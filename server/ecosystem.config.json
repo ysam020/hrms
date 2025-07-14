@@ -1,0 +1,12 @@
+{
+  "apps": [
+    {
+      "name": "server",
+      "script": "app.mjs",
+      "watch": true,
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  ]
+}

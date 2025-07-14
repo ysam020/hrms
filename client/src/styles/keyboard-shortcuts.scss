@@ -1,0 +1,11 @@
+@import url("./constants.scss");
+
+.key {
+  border: 1px solid var(--keys-color);
+  color: var(--keys-color);
+  background-color: var(--card-background);
+  margin: 0 3px;
+  padding: 5px;
+  border-radius: 5px;
+  box-shadow: 0 0 5px 2px rgb(10, 95, 175, 0.3);
+}

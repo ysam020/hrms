@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Paymaster Management Solution Ltd." />
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Paymaster Management Solution Ltd." />
+    <meta
+      property="og:description"
+      content="Paymaster Management Solution Ltd. offers an advanced HR management solution."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="%PUBLIC_URL%/logo192.png" />
+
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <!-- Preload essential resources -->
+    <link rel="preload" href="/assets/images/login-bg.webp" as="image" />
+    <link rel="preload" href="/assets/images/login.webp" as="image" />
+    <link rel="preload" href="/assets/images/personal.webp" as="image" />
+    <link rel="preload" href="/assets/images/sidebar-bg.webp" as="image" />
+
+    <!-- HSTS -->
+    <meta
+      http-equiv="Strict-Transport-Security"
+      content="max-age=31536000; includeSubDomains; preload"
+    />
+    <!-- X-Content-Type-Options -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <!-- Referrer-Policy -->
+    <meta name="referrer" content="no-referrer" />
+    <!-- Permissions -->
+    <meta
+      http-equiv="Permissions-Policy"
+      content="
+      geolocation=(self), 
+      microphone=(), 
+      fullscreen=(self),
+      notifications=(self),
+      interest-cohort=(),
+      payment=()
+  "
+    />
+    <!-- Cross-Origin-Embedder-Policy -->
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+    <!-- Cross-Origin-Resource-Policy -->
+    <meta http-equiv="Cross-Origin-Resource-Policy" content="same-origin" />
+    <!-- Cross-Origin-Opener-Policy -->
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+    <!-- Cache-Control -->
+    <meta
+      http-equiv="Cache-Control"
+      content="no-store, no-cache, must-revalidate, max-age=0"
+    />
+
+    <title>Paymaster Management Solution Ltd.</title>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Service Worker -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          // Only register service worker in production
+          if (
+            window.location.hostname !== "localhost" &&
+            !window.location.hostname.includes("127.0.0.1")
+          ) {
+            navigator.serviceWorker
+              .register("./sw.js")
+              .then((reg) => {})
+              .catch((err) => {});
+          } else {
+            // In development mode, unregister any existing service workers
+            navigator.serviceWorker
+              .getRegistrations()
+              .then((registrations) => {
+                for (let registration of registrations) {
+                  registration.unregister();
+                }
+              })
+              .catch((err) => {
+                console.error("Service worker registration failed:", err);
+              });
+            console.log("Service worker disabled in development mode");
+          }
+        });
+      }
+    </script>
+
+    <!-- Dynamically add CSP -->
+    <script>
+      (function () {
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+        const isLocalhost = hostname === "localhost";
+
+        const clientURLs = isLocalhost
+          ? ["http://localhost:3000", "https://localhost:3000"]
+          : [
+              "http://localhost:3000",
+              "https://localhost:3000",
+              "http://192.168.1.107:3000",
+              "https://192.168.1.107:3000",
+              "http://172.20.10.10:3000",
+              "https://172.20.10.10:3000",
+            ];
+
+        const serverURLs = isLocalhost
+          ? ["http://localhost:9002", "https://localhost:9002"]
+          : [
+              "http://localhost:9002",
+              "https://localhost:9002",
+              "http://192.168.1.107:9002",
+              "https://192.168.1.107:9002",
+              "http://172.20.10.10:9002",
+              "https://172.20.10.10:9002",
+            ];
+
+        const wsServers = [];
+        serverURLs.forEach((url) => {
+          if (url.startsWith("http://")) {
+            wsServers.push(`ws://${url.replace("http://", "")}`);
+          } else if (url.startsWith("https://")) {
+            wsServers.push(`wss://${url.replace("https://", "")}`);
+          }
+        });
+
+        const cspContent = `
+          default-src 'self' ${clientURLs.join(" ")} blob:;
+          script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com;
+          connect-src 'self' ${serverURLs.join(" ")} ${wsServers.join(" ")}
+            https://firebase.googleapis.com 
+            https://firebaseinstallations.googleapis.com 
+            https://fcmregistrations.googleapis.com;
+          style-src 'self' 'unsafe-inline' 
+            https://cdn.jsdelivr.net/npm/primereact 
+            https://fonts.googleapis.com;
+          font-src 'self' https://fonts.gstatic.com;
+          img-src 'self' data: blob:
+            https://localhost:9002
+            https://paymaster-document.s3.ap-south-1.amazonaws.com/ 
+            https://www.google-analytics.com;
+          media-src 'self' blob:;
+          object-src 'none';
+          upgrade-insecure-requests;
+        `.trim();
+
+        const metaTag = document.createElement("meta");
+        metaTag.httpEquiv = "Content-Security-Policy";
+        metaTag.content = cspContent;
+        document.head.appendChild(metaTag);
+      })();
+    </script>
+  </body>
+</html>

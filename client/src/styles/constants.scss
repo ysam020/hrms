@@ -1,0 +1,49 @@
+:root {
+  --box-shadow: 20px 50px 50px 4px rgba(0, 0, 0, 0.05);
+  --btn-color: #fff;
+}
+
+#light {
+  --card-background: #fff;
+  --card-background-primary: #f9fafb;
+  --card-background-secondary: #efefef;
+  --multiselect-token: #0991b1;
+  --multiselect-token-color: #fff;
+  --file-upload-bg: #efefef;
+  --event-strip-bg: #f9fafb;
+  --notes-bg: #fff8d2;
+  --notes-color: #130d6b;
+  --keys-color: #0a5faf;
+  --text-color: #000;
+  --text-color-secondary: #000;
+  --link-color: #0060ae;
+  --btn-bg: #111b21;
+  --notes-box-shadow: inset 0 -40px 400px #fdef8e, inset 0 25px 100px #ecd15b,
+    0 5px 0px 0px #ffec7b;
+  --list-bg: #eef1ff;
+  --text-input-bg: #fff;
+  --text-input-border: #d1d5db;
+}
+
+#dark {
+  --card-background: #212e35;
+  --card-background-primary: #1c262a;
+  --card-background-secondary: #141d23;
+  --multiselect-token: #141d23;
+  --multiselect-token-color: #a5a9ab;
+  --file-upload-bg: #212e35;
+  --event-strip-bg: #111b21;
+  --notes-bg: #212e35;
+  --notes-color: #a5a9ab;
+  --keys-color: #a5a9ab;
+  --text-color: #a5a9ab;
+  --text-color-secondary: #fff;
+  --link-color: #88d0fa;
+  --btn-bg: #0c3f61;
+  --notes-box-shadow: inset 0 -40px 40px rgba(3, 3, 3, 0.2),
+    inset 0 25px 10px rgba(0, 0, 0, 0.2), 0 5px 6px 5px rgba(0, 0, 0, 0.2);
+  color: #888585;
+  --list-bg: #212e35;
+  --text-input-bg: #212e35;
+  --text-input-border: rgba(81, 81, 81, 1);
+}

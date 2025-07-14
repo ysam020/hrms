@@ -1,0 +1,253 @@
+syntax = "proto3";
+
+package userpackage;
+
+import "google/protobuf/timestamp.proto";
+
+message Empty {}
+
+// Main User message with flattened structure
+message User {
+  string id = 1;
+  string username = 2;
+  string password = 3;
+  int32 rank = 4;
+  repeated string modules = 5;
+  string note = 6;
+  string salary = 7;
+  string reference_by = 8;
+
+  // Personal Information
+  string first_name = 9;
+  string middle_name = 10;
+  string last_name = 11;
+  string email = 12;
+  string employee_photo = 13;
+  string designation = 14;
+  string department = 15;
+  string joining_date = 16;
+  string official_email = 17;
+  string dob = 18;
+  string mobile = 19;
+  string blood_group = 20;
+  string qualification = 21;
+
+  // Address Fields (Flattened)
+  string permanent_address_line_1 = 22;
+  string permanent_address_line_2 = 23;
+  string permanent_address_city = 24;
+  string permanent_address_state = 25;
+  string permanent_address_pincode = 26;
+  string communication_address_line_1 = 27;
+  string communication_address_line_2 = 28;
+  string communication_address_city = 29;
+  string communication_address_state = 30;
+  string communication_address_pincode = 31;
+
+  // Identity Documents (Flattened)
+  string aadhar_no = 32;
+  string aadhar_photo_front = 33;
+  string aadhar_photo_back = 34;
+  string pan_no = 35;
+  string pan_photo = 36;
+  repeated string education_certificates = 37;
+  string experience_certificate = 38;
+  string electricity_bill = 39;
+  string pcc = 40;
+  bool dra = 41;
+  string dra_certificate = 42;
+  string pf_no = 43;
+  string esic_no = 44;
+  repeated string insurance_status = 45;
+
+  // Bank Details (Flattened)
+  string bank_account_no = 46;
+  string bank_name = 47;
+  string ifsc_code = 48;
+
+  // KYC and Related Fields
+  string kyc_date = 49;
+  string kyc_approval = 50;
+
+  // Related Collections
+  repeated Appraisal appraisals = 51;
+  repeated Training trainings = 52;
+  repeated Event events = 54;
+
+  // Security Fields
+  string reset_password_otp = 55;
+  google.protobuf.Timestamp reset_password_expires = 56;
+  repeated Session sessions = 57;
+  string twoFactorSecret = 58;
+  string qr_code_image = 59;
+  bool is_two_factor_enabled = 60;
+  int32 failed_login_attempts = 61;
+  google.protobuf.Timestamp first_failed_login_at = 62;
+  bool is_blocked = 63;
+  google.protobuf.Timestamp blocked_until = 64;
+  repeated string backupCodes = 65;
+  repeated Credential webauthn_credentials = 66;
+  repeated string fcm_tokens = 67;
+  string fullName = 68;
+}
+
+message Session {
+  string session_id = 1;
+  google.protobuf.Timestamp login_at = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  string user_agent = 4;
+  float latitude = 5;
+  float longitude = 6;
+}
+
+message Credential {
+  string credential_id = 1;
+  string public_key = 2;
+  int32 counter = 3;
+  repeated string transports = 4;
+  string device = 5;
+}
+
+message Appraisal {
+  string appraisal_date = 1;
+  float performance_score = 2;
+  string strengths = 3;
+  string areas_of_improvement = 4;
+  string feedback = 5;
+}
+
+message Training {
+  string training_program = 1;
+  string training_date = 2;
+  string duration = 3;
+  string training_provider = 4;
+  string feedback = 5;
+}
+
+message Event {
+  string title = 1;
+  string date = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string description = 5;
+}
+
+// Request/Response messages
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message FullNameResponse {
+  string fullName = 1;
+}
+
+message GenerateBackupCodesRequest {
+  int32 num_codes = 1;
+}
+
+message BackupCodesResponse {
+  repeated string backup_codes = 1;
+}
+
+message EncryptFieldRequest {
+  string field = 1;
+  string value = 2;
+}
+
+message EncryptFieldResponse {
+  string encrypted_value = 1;
+}
+
+message DecryptFieldRequest {
+  string field = 1;
+  string encrypted_value = 2;
+}
+
+message DecryptFieldResponse {
+  string decrypted_value = 1;
+}
+
+message AddSessionRequest {
+  string jwt_token = 1;
+  string user_agent = 2;
+  float latitude = 3;
+  float longitude = 4;
+}
+
+message VerifyPasswordRequest {
+  string password = 1;
+}
+
+message VerifyPasswordResponse {
+  bool is_correct = 1;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string two_fa_token = 3;
+  string backup_code = 4;
+  string user_agent = 5;
+  bool is_two_factor_enabled = 6;
+  bool use_backup_code = 7;
+  float latitude = 8;
+  float longitude = 9;
+}
+
+message LoginResponse {
+  string message = 1;
+  string session_id = 2;
+  string error_message = 3;
+  google.protobuf.Timestamp unblock_time = 4;
+
+  // Flattened user data fields
+  string username = 5;
+  int32 rank = 6;
+  string first_name = 7;
+  string middle_name = 8;
+  string last_name = 9;
+  string employee_photo = 10;
+  string email = 11;
+  repeated string modules = 12;
+  string fullName = 13;
+}
+
+message GetUserResponse {
+  User user = 1;
+  string status = 2;
+}
+
+message GetUserModules {
+  repeated string modules = 1;
+}
+
+message GetUsersResponse {
+  repeated string username = 1;
+}
+
+message SessionData {
+  string session_id = 1;
+  string login_at = 2;
+  string user_agent = 3;
+  string road = 4;
+  string city = 5;
+  string country = 6;
+  string postcode = 7;
+  string state = 8;
+  string state_district = 9;
+  string suburb = 10;
+  string village = 11;
+  string location_error = 12;
+}
+
+message GetSessionDataResponse {
+  repeated SessionData sessions = 1;
+}
+
+message Enable2FAResponse {
+  string message = 1;
+  string qr_code_image = 2;
+  string error_message = 3;
+  repeated string backup_codes = 4;
+  bool is_two_factor_enabled = 5;
+}

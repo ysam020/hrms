@@ -1,0 +1,29 @@
+{
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "events": {
+    "start": "clear"
+  },
+  "watch": [
+    "assets",
+    "changeStreams",
+    "config",
+    "controllers",
+    "middlewares",
+    "model",
+    "proto",
+    "routes",
+    "scripts",
+    "templates",
+    "utils",
+    "workers",
+    "app.mjs",
+    ".env",
+    "logger.mjs",
+    "connectDb.mjs",
+    "test.mjs"
+  ],
+  "ext": "js,json,mjs",
+  "exec": "node test.mjs"
+}

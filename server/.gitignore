@@ -1,0 +1,28 @@
+# Ignore certificates
+*.crt
+*.key
+*.pem
+
+# Ignore node_modules in both client and server directories
+node_modules/
+
+# Ignore .env file
+.env
+
+# Ignore logs
+logs/
+*.log
+npm-debug.log*
+
+# Ignore temporary files and folders
+temp/
+tmp/
+
+# Ignore operating system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/editor specific files
+.vscode/
+.idea/
+*.swp

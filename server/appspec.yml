@@ -1,0 +1,25 @@
+version: 0.0
+os: linux
+files:
+  - source: /
+    destination: /home/ec2-user/cicd/pm-cicd
+    overwrite: true
+hooks:
+  BeforeInstall:
+    - location: scripts/before_install.sh
+      timeout: 300
+      runas: ec2-user
+      script: |
+        chmod +x /home/ec2-user/pm-crm-backend/scripts/application_stop.sh
+        chmod +x /home/ec2-user/pm-crm-backend/scripts/before_install.sh
+        chmod +x /home/ec2-user/pm-crm-backend/scripts/application_start.sh
+  ApplicationStop:
+    - location: scripts/application_stop.sh
+      timeout: 300
+      runas: ec2-user
+  ApplicationStart:
+    - location: scripts/application_start.sh
+      timeout: 300
+      runas: ec2-user
+      script: |
+        source /home/ec2-user/pm-crm-backend/scripts/application_start.sh

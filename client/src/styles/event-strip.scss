@@ -1,0 +1,32 @@
+// Event Strip
+.event-strip {
+  position: fixed;
+  bottom: 0;
+  width: calc(100%);
+  z-index: 99999;
+  padding: 10px 0;
+  background-color: var(--event-strip-bg);
+  overflow: hidden;
+  font-size: 16px;
+  color: var(--text-color);
+}
+
+.event-messages {
+  display: flex;
+  white-space: nowrap;
+  animation: moveText 15s linear infinite;
+}
+
+.event-message {
+  margin-right: 30px;
+  font-weight: bold;
+}
+
+@keyframes moveText {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}

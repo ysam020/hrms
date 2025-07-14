@@ -1,0 +1,53 @@
+@import url("./constants.scss");
+
+.login-form {
+  span {
+    color: var(--link-color);
+    font-weight: 800;
+    font-size: 14px;
+    margin: 16px 0;
+    display: block;
+  }
+}
+
+.login-row {
+  height: 100%;
+}
+
+.login-right-col {
+  background: var(--card-background-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.login-right-col-inner-container {
+  width: 50%;
+
+  p {
+    color: var(--link-color);
+    cursor: pointer;
+    font-weight: 600;
+  }
+}
+
+.span-text {
+  margin-top: 50px;
+  cursor: pointer;
+  color: var(--link-color);
+  font-weight: 600;
+}
+
+@media screen and (max-width: 992px) {
+  .login-left-col {
+    display: none !important;
+  }
+  .login-right-col {
+    width: 100% !important;
+  }
+  .login-right-col-inner-container {
+    width: 90%;
+  }
+}

@@ -1,0 +1,421 @@
+@import url("./styles/constants.scss");
+
+.App {
+  font-family: "Poppins", sans-serif;
+  height: 100vh;
+}
+
+.flex-div {
+  display: flex;
+  align-items: center;
+}
+
+.input-hidden {
+  display: none;
+}
+
+.btn {
+  color: var(--btn-color) !important;
+  background-color: var(--btn-bg) !important;
+  padding: 10px;
+  cursor: pointer;
+  box-shadow: 0 0 20px 1px rgba(0, 0, 0, 0.3);
+  margin-top: 10px;
+  border: none;
+  outline: none;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.btn:hover,
+.btn:active {
+  background-color: var(--btn-bg) !important;
+  color: var(--btn-color) !important;
+}
+
+.MuiButton-startIcon {
+  margin: 0 !important;
+}
+
+.link {
+  color: var(--link-color);
+  cursor: pointer;
+  border-radius: 5px;
+  margin-right: 5px;
+  padding: 3px 5px;
+  font-weight: 600;
+}
+
+.approve-link {
+  background-color: #90c8ac;
+  color: #153525;
+}
+
+.reject-link {
+  background-color: #ff9494;
+  color: #851e1e;
+}
+
+.info-link {
+  background-color: #ffd87f;
+  color: #5e4305;
+}
+
+.withdraw-link {
+  background-color: #c5d3e8;
+  color: #0060ae;
+}
+
+.pending-link {
+  background-color: #fff49d;
+  color: #504811;
+}
+
+.MuiListItemText-secondary {
+  text-align: right !important;
+}
+
+form h5 {
+  margin-top: 30px !important;
+  margin-bottom: 10px !important;
+}
+
+.p-icon-field {
+  width: 100% !important;
+}
+
+.p-input-icon {
+  top: 30% !important;
+  margin: 0 !important;
+}
+
+.p-password {
+  width: 100% !important;
+}
+
+.p-float-label {
+  margin-top: 30px !important;
+  background-color: #fff;
+}
+
+.p-inputtext,
+.p-password-input,
+.p-inputnumber,
+.p-dropdown,
+.p-autocomplete,
+.p-multiselect {
+  width: 100% !important;
+  background-color: var(--text-input-bg) !important;
+  color: #888888 !important;
+  border: 1px solid var(--text-input-border) !important;
+  border-radius: 8px !important;
+}
+
+.p-multiselect-token {
+  background-color: var(--multiselect-token) !important;
+  color: var(--multiselect-token-color) !important;
+  border-radius: 8px !important;
+}
+
+.p-inputnumber-input {
+  border: none !important;
+}
+
+.p-multiselect {
+  width: 100% !important;
+}
+
+.p-multiselect-header {
+  display: none !important;
+}
+
+.p-inputtext:enabled:focus,
+.p-calendar:not(.p-calendar-disabled).p-focus>.p-inputtext,
+.p-dropdown:not(.p-disabled).p-focus {
+  box-shadow: 0 0 0 0.01rem #a5f3fc !important;
+  border-color: #06b6d4 !important;
+}
+
+.p-autocomplete {
+  margin-bottom: 10px !important;
+}
+
+.p-divider.p-divider-horizontal {
+  margin: 0.5rem 0 !important;
+}
+
+.login-input {
+  border: none !important;
+  margin-bottom: 0 !important;
+}
+
+.table-autocomplete {
+  width: 300px !important;
+}
+
+.p-calendar {
+  width: 100% !important;
+}
+
+.p-fileupload-buttonbar,
+.p-fileupload-content {
+  background-color: var(--file-upload-bg) !important;
+  border: var(--text-input-border) !important;
+
+  p {
+    color: var(--text-color);
+  }
+}
+
+.p-dropdown-label {
+  padding: 10px !important;
+  border: none !important;
+}
+
+.p-dropdown-item.p-focus,
+.p-dropdown-item.p-highlight {
+  background-color: var(--card-background-secondary);
+}
+
+.p-dropdown-item-label {
+  color: var(--text-color);
+}
+
+.p-dropdown-items-wrapper {
+  background-color: var(--card-background) !important;
+}
+
+.p-datepicker-header,
+.p-datepicker-buttonbar {
+  padding: 0 !important;
+}
+
+.p-datepicker-calendar td {
+  padding: 0 !important;
+}
+
+.p-button {
+  padding: 10px !important;
+  border: none !important;
+}
+
+.p-fileupload {
+  padding-top: 5px !important;
+}
+
+.p-fileupload-row {
+  color: var(--text-color) !important;
+}
+
+.p-button-label {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.p-inputtext::placeholder,
+.p-password-input::placeholder {
+  color: #888888 !important;
+}
+
+.p-error {
+  color: #f15c6d !important;
+}
+
+.MuiSlider-root {
+  width: 400px !important;
+  height: 2px !important;
+  margin-left: 30px !important;
+  color: #05b6d3 !important;
+}
+
+.MuiFormControl-root {
+  width: 100% !important;
+}
+
+// Alert
+.MuiAlert-root {
+  position: absolute;
+  z-index: 99999 !important;
+  top: 15px !important;
+  right: 80px !important;
+  bottom: auto !important;
+  width: 400px;
+}
+
+// Grid
+.MuiGrid2-direction-xs-row {
+  margin-bottom: 5px !important;
+}
+
+.p-picklist-header {
+  background-color: var(--card-background-primary) !important;
+  border: 1px solid var(--text-input-border) !important;
+  border-bottom: 0.5px solid var(--text-input-border) !important;
+  color: var(--text-color) !important;
+}
+
+.p-picklist-list {
+  min-height: 600px !important;
+  background-color: var(--card-background) !important;
+  border: 1px solid var(--text-input-border) !important;
+  border-bottom: 0.5px solid var(--text-input-border) !important;
+}
+
+.p-picklist-item {
+  color: var(--text-color) !important;
+}
+
+.p-picklist-item:hover,
+.p-picklist .p-picklist-list .p-picklist-item.p-focus {
+  background-color: var(--card-background-primary) !important;
+}
+
+.p-picklist .p-picklist-list .p-picklist-item.p-highlight {
+  background-color: var(--card-background-secondary) !important;
+}
+
+.appbar-icon-container {
+  padding: 5px !important;
+  border-radius: 4px !important;
+  height: 2rem !important;
+  width: 2rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-left: 15px !important;
+  cursor: pointer;
+}
+
+.legend-container {
+  margin-top: 1rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.dot {
+  height: 10px;
+  width: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Attendance Type Colors */
+.dot.present {
+  background-color: #19bc9b;
+}
+
+.dot.half {
+  background-color: #ffb002;
+}
+
+.dot.leave {
+  background-color: #f15c6d;
+}
+
+.dot.today {
+  background-color: #9b9999;
+}
+
+.dot.holiday {
+  background-color: #4d3c77;
+}
+
+// Audit Logs
+.flex-div-secondary {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  font-size: 14px;
+
+  p {
+    margin-left: 10px !important;
+  }
+}
+
+.activity-log {
+  background-color: var(--list-bg);
+  padding: 10px;
+  margin-bottom: 5px;
+  border-radius: 10px;
+}
+
+.MuiDrawer-paper {
+  background-image: none !important;
+}
+
+.w-json-view-container {
+  padding: 10px !important;
+  border-radius: 10px !important;
+}
+
+.w-rjv-object-key,
+.w-rjv-value,
+.w-rjv-quotes,
+.w-rjv-colon {
+  font-size: 14px !important;
+}
+
+.table-topbar {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+}
+
+// Chatbot
+.chatbot-toggler {
+  height: 50px !important;
+  width: 50px !important;
+  bottom: 20px !important;
+  right: 20px !important;
+}
+
+.chatbot {
+  bottom: 55px !important;
+  right: 55px !important;
+  z-index: 99999 !important;
+}
+
+.chatbot header {
+  text-align: left !important;
+  padding: 15px !important;
+}
+
+.chatbot header h2 {
+  margin-bottom: 0 !important;
+}
+
+.chatbox {
+  padding: 20px 10px !important;
+  background-color: #efefef !important;
+  box-shadow: 2px 2px 50px 10px rgba(0, 0, 0, 0.05) !important;
+}
+
+.chat p {
+  padding: 10px !important;
+}
+
+.chat.outgoing p {
+  background-color: #0b61ae !important;
+}
+
+.chat.incoming p {
+  background-color: #fff !important;
+}
+
+.chat-input {
+  padding: 0 !important;
+
+  textarea {
+    padding: 10px !important;
+  }
+}

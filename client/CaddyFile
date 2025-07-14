@@ -1,0 +1,6 @@
+pm-crm.com {
+  tls ../certificates/cert-pm-crm.pem ../certificates/key-pm-crm.pem
+  root * /users/Sameer/downloads/test/client/build
+  file_server
+  try_files {path} /index.html
+}
