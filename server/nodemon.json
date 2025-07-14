@@ -25,5 +25,5 @@
     "test.mjs"
   ],
   "ext": "js,json,mjs",
-  "exec": "node test.mjs"
+  "exec": "node app.mjs"
 }
