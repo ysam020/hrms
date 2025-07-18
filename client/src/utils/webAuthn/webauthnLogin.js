@@ -1,5 +1,3 @@
-// OPTION 1: Use Direct Verification (Recommended)
-// Updated client/src/utils/webAuthn/webauthnLogin.js
 import apiClient from "../../config/axiosConfig";
 import { toArrayBuffer } from "./base64urlUtils.js";
 
@@ -70,7 +68,7 @@ export async function performWebAuthnLogin(
       },
     };
 
-    console.log("📤 Verifying credential...");
+    console.log("📤 Step 1: Verifying credential...");
 
     // Step 5: Verify credential (this consumes the challenge)
     const verifyResponse = await apiClient.post("/webauthn-verify-login", {
@@ -84,10 +82,9 @@ export async function performWebAuthnLogin(
       );
     }
 
-    console.log("✅ Credential verified successfully");
+    console.log("✅ Step 1 complete: Credential verified successfully");
 
-    // Step 6: Complete login using the existing login endpoint (with geolocation)
-    console.log("🔐 Completing login session...");
+    console.log("🔐 Step 2: Creating login session...");
 
     // Get geolocation if needed
     let geolocation = { latitude: null, longitude: null };
@@ -107,7 +104,9 @@ export async function performWebAuthnLogin(
       console.warn("Could not get geolocation:", geoError.message);
     }
 
-    // ✅ Use the existing login endpoint that handles sessions properly
+    // ✅ Complete login with session creation
+    console.log("📤 Creating session via /webauthn-login...");
+
     const loginResponse = await apiClient.post("/webauthn-login", {
       username,
       credential,
@@ -115,18 +114,20 @@ export async function performWebAuthnLogin(
       userAgent: navigator.userAgent,
     });
 
+    console.log("📥 Login response:", {
+      status: loginResponse.status,
+      message: loginResponse.data.message,
+      hasUser: !!loginResponse.data.user,
+    });
+
     if (loginResponse.data.message === "Login successful") {
-      console.log("✅ WebAuthn login completed successfully!");
+      console.log("✅ Step 2 complete: Session created successfully!");
+
       setAlert({
         open: true,
         message: "Login successful!",
         severity: "success",
       });
-
-      // Call your existing success handlers
-      if (processLogin) {
-        processLogin(loginResponse.data);
-      }
 
       return {
         success: true,
@@ -134,7 +135,7 @@ export async function performWebAuthnLogin(
         data: loginResponse.data,
       };
     } else {
-      throw new Error(loginResponse.data.message || "Login completion failed");
+      throw new Error(loginResponse.data.message || "Session creation failed");
     }
   } catch (error) {
     console.error("❌ WebAuthn login error:", error);
@@ -157,24 +158,6 @@ export async function performWebAuthnLogin(
       severity: "error",
     });
 
-    // Call error handler if provided
-    if (handleLoginError) {
-      handleLoginError(error);
-    }
-
     return { success: false, error: errorMessage };
   }
 }
-
-// ===================================================
-
-// OPTION 2: Fix Passport Strategy to NOT re-verify
-
-// ===================================================
-
-// OPTION 3: Alternative - Store verification result temporarily
-// server/utils/challengeStore.mjs (ADD to existing file)
-
-// ===================================================
-
-// Updated server/controllers/webauthn/verifyLogin.mjs (if using Option 3)
