@@ -48,9 +48,7 @@ router.post("/api/unusual-login-detection", unusualLoginDetection);
 schedule.scheduleJob("0 0 * * *", async () => {
   // schedule.scheduleJob("*/10 * * * * *", async () => {
   const result = await resetBlockedAccounts();
-  if (result.success) {
-    console.log(`Scheduled job: Reset ${result.count} blocked accounts.`);
-  } else {
+  if (!result.success) {
     console.error(`Scheduled job failed: ${result.error}`);
   }
 });

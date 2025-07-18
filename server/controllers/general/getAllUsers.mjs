@@ -40,11 +40,9 @@ import { cacheResponse, getCachedData } from "../../utils/cacheResponse.mjs";
 const getAllUsers = async (req, res) => {
   try {
     const cacheKey = `userList`;
-
     // Check if there is already cached data
     const cachedData = await getCachedData(cacheKey);
     if (cachedData && cachedData.length > 0) {
-      console.log("Returning cached user data");
       return res.status(200).send(cachedData);
     }
 
@@ -54,7 +52,6 @@ const getAllUsers = async (req, res) => {
       .lean();
 
     await cacheResponse(cacheKey, users);
-    console.log("Fetched and cached user data");
     res.status(200).send(users);
   } catch (error) {
     console.error("Error in getAllUsers:", error);

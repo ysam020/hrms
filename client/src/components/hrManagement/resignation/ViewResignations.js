@@ -23,7 +23,6 @@ import { Download } from "@mui/icons-material";
 
 function ViewResignations() {
   const [data, setData] = useState([]);
-  console.log(data);
   const { user } = useContext(UserContext);
   const { setAlert } = useContext(AlertContext);
   const [resignationData, setResignationData] = useState(null);

@@ -115,19 +115,14 @@ export async function getAllEmbeddedDocs(limit = 5) {
 // Test function to verify the setup
 export async function testConnection() {
   try {
-    console.log("Testing MongoDB connection and collection...");
-
     const docs = await getAllEmbeddedDocs(1);
     if (docs.length > 0) {
-      console.log("✅ Connection successful, found embedded documents");
-      console.log("Sample document structure:", Object.keys(docs[0]));
       return true;
     } else {
-      console.log("⚠️ Connection successful but no documents found");
       return false;
     }
   } catch (err) {
-    console.error("❌ Connection test failed:", err.message);
+    console.error("Connection test failed:", err.message);
     return false;
   }
 }

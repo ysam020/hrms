@@ -1,27 +1,17 @@
 export function base64urlToArrayBuffer(input) {
-  console.log("🔄 Converting to ArrayBuffer:", {
-    input: typeof input === "string" ? input.substring(0, 20) + "..." : input,
-    type: typeof input,
-    isArray: Array.isArray(input),
-    constructor: input?.constructor?.name,
-  });
-
   // Handle different input types
   let base64url;
 
   if (typeof input === "string") {
     base64url = input;
   } else if (input instanceof ArrayBuffer) {
-    console.log("   Input is already ArrayBuffer, returning as-is");
     return input;
   } else if (input instanceof Uint8Array) {
-    console.log("   Input is Uint8Array, returning buffer");
     return input.buffer.slice(
       input.byteOffset,
       input.byteOffset + input.byteLength
     );
   } else if (Array.isArray(input)) {
-    console.log("   Input is Array, converting to Uint8Array buffer");
     return new Uint8Array(input).buffer;
   } else if (
     input &&
@@ -29,7 +19,6 @@ export function base64urlToArrayBuffer(input) {
     input.data &&
     Array.isArray(input.data)
   ) {
-    console.log("   Input is object with data array");
     return new Uint8Array(input.data).buffer;
   } else {
     throw new Error(
@@ -55,10 +44,6 @@ export function base64urlToArrayBuffer(input) {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    console.log(
-      "   ✅ Converted successfully, length:",
-      bytes.buffer.byteLength
-    );
     return bytes.buffer;
   } catch (error) {
     console.error("❌ Base64url conversion failed:", error);
@@ -98,4 +83,71 @@ export function base64urlToUint8Array(base64url) {
 
 export function toArrayBuffer(input) {
   return base64urlToArrayBuffer(input);
+}
+
+export function formatLoginOptions(options) {
+  // Convert challenge
+  try {
+    options.challenge = toArrayBuffer(options.challenge);
+  } catch (error) {
+    console.error("Error converting challenge:", error);
+    throw new Error(`Invalid challenge format: ${error.message}`);
+  }
+
+  // Convert allowCredentials safely
+  if (options.allowCredentials && Array.isArray(options.allowCredentials)) {
+    options.allowCredentials.forEach((cred, index) => {
+      try {
+        cred.id = toArrayBuffer(cred.id);
+      } catch (error) {
+        console.error(`Error converting credential ${index}:`, error);
+        throw new Error(`Invalid credential ID format: ${error.message}`);
+      }
+    });
+  }
+
+  return options;
+}
+
+export async function getCredential(options) {
+  return await navigator.credentials.get({
+    publicKey: options,
+  });
+}
+
+export function serializeCredential(credential) {
+  return {
+    id: credential.id,
+    type: credential.type,
+    rawId: Array.from(new Uint8Array(credential.rawId)),
+    response: {
+      authenticatorData: Array.from(
+        new Uint8Array(credential.response.authenticatorData)
+      ),
+      clientDataJSON: Array.from(
+        new Uint8Array(credential.response.clientDataJSON)
+      ),
+      signature: Array.from(new Uint8Array(credential.response.signature)),
+      userHandle: credential.response.userHandle
+        ? Array.from(new Uint8Array(credential.response.userHandle))
+        : null,
+    },
+  };
+}
+
+export function urlBase64ToUint8Array(base64String) {
+  // Add padding if needed
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+
+  // Convert base64 to binary string
+  const rawData = atob(base64);
+
+  // Convert to Uint8Array
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
 }

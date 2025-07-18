@@ -8,19 +8,6 @@ const originalConsoleLog = console.log;
 const originalConsoleWarn = console.warn;
 
 function suppressHFLogs() {
-  console.log = (...args) => {
-    const message = args.join(" ");
-    // Filter out HuggingFace provider messages
-    if (
-      message.includes("Defaulting to") ||
-      message.includes("Auto selected provider") ||
-      message.includes("provider available for the model")
-    ) {
-      return;
-    }
-    originalConsoleLog(...args);
-  };
-
   console.warn = (...args) => {
     const message = args.join(" ");
     // Filter out HuggingFace provider warnings
@@ -36,7 +23,6 @@ function suppressHFLogs() {
 }
 
 function restoreConsoleLogs() {
-  console.log = originalConsoleLog;
   console.warn = originalConsoleWarn;
 }
 

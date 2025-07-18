@@ -1,4 +1,5 @@
-import { urlBase64ToUint8Array } from "./urlBase64ToUint8Array";
+// import { urlBase64ToUint8Array } from "./urlBase64ToUint8Array";
+import { urlBase64ToUint8Array } from "@hrms/webauthn";
 import { verifyWebauthnRegistration } from "./verifyWebauthnRegistration";
 import apiClient from "../../config/axiosConfig";
 

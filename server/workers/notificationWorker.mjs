@@ -44,10 +44,6 @@ const createNotificationWorker = (io, redisAdapter) => {
             );
 
             await Promise.all(sendPromises);
-
-            console.log(
-              `Notification sent to ${targetUser.length} users via Redis: ${title} - Worker ${process.pid}`
-            );
           } else {
             // Send to single specific user (backward compatibility)
             await redisAdapter.sendToUser(
@@ -55,18 +51,10 @@ const createNotificationWorker = (io, redisAdapter) => {
               "notification",
               savedNotification
             );
-
-            console.log(
-              `Notification sent to user ${targetUser} via Redis: ${title} - Worker ${process.pid}`
-            );
           }
         } else {
           // Broadcast to all users
           await redisAdapter.sendNotification(savedNotification);
-
-          console.log(
-            `Notification broadcast to all users via Redis: ${title} - Worker ${process.pid}`
-          );
         }
 
         return {
@@ -96,14 +84,6 @@ const createNotificationWorker = (io, redisAdapter) => {
       maxStalledCount: 1, // Max number of times a job can be stalled
     }
   );
-
-  worker.on("completed", (job, result) => {
-    console.log(
-      `Notification job ${job.id} completed by worker ${
-        result.processedBy
-      } for targets: ${JSON.stringify(result.targetUsers)}`
-    );
-  });
 
   worker.on("failed", (job, err) => {
     console.error(

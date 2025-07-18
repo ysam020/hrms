@@ -72,9 +72,7 @@ const disableWebAuthn = async (req, res, next) => {
     res.status(200).json({ message: "WebAuthn disabled" });
   } catch (error) {
     await session.abortTransaction();
-    next(error); // forward to error middleware if any
-    // If you want to respond here, comment out next(error) and uncomment below:
-    // res.status(500).json({ message: "Failed to disable WebAuthn" });
+    next(error);
   } finally {
     session.endSession();
   }

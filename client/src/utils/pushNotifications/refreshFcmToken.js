@@ -28,11 +28,6 @@ export const refreshFcmToken = async (
           await saveToken(currentToken, setAlert);
         }
       }
-
-      // Set up message handler for foreground messages
-      onMessage(messaging, (payload) => {
-        console.log(payload);
-      });
     } else if (permissionStatus.state === "prompt") {
       setShowConsentDrawer(true);
       return null;

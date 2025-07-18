@@ -18,9 +18,6 @@ async function run() {
 
     // Get total count for progress tracking
     const totalDocuments = await sourceCollection.countDocuments({});
-    console.log(`Found ${totalDocuments} documents to process.`);
-
-    console.log("Processing documents in batches...");
 
     const BATCH_SIZE = 10;
     let processed = 0;
@@ -93,7 +90,6 @@ async function run() {
 
           // Only create chunks if we have text to embed
           if (!textToEmbed.trim()) {
-            console.log(`Skipping document ${doc._id} - no text to embed`);
             continue;
           }
 
@@ -149,25 +145,17 @@ async function run() {
             options
           );
           totalInserted += result.insertedCount;
-          console.log(`Batch inserted: ${result.insertedCount} chunks`);
         } catch (insertError) {
           console.error("Error inserting batch:", insertError.message);
         }
       }
 
       processed += batch.length;
-      console.log(
-        `Progress: ${processed}/${totalDocuments} documents processed (${totalInserted} chunks inserted)`
-      );
 
       // Clear arrays to free memory
       insertDocuments.length = 0;
       batch.length = 0;
     }
-
-    console.log(
-      `\nCompleted! Processed ${processed} documents and inserted ${totalInserted} chunks.`
-    );
   } catch (err) {
     console.error("Fatal error:", err.stack);
   } finally {

@@ -32,21 +32,11 @@ class RedisConnectionManager {
         enableOfflineQueue: false,
       });
 
-      connection.on("connect", () => {
-        console.log(
-          `Redis ${type} connection established - Worker ${process.pid}`
-        );
-      });
-
       connection.on("error", (err) => {
         console.error(
           `Redis ${type} connection error - Worker ${process.pid}:`,
           err
         );
-      });
-
-      connection.on("close", () => {
-        console.log(`Redis ${type} connection closed - Worker ${process.pid}`);
       });
 
       RedisConnectionManager.connections.set(type, connection);
@@ -58,7 +48,6 @@ class RedisConnectionManager {
   async closeAll() {
     const promises = [];
     for (const [type, connection] of RedisConnectionManager.connections) {
-      console.log(`Closing Redis ${type} connection - Worker ${process.pid}`);
       promises.push(connection.disconnect());
     }
 

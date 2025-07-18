@@ -52,8 +52,6 @@ async function queryUserWithRAG(userQuery) {
       return "Please provide a valid query.";
     }
 
-    console.log(`Processing query: "${userQuery}"`);
-
     // Retrieve relevant documents from vector search
     const documents = await getQueryResults(userQuery);
 
@@ -63,8 +61,6 @@ async function queryUserWithRAG(userQuery) {
       return "I couldn't find any relevant information in the user database for your query.";
     }
 
-    console.log(`Found ${documents.length} documents`);
-
     // Get only the document with the highest score (first one, as they're sorted by score)
     const bestMatch = documents[0];
 
@@ -72,8 +68,6 @@ async function queryUserWithRAG(userQuery) {
       console.error("Best match is null or undefined");
       return "No matching document found.";
     }
-
-    console.log(`Best match score: ${bestMatch.score?.toFixed(4) || "N/A"}`);
 
     // Build context from only the highest scoring document
     let contextText = "";
@@ -181,7 +175,6 @@ export async function singleQuery(query) {
   }
 
   const result = await queryUserWithRAG(query);
-  console.log("FINAL ANSWER:");
   console.log(result);
   return result; // Return the result for API use
 }

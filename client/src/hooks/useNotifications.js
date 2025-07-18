@@ -33,8 +33,6 @@ function useNotifications() {
   // Callback to handle resignation alerts (specific to your use case)
   const handleResignationAlert = useCallback(
     (data) => {
-      console.log("Resignation alert received:", data);
-
       // You can show a toast notification or update UI specifically for resignation alerts
       // For now, we'll convert it to a standard notification format
       const notificationData = {
@@ -73,8 +71,6 @@ function useNotifications() {
 
     // Connection event handlers
     socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
-
       // Clear any pending reconnection timeout
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -83,12 +79,9 @@ function useNotifications() {
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
-
       // Attempt to reconnect after a delay if not manually disconnected
       if (reason !== "io client disconnect") {
         reconnectTimeoutRef.current = setTimeout(() => {
-          console.log("Attempting to reconnect...");
           socket.connect();
         }, 3000);
       }

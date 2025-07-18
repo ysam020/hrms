@@ -21,16 +21,11 @@ function WebAuthnLoginForm(props) {
     }
   }, []);
 
-  // Helper functions (you can define these locally or import them)
   const processLogin = (userData) => {
-    // Your existing login success logic
-    console.log("Processing login for user:", userData.user);
     setUser(userData.user);
-    // Any redirect logic, etc.
   };
 
   const handleLoginError = (error) => {
-    // Your existing error handling logic
     console.error("Login error:", error);
     setAlert({
       open: true,
@@ -49,9 +44,6 @@ function WebAuthnLoginForm(props) {
         setIsSubmitting(true);
         props.setUsername(values.username);
 
-        console.log("🚀 Starting WebAuthn login process...");
-
-        // ✅ Use the complete WebAuthn login function
         const { performWebAuthnLogin } = await import(
           "../utils/webAuthn/webauthnLogin"
         );
@@ -64,28 +56,13 @@ function WebAuthnLoginForm(props) {
         );
 
         if (result.success) {
-          console.log("✅ WebAuthn login completed successfully!");
-          console.log("User data:", result.user);
-
-          // ✅ Login is already complete! No need to call anything else
-          // The session is already created, user is logged in
-
-          // Just update your local state if needed
           if (result.data && result.data.user) {
             setUser(result.data.user);
           }
-
-          // You might want to redirect or update UI here
-          // For example: navigate('/dashboard');
         } else {
-          // Fall back to regular login if WebAuthn failed
-          console.log(
-            "❌ WebAuthn login failed, falling back to regular login"
-          );
           props.setUseWebAuthn(false);
         }
       } catch (error) {
-        console.error("❌ WebAuthn login error:", error);
         setAlert({
           open: true,
           message: "Login failed. Please try again.",
@@ -125,10 +102,9 @@ function WebAuthnLoginForm(props) {
 
         <CustomButton
           type="submit"
-          label="Login with WebAuthn"
+          name="Submit"
           loading={isSubmitting}
           disabled={isSubmitting}
-          className="w-full"
         />
       </form>
 

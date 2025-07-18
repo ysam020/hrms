@@ -1,5 +1,6 @@
 import apiClient from "../../config/axiosConfig";
-import { toArrayBuffer } from "./base64urlUtils.js";
+// import { toArrayBuffer } from "./base64urlUtils.js";
+import { toArrayBuffer } from "@hrms/webauthn";
 
 export async function performWebAuthnLogin(username, setAlert) {
   try {

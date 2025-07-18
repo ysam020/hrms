@@ -214,10 +214,6 @@ function DocumentDownloadButton({ user }) {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
-      console.log(
-        `Successfully downloaded ${successfulDownloads.length} documents`
-      );
     } catch (error) {
       console.error("Error creating ZIP file:", error);
       alert("Failed to create ZIP file. Please try again.");

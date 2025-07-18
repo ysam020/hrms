@@ -123,15 +123,3 @@ export const generateFilename = (baseName, date) => {
 
   return `${baseName}_${month}_${year}`;
 };
-
-// Example usage and test cases:
-/*
-console.log(formatFieldName("firstName")); // "First Name"
-console.log(formatFieldName("FirstName")); // "First Name"
-console.log(formatFieldName("first_name")); // "First Name"
-console.log(formatFieldName("user_id")); // "User Id"
-console.log(formatFieldName("userID")); // "User I D"
-console.log(formatFieldName("created_at")); // "Created At"
-console.log(formatFieldName("isActive")); // "Is Active"
-console.log(formatFieldName("phone_number")); // "Phone Number"
-*/

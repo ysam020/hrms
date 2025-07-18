@@ -29,7 +29,7 @@ function LeaveApplication() {
         const res = await apiClient.get(`/get-available-paid-leaves`);
         setAvailablePaidLeaves(res.data);
       } catch (error) {
-        console.log(error);
+        console.error(error);
       }
     }
 

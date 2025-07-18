@@ -77,34 +77,24 @@
 
 // export default initiateRegistration;
 
-// Enhanced server/controllers/webauthn/initiateRegistration.mjs
 import { generateAttestationOptions } from "../../utils/generateAttestationOptions.mjs";
-import { debugChallenges } from "../../utils/challengeStore.mjs";
 import UserModel from "../../model/userModel.mjs";
 
 const initiateRegistration = async (req, res) => {
   try {
     const username = req.user.username;
-    console.log(`🚀 STARTING REGISTRATION for user: "${username}"`);
 
     const user = await UserModel.findOne({ username });
     if (!user) {
-      console.log(`❌ User not found: "${username}"`);
       return res.status(404).json({ message: "User not found" });
     }
 
     await user.save();
     const options = await generateAttestationOptions(username);
 
-    // Debug: Show challenge storage state
-    debugChallenges();
-
-    console.log(`✅ Registration options generated for: "${username}"`);
-    console.log(`   Challenge in response: "${options.challenge}"`);
-
     res.status(200).json(options);
   } catch (error) {
-    console.error("❌ Registration initiation error:", error);
+    console.error("Registration initiation error:", error);
     res.status(500).json({ message: "Failed to generate attestation options" });
   }
 };

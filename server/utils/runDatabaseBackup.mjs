@@ -128,8 +128,6 @@ async function runDatabaseBackup() {
         `Cleanup failed: ${cleanupError.stderr || cleanupError.error.message}`
       );
     }
-
-    console.log("Database backup process completed successfully");
   } catch (error) {
     console.error(
       `Error during database backup: ${
