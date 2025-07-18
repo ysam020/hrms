@@ -14,6 +14,8 @@ function Attendance() {
   const month = String(currentDate.getMonth() + 1).padStart(2, "0"); // month is 0-indexed
 
   useEffect(() => {
+    let isMounted = true; // Flag to track if component is mounted
+
     async function getData() {
       try {
         const res = await apiClient(
@@ -22,13 +24,21 @@ function Attendance() {
             withCredentials: true,
           }
         );
-        setData(res.data);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error("Error fetching attendance summary:", error);
       }
     }
 
     getData();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, [user?.username, year, month]);
 
   // Memoized data to avoid unnecessary recalculations

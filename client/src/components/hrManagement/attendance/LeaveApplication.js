@@ -24,16 +24,26 @@ function LeaveApplication() {
   const { user } = useContext(UserContext);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getPaidLeaves() {
       try {
         const res = await apiClient.get(`/get-available-paid-leaves`);
-        setAvailablePaidLeaves(res.data);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setAvailablePaidLeaves(res.data);
+        }
       } catch (error) {
         console.error(error);
       }
     }
 
     getPaidLeaves();
+
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   const formik = useFormik({

@@ -252,46 +252,62 @@ function RolePermissionsModal(props) {
 
   // Fetch role permissions from the database when the modal opens
   React.useEffect(() => {
+    let isMounted = true;
+
     async function getRolePermissions() {
       if (!props.roleId) return;
 
-      setLoading(true);
+      if (isMounted) {
+        setLoading(true);
+      }
+
       try {
         const res = await apiClient.get(
           `/get-role-permissions/${props.roleId}`
         );
 
-        // Set the fetched permissions to state
-        if (res.data && Array.isArray(res.data.permissions)) {
-          setRolePermissions(res.data.permissions);
-        } else if (
-          res.data &&
-          typeof res.data === "object" &&
-          res.data.permissions
-        ) {
-          setRolePermissions(res.data.permissions);
-        } else {
-          // If the response format is different, try to handle it
-          const permissions = Array.isArray(res.data) ? res.data : [];
-          setRolePermissions(permissions);
-        }
+        // Only update state if component is still mounted
+        if (isMounted) {
+          // Set the fetched permissions to state
+          if (res.data && Array.isArray(res.data.permissions)) {
+            setRolePermissions(res.data.permissions);
+          } else if (
+            res.data &&
+            typeof res.data === "object" &&
+            res.data.permissions
+          ) {
+            setRolePermissions(res.data.permissions);
+          } else {
+            // If the response format is different, try to handle it
+            const permissions = Array.isArray(res.data) ? res.data : [];
+            setRolePermissions(permissions);
+          }
 
-        // Reset changes flag since we're just loading initial data
-        setHasChanges(false);
+          // Reset changes flag since we're just loading initial data
+          setHasChanges(false);
+        }
       } catch (error) {
         console.error("Error fetching role permissions:", error);
-        setAlert({
-          open: true,
-          message: "Error fetching role permissions. Please try again.",
-          severity: "error",
-        });
-        setRolePermissions([]);
+        if (isMounted) {
+          setAlert({
+            open: true,
+            message: "Error fetching role permissions. Please try again.",
+            severity: "error",
+          });
+          setRolePermissions([]);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     getRolePermissions();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line
   }, [props.roleId]);
 

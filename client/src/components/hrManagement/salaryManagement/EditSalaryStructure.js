@@ -267,24 +267,29 @@ function EditSalaryStructure() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getSalaryStructure() {
       try {
         const res = await apiClient(`/get-user-data/${username}`);
         const structure = res.data.salaryStructure;
 
-        // Set company name from API response
-        setCompanyName(res.data.companyName || "");
+        // Only update state if component is still mounted
+        if (isMounted) {
+          // Set company name from API response
+          setCompanyName(res.data.companyName || "");
+          setGrossSalary(parseFloat(res.data.salary) || 0);
 
-        setGrossSalary(parseFloat(res.data.salary) || 0);
-        if (structure) {
-          setFixedStructure(structure);
-          formik.setValues((prev) => ({
-            ...prev,
-            salaryStructure: {
-              ...prev.salaryStructure,
-              ...structure,
-            },
-          }));
+          if (structure) {
+            setFixedStructure(structure);
+            formik.setValues((prev) => ({
+              ...prev,
+              salaryStructure: {
+                ...prev.salaryStructure,
+                ...structure,
+              },
+            }));
+          }
         }
       } catch (err) {
         console.error(err);
@@ -292,37 +297,60 @@ function EditSalaryStructure() {
     }
 
     getSalaryStructure();
+
+    return () => {
+      isMounted = false;
+    };
   }, [username]);
 
   // Updated useEffect to handle priority logic
   useEffect(() => {
+    let isMounted = true;
+
     const loadSalaryData = async () => {
       if (!grossSalary) return; // wait for salary to load
 
-      // First, try to get existing salary data
-      const existingData = await getExistingSalaryData();
+      try {
+        // First, try to get existing salary data
+        const existingData = await getExistingSalaryData();
 
-      if (
-        existingData &&
-        (existingData.basicPay !== undefined || existingData.salaryStructure)
-      ) {
-        // Handle both direct properties and nested salaryStructure
-        const salaryData = existingData.salaryStructure || existingData;
+        // Only proceed if component is still mounted
+        if (!isMounted) return;
 
-        formik.setValues((prev) => ({
-          ...prev,
-          salaryStructure: {
-            ...prev.salaryStructure,
-            ...salaryData,
-          },
-        }));
-      } else {
-        // If no existing data, fallback to attendance calculation
-        await calculateSalaryFromAttendance();
+        if (
+          existingData &&
+          (existingData.basicPay !== undefined || existingData.salaryStructure)
+        ) {
+          // Handle both direct properties and nested salaryStructure
+          const salaryData = existingData.salaryStructure || existingData;
+
+          // Only update formik if component is still mounted
+          if (isMounted) {
+            formik.setValues((prev) => ({
+              ...prev,
+              salaryStructure: {
+                ...prev.salaryStructure,
+                ...salaryData,
+              },
+            }));
+          }
+        } else {
+          // If no existing data, fallback to attendance calculation
+          // Only proceed if component is still mounted
+          if (isMounted) {
+            await calculateSalaryFromAttendance();
+          }
+        }
+      } catch (error) {
+        console.error("Error loading salary data:", error);
       }
     };
 
     loadSalaryData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [date, grossSalary, username, companyName]);
 
   const updatedSalaryComponents = getFilteredSalaryComponents();

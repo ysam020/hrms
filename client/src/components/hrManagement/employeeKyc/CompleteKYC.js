@@ -97,10 +97,15 @@ function CompleteKYC(props) {
   });
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getData() {
       if (username) {
         try {
           const res = await apiClient(`/get-user-data/${username}`);
+
+          // Only proceed if component is still mounted
+          if (!isMounted) return;
 
           // Merge API data with initial values to ensure no field becomes undefined
           const mergedData = {};
@@ -132,8 +137,10 @@ function CompleteKYC(props) {
             });
           }
 
-          // Set the safely merged values
-          formik.setValues(mergedData);
+          // Set the safely merged values only if component is still mounted
+          if (isMounted) {
+            formik.setValues(mergedData);
+          }
         } catch (error) {
           console.error("Error occurred while fetching user data:", error);
         }
@@ -141,6 +148,10 @@ function CompleteKYC(props) {
     }
 
     getData();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line
   }, [username]);
 

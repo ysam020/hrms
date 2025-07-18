@@ -12,15 +12,26 @@ function HrActivities() {
   const [data, setData] = useState([]);
 
   useEffect(() => {
+    let isMounted = true; // Flag to track if component is mounted
+
     async function getData() {
       try {
         const res = await apiClient(`/get-hr-activities`);
-        setData(res.data);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error(error);
       }
     }
+
     getData();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Memoize columns

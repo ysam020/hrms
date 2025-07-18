@@ -13,27 +13,38 @@ function ForgotPasswordForm(props) {
   const [strengthLabel, setStrengthLabel] = useState("");
 
   useEffect(() => {
+    let isMounted = true;
+
     async function sendOtp() {
       try {
         const res = await apiClient.post(`/send-forgot-password-otp`, {
           username: props.username,
         });
 
-        setAlert({
-          open: true,
-          message: res?.data?.message,
-          severity: "success",
-        });
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setAlert({
+            open: true,
+            message: res?.data?.message,
+            severity: "success",
+          });
+        }
       } catch (err) {
-        setAlert({
-          open: true,
-          message: err?.response?.data?.message,
-          severity: "error",
-        });
+        if (isMounted) {
+          setAlert({
+            open: true,
+            message: err?.response?.data?.message,
+            severity: "error",
+          });
+        }
       }
     }
 
     sendOtp();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line
   }, [props.username]);
 

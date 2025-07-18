@@ -26,21 +26,35 @@ function ViewAttendances() {
   const { setAlert } = useContext(AlertContext);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getAttendances() {
       try {
         const [month, year] = date.split("-");
         const res = await apiClient(`/get-all-attendances/${month}/${year}`);
-        setData(res.data);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error(error);
-        setAlert({
-          open: true,
-          message: "Failed to fetch attendances. Please try again.",
-          severity: "error",
-        });
+
+        if (isMounted) {
+          setAlert({
+            open: true,
+            message: "Failed to fetch attendances. Please try again.",
+            severity: "error",
+          });
+        }
       }
     }
+
     getAttendances();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line
   }, [date]);
 

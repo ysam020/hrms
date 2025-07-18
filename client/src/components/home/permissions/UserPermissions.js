@@ -65,14 +65,31 @@ function UserPermissions() {
   } = useUserAutoComplete(userList);
 
   React.useEffect(() => {
+    let isMounted = true;
+
     async function checkSuperUser() {
       if (selectedUser) {
-        const res = await apiClient.get(`/is-superuser/${selectedUser}`);
-        setIsSuperUser(res.data.isSuperUser);
+        try {
+          const res = await apiClient.get(`/is-superuser/${selectedUser}`);
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setIsSuperUser(res.data.isSuperUser);
+          }
+        } catch (error) {
+          console.error("Error checking superuser status:", error);
+          // Optionally handle error state if component is still mounted
+          if (isMounted) {
+            setIsSuperUser(false); // Default to false on error
+          }
+        }
       }
     }
 
     checkSuperUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedUser]);
 
   const handleSuperUserChange = async (event) => {
@@ -130,62 +147,119 @@ function UserPermissions() {
   }, [debouncedSearchUser]);
 
   React.useEffect(() => {
+    let isMounted = true;
+
+    async function checkSuperUser() {
+      if (selectedUser) {
+        try {
+          const res = await apiClient.get(`/is-superuser/${selectedUser}`);
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setIsSuperUser(res.data.isSuperUser);
+          }
+        } catch (error) {
+          console.error("Error checking superuser status:", error);
+          // Optionally handle error state if component is still mounted
+          if (isMounted) {
+            setIsSuperUser(false); // Default to false on error
+          }
+        }
+      }
+    }
+
+    checkSuperUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedUser]);
+
+  // Get role and permissions useEffect
+  React.useEffect(() => {
+    let isMounted = true;
+
     async function getRolePermissions() {
       try {
         const response = await apiClient.get(`/get-role-and-permissions`);
-        setRoles(response.data);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setRoles(response.data);
+        }
       } catch (error) {
         console.error("Error fetching role permissions:", error);
-        setAlert({
-          open: true,
-          message: "Error loading roles",
-          severity: "error",
-        });
+        if (isMounted) {
+          setAlert({
+            open: true,
+            message: "Error loading roles",
+            severity: "error",
+          });
+        }
       }
     }
 
     getRolePermissions();
+
+    return () => {
+      isMounted = false;
+    };
   }, [setAlert]);
 
   // Fetch user permissions when a user is selected
   React.useEffect(() => {
+    let isMounted = true;
+
     async function getUserPermissions() {
       if (!selectedUser) return;
 
-      setFetchingPermissions(true);
+      if (isMounted) {
+        setFetchingPermissions(true);
+      }
+
       try {
         const res = await apiClient.get(
           `/get-user-permissions/${selectedUser}`
         );
 
-        const userPermissions = Array.isArray(res.data) ? res.data : [];
+        // Only update state if component is still mounted
+        if (isMounted) {
+          const userPermissions = Array.isArray(res.data) ? res.data : [];
 
-        setPermissions(userPermissions);
-        setOriginalUserPermissions([...userPermissions]); // Store original user permissions
+          setPermissions(userPermissions);
+          setOriginalUserPermissions([...userPermissions]); // Store original user permissions
 
-        // Reset the selected role when loading a new user
-        setSelectedRole(null);
+          // Reset the selected role when loading a new user
+          setSelectedRole(null);
 
-        // Reset hasChanges
-        setHasChanges(false);
+          // Reset hasChanges
+          setHasChanges(false);
+        }
       } catch (error) {
         console.error("Error fetching user permissions:", error);
-        setAlert({
-          open: true,
-          message: "Error loading user permissions",
-          severity: "error",
-        });
 
-        // Reset permissions on error
-        setPermissions([]);
-        setOriginalUserPermissions([]);
-        setIsSuperUser(false);
+        if (isMounted) {
+          setAlert({
+            open: true,
+            message: "Error loading user permissions",
+            severity: "error",
+          });
+
+          // Reset permissions on error
+          setPermissions([]);
+          setOriginalUserPermissions([]);
+          setIsSuperUser(false);
+        }
       } finally {
-        setFetchingPermissions(false);
+        if (isMounted) {
+          setFetchingPermissions(false);
+        }
       }
     }
 
     getUserPermissions();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedUser, setAlert]);
 
   return (

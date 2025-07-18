@@ -37,10 +37,15 @@ function ActivityDrawer(props) {
   const { theme } = React.useContext(ThemeContext);
 
   React.useEffect(() => {
+    let isMounted = true;
+
     async function fetchFilteredLogs() {
       if (!props.open) return;
 
-      setLoading(true);
+      if (isMounted) {
+        setLoading(true);
+      }
+
       try {
         const params = new URLSearchParams();
         params.append("days", selectedDays);
@@ -54,23 +59,35 @@ function ActivityDrawer(props) {
         }
 
         const res = await apiClient.get(`/audit-logs?${params.toString()}`);
-        setFilteredLogs(res.data);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setFilteredLogs(res.data);
+        }
       } catch (err) {
-        setAlert({
-          open: true,
-          message:
-            err.message === "Network Error"
-              ? "Network Error, your details will be submitted when you are back online"
-              : err.response?.data?.message || "Something went wrong",
-          severity: "error",
-        });
-        setFilteredLogs([]);
+        if (isMounted) {
+          setAlert({
+            open: true,
+            message:
+              err.message === "Network Error"
+                ? "Network Error, your details will be submitted when you are back online"
+                : err.response?.data?.message || "Something went wrong",
+            severity: "error",
+          });
+          setFilteredLogs([]);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     fetchFilteredLogs();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line
   }, [props.open, selectedDays, selectedEntity, selectedUser]);
 

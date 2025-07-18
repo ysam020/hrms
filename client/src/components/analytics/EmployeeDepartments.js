@@ -8,18 +8,31 @@ const EmployeeDepartments = (props) => {
   const [loading, setLoading] = React.useState(true); // Track loading state
 
   React.useEffect(() => {
+    let isMounted = true; // Flag to track if component is mounted
+
     async function getData() {
       try {
         const res = await apiClient(`/get-employee-departments`);
-        setData(res.data);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error(error);
       } finally {
-        setLoading(false);
+        // Only update loading state if component is still mounted
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     getData();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const labels = data.map((item) => item._id);

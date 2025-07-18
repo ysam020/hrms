@@ -9,16 +9,26 @@ const EmployeePerformance = () => {
   const [data, setData] = React.useState([]);
 
   React.useEffect(() => {
+    let isMounted = true; // Flag to track if component is mounted
+
     async function getData() {
       try {
         const res = await apiClient(`/employee-performance`);
-        setData(res.data);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error(error);
       }
     }
 
     getData();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Extract the data for the chart

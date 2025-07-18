@@ -42,17 +42,30 @@ function ViewAppraisals() {
   const handleCloseViewFeedbackModal = () => setOpenViewFeedbackModal(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getData() {
       try {
         const res = await apiClient(`/view-appraisals/`);
-        setData(res.data);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error("Error occurred while fetching appraisals:", error);
-        setData([]);
+
+        if (isMounted) {
+          setData([]);
+        }
       }
     }
 
     getData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const deleteAppraisal = async (_id, username) => {

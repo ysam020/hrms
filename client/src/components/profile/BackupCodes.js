@@ -25,23 +25,17 @@ function BackupCodes() {
     try {
       switch (action) {
         case "requestNewCodes": {
-          const { requestNewCodes } = await import(
-            "../../utils/profile/requestNewCodes"
-          );
+          const { requestNewCodes } = await import("@hrms/auth");
           requestNewCodes(...args);
           break;
         }
         case "deleteCodes": {
-          const { deleteCodes } = await import(
-            "../../utils/profile/deleteCodes"
-          );
+          const { deleteCodes } = await import("@hrms/auth");
           deleteCodes(...args);
           break;
         }
         case "sendEmail": {
-          const { sendEmail } = await import(
-            "../../utils/profile/sendBackupCodeEmail"
-          );
+          const { sendEmail } = await import("@hrms/auth");
           sendEmail(...args);
           break;
         }

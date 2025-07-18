@@ -49,32 +49,54 @@ function ViewDetails() {
   })();
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getData() {
       try {
         const res = await apiClient(`get-employee-details/${username}`);
-        setData(res.data);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (err) {
-        setErrorStatus(err.response?.status);
-        setAlert({
-          open: true,
-          message:
-            err.message === "Network Error"
-              ? "Network Error, your details will be submitted when you are back online"
-              : err.response?.data?.message || "Something went wrong",
-          severity: "error",
-        });
+        if (isMounted) {
+          setErrorStatus(err.response?.status);
+          setAlert({
+            open: true,
+            message:
+              err.message === "Network Error"
+                ? "Network Error, your details will be submitted when you are back online"
+                : err.response?.data?.message || "Something went wrong",
+            severity: "error",
+          });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     async function loadSalaryComponents() {
-      const module = await salaryComponentsImport;
-      setSalaryComponents(module.salaryComponents);
+      try {
+        const module = await salaryComponentsImport;
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setSalaryComponents(module.salaryComponents);
+        }
+      } catch (error) {
+        console.error("Error loading salary components:", error);
+      }
     }
 
     getData();
     loadSalaryComponents();
+
+    return () => {
+      isMounted = false;
+    };
   }, [username, setAlert]);
 
   if (loading) {

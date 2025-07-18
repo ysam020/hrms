@@ -28,16 +28,26 @@ function ScheduleInterviewModal({
   const [userList, setUserList] = useState([]);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getUsers() {
       try {
         const response = await apiClient.get("/get-interviewer-list");
-        setUserList(response.data);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setUserList(response.data);
+        }
       } catch (error) {
         console.error("Error fetching user list:", error);
       }
     }
 
     getUsers();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const validationSchema = Yup.object({

@@ -50,31 +50,47 @@ function EditDetails() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getGrossSalary() {
-      const res = await apiClient(`/get-user-data/${username}`);
-      const data = res.data;
+      try {
+        const res = await apiClient(`/get-user-data/${username}`);
+        const data = res.data;
 
-      // Set company name from API response
-      setCompany(data.company || "");
+        // Only update state if component is still mounted
+        if (isMounted) {
+          // Set company name from API response
+          setCompany(data.company || "");
 
-      formik.setValues((prev) => ({
-        ...prev,
-        grossSalary: data.salary || "",
-        pf_no: data.pf_no || "",
-        uan_no: data.uan_no || "",
-        esic_no: data.esic_no || "",
-        employeeStatus: data.employeeStatus || "",
-        reasonForTermination: data.reasonForTermination || "",
-        dateOfTermination: data.dateOfTermination || "",
-        dateOfAbscond: data.dateOfAbscond || "",
-        assets: data.assets || [],
-        salaryStructure: {
-          ...data.salaryStructure,
-        },
-      }));
+          formik.setValues((prev) => ({
+            ...prev,
+            grossSalary: data.salary || "",
+            pf_no: data.pf_no || "",
+            uan_no: data.uan_no || "",
+            esic_no: data.esic_no || "",
+            employeeStatus: data.employeeStatus || "",
+            reasonForTermination: data.reasonForTermination || "",
+            dateOfTermination: data.dateOfTermination || "",
+            dateOfAbscond: data.dateOfAbscond || "",
+            assets: data.assets || [],
+            salaryStructure: {
+              ...data.salaryStructure,
+            },
+          }));
+        }
+      } catch (error) {
+        console.error(
+          "Error occurred while fetching gross salary data:",
+          error
+        );
+      }
     }
 
     getGrossSalary();
+
+    return () => {
+      isMounted = false;
+    };
   }, [username]);
 
   const formik = useFormik({

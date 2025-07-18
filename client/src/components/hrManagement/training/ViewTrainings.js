@@ -20,25 +20,41 @@ function ViewTrainings() {
   const dataCache = useRef(new Map());
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getData() {
       if (selectedUser && userList.includes(selectedUser)) {
         if (dataCache.current.has(selectedUser)) {
-          setData(dataCache.current.get(selectedUser));
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setData(dataCache.current.get(selectedUser));
+          }
           return;
         }
 
         try {
           const res = await apiClient(`/view-trainings/${selectedUser}`);
-          setData(res.data);
-          dataCache.current.set(selectedUser, res.data); // Cache the data
+
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setData(res.data);
+            dataCache.current.set(selectedUser, res.data); // Cache the data
+          }
         } catch (error) {
           console.error("Error occurred while fetching trainings:", error);
-          setData([]);
+
+          if (isMounted) {
+            setData([]);
+          }
         }
       }
     }
 
     getData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedUser, userList]);
 
   const baseColumns = useMemo(

@@ -1,6 +1,6 @@
 import apiClient from "../../config/axiosConfig";
 
-export const sendEmail = async (setAlert) => {
+export const sendBackupCodeEmail = async (setAlert) => {
   try {
     const res = await apiClient(`/send-backup-codes-email`);
     setAlert({

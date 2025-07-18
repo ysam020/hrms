@@ -9,18 +9,31 @@ const JoiningInfo = (props) => {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    let isMounted = true; // Flag to track if component is mounted
+
     async function getData() {
       try {
         const res = await apiClient(`/get-joining-data`);
-        setData(res.data);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error(error);
       } finally {
-        setLoading(false);
+        // Only update loading state if component is still mounted
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     getData();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (loading) {

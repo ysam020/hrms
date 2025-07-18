@@ -15,17 +15,26 @@ function ViewIndividualKyc() {
   const { setAlert } = useContext(AlertContext);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getUser() {
       try {
         const res = await apiClient(`/get-user-data/${username}`);
 
-        setData(res.data);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error("Error occurred while fetching user data:", error);
       }
     }
 
     getUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, [username]);
 
   const handleKycApproval = async (status) => {

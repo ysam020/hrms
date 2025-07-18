@@ -54,16 +54,26 @@ function ViewIndividualJob() {
   const handleCloseInfoModal = () => setOpenInfoModal(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function getData() {
       try {
         const res = await apiClient(`/view-job-opening/${_id}`);
-        setData(res.data);
+
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setData(res.data);
+        }
       } catch (error) {
         console.error(error);
       }
     }
 
     getData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [_id]);
 
   // Modified getJobApplications to accept status parameter

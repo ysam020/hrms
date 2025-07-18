@@ -16,23 +16,37 @@ function WebAuthnLoginForm(props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingLoginData, setPendingLoginData] = useState(null);
 
+  // Add isMounted ref to track component mount status
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
     if (usernameRef.current) {
       usernameRef.current.focus();
     }
   }, []);
 
+  // Cleanup effect to prevent state updates after unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const processLogin = (userData) => {
-    setUser(userData.user);
+    if (isMountedRef.current) {
+      setUser(userData.user);
+    }
   };
 
   const handleLoginError = (error) => {
     console.error("Login error:", error);
-    setAlert({
-      open: true,
-      message: "Login failed. Please try again.",
-      severity: "error",
-    });
+    if (isMountedRef.current) {
+      setAlert({
+        open: true,
+        message: "Login failed. Please try again.",
+        severity: "error",
+      });
+    }
   };
 
   const formik = useFormik({
@@ -42,8 +56,10 @@ function WebAuthnLoginForm(props) {
     validationSchema,
     onSubmit: async (values) => {
       try {
-        setIsSubmitting(true);
-        props.setUsername(values.username);
+        if (isMountedRef.current) {
+          setIsSubmitting(true);
+          props.setUsername(values.username);
+        }
 
         // First, check if user exists and get their status
         const optionsResponse = await apiClient.post(
@@ -53,25 +69,32 @@ function WebAuthnLoginForm(props) {
           }
         );
 
+        // Only proceed if component is still mounted
+        if (!isMountedRef.current) return;
+
         // Handle different error scenarios
         if (optionsResponse.data.error) {
           const { message, fallbackToPassword } = optionsResponse.data;
 
           // If fallbackToPassword is true, it means no WebAuthn credentials - fall back to password login
           if (fallbackToPassword) {
-            props.setIsTwoFactorEnabled(
-              optionsResponse.data.isTwoFactorEnabled
-            );
-            props.setUseWebAuthn(false);
+            if (isMountedRef.current) {
+              props.setIsTwoFactorEnabled(
+                optionsResponse.data.isTwoFactorEnabled
+              );
+              props.setUseWebAuthn(false);
+            }
             return;
           }
 
           // For other errors (user not found, employee status issues), show error and don't fallback
-          setAlert({
-            open: true,
-            message: message,
-            severity: "error",
-          });
+          if (isMountedRef.current) {
+            setAlert({
+              open: true,
+              message: message,
+              severity: "error",
+            });
+          }
           return;
         }
 
@@ -85,16 +108,22 @@ function WebAuthnLoginForm(props) {
           handleLoginError
         );
 
-        if (result.success) {
-          if (result.data && result.data.user) {
-            setUser(result.data.user);
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          if (result.success) {
+            if (result.data && result.data.user) {
+              setUser(result.data.user);
+            }
+          } else {
+            // WebAuthn authentication failed, but don't fallback to password
+            // The error is already shown by performWebAuthnLogin
           }
-        } else {
-          // WebAuthn authentication failed, but don't fallback to password
-          // The error is already shown by performWebAuthnLogin
         }
       } catch (error) {
         console.error("WebAuthn login error:", error);
+
+        // Only update state if component is still mounted
+        if (!isMountedRef.current) return;
 
         // Check if it's a network error or server error
         if (error.response) {
@@ -102,27 +131,35 @@ function WebAuthnLoginForm(props) {
 
           // If fallbackToPassword is true, fall back to password login
           if (data.fallbackToPassword) {
-            props.setIsTwoFactorEnabled(data.isTwoFactorEnabled);
-            props.setUseWebAuthn(false);
+            if (isMountedRef.current) {
+              props.setIsTwoFactorEnabled(data.isTwoFactorEnabled);
+              props.setUseWebAuthn(false);
+            }
             return;
           }
 
           // For other errors, show the error message
-          setAlert({
-            open: true,
-            message: data.message || "Login failed. Please try again.",
-            severity: "error",
-          });
+          if (isMountedRef.current) {
+            setAlert({
+              open: true,
+              message: data.message || "Login failed. Please try again.",
+              severity: "error",
+            });
+          }
         } else {
           // Network or other errors
-          setAlert({
-            open: true,
-            message: "Login failed. Please try again.",
-            severity: "error",
-          });
+          if (isMountedRef.current) {
+            setAlert({
+              open: true,
+              message: "Login failed. Please try again.",
+              severity: "error",
+            });
+          }
         }
       } finally {
-        setIsSubmitting(false);
+        if (isMountedRef.current) {
+          setIsSubmitting(false);
+        }
       }
     },
   });
