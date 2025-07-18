@@ -1,6 +1,5 @@
 import apiClient from "../../config/axiosConfig";
 
-// Step 1: Check if WebAuthn credentials exist
 export async function checkCredentials(username) {
   try {
     const response = await apiClient.post(`/webauthn-credential-check`, {
@@ -11,7 +10,7 @@ export async function checkCredentials(username) {
   } catch (error) {
     console.error("Credential check error:", error);
 
-    // Handle server errors (404, 403, etc.) and return structured response
+    // Handle server errors and return structured response
     if (error.response && error.response.data && error.response.data.message) {
       return {
         message: error.response.data.message,

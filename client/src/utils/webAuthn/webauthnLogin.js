@@ -1,17 +1,9 @@
 import apiClient from "../../config/axiosConfig";
 import { toArrayBuffer } from "./base64urlUtils.js";
 
-export async function performWebAuthnLogin(
-  username,
-  setAlert,
-  processLogin,
-  handleLoginError
-) {
+export async function performWebAuthnLogin(username, setAlert) {
   try {
-    console.log(`🔐 Starting WebAuthn login for: ${username}`);
-
     // Step 1: Get login options from server
-    console.log("📡 Requesting login options...");
     const optionsResponse = await apiClient.post("/webauthn-login-options", {
       username,
     });
@@ -21,7 +13,6 @@ export async function performWebAuthnLogin(
     }
 
     const options = optionsResponse.data;
-    console.log("✅ Received login options");
 
     // Step 2: Format options for WebAuthn API
     const publicKeyCredentialRequestOptions = {
@@ -36,8 +27,6 @@ export async function performWebAuthnLogin(
       })),
     };
 
-    console.log("🔑 Requesting assertion from authenticator...");
-
     // Step 3: Get assertion from authenticator
     const assertion = await navigator.credentials.get({
       publicKey: publicKeyCredentialRequestOptions,
@@ -46,8 +35,6 @@ export async function performWebAuthnLogin(
     if (!assertion) {
       throw new Error("No assertion received from authenticator");
     }
-
-    console.log("✅ Assertion received");
 
     // Step 4: Format credential for server transmission
     const credential = {
@@ -68,8 +55,6 @@ export async function performWebAuthnLogin(
       },
     };
 
-    console.log("📤 Step 1: Verifying credential...");
-
     // Step 5: Verify credential (this consumes the challenge)
     const verifyResponse = await apiClient.post("/webauthn-verify-login", {
       username,
@@ -81,10 +66,6 @@ export async function performWebAuthnLogin(
         verifyResponse.data.message || "Login verification failed"
       );
     }
-
-    console.log("✅ Step 1 complete: Credential verified successfully");
-
-    console.log("🔐 Step 2: Creating login session...");
 
     // Get geolocation if needed
     let geolocation = { latitude: null, longitude: null };
@@ -104,9 +85,7 @@ export async function performWebAuthnLogin(
       console.warn("Could not get geolocation:", geoError.message);
     }
 
-    // ✅ Complete login with session creation
-    console.log("📤 Creating session via /webauthn-login...");
-
+    // Complete login with session creation
     const loginResponse = await apiClient.post("/webauthn-login", {
       username,
       credential,
@@ -114,15 +93,7 @@ export async function performWebAuthnLogin(
       userAgent: navigator.userAgent,
     });
 
-    console.log("📥 Login response:", {
-      status: loginResponse.status,
-      message: loginResponse.data.message,
-      hasUser: !!loginResponse.data.user,
-    });
-
     if (loginResponse.data.message === "Login successful") {
-      console.log("✅ Step 2 complete: Session created successfully!");
-
       setAlert({
         open: true,
         message: "Login successful!",
@@ -138,7 +109,7 @@ export async function performWebAuthnLogin(
       throw new Error(loginResponse.data.message || "Session creation failed");
     }
   } catch (error) {
-    console.error("❌ WebAuthn login error:", error);
+    console.error("WebAuthn login error:", error);
 
     let errorMessage = "WebAuthn login failed";
 

@@ -1,4 +1,3 @@
-// Fixed client/src/forms/WebAuthnLoginForm.js
 import React, { useContext, useRef, useEffect, useState } from "react";
 import { InputText } from "primereact/inputtext";
 import { UserContext } from "../contexts/UserContext";
@@ -7,7 +6,6 @@ import { useFormik } from "formik";
 import { validationSchema } from "../schemas/auth/webAuthnLoginSchema";
 import { AlertContext } from "../contexts/AlertContext";
 import LocationConsentDrawer from "../components/customComponents/LocationConsentDrawer";
-import apiClient from "../config/axiosConfig";
 
 function WebAuthnLoginForm(props) {
   const { setUser } = useContext(UserContext);
@@ -147,51 +145,3 @@ function WebAuthnLoginForm(props) {
 }
 
 export default WebAuthnLoginForm;
-
-// ===================================================
-
-// Alternative: If you want to keep your existing structure,
-// just fix the onSubmit function:
-
-// const onSubmitFixed = async (values) => {
-//   try {
-//     setIsSubmitting(true);
-//     props.setUsername(values.username);
-
-//     // Import the new WebAuthn login utility
-//     const { performWebAuthnLogin } = await import(
-//       "../utils/webAuthn/webauthnLogin"
-//     );
-
-//     const result = await performWebAuthnLogin(values.username, setAlert);
-
-//     if (result.success) {
-//       // ✅ LOGIN IS ALREADY COMPLETE!
-//       // Don't call any other login functions
-//       console.log("WebAuthn login successful:", result.user);
-
-//       // Just update your UI/state as needed
-//       if (processLogin) {
-//         processLogin(result.data);
-//       }
-//     } else {
-//       // Fall back to regular login or show error
-//       props.setUseWebAuthn(false);
-//     }
-//   } catch (error) {
-//     console.error("WebAuthn login error:", error);
-//     setAlert({
-//       open: true,
-//       message: "Login failed. Please try again.",
-//       severity: "error",
-//     });
-//     props.setUseWebAuthn(false);
-//   } finally {
-//     setIsSubmitting(false);
-//   }
-// };
-
-// ===================================================
-
-// Debug: Enhanced performWebAuthnLogin with better error messages
-// Updated client/src/utils/webAuthn/webauthnLogin.js
