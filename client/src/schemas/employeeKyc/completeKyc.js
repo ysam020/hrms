@@ -1,11 +1,12 @@
 import * as yup from "yup";
+import validators from "@hrms/validation-utils";
 
-const emailRegex =
-  /[a-zA-Z0-9_]+(\.)?[a-zA-Z0-9_]+[@]{1}[a-zA-Z]+\.[a-zA-Z]{2,6}/;
-const mobileNumberRegex = /^[6-9]\d{9}$/;
-const aadharNumberRegex = /^\d{12}$/;
-const panNumberRegex = /^[A-Z]{5}\d{4}[A-Z]$/;
-const pinCodeRegex = /^\d{6}$/;
+const { email, mobileNumber, aadharNumber, panNumber, pinCode } = validators;
+const emailRegex = email();
+const mobileNumberRegex = mobileNumber();
+const aadharNumberRegex = aadharNumber();
+const panNumberRegex = panNumber();
+const pinCodeRegex = pinCode();
 
 export const validationSchema = yup.object({
   employee_photo: yup

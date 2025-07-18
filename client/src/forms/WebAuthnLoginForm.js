@@ -34,99 +34,50 @@ function WebAuthnLoginForm(props) {
       let hasServerError = false; // Track if we have a server error
 
       try {
-        const { checkCredentials } = await import(
-          "../utils/webAuthn/checkCredentials"
-        );
-        credentialRes = await checkCredentials(values.username);
+        setIsSubmitting(true);
+        props.setUsername(values.username);
 
-        // If server returned an error message, stop here
-        if (credentialRes?.message) {
-          setAlert({
-            open: true,
-            message: credentialRes.message,
-            severity: "error",
-          });
-          hasServerError = true; // Mark that we have a server error
-          return; // Don't proceed or fall back
-        }
-
-        // No credentials, but valid user
-        if (!credentialRes.hasCredentials) {
-          props.setUseWebAuthn(false);
-          props.setIsTwoFactorEnabled(credentialRes.isTwoFactorEnabled);
-          return;
-        }
-
-        const { getLoginOptions } = await import(
-          "../utils/webAuthn/getLoginOptions"
-        );
-        const loginOptions = await getLoginOptions(values.username);
-
-        if (!loginOptions) {
-          props.setUseWebAuthn(false);
-          return;
-        }
-
-        const { formatLoginOptions } = await import(
-          "../utils/webAuthn/formatLoginOptions"
-        );
-        const formattedOptions = formatLoginOptions(loginOptions);
-
-        const { getCredential } = await import(
-          "../utils/webAuthn/getCredential"
-        );
-        const credential = await getCredential(formattedOptions);
-
-        const { serializeCredential } = await import(
-          "../utils/webAuthn/serializeCredential"
-        );
-        const serializedCredential = serializeCredential(credential);
-
-        const { verifyCredential } = await import(
-          "../utils/webAuthn/verifyCredential"
-        );
-        const isVerified = await verifyCredential(
-          values.username,
-          serializedCredential
+        // Import the new WebAuthn login utility
+        const { performWebAuthnLogin } = await import(
+          "../utils/webAuthn/webauthnLogin"
         );
 
-        if (isVerified) {
+        const result = await performWebAuthnLogin(values.username, setAlert);
+
+        if (result.success) {
+          // Handle successful login
+          console.log("Login successful, user:", result.user);
+
+          // You might want to set user context, redirect, etc.
+          // setUser(result.user);
+          // navigate('/dashboard');
+
+          // Or proceed with your existing login flow if you need session management
           const { login } = await import("../utils/webAuthn/login");
           await login(
             values,
-            serializedCredential,
+            result.credential,
             setAlert,
-            processLogin,
-            handleLoginError,
+            processLogin, // Your existing function
+            handleLoginError, // Your existing function
             setIsSubmitting,
             setShowConsentDrawer,
             setPendingLoginData
           );
         } else {
+          // Fall back to regular login or show error
           props.setUseWebAuthn(false);
         }
-      } catch (err) {
-        console.error(err);
-
-        // Don't fall back to regular login if we have a server error
-        if (hasServerError) {
-          return;
-        }
-
-        if (err.name === "NotAllowedError") {
-          console.warn("User canceled the WebAuthn prompt.");
-        }
-
-        // Only fall back to regular login for client-side errors or network issues
-        // not for server validation errors (404, 403, etc.)
-        if (credentialRes && credentialRes.isTwoFactorEnabled !== undefined) {
-          props.setIsTwoFactorEnabled(credentialRes.isTwoFactorEnabled);
-        } else {
-          console.warn("Could not determine 2FA status, setting to false.");
-          props.setIsTwoFactorEnabled(false);
-        }
-
+      } catch (error) {
+        console.error("WebAuthn login error:", error);
+        setAlert({
+          open: true,
+          message: "Login failed. Please try again.",
+          severity: "error",
+        });
         props.setUseWebAuthn(false);
+      } finally {
+        setIsSubmitting(false);
       }
     },
   });

@@ -18,6 +18,7 @@ import useMuiTheme from "./hooks/useMuiTheme.js";
 import ErrorFallback from "./components/customComponents/ErrorFallback.js";
 import { ErrorBoundary } from "react-error-boundary";
 import Loading from "./components/customComponents/Loading.js";
+
 const HomePage = React.lazy(() => import("./pages/HomePage"));
 const LoginPage = React.lazy(() => import("./pages/LoginPage"));
 const SpotlightModal = React.lazy(() => import("./modals/SpotlightModal"));

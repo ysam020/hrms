@@ -56,18 +56,38 @@
  *       - WebAuthn
  */
 
+// 3. Enhanced server/controllers/webauthn/initiateLogin.mjs
 import { generateAssertionOptions } from "../../utils/generateAssertionOptions.mjs";
 
 const initiateLogin = async (req, res) => {
   try {
     const { username } = req.body;
+
+    console.log(`🚀 STARTING LOGIN OPTIONS for user: "${username}"`);
+
+    if (!username) {
+      return res.status(400).json({
+        error: true,
+        message: "Username is required",
+      });
+    }
+
     // Generate assertion options for WebAuthn login
     const options = await generateAssertionOptions(username);
 
+    // Check if there was an error (user not found, no credentials, etc.)
+    if (options.error) {
+      return res.status(404).json(options);
+    }
+
+    console.log(`✅ Login options generated successfully for: "${username}"`);
     res.status(200).json(options);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to generate assertion options" });
+    console.error(`❌ Error generating login options:`, error);
+    res.status(500).json({
+      error: true,
+      message: "Failed to generate assertion options",
+    });
   }
 };
 

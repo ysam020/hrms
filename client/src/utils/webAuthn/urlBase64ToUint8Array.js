@@ -1,13 +1,16 @@
-export const urlBase64ToUint8Array = (base64String) => {
+export function urlBase64ToUint8Array(base64String) {
+  // Add padding if needed
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
 
-  const rawData = window.atob(base64);
-  const buffer = new Uint8Array(rawData.length);
+  // Convert base64 to binary string
+  const rawData = atob(base64);
 
+  // Convert to Uint8Array
+  const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; ++i) {
-    buffer[i] = rawData.charCodeAt(i);
+    outputArray[i] = rawData.charCodeAt(i);
   }
 
-  return buffer;
-};
+  return outputArray;
+}

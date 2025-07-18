@@ -53,11 +53,9 @@ function MarkAttendance() {
   });
 
   // Add a stable ref for the video element to prevent recreation
-  // const videoCallbackRef = useRef(null);
   const videoCallbackRef = useCallback(
     (node) => {
       if (node && faceRecognitionState.videoStream) {
-        console.log("🎥 Video element mounted, setting stream");
         node.srcObject = faceRecognitionState.videoStream;
         videoStreamRef.current = faceRecognitionState.videoStream;
 
@@ -73,12 +71,6 @@ function MarkAttendance() {
   // Add render logging
   const renderCountRef = useRef(0);
   renderCountRef.current += 1;
-  console.log(`🔄 MarkAttendance render #${renderCountRef.current}`, {
-    dialogOpen,
-    step: faceRecognitionState.step,
-    showVideo: faceRecognitionState.showVideo,
-    progress: faceRecognitionState.progress,
-  });
 
   // Liveness detection parameters
   const HEAD_MOVEMENT_SAMPLES = 10;
@@ -174,7 +166,6 @@ function MarkAttendance() {
   );
 
   const getStepMessage = useCallback((state) => {
-    console.log(`📝 Getting step message for:`, state.step);
     switch (state.step) {
       case "camera_access":
         return "Requesting camera access...";
@@ -206,11 +197,7 @@ function MarkAttendance() {
 
       // Always allow step changes immediately
       if (newState.step && newState.step !== faceRecognitionState.step) {
-        console.log(
-          `🔄 Step change: ${faceRecognitionState.step} → ${newState.step}`
-        );
         setFaceRecognitionState((prev) => {
-          console.log(`📊 State update:`, { prev, newState });
           return { ...prev, ...newState };
         });
         livenessDataRef.current.lastUpdateTime = now;
@@ -219,7 +206,6 @@ function MarkAttendance() {
 
       // Throttle progress updates
       if (now - livenessDataRef.current.lastUpdateTime > UPDATE_THROTTLE) {
-        console.log(`📈 Progress update:`, newState);
         setFaceRecognitionState((prev) => ({ ...prev, ...newState }));
         livenessDataRef.current.lastUpdateTime = now;
       }
@@ -229,14 +215,11 @@ function MarkAttendance() {
 
   // Setup video stream effect - runs only when videoStream changes
   useEffect(() => {
-    console.log("videoCallbackRef.current".videoCallbackRef?.current);
     if (
       faceRecognitionState.showVideo &&
       faceRecognitionState.videoStream &&
       videoCallbackRef.current
     ) {
-      console.log("🎥 Setting up video stream");
-
       const video = videoCallbackRef.current;
       // Only set srcObject if it's different
       if (video.srcObject !== faceRecognitionState.videoStream) {
@@ -261,7 +244,6 @@ function MarkAttendance() {
   }, []);
 
   const performLivenessDetection = async (video) => {
-    console.log(`🔍 Starting liveness detection (head movement only)`);
     return new Promise((resolve, reject) => {
       // Reset refs
       livenessDataRef.current = {
@@ -328,7 +310,6 @@ function MarkAttendance() {
           // Check if liveness detection is complete (head movement only)
           if (maxHeadMovement > 15) {
             clearInterval(detectionInterval);
-            console.log("✅ Liveness detection completed successfully!");
             resolve(true);
           }
 
@@ -349,7 +330,6 @@ function MarkAttendance() {
     let video = null;
 
     try {
-      console.log("🚀 Starting face recognition process for:", fieldType);
       setField(fieldType);
       setDialogOpen(true);
 
@@ -429,7 +409,6 @@ function MarkAttendance() {
         throw new Error("Face does not match. Please try again.");
       }
 
-      console.log("✅ Face verification and liveness check successful!");
       setDialogOpen(false);
 
       const geoLocation = await getGeolocation(setAlert, setShowConsentDrawer);
@@ -472,13 +451,6 @@ function MarkAttendance() {
       "liveness_head_movement",
     ].includes(faceRecognitionState.step);
 
-    console.log(`🖼️ Dialog render:`, {
-      dialogOpen,
-      step: faceRecognitionState.step,
-      isLivenessStep,
-      progress: faceRecognitionState.progress,
-    });
-
     return (
       <Dialog
         open={dialogOpen}
@@ -486,7 +458,6 @@ function MarkAttendance() {
         fullWidth
         disableEscapeKeyDown
         onClose={() => console.log("Dialog close attempt blocked")}
-        // Add these props to prevent flickering
         keepMounted={false}
         transitionDuration={0}
       >
