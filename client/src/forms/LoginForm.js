@@ -8,7 +8,7 @@ import CustomButton from "../components/customComponents/CustomButton";
 import { AlertContext } from "../contexts/AlertContext";
 import apiClient from "../config/axiosConfig";
 import LocationConsentDrawer from "../components/customComponents/LocationConsentDrawer";
-import { getGeolocation } from "../utils/auth/getGeolocation";
+import { getGeolocation } from "@hrms/auth";
 
 function LoginForm(props) {
   const { setUser } = useContext(UserContext);

@@ -4,7 +4,7 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
 import useTabs from "../../hooks/useTabs";
-import { getSessionData } from "../../utils/auth/getSessionData";
+import { getSessionData } from "@hrms/auth";
 import { UserContext } from "../../contexts/UserContext";
 import { useNavigate } from "react-router-dom";
 import { AlertContext } from "../../contexts/AlertContext";
@@ -53,9 +53,7 @@ function Profile() {
   }, []);
 
   const logOutAllDevices = React.useCallback(async () => {
-    const { logOutFromAllSessions } = await import(
-      "../../utils/auth/logOutFromAllSessions"
-    );
+    const { logOutFromAllSessions } = await import("@hrms/auth");
     logOutFromAllSessions(setUser, navigate, setAlert);
   }, [setUser, navigate, setAlert]);
 

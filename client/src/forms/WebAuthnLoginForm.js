@@ -6,6 +6,7 @@ import { useFormik } from "formik";
 import { validationSchema } from "../schemas/auth/webAuthnLoginSchema";
 import { AlertContext } from "../contexts/AlertContext";
 import LocationConsentDrawer from "../components/customComponents/LocationConsentDrawer";
+import apiClient from "../config/axiosConfig";
 
 function WebAuthnLoginForm(props) {
   const { setUser } = useContext(UserContext);
@@ -44,15 +45,44 @@ function WebAuthnLoginForm(props) {
         setIsSubmitting(true);
         props.setUsername(values.username);
 
-        const { performWebAuthnLogin } = await import(
-          "../utils/webAuthn/webauthnLogin"
+        // First, check if user exists and get their status
+        const optionsResponse = await apiClient.post(
+          "/webauthn-login-options",
+          {
+            username: values.username,
+          }
         );
+
+        // Handle different error scenarios
+        if (optionsResponse.data.error) {
+          const { message, fallbackToPassword } = optionsResponse.data;
+
+          // If fallbackToPassword is true, it means no WebAuthn credentials - fall back to password login
+          if (fallbackToPassword) {
+            props.setIsTwoFactorEnabled(
+              optionsResponse.data.isTwoFactorEnabled
+            );
+            props.setUseWebAuthn(false);
+            return;
+          }
+
+          // For other errors (user not found, employee status issues), show error and don't fallback
+          setAlert({
+            open: true,
+            message: message,
+            severity: "error",
+          });
+          return;
+        }
+
+        // If we get here, user exists and has WebAuthn credentials, proceed with WebAuthn login
+        const { performWebAuthnLogin } = await import("@hrms/webauthn");
 
         const result = await performWebAuthnLogin(
           values.username,
           setAlert,
-          processLogin, // Pass the success handler
-          handleLoginError // Pass the error handler
+          processLogin,
+          handleLoginError
         );
 
         if (result.success) {
@@ -60,16 +90,37 @@ function WebAuthnLoginForm(props) {
             setUser(result.data.user);
           }
         } else {
-          props.setUseWebAuthn(false);
+          // WebAuthn authentication failed, but don't fallback to password
+          // The error is already shown by performWebAuthnLogin
         }
       } catch (error) {
-        setAlert({
-          open: true,
-          message: "Login failed. Please try again.",
-          severity: "error",
-        });
-        // Fall back to regular login
-        props.setUseWebAuthn(false);
+        console.error("WebAuthn login error:", error);
+
+        // Check if it's a network error or server error
+        if (error.response) {
+          const { data } = error.response;
+
+          // If fallbackToPassword is true, fall back to password login
+          if (data.fallbackToPassword) {
+            props.setIsTwoFactorEnabled(data.isTwoFactorEnabled);
+            props.setUseWebAuthn(false);
+            return;
+          }
+
+          // For other errors, show the error message
+          setAlert({
+            open: true,
+            message: data.message || "Login failed. Please try again.",
+            severity: "error",
+          });
+        } else {
+          // Network or other errors
+          setAlert({
+            open: true,
+            message: "Login failed. Please try again.",
+            severity: "error",
+          });
+        }
       } finally {
         setIsSubmitting(false);
       }

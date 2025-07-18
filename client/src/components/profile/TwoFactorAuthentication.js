@@ -24,14 +24,10 @@ function TwoFactorAuthentication() {
 
   const handleTwoFASwitchChange = async (e) => {
     if (e.target.checked) {
-      const { enableTwoFactor } = await import(
-        "../../utils/auth/enableTwoFactor"
-      );
+      const { enableTwoFactor } = await import("@hrms/auth");
       enableTwoFactor(user, setIsTwoFactorEnabled, setQr, setUser);
     } else {
-      const { disableTwoFactor } = await import(
-        "../../utils/auth/disableTwoFactor"
-      );
+      const { disableTwoFactor } = await import("@hrms/auth");
       disableTwoFactor(setIsTwoFactorEnabled, setAlert);
     }
   };
@@ -55,7 +51,7 @@ function TwoFactorAuthentication() {
                 className="btn"
                 onClick={async () => {
                   const { initiateWebauthnRegistration } = await import(
-                    "../../utils/webAuthn/initiateWebauthnRegistration"
+                    "@hrms/webauthn"
                   );
                   initiateWebauthnRegistration(setAlert);
                 }}
@@ -66,9 +62,7 @@ function TwoFactorAuthentication() {
                 style={{ marginTop: 0, marginLeft: "10px" }}
                 className="btn"
                 onClick={async () => {
-                  const { disableWebAuthn } = await import(
-                    "../../utils/webAuthn/disableWebAuthn"
-                  );
+                  const { disableWebAuthn } = await import("@hrms/webauthn");
                   disableWebAuthn(setAlert);
                 }}
               >

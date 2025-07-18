@@ -10,9 +10,7 @@ function useFullScreen() {
         event.key === "f"
       ) {
         event.preventDefault();
-        const { toggleFullScreen } = await import(
-          "../utils/keyboard-shortcuts/toggleFullScreen"
-        );
+        const { toggleFullScreen } = await import("@hrms/shortcuts");
         toggleFullScreen();
       }
     };

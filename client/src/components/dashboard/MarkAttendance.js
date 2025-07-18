@@ -18,7 +18,7 @@ import {
 import { AlertContext } from "../../contexts/AlertContext";
 import { UserContext } from "../../contexts/UserContext";
 import apiClient from "../../config/axiosConfig";
-import { getGeolocation } from "../../utils/auth/getGeolocation";
+import { getGeolocation } from "@hrms/auth";
 import { addAttendance } from "../../utils/addAttendance";
 import * as faceapi from "face-api.js";
 

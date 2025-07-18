@@ -1,19 +1,31 @@
 import apiClient from "../../config/axiosConfig";
-// import { toArrayBuffer } from "./base64urlUtils.js";
-import { toArrayBuffer } from "@hrms/webauthn";
+import { toArrayBuffer } from "./toArrayBuffer";
 
-export async function performWebAuthnLogin(username, setAlert) {
+export async function performWebAuthnLogin(
+  username,
+  setAlert,
+  onFallbackToPassword
+) {
   try {
-    // Step 1: Get login options from server
+    // Step 1: Get login options from server (includes all validation)
     const optionsResponse = await apiClient.post("/webauthn-login-options", {
       username,
     });
 
-    if (optionsResponse.data.error) {
-      throw new Error(optionsResponse.data.message);
-    }
-
     const options = optionsResponse.data;
+
+    // Check if we need to fallback to password login
+    if (options.fallbackToPassword) {
+      if (onFallbackToPassword) {
+        onFallbackToPassword(options.isTwoFactorEnabled);
+      }
+      return {
+        success: false,
+        fallbackToPassword: true,
+        isTwoFactorEnabled: options.isTwoFactorEnabled,
+        message: "WebAuthn not available, using password login",
+      };
+    }
 
     // Step 2: Format options for WebAuthn API
     const publicKeyCredentialRequestOptions = {
@@ -113,8 +125,27 @@ export async function performWebAuthnLogin(username, setAlert) {
     console.error("WebAuthn login error:", error);
 
     let errorMessage = "WebAuthn login failed";
+    let shouldFallbackToPassword = false;
 
-    if (error.name === "NotAllowedError") {
+    // Handle specific server errors
+    if (error.response && error.response.data) {
+      const serverError = error.response.data;
+
+      if (serverError.fallbackToPassword) {
+        shouldFallbackToPassword = true;
+        if (onFallbackToPassword) {
+          onFallbackToPassword(serverError.isTwoFactorEnabled);
+        }
+        return {
+          success: false,
+          fallbackToPassword: true,
+          isTwoFactorEnabled: serverError.isTwoFactorEnabled,
+          message: serverError.message || "Falling back to password login",
+        };
+      }
+
+      errorMessage = serverError.message || errorMessage;
+    } else if (error.name === "NotAllowedError") {
       errorMessage = "Authentication was cancelled or timed out";
     } else if (error.name === "InvalidStateError") {
       errorMessage = "Authenticator is in an invalid state";
@@ -130,6 +161,10 @@ export async function performWebAuthnLogin(username, setAlert) {
       severity: "error",
     });
 
-    return { success: false, error: errorMessage };
+    return {
+      success: false,
+      error: errorMessage,
+      fallbackToPassword: shouldFallbackToPassword,
+    };
   }
 }

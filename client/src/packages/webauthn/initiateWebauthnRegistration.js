@@ -1,9 +1,7 @@
-// import { urlBase64ToUint8Array } from "./urlBase64ToUint8Array";
-import { urlBase64ToUint8Array } from "@hrms/webauthn";
-import { verifyWebauthnRegistration } from "./verifyWebauthnRegistration";
 import apiClient from "../../config/axiosConfig";
+import { urlBase64ToUint8Array } from "./urlBase64ToUint8Array";
+import { verifyWebauthnRegistration } from "./verifyWebauthnRegistration";
 
-// Initiate WebAuthn Registration
 export async function initiateWebauthnRegistration(setAlert) {
   try {
     const registrationOptionsRes = await apiClient(`/webauthn-register`);

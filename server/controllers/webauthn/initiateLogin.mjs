@@ -57,6 +57,7 @@
  */
 
 import { generateAssertionOptions } from "../../utils/generateAssertionOptions.mjs";
+import User from "../../model/userModel.mjs";
 
 const initiateLogin = async (req, res) => {
   try {
@@ -69,20 +70,76 @@ const initiateLogin = async (req, res) => {
       });
     }
 
-    // Generate assertion options for WebAuthn login
-    const options = await generateAssertionOptions(username);
+    // Step 1: Check if user exists and get employee status
+    const user = await User.findOne({ username }).select(
+      "webAuthnCredentials isTwoFactorEnabled employeeStatus"
+    );
 
-    // Check if there was an error (user not found, no credentials, etc.)
-    if (options.error) {
-      return res.status(404).json(options);
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: "User not found",
+      });
     }
 
-    res.status(200).json(options);
+    // Step 2: Check employee status
+    const { employeeStatus } = user;
+    if (
+      employeeStatus === "Absconded" ||
+      employeeStatus === "Terminated" ||
+      employeeStatus === "Resigned"
+    ) {
+      let message = "You don't have access to the platform.";
+      if (employeeStatus === "Terminated") {
+        message =
+          "Your account has been terminated. You no longer have access to the platform.";
+      } else if (employeeStatus === "Absconded") {
+        message =
+          "You have been marked as absconded and no longer have access to the platform.";
+      } else if (employeeStatus === "Resigned") {
+        message =
+          "You have resigned and your access to the platform has been revoked.";
+      }
+      return res.status(403).json({
+        error: true,
+        message,
+      });
+    }
+
+    // Step 3: Check if user has WebAuthn credentials
+    if (!user.webAuthnCredentials || user.webAuthnCredentials.length === 0) {
+      return res.status(404).json({
+        error: true,
+        message: "No WebAuthn credentials found",
+        fallbackToPassword: true, // This flag tells frontend to show password login
+        isTwoFactorEnabled: user.isTwoFactorEnabled,
+      });
+    }
+
+    // Step 4: Generate assertion options for WebAuthn login
+    const options = await generateAssertionOptions(username);
+
+    // Check if there was an error generating options
+    if (options.error) {
+      return res.status(500).json({
+        error: true,
+        message: "Failed to generate assertion options",
+      });
+    }
+
+    console.log("WebAuthn login options generated for:", username);
+    res.status(200).json({
+      ...options,
+      isTwoFactorEnabled: user.isTwoFactorEnabled,
+    });
   } catch (error) {
-    console.error(`Error generating login options:`, error);
+    console.error(
+      `Error initiating WebAuthn login for "${req.body?.username}":`,
+      error
+    );
     res.status(500).json({
       error: true,
-      message: "Failed to generate assertion options",
+      message: "Failed to initiate WebAuthn login",
     });
   }
 };
