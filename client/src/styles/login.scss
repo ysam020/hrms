@@ -1,4 +1,4 @@
-@import url("./constants.scss");
+@import "./constants.scss";
 
 .login-form {
   span {
@@ -44,9 +44,11 @@
   .login-left-col {
     display: none !important;
   }
+
   .login-right-col {
     width: 100% !important;
   }
+
   .login-right-col-inner-container {
     width: 90%;
   }

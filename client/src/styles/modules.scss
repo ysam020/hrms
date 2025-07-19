@@ -1,4 +1,4 @@
-@import url("./constants.scss");
+@import "./constants.scss";
 
 .module-col {
   display: flex;
@@ -20,6 +20,7 @@
     border-radius: 10px;
     background-blend-mode: multiply;
     background-size: cover;
+
     h4 {
       margin-bottom: 10px;
     }
@@ -29,24 +30,24 @@
       font-weight: 500;
       letter-spacing: 1px;
     }
-  }
 
-  .module-col-inner::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 0;
-    border-left: 10px solid #bf3c3b;
-    border-bottom: 10px solid #bf3c3b;
-    border-top: 10px solid #bf3c3b;
-    border-right: 10px solid transparent;
-    opacity: 0;
-    transition: opacity 0.2s ease-in-out;
-  }
+    &::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      border-left: 10px solid #bf3c3b;
+      border-bottom: 10px solid #bf3c3b;
+      border-top: 10px solid #bf3c3b;
+      border-right: 10px solid transparent;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+    }
 
-  .module-col-inner:hover::before {
-    opacity: 1;
+    &:hover::before {
+      opacity: 1;
+    }
   }
 }

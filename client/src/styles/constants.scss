@@ -1,3 +1,34 @@
+$border-radius: 8px;
+$border-radius-small: 5px;
+$border-radius-large: 10px;
+$spacing-xs: 5px;
+$spacing-sm: 10px;
+$spacing-md: 20px;
+$spacing-lg: 30px;
+
+// Color variables
+$success-green: #90c8ac;
+$success-text: #153525;
+$error-red: #ff9494;
+$error-text: #851e1e;
+$warning-yellow: #ffd87f;
+$warning-text: #5e4305;
+$info-blue: #c5d3e8;
+$info-text: #0060ae;
+$pending-yellow: #fff49d;
+$pending-text: #504811;
+
+// Mixins for repeated patterns
+@mixin status-link($bg-color, $text-color) {
+  background-color: $bg-color;
+  color: $text-color;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-right: 5px;
+  padding: 3px 5px;
+  font-weight: 600;
+}
+
 :root {
   --box-shadow: 20px 50px 50px 4px rgba(0, 0, 0, 0.05);
   --btn-color: #fff;

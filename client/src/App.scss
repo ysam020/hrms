@@ -1,4 +1,4 @@
-@import url("./styles/constants.scss");
+@import "./styles/constants.scss";
 
 .App {
   font-family: "Poppins", sans-serif;
@@ -26,12 +26,12 @@
   border-radius: 8px;
   display: flex;
   align-items: center;
-}
 
-.btn:hover,
-.btn:active {
-  background-color: var(--btn-bg) !important;
-  color: var(--btn-color) !important;
+  &:hover,
+  &:active {
+    background-color: var(--btn-bg) !important;
+    color: var(--btn-color) !important;
+  }
 }
 
 .MuiButton-startIcon {
@@ -48,28 +48,23 @@
 }
 
 .approve-link {
-  background-color: #90c8ac;
-  color: #153525;
+  @include status-link($success-green, $success-text);
 }
 
 .reject-link {
-  background-color: #ff9494;
-  color: #851e1e;
+  @include status-link($error-red, $error-text);
 }
 
 .info-link {
-  background-color: #ffd87f;
-  color: #5e4305;
+  @include status-link($warning-yellow, $warning-text);
 }
 
 .withdraw-link {
-  background-color: #c5d3e8;
-  color: #0060ae;
+  @include status-link($info-blue, $info-text);
 }
 
 .pending-link {
-  background-color: #fff49d;
-  color: #504811;
+  @include status-link($pending-yellow, $pending-text);
 }
 
 .MuiListItemText-secondary {
@@ -264,9 +259,12 @@ form h5 {
 
 .p-picklist-item {
   color: var(--text-color) !important;
+
+  &:hover {
+    background-color: var(--card-background-primary) !important;
+  }
 }
 
-.p-picklist-item:hover,
 .p-picklist .p-picklist-list .p-picklist-item.p-focus {
   background-color: var(--card-background-primary) !important;
 }
@@ -306,27 +304,27 @@ form h5 {
   width: 10px;
   border-radius: 50%;
   display: inline-block;
-}
 
-/* Attendance Type Colors */
-.dot.present {
-  background-color: #19bc9b;
-}
+  // Attendance Type Colors using nesting
+  &.present {
+    background-color: #19bc9b;
+  }
 
-.dot.half {
-  background-color: #ffb002;
-}
+  &.half {
+    background-color: #ffb002;
+  }
 
-.dot.leave {
-  background-color: #f15c6d;
-}
+  &.leave {
+    background-color: #f15c6d;
+  }
 
-.dot.today {
-  background-color: #9b9999;
-}
+  &.today {
+    background-color: #9b9999;
+  }
 
-.dot.holiday {
-  background-color: #4d3c77;
+  &.holiday {
+    background-color: #4d3c77;
+  }
 }
 
 // Audit Logs
@@ -383,15 +381,15 @@ form h5 {
   bottom: 55px !important;
   right: 55px !important;
   z-index: 99999 !important;
-}
 
-.chatbot header {
-  text-align: left !important;
-  padding: 15px !important;
-}
+  header {
+    text-align: left !important;
+    padding: 15px !important;
 
-.chatbot header h2 {
-  margin-bottom: 0 !important;
+    h2 {
+      margin-bottom: 0 !important;
+    }
+  }
 }
 
 .chatbox {
@@ -400,16 +398,18 @@ form h5 {
   box-shadow: 2px 2px 50px 10px rgba(0, 0, 0, 0.05) !important;
 }
 
-.chat p {
-  padding: 10px !important;
-}
+.chat {
+  p {
+    padding: 10px !important;
+  }
 
-.chat.outgoing p {
-  background-color: #0b61ae !important;
-}
+  &.outgoing p {
+    background-color: #0b61ae !important;
+  }
 
-.chat.incoming p {
-  background-color: #fff !important;
+  &.incoming p {
+    background-color: #fff !important;
+  }
 }
 
 .chat-input {

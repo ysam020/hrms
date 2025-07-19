@@ -127,7 +127,6 @@ const initiateLogin = async (req, res) => {
       });
     }
 
-    console.log("WebAuthn login options generated for:", username);
     res.status(200).json({
       ...options,
       isTwoFactorEnabled: user.isTwoFactorEnabled,
