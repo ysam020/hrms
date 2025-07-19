@@ -1,44 +1,33 @@
-import Redis from "ioredis";
+// server/config/redisAdapter.mjs - Updated to use consolidated Redis config
+import { RedisConnectionManager } from "./redisConfig.mjs";
 
 class RedisWebSocketAdapter {
   constructor(io) {
     this.io = io;
     this.userSockets = new Map();
 
-    // Create Redis connections for pub/sub
-    this.publisher = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: process.env.REDIS_PORT || 6379,
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
+    // Use the centralized connection manager
+    const redisManager = RedisConnectionManager.getInstance();
 
-    this.subscriber = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: process.env.REDIS_PORT || 6379,
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
-
-    // Redis client for storing user-socket mappings
-    this.redisClient = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: process.env.REDIS_PORT || 6379,
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
+    // Create specialized connections for pub/sub and client operations
+    this.publisher = redisManager.getConnection("publisher");
+    this.subscriber = redisManager.getConnection("subscriber");
+    this.redisClient = redisManager.getConnection("websocket");
 
     this.setupSubscriber();
     this.setupSocketHandlers();
   }
 
   setupSubscriber() {
-    // Subscribe to WebSocket events
-    this.subscriber.subscribe(
-      "socket:user-message",
-      "socket:broadcast",
-      "socket:notification"
-    );
+    // Wait for subscriber connection to be ready before subscribing
+    this.subscriber.on("ready", () => {
+      // Subscribe to WebSocket events
+      this.subscriber.subscribe(
+        "socket:user-message",
+        "socket:broadcast",
+        "socket:notification"
+      );
+    });
 
     this.subscriber.on("message", async (channel, message) => {
       try {
@@ -159,11 +148,10 @@ class RedisWebSocketAdapter {
     );
   }
 
-  // Cleanup method
+  // Cleanup method - now uses the centralized manager
   async cleanup() {
-    await this.subscriber.disconnect();
-    await this.publisher.disconnect();
-    await this.redisClient.disconnect();
+    // The connection manager will handle cleanup of all connections
+    return RedisConnectionManager.getInstance().closeAll();
   }
 }
 

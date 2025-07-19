@@ -34,28 +34,78 @@
  *       - Admin
  */
 
+// import UserModel from "../../model/userModel.mjs";
+// import { cacheResponse, getCachedData } from "../../utils/cacheResponse.mjs";
+
+// const getAllUsers = async (req, res) => {
+//   try {
+//     const cacheKey = `userList`;
+//     // Check if there is already cached data
+//     const cachedData = await getCachedData(cacheKey);
+//     if (cachedData && cachedData.length > 0) {
+//       return res.status(200).send(cachedData);
+//     }
+
+//     const users = await UserModel.find({})
+//       .select("-_id username")
+//       .sort({ username: 1 }) // 1 = ascending (A-Z), -1 = descending (Z-A)
+//       .lean();
+
+//     await cacheResponse(cacheKey, users);
+//     res.status(200).send(users);
+//   } catch (error) {
+//     console.error("Error in getAllUsers:", error);
+//     res.status(500).send({
+//       message:
+//         "An error occurred while fetching users. Please try again later.",
+//     });
+//   }
+// };
+
+// export default getAllUsers;
+
+// server/controllers/general/optimizedGetAllUsers.mjs
 import UserModel from "../../model/userModel.mjs";
-import { cacheResponse, getCachedData } from "../../utils/cacheResponse.mjs";
+import OptimizedRedisPool from "../../config/optimizedRedisPool.mjs";
+
+const redis = OptimizedRedisPool.getInstance();
 
 const getAllUsers = async (req, res) => {
   try {
-    const cacheKey = `userList`;
-    // Check if there is already cached data
-    const cachedData = await getCachedData(cacheKey);
-    if (cachedData && cachedData.length > 0) {
-      return res.status(200).send(cachedData);
+    const cacheKey = `userList:v1`;
+    const cacheTTL = 300; // 5 minutes
+
+    // Try to get from Redis cache first
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      return res.status(200).json(JSON.parse(cachedData));
     }
 
+    // If not in cache, get from database
     const users = await UserModel.find({})
-      .select("-_id username")
-      .sort({ username: 1 }) // 1 = ascending (A-Z), -1 = descending (Z-A)
-      .lean();
+      .select("username") // Only select needed fields
+      .sort({ username: 1 })
+      .lean() // Use lean() for better performance
+      .maxTimeMS(5000); // Add timeout to prevent hanging
 
-    await cacheResponse(cacheKey, users);
-    res.status(200).send(users);
+    // Cache the result
+    await redis.setex(cacheKey, cacheTTL, JSON.stringify(users));
+
+    res.status(200).json(users);
   } catch (error) {
     console.error("Error in getAllUsers:", error);
-    res.status(500).send({
+
+    // Return cached data if available, even if stale
+    try {
+      const staleData = await redis.get(`${cacheKey}:backup`);
+      if (staleData) {
+        return res.status(200).json(JSON.parse(staleData));
+      }
+    } catch (cacheError) {
+      console.error("Cache fallback failed:", cacheError);
+    }
+
+    res.status(500).json({
       message:
         "An error occurred while fetching users. Please try again later.",
     });
