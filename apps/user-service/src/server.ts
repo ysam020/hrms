@@ -7,7 +7,7 @@ async function startServer() {
     const host = process.env.USER_SERVICE_HOST || "localhost";
     const port = process.env.USER_SERVICE_PORT || "50052";
     server.start(`${host}:${port}`);
-    logger.info(`UserServer started at ${host}:${port}`);
+    logger.info("UserServer started");
   } catch (error) {
     logger.error(`Failed to start UserServer: ${error}`);
     process.exit(1);

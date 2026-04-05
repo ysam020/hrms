@@ -669,23 +669,28 @@ export async function getPolicyPdf(req: Request, res: Response) {
     drawPageHeader();
     let cursorY = 23;
 
+    const HTML_ENTITIES: Record<string, string> = {
+      "&nbsp;": " ",
+      "&amp;": "&",
+      "&lt;": "<",
+      "&gt;": ">",
+      "&quot;": '"',
+      "&#39;": "'",
+    };
+    // Single-pass replacement prevents double-unescaping (e.g. &amp;lt; → &lt;, not <)
     const decodeHtml = (s: string) =>
-      s
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'");
+      s.replace(/&(?:nbsp|amp|lt|gt|quot|#39);/g, (m) => HTML_ENTITIES[m] ?? m);
 
-    const textOf = (html: string) =>
-      decodeHtml(
-        html
-          .replace(/<br\s*\/?>/gi, " ")
-          .replace(/<[^>]+>/g, "")
-          .replace(/\s+/g, " ")
-          .trim(),
-      );
+    const textOf = (html: string) => {
+      let text = html.replace(/<br\s*\/?>/gi, " ");
+      // Strip tags iteratively — a single pass can miss malformed/nested angle brackets
+      let prev: string;
+      do {
+        prev = text;
+        text = text.replace(/<[^>]*>/g, "");
+      } while (text !== prev);
+      return decodeHtml(text.replace(/\s+/g, " ").trim());
+    };
 
     const content = policy.content || "";
     const flatHtml = content.replace(/<\/?(ul|ol)\b[^>]*>/gi, "");

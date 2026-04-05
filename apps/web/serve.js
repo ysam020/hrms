@@ -11,6 +11,27 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 9000;
 
+// Simple in-process rate limiter (100 req / 60 s per IP)
+const RL_WINDOW_MS = 60_000;
+const RL_MAX = 100;
+const rlStore = new Map();
+function rateLimiter(req, res, next) {
+  const ip = req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const entry = rlStore.get(ip) || { count: 0, resetAt: now + RL_WINDOW_MS };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + RL_WINDOW_MS;
+  }
+  entry.count += 1;
+  rlStore.set(ip, entry);
+  if (entry.count > RL_MAX) {
+    res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000));
+    return res.status(429).send("Too Many Requests");
+  }
+  next();
+}
+
 // Enable gzip compression
 app.use(compression({ level: 9 }));
 
@@ -44,7 +65,7 @@ app.use(
 );
 
 // SPA fallback - serve index.html for all routes
-app.get("*", (req, res) => {
+app.get("*", rateLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 

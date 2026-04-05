@@ -48,6 +48,17 @@ app.use(
 );
 app.use(cors({ credentials: true, origin: allowedOrigins }));
 app.use(cookieParser());
+
+// CSRF protection: reject state-changing requests whose Origin doesn't match
+// an allowed origin. Works in conjunction with sameSite=strict cookies and
+// the CORS allowlist above.
+app.use((req, res, next) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  const origin = req.headers.origin || req.headers.referer || "";
+  const allowed = allowedOrigins.some((o) => origin.startsWith(o));
+  if (!allowed) return res.status(403).json({ message: "Forbidden" });
+  next();
+});
 app.use(apiRequestLogger);
 
 // Body parsers

@@ -7,7 +7,7 @@ async function startServer() {
     const host = process.env.AUTH_SERVICE_HOST || "localhost";
     const port = process.env.AUTH_SERVICE_PORT || "50051";
     server.start(`${host}:${port}`);
-    logger.info(`AuthServer started at ${host}:${port}`);
+    logger.info("AuthServer started");
   } catch (error) {
     logger.error(`Failed to start AuthServer: ${error}`);
     process.exit(1);

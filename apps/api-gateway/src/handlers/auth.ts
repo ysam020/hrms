@@ -4,7 +4,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
-import { safeDecrypt } from "@hrms/crypto";
+import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -148,10 +148,18 @@ export async function getProfile(req: Request, res: Response) {
 
 export async function refreshToken(req: Request, res: Response) {
   try {
-    const token = req.cookies?.refresh_token;
-    if (!token) {
+    const rawCookie = req.cookies?.refresh_token;
+    if (!rawCookie) {
       return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
         message: "No refresh token provided",
+      });
+    }
+    let token: string;
+    try {
+      token = aesDecrypt(rawCookie);
+    } catch {
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: "Invalid refresh token",
       });
     }
     const response = await grpcCall<any, any>(authClient, "refreshToken", {
@@ -166,7 +174,7 @@ export async function refreshToken(req: Request, res: Response) {
     if (response.refreshToken) {
       res.cookie(
         "refresh_token",
-        response.refreshToken,
+        aesEncrypt(response.refreshToken),
         REFRESH_COOKIE_OPTIONS,
       );
     }
@@ -410,7 +418,7 @@ export async function webAuthnVerifyLogin(req: Request, res: Response) {
     if (response.refreshToken) {
       res.cookie(
         "refresh_token",
-        response.refreshToken,
+        aesEncrypt(response.refreshToken),
         REFRESH_COOKIE_OPTIONS,
       );
     }
@@ -492,7 +500,7 @@ export async function googleAuthCallback(req: Request, res: Response) {
     if (response.refreshToken) {
       res.cookie(
         "refresh_token",
-        response.refreshToken,
+        aesEncrypt(response.refreshToken),
         REFRESH_COOKIE_OPTIONS,
       );
     }

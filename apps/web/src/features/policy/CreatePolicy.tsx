@@ -1,4 +1,5 @@
 import React, { useContext, useState } from "react";
+import DOMPurify from "dompurify";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
@@ -44,7 +45,7 @@ function CreatePolicy({ onSaved }) {
     if (!policyType) newErrors.policyType = "Policy type is required";
     if (policyType === "Other" && !policyName.trim())
       newErrors.policyName = "Policy name is required";
-    if (!content || content.replace(/<[^>]*>/g, "").trim().length < 10)
+    if (!content || DOMPurify.sanitize(content, { ALLOWED_TAGS: [] }).trim().length < 10)
       newErrors.content = "Content must be at least 10 characters";
     return newErrors;
   };
