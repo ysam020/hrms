@@ -31,7 +31,6 @@ const handleRoleChange = (
     setIsSuperUser(originalUserPermissions.includes("*:*:*"));
   }
 
-
   if (originalUserPermissions) {
     const hasActualChanges = !arraysEqual(
       [...newPermissions].sort(),

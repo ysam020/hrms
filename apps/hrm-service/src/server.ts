@@ -7,7 +7,7 @@ async function startServer() {
     const host = process.env.HRM_SERVICE_HOST || "localhost";
     const port = process.env.HRM_SERVICE_PORT || "50057";
     server.start(`${host}:${port}`);
-    logger.info(`HrmServer started at ${host}:${port}`);
+    logger.info("HrmServer started");
   } catch (error) {
     logger.error(`Failed to start HrmServer: ${error}`);
     process.exit(1);

@@ -1,8 +1,19 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { authenticate, authorize } from "../middleware/authenticate";
 import * as h from "../handlers/analytics";
 
+const analyticsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests, please try again later" },
+});
+
 export const analyticsRouter: Router = Router();
+
+analyticsRouter.use(analyticsLimiter);
 
 analyticsRouter.get(
   "/dashboard",

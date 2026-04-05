@@ -7,7 +7,7 @@ async function startServer() {
     const host = process.env.SALARY_SERVICE_HOST || "localhost";
     const port = process.env.SALARY_SERVICE_PORT || "50058";
     server.start(`${host}:${port}`);
-    logger.info(`SalaryServer started at ${host}:${port}`);
+    logger.info("SalaryServer started");
   } catch (error) {
     logger.error(`Failed to start SalaryServer: ${error}`);
     process.exit(1);

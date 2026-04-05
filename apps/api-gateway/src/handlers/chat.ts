@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import dns from "dns";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -23,6 +24,22 @@ function isSafeUrl(raw: string): boolean {
   const m = host.match(/^172\.(\d+)\./);
   if (m && parseInt(m[1]) >= 16 && parseInt(m[1]) <= 31) return false;
   return true;
+}
+
+// Resolve hostname to IPs and verify none are private — prevents DNS rebinding attacks.
+async function isSafeHostname(hostname: string): Promise<boolean> {
+  try {
+    const addresses = await dns.promises.lookup(hostname, { all: true });
+    for (const { address } of addresses) {
+      if (PRIVATE_IP_RE.test(address)) return false;
+      // Block 172.16.0.0/12 on resolved IPs
+      const m = address.match(/^172\.(\d+)\./);
+      if (m && parseInt(m[1]) >= 16 && parseInt(m[1]) <= 31) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function withId<
@@ -424,6 +441,13 @@ export async function ogPreview(req: Request, res: Response) {
       });
 
     if (!isSafeUrl(url))
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Invalid or disallowed URL",
+      });
+
+    // Resolve DNS and re-check IPs to prevent DNS rebinding attacks
+    const hostname = new URL(url).hostname;
+    if (!(await isSafeHostname(hostname)))
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Invalid or disallowed URL",
       });

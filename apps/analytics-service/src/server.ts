@@ -7,7 +7,7 @@ async function startServer() {
     const host = process.env.ANALYTICS_SERVICE_HOST || "localhost";
     const port = process.env.ANALYTICS_SERVICE_PORT || "50059";
     server.start(`${host}:${port}`);
-    logger.info(`AnalyticsServer started at ${host}:${port}`);
+    logger.info("AnalyticsServer started");
   } catch (error) {
     logger.error(`Failed to start AnalyticsServer: ${error}`);
     process.exit(1);

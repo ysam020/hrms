@@ -3,6 +3,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import compression from "compression";
+import rateLimit from "express-rate-limit";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,8 +12,19 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 9000;
 
+// Rate limiter: 100 requests per 60 seconds per IP
+const limiter = rateLimit({
+  windowMs: 60_000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Enable gzip compression
 app.use(compression({ level: 9 }));
+
+// Apply rate limiting to all requests (including static files)
+app.use(limiter);
 
 // Serve static files with intelligent cache headers
 app.use(
