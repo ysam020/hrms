@@ -1,0 +1,226 @@
+paths:
+  /api/add-attendance:
+    post:
+      summary: Add attendance record
+      description: Log a check-in/check-out attendance entry for the authenticated user
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, checkIn]
+              properties:
+                date:
+                  type: string
+                  format: date
+                  example: "2026-04-01"
+                checkIn:
+                  type: string
+                  format: time
+                  example: "09:00"
+                checkOut:
+                  type: string
+                  format: time
+                  example: "18:00"
+                status:
+                  type: string
+                  enum: [present, absent, half-day, late]
+                  example: "present"
+                notes: { type: string, example: "Working from home" }
+      responses:
+        "200":
+          description: Attendance recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Attendance added" }
+        "400":
+          description: Invalid attendance data
+        "401":
+          description: Unauthorized
+
+  /api/get-attendances/{month}/{year}:
+    get:
+      summary: Get own attendance for a month
+      description: Returns the authenticated user's attendance records for the given month/year
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
+        - name: year
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 2026
+      responses:
+        "200":
+          description: Attendance records retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, format: date }
+                        checkIn: { type: string }
+                        checkOut: { type: string }
+                        status: { type: string }
+                        hoursWorked: { type: number }
+        "401":
+          description: Unauthorized
+
+  /api/get-all-attendances/{year}/{month}:
+    get:
+      summary: Get all employees' attendance for a month
+      description: Returns attendance records for all employees (admin/HR only)
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: year
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 2026
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
+      responses:
+        "200":
+          description: All attendance records retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        username: { type: string }
+                        records: { type: array, items: { type: object } }
+        "401":
+          description: Unauthorized
+
+  /api/attendance-correction:
+    put:
+      summary: Request attendance correction
+      description: Submit a correction request for an incorrect attendance record
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, correctedCheckIn]
+              properties:
+                date: { type: string, format: date, example: "2026-04-01" }
+                correctedCheckIn:
+                  { type: string, format: time, example: "09:00" }
+                correctedCheckOut:
+                  { type: string, format: time, example: "18:00" }
+                reason: { type: string, example: "Forgot to mark check-in" }
+      responses:
+        "200":
+          description: Correction request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/get-attendance-summary/{username}/{year}/{month}:
+    get:
+      summary: Get attendance summary for a user
+      description: Returns aggregated attendance summary (present/absent/leave days) for a user
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+          example: "sameer_yadav"
+        - name: year
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 2026
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
+      responses:
+        "200":
+          description: Attendance summary retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      username: { type: string }
+                      totalDays: { type: integer, example: 22 }
+                      present: { type: integer, example: 20 }
+                      absent: { type: integer, example: 1 }
+                      leaves: { type: integer, example: 1 }
+                      totalHours: { type: number, example: 176 }
+        "401":
+          description: Unauthorized
+
+  /api/attendance-insights:
+    get:
+      summary: Attendance insights
+      description: Returns aggregate attendance statistics across the organization
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Insights retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      averageAttendance: { type: number, example: 92.5 }
+                      lateArrivals: { type: integer, example: 8 }
+                      absentToday: { type: integer, example: 3 }
+        "401":
+          description: Unauthorized

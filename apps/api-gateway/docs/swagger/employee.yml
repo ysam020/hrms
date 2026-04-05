@@ -1,0 +1,262 @@
+paths:
+  /api/edit-employee-details:
+    put:
+      summary: Edit employee details
+      description: Update employee profile fields for the authenticated user
+      tags: [Employee Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                department: { type: string, example: "SOFTWARE DEVELOPMENT" }
+                designation: { type: string, example: "FULL STACK DEVELOPER" }
+                phone: { type: string, example: "+91 9876543210" }
+                dateOfBirth:
+                  { type: string, format: date, example: "1995-06-15" }
+                address: { type: string, example: "Mumbai, India" }
+                emergencyContact:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    phone: { type: string }
+                    relation: { type: string }
+      responses:
+        "200":
+          description: Employee details updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Employee details updated" }
+        "401":
+          description: Unauthorized
+
+  /api/get-employee-details/{username}:
+    get:
+      summary: Get employee details
+      description: Returns detailed employee profile for the given username
+      tags: [Employee Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+          example: "sameer_yadav"
+      responses:
+        "200":
+          description: Employee details retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      username: { type: string }
+                      department: { type: string }
+                      designation: { type: string }
+                      dateOfJoining: { type: string, format: date }
+                      phone: { type: string }
+                      dateOfBirth: { type: string, format: date }
+        "401":
+          description: Unauthorized
+        "404":
+          description: Employee not found
+
+  /api/employee-insights:
+    get:
+      summary: Employee insights
+      description: Returns aggregate statistics about employees (counts by department, role, status, etc.)
+      tags: [Employee Management]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Insights data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      totalEmployees: { type: integer, example: 45 }
+                      byDepartment: { type: array, items: { type: object } }
+                      byRole: { type: array, items: { type: object } }
+        "401":
+          description: Unauthorized
+
+  /api/complete-kyc:
+    post:
+      summary: Submit KYC
+      description: Submit KYC (Know Your Customer) documents for the authenticated employee
+      tags: [KYC]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                panNumber: { type: string, example: "ABCDE1234F" }
+                aadharNumber: { type: string, example: "1234-5678-9012" }
+                bankAccountNumber: { type: string, example: "1234567890" }
+                ifscCode: { type: string, example: "HDFC0001234" }
+                bankName: { type: string, example: "HDFC Bank" }
+                documents:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string, example: "pan_card" }
+                      url: { type: string, format: uri }
+      responses:
+        "200":
+          description: KYC submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "KYC submitted for review" }
+        "400":
+          description: Invalid KYC data
+        "401":
+          description: Unauthorized
+
+  /api/edit-kyc:
+    put:
+      summary: Edit KYC details
+      description: Update a pending or rejected KYC submission
+      tags: [KYC]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                panNumber: { type: string }
+                aadharNumber: { type: string }
+                bankAccountNumber: { type: string }
+                ifscCode: { type: string }
+      responses:
+        "200":
+          description: KYC updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/kyc-approval:
+    post:
+      summary: Approve or reject KYC
+      description: Admin/HR action to approve or reject an employee KYC submission
+      tags: [KYC]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kycId, action]
+              properties:
+                kycId: { type: string, example: "6672a2501aa931b68b091faf" }
+                action:
+                  type: string
+                  enum: [approve, reject]
+                  example: "approve"
+                rejectionReason: { type: string, example: "Document unclear" }
+      responses:
+        "200":
+          description: KYC status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /api/view-all-kycs:
+    get:
+      summary: View all KYC submissions
+      description: Returns all KYC submissions (admin/HR only)
+      tags: [KYC]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC list retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kycId: { type: string }
+                        username: { type: string }
+                        status:
+                          type: string
+                          enum: [pending, approved, rejected]
+                        submittedAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+
+  /api/get-kyc-insights:
+    get:
+      summary: KYC insights
+      description: Returns aggregate KYC statistics (counts by status, department, etc.)
+      tags: [KYC]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC insights retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      pending: { type: integer }
+                      approved: { type: integer }
+                      rejected: { type: integer }
+        "401":
+          description: Unauthorized

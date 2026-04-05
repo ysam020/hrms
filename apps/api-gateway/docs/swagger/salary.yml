@@ -1,0 +1,133 @@
+paths:
+  /api/update-salary:
+    post:
+      summary: Update employee salary
+      description: Set or update the salary details for an employee (admin/HR only)
+      tags: [Salary]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, basicSalary]
+              properties:
+                username: { type: string, example: "sameer_yadav" }
+                basicSalary: { type: number, example: 50000 }
+                hra: { type: number, example: 20000 }
+                conveyanceAllowance: { type: number, example: 5000 }
+                medicalAllowance: { type: number, example: 3000 }
+                specialAllowance: { type: number, example: 10000 }
+                pfContribution: { type: number, example: 6000 }
+                professionalTax: { type: number, example: 200 }
+                effectiveFrom:
+                  { type: string, format: date, example: "2026-04-01" }
+      responses:
+        "200":
+          description: Salary updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Salary updated" }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /api/get-user-salary/{username}/{year}/{month}:
+    get:
+      summary: Get user salary for a month
+      description: Returns the salary breakdown for a specific employee, year, and month
+      tags: [Salary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+          example: "sameer_yadav"
+        - name: year
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 2026
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
+      responses:
+        "200":
+          description: Salary data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      username: { type: string }
+                      year: { type: integer }
+                      month: { type: integer }
+                      basicSalary: { type: number }
+                      grossSalary: { type: number }
+                      netSalary: { type: number }
+                      deductions:
+                        type: object
+                        properties:
+                          pf: { type: number }
+                          professionalTax: { type: number }
+                      allowances:
+                        type: object
+                        properties:
+                          hra: { type: number }
+                          conveyance: { type: number }
+                          medical: { type: number }
+        "401":
+          description: Unauthorized
+        "404":
+          description: Salary data not found
+
+  /api/generate-salary-slip/{username}/{year}/{month}:
+    get:
+      summary: Generate salary slip PDF
+      description: Generates and returns a salary slip PDF for the given employee and period
+      tags: [Salary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+          example: "sameer_yadav"
+        - name: year
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 2026
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
+      responses:
+        "200":
+          description: Salary slip PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Unauthorized
+        "404":
+          description: Salary data not found

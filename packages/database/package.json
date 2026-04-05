@@ -1,0 +1,32 @@
+{
+  "name": "@hrms/db",
+  "version": "0.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "prisma": {
+    "schema": "src/prisma"
+  },
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx src/seed.ts",
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0"
+  },
+  "devDependencies": {
+    "@hrms/logger": "workspace:*",
+    "@hrms/typescript-config": "workspace:*",
+    "@types/node": "^22.8.7",
+    "tsx": "^4.19.2"
+  }
+}

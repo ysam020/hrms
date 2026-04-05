@@ -1,0 +1,249 @@
+paths:
+  /api/chat/conversations:
+    get:
+      summary: Get all conversations
+      description: Returns all chat conversations for the authenticated user
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Conversations retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        roomId: { type: string }
+                        participants:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              username: { type: string }
+                              fullName: { type: string }
+                        lastMessage:
+                          type: object
+                          properties:
+                            content: { type: string }
+                            sentAt: { type: string, format: date-time }
+                        unreadCount: { type: integer, example: 3 }
+        "401":
+          description: Unauthorized
+
+  /api/chat/conversations/start:
+    post:
+      summary: Start a new conversation
+      description: Creates a new 1:1 or group chat conversation
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [participants]
+              properties:
+                participants:
+                  type: array
+                  items: { type: string }
+                  description: List of usernames to include in the conversation
+                  example: ["john_doe", "jane_smith"]
+                name:
+                  type: string
+                  description: Group name (for group conversations)
+                  example: "Project Phoenix"
+      responses:
+        "200":
+          description: Conversation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      roomId: { type: string }
+        "401":
+          description: Unauthorized
+
+  /api/chat/conversations/{roomId}/messages:
+    get:
+      summary: Get messages in a conversation
+      description: Returns paginated messages for a specific chat room
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
+          description: Chat room ID
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+          description: Fetch messages before this timestamp (for pagination)
+      responses:
+        "200":
+          description: Messages retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        messageId: { type: string }
+                        sender: { type: string }
+                        content: { type: string }
+                        sentAt: { type: string, format: date-time }
+                        readBy: { type: array, items: { type: string } }
+        "401":
+          description: Unauthorized
+
+  /api/chat/conversations/{roomId}/read:
+    post:
+      summary: Mark messages as read
+      description: Marks all unread messages in a conversation as read for the authenticated user
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Messages marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/chat/unread-counts:
+    get:
+      summary: Get unread message counts
+      description: Returns the number of unread messages per conversation for the authenticated user
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unread counts retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        roomId: { type: string }
+                        unreadCount: { type: integer, example: 5 }
+        "401":
+          description: Unauthorized
+
+  /api/chat/messages/{messageId}:
+    delete:
+      summary: Delete a message
+      description: Delete a specific chat message (sender only)
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Cannot delete another user's message
+
+  /api/chat/conversations/{roomId}:
+    delete:
+      summary: Delete a conversation
+      description: Delete an entire chat conversation and all its messages
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Conversation deleted
+        "401":
+          description: Unauthorized
+
+  /api/og-preview:
+    get:
+      summary: Fetch Open Graph preview for a URL
+      description: Returns Open Graph metadata (title, description, image) for a given URL, used for link previews in chat
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+          example: "https://example.com/article"
+      responses:
+        "200":
+          description: OG metadata retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      title: { type: string }
+                      description: { type: string }
+                      image: { type: string, format: uri }
+                      url: { type: string, format: uri }
+        "401":
+          description: Unauthorized

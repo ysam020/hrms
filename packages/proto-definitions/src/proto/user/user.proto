@@ -1,0 +1,128 @@
+syntax = "proto3";
+package user;
+
+import "health/health.proto";
+
+message User {
+  string id = 1;
+  string email = 2;
+  string username = 3;
+  string role = 4;
+  string first_name = 5;
+  string last_name = 6;
+  string middle_name = 7;
+  string mobile = 8;
+  string department = 9;
+  string designation = 10;
+  string employee_status = 11;
+  string employee_photo = 12;
+  string dob = 13;
+  string blood_group = 14;
+  string official_email = 15;
+  string joining_date = 16;
+  string communication_address_line_1 = 17;
+  string communication_address_line_2 = 18;
+  string communication_address_city = 19;
+  string communication_address_state = 20;
+  string communication_address_pincode = 21;
+  string permanent_address_line_1 = 22;
+  string permanent_address_line_2 = 23;
+  string permanent_address_city = 24;
+  string permanent_address_state = 25;
+  string permanent_address_pincode = 26;
+  string bank_account_no = 27;
+  string bank_name = 28;
+  string ifsc_code = 29;
+  string aadhar_no = 30;
+  string aadhar_photo_front = 31;
+  string pan_no = 32;
+  string pan_photo = 33;
+  string pf_no = 34;
+  string uan_no = 35;
+  string esic_no = 36;
+  bool is_super_user = 37;
+  string date_of_termination = 38;
+  string reason_for_termination = 39;
+  string date_of_abscond = 40;
+}
+
+message GetUserRequest {
+  string userId = 1;
+}
+
+message GetUserResponse {
+  string message = 1;
+  int32 status = 2;
+  User data = 3;
+}
+
+message UpdateUserRequest {
+  string userId = 1;
+  string firstName = 2;
+  string lastName = 3;
+  string phone = 4;
+  string profileImage = 5;
+}
+
+message UpdateUserResponse {
+  string message = 1;
+  int32 status = 2;
+  User data = 3;
+}
+
+message ListUsersRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string search = 3;
+  string role = 4;
+  string department = 5;
+}
+
+message ListUsersResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated User data = 3;
+  int32 total = 4;
+  int32 page = 5;
+  int32 totalPages = 6;
+}
+
+message RegisterFcmTokenRequest {
+  string userId = 1;
+  string token = 2;
+  string deviceFingerprint = 3;
+  string browser = 4;
+  string os = 5;
+  string deviceType = 6;
+  string ipAddress = 7;
+}
+
+message RemoveFcmTokenRequest {
+  string user_id = 1;
+  string device_fingerprint = 2;
+  bool disable_all = 3;
+}
+
+message FcmTokenResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+message DeleteUserRequest {
+  string userId = 1;
+}
+
+message DeleteUserResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+service UserService {
+  rpc GetUser (GetUserRequest) returns (GetUserResponse);
+  rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
+  rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
+  rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+  rpc RegisterFcmToken (RegisterFcmTokenRequest) returns (FcmTokenResponse);
+  rpc RemoveFcmToken (RemoveFcmTokenRequest) returns (FcmTokenResponse);
+  rpc CleanupExpiredFcmTokens (health.HealthCheckRequest) returns (FcmTokenResponse);
+}

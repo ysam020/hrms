@@ -1,0 +1,76 @@
+syntax = "proto3";
+package attendance;
+
+message AttendanceRecord {
+  string id = 1;
+  string userId = 2;
+  string date = 3;
+  string checkIn = 4;
+  string checkOut = 5;
+  string status = 6;
+  double latitude = 7;
+  double longitude = 8;
+  string workHours = 9;
+}
+
+message MarkAttendanceRequest {
+  string userId = 1;
+  string type = 2;  // CHECK_IN or CHECK_OUT
+  double latitude = 3;
+  double longitude = 4;
+  string deviceInfo = 5;
+  string imageUrl = 6;
+}
+
+message AttendanceResponse {
+  string message = 1;
+  int32 status = 2;
+  AttendanceRecord data = 3;
+}
+
+message GetAttendanceRequest {
+  string userId = 1;
+  string startDate = 2;
+  string endDate = 3;
+  int32 page = 4;
+  int32 limit = 5;
+}
+
+message GetAttendanceResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated AttendanceRecord data = 3;
+  int32 total = 4;
+}
+
+message AttendanceSummaryRequest {
+  string userId = 1;
+  string month = 2;
+  string year = 3;
+}
+
+message AttendanceSummaryResponse {
+  string message = 1;
+  int32 status = 2;
+  int32 totalDays = 3;
+  int32 presentDays = 4;
+  int32 absentDays = 5;
+  int32 lateDays = 6;
+  double totalHours = 7;
+}
+
+message CorrectAttendanceRequest {
+  string username = 1;
+  string date = 2;
+  string time_in = 3;
+  string time_out = 4;
+  string corrected_by = 5;
+}
+
+service AttendanceService {
+  rpc MarkAttendance (MarkAttendanceRequest) returns (AttendanceResponse);
+  rpc GetAttendance (GetAttendanceRequest) returns (GetAttendanceResponse);
+  rpc GetAttendanceSummary (AttendanceSummaryRequest) returns (AttendanceSummaryResponse);
+  rpc GetTodayAttendance (MarkAttendanceRequest) returns (AttendanceResponse);
+  rpc CorrectAttendance (CorrectAttendanceRequest) returns (AttendanceResponse);
+}

@@ -1,0 +1,104 @@
+syntax = "proto3";
+package employee;
+
+import "health/health.proto";
+
+message Employee {
+  string id = 1;
+  string userId = 2;
+  string employeeId = 3;
+  string firstName = 4;
+  string lastName = 5;
+  string email = 6;
+  string phone = 7;
+  string department = 8;
+  string designation = 9;
+  string dateOfJoining = 10;
+  string employmentType = 11;
+  string status = 12;
+  string managerId = 13;
+  string profileImage = 14;
+}
+
+message GetEmployeeRequest {
+  string employeeId = 1;
+}
+
+message GetEmployeeResponse {
+  string message = 1;
+  int32 status = 2;
+  Employee data = 3;
+}
+
+message CreateEmployeeRequest {
+  string firstName = 1;
+  string lastName = 2;
+  string email = 3;
+  string phone = 4;
+  string department = 5;
+  string designation = 6;
+  string dateOfJoining = 7;
+  string employmentType = 8;
+  string managerId = 9;
+}
+
+message UpdateEmployeeRequest {
+  string employeeId = 1;
+  string firstName = 2;
+  string lastName = 3;
+  string phone = 4;
+  string department = 5;
+  string designation = 6;
+  string employmentType = 7;
+  string status = 8;
+  string managerId = 9;
+}
+
+message ListEmployeesRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string search = 3;
+  string department = 4;
+  string status = 5;
+}
+
+message ListEmployeesResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated Employee data = 3;
+  int32 total = 4;
+}
+
+message DeleteEmployeeRequest {
+  string employeeId = 1;
+}
+
+message BasicResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+message KycRequest {
+  string userId = 1;
+  string documentType = 2;
+  string documentNumber = 3;
+  string documentUrl = 4;
+}
+
+message KycResponse {
+  string message = 1;
+  int32 status = 2;
+  string kycStatus = 3;
+}
+
+service EmployeeService {
+  rpc GetEmployee (GetEmployeeRequest) returns (GetEmployeeResponse);
+  rpc CreateEmployee (CreateEmployeeRequest) returns (GetEmployeeResponse);
+  rpc UpdateEmployee (UpdateEmployeeRequest) returns (GetEmployeeResponse);
+  rpc DeleteEmployee (DeleteEmployeeRequest) returns (BasicResponse);
+  rpc ListEmployees (ListEmployeesRequest) returns (ListEmployeesResponse);
+  rpc SubmitKyc (KycRequest) returns (KycResponse);
+  rpc GetKycStatus (GetEmployeeRequest) returns (KycResponse);
+  rpc ApproveKyc (GetEmployeeRequest) returns (KycResponse);
+  rpc RejectKyc (GetEmployeeRequest) returns (KycResponse);
+}

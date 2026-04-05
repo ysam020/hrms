@@ -1,0 +1,170 @@
+syntax = "proto3";
+package recruitment;
+
+message JobOpening {
+  string id = 1;
+  string job_title = 2;
+  int32 number_of_vacancies = 3;
+  string job_posting_date = 4;
+  string application_deadline = 5;
+  string job_description = 6;
+  string required_skills = 7;
+  float experience = 8;
+  repeated float budget = 9;
+  string department = 10;
+  string hiring_manager = 11;
+  int32 candidates_hired = 12;
+  string status = 13;
+  string created_by = 14;
+  string created_on = 15;
+}
+
+message JobApplication {
+  string id = 1;
+  string jobId = 2;
+  string applicantName = 3;
+  string email = 4;
+  string phone = 5;
+  string resumeUrl = 6;
+  string status = 7;
+  string appliedAt = 8;
+}
+
+message Resignation {
+  string id = 1;
+  string userId = 2;
+  string reason = 3;
+  string lastWorkingDate = 4;
+  string status = 5;
+  string createdAt = 6;
+  string username = 7;
+  string resignation_date = 8;
+  string submitted_on = 9;
+  string rejection_reason = 10;
+  string last_date = 11;
+}
+
+message ListResignationsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string username = 3;
+  string status = 4;
+}
+
+message ListResignationsResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated Resignation data = 3;
+  int32 total_count = 4;
+  int32 page = 5;
+  int32 limit = 6;
+  int32 total_pages = 7;
+}
+
+message CreateJobRequest {
+  string job_title = 1;
+  string job_description = 2;
+  string required_skills = 3;
+  string experience = 4;
+  string hiring_manager = 5;
+  string application_deadline = 6;
+  repeated float budget = 7;
+  int32 number_of_vacancies = 8;
+  string job_status = 9;
+  string created_by = 10;
+}
+
+message JobResponse {
+  string message = 1;
+  int32 status = 2;
+  JobOpening data = 3;
+}
+
+message ListJobsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string search = 3;
+  string job_status = 4;
+  string department = 5;
+}
+
+message ListJobsResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated JobOpening data = 3;
+  int32 total = 4;
+}
+
+message ApplyJobRequest {
+  string jobId = 1;
+  string applicantName = 2;
+  string email = 3;
+  string phone = 4;
+  string resumeUrl = 5;
+  string coverLetter = 6;
+}
+
+message ApplicationResponse {
+  string message = 1;
+  int32 status = 2;
+  JobApplication data = 3;
+}
+
+message ListApplicationsRequest {
+  string jobId = 1;
+  string status = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message ListApplicationsResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated JobApplication data = 3;
+  int32 total = 4;
+}
+
+message IdRequest {
+  string id = 1;
+}
+
+message BasicResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+message UpdateStatusRequest {
+  string id = 1;
+  string status = 2;
+  string remarks = 3;
+}
+
+message SubmitResignationRequest {
+  string userId = 1;
+  string reason = 2;
+  string lastWorkingDate = 3;
+}
+
+message ResignationResponse {
+  string message = 1;
+  int32 status = 2;
+  Resignation data = 3;
+}
+
+service RecruitmentService {
+  rpc CreateJobOpening (CreateJobRequest) returns (JobResponse);
+  rpc GetJobOpening (IdRequest) returns (JobResponse);
+  rpc ListJobOpenings (ListJobsRequest) returns (ListJobsResponse);
+  rpc UpdateJobOpening (CreateJobRequest) returns (JobResponse);
+  rpc DeleteJobOpening (IdRequest) returns (BasicResponse);
+  rpc ApplyForJob (ApplyJobRequest) returns (ApplicationResponse);
+  rpc ListApplications (ListApplicationsRequest) returns (ListApplicationsResponse);
+  rpc UpdateApplicationStatus (UpdateStatusRequest) returns (BasicResponse);
+  rpc SubmitResignation (SubmitResignationRequest) returns (ResignationResponse);
+  rpc GetResignation (IdRequest) returns (ResignationResponse);
+  rpc ApproveResignation (UpdateStatusRequest) returns (BasicResponse);
+  rpc RejectResignation (UpdateStatusRequest) returns (BasicResponse);
+  rpc GetMyResignation (IdRequest) returns (ResignationResponse);
+  // List all resignations with pagination and optional filters
+  rpc ListResignations (ListResignationsRequest) returns (ListResignationsResponse);
+}

@@ -1,0 +1,459 @@
+paths:
+  /api/get-hr-activities:
+    get:
+      summary: List HR activities
+      description: Returns all HR activities (warnings, commendations, PIPs, etc.)
+      tags: [HR Activities]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: HR activities retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        type: { type: string, example: "warning" }
+                        username: { type: string }
+                        description: { type: string }
+                        createdAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+
+  /api/hr-activity/{_id}:
+    get:
+      summary: Get a specific HR activity
+      description: Returns details of a single HR activity record
+      tags: [HR Activities]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: HR activity retrieved
+        "401":
+          description: Unauthorized
+        "404":
+          description: HR activity not found
+
+  /api/add-hr-activity:
+    post:
+      summary: Create HR activity
+      description: Record a new HR activity for an employee
+      tags: [HR Activities]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, type, description]
+              properties:
+                username: { type: string, example: "sameer_yadav" }
+                type:
+                  type: string
+                  enum: [warning, commendation, pip, promotion, transfer, other]
+                  example: "commendation"
+                description:
+                  { type: string, example: "Outstanding performance in Q1" }
+                date: { type: string, format: date }
+      responses:
+        "200":
+          description: HR activity created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/edit-hr-activity/{_id}:
+    put:
+      summary: Edit HR activity
+      description: Update an existing HR activity record
+      tags: [HR Activities]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type: { type: string }
+                description: { type: string }
+                date: { type: string, format: date }
+      responses:
+        "200":
+          description: HR activity updated
+        "401":
+          description: Unauthorized
+
+  /api/delete-hr-activity/{_id}:
+    delete:
+      summary: Delete HR activity
+      description: Remove an HR activity record
+      tags: [HR Activities]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: HR activity deleted
+        "401":
+          description: Unauthorized
+
+  /api/rules:
+    get:
+      summary: List business rules
+      description: Returns all configured business/rule-engine rules
+      tags: [Rule Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Rules retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        description: { type: string }
+                        active: { type: boolean }
+        "401":
+          description: Unauthorized
+    post:
+      summary: Create a business rule
+      description: Define a new business rule in the rule engine
+      tags: [Rule Engine]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, conditions, actions]
+              properties:
+                name: { type: string, example: "Late Arrival Warning" }
+                description: { type: string }
+                conditions:
+                  type: array
+                  items: { type: object }
+                actions:
+                  type: array
+                  items: { type: object }
+                active: { type: boolean, default: true }
+      responses:
+        "200":
+          description: Rule created
+        "401":
+          description: Unauthorized
+
+  /api/rules/{id}:
+    put:
+      summary: Update a business rule
+      tags: [Rule Engine]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                conditions: { type: array, items: { type: object } }
+                actions: { type: array, items: { type: object } }
+      responses:
+        "200":
+          description: Rule updated
+        "401":
+          description: Unauthorized
+    delete:
+      summary: Delete a business rule
+      tags: [Rule Engine]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Rule deleted
+        "401":
+          description: Unauthorized
+
+  /api/rules/{id}/status:
+    patch:
+      summary: Toggle rule active status
+      description: Enable or disable a business rule
+      tags: [Rule Engine]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [active]
+              properties:
+                active: { type: boolean, example: false }
+      responses:
+        "200":
+          description: Rule status updated
+        "401":
+          description: Unauthorized
+
+  /api/rules/test:
+    post:
+      summary: Test a business rule
+      description: Evaluate a rule against sample data without persisting results
+      tags: [Rule Engine]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ruleId, testData]
+              properties:
+                ruleId: { type: string }
+                testData:
+                  {
+                    type: object,
+                    description: "Sample data to evaluate the rule against",
+                  }
+      responses:
+        "200":
+          description: Rule test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      matched: { type: boolean }
+                      executedActions: { type: array, items: { type: object } }
+        "401":
+          description: Unauthorized
+
+  /api/policies:
+    get:
+      summary: List all policies
+      description: Returns all HR policies
+      tags: [Policies]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Policies retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        category: { type: string }
+                        updatedAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+    post:
+      summary: Create or update a policy
+      description: Create a new policy or update if one exists with the same title
+      tags: [Policies]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title: { type: string, example: "Remote Work Policy" }
+                category: { type: string, example: "Work Arrangement" }
+                content:
+                  {
+                    type: string,
+                    description: "Policy body (HTML or Markdown)",
+                  }
+      responses:
+        "200":
+          description: Policy created or updated
+        "401":
+          description: Unauthorized
+
+  /api/policies/{id}:
+    get:
+      summary: Get a specific policy
+      tags: [Policies]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Policy retrieved
+        "401":
+          description: Unauthorized
+        "404":
+          description: Policy not found
+    put:
+      summary: Update a policy
+      tags: [Policies]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                category: { type: string }
+                content: { type: string }
+      responses:
+        "200":
+          description: Policy updated
+        "401":
+          description: Unauthorized
+    delete:
+      summary: Delete a policy
+      tags: [Policies]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Policy deleted
+        "401":
+          description: Unauthorized
+
+  /api/policies/{id}/pdf:
+    get:
+      summary: Download policy as PDF
+      description: Generates and returns a PDF version of the policy
+      tags: [Policies]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: PDF file stream
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Unauthorized
+
+  /api/is-superuser/{username}:
+    get:
+      summary: Check if user is a superuser
+      description: Returns whether the specified user has superuser privileges
+      tags: [HR Activities]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+          example: "sameer_yadav"
+      responses:
+        "200":
+          description: Superuser status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      isSuperuser: { type: boolean, example: false }
+        "401":
+          description: Unauthorized

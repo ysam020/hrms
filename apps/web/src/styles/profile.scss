@@ -1,0 +1,7 @@
+@use "./constants.scss";
+
+.profile-container {
+  background-color: var(--card-background);
+  padding: 20px;
+  color: var(--text-color);
+}

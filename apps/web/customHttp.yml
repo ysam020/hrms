@@ -1,0 +1,129 @@
+customHeaders:
+  # ============================================================
+  # Applied to every response
+  # ============================================================
+  - pattern: "**/*"
+    headers:
+      # ---------------------------------------------------------
+      # Transport Security
+      # ---------------------------------------------------------
+      # 2-year max-age required for HSTS preload list submission
+      - key: "Strict-Transport-Security"
+        value: "max-age=63072000; includeSubDomains; preload"
+
+      # ---------------------------------------------------------
+      # Anti-clickjacking  (frame-ancestors in CSP covers modern
+      # browsers; this covers legacy browsers)
+      # ---------------------------------------------------------
+      - key: "X-Frame-Options"
+        value: "DENY"
+
+      # ---------------------------------------------------------
+      # MIME sniffing prevention
+      # ---------------------------------------------------------
+      - key: "X-Content-Type-Options"
+        value: "nosniff"
+
+      # ---------------------------------------------------------
+      # Disable the old browser XSS auditor (it causes bypasses)
+      # ---------------------------------------------------------
+      - key: "X-XSS-Protection"
+        value: "0"
+
+      # ---------------------------------------------------------
+      # Block cross-domain Flash / Acrobat data access
+      # ---------------------------------------------------------
+      - key: "X-Permitted-Cross-Domain-Policies"
+        value: "none"
+
+      # ---------------------------------------------------------
+      # Referrer information leaked to external links
+      # ---------------------------------------------------------
+      - key: "Referrer-Policy"
+        value: "strict-origin-when-cross-origin"
+
+      # ---------------------------------------------------------
+      # Disable automatic DNS prefetch (minor info-leak vector)
+      # ---------------------------------------------------------
+      - key: "X-DNS-Prefetch-Control"
+        value: "off"
+
+      # ---------------------------------------------------------
+      # Permissions / Feature Policy
+      # Covers all known browser capability APIs; WebAuthn APIs
+      # (publickey-credentials-*) are allowed for self.
+      # ---------------------------------------------------------
+      - key: "Permissions-Policy"
+        value: "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), bluetooth=(), camera=(), clipboard-read=(), clipboard-write=(), display-capture=(), document-domain=(), encrypted-media=(), fullscreen=(self), gamepad=(), geolocation=(self), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-create=(self), publickey-credentials-get=(self), screen-wake-lock=(), serial=(), speaker-selection=(), sync-xhr=(), usb=(), web-share=(), window-management=(), xr-spatial-tracking=()"
+
+      # ---------------------------------------------------------
+      # Cross-Origin isolation headers
+      # COOP: prevents other origins from accessing your window
+      # CORP: prevents your resources from being loaded by others
+      # COEP credentialless: enables SharedArrayBuffer without
+      #   breaking third-party CDN/Firebase resources (less strict
+      #   than require-corp; cross-origin no-CORS requests are
+      #   sent without credentials, which is safe for CDNs)
+      # ---------------------------------------------------------
+      - key: "Cross-Origin-Opener-Policy"
+        value: "same-origin"
+      - key: "Cross-Origin-Resource-Policy"
+        value: "same-origin"
+      - key: "Cross-Origin-Embedder-Policy"
+        value: "credentialless"
+
+      # ---------------------------------------------------------
+      # Content Security Policy
+      #
+      # Notes on unsafe-inline / unsafe-eval:
+      #   - unsafe-inline in script-src: required by Vite's module
+      #     preload polyfill in the built output.
+      #   - unsafe-eval in script-src: required by Google Tag
+      #     Manager (uses new Function() internally).
+      #   - unsafe-inline in style-src: required by MUI/PrimeReact
+      #     component libraries that inject inline styles.
+      #
+      # frame-ancestors 'none' is more robust than X-Frame-Options
+      # and is the modern standard for clickjacking protection.
+      # ---------------------------------------------------------
+      - key: "Content-Security-Policy"
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://www.googletagmanager.com; connect-src 'self' https://api.praesto.cloud wss://api.praesto.cloud https://firebase.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://fcm.googleapis.com https://cdn.jsdelivr.net https://unpkg.com https://www.google-analytics.com https://www.googletagmanager.com https://region1.google-analytics.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://api.praesto.cloud https://www.google-analytics.com https://www.googletagmanager.com https://www.google.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self' https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self' https://api.praesto.cloud; frame-ancestors 'none'; upgrade-insecure-requests"
+
+  # ============================================================
+  # HTML shell — never cache so fresh security headers apply
+  # ============================================================
+  - pattern: "*.html"
+    headers:
+      - key: "Cache-Control"
+        value: "no-store, no-cache, must-revalidate"
+      - key: "Pragma"
+        value: "no-cache"
+      - key: "Expires"
+        value: "0"
+
+  # ============================================================
+  # Hashed static assets (Vite JS/CSS bundles have content hashes
+  # in their filenames so they can be cached forever safely)
+  # ============================================================
+  - pattern: "/assets/**"
+    headers:
+      - key: "Cache-Control"
+        value: "public, max-age=31536000, immutable"
+
+  # ============================================================
+  # Service workers must never be cached — browsers need to
+  # check for updates on every load
+  # ============================================================
+  - pattern: "/sw.js"
+    headers:
+      - key: "Cache-Control"
+        value: "no-store, no-cache, must-revalidate"
+      - key: "Service-Worker-Allowed"
+        value: "/"
+
+  - pattern: "/firebase-messaging-sw.js"
+    headers:
+      - key: "Cache-Control"
+        value: "no-store, no-cache, must-revalidate"
+      - key: "Service-Worker-Allowed"
+        value: "/"

@@ -1,0 +1,11 @@
+export * as auth from "./generated/auth/auth";
+export * as user from "./generated/user/user";
+export * as employee from "./generated/employee/employee";
+export * as attendance from "./generated/attendance/attendance";
+export * as leave from "./generated/leave/leave";
+export * as hrm from "./generated/hrm/hrm";
+export * as salary from "./generated/salary/salary";
+export * as recruitment from "./generated/recruitment/recruitment";
+export * as notification from "./generated/notification/notification";
+export * as analytics from "./generated/analytics/analytics";
+export * as health from "./generated/health/health";

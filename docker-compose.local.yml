@@ -1,0 +1,209 @@
+services:
+  api-gateway:
+    container_name: api-gateway
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=api-gateway
+        - PROJECT=api-gateway
+        - PORT=9002
+    environment:
+      - AUTH_SERVICE_HOST=auth-service
+      - USER_SERVICE_HOST=user-service
+      - EMPLOYEE_SERVICE_HOST=employee-service
+      - ATTENDANCE_SERVICE_HOST=attendance-service
+      - LEAVE_SERVICE_HOST=leave-service
+      - RECRUITMENT_SERVICE_HOST=recruitment-service
+      - HRM_SERVICE_HOST=hrm-service
+      - SALARY_SERVICE_HOST=salary-service
+      - ANALYTICS_SERVICE_HOST=analytics-service
+      - NOTIFICATION_SERVICE_HOST=notification-service
+    ports:
+      - "9002:9002"
+    env_file: .env.local
+
+  auth-service:
+    container_name: auth-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=auth-service
+        - PROJECT=auth-service
+        - PORT=50051
+    ports:
+      - "50051:50051"
+    env_file: .env.local
+
+  user-service:
+    container_name: user-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=user-service
+        - PROJECT=user-service
+        - PORT=50052
+    ports:
+      - "50052:50052"
+    env_file: .env.local
+
+  employee-service:
+    container_name: employee-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=employee-service
+        - PROJECT=@hrms/employee-service
+        - PORT=50053
+    ports:
+      - "50053:50053"
+    env_file: .env.local
+
+  attendance-service:
+    container_name: attendance-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=attendance-service
+        - PROJECT=@hrms/attendance-service
+        - PORT=50054
+    ports:
+      - "50054:50054"
+    env_file: .env.local
+
+  leave-service:
+    container_name: leave-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=leave-service
+        - PROJECT=@hrms/leave-service
+        - PORT=50055
+    ports:
+      - "50055:50055"
+    env_file: .env.local
+
+  recruitment-service:
+    container_name: recruitment-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=recruitment-service
+        - PROJECT=@hrms/recruitment-service
+        - PORT=50056
+    ports:
+      - "50056:50056"
+    env_file: .env.local
+
+  hrm-service:
+    container_name: hrm-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=hrm-service
+        - PROJECT=@hrms/hrm-service
+        - PORT=50057
+    ports:
+      - "50057:50057"
+    env_file: .env.local
+
+  salary-service:
+    container_name: salary-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=salary-service
+        - PROJECT=@hrms/salary-service
+        - PORT=50058
+    ports:
+      - "50058:50058"
+    env_file: .env.local
+
+  analytics-service:
+    container_name: analytics-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=analytics-service
+        - PROJECT=@hrms/analytics-service
+        - PORT=50059
+    ports:
+      - "50059:50059"
+    env_file: .env.local
+
+  notification-service:
+    container_name: notification-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=notification-service
+        - PROJECT=@hrms/notification-service
+        - PORT=50060
+    ports:
+      - "50060:50060"
+    env_file: .env.local
+
+  scheduler-service:
+    container_name: scheduler-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=scheduler-service
+        - PROJECT=@hrms/scheduler-service
+    env_file: .env.local
+
+  web:
+    container_name: web
+    build:
+      context: .
+      dockerfile: ./docker/web.Dockerfile
+      no_cache: true
+    ports:
+      - "80:80"
+
+  mongodb:
+    container_name: hrms-mongodb
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: hrms
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    container_name: hrms-redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  mongo-data:
+    driver: local
+  redis-data:
+    driver: local

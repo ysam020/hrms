@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Praesto - Advanced HR Management Solution"
+    />
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Praesto" />
+    <meta
+      property="og:description"
+      content="Praesto offers an advanced HR management solution."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="%PUBLIC_URL%/logo192.png" />
+
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- ========================================
+         PERFORMANCE OPTIMIZATIONS
+         ======================================== -->
+
+    <!-- DNS Prefetch - Resolve DNS early (fastest) -->
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net" />
+    <link rel="dns-prefetch" href="//unpkg.com" />
+    <link rel="dns-prefetch" href="//raw.githubusercontent.com" />
+
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://localhost:9002" />
+    <link
+      rel="preload"
+      as="image"
+      href="/assets/images/m-bg.webp"
+      fetchpriority="high"
+    />
+
+    <!-- Preload Critical LCP Images -->
+    <link
+      rel="preload"
+      href="/assets/images/login-bg.webp"
+      as="image"
+      type="image/webp"
+      fetchpriority="high"
+    />
+
+    <link
+      rel="preload"
+      href="/assets/images/m-bg.webp"
+      as="image"
+      type="image/webp"
+      fetchpriority="high"
+    />
+
+    <!-- Security headers are set as HTTP response headers via customHttp.yml (AWS Amplify).
+         Meta-based headers are ignored by security scanners and browsers for most directives. -->
+
+    <title>Praesto - HR Management System</title>
+
+    <!-- Prevent flash of wrong theme IMMEDIATELY -->
+    <script>
+      (function () {
+        try {
+          const theme = JSON.parse(localStorage.getItem("theme") || '"light"');
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark-theme");
+            document.documentElement.style.backgroundColor = "#111B21";
+          }
+        } catch (e) {
+          // Fail silently
+        }
+      })();
+    </script>
+
+    <!-- Critical CSS for instant rendering -->
+    <style>
+      /* Reset and base styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      body {
+        font-family:
+          "Poppins",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          "Roboto",
+          sans-serif;
+        background-color: #ffffff;
+        color: #333333;
+        transition:
+          background-color 0.2s ease,
+          color 0.2s ease;
+      }
+
+      /* Dark theme */
+      .dark-theme body {
+        background-color: #111b21;
+        color: #a5a9ab;
+      }
+
+      #root {
+        min-height: 100vh;
+      }
+
+      /* Loading spinner - visible during app initialization */
+      .loading-spinner {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        border-left-color: #3498db;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        z-index: 9999;
+      }
+
+      @keyframes spin {
+        to {
+          transform: translate(-50%, -50%) rotate(360deg);
+        }
+      }
+
+      /* Offline indicator */
+      .offline-indicator {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: #f44336;
+        color: white;
+        text-align: center;
+        padding: 10px;
+        z-index: 10000;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      /* Error boundary styles */
+      .error-boundary {
+        max-width: 600px;
+        margin: 60px auto;
+        padding: 32px;
+        text-align: center;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .error-boundary h1 {
+        color: #d32f2f;
+        margin-bottom: 16px;
+        font-size: 24px;
+      }
+
+      .error-boundary p {
+        color: #666;
+        line-height: 1.6;
+        margin-bottom: 24px;
+      }
+
+      /* Performance warning (development only) */
+      .performance-warning {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        background: rgba(255, 193, 7, 0.95);
+        color: #000;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 9998;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        max-width: 280px;
+      }
+
+      /* Prevent layout shift - reserve space for common elements */
+      .dashboard-container {
+        min-height: 192px; /* Prevent layout shift noticed in CLS audit */
+        contain: paint; /* Optimization for browser rendering */
+      }
+
+      /* Skeleton loading states to prevent CLS */
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          #f0f0f0 25%,
+          #e0e0e0 50%,
+          #f0f0f0 75%
+        );
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+      }
+
+      @keyframes loading {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+
+      /* Reduce motion for users who prefer it */
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <!-- Initial loading indicator -->
+      <div class="loading-spinner" id="initial-loader"></div>
+    </div>
+
+    <!-- Service Worker Registration -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          const isHttps = window.location.protocol === "https:";
+
+          if (isHttps) {
+            navigator.serviceWorker
+              .register("./firebase-messaging-sw.js")
+              .then((registration) => {
+                registration.addEventListener("updatefound", () => {
+                  const newWorker = registration.installing;
+                  newWorker.addEventListener("statechange", () => {
+                    if (
+                      newWorker.state === "installed" &&
+                      navigator.serviceWorker.controller
+                    ) {
+                      console.log("New version available! Refresh to update.");
+                    }
+                  });
+                });
+              })
+              .catch((error) => {
+                console.error("Service Worker registration failed:", error);
+              });
+          }
+        });
+      }
+    </script>
+
+    <!-- CSP with optimized CDN Support -->
+    <script>
+      (function () {
+        const hostname = window.location.hostname;
+        const isLocalhost =
+          hostname === "localhost" || hostname.includes("127.0.0.1");
+
+        // Client URLs
+        const clientURLs = isLocalhost
+          ? ["http://localhost:3000", "https://localhost:3000"]
+          : [
+              "http://localhost:3000",
+              "https://localhost:3000",
+              "http://192.168.1.107:3000",
+              "https://192.168.1.107:3000",
+              "http://172.20.10.10:3000",
+              "https://172.20.10.10:3000",
+            ];
+
+        // Server URLs
+        const serverURLs = isLocalhost
+          ? [
+              "http://localhost:9002",
+              "https://localhost:9002",
+              "https://localhost",
+              "http://localhost",
+            ]
+          : [
+              "http://localhost:9002",
+              "https://localhost:9002",
+              "http://192.168.1.107:9002",
+              "https://192.168.1.107:9002",
+              "http://172.20.10.10:9002",
+              "https://172.20.10.10:9002",
+              "https://api.praesto.cloud",
+            ];
+
+        // WebSocket URLs
+        const wsServers = [];
+        serverURLs.forEach((url) => {
+          const wsUrl = url.replace(/^http/, "ws");
+          wsServers.push(wsUrl);
+        });
+
+        // CDN URLs - only essential ones
+        const cdnURLs = [
+          "https://cdn.jsdelivr.net",
+          "https://raw.githubusercontent.com",
+          "https://unpkg.com",
+        ];
+
+        // S3 URLs
+        const s3URLs = ["https://praesto.s3.ap-south-1.amazonaws.com"];
+
+        // Firebase URLs
+        const firebaseURLs = [
+          "https://firebase.googleapis.com",
+          "https://firebaseinstallations.googleapis.com",
+          "https://fcmregistrations.googleapis.com",
+          "https://fcm.googleapis.com",
+        ];
+
+        // Analytics URLs
+        const analyticsURLs = [
+          "https://www.google-analytics.com",
+          "https://www.googletagmanager.com",
+          "https://region1.google-analytics.com",
+        ];
+
+        // Build CSP policy
+        const cspPolicy = {
+          "default-src": ["'self'", ...clientURLs, "blob:", "data:"],
+
+          "script-src": [
+            "'self'",
+            "'unsafe-inline'",
+            "'unsafe-eval'",
+            ...cdnURLs,
+            "https://www.gstatic.com",
+            "https://www.googletagmanager.com",
+          ],
+
+          "connect-src": [
+            "'self'",
+            ...serverURLs,
+            ...wsServers,
+            ...firebaseURLs,
+            ...cdnURLs,
+            ...analyticsURLs,
+            ...s3URLs,
+          ],
+
+          "style-src": ["'self'", "'unsafe-inline'", "https://unpkg.com"],
+
+          "font-src": ["'self'"],
+
+          "img-src": [
+            "'self'",
+            "data:",
+            "blob:",
+            ...serverURLs,
+            ...analyticsURLs,
+            ...s3URLs,
+            "https://www.google.com",
+          ],
+
+          "media-src": ["'self'", "blob:", "data:"],
+          "worker-src": ["'self'", "blob:"],
+          "child-src": ["'self'", "blob:"],
+          "frame-src": ["'self'", "https://www.google.com"],
+          "object-src": ["'none'"],
+          "base-uri": ["'self'"],
+          "form-action": ["'self'", ...serverURLs],
+          "upgrade-insecure-requests": [],
+          "block-all-mixed-content": [],
+        };
+
+        // Convert to CSP string
+        const cspString = Object.entries(cspPolicy)
+          .map(([directive, sources]) => {
+            return sources.length > 0
+              ? `${directive} ${sources.join(" ")}`
+              : directive;
+          })
+          .join("; ");
+
+        // Apply CSP
+        const metaTag = document.createElement("meta");
+        metaTag.httpEquiv = "Content-Security-Policy";
+        metaTag.content = cspString;
+        document.head.appendChild(metaTag);
+
+        // Global error monitoring
+        window.addEventListener("error", (event) => {
+          console.error("Global Error:", {
+            message: event.message,
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno,
+            error: event.error,
+          });
+
+          if (window.Sentry) {
+            window.Sentry.captureException(
+              event.error || new Error(event.message),
+            );
+          }
+        });
+
+        // Unhandled promise rejection monitoring
+        window.addEventListener("unhandledrejection", (event) => {
+          console.error("Unhandled Promise Rejection:", event.reason);
+
+          if (window.Sentry) {
+            window.Sentry.captureException(event.reason);
+          }
+        });
+      })();
+    </script>
+
+    <!-- Network status monitoring -->
+    <script>
+      window.addEventListener("load", () => {
+        let offlineIndicator = null;
+
+        function showOfflineIndicator() {
+          if (!offlineIndicator) {
+            offlineIndicator = document.createElement("div");
+            offlineIndicator.className = "offline-indicator";
+            offlineIndicator.textContent = "⚠️ No internet connection";
+            document.body.appendChild(offlineIndicator);
+          }
+        }
+
+        function hideOfflineIndicator() {
+          if (offlineIndicator) {
+            offlineIndicator.remove();
+            offlineIndicator = null;
+          }
+        }
+
+        window.addEventListener("online", hideOfflineIndicator);
+        window.addEventListener("offline", showOfflineIndicator);
+
+        if (!navigator.onLine) {
+          showOfflineIndicator();
+        }
+      });
+    </script>
+  </body>
+</html>

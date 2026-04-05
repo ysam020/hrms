@@ -1,0 +1,30 @@
+import { Router } from "express";
+import { authRouter } from "./auth";
+import { userRouter } from "./user";
+import { employeeRouter } from "./employee";
+import { attendanceRouter } from "./attendance";
+import { leaveRouter } from "./leave";
+import { recruitmentRouter } from "./recruitment";
+import { hrmRouter } from "./hrm";
+import { salaryRouter } from "./salary";
+import { notificationRouter } from "./notification";
+import { generalRouter } from "./general";
+import { analyticsRoutesRouter } from "./analyticsRoutes";
+import { permissionsRouter } from "./permissions";
+import { chatRouter } from "./chat";
+
+export const rootRouter: Router = Router();
+
+rootRouter.use(authRouter);
+rootRouter.use(userRouter);
+rootRouter.use(employeeRouter);
+rootRouter.use(attendanceRouter);
+rootRouter.use(leaveRouter);
+rootRouter.use(recruitmentRouter);
+rootRouter.use(hrmRouter);
+rootRouter.use(salaryRouter);
+rootRouter.use(notificationRouter);
+rootRouter.use(generalRouter);
+rootRouter.use(analyticsRoutesRouter);
+rootRouter.use(permissionsRouter);
+rootRouter.use(chatRouter);

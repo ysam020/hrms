@@ -1,0 +1,115 @@
+import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
+import { prisma } from "@hrms/db";
+import { logger } from "@hrms/logger";
+import { cacheManager } from "@hrms/cache";
+import { getNotificationQueue } from "@hrms/queue";
+import { MESSAGES } from "../constants/messages";
+
+export const applyForJob = async (
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
+) => {
+  try {
+    const { jobTitleId, name, email, mobile, resume, reason, aadharNo } =
+      call.request;
+
+    if (!jobTitleId || !name || !email) {
+      return callback(null, {
+        message: MESSAGES.JOB_TITLE_ID_NAME_EMAIL_REQUIRED,
+        status: status.INVALID_ARGUMENT,
+      });
+    }
+
+    const jobOpening = await prisma.jobOpening.findUnique({
+      where: { id: jobTitleId },
+    });
+    if (!jobOpening || jobOpening.status !== "Open") {
+      return callback(null, {
+        message: MESSAGES.JOB_NOT_FOUND_OR_CLOSED,
+        status: status.NOT_FOUND,
+      });
+    }
+
+    const existing = await prisma.jobApplication.findFirst({
+      where: { jobTitleId, email },
+    });
+    if (existing) {
+      return callback(null, {
+        message: MESSAGES.ALREADY_APPLIED,
+        status: status.ALREADY_EXISTS,
+      });
+    }
+
+    const application = await prisma.jobApplication.create({
+      data: {
+        jobTitleId,
+        name,
+        email,
+        mobile: mobile || null,
+        resume: resume || null,
+        reason: reason || null,
+        aadharNo: aadharNo || null,
+        status: "Applied",
+      },
+    });
+
+    await cacheManager.invalidatePattern("applications:*");
+
+    // Notify HR + hiring manager (fire-and-forget)
+    prisma.user
+      .findMany({
+        where: { department: "HUMAN RESOURCES" },
+        select: { id: true, username: true },
+      })
+      .then(async (hrUsers) => {
+        const allTargets = [...hrUsers];
+        if (jobOpening.hiringManager) {
+          const hmUser = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { username: jobOpening.hiringManager },
+                {
+                  AND: [
+                    { first_name: { not: null } },
+                    { last_name: { not: null } },
+                  ],
+                },
+              ],
+            },
+            select: {
+              id: true,
+              username: true,
+              first_name: true,
+              last_name: true,
+            },
+          });
+          if (hmUser && !allTargets.find((u) => u.id === hmUser.id))
+            allTargets.push(hmUser);
+        }
+        if (allTargets.length === 0) return;
+        return getNotificationQueue().add("jobApplicationReceived", {
+          title: "Recruitment",
+          message: `New job application: ${name} has applied for ${jobOpening.jobTitle}`,
+          recipients: allTargets.map((u) => u.id),
+          pushTargets: allTargets.map((u) => u.username),
+          eventType: "job_application",
+          priority: "medium",
+        });
+      })
+      .catch((err) =>
+        logger.warn("[applyForJob] Notification enqueue failed:", { err }),
+      );
+
+    return callback(null, {
+      message: MESSAGES.APPLICATION_SUBMITTED,
+      status: status.OK,
+      data: application,
+    });
+  } catch (err) {
+    logger.error("ApplyForJob error:", { err });
+    return callback(null, {
+      message: MESSAGES.INTERNAL_SERVER_ERROR,
+      status: status.INTERNAL,
+    });
+  }
+};

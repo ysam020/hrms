@@ -1,0 +1,427 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["prismaSchemaFolder"]
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("MONGO_URI")
+}
+
+// ─── User ────────────────────────────────────────────────────────────────────
+
+model User {
+  id                          String    @id @default(auto()) @map("_id") @db.ObjectId
+  username                    String    @unique
+  password                    String?
+  email                       String?
+  official_email              String?
+  first_name                  String?
+  middle_name                 String?
+  last_name                   String?
+  mobile                      String?
+  dob                         String?
+  blood_group                 String?
+  qualification               String?
+  role                        String[]
+  permissions                 String[]
+  isSuperUser                 Boolean   @default(false)
+  wfh                         Boolean   @default(false)
+  assets                      String[]
+  note                        String?
+  employeeStatus              String    @default("Active")
+  reasonForTermination        String?
+  dateOfTermination           String?
+  dateOfAbscond               String?
+  designation                 String?
+  department                  String?
+  joining_date                String?
+  employee_photo              String?
+  face_descriptor             Json?
+  // Address
+  permanent_address_line_1    String?
+  permanent_address_line_2    String?
+  permanent_address_city      String?
+  permanent_address_state     String?
+  permanent_address_pincode   String?
+  communication_address_line_1  String?
+  communication_address_line_2  String?
+  communication_address_city    String?
+  communication_address_state   String?
+  communication_address_pincode String?
+  // KYC documents
+  aadhar_no                   String?
+  aadhar_photo_front          String?
+  aadhar_photo_back           String?
+  pan_no                      String?
+  pan_photo                   String?
+  education_certificates      String[]
+  experience_certificate      String?
+  electricity_bill            String?
+  pf_no                       String?
+  uan_no                      String?
+  esic_no                     String?
+  bank_account_no             String?
+  bank_name                   String?
+  ifsc_code                   String?
+  kyc_date                    String?
+  kyc_approval                String?
+  // Salary (embedded in user)
+  salary                      Float?
+  salaryBasicPay              Float?
+  salaryHra                   Float?
+  salaryConveyance            Float?
+  salaryPf                    Float?
+  salaryEsi                   Float?
+  salaryPt                    Float?
+  reference_by                String?
+  // Auth
+  webAuthnCredentials         Json?
+  fcmTokens                   Json?
+  events                      Json?
+  createdAt                   DateTime? @default(now())
+  updatedAt                   DateTime? @updatedAt
+
+  attendanceRecords           AttendanceRecord[]
+  leaveApplications           LeaveApplication[]
+  leaveBalance                LeaveBalance?
+  notifications               NotificationRecipient[]
+  salaryStructures            SalaryStructure[]
+
+  @@map("users")
+}
+
+// ─── Attendance ───────────────────────────────────────────────────────────────
+
+model AttendanceRecord {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  username     String
+  date         DateTime
+  timeIn       String?
+  timeOut      String?
+  workingHours Float?
+  status       String?
+  isCorrected  Boolean  @default(false)
+  correctedBy  String?
+
+  user         User?    @relation(fields: [username], references: [username])
+
+  @@unique([username, date])
+  @@map("attendance_records")
+}
+
+// ─── Leave ────────────────────────────────────────────────────────────────────
+
+model LeaveApplication {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  username          String
+  from              String
+  to                String
+  leaveType         String
+  days              Float
+  status            String   @default("Pending")
+  reason            String?
+  sickLeave         Boolean?
+  medicalCertificate String?
+  appliedOn         String?
+  approvedByUsername String?
+  approvedOn        String?
+
+  user              User?    @relation(fields: [username], references: [username])
+
+  @@map("leaves")
+}
+
+model LeaveBalance {
+  id                              String   @id @default(auto()) @map("_id") @db.ObjectId
+  username                        String   @unique
+  accumulatedPLBeforeCurrentMonth Float    @default(0)
+  balances                        Json?
+  createdAt                       DateTime? @default(now())
+  updatedAt                       DateTime? @updatedAt
+
+  user                            User?    @relation(fields: [username], references: [username])
+
+  @@map("leavebalances")
+}
+
+// ─── Job Openings & Applications ─────────────────────────────────────────────
+
+model JobOpening {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  jobTitle           String
+  numberOfVacancies  Int?
+  jobPostingDate     DateTime? @default(now())
+  applicationDeadline DateTime
+  jobDescription     String
+  requiredSkills     String
+  experience         Float
+  budget             Float[]
+  department         String?
+  hiringManager      String
+  candidatesHired    Int       @default(0)
+  status             String
+  createdBy          String
+  createdOn          DateTime? @default(now())
+  lastUpdateBy       String?
+  lastUpdatedOn      DateTime?
+  deletedBy          String?
+  deletedOn          DateTime?
+
+  applications       JobApplication[]
+
+  @@map("jobopenings")
+}
+
+model JobApplication {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String?
+  mobile       String?
+  email        String?
+  aadharNo     String?
+  jobTitleId   String?  @db.ObjectId
+  resume       String?
+  interviews   Json?
+  reason       String?
+  status       String   @default("Applied")
+
+  jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id])
+
+  @@map("jobapplications")
+}
+
+// ─── Resignation ─────────────────────────────────────────────────────────────
+
+model Resignation {
+  id                          String    @id @default(auto()) @map("_id") @db.ObjectId
+  username                    String?
+  resignationDate             String?
+  lastDate                    String?
+  lastWorkingDay              DateTime?
+  reason                      String?
+  comments                    String?
+  rejectionReason             String?
+  overallJobSatisfaction      Float     @default(0)
+  qualityOfCommunication      String?
+  supportFromManager          String?
+  appreciationForWork         String?
+  collaborationWithinTheTeam  String?
+  overallCompanyCulture       String?
+  suggestions                 String?
+  assetsReturned              Boolean?
+  fnfDone                     Boolean?
+  status                      String    @default("Submitted")
+  submittedOn                 DateTime?
+  approvedOn                  DateTime?
+  rejectedOn                  DateTime?
+  withdrawnOn                 DateTime?
+  feedbackSubmittedOn         DateTime?
+  lastUpdatedOn               DateTime?
+
+  @@map("resignations")
+}
+
+// ─── Salary ───────────────────────────────────────────────────────────────────
+
+model SalaryStructure {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  username        String
+  grossSalary     Float
+  month           Int
+  year            Int
+  basicPay        Float?
+  hra             Float?
+  conveyance      Float?
+  incentive       Float?
+  pf              Float?
+  esi             Float?
+  pt              Float?
+  deductions      Float?
+  grossEarnings   Float?
+  netPayable      Float?
+  createdAt       DateTime? @default(now())
+  updatedAt       DateTime? @updatedAt
+
+  user            User?    @relation(fields: [username], references: [username])
+
+  @@map("salarystructures")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id         String                  @id @default(auto()) @map("_id") @db.ObjectId
+  title      String?
+  message    String?
+  timeStamp  DateTime? @default(now())
+  eventType  String                  @default("general")
+  activityId String?                 @db.ObjectId
+  priority   String                  @default("medium")
+
+  recipients NotificationRecipient[]
+
+  @@map("notifications")
+}
+
+model NotificationRecipient {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  notificationId String       @db.ObjectId
+  userId         String       @db.ObjectId
+  isCleared      Boolean      @default(false)
+
+  notification   Notification @relation(fields: [notificationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@map("notification_recipients")
+}
+
+// ─── Roles ────────────────────────────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String?
+  permissions String[]
+  assignedTo  Json?
+
+  @@map("roles")
+}
+
+// ─── HR Activities ────────────────────────────────────────────────────────────
+
+model HrActivity {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  title         String
+  description   String
+  date          String
+  time          String
+  status        String
+  createdBy     String
+  createdOn     DateTime? @default(now())
+  lastUpdatedOn DateTime? @default(now())
+  lastUpdatedBy String?
+  deletedBy     String?
+  deletedOn     DateTime?
+
+  @@map("hractivities")
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+model ChatRoom {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  participants String[]
+  type         String    @default("direct")
+  name         String?
+  lastMessageId String?  @db.ObjectId
+  lastActivity DateTime? @default(now())
+  deletedFor   String[]
+  createdAt    DateTime? @default(now())
+  updatedAt    DateTime? @updatedAt
+
+  messages     Message[]
+
+  @@map("chatrooms")
+}
+
+model Message {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  chatRoomId   String    @db.ObjectId
+  sender       String
+  content      String?
+  type         String    @default("text")
+  fileUrl      String?
+  fileName     String?
+  fileMimeType String?
+  fileSize     Float?
+  replyToId    String?   @db.ObjectId
+  readBy       String[]
+  isDeleted    Boolean   @default(false)
+  createdAt    DateTime? @default(now())
+  updatedAt    DateTime? @updatedAt
+
+  chatRoom     ChatRoom  @relation(fields: [chatRoomId], references: [id])
+
+  @@map("messages")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String?  @db.ObjectId
+  action      String
+  entityType  String
+  oldValue    Json?
+  newValue    Json?
+  description String   @default("")
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime? @default(now())
+
+  @@map("auditlogs")
+}
+
+// ─── Holidays ─────────────────────────────────────────────────────────────────
+
+model Holiday {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  year     Int
+  month    Int
+  holidays Json?
+
+  @@map("holidays")
+}
+
+// ─── Policies ─────────────────────────────────────────────────────────────────
+
+model Policy {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  policyType    String
+  policyName    String?
+  content       String
+  status        String    @default("Active")
+  createdBy     String
+  createdOn     DateTime? @default(now())
+  lastUpdatedOn DateTime? @default(now())
+  lastUpdatedBy String?
+  deletedBy     String?
+  deletedOn     DateTime?
+
+  @@map("policies")
+}
+
+// ─── Business Rules ───────────────────────────────────────────────────────────
+
+model Rule {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  category       String
+  description    String?
+  priority       Int       @default(0)
+  status         String    @default("draft")
+  tags           String[]
+  conditions     Json?
+  conditionLogic String    @default("AND")
+  actions        Json?
+  effectiveFrom  DateTime?
+  effectiveTo    DateTime?
+  createdBy      String?
+  lastModifiedBy String?
+  executionCount Int       @default(0)
+  lastExecuted   DateTime?
+  createdAt      DateTime? @default(now())
+  updatedAt      DateTime? @updatedAt
+
+  @@map("rules")
+}
+
+// ─── Teams ────────────────────────────────────────────────────────────────────
+
+model Team {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamName    String
+  teamLeader  String
+  members     String[]
+
+  @@map("teams")
+}

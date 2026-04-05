@@ -1,0 +1,124 @@
+import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
+import { prisma } from "@hrms/db";
+import { logger } from "@hrms/logger";
+import { MESSAGES } from "../constants/messages";
+
+export const processPayroll = async (
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
+) => {
+  try {
+    const { month, year, usernames } = call.request;
+
+    if (!month || !year) {
+      return callback(null, {
+        message: MESSAGES.MONTH_YEAR_REQUIRED,
+        status: status.INVALID_ARGUMENT,
+      });
+    }
+
+    const monthNum = parseInt(String(month));
+    const yearNum = parseInt(String(year));
+    const lastDay = new Date(yearNum, monthNum, 0).getDate();
+    const startDate = new Date(yearNum, monthNum - 1, 1);
+    const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
+
+    const employeeWhere: any = { employeeStatus: "Active" };
+    if (usernames && usernames.length > 0)
+      employeeWhere.username = { in: usernames };
+
+    const employees = await prisma.user.findMany({
+      where: employeeWhere,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+      },
+    });
+
+    const payrollResults = [];
+
+    for (const employee of employees) {
+      try {
+        const salaryStructure = await prisma.salaryStructure.findFirst({
+          where: {
+            username: employee.username,
+            month: monthNum,
+            year: yearNum,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (!salaryStructure) {
+          payrollResults.push({
+            username: employee.username,
+            status: "skipped",
+            reason: "No salary structure",
+          });
+          continue;
+        }
+
+        const records = await prisma.attendanceRecord.findMany({
+          where: {
+            username: employee.username,
+            date: { gte: startDate, lte: endDate },
+          },
+        });
+
+        const presentStatuses = ["present", "late", "half day"];
+        const presentDays = records.filter((r) =>
+          presentStatuses.includes((r.status ?? "").toLowerCase()),
+        ).length;
+        const halfDays = records.filter(
+          (r) => (r.status ?? "").toLowerCase() === "half day",
+        ).length;
+        const effectiveDays = presentDays - halfDays * 0.5;
+
+        const dailyNet = (salaryStructure.netPayable ?? 0) / lastDay;
+        const lopDeduction = Math.max(0, (lastDay - effectiveDays) * dailyNet);
+        const finalNet = Math.max(
+          0,
+          (salaryStructure.netPayable ?? 0) - lopDeduction,
+        );
+
+        payrollResults.push({
+          username: employee.username,
+          month: monthNum,
+          year: yearNum,
+          grossSalary: salaryStructure.grossSalary,
+          deductions: (salaryStructure.deductions ?? 0) + lopDeduction,
+          lopDeduction,
+          netPayable: finalNet,
+          presentDays: effectiveDays,
+          totalDays: lastDay,
+          status: "processed",
+        });
+      } catch (empErr) {
+        logger.error(`Payroll error for ${employee.username}:`, { empErr });
+        payrollResults.push({
+          username: employee.username,
+          status: "error",
+          reason: String(empErr),
+        });
+      }
+    }
+
+    return callback(null, {
+      message: MESSAGES.PAYROLL_PROCESSED,
+      status: status.OK,
+      data: payrollResults,
+      processedCount: payrollResults.filter((r) => r.status === "processed")
+        .length,
+      skippedCount: payrollResults.filter((r) => r.status === "skipped").length,
+      errorCount: payrollResults.filter((r) => r.status === "error").length,
+    });
+  } catch (err) {
+    logger.error("ProcessPayroll error:", { err });
+    return callback(null, {
+      message: MESSAGES.INTERNAL_SERVER_ERROR,
+      status: status.INTERNAL,
+    });
+  }
+};

@@ -1,0 +1,458 @@
+import { Request, Response } from "express";
+import { attendanceClient, grpcCall } from "../grpc/clients";
+import { AuthRequest } from "../middleware/authenticate";
+import { prisma } from "@hrms/db";
+import { logger } from "@hrms/logger";
+import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+
+export async function addAttendance(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const response = await grpcCall(attendanceClient, "markAttendance", {
+      userId: user!.userId,
+      type: req.body.type,
+      latitude: req.body.latitude || 0,
+      longitude: req.body.longitude || 0,
+      deviceInfo: req.body.deviceInfo || "",
+      imageUrl: req.body.imageUrl || "",
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: any) {
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
+  }
+}
+
+export async function getAttendances(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const month = String(req.params.month);
+    const year = String(req.params.year);
+    const startDate = `${year}-${month.padStart(2, "0")}-01`;
+    const endDate = `${year}-${month.padStart(2, "0")}-31`;
+    const response = await grpcCall(attendanceClient, "getAttendance", {
+      userId: user!.userId,
+      startDate,
+      endDate,
+      page: 1,
+      limit: 100,
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: any) {
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
+  }
+}
+
+export async function getAllAttendances(req: Request, res: Response) {
+  try {
+    const month = String(req.params.month);
+    const year = String(req.params.year);
+    const startDate = `${year}-${month.padStart(2, "0")}-01`;
+    const endDate = `${year}-${month.padStart(2, "0")}-31`;
+    const response = await grpcCall(attendanceClient, "getAttendance", {
+      userId: "",
+      startDate,
+      endDate,
+      page: parseInt(req.query.page as string) || 1,
+      limit: Math.min(parseInt(req.query.limit as string) || 50, 200),
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: any) {
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
+  }
+}
+
+export async function attendanceCorrection(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { username, date, timeIn, timeOut } = req.body;
+    if (!username)
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "username is required",
+      });
+
+    const correctedBy =
+      (
+        await prisma.user.findUnique({
+          where: { id: user!.userId },
+          select: { username: true },
+        })
+      )?.username || user!.userId;
+
+    const response = await grpcCall(attendanceClient, "correctAttendance", {
+      username,
+      date: date || "",
+      timeIn: timeIn || "",
+      timeOut: timeOut || "",
+      correctedBy,
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: any) {
+    logger.error("PUT /attendance-correction error:", { error });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
+  }
+}
+
+export async function getAttendanceSummary(req: Request, res: Response) {
+  try {
+    const username = String(req.params.username);
+    const yearNum = parseInt(String(req.params.year));
+    const monthNum = parseInt(String(req.params.month));
+    const monthPadded = String(monthNum).padStart(2, "0");
+
+    const today = new Date();
+    const isCurrentMonth =
+      yearNum === today.getFullYear() && monthNum === today.getMonth() + 1;
+    const endDay = isCurrentMonth
+      ? today.getDate()
+      : new Date(yearNum, monthNum, 0).getDate();
+
+    const [records, leaveBalance] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: {
+          username,
+          date: {
+            gte: new Date(yearNum, monthNum - 1, 1),
+            lte: new Date(yearNum, monthNum - 1, endDay, 23, 59, 59),
+          },
+        },
+        select: { date: true, status: true, isCorrected: true },
+      }),
+      prisma.leaveBalance.findUnique({
+        where: { username },
+        select: { balances: true },
+      }),
+    ]);
+
+    const recordMap = new Map<string, string>();
+    let correctionsUsed = 0;
+    for (const r of records) {
+      const dateStr = new Date(r.date).toISOString().split("T")[0];
+      recordMap.set(dateStr, r.status || "");
+      if (r.isCorrected) correctionsUsed++;
+    }
+
+    let presents = 0,
+      halfDays = 0,
+      leaves = 0,
+      weekOffs = 0,
+      holidays = 0;
+    for (let day = 1; day <= endDay; day++) {
+      const dateStr = `${yearNum}-${monthPadded}-${String(day).padStart(2, "0")}`;
+      const s = recordMap.get(dateStr) || "";
+      if (s === "Present") presents++;
+      else if (s === "Half Day") halfDays++;
+      else if (s === "Week Off") weekOffs++;
+      else if (s === "Holiday") holidays++;
+      else leaves++;
+    }
+
+    let usedPL = 0,
+      usedLWP = 0;
+    if (leaveBalance?.balances && Array.isArray(leaveBalance.balances)) {
+      const mb = (leaveBalance.balances as any[]).find(
+        (b) =>
+          String(b.year) === String(yearNum) &&
+          String(b.month) === String(monthNum),
+      );
+      if (mb) {
+        usedPL = mb.usedPL || 0;
+        usedLWP = mb.usedLWP || 0;
+      }
+    }
+
+    const maxCorrectionsPerMonth = parseInt(
+      process.env.ATTENDANCE_CORRECTIONS_PER_MONTH || "3",
+    );
+    const remainingCorrections = Math.max(
+      0,
+      maxCorrectionsPerMonth - correctionsUsed,
+    );
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Attendance summary fetched",
+      data: {
+        presents,
+        halfDays,
+        leaves,
+        weekOffs,
+        holidays,
+        paidLeaves: usedPL,
+        unpaidLeaves: usedLWP,
+        totalLeaves: usedPL + usedLWP,
+        correctionsUsed,
+        remainingCorrections,
+        maxCorrectionsPerMonth,
+      },
+    });
+  } catch (error: any) {
+    logger.error("get-attendance-summary error:", { error });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
+  }
+}
+
+export async function attendanceInsights(req: Request, res: Response) {
+  try {
+    const period = (req.query.period as string) || "current_month";
+    const now = new Date();
+
+    let startDate: Date;
+    let endDate: Date = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+    );
+
+    switch (period) {
+      case "last_month":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        break;
+      case "quarter":
+        startDate = new Date(
+          now.getFullYear(),
+          Math.floor(now.getMonth() / 3) * 3,
+          1,
+        );
+        break;
+      case "year":
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const [records, users] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: { date: { gte: startDate, lte: endDate } },
+      }),
+      prisma.user.findMany({ select: { username: true, department: true } }),
+    ]);
+
+    const userDeptMap = new Map<string, string>(
+      users.map(
+        (u: any) => [u.username, u.department || "Unknown"] as [string, string],
+      ),
+    );
+
+    const total = records.length;
+    const presentCount = records.filter(
+      (r: any) => r.status === "Present" || r.status === "Late",
+    ).length;
+    const halfDayCount = records.filter(
+      (r: any) => r.status === "Half Day",
+    ).length;
+    const correctedCount = records.filter((r: any) => r.isCorrected).length;
+    const withHours = records.filter(
+      (r: any) => r.workingHours != null && r.workingHours > 0,
+    );
+    const avgWorkingHours =
+      withHours.length > 0
+        ? Math.round(
+            (withHours.reduce(
+              (s: any, r: any) => s + (r.workingHours || 0),
+              0,
+            ) /
+              withHours.length) *
+              100,
+          ) / 100
+        : 0;
+    const withCheckIn = records.filter((r: any) => r.timeIn);
+    const automatedCheckIns = withCheckIn.filter(
+      (r: any) => !r.isCorrected,
+    ).length;
+    const overallAttendanceRate =
+      total > 0 ? Math.round(((presentCount + halfDayCount) / total) * 100) : 0;
+    const correctionRate =
+      total > 0 ? Math.round((correctedCount / total) * 100) : 0;
+    const automationRate =
+      withCheckIn.length > 0
+        ? Math.round((automatedCheckIns / withCheckIn.length) * 100)
+        : 0;
+
+    const statusDistribution = {
+      present: presentCount,
+      halfDay: halfDayCount,
+      leave: records.filter(
+        (r: any) => !r.status || r.status === "Absent" || r.status === "Leave",
+      ).length,
+      weekOff: records.filter((r: any) => r.status === "Week Off").length,
+      holiday: records.filter((r: any) => r.status === "Holiday").length,
+    };
+
+    const byEmployee = new Map<string, typeof records>();
+    for (const r of records) {
+      if (!byEmployee.has(r.username)) byEmployee.set(r.username, []);
+      byEmployee.get(r.username)!.push(r);
+    }
+    const employeeRiskAssessment = Array.from(byEmployee.entries())
+      .map(([username, recs]) => {
+        const t = recs.length;
+        const p = recs.filter(
+          (r: any) =>
+            r.status === "Present" ||
+            r.status === "Late" ||
+            r.status === "Half Day",
+        ).length;
+        const attendanceRate = t > 0 ? Math.round((p / t) * 100) : 0;
+        const hoursRecs = recs.filter((r: any) => r.workingHours);
+        const avgHours =
+          hoursRecs.length > 0
+            ? Math.round(
+                (hoursRecs.reduce(
+                  (s: any, r: any) => s + (r.workingHours || 0),
+                  0,
+                ) /
+                  hoursRecs.length) *
+                  100,
+              ) / 100
+            : 0;
+        const corrFreq =
+          t > 0
+            ? Math.round(
+                (recs.filter((r: any) => r.isCorrected).length / t) * 100,
+              )
+            : 0;
+        const riskScore =
+          Math.round(
+            ((100 - attendanceRate) * 0.5 +
+              corrFreq * 0.3 +
+              Math.max(0, 8 - avgHours) * 2.5) *
+              10,
+          ) / 10;
+        return {
+          username,
+          attendanceRate,
+          avgWorkingHours: avgHours,
+          correctionFrequency: corrFreq,
+          riskScore,
+          riskLevel:
+            riskScore > 30 ? "High" : riskScore > 15 ? "Medium" : "Low",
+        };
+      })
+      .sort((a, b) => b.riskScore - a.riskScore);
+
+    const byDept = new Map<string, typeof records>();
+    for (const r of records) {
+      const dept = userDeptMap.get(r.username) || "Unknown";
+      if (!byDept.has(dept)) byDept.set(dept, []);
+      byDept.get(dept)!.push(r);
+    }
+    const teamPerformance = Array.from(byDept.entries()).map(
+      ([department, recs]) => {
+        const t = recs.length;
+        const p = recs.filter(
+          (r: any) =>
+            r.status === "Present" ||
+            r.status === "Late" ||
+            r.status === "Half Day",
+        ).length;
+        const hoursRecs = recs.filter((r: any) => r.workingHours);
+        return {
+          department,
+          employeeCount: new Set(recs.map((r: any) => r.username)).size,
+          attendanceRate: t > 0 ? Math.round((p / t) * 100) : 0,
+          avgWorkingHours:
+            hoursRecs.length > 0
+              ? Math.round(
+                  (hoursRecs.reduce(
+                    (s: any, r: any) => s + (r.workingHours || 0),
+                    0,
+                  ) /
+                    hoursRecs.length) *
+                    100,
+                ) / 100
+              : 0,
+          correctionRate:
+            t > 0
+              ? Math.round(
+                  (recs.filter((r: any) => r.isCorrected).length / t) * 100,
+                )
+              : 0,
+        };
+      },
+    );
+
+    const weekMap = new Map<number, { present: number; total: number }>();
+    for (const r of records) {
+      const d = new Date(r.date);
+      const startOfYear = new Date(d.getFullYear(), 0, 1);
+      const week = Math.ceil(
+        ((d.getTime() - startOfYear.getTime()) / 86400000 +
+          startOfYear.getDay() +
+          1) /
+          7,
+      );
+      if (!weekMap.has(week)) weekMap.set(week, { present: 0, total: 0 });
+      const w = weekMap.get(week)!;
+      w.total++;
+      if (
+        r.status === "Present" ||
+        r.status === "Late" ||
+        r.status === "Half Day"
+      )
+        w.present++;
+    }
+    const weeklyTrends = Array.from(weekMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([week, { present, total: wt }]) => ({
+        week,
+        attendanceRate: wt > 0 ? Math.round((present / wt) * 100) : 0,
+      }));
+
+    const last2 = weeklyTrends.slice(-2);
+    const trendDirection =
+      last2.length === 2
+        ? last2[1].attendanceRate - last2[0].attendanceRate > 5
+          ? "improving"
+          : last2[1].attendanceRate - last2[0].attendanceRate < -5
+            ? "declining"
+            : "stable"
+        : "stable";
+
+    const hourMap = new Map<number, number>();
+    for (const r of records) {
+      if (r.timeIn) {
+        const hour = parseInt(r.timeIn.split(":")[0]);
+        if (!isNaN(hour)) hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+      }
+    }
+    const peakHours = Array.from(hourMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([hour, count]) => ({ hour, count }));
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: {
+        primaryMetrics: {
+          overallAttendanceRate,
+          averageWorkingHours: avgWorkingHours,
+          correctionRate,
+          automationRate,
+          statusDistribution,
+        },
+        employeeRiskAssessment,
+        teamPerformance,
+        trendAnalysis: { weeklyTrends, trendDirection },
+        attendancePatterns: { peakHours },
+      },
+    });
+  } catch (error: any) {
+    logger.error("GET /attendance-insights error:", { error });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
+  }
+}

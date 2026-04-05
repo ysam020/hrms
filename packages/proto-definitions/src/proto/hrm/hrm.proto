@@ -1,0 +1,161 @@
+syntax = "proto3";
+package hrm;
+
+message HrActivity {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  string date = 4;
+  string time = 5;
+  string status = 6;
+  string created_by = 7;
+  string created_on = 8;
+}
+
+message Policy {
+  string id = 1;
+  string title = 2;
+  string content = 3;
+  string category = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+}
+
+message Permission {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  repeated string actions = 4;
+}
+
+message Role {
+  string id = 1;
+  string name = 2;
+  repeated Permission permissions = 3;
+}
+
+message BusinessRule {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string condition = 4;
+  string action = 5;
+  bool isActive = 6;
+}
+
+message BasicResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+message IdRequest {
+  string id = 1;
+}
+
+message CreateActivityRequest {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  string date = 4;
+  string time = 5;
+  string activity_type = 6;
+  string location = 7;
+  string created_by = 8;
+  string updated_by = 9;
+}
+
+message ActivityResponse {
+  string message = 1;
+  int32 status = 2;
+  HrActivity data = 3;
+}
+
+message ListActivitiesRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string status = 3;
+  string assignedTo = 4;
+}
+
+message ListActivitiesResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated HrActivity data = 3;
+  int32 total = 4;
+}
+
+message CreatePolicyRequest {
+  string title = 1;
+  string content = 2;
+  string category = 3;
+  string createdBy = 4;
+}
+
+message PolicyResponse {
+  string message = 1;
+  int32 status = 2;
+  Policy data = 3;
+}
+
+message ListPoliciesResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated Policy data = 3;
+}
+
+message GetRolesRequest {
+  string userId = 1;
+}
+
+message RolesResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated Role data = 3;
+}
+
+message CheckPermissionRequest {
+  string userId = 1;
+  string resource = 2;
+  string action = 3;
+}
+
+message CheckPermissionResponse {
+  bool allowed = 1;
+  string message = 2;
+}
+
+message CreateRuleRequest {
+  string name = 1;
+  string description = 2;
+  string condition = 3;
+  string action = 4;
+}
+
+message RuleResponse {
+  string message = 1;
+  int32 status = 2;
+  BusinessRule data = 3;
+}
+
+message ListRulesResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated BusinessRule data = 3;
+}
+
+service HrmService {
+  rpc CreateHrActivity (CreateActivityRequest) returns (ActivityResponse);
+  rpc GetHrActivity (IdRequest) returns (ActivityResponse);
+  rpc ListHrActivities (ListActivitiesRequest) returns (ListActivitiesResponse);
+  rpc UpdateHrActivity (CreateActivityRequest) returns (ActivityResponse);
+  rpc CreatePolicy (CreatePolicyRequest) returns (PolicyResponse);
+  rpc GetPolicy (IdRequest) returns (PolicyResponse);
+  rpc ListPolicies (IdRequest) returns (ListPoliciesResponse);
+  rpc GetUserRoles (GetRolesRequest) returns (RolesResponse);
+  rpc CheckPermission (CheckPermissionRequest) returns (CheckPermissionResponse);
+  rpc AssignRole (GetRolesRequest) returns (BasicResponse);
+  rpc CreateRule (CreateRuleRequest) returns (RuleResponse);
+  rpc ListRules (IdRequest) returns (ListRulesResponse);
+  rpc UpdateRule (CreateRuleRequest) returns (RuleResponse);
+  rpc DeleteRule (IdRequest) returns (BasicResponse);
+}

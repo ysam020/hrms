@@ -1,0 +1,246 @@
+import type { Server as SocketServer, Socket } from "socket.io";
+import { prisma } from "@hrms/db";
+import { logger } from "@hrms/logger";
+import { sendPushNotifications } from "@hrms/firebase";
+import type { RedisWebSocketAdapter } from "@hrms/websocket";
+
+type AuthenticatedSocket = Socket & { username: string };
+
+export function setupChatSocket(
+  io: SocketServer,
+  redisAdapter: RedisWebSocketAdapter,
+): void {
+  io.on("connection", (socket) => {
+    const username = (socket as AuthenticatedSocket).username;
+
+    // Per-connection cache of roomId → participants[] to avoid repeated DB hits
+    const roomParticipantsCache = new Map<string, string[]>();
+
+    const getParticipants = async (roomId: string): Promise<string[]> => {
+      if (roomParticipantsCache.has(roomId))
+        return roomParticipantsCache.get(roomId)!;
+      const room = await prisma.chatRoom.findUnique({
+        where: { id: roomId },
+        select: { participants: true },
+      });
+      const participants = room?.participants ?? [];
+      roomParticipantsCache.set(roomId, participants);
+      return participants;
+    };
+
+    // Client joins a room — pre-fetch participants into cache
+    socket.on("chat:join", async ({ roomId }: { roomId: string }) => {
+      try {
+        await getParticipants(roomId);
+      } catch (err) {
+        logger.error(`chat:join error for ${username}:`, { err });
+      }
+    });
+
+    // Client sends a new message
+    socket.on(
+      "chat:send",
+      async ({
+        roomId,
+        content,
+        type,
+        replyTo,
+        fileUrl,
+        fileName,
+        fileMimeType,
+        fileSize,
+      }: {
+        roomId: string;
+        content?: string;
+        type?: string;
+        replyTo?: string;
+        fileUrl?: string;
+        fileName?: string;
+        fileMimeType?: string;
+        fileSize?: number;
+      }) => {
+        try {
+          // Verify sender is a participant of this room
+          const participants = await getParticipants(roomId);
+          if (!participants.includes(username)) {
+            socket.emit("chat:error", {
+              message: "Not a participant of this room",
+            });
+            return;
+          }
+
+          // Enforce message content size limit (10 000 chars)
+          if (content && content.length > 10_000) {
+            socket.emit("chat:error", {
+              message: "Message too long (max 10 000 characters)",
+            });
+            return;
+          }
+
+          const message = await prisma.message.create({
+            data: {
+              chatRoomId: roomId,
+              sender: username,
+              content: content ?? null,
+              type: type ?? "text",
+              fileUrl: fileUrl ?? null,
+              fileName: fileName ?? null,
+              fileMimeType: fileMimeType ?? null,
+              fileSize: fileSize ?? null,
+              replyToId: replyTo ?? null,
+              readBy: [],
+              isDeleted: false,
+            },
+          });
+
+          // Update room's lastMessage pointer and lastActivity timestamp
+          await prisma.chatRoom.update({
+            where: { id: roomId },
+            data: {
+              lastMessageId: message.id,
+              lastActivity: message.createdAt,
+            },
+          });
+
+          // Normalize shape to match what the Mongoose-based server sent:
+          // - _id (client uses this as the key)
+          // - chatRoom (client reads msg.chatRoom to determine which room to update)
+          // - replyTo (client renders reply preview from this)
+          const msgObj = {
+            ...message,
+            _id: message.id,
+            chatRoom: message.chatRoomId,
+            replyTo: message.replyToId ?? null,
+          };
+
+          // Deliver to all participants (handles cross-worker routing via Redis pub/sub)
+          // participants is already fetched above for the membership check
+          await Promise.all(
+            participants.map((p) =>
+              redisAdapter.sendToUser(p, "chat:message", msgObj),
+            ),
+          );
+
+          // FCM push to other participants (non-blocking)
+          const others = participants.filter((p) => p !== username);
+          if (others.length > 0) {
+            const pushBody =
+              type === "image"
+                ? "📷 Sent an image"
+                : type === "video"
+                  ? "🎥 Sent a video"
+                  : type === "file"
+                    ? `📎 ${fileName || "Sent a file"}`
+                    : (content ?? "");
+            sendPushNotifications(others, username, pushBody, {
+              latestOnly: true,
+            }).catch((err) =>
+              logger.error("[chat:send] FCM push error:", { err }),
+            );
+          }
+        } catch (err) {
+          logger.error(`chat:send error for ${username}:`, { err });
+          socket.emit("chat:error", { message: "Failed to send message" });
+        }
+      },
+    );
+
+    // Typing started — forward to other participants only
+    socket.on("chat:typing", async ({ roomId }: { roomId: string }) => {
+      try {
+        const participants = await getParticipants(roomId);
+        await Promise.all(
+          participants
+            .filter((p) => p !== username)
+            .map((p) =>
+              redisAdapter.sendToUser(p, "chat:typing", { roomId, username }),
+            ),
+        );
+      } catch {
+        /* non-critical */
+      }
+    });
+
+    // Typing stopped — forward to other participants only
+    socket.on("chat:stop-typing", async ({ roomId }: { roomId: string }) => {
+      try {
+        const participants = await getParticipants(roomId);
+        await Promise.all(
+          participants
+            .filter((p) => p !== username)
+            .map((p) =>
+              redisAdapter.sendToUser(p, "chat:stop-typing", {
+                roomId,
+                username,
+              }),
+            ),
+        );
+      } catch {
+        /* non-critical */
+      }
+    });
+
+    // Mark room messages as read and notify other participants
+    socket.on("chat:read", async ({ roomId }: { roomId: string }) => {
+      try {
+        const unread = await prisma.message.findMany({
+          where: {
+            chatRoomId: roomId,
+            isDeleted: false,
+            NOT: [{ sender: username }, { readBy: { has: username } }],
+          },
+          select: { id: true },
+        });
+
+        if (unread.length > 0) {
+          await Promise.all(
+            unread.map((m: any) =>
+              prisma.message.update({
+                where: { id: m.id },
+                data: { readBy: { push: username } },
+              }),
+            ),
+          );
+        }
+
+        const participants = await getParticipants(roomId);
+        await Promise.all(
+          participants
+            .filter((p) => p !== username)
+            .map((p) =>
+              redisAdapter.sendToUser(p, "chat:read", {
+                roomId,
+                reader: username,
+              }),
+            ),
+        );
+      } catch (err) {
+        logger.error(`chat:read error for ${username}:`, { err });
+      }
+    });
+
+    // Notify all participants that a message was deleted
+    socket.on(
+      "chat:delete-message",
+      async ({ messageId, roomId }: { messageId: string; roomId: string }) => {
+        try {
+          const participants = await getParticipants(roomId);
+          await Promise.all(
+            participants.map((p) =>
+              redisAdapter.sendToUser(p, "chat:message-deleted", {
+                messageId,
+                roomId,
+              }),
+            ),
+          );
+        } catch (err) {
+          logger.error(`chat:delete-message error for ${username}:`, { err });
+        }
+      },
+    );
+
+    socket.on("disconnect", () => {
+      roomParticipantsCache.clear();
+    });
+  });
+}

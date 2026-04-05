@@ -1,0 +1,591 @@
+paths:
+  /api/view-job-openings:
+    get:
+      summary: List all job openings (internal)
+      description: Returns all job openings visible to authenticated employees
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Job openings retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        title: { type: string, example: "Full Stack Developer" }
+                        department: { type: string }
+                        location: { type: string }
+                        status: { type: string, enum: [open, closed, paused] }
+                        applicationsCount: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/view-job-opening/{id}:
+    get:
+      summary: Get a specific job opening
+      description: Returns details of a single job opening
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: "6672a2501aa931b68b091faf"
+      responses:
+        "200":
+          description: Job opening details retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      _id: { type: string }
+                      title: { type: string }
+                      description: { type: string }
+                      requirements: { type: array, items: { type: string } }
+                      salary: { type: string }
+                      location: { type: string }
+        "401":
+          description: Unauthorized
+        "404":
+          description: Job opening not found
+
+  /api/add-job-opening:
+    post:
+      summary: Create a job opening
+      description: Add a new job opening (admin/HR only)
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, department]
+              properties:
+                title: { type: string, example: "Backend Developer" }
+                department: { type: string, example: "Engineering" }
+                description: { type: string }
+                requirements: { type: array, items: { type: string } }
+                location: { type: string, example: "Remote" }
+                salary: { type: string, example: "₹8L - ₹12L" }
+                employmentType:
+                  type: string
+                  enum: [full-time, part-time, contract, internship]
+                  example: "full-time"
+      responses:
+        "200":
+          description: Job opening created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/edit-job-opening/{_id}:
+    put:
+      summary: Edit a job opening
+      description: Update an existing job opening
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                status: { type: string, enum: [open, closed, paused] }
+      responses:
+        "200":
+          description: Job opening updated
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not found
+
+  /api/delete-job-opening/{_id}:
+    delete:
+      summary: Delete a job opening
+      description: Permanently remove a job opening
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Job opening deleted
+        "401":
+          description: Unauthorized
+
+  /api/public/careers:
+    get:
+      summary: Public careers page
+      description: Returns open job listings for public career pages (no authentication required)
+      tags: [Recruitment]
+      responses:
+        "200":
+          description: Public job listings retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        title: { type: string }
+                        department: { type: string }
+                        location: { type: string }
+                        employmentType: { type: string }
+
+  /api/get-job-titles:
+    get:
+      summary: Get all job titles
+      description: Returns a list of all unique job titles in the system
+      tags: [Recruitment]
+      responses:
+        "200":
+          description: Job titles retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: array, items: { type: string } }
+
+  /api/apply-for-job:
+    post:
+      summary: Submit a job application
+      description: Public endpoint to apply for a job opening (no auth required)
+      tags: [Recruitment]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jobId, name, email]
+              properties:
+                jobId: { type: string, example: "6672a2501aa931b68b091faf" }
+                name: { type: string, example: "John Doe" }
+                email:
+                  { type: string, format: email, example: "john@example.com" }
+                phone: { type: string, example: "+91 9876543210" }
+                resumeUrl: { type: string, format: uri }
+                coverLetter: { type: string }
+      responses:
+        "200":
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Application submitted successfully",
+                    }
+        "400":
+          description: Invalid application data
+
+  /api/view-applications/{id}:
+    get:
+      summary: View applications for a job opening
+      description: Returns all candidates who applied for a specific job
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Job opening ID
+      responses:
+        "200":
+          description: Applications retrieved
+        "401":
+          description: Unauthorized
+
+  /api/update-candidate-status:
+    put:
+      summary: Update candidate application status
+      description: Move a candidate through the recruitment pipeline stages
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicationId, status]
+              properties:
+                applicationId: { type: string }
+                status:
+                  type: string
+                  enum: [applied, screening, interview, offer, hired, rejected]
+                  example: "interview"
+      responses:
+        "200":
+          description: Status updated
+        "401":
+          description: Unauthorized
+
+  /api/hire-candidate:
+    put:
+      summary: Hire a candidate
+      description: Mark a candidate as hired and trigger onboarding
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicationId]
+              properties:
+                applicationId: { type: string }
+                joiningDate: { type: string, format: date }
+                offeredSalary: { type: number }
+      responses:
+        "200":
+          description: Candidate hired
+        "401":
+          description: Unauthorized
+
+  /api/reject-application:
+    put:
+      summary: Reject a job application
+      description: Reject a candidate's application with an optional reason
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicationId]
+              properties:
+                applicationId: { type: string }
+                reason: { type: string }
+      responses:
+        "200":
+          description: Application rejected
+        "401":
+          description: Unauthorized
+
+  /api/schedule-interview:
+    put:
+      summary: Schedule an interview
+      description: Set interview date, time, and interviewer for a candidate
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicationId, interviewDate, interviewerId]
+              properties:
+                applicationId: { type: string }
+                interviewDate: { type: string, format: date-time }
+                interviewerId: { type: string }
+                mode:
+                  type: string
+                  enum: [in-person, video, phone]
+                  example: "video"
+                meetingLink: { type: string, format: uri }
+      responses:
+        "200":
+          description: Interview scheduled
+        "401":
+          description: Unauthorized
+
+  /api/reschedule-interview:
+    put:
+      summary: Reschedule an interview
+      description: Update the date/time of a scheduled interview
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicationId, newInterviewDate]
+              properties:
+                applicationId: { type: string }
+                newInterviewDate: { type: string, format: date-time }
+                reason: { type: string }
+      responses:
+        "200":
+          description: Interview rescheduled
+        "401":
+          description: Unauthorized
+
+  /api/reassign-interviewer:
+    put:
+      summary: Reassign interviewer
+      description: Change the interviewer assigned to a candidate
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicationId, newInterviewerId]
+              properties:
+                applicationId: { type: string }
+                newInterviewerId: { type: string }
+      responses:
+        "200":
+          description: Interviewer reassigned
+        "401":
+          description: Unauthorized
+
+  /api/get-interviewer-list:
+    get:
+      summary: Get list of interviewers
+      description: Returns employees eligible to conduct interviews
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Interviewer list retrieved
+        "401":
+          description: Unauthorized
+
+  /api/job-openings-insights:
+    get:
+      summary: Job openings insights
+      description: Returns aggregate statistics about job openings and applications
+      tags: [Recruitment]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Insights retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      totalOpenings: { type: integer }
+                      totalApplications: { type: integer }
+                      hired: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/add-resignation:
+    post:
+      summary: Submit resignation
+      description: Submit a resignation request for the authenticated employee
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lastWorkingDate, reason]
+              properties:
+                lastWorkingDate:
+                  { type: string, format: date, example: "2026-05-01" }
+                reason: { type: string, example: "Better opportunity" }
+      responses:
+        "200":
+          description: Resignation submitted
+        "401":
+          description: Unauthorized
+
+  /api/view-resignations:
+    get:
+      summary: View resignations
+      description: Returns resignation requests. Employees see their own; admin/HR see all.
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resignations retrieved
+        "401":
+          description: Unauthorized
+
+  /api/approve-resignation/{_id}:
+    put:
+      summary: Approve a resignation
+      description: Admin/HR approves an employee's resignation
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Resignation approved
+        "401":
+          description: Unauthorized
+
+  /api/reject-resignation/{_id}:
+    put:
+      summary: Reject a resignation
+      description: Admin/HR rejects an employee's resignation request
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Resignation rejected
+        "401":
+          description: Unauthorized
+
+  /api/withdraw-resignation/{_id}:
+    put:
+      summary: Withdraw a resignation
+      description: Employee withdraws their submitted resignation
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Resignation withdrawn
+        "401":
+          description: Unauthorized
+
+  /api/update-resignation/{_id}:
+    put:
+      summary: Update resignation details
+      description: Update a pending resignation's last working date or reason
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lastWorkingDate: { type: string, format: date }
+                reason: { type: string }
+      responses:
+        "200":
+          description: Resignation updated
+        "401":
+          description: Unauthorized
+
+  /api/add-exit-feedback:
+    post:
+      summary: Submit exit feedback
+      description: Employee submits exit interview feedback before leaving
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                overallRating:
+                  { type: integer, minimum: 1, maximum: 5, example: 4 }
+                reasonForLeaving: { type: string }
+                feedback: { type: string }
+                wouldRecommend: { type: boolean }
+      responses:
+        "200":
+          description: Exit feedback submitted
+        "401":
+          description: Unauthorized
+
+  /api/resignation-insights:
+    get:
+      summary: Resignation insights
+      description: Returns aggregate statistics about resignations and attrition
+      tags: [Resignation]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Insights retrieved
+        "401":
+          description: Unauthorized

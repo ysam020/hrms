@@ -1,0 +1,24 @@
+{
+  "name": "@hrms/firebase",
+  "version": "0.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@hrms/db": "workspace:*",
+    "@hrms/logger": "workspace:*",
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "@hrms/typescript-config": "workspace:*",
+    "@types/node": "^22.8.7"
+  }
+}

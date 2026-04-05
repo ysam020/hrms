@@ -1,0 +1,100 @@
+syntax = "proto3";
+package auth;
+
+import "health/health.proto";
+
+message GoogleOAuthCallbackRequest {
+  string code = 1;
+  string state = 2;
+}
+
+message AuthTokenResponse {
+  string accessToken = 1;
+  string message = 2;
+  int32 status = 3;
+  UserPayload data = 4;
+  string refresh_token = 5;
+}
+
+message UserPayload {
+  string id = 1;
+  string email = 2;
+  string username = 3;
+  string role = 4;
+  string firstName = 5;
+  string lastName = 6;
+}
+
+message RefreshTokenRequest {
+  string refreshToken = 1;
+}
+
+message RefreshTokenResponse {
+  string accessToken = 1;
+  string message = 2;
+  int32 status = 3;
+}
+
+message LogoutRequest {
+  string userId = 1;
+}
+
+message LogoutResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+message GetProfileRequest {
+  string userId = 1;
+}
+
+message GetProfileResponse {
+  string message = 1;
+  int32 status = 2;
+  UserPayload data = 3;
+}
+
+message WebAuthnRegistrationOptionsRequest {
+  string userId = 1;
+  string email = 2;
+}
+
+message WebAuthnOptionsResponse {
+  string message = 1;
+  int32 status = 2;
+  string options = 3;  // JSON-encoded options
+}
+
+message WebAuthnRegistrationVerifyRequest {
+  string userId = 1;
+  string credential = 2;  // JSON-encoded credential
+}
+
+message WebAuthnAuthenticationOptionsRequest {
+  string username = 1;
+}
+
+message WebAuthnAuthenticationVerifyRequest {
+  string userId = 1;
+  string credential = 2;
+  string username = 3;
+}
+
+message WebAuthnVerifyResponse {
+  string message = 1;
+  int32 status = 2;
+  string accessToken = 3;
+  string refresh_token = 4;
+}
+
+
+service AuthService {
+  rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
+  rpc Logout (LogoutRequest) returns (LogoutResponse);
+  rpc GetProfile (GetProfileRequest) returns (GetProfileResponse);
+  rpc WebAuthnRegistrationOptions (WebAuthnRegistrationOptionsRequest) returns (WebAuthnOptionsResponse);
+  rpc WebAuthnRegistrationVerify (WebAuthnRegistrationVerifyRequest) returns (WebAuthnVerifyResponse);
+  rpc WebAuthnAuthenticationOptions (WebAuthnAuthenticationOptionsRequest) returns (WebAuthnOptionsResponse);
+  rpc WebAuthnAuthenticationVerify (WebAuthnAuthenticationVerifyRequest) returns (WebAuthnVerifyResponse);
+  rpc GoogleOAuthCallback (GoogleOAuthCallbackRequest) returns (AuthTokenResponse);
+}

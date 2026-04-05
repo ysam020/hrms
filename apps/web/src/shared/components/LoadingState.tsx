@@ -1,0 +1,57 @@
+import React from "react";
+import CircularProgress from "@mui/material/CircularProgress";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+
+function LoadingState({
+  height = 400,
+  message = undefined,
+  size = "medium",
+  theme = "light",
+}: {
+  height?: number;
+  message?: any;
+  size?: string;
+  theme?: string;
+}) {
+  const getSpinnerSize = () => {
+    switch (size) {
+      case "small":
+        return 24;
+      case "large":
+        return 60;
+      default:
+        return 40;
+    }
+  };
+
+  return (
+    <Box
+      className="dashboard-container"
+      sx={{
+        height,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: message ? 2 : 0,
+      }}
+    >
+      <CircularProgress
+        size={getSpinnerSize()}
+        color={theme === "dark" ? "inherit" : "primary"}
+      />
+      {message && (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ textAlign: "center" }}
+        >
+          {message}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+export default React.memo(LoadingState);

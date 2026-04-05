@@ -1,0 +1,397 @@
+paths:
+  /api/get-employment-type-breakdown:
+    get:
+      summary: Employment type breakdown
+      description: Returns employee count grouped by employment type (full-time, part-time, contract, etc.)
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Employment type breakdown retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string, example: "full-time" }
+                        count: { type: integer, example: 30 }
+                        percentage: { type: number, example: 66.7 }
+        "401":
+          description: Unauthorized
+
+  /api/get-employee-status-distribution:
+    get:
+      summary: Employee status distribution
+      description: Returns employee count grouped by status (active, on leave, resigned, etc.)
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Status distribution retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status: { type: string }
+                        count: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/get-employee-departments:
+    get:
+      summary: Employee count by department
+      description: Returns the number of employees in each department
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Department breakdown retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        department: { type: string, example: "Engineering" }
+                        count: { type: integer, example: 15 }
+        "401":
+          description: Unauthorized
+
+  /api/get-employee-designations:
+    get:
+      summary: Employee count by designation
+      description: Returns the number of employees at each designation/role
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Designation breakdown retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-age-distribution:
+    get:
+      summary: Employee age distribution
+      description: Returns employee count grouped by age bands
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Age distribution retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ageBand: { type: string, example: "25-30" }
+                        count: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/get-joining-data:
+    get:
+      summary: Employee joining data over time
+      description: Returns monthly/yearly employee joining counts
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema: { type: string, enum: [monthly, yearly], default: "monthly" }
+      responses:
+        "200":
+          description: Joining trend data retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-tenure-distribution:
+    get:
+      summary: Employee tenure distribution
+      description: Returns employee count grouped by years of service bands
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Tenure distribution retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-headcount-growth:
+    get:
+      summary: Headcount growth over time
+      description: Returns net headcount change per period
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [monthly, quarterly, yearly],
+              default: "monthly",
+            }
+        - name: year
+          in: query
+          schema: { type: integer, example: 2026 }
+      responses:
+        "200":
+          description: Headcount growth data retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-leave-approval-rate:
+    get:
+      summary: Leave approval rate
+      description: Returns the percentage of leave applications approved vs rejected
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Leave approval rate retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      approvalRate: { type: number, example: 87.5 }
+                      total: { type: integer }
+                      approved: { type: integer }
+                      rejected: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/get-leave-type-breakdown:
+    get:
+      summary: Leave type breakdown
+      description: Returns leave count grouped by leave type
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Leave type breakdown retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-monthly-leave-patterns:
+    get:
+      summary: Monthly leave patterns
+      description: Returns leave application counts by month
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: year
+          in: query
+          schema: { type: integer, example: 2026 }
+      responses:
+        "200":
+          description: Monthly leave patterns retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-attendance-trends:
+    get:
+      summary: Attendance trends
+      description: Returns daily/weekly attendance rate trends
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema: { type: string, enum: [weekly, monthly], default: "monthly" }
+        - name: year
+          in: query
+          schema: { type: integer, example: 2026 }
+        - name: month
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Attendance trends retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-working-hours-distribution:
+    get:
+      summary: Working hours distribution
+      description: Returns distribution of hours worked per day across employees
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Working hours distribution retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-job-openings-by-status:
+    get:
+      summary: Job openings by status
+      description: Returns job opening count grouped by status (open, closed, paused)
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Job openings by status retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-applications-by-job-role:
+    get:
+      summary: Applications by job role
+      description: Returns application count per job title/role
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Applications by job role retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-hiring-funnel:
+    get:
+      summary: Hiring funnel metrics
+      description: Returns candidate count at each stage of the recruitment pipeline
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Hiring funnel data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        stage: { type: string, example: "screening" }
+                        count: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/get-hiring-manager-performance:
+    get:
+      summary: Hiring manager performance
+      description: Returns recruitment metrics grouped by hiring manager
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Hiring manager performance retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-salary-distribution-by-department:
+    get:
+      summary: Salary distribution by department
+      description: Returns average, min, and max salary per department
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Salary distribution retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        department: { type: string }
+                        avgSalary: { type: number }
+                        minSalary: { type: number }
+                        maxSalary: { type: number }
+        "401":
+          description: Unauthorized
+
+  /api/get-compensation-breakdown:
+    get:
+      summary: Compensation breakdown
+      description: Returns aggregate breakdown of salary components (basic, HRA, allowances, deductions)
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Compensation breakdown retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-average-salary-by-designation:
+    get:
+      summary: Average salary by designation
+      description: Returns average salary grouped by designation
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Average salary by designation retrieved
+        "401":
+          description: Unauthorized
+
+  /api/get-salary-bands:
+    get:
+      summary: Salary bands
+      description: Returns employee count grouped by salary range bands
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Salary bands retrieved
+        "401":
+          description: Unauthorized

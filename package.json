@@ -1,0 +1,64 @@
+{
+  "name": "server",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@8.15.6",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "turbo run dev --concurrency=25",
+    "build": "turbo run build",
+    "start:prod": "turbo run start:prod",
+    "lint": "turbo run lint",
+    "proto:gen": "turbo run proto:gen",
+    "db:generate": "turbo run db:generate",
+    "db:push": "turbo run db:push",
+    "db:migrate": "turbo run db:migrate",
+    "db:studio": "turbo run db:studio",
+    "db:seed": "turbo run db:seed",
+    "format": "prettier --write . && eslint --fix --no-config-lookup --config ./eslint.config.js \"**/*.{js,jsx,ts,tsx}\"",
+    "prepare": "husky",
+    "postinstall": "pnpm db:generate",
+    "setup:project": "pnpm proto:gen && pnpm db:generate && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@hrms/typescript-config": "workspace:*",
+    "@types/express": "^5.0.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.2.5",
+    "turbo": "^2.8.17",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx,css,scss,json,md,yaml,yml}": [
+      "prettier --write"
+    ],
+    "**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix --no-config-lookup --config ./eslint.config.js"
+    ]
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.3",
+    "@grpc/proto-loader": "^0.7.13",
+    "@hrms/logger": "workspace:*",
+    "@types/node": "^22.8.7",
+    "dotenv": "^16.4.5",
+    "dotenv-cli": "^7.4.2",
+    "express": "^4.21.1",
+    "winston": "^3.16.0",
+    "zod": "^3.23.8",
+    "zod-validation-error": "^3.4.0"
+  }
+}

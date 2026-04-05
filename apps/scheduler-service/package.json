@@ -1,0 +1,22 @@
+{
+  "name": "scheduler-service",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx --watch src/bootstrap.ts",
+    "prod": "node dist/bootstrap.js",
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@hrms/cache": "workspace:*",
+    "@hrms/common": "workspace:*",
+    "@hrms/db": "workspace:*",
+    "@hrms/logger": "workspace:*",
+    "@hrms/queue": "workspace:*",
+    "bullmq": "^5.41.7",
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "@hrms/typescript-config": "workspace:*",
+    "tsx": "^4.19.2"
+  }
+}

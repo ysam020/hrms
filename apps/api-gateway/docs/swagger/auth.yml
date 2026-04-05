@@ -1,0 +1,332 @@
+paths:
+  /api/profile:
+    get:
+      summary: Get authenticated user profile
+      description: Returns the full profile of the currently authenticated user
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, example: "6672a2501aa931b68b091faf" }
+                      email: { type: string, example: "sameer@praesto.cloud" }
+                      username: { type: string, example: "sameer_yadav" }
+                      role: { type: string, example: "admin" }
+                      isSuperUser: { type: boolean, example: false }
+        "401":
+          description: Unauthorized
+
+  /api/refresh-token:
+    post:
+      summary: Refresh access token
+      description: Issue a new access token using a valid refresh token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  description: Valid refresh token
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        "200":
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      accessToken: { type: string }
+        "401":
+          description: Invalid or expired refresh token
+
+  /api/logout:
+    get:
+      summary: Logout current session
+      description: Invalidates the current session and clears auth cookies
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Logout successful" }
+        "401":
+          description: Unauthorized
+
+  /api/auth/google:
+    get:
+      summary: Initiate Google OAuth login
+      description: >
+        Redirects the user to Google's OAuth 2.0 authorization page.
+        This is a browser redirect — not an AJAX endpoint.
+      tags: [Authentication]
+      responses:
+        "302":
+          description: Redirect to Google OAuth authorization page
+          headers:
+            Location:
+              schema:
+                type: string
+                example: "https://accounts.google.com/o/oauth2/auth?..."
+
+  /api/auth/google/callback:
+    get:
+      summary: Google OAuth callback
+      description: >
+        Callback URL that Google redirects to after authentication.
+        On success, issues JWT tokens and redirects to the application.
+      tags: [Authentication]
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+          description: Authorization code from Google
+        - name: state
+          in: query
+          schema: { type: string }
+          description: CSRF state parameter
+      responses:
+        "302":
+          description: Redirect to dashboard on success, or login page on failure
+
+  /api/webauthn-register:
+    get:
+      summary: Get WebAuthn registration options
+      description: Returns PublicKeyCredentialCreationOptions to begin passkey registration
+      tags: [WebAuthn]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Registration options returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    {
+                      type: object,
+                      description: "PublicKeyCredentialCreationOptions",
+                    }
+        "401":
+          description: Unauthorized
+    post:
+      summary: Store WebAuthn registration options
+      description: Persists the registration challenge before verification
+      tags: [WebAuthn]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: PublicKeyCredentialCreationOptions from the browser
+      responses:
+        "200":
+          description: Registration options stored successfully
+        "401":
+          description: Unauthorized
+
+  /api/webauthn-verify-registration:
+    post:
+      summary: Verify WebAuthn registration
+      description: Verifies the attestation response and saves the credential
+      tags: [WebAuthn]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: RegistrationResponseJSON from the browser
+      responses:
+        "200":
+          description: Credential registered successfully
+        "400":
+          description: Verification failed
+        "401":
+          description: Unauthorized
+
+  /api/webauthn-credentials:
+    get:
+      summary: Get WebAuthn credentials
+      description: Returns all registered passkey credentials for the authenticated user
+      tags: [WebAuthn]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Credentials retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        credentialId: { type: string }
+                        deviceName: { type: string }
+                        createdAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+
+  /api/webauthn-credential-check:
+    post:
+      summary: Check if WebAuthn credential exists for email
+      description: Returns whether a passkey is enrolled for the given email address
+      tags: [WebAuthn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "sameer@praesto.cloud"
+      responses:
+        "200":
+          description: Credential check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      hasCredential: { type: boolean, example: true }
+
+  /api/disable-webauthn:
+    delete:
+      summary: Disable WebAuthn / remove passkeys
+      description: Removes all WebAuthn credentials for the authenticated user
+      tags: [WebAuthn]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: WebAuthn disabled successfully
+        "401":
+          description: Unauthorized
+
+  /api/webauthn-login-options:
+    post:
+      summary: Get WebAuthn login options
+      description: Returns PublicKeyCredentialRequestOptions to begin passkey login
+      tags: [WebAuthn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "sameer@praesto.cloud"
+      responses:
+        "200":
+          description: Login options returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    {
+                      type: object,
+                      description: "PublicKeyCredentialRequestOptions",
+                    }
+
+  /api/webauthn-verify-login:
+    post:
+      summary: Verify WebAuthn login assertion
+      description: Verifies the authentication response and issues JWT tokens
+      tags: [WebAuthn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: AuthenticationResponseJSON from the browser
+      responses:
+        "200":
+          description: Login successful, tokens issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      accessToken: { type: string }
+                      refreshToken: { type: string }
+        "400":
+          description: Verification failed
+        "401":
+          description: Invalid credential
+
+  /api/webauthn-login:
+    post:
+      summary: WebAuthn login (combined)
+      description: Combined endpoint to perform a full WebAuthn login flow
+      tags: [WebAuthn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: AuthenticationResponseJSON from the browser
+      responses:
+        "200":
+          description: Login successful
+        "401":
+          description: Authentication failed

@@ -1,0 +1,126 @@
+// Timeline Styles
+.compact-timeline {
+  width: 100% !important;
+  padding: 0 !important;
+  padding-bottom: 2rem !important;
+
+  // Timeline connector
+  .p-timeline-event-connector {
+    width: 2px !important;
+    background: linear-gradient(
+      to bottom,
+      rgba(108, 93, 252, 0.3) 0%,
+      rgba(108, 93, 252, 0.1) 100%
+    ) !important;
+    margin-left: 11px !important; // Center with 24px marker
+    border-radius: 1px !important;
+  }
+
+  // Compact event spacing
+  .p-timeline-event {
+    margin-bottom: 0.5rem !important;
+    padding: 0 !important;
+
+    &:last-child {
+      margin-bottom: 0.5rem !important;
+    }
+  }
+
+  // Compact marker
+  .p-timeline-event-marker {
+    position: relative !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: none !important;
+    width: auto !important;
+    height: auto !important;
+  }
+
+  // Compact content spacing
+  .p-timeline-event-content {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  // Left align adjustments
+  &.p-timeline-left {
+    .p-timeline-event-content {
+      margin-left: 0 !important;
+      padding-left: 0 !important;
+    }
+  }
+}
+
+// Dark theme
+#dark {
+  .compact-timeline {
+    .p-timeline-event-connector {
+      background: linear-gradient(
+        to bottom,
+        rgba(108, 93, 252, 0.4) 0%,
+        rgba(108, 93, 252, 0.2) 100%
+      ) !important;
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .compact-timeline {
+    .p-timeline-event {
+      margin-bottom: 0.8rem !important;
+
+      &:last-child {
+        margin-bottom: 1.5rem !important;
+      }
+    }
+
+    .p-timeline-event-connector {
+      margin-left: 10px !important;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .compact-timeline {
+    .p-timeline-event {
+      margin-bottom: 0.6rem !important;
+
+      &:last-child {
+        margin-bottom: 1rem !important;
+      }
+    }
+  }
+}
+
+// Override PrimeReact defaults
+.p-timeline {
+  padding: 0 !important;
+  padding-bottom: 1rem !important;
+
+  .p-timeline-event-opposite {
+    display: none !important;
+  }
+
+  .p-timeline-event-separator {
+    flex: 0 0 auto !important;
+  }
+}
+
+// Hover effects
+.compact-timeline {
+  .p-timeline-event-content:hover {
+    .MuiPaper-root {
+      transform: translateY(-1px) !important;
+    }
+  }
+}
+
+.timeline {
+  .p-timeline-event-content:hover {
+    .MuiPaper-root {
+      transform: translateY(-2px) !important;
+    }
+  }
+}

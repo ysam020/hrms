@@ -1,0 +1,132 @@
+import { Router } from "express";
+import { authenticate, requireSuperUser } from "../middleware/authenticate";
+import * as h from "../handlers/analyticsRoutes";
+
+export const analyticsRoutesRouter: Router = Router();
+
+analyticsRoutesRouter.get(
+  "/get-employment-type-breakdown",
+  authenticate,
+  requireSuperUser,
+  h.getEmploymentTypeBreakdown,
+);
+analyticsRoutesRouter.get(
+  "/get-employee-status-distribution",
+  authenticate,
+  requireSuperUser,
+  h.getEmployeeStatusDistribution,
+);
+analyticsRoutesRouter.get(
+  "/get-employee-departments",
+  authenticate,
+  requireSuperUser,
+  h.getEmployeeDepartments,
+);
+analyticsRoutesRouter.get(
+  "/get-employee-designations",
+  authenticate,
+  requireSuperUser,
+  h.getEmployeeDesignations,
+);
+analyticsRoutesRouter.get(
+  "/get-age-distribution",
+  authenticate,
+  requireSuperUser,
+  h.getAgeDistribution,
+);
+analyticsRoutesRouter.get(
+  "/get-joining-data",
+  authenticate,
+  requireSuperUser,
+  h.getJoiningData,
+);
+analyticsRoutesRouter.get(
+  "/get-tenure-distribution",
+  authenticate,
+  requireSuperUser,
+  h.getTenureDistribution,
+);
+analyticsRoutesRouter.get(
+  "/get-headcount-growth",
+  authenticate,
+  requireSuperUser,
+  h.getHeadcountGrowth,
+);
+analyticsRoutesRouter.get(
+  "/get-leave-approval-rate",
+  authenticate,
+  requireSuperUser,
+  h.getLeaveApprovalRate,
+);
+analyticsRoutesRouter.get(
+  "/get-leave-type-breakdown",
+  authenticate,
+  requireSuperUser,
+  h.getLeaveTypeBreakdown,
+);
+analyticsRoutesRouter.get(
+  "/get-monthly-leave-patterns",
+  authenticate,
+  requireSuperUser,
+  h.getMonthlyLeavePatterns,
+);
+analyticsRoutesRouter.get(
+  "/get-attendance-trends",
+  authenticate,
+  requireSuperUser,
+  h.getAttendanceTrends,
+);
+analyticsRoutesRouter.get(
+  "/get-working-hours-distribution",
+  authenticate,
+  requireSuperUser,
+  h.getWorkingHoursDistribution,
+);
+analyticsRoutesRouter.get(
+  "/get-job-openings-by-status",
+  authenticate,
+  requireSuperUser,
+  h.getJobOpeningsByStatus,
+);
+analyticsRoutesRouter.get(
+  "/get-applications-by-job-role",
+  authenticate,
+  requireSuperUser,
+  h.getApplicationsByJobRole,
+);
+analyticsRoutesRouter.get(
+  "/get-hiring-funnel",
+  authenticate,
+  requireSuperUser,
+  h.getHiringFunnel,
+);
+analyticsRoutesRouter.get(
+  "/get-hiring-manager-performance",
+  authenticate,
+  requireSuperUser,
+  h.getHiringManagerPerformance,
+);
+analyticsRoutesRouter.get(
+  "/get-salary-distribution-by-department",
+  authenticate,
+  requireSuperUser,
+  h.getSalaryDistributionByDepartment,
+);
+analyticsRoutesRouter.get(
+  "/get-compensation-breakdown",
+  authenticate,
+  requireSuperUser,
+  h.getCompensationBreakdown,
+);
+analyticsRoutesRouter.get(
+  "/get-average-salary-by-designation",
+  authenticate,
+  requireSuperUser,
+  h.getAverageSalaryByDesignation,
+);
+analyticsRoutesRouter.get(
+  "/get-salary-bands",
+  authenticate,
+  requireSuperUser,
+  h.getSalaryBands,
+);

@@ -1,0 +1,73 @@
+title Application Architecture
+
+// DATABASE
+DATABASE[icon: mongodb]{
+  Database[icon: mongodb]
+}
+
+// DEVELOPMENT
+DEVELOPMENT[icon: code]{
+  ReactJS [icon: react]
+  NodeJS [icon: nodejs]
+  EpressJS[icon: express]
+}
+
+// VCS
+VCS[icon:git ]{
+  GitHub [icon: github]
+}
+
+// CLIENT CICD
+CLIENT CICD AND DEPLOYMENT[icon: aws-amplify]{
+    AWS Amplify[icon: aws-amplify]
+}
+
+// CLIENT APP
+CLIENT APP[icon: client]{
+  CLIENT[icon: client]
+}
+
+// DESKTOP APP
+DESKTOP APP[icon: app]{
+  Electron[icon: electron]
+}
+
+// SERVER CICD
+SERVER CICD[icon: aws-codepipeline]{
+AWS CodePipeline[icon: aws-codepipeline]
+AWS CodeDeploy[icon: aws-codedeploy]
+}
+
+// SERVER ENV VARIABLES
+ENV VARIABLES[icon: aws-privatelink]{
+AWS Parameter Store[icon: aws-privatelink]
+}
+
+// SERVER DEPLOYMENT
+SERVER DEPLOYMENT[icon: aws-ec2]{
+   AWS EC2[icon: aws-ec2]
+   Load Balancers[icon: aws-application-load-balancer]
+   AUTO SCALING[icon: aws-auto-scaling]
+}
+
+// SERVER
+SERVER[icon: server]{
+  Nodejs Server[icon: server]
+}
+
+// SECURITY
+SECURITY[icon: aws-security-group]{
+Session Management[icon: timer]
+JWT[icon:]
+2FA (Authenticator Apps)[icon: google]
+2FA (WebAuthn)[icon: fingerprint]
+}
+
+// CONNECTIONS
+DEVELOPMENT -> VCS -> CLIENT CICD AND DEPLOYMENT -> CLIENT APP <> SECURITY
+
+VCS -> SERVER CICD -> ENV VARIABLES -> SERVER DEPLOYMENT -> SERVER <> SECURITY 
+
+VCS -> DESKTOP APP
+
+DATABASE -> SERVER

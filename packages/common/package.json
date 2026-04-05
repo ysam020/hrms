@@ -1,0 +1,31 @@
+{
+  "name": "@hrms/common",
+  "version": "0.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1019.0",
+    "@grpc/grpc-js": "^1.12.3",
+    "@hrms/logger": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "crypto": "*",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "@hrms/typescript-config": "workspace:*",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/nodemailer": "^6.4.17"
+  }
+}

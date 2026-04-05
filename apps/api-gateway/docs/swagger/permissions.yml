@@ -1,0 +1,388 @@
+paths:
+  /api/get-roles:
+    get:
+      summary: Get all roles
+      description: Returns all defined roles in the system
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Roles retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        name: { type: string, example: "hr" }
+                        description: { type: string }
+                        permissions: { type: array, items: { type: string } }
+        "401":
+          description: Unauthorized
+
+  /api/create-role:
+    post:
+      summary: Create a role
+      description: Define a new role with a set of permissions
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "team_lead" }
+                description:
+                  { type: string, example: "Team lead with elevated access" }
+                permissions:
+                  type: array
+                  items: { type: string }
+                  example: ["view_attendance", "approve_leave"]
+      responses:
+        "200":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/delete-role/{_id}:
+    delete:
+      summary: Delete a role
+      description: Remove a role from the system
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role deleted
+        "401":
+          description: Unauthorized
+
+  /api/update-role-permissions/{_id}:
+    put:
+      summary: Update role permissions
+      description: Replace the permissions set for an existing role
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissions]
+              properties:
+                permissions:
+                  type: array
+                  items: { type: string }
+                  example:
+                    ["view_attendance", "approve_leave", "manage_payroll"]
+      responses:
+        "200":
+          description: Role permissions updated
+        "401":
+          description: Unauthorized
+
+  /api/get-role-permissions/{_id}:
+    get:
+      summary: Get permissions for a role
+      description: Returns the list of permissions assigned to a specific role
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role permissions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      roleId: { type: string }
+                      name: { type: string }
+                      permissions: { type: array, items: { type: string } }
+        "401":
+          description: Unauthorized
+
+  /api/get-role-and-permissions:
+    get:
+      summary: Get all roles with their permissions
+      description: Returns all roles along with their complete permission sets
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Roles and permissions retrieved
+        "401":
+          description: Unauthorized
+
+  /api/save-user-permissions:
+    put:
+      summary: Save user-level permissions
+      description: Set custom (overriding) permissions for a specific user
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, permissions]
+              properties:
+                username: { type: string, example: "sameer_yadav" }
+                permissions:
+                  type: array
+                  items: { type: string }
+                  example: ["view_salary", "edit_attendance"]
+      responses:
+        "200":
+          description: User permissions saved
+        "401":
+          description: Unauthorized
+
+  /api/get-user-permissions/{username}:
+    get:
+      summary: Get user-level permissions
+      description: Returns the effective permissions for a specific user (role + custom)
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+          example: "sameer_yadav"
+      responses:
+        "200":
+          description: User permissions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      username: { type: string }
+                      role: { type: string }
+                      permissions: { type: array, items: { type: string } }
+        "401":
+          description: Unauthorized
+
+  /api/update-superuser/{username}:
+    put:
+      summary: Toggle superuser status
+      description: Grant or revoke superuser privileges for a user
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isSuperUser]
+              properties:
+                isSuperUser: { type: boolean, example: true }
+      responses:
+        "200":
+          description: Superuser status updated
+        "401":
+          description: Unauthorized
+
+  /api/delete-user-role:
+    post:
+      summary: Remove a role from a user
+      description: Unassign a role from a specific user
+      tags: [Permissions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, roleId]
+              properties:
+                username: { type: string, example: "sameer_yadav" }
+                roleId: { type: string }
+      responses:
+        "200":
+          description: Role removed from user
+        "401":
+          description: Unauthorized
+
+  /api/get-teams:
+    get:
+      summary: Get all teams
+      description: Returns all defined teams with their members
+      tags: [Teams]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Teams retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        name: { type: string, example: "Backend Team" }
+                        members:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              username: { type: string }
+                              fullName: { type: string }
+        "401":
+          description: Unauthorized
+
+  /api/create-team:
+    post:
+      summary: Create a team
+      description: Create a new team
+      tags: [Teams]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Frontend Team" }
+                description: { type: string }
+                members:
+                  type: array
+                  items: { type: string }
+                  description: List of usernames
+      responses:
+        "200":
+          description: Team created
+        "401":
+          description: Unauthorized
+
+  /api/delete-team/{_id}:
+    delete:
+      summary: Delete a team
+      description: Remove a team permanently
+      tags: [Teams]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Team deleted
+        "401":
+          description: Unauthorized
+
+  /api/add-team-members:
+    put:
+      summary: Add members to a team
+      description: Add one or more users to an existing team
+      tags: [Teams]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId, members]
+              properties:
+                teamId: { type: string }
+                members:
+                  type: array
+                  items: { type: string }
+                  description: List of usernames to add
+      responses:
+        "200":
+          description: Members added
+        "401":
+          description: Unauthorized
+
+  /api/delete-user-from-team:
+    post:
+      summary: Remove a user from a team
+      description: Remove a specific user from a team
+      tags: [Teams]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId, username]
+              properties:
+                teamId: { type: string }
+                username: { type: string, example: "sameer_yadav" }
+      responses:
+        "200":
+          description: User removed from team
+        "401":
+          description: Unauthorized

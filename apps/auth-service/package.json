@@ -1,0 +1,29 @@
+{
+  "name": "auth-service",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx --watch src/bootstrap.ts",
+    "prod": "node dist/bootstrap.js",
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@hrms/common": "workspace:*",
+    "@hrms/db": "workspace:*",
+    "@hrms/grpc-server": "workspace:*",
+    "@hrms/logger": "workspace:*",
+    "@hrms/proto": "workspace:^",
+    "@simplewebauthn/server": "^10.0.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@hrms/typescript-config": "workspace:*",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.16",
+    "tsx": "^4.19.2"
+  }
+}

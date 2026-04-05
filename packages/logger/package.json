@@ -1,0 +1,22 @@
+{
+  "name": "@hrms/logger",
+  "version": "0.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.3",
+    "winston": "^3.16.0"
+  },
+  "devDependencies": {
+    "@hrms/typescript-config": "workspace:*"
+  }
+}

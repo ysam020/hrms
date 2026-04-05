@@ -1,0 +1,70 @@
+syntax = "proto3";
+package salary;
+
+message SalaryComponent {
+  string name = 1;
+  double amount = 2;
+  string type = 3;  // EARNING or DEDUCTION
+}
+
+message SalaryStructure {
+  string id = 1;
+  string userId = 2;
+  double basicSalary = 3;
+  repeated SalaryComponent components = 4;
+  double grossSalary = 5;
+  double netSalary = 6;
+  string effectiveDate = 7;
+}
+
+message GetSalaryRequest {
+  string userId = 1;
+}
+
+message SalaryResponse {
+  string message = 1;
+  int32 status = 2;
+  SalaryStructure data = 3;
+}
+
+message CreateSalaryRequest {
+  string userId = 1;
+  double basicSalary = 2;
+  repeated SalaryComponent components = 3;
+  string effectiveDate = 4;
+  string createdBy = 5;
+}
+
+message ProcessPayrollRequest {
+  string month = 1;
+  string year = 2;
+  repeated string userIds = 3;
+}
+
+message PayrollRecord {
+  string userId = 1;
+  string employeeName = 2;
+  double grossSalary = 3;
+  double netSalary = 4;
+  double deductions = 5;
+  string status = 6;
+}
+
+message ProcessPayrollResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated PayrollRecord data = 3;
+}
+
+message BasicResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+service SalaryService {
+  rpc GetSalaryStructure (GetSalaryRequest) returns (SalaryResponse);
+  rpc CreateSalaryStructure (CreateSalaryRequest) returns (SalaryResponse);
+  rpc UpdateSalaryStructure (CreateSalaryRequest) returns (SalaryResponse);
+  rpc ProcessPayroll (ProcessPayrollRequest) returns (ProcessPayrollResponse);
+  rpc GetPayslip (GetSalaryRequest) returns (SalaryResponse);
+}

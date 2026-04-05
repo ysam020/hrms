@@ -1,0 +1,17 @@
+export const MESSAGES = {
+  USERNAME_REQUIRED: "username is required",
+  USERNAME_TYPE_REQUIRED: "username and type (CHECK_IN/CHECK_OUT) are required",
+  USER_ID_MONTH_YEAR_REQUIRED: "userId, month and year are required",
+  ALREADY_CHECKED_IN: "Already checked in for today",
+  ALREADY_CHECKED_OUT: "Already checked out for today",
+  NO_CHECKIN_FOUND: "No check-in record found for today",
+  NO_ATTENDANCE_RECORD_TODAY: "No attendance record found for today",
+  CHECKED_IN_SUCCESSFULLY: "Checked in successfully",
+  CHECKED_OUT_SUCCESSFULLY: "Checked out successfully",
+  INVALID_ATTENDANCE_TYPE: "Invalid type. Use CHECK_IN or CHECK_OUT",
+  ATTENDANCE_CORRECTED: "Attendance corrected successfully",
+  ATTENDANCE_RECORDS_FETCHED: "Attendance records fetched successfully",
+  ATTENDANCE_SUMMARY_FETCHED: "Attendance summary fetched",
+  TODAY_ATTENDANCE_FETCHED: "Today attendance fetched successfully",
+  INTERNAL_ERROR: "Internal error",
+};

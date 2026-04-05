@@ -1,0 +1,41 @@
+syntax = "proto3";
+package analytics;
+
+message DateRangeRequest {
+  string startDate = 1;
+  string endDate = 2;
+  string department = 3;
+}
+
+message MetricValue {
+  string label = 1;
+  double value = 2;
+  string date = 3;
+}
+
+message AnalyticsResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated MetricValue data = 3;
+  double total = 4;
+}
+
+message DashboardStatsResponse {
+  string message = 1;
+  int32 status = 2;
+  int32 totalEmployees = 3;
+  int32 presentToday = 4;
+  int32 onLeave = 5;
+  int32 pendingApprovals = 6;
+  int32 openJobPositions = 7;
+  double avgAttendanceRate = 8;
+}
+
+service AnalyticsService {
+  rpc GetDashboardStats (DateRangeRequest) returns (DashboardStatsResponse);
+  rpc GetAttendanceAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  rpc GetLeaveAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  rpc GetRecruitmentAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  rpc GetSalaryAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  rpc GetEmployeeGrowth (DateRangeRequest) returns (AnalyticsResponse);
+}

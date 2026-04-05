@@ -1,0 +1,148 @@
+paths:
+  /api/get-all-users:
+    get:
+      summary: List all users
+      description: Returns a paginated list of users with optional filters
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+          description: Page number
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+          description: Items per page
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Search term for name or email
+        - name: role
+          in: query
+          schema: { type: string }
+          description: Filter by role
+        - name: department
+          in: query
+          schema: { type: string }
+          description: Filter by department
+      responses:
+        "200":
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            email: { type: string }
+                            username: { type: string }
+                            role: { type: string }
+                            department: { type: string }
+                      total: { type: integer }
+                      page: { type: integer }
+                      limit: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/get-user-data/{username}:
+    get:
+      summary: Get user data by username
+      description: Returns detailed information for a specific user
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+          example: "sameer_yadav"
+      responses:
+        "200":
+          description: User data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      email: { type: string }
+                      username: { type: string }
+                      fullName: { type: string }
+                      role: { type: string }
+                      department: { type: string }
+                      designation: { type: string }
+        "401":
+          description: Unauthorized
+        "404":
+          description: User not found
+
+  /api/save-fcm-token:
+    put:
+      summary: Save FCM push notification token
+      description: Registers a Firebase Cloud Messaging token for the current user's device
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fcmToken]
+              properties:
+                fcmToken:
+                  type: string
+                  description: Firebase Cloud Messaging token
+                  example: "fxyz123:APA91b..."
+                deviceInfo:
+                  type: object
+                  properties:
+                    platform: { type: string, example: "web" }
+                    userAgent: { type: string, example: "Mozilla/5.0..." }
+      responses:
+        "200":
+          description: FCM token saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/disable-push-notifications:
+    delete:
+      summary: Disable push notifications
+      description: Removes the FCM token for the current user, disabling push notifications
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Push notifications disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized

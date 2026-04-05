@@ -1,0 +1,22 @@
+{
+  "name": "analytics-service",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx --watch src/bootstrap.ts",
+    "prod": "node dist/bootstrap.js",
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@hrms/cache": "workspace:*",
+    "@hrms/common": "workspace:*",
+    "@hrms/db": "workspace:*",
+    "@hrms/grpc-server": "workspace:*",
+    "@hrms/logger": "workspace:*",
+    "@hrms/proto": "workspace:^",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@hrms/typescript-config": "workspace:*",
+    "tsx": "^4.19.2"
+  }
+}

@@ -1,0 +1,31 @@
+#!/bin/sh
+# $3 is 1 for branch checkout, 0 for file checkout
+[ "$3" = "1" ] || exit 0
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Allow base branches
+case "$BRANCH" in
+  main|master|develop|staging|production)
+    exit 0
+    ;;
+esac
+
+# Branch naming convention: <type>/<short-description>
+# type: feature, bugfix, hotfix, release, chore, fix, refactor, test, docs
+PATTERN="^(feature|bugfix|hotfix|release|chore|fix|refactor|test|docs)/[a-z0-9][a-z0-9_-]*$"
+
+if ! echo "$BRANCH" | grep -qE "$PATTERN"; then
+  echo ""
+  echo "⚠️  WARNING: Branch name '$BRANCH' does not follow the naming convention."
+  echo ""
+  echo "   Expected format: <type>/<short-description>"
+  echo "   Allowed types:   feature, bugfix, hotfix, release, chore, fix, refactor, test, docs"
+  echo "   Description:     lowercase letters, numbers, hyphens, underscores"
+  echo ""
+  echo "   Examples:"
+  echo "     feature/add-login-page"
+  echo "     bugfix/fix-null-pointer"
+  echo "     hotfix/patch-auth-token"
+  echo ""
+fi
