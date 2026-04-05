@@ -201,7 +201,10 @@ function EditPolicyModal({ policy, onClose, onSaved, theme }) {
       {};
     if (!policyType) e.policyType = "Required";
     if (policyType === "Other" && !policyName.trim()) e.policyName = "Required";
-    if (!content || DOMPurify.sanitize(content, { ALLOWED_TAGS: [] }).trim().length < 10)
+    if (
+      !content ||
+      DOMPurify.sanitize(content, { ALLOWED_TAGS: [] }).trim().length < 10
+    )
       e.content = "Content must be at least 10 characters";
     return e;
   };
