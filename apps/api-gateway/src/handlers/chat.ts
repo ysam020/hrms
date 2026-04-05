@@ -453,6 +453,7 @@ export async function ogPreview(req: Request, res: Response) {
       });
 
     const response = await fetch(url, {
+      redirect: "error", // prevent redirect-based SSRF bypassing isSafeHostname
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",

@@ -147,6 +147,9 @@ importers:
       cors:
         specifier: ^2.8.5
         version: 2.8.6
+      csrf-csrf:
+        specifier: ^4.0.3
+        version: 4.0.3
       express:
         specifier: ^4.21.1
         version: 4.22.1
@@ -9618,6 +9621,15 @@ packages:
         integrity: sha512-VxBKmeNcqQdiUQUW2Tzq0t377b54N2bMtXO/qiLa+6eRRmmC4qT3D4OnTGoT/U6O9aklQ/jTwbOtRMTTY8G0Ig==,
       }
     deprecated: This package is no longer supported. It's now a built-in Node module. If you've depended on crypto, you should switch to the one that's built-in.
+    dev: false
+
+  /csrf-csrf@4.0.3:
+    resolution:
+      {
+        integrity: sha512-DaygOzelL4Qo1pHwI9LPyZL+X2456/OzpT596kNeZGiTSqKVDOk/9PPJ+FjzZacjMUEusOHw3WJKe1RW4iUhrw==,
+      }
+    dependencies:
+      http-errors: 2.0.1
     dev: false
 
   /css-line-break@2.1.0:

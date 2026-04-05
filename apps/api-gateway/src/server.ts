@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
+import { doubleCsrf } from "csrf-csrf";
 import https from "https";
 import http from "http";
 import fs from "fs";
@@ -18,6 +19,30 @@ import { auditLogMiddleware } from "./middleware/auditLog";
 
 const app = express();
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
+
+const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
+  getSecret: () => process.env.CSRF_SECRET!,
+  getSessionIdentifier: (req) => {
+    // Tie the CSRF token to the authenticated user when possible
+    const auth = req.headers.authorization;
+    if (auth?.startsWith("Bearer ")) {
+      try {
+        const payload = jwt.decode(auth.slice(7)) as any;
+        if (payload?.userId) return payload.userId as string;
+      } catch {}
+    }
+    return req.ip ?? "";
+  },
+  cookieName: "csrf-token",
+  cookieOptions: {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  },
+  size: 64,
+  getCsrfTokenFromRequest: (req) => req.headers["x-csrf-token"],
+});
 
 // Trust the first proxy hop so req.ip is correct and rate limiters
 // work properly behind a reverse proxy / load balancer.
@@ -48,17 +73,7 @@ app.use(
 );
 app.use(cors({ credentials: true, origin: allowedOrigins }));
 app.use(cookieParser());
-
-// CSRF protection: reject state-changing requests whose Origin doesn't match
-// an allowed origin. Works in conjunction with sameSite=strict cookies and
-// the CORS allowlist above.
-app.use((req, res, next) => {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
-  const origin = req.headers.origin || req.headers.referer || "";
-  const allowed = allowedOrigins.some((o) => origin.startsWith(o));
-  if (!allowed) return res.status(403).json({ message: "Forbidden" });
-  next();
-});
+app.use(doubleCsrfProtection);
 app.use(apiRequestLogger);
 
 // Body parsers
@@ -104,6 +119,9 @@ app.use("/api", generalLimiter);
 
 app.use(auditLogMiddleware);
 configureSwagger(app);
+app.get("/api/csrf-token", (req, res) => {
+  res.json({ csrfToken: generateCsrfToken(req, res) });
+});
 app.use("/api", rootRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "healthy" }));
