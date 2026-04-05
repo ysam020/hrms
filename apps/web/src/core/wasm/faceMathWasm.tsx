@@ -37,8 +37,6 @@ export async function loadFaceMath(wasmUrl = "/face_math.wasm") {
 
 let _getHeap: any = null;
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
 /**
  * Allocate n Float32 slots at the start of WASM memory starting at a given
  * page-aligned offset.  We use a simple bump-allocator beginning at byte 0
@@ -54,8 +52,6 @@ const REGION = {
   A: { offset: (136 + 3 + 24) * 4, size: 128 * 4 }, // descriptor A
   B: { offset: (136 + 3 + 24 + 128) * 4, size: 128 * 4 }, // descriptor B
 };
-
-// ── Exported API ───────────────────────────────────────────────────────────────
 
 /**
  * calculateHeadPose

@@ -22,7 +22,6 @@ import { useDashboard } from "@web/app/providers/DashboardContext";
 
 const MarkAttendance = React.lazy(() => import("./MarkAttendance"));
 
-// ── Shared section label ─────────────────────────────────────────────────────
 const SectionLabel = ({ children }) => (
   <Typography
     variant="caption"
@@ -40,7 +39,6 @@ const SectionLabel = ({ children }) => (
   </Typography>
 );
 
-// ── Quick action button ───────────────────────────────────────────────────────
 const ActionBtn = ({ icon, label, onClick, isDark }) => (
   <Tooltip title={label} placement="top" arrow>
     <Box
@@ -87,7 +85,6 @@ const ActionBtn = ({ icon, label, onClick, isDark }) => (
   </Tooltip>
 );
 
-// ── Stat pill for attendance month summary ────────────────────────────────────
 const StatPill = ({ label, value, color, isLoading }) => (
   <Box
     sx={{
@@ -126,7 +123,6 @@ const StatPill = ({ label, value, color, isLoading }) => (
   </Box>
 );
 
-// ── MyWorkspace ───────────────────────────────────────────────────────────────
 function MyWorkspace({ isDark }) {
   const navigate = useNavigate();
   const { user } = useContext(UserContext);
@@ -244,7 +240,7 @@ function MyWorkspace({ isDark }) {
         overflow: "hidden",
       }}
     >
-      {/* ── Header: Greeting ── */}
+      {/* greeting */}
       <Box
         sx={{
           px: 2,
@@ -276,9 +272,9 @@ function MyWorkspace({ isDark }) {
         )}
       </Box>
 
-      {/* ── Scrollable body ── */}
+      {/* scrollable content */}
       <Box sx={{ flex: 1, overflow: "auto" }}>
-        {/* ── Attendance Today (punch + times) ── */}
+        {/* attendance today */}
         <Box
           sx={{
             px: 2,
@@ -430,7 +426,7 @@ function MyWorkspace({ isDark }) {
           )}
         </Box>
 
-        {/* ── This Month: full attendance stats ── */}
+        {/* this month stats */}
         <Box
           sx={{
             px: 2,
@@ -559,7 +555,7 @@ function MyWorkspace({ isDark }) {
           )}
         </Box>
 
-        {/* ── Quick actions ── */}
+        {/* quick actions */}
         <Box
           sx={{
             px: 2,
@@ -588,7 +584,7 @@ function MyWorkspace({ isDark }) {
           </Box>
         </Box>
 
-        {/* ── Coming up (events + holidays) ── */}
+        {/* upcoming events */}
         <Box sx={{ px: 2, pt: 1.25, pb: 1.5 }}>
           <SectionLabel>Coming Up</SectionLabel>
           {loading.calendarEvents || loading.holidays ? (

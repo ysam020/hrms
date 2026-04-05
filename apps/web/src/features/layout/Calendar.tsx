@@ -139,7 +139,6 @@ const CustomCalendar = () => {
     try {
       setIsDeleting(true);
 
-      // Get the correct event ID
       const eventId =
         eventToDelete.resource?._id || eventToDelete._id || eventToDelete.id;
 

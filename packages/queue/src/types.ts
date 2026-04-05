@@ -1,13 +1,9 @@
-// ─── Email Queue ──────────────────────────────────────────────────────────────
-
 export interface EmailJobData {
   to: string;
   subject: string;
   html: string;
   from?: string;
 }
-
-// ─── Notification Queue ───────────────────────────────────────────────────────
 
 export interface NotificationJobData {
   title: string;
@@ -23,8 +19,6 @@ export interface NotificationJobData {
   priority?: "high" | "medium" | "low";
   metadata?: Record<string, unknown>;
 }
-
-// ─── Scheduler Queue ──────────────────────────────────────────────────────────
 
 export type SchedulerJobName =
   | "updateExpiredHrActivities"

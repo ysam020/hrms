@@ -34,7 +34,6 @@ function AuditLogs(props) {
   const userList = useUserList();
   const { theme } = React.useContext(ThemeContext);
 
-  // Build query params
   const queryParams = React.useMemo(() => {
     const params = new URLSearchParams();
     params.append("days", String(selectedDays));

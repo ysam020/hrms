@@ -25,7 +25,7 @@ loadFaceMath()
     console.error("[faceRecognition.worker] WASM load failed:", err),
   );
 
-// ── Synchronous JS fallback (used only if WASM hasn't loaded yet) ─────────────
+// JS fallback used when WASM hasn't loaded yet
 
 const jsFallback = {
   calculateHeadPose(landmarks) {
@@ -81,8 +81,6 @@ const math = {
       : jsFallback.euclideanDistance(d1, d2),
 };
 
-// ── Message handler ───────────────────────────────────────────────────────────
-
 self.onmessage = ({ data }) => {
   const { type } = data;
 
@@ -113,14 +111,13 @@ self.onmessage = ({ data }) => {
     consecutiveFailures = 0;
     if (score < MIN_CONFIDENCE) return;
 
-    // ── WASM: head pose from raw landmark positions ─────────────────────────
     const headPose = math.pose(landmarks);
     if (!headPose) return;
 
     headPositions.push(headPose);
     if (headPositions.length > HEAD_MOVEMENT_SAMPLES) headPositions.shift();
 
-    // ── WASM: max movement across the sliding window ────────────────────────
+    // max movement across the sliding window
     let currentMax = 0;
     if (headPositions.length >= 3) {
       currentMax = math.movement(headPositions);
@@ -146,7 +143,6 @@ self.onmessage = ({ data }) => {
   }
 
   if (type === "compute_distance") {
-    // ── WASM: euclidean distance between 128-float face descriptors ──────────
     const distance = math.distance(data.d1, data.d2);
     self.postMessage({ type: "distance_result", distance });
   }

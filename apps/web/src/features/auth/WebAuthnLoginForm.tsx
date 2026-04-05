@@ -29,8 +29,6 @@ function WebAuthnLoginForm(props) {
     usernameRef.current?.focus();
   }, []);
 
-  // ✅ No isMountedRef
-
   const updateFaviconAfterLogin = async () => {
     try {
       const res = await apiClient(API_ENDPOINTS.GET_NOTIFICATIONS);

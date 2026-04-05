@@ -118,7 +118,6 @@ function MarkAttendance({ compact = false }) {
     }
   }, [faceApiReady, setAlert]);
 
-  // Handle attendance button click
   const handleAttendance = useCallback(
     async (fieldType) => {
       try {
@@ -189,13 +188,12 @@ function MarkAttendance({ compact = false }) {
 
   const status = getStatus();
 
-  // Check if any critical data is still loading
   const isInitialLoading =
     attendanceLoading &&
     todayTimeIn === undefined &&
     todayTimeOut === undefined;
 
-  // ── Compact sidebar mode ────────────────────────────────────────────────
+  // compact mode: render minimal punch-in/out buttons for the sidebar
   if (compact) {
     const Dialogs = (
       <>

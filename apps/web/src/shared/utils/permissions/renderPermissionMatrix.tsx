@@ -32,7 +32,6 @@ const renderPermissionMatrix = (
 
   const actions = Object.keys(moduleStructure.actions);
 
-  // Get all unique scopes used in this module
   const availableScopes = ["self", "team", "all", "-"].filter((scope) =>
     actions.some((action) => moduleStructure.actions[action].includes(scope)),
   );
@@ -80,10 +79,7 @@ const renderPermissionMatrix = (
                   const isValidScope =
                     moduleStructure.actions[action].includes(scope);
 
-                  // Check if this checkbox should be disabled
                   const isDisabled = isCheckboxDisabled(isSuperUser);
-
-                  // Create tooltip message for disabled checkboxes
                   const getTooltipMessage = () => {
                     if (isSuperUser)
                       return "Super admin permissions cannot be modified";

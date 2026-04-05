@@ -46,10 +46,8 @@ const downloadSalarySlip = async (
     link.click();
     link.remove();
 
-    // Clean up the URL object
     window.URL.revokeObjectURL(url);
 
-    // Show success message
     setAlert({
       open: true,
       message: "Salary slip downloaded successfully",
@@ -60,23 +58,14 @@ const downloadSalarySlip = async (
 
     let errorMessage = "Failed to download salary slip";
 
-    // When responseType is 'blob', error responses are also blobs
-    // We need to parse the blob to get the JSON error message
+    // when responseType is 'blob', error responses are also blobs — parse to get the JSON message
     if (error.response?.data instanceof Blob) {
       try {
-        // Convert blob to text
         const errorText = await error.response.data.text();
-
-        // Try to parse as JSON
         const errorData = JSON.parse(errorText);
-
-        // Extract the error message
         errorMessage = errorData.message || errorMessage;
       } catch (parseError) {
-        // If parsing fails, check for text content
         console.error("Error parsing error response:", parseError);
-
-        // Fallback to generic message with status code
         if (error.response?.status === 404) {
           errorMessage = "Salary data not found for the selected period";
         } else if (error.response?.status === 400) {
@@ -86,10 +75,8 @@ const downloadSalarySlip = async (
         }
       }
     } else if (error.response?.data?.message) {
-      // Standard JSON error response (shouldn't happen with blob, but just in case)
       errorMessage = error.response.data.message;
     } else if (error.message) {
-      // Network error or other issues
       errorMessage = error.message;
     }
 

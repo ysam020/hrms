@@ -229,7 +229,6 @@ function ViewLeaveApplications() {
     setShowFutureOnly(event.target.checked);
   }, []);
 
-  // Get status chip props
   const getStatusChip = (status) => {
     const statusMap = {
       Pending: {

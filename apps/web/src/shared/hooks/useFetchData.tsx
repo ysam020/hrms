@@ -62,7 +62,7 @@ function useFetchData<T = any>(
         setLoading(true);
         setError(null);
 
-        // ✅ stale-while-revalidate
+        // stale-while-revalidate: return cached data immediately, update in background
         if (shouldCache) {
           const cached = await getAnalyticsCache(uri);
           if (cached && currentRequestId === requestIdRef.current) {
@@ -73,7 +73,7 @@ function useFetchData<T = any>(
 
         const res = await apiClient[method](uri, { signal });
 
-        // ✅ ignore stale responses
+        // discard response if a newer request has started
         if (currentRequestId !== requestIdRef.current) return;
 
         const responseData = res.data?.data ?? res.data;

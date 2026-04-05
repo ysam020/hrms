@@ -12,7 +12,7 @@
  * permissions string array, compared to O(n) per call with Array.includes().
  */
 
-// ── Registry ──────────────────────────────────────────────────────────────────
+// Registry
 
 const PERM_DEFS = [
   // Attendance
@@ -150,7 +150,7 @@ for (const [module, action, ...scopes] of PERM_DEFS) {
 
 export const SUPERUSER_MASK = (1n << _bitPos) - 1n;
 
-// ── Encoding ──────────────────────────────────────────────────────────────────
+// Encoding
 
 /**
  * Convert a permissions string array to a BigInt bitmask.
@@ -185,7 +185,7 @@ export function fromPermissionsArray(permissions) {
   return mask;
 }
 
-// ── Check ─────────────────────────────────────────────────────────────────────
+// Check
 
 /**
  * Exact-match check: does this bitmask contain the specific module:action:scope?

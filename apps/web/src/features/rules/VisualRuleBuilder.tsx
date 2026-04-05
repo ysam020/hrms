@@ -362,7 +362,6 @@ const VisualRuleBuilderInner = ({
         ...existingRule,
       }));
 
-      // Check if visual flow exists, otherwise generate from rule JSON
       if (
         existingRule.visualFlow &&
         existingRule.visualFlow.nodes &&
@@ -607,10 +606,8 @@ const VisualRuleBuilderInner = ({
         let value = node.data.condition.value;
         let valueType = "string";
 
-        // Convert value based on field type
         if (fieldConfig) {
           if (fieldConfig.type === "boolean") {
-            // Convert string "true"/"false" to boolean
             if (typeof value === "string") {
               value = value.toLowerCase() === "true";
             }

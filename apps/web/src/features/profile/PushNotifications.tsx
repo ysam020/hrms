@@ -47,7 +47,6 @@ function PushNotifications() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Get current device fingerprint
     const getCurrentDeviceFingerprint = async () => {
       try {
         const { deviceFingerprint } = await generateDeviceFingerprint();
@@ -178,7 +177,6 @@ function PushNotifications() {
     return tokenObj.deviceFingerprint === currentDeviceFingerprint;
   };
 
-  // Check if current device is already enabled for push notifications
   const isCurrentDeviceEnabled = () => {
     if (!currentDeviceFingerprint || !user?.fcmTokens) {
       return false;

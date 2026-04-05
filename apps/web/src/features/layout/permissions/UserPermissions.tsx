@@ -37,10 +37,8 @@ function UserPermissions() {
   const [typedUser, setTypedUser] = React.useState("");
   const [filteredUsers, setFilteredUsers] = React.useState<any[]>([]);
 
-  // Get user list
   const userList = useUserList();
 
-  // Fetch roles using custom hook
   const { data: rolesData, loading: loadingRoles } = useFetchData(
     "/get-role-and-permissions",
     "get",
@@ -209,19 +207,16 @@ function UserPermissions() {
       newPermissions = mergedPermissions;
       setPermissions(mergedPermissions);
 
-      // Check if the merged permissions include super admin permissions
       setIsSuperUser(mergedPermissions.includes("*:*:*"));
     } else {
       // Role deselected - filter back to only original user permissions
       newPermissions = [...originalUserPermissions];
       setPermissions(newPermissions);
 
-      // Check if original user permissions include super admin
       setIsSuperUser(originalUserPermissions.includes("*:*:*"));
     }
   };
 
-  // Helper function to compare arrays
   const arraysEqual = (a, b) => {
     if (a.length !== b.length) return false;
     return a.every((val, index) => val === b[index]);

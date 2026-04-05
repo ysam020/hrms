@@ -16,7 +16,6 @@ export const verifyWebauthnRegistration = async (
   try {
     const { deviceInfo } = await generateDeviceFingerprint();
 
-    // Format credential before sending to server
     const credentialForServer: any = {
       id: credential.id,
       rawId: credential.rawId,
@@ -28,17 +27,15 @@ export const verifyWebauthnRegistration = async (
           ? credential.response.getTransports()
           : undefined,
       },
-      deviceInfo: deviceInfo, // Include device info from client
+      deviceInfo: deviceInfo,
     };
 
-    // Convert rawId ArrayBuffer to array
     if (credentialForServer.rawId instanceof ArrayBuffer) {
       credentialForServer.rawId = Array.from(
         new Uint8Array(credentialForServer.rawId),
       );
     }
 
-    // Convert ArrayBuffers to appropriate format for transmission
     if (credentialForServer.response.clientDataJSON instanceof ArrayBuffer) {
       credentialForServer.response.clientDataJSON = Array.from(
         new Uint8Array(credentialForServer.response.clientDataJSON),
@@ -59,7 +56,6 @@ export const verifyWebauthnRegistration = async (
     );
 
     if (res.data.success) {
-      // Store credential ID for this device
       setCurrentDeviceCredentialId(credential.id);
 
       setAlert({

@@ -92,7 +92,7 @@ function promisify<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-// ── Messages ──────────────────────────────────────────────────────────────────
+// Messages
 
 export async function getMessagesByRoom(roomId) {
   const store = await tx("messages");
@@ -132,7 +132,7 @@ export async function deleteRoomMessages(roomId) {
   await Promise.all(keys.map((k) => promisify(store.delete(k))));
 }
 
-// ── Conversations ─────────────────────────────────────────────────────────────
+// Conversations
 
 export async function getConversations() {
   const store = await tx("conversations");
@@ -155,12 +155,11 @@ export async function deleteConversationFromDB(roomId) {
   return promisify(store.delete(roomId));
 }
 
-// ── Notifications ─────────────────────────────────────────────────────────────
+// Notifications
 
 export async function getNotifications() {
   const store = await tx("notifications");
   const all = (await promisify(store.getAll())) as any[];
-  // Return sorted newest-first
   return all.sort(
     (a, b) => new Date(b.timeStamp).getTime() - new Date(a.timeStamp).getTime(),
   );
@@ -189,7 +188,7 @@ export async function pruneNotifications(maxCount = 200) {
   await Promise.all(toDelete.map((n) => promisify(store.delete(n._id))));
 }
 
-// ── Analytics cache ───────────────────────────────────────────────────────────
+// Analytics cache
 
 const ANALYTICS_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -215,7 +214,7 @@ export async function invalidateAnalyticsCache(pattern) {
   await Promise.all(toDelete.map((k) => promisify(store.delete(k))));
 }
 
-// ── Pagination cache ──────────────────────────────────────────────────────────
+// Pagination cache
 
 const PAGINATION_TTL = 2 * 60 * 1000; // 2 minutes
 
@@ -241,7 +240,7 @@ export async function invalidatePaginationCache(keyPrefix) {
   await Promise.all(toDelete.map((k) => promisify(store.delete(k))));
 }
 
-// ── Message outbox (offline queue) ────────────────────────────────────────────
+// Message outbox (offline queue)
 
 export async function enqueueMessage(tempId, roomId, payload) {
   const store = await tx("message_outbox", "readwrite");

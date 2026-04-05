@@ -69,7 +69,6 @@ export const getAttendanceSummary = async (
       select: { date: true, status: true, isCorrected: true },
     });
 
-    // Build a map by date string
     const recordMap = new Map<string, string>();
     let correctionsUsed = 0;
     for (const r of records) {

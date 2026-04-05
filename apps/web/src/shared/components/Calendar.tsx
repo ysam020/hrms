@@ -24,7 +24,6 @@ const AttendanceCalendar = (props: {
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Get current date for future navigation restrictions
   const today = useMemo(() => new Date(), []);
 
   // Transform attendance data for React Big Calendar
@@ -77,7 +76,6 @@ const AttendanceCalendar = (props: {
     });
   }, [props.attendances]);
 
-  // Check if navigation to future is allowed
   const canNavigateToFuture = useCallback(
     (date: Date) => {
       const targetMonth = dayjs(date).startOf("month");

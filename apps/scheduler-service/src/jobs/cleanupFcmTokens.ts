@@ -54,7 +54,6 @@ export async function cleanupFcmTokens(): Promise<void> {
         const token = typeof tokenObj === "string" ? tokenObj : tokenObj.token;
         if (!token) continue;
 
-        // Skip tokens older than 90 days
         const lastUsed = new Date(
           tokenObj.lastUsed ?? tokenObj.createdAt ?? Date.now(),
         );

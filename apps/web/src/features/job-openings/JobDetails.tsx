@@ -25,7 +25,6 @@ type DataFieldProps = {
 };
 
 const JobDetails = (props) => {
-  // Helper function to format field values with N/A fallback
   const formatFieldValue = (value) => {
     if (!value || value === "" || value === null || value === undefined) {
       return "N/A";

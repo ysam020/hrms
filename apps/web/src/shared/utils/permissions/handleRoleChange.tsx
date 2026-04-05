@@ -22,18 +22,16 @@ const handleRoleChange = (
     newPermissions = mergedPermissions;
     setPermissions(mergedPermissions);
 
-    // Check if the merged permissions include super admin permissions
     setIsSuperUser(mergedPermissions.includes("*:*:*"));
   } else {
     // Role deselected - filter back to only original user permissions
     newPermissions = [...originalUserPermissions];
     setPermissions(newPermissions);
 
-    // Check if original user permissions include super admin
     setIsSuperUser(originalUserPermissions.includes("*:*:*"));
   }
 
-  // Check if permissions have actually changed from original
+
   if (originalUserPermissions) {
     const hasActualChanges = !arraysEqual(
       [...newPermissions].sort(),
@@ -46,7 +44,6 @@ const handleRoleChange = (
   }
 };
 
-// Helper function to compare arrays
 const arraysEqual = (a, b) => {
   if (a.length !== b.length) return false;
   return a.every((val, index) => val === b[index]);

@@ -145,7 +145,6 @@ function AddEventModal({
     }
   }, [open]);
 
-  // Get modal title and info
   const getModalInfo = () => {
     if (isEditMode) {
       return {
@@ -153,7 +152,6 @@ function AddEventModal({
         icon: <EditIcon sx={{ color: "#6C5DFC", fontSize: 24 }} />,
       };
     } else if (selectedSlot) {
-      // Check if times are set in form or slot
       const startTime =
         formik.values.startTime ||
         (selectedSlot.start &&

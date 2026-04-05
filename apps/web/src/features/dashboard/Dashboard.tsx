@@ -30,7 +30,7 @@ import "../../styles/dashboard.scss";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-// ── Lazy widgets ───────────────────────────────────────────────────────────
+// Lazy-loaded widgets
 const HrActivities = React.lazy(() => import("./HrActivities"));
 const AttendanceCalendar = React.lazy(() => import("./AttendanceCalendar"));
 const QuickStats = React.lazy(() => import("./QuickStats"));
@@ -42,7 +42,7 @@ const BirthdayAnniversary = React.lazy(() => import("./BirthdayAnniversary"));
 const DepartmentBreakdown = React.lazy(() => import("./DepartmentBreakdown"));
 const WorkforceStatus = React.lazy(() => import("./WorkforceStatus"));
 
-// ── Constants ──────────────────────────────────────────────────────────────
+// Constants
 const STORAGE_KEY_LAYOUT = "db_layout_v12";
 const STORAGE_KEY_VISIBILITY = "db_visibility_v12";
 const RIGHT_PANEL_WIDTH = 270;
@@ -89,7 +89,6 @@ const DEFAULT_VISIBILITY = Object.keys(WIDGET_LABELS).reduce((acc, k) => {
   return acc;
 }, {});
 
-// ── Helpers ────────────────────────────────────────────────────────────────
 function loadFromStorage(key, fallback) {
   try {
     const v = localStorage.getItem(key);
@@ -130,7 +129,6 @@ function renderWidget(id) {
   }
 }
 
-// ── WidgetCard ─────────────────────────────────────────────────────────────
 const WidgetCard = React.memo(
   ({
     label,
@@ -212,7 +210,6 @@ const WidgetCard = React.memo(
   ),
 );
 
-// ── RightPanel ─────────────────────────────────────────────────────────────
 const RightPanel = React.memo(({ isDark }: { isDark: boolean }) => (
   <Box
     sx={{
@@ -237,7 +234,6 @@ const RightPanel = React.memo(({ isDark }: { isDark: boolean }) => (
   </Box>
 ));
 
-// ── DashboardInner ─────────────────────────────────────────────────────────
 function DashboardInner() {
   const { theme } = useContext(ThemeContext);
   const isDark = theme === "dark";
@@ -318,7 +314,7 @@ function DashboardInner() {
         bgcolor: isDark ? "#111B21" : "#F9FAFB",
       }}
     >
-      {/* ── Main area ── */}
+      {/* main grid area */}
       <Box
         sx={{
           position: "relative",
@@ -429,7 +425,7 @@ function DashboardInner() {
         </Box>
       </Box>
 
-      {/* ── Right panel ── */}
+      {/* sidebar */}
       <Box sx={{ p: 1, pl: 0, flexShrink: 0, display: "flex" }}>
         <RightPanel isDark={isDark} />
       </Box>
@@ -437,7 +433,6 @@ function DashboardInner() {
   );
 }
 
-// ── Dashboard (root) ───────────────────────────────────────────────────────
 function Dashboard() {
   const { user } = useContext(UserContext);
   return (

@@ -9,7 +9,6 @@ export const getGeolocation = async (
   setShowConsentDrawer: (value: boolean) => void,
 ) => {
   try {
-    // Check if geolocation is supported
     if (!navigator.geolocation) {
       setAlert({
         open: true,
@@ -20,14 +19,11 @@ export const getGeolocation = async (
       return { locationUnavailable: true, reason: "browser-unsupported" };
     }
 
-    // Check current permission status
     const permissionStatus = await navigator.permissions.query({
       name: "geolocation",
     });
 
-    // Handle different permission states
     if (permissionStatus.state === "granted") {
-      // Permission already granted, directly get location
       try {
         const position = await new Promise<GeolocationPosition>(
           (resolve, reject) => {
@@ -48,7 +44,6 @@ export const getGeolocation = async (
           longitude: position.coords.longitude,
         };
       } catch (posError) {
-        // Handle errors even when permission is granted
         return handleGeolocationError(
           posError as GeolocationPositionError,
           setAlert,
@@ -58,7 +53,6 @@ export const getGeolocation = async (
       setShowConsentDrawer(true);
       return null;
     } else if (permissionStatus.state === "denied") {
-      // User has explicitly denied permission
       setAlert({
         open: true,
         message:
@@ -79,7 +73,6 @@ export const getGeolocation = async (
   }
 };
 
-// Helper function to handle geolocation errors
 const handleGeolocationError = (
   error: GeolocationPositionError,
   setAlert: (alert: AlertState) => void,
