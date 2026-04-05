@@ -35,7 +35,6 @@ function ViewIndividualJob() {
     null,
   );
 
-  // Build the applications URL with status filter
   const applicationsUrl = `/view-applications/${_id}${
     statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ""
   }`;

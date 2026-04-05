@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
-// ─── Analysis ────────────────────────────────────────────────────────────────
-
 const LONG_TASK_MS = 50; // gap threshold to flag as a long task
 
 function analyzeTrace(trace: any) {
@@ -106,8 +104,6 @@ function analyzeTrace(trace: any) {
   };
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 const BORDER = "1px solid rgba(255,255,255,0.07)";
 const SECTION_LABEL = {
   fontSize: 10,
@@ -187,8 +183,6 @@ const SCRIPT_COLORS: Record<string, string> = {
   Vendor: "#facc15",
   Native: "#94a3b8",
 };
-
-// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ProfilerOverlay({
   isActive,
@@ -293,7 +287,7 @@ export default function ProfilerOverlay({
             backdropFilter: "blur(12px)",
           }}
         >
-          {/* ── Header ── */}
+          {/* header */}
           <div
             style={{
               display: "flex",
@@ -391,7 +385,7 @@ export default function ProfilerOverlay({
             </div>
           </div>
 
-          {/* ── Stats row ── */}
+          {/* stats row */}
           <div
             style={{
               display: "flex",
@@ -416,7 +410,7 @@ export default function ProfilerOverlay({
             <StatCard label="Max depth" value={analysis.maxDepth} />
           </div>
 
-          {/* ── Long tasks ── */}
+          {/* long tasks */}
           {analysis.longTasks.length > 0 && (
             <div
               style={{
@@ -454,7 +448,7 @@ export default function ProfilerOverlay({
             </div>
           )}
 
-          {/* ── Self-time hot frames ── */}
+          {/* top frames */}
           <div style={{ padding: "10px 14px", borderBottom: BORDER }}>
             <SectionLabel>
               Self time — where CPU actually spent time (leaf frames)
@@ -504,7 +498,7 @@ export default function ProfilerOverlay({
             )}
           </div>
 
-          {/* ── Script breakdown ── */}
+          {/* script breakdown */}
           <div style={{ padding: "10px 14px", borderBottom: BORDER }}>
             <SectionLabel>Script breakdown (self time)</SectionLabel>
             {Object.entries(analysis.byScript)
@@ -538,7 +532,7 @@ export default function ProfilerOverlay({
               })}
           </div>
 
-          {/* ── Insight callouts ── */}
+          {/* insights */}
           {(() => {
             const notes = [];
             if (analysis.idlePct > 70)

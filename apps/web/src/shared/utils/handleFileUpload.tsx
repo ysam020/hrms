@@ -56,7 +56,6 @@ const handleFileUpload = async (
         severity: "info",
       });
 
-      // Step 1: get pre-signed URL from server
       const { data: presignedRes } = await apiClient.post(
         API_ENDPOINTS.UPLOAD_PRESIGNED_URL,
         {
@@ -70,7 +69,7 @@ const handleFileUpload = async (
 
       const { url, fileUrl } = presignedRes.data;
 
-      // Step 2: PUT file directly to S3 (plain axios — no auth headers)
+      // PUT directly to S3 — skip auth headers since the URL is pre-signed
       await axios.put(url, file, {
         headers: { "Content-Type": file.type },
       });

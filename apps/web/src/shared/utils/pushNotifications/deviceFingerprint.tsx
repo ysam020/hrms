@@ -2,11 +2,9 @@ import { UAParser } from "ua-parser-js";
 
 export const generateDeviceFingerprint = async () => {
   try {
-    // Initialize UA-Parser
     const parser = new UAParser();
     const result = parser.getResult();
 
-    // Get additional browser/environment info
     const language = navigator.language || "Unknown";
     const timezone =
       Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown";
@@ -14,19 +12,16 @@ export const generateDeviceFingerprint = async () => {
     const platform = navigator.platform || "Unknown";
     const userAgent = navigator.userAgent;
 
-    // Extract parsed information
     const browser = result.browser;
     const os = result.os;
     const device = result.device;
     const engine = result.engine;
 
-    // Determine device type
     const getDeviceType = () => {
       if (device.type) {
         return device.type;
       }
 
-      // Fallback detection
       const ua = userAgent.toLowerCase();
       if (
         ua.includes("mobile") ||
@@ -42,7 +37,6 @@ export const generateDeviceFingerprint = async () => {
 
     const deviceType = getDeviceType();
 
-    // Build device info
     const deviceInfo = {
       browser: browser.name || "Unknown",
       browserVersion: browser.version || "Unknown",
@@ -76,7 +70,6 @@ export const generateDeviceFingerprint = async () => {
       deviceInfo.colorDepth,
     ].join("|");
 
-    // Generate hash of fingerprint data
     const encoder = new TextEncoder();
     const data = encoder.encode(fingerprintData);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -121,7 +114,6 @@ export const generateDeviceFingerprint = async () => {
   }
 };
 
-// Function to check if current device matches a stored device fingerprint
 export const isCurrentDevice = async (storedDeviceFingerprint) => {
   try {
     const { deviceFingerprint } = await generateDeviceFingerprint();

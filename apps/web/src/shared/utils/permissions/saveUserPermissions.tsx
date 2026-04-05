@@ -54,7 +54,6 @@ const saveUserPermissions = async (
           API_ENDPOINTS.GET_USER_PERMISSIONS(selectedUser),
         );
 
-        // Handle the response format
         let updatedPermissions: any[] = [];
         if (updatedPermissionsResponse.data) {
           if (Array.isArray(updatedPermissionsResponse.data)) {

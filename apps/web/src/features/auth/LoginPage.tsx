@@ -194,7 +194,7 @@ function LoginPage() {
 
           {/* Form area */}
           <div className="form-container">
-            {/* ── Default: Google sign-in ── */}
+            {/* default: Google sign-in */}
             {view === VIEW.DEFAULT && (
               <div
                 style={{
@@ -288,7 +288,7 @@ function LoginPage() {
               </div>
             )}
 
-            {/* ── WebAuthn ── */}
+            {/* WebAuthn */}
             {view === VIEW.WEBAUTHN && (
               <>
                 <ErrorBoundary fallback={<ErrorFallback />}>

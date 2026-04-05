@@ -45,7 +45,6 @@ function RolePermissionsModal(props) {
     return aDisplay.localeCompare(bDisplay);
   });
 
-  // Check if a specific permission exists
   const hasPermission = (module, action, scope) => {
     // Check for super admin wildcard permission
     if (rolePermissions.includes("*:*:*")) {
@@ -138,7 +137,6 @@ function RolePermissionsModal(props) {
 
     const actions = Object.keys(moduleStructure.actions);
 
-    // Get all unique scopes used in this module
     const availableScopes = ["self", "team", "all", "-"].filter((scope) =>
       actions.some((action) => moduleStructure.actions[action].includes(scope)),
     );
@@ -265,7 +263,6 @@ function RolePermissionsModal(props) {
   // Update rolePermissions state when data is fetched
   React.useEffect(() => {
     if (fetchedPermissions && !loading) {
-      // Handle different response structures
       let permissions: any[] = [];
 
       if (Array.isArray(fetchedPermissions.permissions)) {

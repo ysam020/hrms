@@ -9,7 +9,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client, S3_BUCKET, s3FileUrl } from "../config/s3";
 
-// ── File validation ────────────────────────────────────────────────────────
+// File validation
 
 export const DANGEROUS_EXTENSIONS = [
   ".exe",
@@ -84,7 +84,7 @@ export function sanitizePart(s: string | undefined): string | null {
   return v.length ? v.substring(0, 100) : null;
 }
 
-// ── Route handlers ─────────────────────────────────────────────────────────
+// Route handlers
 
 export async function getHolidays(req: Request, res: Response) {
   try {

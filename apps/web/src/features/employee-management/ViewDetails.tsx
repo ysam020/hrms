@@ -170,7 +170,6 @@ function ViewDetails() {
     setIsEditing(false);
   };
 
-  // Helper function to get nested error messages
   const getFieldError = (fieldName: string): string | null => {
     const fieldParts = fieldName.split(".");
     let error: any = formik.errors;
@@ -223,7 +222,6 @@ function ViewDetails() {
     );
   }
 
-  // Check if error is 403 (Unauthorized)
   if (error?.status === 403) {
     return (
       <Suspense

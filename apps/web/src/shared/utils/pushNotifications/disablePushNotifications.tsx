@@ -12,7 +12,6 @@ export const disablePushNotifications = async (
     };
 
     if (!disableAll) {
-      // Get current device fingerprint to disable only this device
       const { deviceFingerprint } = await generateDeviceFingerprint();
       requestData.deviceFingerprint = deviceFingerprint;
     }

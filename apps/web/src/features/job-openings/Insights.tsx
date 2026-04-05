@@ -88,7 +88,6 @@ const JobOpeningsInsights = () => {
     return "#f44336"; // Red
   };
 
-  // Helper function to get application status breakdown as percentages
   const getApplicationStatusBreakdown = () => {
     const { applicationsByStatus } = insights.applications;
     const total = insights.applications.totalApplications;

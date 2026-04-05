@@ -64,7 +64,7 @@ function useNotifications() {
       try {
         setLoading(true);
 
-        // ✅ show cached immediately
+        // show cached notifications immediately
         const cached = await getNotifications();
         if (cached.length > 0 && currentRequestId === requestIdRef.current) {
           setNotifications(cached);

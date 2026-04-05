@@ -204,7 +204,6 @@ export const RULE_METADATA = {
   },
 };
 
-// Helper function to create a rule from template
 export const createRuleFromTemplate = (template) => {
   const { id, template: isTemplate, ...ruleData } = template;
   return {

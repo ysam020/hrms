@@ -8,8 +8,6 @@ importScripts(
   "https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-sw.js",
 );
 
-// ─── Firebase ─────────────────────────────────────────────────────────────────
-
 firebase.initializeApp({
   apiKey: "AIzaSyDTDvGXNnUuzR3cqjVc5ZLyHfNqhrA_q5w",
   authDomain: "wapp-c2920.firebaseapp.com",
@@ -43,8 +41,7 @@ messaging.onBackgroundMessage((payload) => {
   });
 });
 
-// ─── Workbox ──────────────────────────────────────────────────────────────────
-
+// Workbox setup
 if (!workbox) {
   console.error("Workbox could not be loaded.");
 } else {
@@ -53,7 +50,7 @@ if (!workbox) {
   // Precache app shell — workbox injectManifest replaces this placeholder at build time
   workbox.precaching.precacheAndRoute(self.__WB_MANIFEST || []);
 
-  // ── Static assets ──────────────────────────────────────────────────────────
+  // Static assets
 
   workbox.routing.registerRoute(
     ({ url, request }) =>
@@ -132,7 +129,7 @@ if (!workbox) {
     }),
   );
 
-  // ── API caching ────────────────────────────────────────────────────────────
+  // API caching
   // Note: API may be on a different origin (port), so we match by pathname only.
 
   // Notifications - NetworkFirst since they need to be real-time
@@ -213,7 +210,7 @@ if (!workbox) {
     }),
   );
 
-  // ── Cache invalidation via postMessage ────────────────────────────────────
+  // Cache invalidation via postMessage
 
   self.addEventListener("message", async (event) => {
     if (event.data?.type === "INVALIDATE_CACHE") {

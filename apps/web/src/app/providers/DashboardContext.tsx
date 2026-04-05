@@ -196,12 +196,7 @@ export function DashboardProvider({
           birthdaysAnniversaries: false,
         });
       } catch (error) {
-        const err = error as { name?: string; code?: string };
-        if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
-          console.log("Dashboard request canceled");
-        } else {
-          console.error("Dashboard fetch error:", error);
-        }
+        console.error("Dashboard fetch error:", error);
       }
     })();
 

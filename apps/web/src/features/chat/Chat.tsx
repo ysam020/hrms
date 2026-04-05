@@ -33,7 +33,7 @@ import apiClient from "@web/core/http/axiosConfig";
 import "../../styles/chat.scss";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
-// ── Lazy-loaded MUI Icons ────────────────────────────────────────────────────
+// Lazy-loaded MUI icons
 const SendIcon = React.lazy(() => import("@mui/icons-material/Send"));
 const AttachFileIcon = React.lazy(
   () => import("@mui/icons-material/AttachFile"),
@@ -60,8 +60,6 @@ const TableChartIcon = React.lazy(
 );
 const ArticleIcon = React.lazy(() => import("@mui/icons-material/Article"));
 const VideoFileIcon = React.lazy(() => import("@mui/icons-material/VideoFile"));
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getOtherParticipant(room, myUsername) {
   return room.participants?.find((p) => p !== myUsername) || "Unknown";
@@ -141,8 +139,6 @@ function FileTypeIcon({
   );
 }
 
-// ── OG Link Preview ──────────────────────────────────────────────────────────
-
 const FIRST_URL_RE = /https?:\/\/\S+/;
 const ogCache = new Map();
 
@@ -216,8 +212,6 @@ function LinkPreview({ url }) {
   );
 }
 
-// ── Typing Indicator ─────────────────────────────────────────────────────────
-
 function TypingIndicator({ names }) {
   if (!names || names.length === 0) return null;
   const label =
@@ -236,8 +230,6 @@ function TypingIndicator({ names }) {
   );
 }
 
-// ── Linkify decorator ─────────────────────────────────────────────────────────
-
 function linkifyDecorator(href, text, key) {
   return (
     <a
@@ -251,8 +243,6 @@ function linkifyDecorator(href, text, key) {
     </a>
   );
 }
-
-// ── Message Bubble ───────────────────────────────────────────────────────────
 
 function MessageBubble({
   msg,
@@ -443,8 +433,6 @@ function MessageBubble({
   );
 }
 
-// ── Conversation List Item ───────────────────────────────────────────────────
-
 function ConversationItem({ conv, myUsername, isActive, onClick, unread }) {
   const other = getOtherParticipant(conv, myUsername);
   const lastMsg = conv.lastMessage;
@@ -494,8 +482,6 @@ function ConversationItem({ conv, myUsername, isActive, onClick, unread }) {
     </div>
   );
 }
-
-// ── Main Chat Component ──────────────────────────────────────────────────────
 
 function Chat() {
   const { user } = useContext(UserContext);
@@ -768,7 +754,7 @@ function Chat() {
 
   return (
     <div className={`chat-root ${isDark ? "dark" : "light"}`}>
-      {/* ── Left Panel: Conversations ── */}
+      {/* left panel */}
       <div
         className={`chat-left-panel ${mobileShowThread ? "mobile-hidden" : ""}`}
       >
@@ -851,7 +837,7 @@ function Chat() {
         </div>
       </div>
 
-      {/* ── Right Panel: Thread ── */}
+      {/* right panel */}
       <div
         className={`chat-right-panel ${mobileShowThread ? "mobile-visible" : ""}`}
       >
@@ -1080,7 +1066,7 @@ function Chat() {
         )}
       </div>
 
-      {/* ── Image Lightbox ── */}
+      {/* image lightbox */}
       <Dialog
         open={Boolean(lightboxUrl)}
         onClose={() => setLightboxUrl(null)}
@@ -1111,7 +1097,7 @@ function Chat() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Message Confirm ── */}
+      {/* delete message confirmation */}
       <Dialog
         open={Boolean(deleteTargetMsg)}
         onClose={() => setDeleteTargetMsg(null)}
@@ -1134,7 +1120,7 @@ function Chat() {
         </DialogActions>
       </Dialog>
 
-      {/* ── Delete Conversation Confirm ── */}
+      {/* delete conversation confirmation */}
       <Dialog
         open={deleteConvConfirm}
         onClose={() => setDeleteConvConfirm(false)}

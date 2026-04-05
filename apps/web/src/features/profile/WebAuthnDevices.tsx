@@ -204,7 +204,6 @@ function WebAuthnDevices() {
     return credentialId === currentCredentialId;
   };
 
-  // Check if current device already has WebAuthn registered
   const isCurrentDeviceRegistered = () => {
     return credentials.some((credential) =>
       isCurrentDevice(credential.credentialID),

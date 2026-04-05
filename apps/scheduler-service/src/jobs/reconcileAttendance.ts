@@ -167,7 +167,6 @@ async function processEmployee(
     }
   }
 
-  // Build attendance records
   const attendanceRecords = [
     ...holidayDates.map((date) => ({
       username,
@@ -200,7 +199,6 @@ async function processEmployee(
     });
   }
 
-  // Build leave applications
   const now = new Date().toISOString();
   const leaveApplications: Array<{
     username: string;

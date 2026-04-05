@@ -45,7 +45,6 @@ const togglePermission = (
 
   setPermissions(updatedPermissions);
 
-  // Check if permissions have actually changed from original
   if (originalUserPermissions) {
     const hasActualChanges = !arraysEqual(
       [...updatedPermissions].sort(),
@@ -57,7 +56,6 @@ const togglePermission = (
   }
 };
 
-// Helper function to compare arrays
 const arraysEqual = (a, b) => {
   if (a.length !== b.length) return false;
   return a.every((val, index) => val === b[index]);

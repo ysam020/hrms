@@ -11,7 +11,6 @@ type AlertFn = (alert: {
   severity: string;
 }) => void;
 
-// Helper function to convert different ID formats to ArrayBuffer
 function credentialIdToArrayBuffer(
   id: string | ArrayBuffer | { type: string; data: number[] } | number[],
 ) {
@@ -30,12 +29,10 @@ function credentialIdToArrayBuffer(
   }
 
   if (Array.isArray(id)) {
-    // Handle array of bytes
     return new Uint8Array(id).buffer;
   }
 
   if (typeof id === "string") {
-    // Handle base64url string
     return Uint8Array.from(
       atob(id.replace(/-/g, "+").replace(/_/g, "/")),
       (c) => c.charCodeAt(0),
@@ -53,29 +50,23 @@ export async function performWebAuthnLogin(
   setAlert: AlertFn,
 ) {
   try {
-    // Fetch notifications and update favicon after successful login
     const updateFaviconAfterLogin = async () => {
       try {
         const res = await apiClient(API_ENDPOINTS.GET_NOTIFICATIONS);
         const notifications = res.data || [];
-
-        // Update favicon with notification count
         updateFaviconWithDot(notifications.length > 0);
         updateDocumentTitle(notifications.length);
       } catch (error) {
         console.error("Error fetching notifications after login:", error);
-        // If notifications fetch fails, still clear the favicon
         updateFaviconWithDot(false);
         updateDocumentTitle(0);
       }
     };
 
-    // Step 1: Validate that we received valid options
     if (!options || !options.challenge) {
       throw new Error("Invalid authentication options received from server");
     }
 
-    // Step 2: Convert base64url encoded values to Uint8Array for WebAuthn API
     const challenge = Uint8Array.from(
       atob(options.challenge.replace(/-/g, "+").replace(/_/g, "/")),
       (c) => c.charCodeAt(0),
@@ -87,7 +78,6 @@ export async function performWebAuthnLogin(
         id: credentialIdToArrayBuffer(cred.id),
       })) || [];
 
-    // Step 3: Create the credential request options
     const publicKeyCredentialRequestOptions = {
       challenge: challenge,
       rpId: options.rpId,
@@ -96,12 +86,10 @@ export async function performWebAuthnLogin(
       allowCredentials: allowCredentials,
     };
 
-    // Validate that we have at least one credential
     if (allowCredentials.length === 0) {
       throw new Error("No valid credentials available for authentication");
     }
 
-    // Step 4: Get assertion from authenticator
     const assertion = await navigator.credentials.get({
       publicKey: publicKeyCredentialRequestOptions,
     });
@@ -110,7 +98,6 @@ export async function performWebAuthnLogin(
       throw new Error("No assertion received from authenticator");
     }
 
-    // Step 5: Credential formatting
     const pkAssertion = assertion as PublicKeyCredential;
     const pkResponse = pkAssertion.response as AuthenticatorAssertionResponse;
     const credential = {
@@ -129,7 +116,6 @@ export async function performWebAuthnLogin(
     };
 
     try {
-      // Step 6: Verify credential
       const verifyResponse = await apiClient.post(
         API_ENDPOINTS.WEBAUTHN_VERIFY_LOGIN,
         {
@@ -144,7 +130,6 @@ export async function performWebAuthnLogin(
         );
       }
 
-      // Get geolocation if needed
       let geolocation: { latitude: number | null; longitude: number | null } = {
         latitude: null,
         longitude: null,
@@ -204,7 +189,6 @@ export async function performWebAuthnLogin(
   } catch (error: any) {
     console.error("WebAuthn login failed:", error);
 
-    // Handle specific error types
     if (error.name === "NotAllowedError") {
       handleLoginError(
         new Error(

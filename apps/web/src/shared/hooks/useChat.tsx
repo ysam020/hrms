@@ -34,7 +34,7 @@ function useChat() {
   const dbLoadedRoomsRef = useRef(new Set());
   const prevConnectedRef = useRef(false);
 
-  // ── IndexedDB helpers ────────────────────────────────────────────────────────
+  // IndexedDB helpers
 
   /**
    * Merge two message arrays by _id (server data wins on conflict).
@@ -50,7 +50,7 @@ function useChat() {
     );
   };
 
-  // ── HTTP helpers ─────────────────────────────────────────────────────────────
+  // HTTP helpers
 
   const fetchConversations = useCallback(async () => {
     setLoadingConversations(true);
@@ -185,7 +185,7 @@ function useChat() {
     [dbLoadedRoomsRef],
   );
 
-  // ── Socket actions ────────────────────────────────────────────────────────────
+  // Socket actions
 
   const joinRoom = useCallback(
     (roomId) => {
@@ -287,7 +287,7 @@ function useChat() {
     [socketRef],
   );
 
-  // ── Socket event handlers ─────────────────────────────────────────────────────
+  // Socket event handlers
 
   const handleIncomingMessage = useCallback(
     (msg) => {
@@ -383,7 +383,7 @@ function useChat() {
     });
   }, []);
 
-  // ── Socket subscription ───────────────────────────────────────────────────────
+  // Socket subscriptions
 
   useEffect(() => {
     if (!user?.username) return;

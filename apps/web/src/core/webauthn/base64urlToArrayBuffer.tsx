@@ -1,5 +1,4 @@
 export function base64urlToArrayBuffer(input: unknown) {
-  // Handle different input types
   let base64url: string;
 
   if (typeof input === "string") {
@@ -31,14 +30,9 @@ export function base64urlToArrayBuffer(input: unknown) {
   }
 
   try {
-    // Add padding if needed
     const padding = "=".repeat((4 - (base64url.length % 4)) % 4);
     const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/") + padding;
-
-    // Convert base64 to binary string
     const binaryString = atob(base64);
-
-    // Convert binary string to ArrayBuffer
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);

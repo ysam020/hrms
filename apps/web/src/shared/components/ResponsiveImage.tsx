@@ -34,7 +34,6 @@ function ResponsiveImage({
 
     const basePath = imagePath.substring(0, lastDot);
 
-    // Check if this is an employee photo or logo
     const isEmployeePhoto = imagePath.includes("employee_photo");
     const isLogo = imagePath.includes("logo");
 

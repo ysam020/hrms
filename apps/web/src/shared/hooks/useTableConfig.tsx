@@ -173,7 +173,6 @@ function useTableConfig(
       };
     }
 
-    // Return base configuration
     return {
       ...baseConfig,
       ...customOptions,

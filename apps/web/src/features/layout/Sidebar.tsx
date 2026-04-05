@@ -62,7 +62,6 @@ function Sidebar() {
     ];
   }, []);
 
-  // Helper function to check if route is active
   const isActive = (path) => {
     if (path === "/") {
       return location.pathname === "/";

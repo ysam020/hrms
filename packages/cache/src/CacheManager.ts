@@ -141,7 +141,6 @@ export class CacheManager {
         }
       } while (cursor !== "0");
 
-      // Evict matching entries from memory cache
       const prefix = pattern.endsWith(":*")
         ? pattern.slice(0, -1)
         : pattern.replace(/\*/g, "");
@@ -198,7 +197,6 @@ let instance: CacheManager | null = null;
 export function getCacheManager(): CacheManager {
   if (!instance) {
     instance = new CacheManager();
-    // Purge expired memory entries every 5 minutes
     setInterval(() => instance!.cleanup(), 300_000);
   }
   return instance;

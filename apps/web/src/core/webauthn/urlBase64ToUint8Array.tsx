@@ -1,21 +1,13 @@
 export function urlBase64ToUint8Array(base64String: string) {
-  // Validate input
   if (!base64String || typeof base64String !== "string") {
     throw new Error("Invalid base64 string provided");
   }
 
   try {
-    // Clean the string - remove any whitespace
     const cleaned = base64String.trim();
-
-    // Add padding if needed
     const padding = "=".repeat((4 - (cleaned.length % 4)) % 4);
     const base64 = (cleaned + padding).replace(/-/g, "+").replace(/_/g, "/");
-
-    // Convert base64 to binary string
     const rawData = atob(base64);
-
-    // Convert to Uint8Array
     const outputArray = new Uint8Array(rawData.length);
     for (let i = 0; i < rawData.length; ++i) {
       outputArray[i] = rawData.charCodeAt(i);

@@ -37,7 +37,6 @@ function useServerPagination(
   const hasNextPage = pagination.pageIndex < totalPages - 1;
   const hasPrevPage = pagination.pageIndex > 0;
 
-  // Build a deterministic cache key for a given pagination state
   const buildCacheKey = useCallback(
     (paginationState) =>
       cacheKey
@@ -71,7 +70,6 @@ function useServerPagination(
           skip: paginationState.pageIndex * paginationState.pageSize,
         });
 
-        // Handle different response structures
         if (result?.data) {
           setData(result.data);
           const total = result.totalCount || result.total_count || 0;

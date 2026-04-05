@@ -39,7 +39,6 @@ type DataFieldProps = {
 function BasicInfo({ user }) {
   const { theme } = useContext(ThemeContext);
 
-  // Helper function to format field values with N/A fallback
   const formatFieldValue = (value) => {
     if (!value || value === "" || value === null || value === undefined) {
       return "N/A";
@@ -47,7 +46,6 @@ function BasicInfo({ user }) {
     return value;
   };
 
-  // Helper function to format address
   const formatAddress = (addressFields) => {
     const filteredFields = addressFields.filter(
       (field) => field && field !== "" && field !== null && field !== undefined,

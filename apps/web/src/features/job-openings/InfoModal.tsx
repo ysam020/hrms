@@ -149,7 +149,6 @@ function InfoModal(props) {
     }
   };
 
-  // Helper function to check if a specific round should have status dropdown hidden
   const shouldHideStatusDropdown = (roundNumber) => {
     if (!status) return false;
 

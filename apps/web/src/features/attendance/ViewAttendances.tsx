@@ -297,7 +297,6 @@ function ViewAttendances() {
     },
   );
 
-  // Get the date toolbar component
   const dateToolbar = tableToolbarDate(date, setDate);
 
   const table = useMaterialReactTable({

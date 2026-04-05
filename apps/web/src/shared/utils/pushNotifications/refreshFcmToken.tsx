@@ -22,7 +22,6 @@ export const refreshFcmToken = async (
         const { deviceFingerprint, deviceInfo } =
           await generateDeviceFingerprint();
 
-        // Check if this device already has a token
         const existingTokenForDevice = fcmTokens?.find(
           (tokenObj) => tokenObj.deviceFingerprint === deviceFingerprint,
         );

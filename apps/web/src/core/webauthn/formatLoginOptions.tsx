@@ -9,7 +9,6 @@ export function formatLoginOptions(options: any) {
     throw new Error(`Invalid challenge format: ${error.message}`);
   }
 
-  // Convert allowCredentials
   if (options.allowCredentials && Array.isArray(options.allowCredentials)) {
     options.allowCredentials.forEach((cred: any, index: number) => {
       try {
