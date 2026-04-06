@@ -5,6 +5,7 @@ declare module "axios" {
   interface InternalAxiosRequestConfig {
     isProto?: boolean;
     _authRetried?: boolean;
+    _csrfRetried?: boolean;
   }
 }
 
@@ -25,11 +26,13 @@ export const getAccessToken = () => _accessToken;
 export const setAccessToken = (token: string) => {
   _accessToken = token;
   localStorage.setItem(TOKEN_KEY, token);
+  invalidateCsrfToken();
 };
 
 const clearAccessToken = () => {
   _accessToken = null;
   localStorage.removeItem(TOKEN_KEY);
+  invalidateCsrfToken();
 };
 
 // Decode JWT expiry
@@ -49,6 +52,29 @@ const isExpiringSoon = (token: string, bufferSec = 60) => {
 
 const API_URL = import.meta.env.VITE_API_STRING;
 
+// CSRF token — fetched lazily on the first mutating request and cached.
+// Must be invalidated after login/logout (session identifier changes).
+let _csrfToken: string | null = null;
+
+const fetchCsrfToken = async (): Promise<string> => {
+  if (_csrfToken) return _csrfToken;
+  // Mirror the Authorization header so the server's getSessionIdentifier
+  // produces the same session key here as on subsequent mutating requests.
+  const token = getAccessToken();
+  const res = await axios.get<{ csrfToken: string }>(`${API_URL}/csrf-token`, {
+    withCredentials: true,
+    ...(token && { headers: { Authorization: `Bearer ${token}` } }),
+  });
+  _csrfToken = res.data.csrfToken;
+  return _csrfToken;
+};
+
+export const invalidateCsrfToken = () => {
+  _csrfToken = null;
+};
+
+const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
+
 const apiClient = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -62,8 +88,26 @@ let _refreshPromise: Promise<string> | null = null;
 export const performRefresh = () => {
   if (_refreshPromise) return _refreshPromise;
 
-  _refreshPromise = axios
-    .post(`${API_URL}/refresh-token`, {}, { withCredentials: true })
+  // Capture the current (possibly expiring) token before fetchCsrfToken runs,
+  // so the POST carries the same Authorization value that was used to generate
+  // the CSRF token (getSessionIdentifier uses jwt.decode, not jwt.verify, so
+  // an expired token still yields the correct userId as the session key).
+  const currentToken = getAccessToken();
+
+  _refreshPromise = fetchCsrfToken()
+    .then((csrfToken) =>
+      axios.post(
+        `${API_URL}/refresh-token`,
+        {},
+        {
+          withCredentials: true,
+          headers: {
+            "x-csrf-token": csrfToken,
+            ...(currentToken && { Authorization: `Bearer ${currentToken}` }),
+          },
+        },
+      ),
+    )
     .then((res) => {
       if (res.data?.success) {
         const newToken = res.data.data.accessToken;
@@ -125,6 +169,10 @@ apiClient.interceptors.request.use(
       config.headers["Authorization"] = `Bearer ${token}`;
     }
 
+    if (MUTATING_METHODS.has(config.method?.toLowerCase() ?? "")) {
+      config.headers["x-csrf-token"] = await fetchCsrfToken();
+    }
+
     return config;
   },
 );
@@ -135,6 +183,14 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config as InternalAxiosRequestConfig;
+
+    if (error.response?.status === 403 && !originalRequest._csrfRetried) {
+      originalRequest._csrfRetried = true;
+      invalidateCsrfToken();
+      originalRequest.headers = originalRequest.headers || {};
+      originalRequest.headers["x-csrf-token"] = await fetchCsrfToken();
+      return apiClient(originalRequest);
+    }
 
     if (error.response?.status === 401) {
       if (!originalRequest._authRetried) {

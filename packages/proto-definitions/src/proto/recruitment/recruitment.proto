@@ -152,19 +152,32 @@ message ResignationResponse {
 }
 
 service RecruitmentService {
+  // Creates a new job opening.
   rpc CreateJobOpening (CreateJobRequest) returns (JobResponse);
+  // Returns a job opening by ID.
   rpc GetJobOpening (IdRequest) returns (JobResponse);
+  // Returns a paginated list of job openings with optional filters.
   rpc ListJobOpenings (ListJobsRequest) returns (ListJobsResponse);
+  // Updates an existing job opening.
   rpc UpdateJobOpening (CreateJobRequest) returns (JobResponse);
+  // Deletes a job opening by ID.
   rpc DeleteJobOpening (IdRequest) returns (BasicResponse);
+  // Submits a job application for a candidate.
   rpc ApplyForJob (ApplyJobRequest) returns (ApplicationResponse);
+  // Returns a paginated list of job applications with optional filters.
   rpc ListApplications (ListApplicationsRequest) returns (ListApplicationsResponse);
+  // Updates the status of a job application.
   rpc UpdateApplicationStatus (UpdateStatusRequest) returns (BasicResponse);
+  // Submits a resignation request for an employee.
   rpc SubmitResignation (SubmitResignationRequest) returns (ResignationResponse);
+  // Returns a resignation request by ID.
   rpc GetResignation (IdRequest) returns (ResignationResponse);
+  // Approves a pending resignation request.
   rpc ApproveResignation (UpdateStatusRequest) returns (BasicResponse);
+  // Rejects a pending resignation request.
   rpc RejectResignation (UpdateStatusRequest) returns (BasicResponse);
+  // Returns the current user's own resignation request.
   rpc GetMyResignation (IdRequest) returns (ResignationResponse);
-  // List all resignations with pagination and optional filters
+  // Returns all resignations with pagination and optional filters.
   rpc ListResignations (ListResignationsRequest) returns (ListResignationsResponse);
 }

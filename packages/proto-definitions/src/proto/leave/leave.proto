@@ -89,12 +89,20 @@ message BasicLeaveResponse {
 }
 
 service LeaveService {
+  // Submits a new leave application.
   rpc ApplyLeave (ApplyLeaveRequest) returns (LeaveResponse);
+  // Returns a list of leave applications with optional filters.
   rpc GetLeaves (GetLeaveRequest) returns (GetLeaveResponse);
+  // Returns a single leave application by ID.
   rpc GetLeaveById (GetLeaveByIdRequest) returns (LeaveResponse);
+  // Approves a pending leave application.
   rpc ApproveLeave (ApproveLeaveRequest) returns (BasicLeaveResponse);
+  // Rejects a pending leave application.
   rpc RejectLeave (RejectLeaveRequest) returns (BasicLeaveResponse);
+  // Cancels an approved or pending leave application.
   rpc CancelLeave (CancelLeaveRequest) returns (BasicLeaveResponse);
+  // Returns the leave balance for an employee.
   rpc GetLeaveBalance (GetLeaveBalanceRequest) returns (GetLeaveBalanceResponse);
+  // Updates the leave balance for an employee.
   rpc UpdateLeaveBalance (GetLeaveBalanceRequest) returns (BasicLeaveResponse);
 }
