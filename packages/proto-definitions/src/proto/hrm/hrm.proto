@@ -144,18 +144,32 @@ message ListRulesResponse {
 }
 
 service HrmService {
+  // Creates a new HR activity record.
   rpc CreateHrActivity (CreateActivityRequest) returns (ActivityResponse);
+  // Returns an HR activity record by ID.
   rpc GetHrActivity (IdRequest) returns (ActivityResponse);
+  // Returns a paginated list of HR activity records.
   rpc ListHrActivities (ListActivitiesRequest) returns (ListActivitiesResponse);
+  // Updates an existing HR activity record.
   rpc UpdateHrActivity (CreateActivityRequest) returns (ActivityResponse);
+  // Creates a new HR policy document.
   rpc CreatePolicy (CreatePolicyRequest) returns (PolicyResponse);
+  // Returns an HR policy document by ID.
   rpc GetPolicy (IdRequest) returns (PolicyResponse);
+  // Returns all HR policies for an organisation.
   rpc ListPolicies (IdRequest) returns (ListPoliciesResponse);
+  // Returns the roles assigned to a user.
   rpc GetUserRoles (GetRolesRequest) returns (RolesResponse);
+  // Checks whether a user has a specific permission.
   rpc CheckPermission (CheckPermissionRequest) returns (CheckPermissionResponse);
+  // Assigns a role to a user.
   rpc AssignRole (GetRolesRequest) returns (BasicResponse);
+  // Creates a new access-control rule.
   rpc CreateRule (CreateRuleRequest) returns (RuleResponse);
+  // Returns all access-control rules for an organisation.
   rpc ListRules (IdRequest) returns (ListRulesResponse);
+  // Updates an existing access-control rule.
   rpc UpdateRule (CreateRuleRequest) returns (RuleResponse);
+  // Deletes an access-control rule by ID.
   rpc DeleteRule (IdRequest) returns (BasicResponse);
 }

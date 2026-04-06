@@ -60,10 +60,16 @@ message BasicResponse {
 }
 
 service NotificationService {
+  // Sends a push notification to a single user.
   rpc SendNotification (SendNotificationRequest) returns (NotificationResponse);
+  // Sends push notifications to multiple users.
   rpc SendBulkNotification (SendBulkNotificationRequest) returns (BasicResponse);
+  // Returns notifications for a user with optional filters.
   rpc GetNotifications (GetNotificationsRequest) returns (GetNotificationsResponse);
+  // Marks a specific notification as read.
   rpc MarkAsRead (MarkReadRequest) returns (BasicResponse);
+  // Marks all notifications as read for a user.
   rpc MarkAllAsRead (MarkReadRequest) returns (BasicResponse);
+  // Deletes a notification by ID.
   rpc DeleteNotification (MarkReadRequest) returns (BasicResponse);
 }

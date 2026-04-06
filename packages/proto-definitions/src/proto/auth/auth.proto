@@ -1,7 +1,6 @@
 syntax = "proto3";
 package auth;
 
-import "health/health.proto";
 
 message GoogleOAuthCallbackRequest {
   string code = 1;
@@ -89,12 +88,20 @@ message WebAuthnVerifyResponse {
 
 
 service AuthService {
+  // Issues a new access token using a valid refresh token.
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
+  // Invalidates the current session and clears auth tokens.
   rpc Logout (LogoutRequest) returns (LogoutResponse);
+  // Returns the authenticated user's profile.
   rpc GetProfile (GetProfileRequest) returns (GetProfileResponse);
+  // Generates WebAuthn registration options for a new credential.
   rpc WebAuthnRegistrationOptions (WebAuthnRegistrationOptionsRequest) returns (WebAuthnOptionsResponse);
+  // Verifies and stores a completed WebAuthn registration.
   rpc WebAuthnRegistrationVerify (WebAuthnRegistrationVerifyRequest) returns (WebAuthnVerifyResponse);
+  // Generates WebAuthn authentication options for login.
   rpc WebAuthnAuthenticationOptions (WebAuthnAuthenticationOptionsRequest) returns (WebAuthnOptionsResponse);
+  // Verifies a WebAuthn authentication assertion and issues tokens.
   rpc WebAuthnAuthenticationVerify (WebAuthnAuthenticationVerifyRequest) returns (WebAuthnVerifyResponse);
+  // Handles the Google OAuth2 callback and issues tokens.
   rpc GoogleOAuthCallback (GoogleOAuthCallbackRequest) returns (AuthTokenResponse);
 }

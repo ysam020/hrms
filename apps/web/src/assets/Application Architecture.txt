@@ -2,24 +2,49 @@ title Application Architecture
 
 // DATABASE
 DATABASE[icon: mongodb]{
-  Database[icon: mongodb]
+  MongoDB[icon: mongodb]
+  Prisma ORM[icon: prisma]
+}
+
+// CACHE & QUEUE
+CACHE AND QUEUE[icon: redis]{
+  Redis[icon: redis]
+  BullMQ[icon: redis]
+}
+
+// FILE STORAGE
+FILE STORAGE[icon: aws-s3]{
+  AWS S3[icon: aws-s3]
+}
+
+// PUSH NOTIFICATIONS
+PUSH NOTIFICATIONS[icon: firebase]{
+  Firebase Cloud Messaging[icon: firebase]
 }
 
 // DEVELOPMENT
 DEVELOPMENT[icon: code]{
-  ReactJS [icon: react]
-  NodeJS [icon: nodejs]
-  EpressJS[icon: express]
+  React 18[icon: react]
+  Vite[icon: vite]
+  TypeScript[icon: typescript]
+  NodeJS[icon: nodejs]
+  ExpressJS[icon: express]
+  gRPC[icon: grpc]
+  Socket.IO[icon: socket-io]
+  Turborepo[icon: turborepo]
+  pnpm[icon: pnpm]
 }
 
 // VCS
-VCS[icon:git ]{
-  GitHub [icon: github]
+VCS[icon: git]{
+  GitHub[icon: github]
 }
 
-// CLIENT CICD
-CLIENT CICD AND DEPLOYMENT[icon: aws-amplify]{
-    AWS Amplify[icon: aws-amplify]
+// CI/CD AND DEPLOYMENT
+CICD[icon: docker]{
+  Docker[icon: docker]
+  Docker Compose[icon: docker]
+  nginx[icon: nginx]
 }
 
 // CLIENT APP
@@ -27,47 +52,67 @@ CLIENT APP[icon: client]{
   CLIENT[icon: client]
 }
 
-// DESKTOP APP
-DESKTOP APP[icon: app]{
-  Electron[icon: electron]
-}
-
-// SERVER CICD
-SERVER CICD[icon: aws-codepipeline]{
-AWS CodePipeline[icon: aws-codepipeline]
-AWS CodeDeploy[icon: aws-codedeploy]
-}
-
-// SERVER ENV VARIABLES
-ENV VARIABLES[icon: aws-privatelink]{
-AWS Parameter Store[icon: aws-privatelink]
+// ENV VARIABLES
+ENV VARIABLES[icon: aws-secrets-manager]{
+  AWS Secrets Manager[icon: aws-secrets-manager]
 }
 
 // SERVER DEPLOYMENT
 SERVER DEPLOYMENT[icon: aws-ec2]{
-   AWS EC2[icon: aws-ec2]
-   Load Balancers[icon: aws-application-load-balancer]
-   AUTO SCALING[icon: aws-auto-scaling]
+  AWS EC2[icon: aws-ec2]
+  Load Balancers[icon: aws-application-load-balancer]
+  AUTO SCALING[icon: aws-auto-scaling]
 }
 
-// SERVER
-SERVER[icon: server]{
-  Nodejs Server[icon: server]
+// API GATEWAY
+API GATEWAY[icon: server]{
+  Express Gateway[icon: express]
+  JWT Middleware[icon: lock]
+  Rate Limiter[icon: timer]
+  CSRF Protection[icon: shield]
+  Audit Logger[icon: logs]
+}
+
+// MICROSERVICES
+MICROSERVICES[icon: microservices]{
+  auth-service[icon: lock]
+  user-service[icon: user]
+  employee-service[icon: user]
+  attendance-service[icon: calendar]
+  leave-service[icon: calendar]
+  recruitment-service[icon: users]
+  hrm-service[icon: briefcase]
+  salary-service[icon: dollar-sign]
+  analytics-service[icon: bar-chart]
+  notification-service[icon: bell]
+  scheduler-service[icon: timer]
 }
 
 // SECURITY
-SECURITY[icon: aws-security-group]{
-Session Management[icon: timer]
-JWT[icon:]
-2FA (Authenticator Apps)[icon: google]
-2FA (WebAuthn)[icon: fingerprint]
+SECURITY[icon: shield]{
+  Google OAuth 2.0[icon: google]
+  WebAuthn (Passkey)[icon: fingerprint]
+  JWT Access Token[icon: lock]
+  Refresh Token (httpOnly Cookie)[icon: cookie]
 }
 
 // CONNECTIONS
-DEVELOPMENT -> VCS -> CLIENT CICD AND DEPLOYMENT -> CLIENT APP <> SECURITY
+DEVELOPMENT -> VCS -> CICD -> CLIENT APP
+CICD -> SERVER DEPLOYMENT
 
-VCS -> SERVER CICD -> ENV VARIABLES -> SERVER DEPLOYMENT -> SERVER <> SECURITY 
+CLIENT APP <> API GATEWAY
+CLIENT APP -> PUSH NOTIFICATIONS
 
-VCS -> DESKTOP APP
+API GATEWAY <> SECURITY
+API GATEWAY -> MICROSERVICES
+API GATEWAY -> CACHE AND QUEUE
 
-DATABASE -> SERVER
+MICROSERVICES -> DATABASE
+MICROSERVICES -> CACHE AND QUEUE
+MICROSERVICES -> FILE STORAGE
+MICROSERVICES -> PUSH NOTIFICATIONS
+
+SERVER DEPLOYMENT -> API GATEWAY
+SERVER DEPLOYMENT -> MICROSERVICES
+ENV VARIABLES -> API GATEWAY
+ENV VARIABLES -> MICROSERVICES

@@ -32,10 +32,16 @@ message DashboardStatsResponse {
 }
 
 service AnalyticsService {
+  // Returns aggregated dashboard statistics for a date range.
   rpc GetDashboardStats (DateRangeRequest) returns (DashboardStatsResponse);
+  // Returns attendance metrics and trends for a date range.
   rpc GetAttendanceAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  // Returns leave usage metrics and trends for a date range.
   rpc GetLeaveAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  // Returns recruitment funnel metrics for a date range.
   rpc GetRecruitmentAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  // Returns payroll and salary metrics for a date range.
   rpc GetSalaryAnalytics (DateRangeRequest) returns (AnalyticsResponse);
+  // Returns headcount growth data for a date range.
   rpc GetEmployeeGrowth (DateRangeRequest) returns (AnalyticsResponse);
 }

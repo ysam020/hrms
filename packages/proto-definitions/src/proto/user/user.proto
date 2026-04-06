@@ -1,7 +1,7 @@
 syntax = "proto3";
 package user;
 
-import "health/health.proto";
+import "google/protobuf/empty.proto";
 
 message User {
   string id = 1;
@@ -118,11 +118,18 @@ message DeleteUserResponse {
 }
 
 service UserService {
+  // Returns a user record by ID.
   rpc GetUser (GetUserRequest) returns (GetUserResponse);
+  // Updates profile fields for a user.
   rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
+  // Returns a paginated list of users with optional filters.
   rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
+  // Deletes a user record by ID.
   rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+  // Registers an FCM device token for push notifications.
   rpc RegisterFcmToken (RegisterFcmTokenRequest) returns (FcmTokenResponse);
+  // Removes an FCM device token for a user.
   rpc RemoveFcmToken (RemoveFcmTokenRequest) returns (FcmTokenResponse);
-  rpc CleanupExpiredFcmTokens (health.HealthCheckRequest) returns (FcmTokenResponse);
+  // Removes expired FCM tokens for all users.
+  rpc CleanupExpiredFcmTokens (google.protobuf.Empty) returns (FcmTokenResponse);
 }

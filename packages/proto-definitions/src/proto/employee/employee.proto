@@ -1,7 +1,6 @@
 syntax = "proto3";
 package employee;
 
-import "health/health.proto";
 
 message Employee {
   string id = 1;
@@ -92,13 +91,22 @@ message KycResponse {
 }
 
 service EmployeeService {
+  // Retrieves a single employee by ID.
   rpc GetEmployee (GetEmployeeRequest) returns (GetEmployeeResponse);
+  // Creates a new employee record.
   rpc CreateEmployee (CreateEmployeeRequest) returns (GetEmployeeResponse);
+  // Updates an existing employee record.
   rpc UpdateEmployee (UpdateEmployeeRequest) returns (GetEmployeeResponse);
+  // Deletes an employee record by ID.
   rpc DeleteEmployee (DeleteEmployeeRequest) returns (BasicResponse);
+  // Returns a paginated list of employees with optional filters.
   rpc ListEmployees (ListEmployeesRequest) returns (ListEmployeesResponse);
+  // Submits KYC documents for an employee.
   rpc SubmitKyc (KycRequest) returns (KycResponse);
+  // Returns the KYC verification status for an employee.
   rpc GetKycStatus (GetEmployeeRequest) returns (KycResponse);
+  // Approves the KYC submission for an employee.
   rpc ApproveKyc (GetEmployeeRequest) returns (KycResponse);
+  // Rejects the KYC submission for an employee.
   rpc RejectKyc (GetEmployeeRequest) returns (KycResponse);
 }

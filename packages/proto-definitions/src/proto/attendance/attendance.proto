@@ -68,9 +68,14 @@ message CorrectAttendanceRequest {
 }
 
 service AttendanceService {
+  // Records a clock-in or clock-out event for an employee.
   rpc MarkAttendance (MarkAttendanceRequest) returns (AttendanceResponse);
+  // Returns attendance records for an employee within a date range.
   rpc GetAttendance (GetAttendanceRequest) returns (GetAttendanceResponse);
+  // Returns aggregated attendance summary for an employee.
   rpc GetAttendanceSummary (AttendanceSummaryRequest) returns (AttendanceSummaryResponse);
+  // Returns today's attendance record for an employee.
   rpc GetTodayAttendance (MarkAttendanceRequest) returns (AttendanceResponse);
+  // Corrects a previously recorded attendance entry.
   rpc CorrectAttendance (CorrectAttendanceRequest) returns (AttendanceResponse);
 }

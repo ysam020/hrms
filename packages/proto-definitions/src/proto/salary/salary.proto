@@ -62,9 +62,14 @@ message BasicResponse {
 }
 
 service SalaryService {
+  // Returns the salary structure for an employee.
   rpc GetSalaryStructure (GetSalaryRequest) returns (SalaryResponse);
+  // Creates a new salary structure for an employee.
   rpc CreateSalaryStructure (CreateSalaryRequest) returns (SalaryResponse);
+  // Updates an existing salary structure for an employee.
   rpc UpdateSalaryStructure (CreateSalaryRequest) returns (SalaryResponse);
+  // Runs payroll processing for a given period.
   rpc ProcessPayroll (ProcessPayrollRequest) returns (ProcessPayrollResponse);
+  // Returns a generated payslip for an employee.
   rpc GetPayslip (GetSalaryRequest) returns (SalaryResponse);
 }
