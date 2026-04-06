@@ -22,7 +22,7 @@ function NotificationConsentDrawer({
   setAlert: (alert: {
     open: boolean;
     message: string;
-    severity: string;
+    severity: "error" | "info" | "success" | "warning";
   }) => void;
   onEnableNotifications?: () => Promise<void>;
 }) {
