@@ -48,7 +48,7 @@ function analyzeTrace(trace: any) {
     });
 
   // Long tasks: consecutive sample pairs with a gap > threshold
-  const longTasks = [];
+  const longTasks: { gapMs: number; atMs: number }[] = [];
   for (let i = 1; i < n; i++) {
     const gap = samples[i].timestamp - samples[i - 1].timestamp;
     if (gap > LONG_TASK_MS) {
@@ -534,7 +534,7 @@ export default function ProfilerOverlay({
 
           {/* insights */}
           {(() => {
-            const notes = [];
+            const notes: string[] = [];
             if (analysis.idlePct > 70)
               notes.push(
                 "Mostly idle — try profiling during a specific user interaction.",
