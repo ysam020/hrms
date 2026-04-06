@@ -1,6 +1,6 @@
 @use "./constants.scss";
 
-// ── Chat root layout ──────────────────────────────────────────────────────────
+// Chat root layout
 .chat-root {
   display: flex;
   // 64px app bar + 72px global dock clearance
@@ -60,7 +60,7 @@
   }
 }
 
-// ── Left panel ────────────────────────────────────────────────────────────────
+// Left panel
 .chat-left-panel {
   width: 360px;
   min-width: 280px;
@@ -133,7 +133,7 @@
   overflow-y: auto;
 }
 
-// ── Conversation item ─────────────────────────────────────────────────────────
+// Conversation item
 .chat-conv-item {
   display: flex;
   align-items: center;
@@ -200,7 +200,7 @@
   }
 }
 
-// ── Right panel ───────────────────────────────────────────────────────────────
+// Right panel
 .chat-right-panel {
   flex: 1;
   display: flex;
@@ -243,7 +243,7 @@
   }
 }
 
-// ── Messages area ─────────────────────────────────────────────────────────────
+// Messages area
 .chat-messages-area {
   flex: 1;
   overflow-y: auto;
@@ -419,7 +419,7 @@
   font-size: 11px !important;
 }
 
-// ── WhatsApp-style file card ──────────────────────────────────────────────────
+// WhatsApp-style file card
 .chat-file-card {
   display: flex;
   align-items: center;
@@ -476,7 +476,7 @@
   display: block;
 }
 
-// ── Link preview card ─────────────────────────────────────────────────────────
+// Link preview card
 .chat-link-preview {
   display: flex;
   flex-direction: column;
@@ -559,7 +559,7 @@
   opacity: 0.7;
 }
 
-// ── Typing indicator ──────────────────────────────────────────────────────────
+// Typing indicator
 .chat-typing-indicator {
   display: flex;
   align-items: center;
@@ -598,7 +598,7 @@
   }
 }
 
-// ── Reply bar (input area) ────────────────────────────────────────────────────
+// Reply bar (input area)
 .chat-reply-bar {
   display: flex;
   align-items: center;
@@ -617,7 +617,7 @@
   flex-direction: column;
 }
 
-// ── Input area ────────────────────────────────────────────────────────────────
+// Input area
 .chat-input-area {
   display: flex;
   align-items: flex-end;
@@ -691,7 +691,7 @@
   overflow: hidden;
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
+// Empty state
 .chat-empty-state {
   flex: 1;
   display: flex;
@@ -703,7 +703,7 @@
   padding: 32px;
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
+// Utility
 .chat-centered {
   display: flex;
   flex-direction: column;

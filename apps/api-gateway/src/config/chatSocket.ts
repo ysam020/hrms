@@ -102,10 +102,6 @@ export function setupChatSocket(
             },
           });
 
-          // Normalize shape to match what the Mongoose-based server sent:
-          // - _id (client uses this as the key)
-          // - chatRoom (client reads msg.chatRoom to determine which room to update)
-          // - replyTo (client renders reply preview from this)
           const msgObj = {
             ...message,
             _id: message.id,
@@ -113,8 +109,6 @@ export function setupChatSocket(
             replyTo: message.replyToId ?? null,
           };
 
-          // Deliver to all participants (handles cross-worker routing via Redis pub/sub)
-          // participants is already fetched above for the membership check
           await Promise.all(
             participants.map((p) =>
               redisAdapter.sendToUser(p, "chat:message", msgObj),
@@ -128,9 +122,9 @@ export function setupChatSocket(
               type === "image"
                 ? "📷 Sent an image"
                 : type === "video"
-                  ? "🎥 Sent a video"
+                  ? "Sent a video"
                   : type === "file"
-                    ? `📎 ${fileName || "Sent a file"}`
+                    ? `${fileName || "Sent a file"}`
                     : (content ?? "");
             sendPushNotifications(others, username, pushBody, {
               latestOnly: true,
