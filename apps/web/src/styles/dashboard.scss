@@ -3,8 +3,7 @@
 .dashboard {
   padding-bottom: 0;
 
-  // ── Widget container (MarkAttendance, Attendance) ────────────────────────
-  // max-height removed so widgets fill their grid cell
+  // Widget container
   .dashboard-container {
     height: 100%;
     overflow: auto;
@@ -73,7 +72,7 @@
   }
 }
 
-// ── Notifications list ───────────────────────────────────────────────────
+// Notifications list
 .notifications {
   margin: 10px 0;
   border-radius: 10px;
@@ -96,7 +95,7 @@
   }
 }
 
-// ── HR Activities table ──────────────────────────────────────────────────
+// HR Activities table
 .hr-activities,
 .hr-activities thead,
 th {
@@ -108,7 +107,7 @@ th {
   border-radius: 10px !important;
 }
 
-// ── Bottom Dock ──────────────────────────────────────────────────────────
+// Bottom Dock
 .dashboard-dock {
   position: absolute;
   bottom: 0;
@@ -203,7 +202,7 @@ th {
   }
 }
 
-// ── Global Dock (fixed, all pages) ───────────────────────────────────────
+// Global Dock (fixed, all pages)
 .global-dock {
   position: fixed;
   bottom: 0;
@@ -330,7 +329,7 @@ th {
   }
 }
 
-// ── react-grid-layout ────────────────────────────────────────────────────
+// react-grid-layout
 .dashboard-grid {
   // Placeholder shown while dragging a widget
   .react-grid-placeholder {
