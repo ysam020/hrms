@@ -94,7 +94,9 @@ if (!workbox) {
   workbox.routing.registerRoute(
     ({ url, request }) =>
       url.origin === self.location.origin &&
-      (request.destination === "document" || url.pathname.endsWith(".html")),
+      (request.destination === "document" || url.pathname.endsWith(".html")) &&
+      !url.searchParams.has("oauth_success") &&
+      !url.searchParams.has("error"),
     new workbox.strategies.NetworkFirst({
       cacheName: "html-cache-v1",
       plugins: [
