@@ -46,6 +46,10 @@ export const getFirebaseMessaging = async () => {
     });
   }
 
+  if (!("serviceWorker" in navigator) || import.meta.env.DEV) {
+    return { getToken, messaging: messagingInstance, token: null };
+  }
+
   const serviceWorkerRegistration = await navigator.serviceWorker.register(
     "/firebase-messaging-sw.js",
     { scope: "/" },
