@@ -22,6 +22,10 @@ module.exports = {
     "<rootDir>/apps/*/src/__tests__/**/*.test.ts",
     "<rootDir>/packages/*/src/__tests__/**/*.test.ts",
   ],
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    "<rootDir>/apps/web/",
+  ],
   moduleNameMapper: {
     "^@hrms/db$": "<rootDir>/packages/database/dist/index.js",
     "^@hrms/cache$": "<rootDir>/packages/cache/dist/index.js",

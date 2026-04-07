@@ -14,7 +14,10 @@
     "preview": "vite preview",
     "serve": "node serve.js",
     "build:wasm": "node scripts/build-wasm.js",
-    "analyze": "vite build --mode analyze"
+    "analyze": "vite build --mode analyze",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
