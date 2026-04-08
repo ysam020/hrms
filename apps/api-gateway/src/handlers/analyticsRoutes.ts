@@ -2,17 +2,27 @@ import { Request, Response } from "express";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 
 export async function getEmploymentTypeBreakdown(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:employment-type";
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const where: any = { employeeStatus: "Active" };
     const [total, wfh] = await Promise.all([
       prisma.user.count({ where }),
       prisma.user.count({ where: { ...where, wfh: true } }),
     ]);
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { wfhCount: wfh, officeCount: total - wfh, totalEmployees: total },
-    });
+    const data = {
+      wfhCount: wfh,
+      officeCount: total - wfh,
+      totalEmployees: total,
+    };
+    await cacheManager.set(cacheKey, data, "analytics");
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employment-type-breakdown error:", { err });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -26,6 +36,11 @@ export async function getEmployeeStatusDistribution(
   res: Response,
 ) {
   try {
+    const cacheKey = "analytics:employee-status";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const groups = await prisma.user.groupBy({
       by: ["employeeStatus"],
       _count: { id: true },
@@ -36,6 +51,7 @@ export async function getEmployeeStatusDistribution(
         count: g._count.id,
       }))
       .sort((a: any, b: any) => b.count - a.count);
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-status-distribution error:", { err });
@@ -45,6 +61,11 @@ export async function getEmployeeStatusDistribution(
 
 export async function getEmployeeDepartments(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:employee-departments";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const groups = await prisma.user.groupBy({
       by: ["department"],
       where: { employeeStatus: "Active", NOT: { department: null } },
@@ -54,6 +75,7 @@ export async function getEmployeeDepartments(_req: Request, res: Response) {
     const data = groups
       .filter((g: any) => g.department)
       .map((g: any) => ({ _id: g.department!, count: g._count.id }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-departments error:", { err });
@@ -63,6 +85,11 @@ export async function getEmployeeDepartments(_req: Request, res: Response) {
 
 export async function getEmployeeDesignations(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:employee-designations";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const groups = await prisma.user.groupBy({
       by: ["designation"],
       where: { employeeStatus: "Active", NOT: { designation: null } },
@@ -72,6 +99,7 @@ export async function getEmployeeDesignations(_req: Request, res: Response) {
     const data = groups
       .filter((g: any) => g.designation)
       .map((g: any) => ({ _id: g.designation!, count: g._count.id }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-designations error:", { err });
@@ -81,6 +109,11 @@ export async function getEmployeeDesignations(_req: Request, res: Response) {
 
 export async function getAgeDistribution(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:age-distribution";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const users = await prisma.user.findMany({
       where: { NOT: { dob: null } },
       select: { dob: true },
@@ -106,6 +139,7 @@ export async function getAgeDistribution(_req: Request, res: Response) {
       _id,
       count,
     }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-age-distribution error:", { err });
@@ -115,6 +149,11 @@ export async function getAgeDistribution(_req: Request, res: Response) {
 
 export async function getJoiningData(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:joining-data";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const users = await prisma.user.findMany({
       where: { NOT: { joining_date: null } },
       select: { joining_date: true },
@@ -130,6 +169,7 @@ export async function getJoiningData(_req: Request, res: Response) {
     const data = Object.entries(counts)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, count]) => ({ formattedDate: key, count }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-joining-data error:", { err });
@@ -139,6 +179,11 @@ export async function getJoiningData(_req: Request, res: Response) {
 
 export async function getTenureDistribution(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:tenure-distribution";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const users = await prisma.user.findMany({
       where: { employeeStatus: "Active", NOT: { joining_date: null } },
       select: { joining_date: true },
@@ -166,6 +211,7 @@ export async function getTenureDistribution(_req: Request, res: Response) {
       _id,
       count,
     }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-tenure-distribution error:", { err });
@@ -175,6 +221,11 @@ export async function getTenureDistribution(_req: Request, res: Response) {
 
 export async function getHeadcountGrowth(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:headcount-growth";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const months = 12;
     const users = await prisma.user.findMany({
       where: { NOT: { joining_date: null } },
@@ -221,6 +272,7 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
           cumulativeHeadcount: cumulative,
         };
       });
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-headcount-growth error:", { err });
@@ -230,6 +282,11 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
 
 export async function getLeaveApprovalRate(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:leave-approval-rate";
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const [approved, pending, rejected, total] = await Promise.all([
       prisma.leaveApplication.count({ where: { status: "Approved" } }),
       prisma.leaveApplication.count({ where: { status: "Pending" } }),
@@ -237,9 +294,9 @@ export async function getLeaveApprovalRate(_req: Request, res: Response) {
       prisma.leaveApplication.count(),
     ]);
     const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { approvalRate, approved, pending, rejected, total },
-    });
+    const data = { approvalRate, approved, pending, rejected, total };
+    await cacheManager.set(cacheKey, data, "analytics");
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-leave-approval-rate error:", { err });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -250,6 +307,11 @@ export async function getLeaveApprovalRate(_req: Request, res: Response) {
 
 export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:leave-type-breakdown";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const groups = await prisma.leaveApplication.groupBy({
       by: ["leaveType"],
       _count: { id: true },
@@ -260,6 +322,7 @@ export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
       count: g._count.id,
       totalDays: Math.round(g._sum.days ?? 0),
     }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-leave-type-breakdown error:", { err });
@@ -269,6 +332,11 @@ export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
 
 export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:monthly-leave-patterns";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const leaves = await prisma.leaveApplication.findMany({
       where: { status: "Approved" },
       select: { from: true, leaveType: true, days: true },
@@ -282,6 +350,7 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
     const data = Object.entries(patterns)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, count]) => ({ month, count }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-monthly-leave-patterns error:", { err });
@@ -291,6 +360,11 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
 
 export async function getAttendanceTrends(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:attendance-trends";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const records = await prisma.attendanceRecord.findMany({
       select: { date: true, status: true, workingHours: true },
     });
@@ -322,6 +396,7 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
             v.total > 0 ? Math.round((v.hours / v.total) * 100) / 100 : 0,
         };
       });
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-attendance-trends error:", { err });
@@ -334,6 +409,11 @@ export async function getWorkingHoursDistribution(
   res: Response,
 ) {
   try {
+    const cacheKey = "analytics:working-hours-distribution";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const records = await prisma.attendanceRecord.findMany({
       where: { NOT: { workingHours: null } },
       select: { workingHours: true },
@@ -357,6 +437,7 @@ export async function getWorkingHoursDistribution(
       _id,
       count,
     }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-working-hours-distribution error:", { err });
@@ -366,6 +447,11 @@ export async function getWorkingHoursDistribution(
 
 export async function getJobOpeningsByStatus(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:job-openings-by-status";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const groups = await prisma.jobOpening.groupBy({
       by: ["status"],
       _count: { id: true },
@@ -374,6 +460,7 @@ export async function getJobOpeningsByStatus(_req: Request, res: Response) {
       _id: g.status || "Unknown",
       count: g._count.id,
     }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-job-openings-by-status error:", { err });
@@ -383,6 +470,11 @@ export async function getJobOpeningsByStatus(_req: Request, res: Response) {
 
 export async function getApplicationsByJobRole(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:applications-by-job-role";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const jobs = await prisma.jobOpening.findMany({
       select: { jobTitle: true, status: true },
     });
@@ -412,9 +504,9 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
       else if (s === "interviewed") byRole[title].interviewed++;
       else if (s === "hired" || s === "closed") byRole[title].hired++;
     }
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: Object.values(byRole),
-    });
+    const data = Object.values(byRole);
+    await cacheManager.set(cacheKey, data, "analytics");
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-applications-by-job-role error:", { err });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
@@ -423,6 +515,11 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
 
 export async function getHiringFunnel(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:hiring-funnel";
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const [applied, shortlisted, interviewed, offered, hired] =
       await Promise.all([
         prisma.jobOpening.count(),
@@ -441,19 +538,19 @@ export async function getHiringFunnel(_req: Request, res: Response) {
       ]);
     const pct = (n: number, d: number) =>
       d > 0 ? Math.round((n / d) * 100) : 0;
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: {
-        applied,
-        shortlisted,
-        interviewed,
-        offered,
-        hired,
-        shortlistRate: pct(shortlisted, applied),
-        interviewRate: pct(interviewed, shortlisted),
-        offerRate: pct(offered, interviewed),
-        hireRate: pct(hired, offered),
-      },
-    });
+    const data = {
+      applied,
+      shortlisted,
+      interviewed,
+      offered,
+      hired,
+      shortlistRate: pct(shortlisted, applied),
+      interviewRate: pct(interviewed, shortlisted),
+      offerRate: pct(offered, interviewed),
+      hireRate: pct(hired, offered),
+    };
+    await cacheManager.set(cacheKey, data, "analytics");
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-hiring-funnel error:", { err });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -477,6 +574,11 @@ export async function getHiringManagerPerformance(
   res: Response,
 ) {
   try {
+    const cacheKey = "analytics:hiring-manager-performance";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const jobs = await prisma.jobOpening.findMany({
       select: { hiringManager: true, status: true },
     });
@@ -508,6 +610,7 @@ export async function getHiringManagerPerformance(
           ? Math.round((stats.closedJobs / stats.totalJobs) * 100)
           : 0,
     }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-hiring-manager-performance error:", { err });
@@ -520,6 +623,11 @@ export async function getSalaryDistributionByDepartment(
   res: Response,
 ) {
   try {
+    const cacheKey = "analytics:salary-distribution-by-dept";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const groups = await prisma.user.groupBy({
       by: ["department"],
       where: { NOT: [{ department: null }, { salary: null }] },
@@ -537,6 +645,7 @@ export async function getSalaryDistributionByDepartment(
         avgSalary: Math.round(g._avg.salary ?? 0),
         employeeCount: g._count.id,
       }));
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-salary-distribution-by-department error:", { err });
@@ -546,6 +655,11 @@ export async function getSalaryDistributionByDepartment(
 
 export async function getCompensationBreakdown(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:compensation-breakdown";
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const agg = await prisma.user.aggregate({
       where: { NOT: { salary: null } },
       _avg: {
@@ -558,17 +672,17 @@ export async function getCompensationBreakdown(_req: Request, res: Response) {
       },
       _count: { id: true },
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: {
-        employeeCount: agg._count.id,
-        avgBasicPay: Math.round(agg._avg.salaryBasicPay ?? 0),
-        avgHRA: Math.round(agg._avg.salaryHra ?? 0),
-        avgConveyance: Math.round(agg._avg.salaryConveyance ?? 0),
-        avgPF: Math.round(agg._avg.salaryPf ?? 0),
-        avgESI: Math.round(agg._avg.salaryEsi ?? 0),
-        avgPT: Math.round(agg._avg.salaryPt ?? 0),
-      },
-    });
+    const data = {
+      employeeCount: agg._count.id,
+      avgBasicPay: Math.round(agg._avg.salaryBasicPay ?? 0),
+      avgHRA: Math.round(agg._avg.salaryHra ?? 0),
+      avgConveyance: Math.round(agg._avg.salaryConveyance ?? 0),
+      avgPF: Math.round(agg._avg.salaryPf ?? 0),
+      avgESI: Math.round(agg._avg.salaryEsi ?? 0),
+      avgPT: Math.round(agg._avg.salaryPt ?? 0),
+    };
+    await cacheManager.set(cacheKey, data, "analytics");
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-compensation-breakdown error:", { err });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -590,6 +704,11 @@ export async function getAverageSalaryByDesignation(
   res: Response,
 ) {
   try {
+    const cacheKey = "analytics:avg-salary-by-designation";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const groups = await prisma.user.groupBy({
       by: ["designation"],
       where: { NOT: [{ designation: null }, { salary: null }] },
@@ -608,6 +727,7 @@ export async function getAverageSalaryByDesignation(
         employeeCount: g._count.id,
       }))
       .sort((a: any, b: any) => b.avgSalary - a.avgSalary);
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-average-salary-by-designation error:", { err });
@@ -617,6 +737,11 @@ export async function getAverageSalaryByDesignation(
 
 export async function getSalaryBands(_req: Request, res: Response) {
   try {
+    const cacheKey = "analytics:salary-bands";
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached)
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+
     const users = await prisma.user.findMany({
       where: { NOT: { salary: null } },
       select: { salary: true },
@@ -641,6 +766,7 @@ export async function getSalaryBands(_req: Request, res: Response) {
           : 0;
       return { range: band.range, count: inBand.length, avgSalary };
     });
+    await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-salary-bands error:", { err });

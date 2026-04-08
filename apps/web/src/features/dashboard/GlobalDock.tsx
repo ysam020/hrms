@@ -29,21 +29,56 @@ const DOCK_COLORS = {
   },
 };
 
-const DockIcon = ({ iconClass, color }) => (
+const DockIcon = ({
+  iconClass,
+  color,
+  label,
+  isDark,
+}: {
+  iconClass: string;
+  color: string;
+  label: string;
+  isDark: boolean;
+}) => (
   <Box
     sx={{
-      width: 40,
-      height: 40,
-      borderRadius: "11px",
-      bgcolor: color,
       display: "flex",
+      flexDirection: "column",
       alignItems: "center",
-      justifyContent: "center",
-      boxShadow: `0 2px 8px ${color}55`,
-      cursor: "pointer",
+      gap: "2px",
     }}
   >
-    <i className={`pi ${iconClass}`} style={{ fontSize: 18, color: "#fff" }} />
+    <Box
+      sx={{
+        width: 34,
+        height: 34,
+        borderRadius: "9px",
+        bgcolor: color,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: `0 2px 8px ${color}55`,
+        cursor: "pointer",
+      }}
+    >
+      <i
+        className={`pi ${iconClass}`}
+        style={{ fontSize: 15, color: "#fff" }}
+      />
+    </Box>
+    <Box
+      component="span"
+      sx={{
+        fontSize: "0.55rem",
+        fontWeight: 600,
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+        letterSpacing: "0.01em",
+        color: isDark ? "rgba(210,210,210,0.9)" : "rgba(30,30,30,0.72)",
+      }}
+    >
+      {label}
+    </Box>
   </Box>
 );
 
@@ -51,44 +86,100 @@ const DOCK_ITEMS = (navigate, isDark) => {
   const c = DOCK_COLORS[isDark ? "dark" : "light"];
   return [
     {
-      label: "Employees",
-      icon: () => <DockIcon iconClass="pi-users" color={c.blue} />,
-      command: () => navigate("/employee-management"),
-    },
-    {
       label: "Attendance",
-      icon: () => <DockIcon iconClass="pi-calendar" color={c.green} />,
+      icon: () => (
+        <DockIcon
+          iconClass="pi-calendar"
+          color={c.green}
+          label="Attendance"
+          isDark={isDark}
+        />
+      ),
       command: () => navigate("/attendance"),
     },
     {
-      label: "Salary",
-      icon: () => <DockIcon iconClass="pi-money-bill" color={c.teal} />,
-      command: () => navigate("/salary-management"),
-    },
-    {
-      label: "Job Openings",
-      icon: () => <DockIcon iconClass="pi-briefcase" color={c.purple} />,
-      command: () => navigate("/job-openings"),
+      label: "Employees",
+      icon: () => (
+        <DockIcon
+          iconClass="pi-users"
+          color={c.blue}
+          label="Employees"
+          isDark={isDark}
+        />
+      ),
+      command: () => navigate("/employee-management"),
     },
     {
       label: "Holidays",
-      icon: () => <DockIcon iconClass="pi-sun" color={c.gold} />,
+      icon: () => (
+        <DockIcon
+          iconClass="pi-sun"
+          color={c.gold}
+          label="Holidays"
+          isDark={isDark}
+        />
+      ),
       command: () => navigate("/holidays"),
     },
     {
       label: "HR Activities",
-      icon: () => <DockIcon iconClass="pi-list" color={c.slate} />,
+      icon: () => (
+        <DockIcon
+          iconClass="pi-list"
+          color={c.slate}
+          label="HR Activities"
+          isDark={isDark}
+        />
+      ),
       command: () => navigate("/hr-activities"),
     },
     {
+      label: "Job Openings",
+      icon: () => (
+        <DockIcon
+          iconClass="pi-briefcase"
+          color={c.purple}
+          label="Job Openings"
+          isDark={isDark}
+        />
+      ),
+      command: () => navigate("/job-openings"),
+    },
+    {
       label: "KYC Details",
-      icon: () => <DockIcon iconClass="pi-id-card" color={c.sienna} />,
+      icon: () => (
+        <DockIcon
+          iconClass="pi-id-card"
+          color={c.sienna}
+          label="KYC Details"
+          isDark={isDark}
+        />
+      ),
       command: () => navigate("/kyc"),
     },
     {
       label: "Resignation",
-      icon: () => <DockIcon iconClass="pi-sign-out" color={c.rose} />,
+      icon: () => (
+        <DockIcon
+          iconClass="pi-sign-out"
+          color={c.rose}
+          label="Resignation"
+          isDark={isDark}
+        />
+      ),
       command: () => navigate("/resignation-process"),
+    },
+    {
+      label: "Salary",
+      icon: () => (
+        <DockIcon
+          iconClass="pi-money-bill"
+          color={c.teal}
+          label="Salary"
+          isDark={isDark}
+        />
+      ),
+      command: () => navigate("/salary-management"),
     },
   ];
 };

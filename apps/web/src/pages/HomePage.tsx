@@ -88,9 +88,12 @@ function HomePage(props) {
     [theme],
   );
 
+  const fcmRefreshed = React.useRef(false);
   useEffect(() => {
-    // Only call refreshFcmToken when user data is fully loaded
-    if (user && user.fcmTokens !== undefined) {
+    // Only run once per session — user object reference changes on every profile
+    // update, which would otherwise re-trigger the consent drawer each time.
+    if (user && user.fcmTokens !== undefined && !fcmRefreshed.current) {
+      fcmRefreshed.current = true;
       refreshFcmToken(setShowConsentDrawer, setAlert, user.fcmTokens);
     }
   }, [user]);

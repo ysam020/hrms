@@ -16,6 +16,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import Alert from "@mui/material/Alert";
 import Loading from "@web/shared/components/Loading";
 import useLogout from "@web/shared/hooks/useLogout";
+import { useSwUpdate } from "@web/shared/hooks/useSwUpdate";
 import { setUnauthorizedHandler } from "@web/core/http/axiosConfig";
 import useNavigateWithKeyboard from "@web/shared/hooks/useNavigateWithKeyboard";
 import useFullScreen from "@web/shared/hooks/useFullScreen";
@@ -59,6 +60,7 @@ function App() {
   });
 
   const handleLogout = useLogout(setUser);
+  const { updateAvailable, triggerUpdate } = useSwUpdate();
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -286,6 +288,36 @@ function App() {
                 >
                   {alert.message}
                 </Alert>
+
+                {updateAvailable && (
+                  <Alert
+                    severity="info"
+                    variant="filled"
+                    action={
+                      <span
+                        onClick={triggerUpdate}
+                        style={{
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          textDecoration: "underline",
+                        }}
+                      >
+                        Refresh
+                      </span>
+                    }
+                    sx={{
+                      position: "fixed",
+                      bottom: "20px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      zIndex: 9999,
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    A new version is available.
+                  </Alert>
+                )}
               </div>
 
               <DomMagnifier enabled={magnifierOn} />

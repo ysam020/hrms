@@ -3,6 +3,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 import { randomBytes } from "crypto";
 import path from "path";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
@@ -96,6 +97,15 @@ export async function getHolidays(req: Request, res: Response) {
       });
     }
 
+    const cacheKey = `holiday:${year}`;
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Holidays retrieved successfully",
+        data: cached,
+      });
+    }
+
     const records = await prisma.holiday.findMany({ where: { year } });
     const data = records.flatMap((record: any) => {
       const list = Array.isArray(record.holidays)
@@ -110,6 +120,7 @@ export async function getHolidays(req: Request, res: Response) {
       }));
     });
 
+    await cacheManager.set(cacheKey, data, "holiday");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holidays retrieved successfully",
       data,
@@ -127,6 +138,16 @@ export async function getCalendarEvents(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const userId = user!.userId;
+    const cacheKey = `calendar:events:${userId}`;
+
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Calendar events retrieved successfully",
+        data: cached,
+      });
+    }
+
     const dbUser = await prisma.user.findUnique({
       where: { id: userId },
       select: { events: true },
@@ -156,6 +177,7 @@ export async function getCalendarEvents(req: Request, res: Response) {
           new Date(a.date).getTime() - new Date(b.date).getTime(),
       );
 
+    await cacheManager.set(cacheKey, data, "user");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Calendar events retrieved successfully",
       data,
@@ -179,6 +201,15 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "month and year query params are required",
         data: [],
+      });
+    }
+
+    const cacheKey = `dashboard:birthdays:${monthNum}:${yearNum}`;
+    const cached = await cacheManager.get<any[]>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Birthdays and anniversaries retrieved successfully",
+        data: cached,
       });
     }
 
@@ -232,6 +263,7 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
     }
 
     data.sort((a, b) => a.day - b.day);
+    await cacheManager.set(cacheKey, data, "dashboard");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Birthdays and anniversaries retrieved successfully",
       data,
@@ -354,6 +386,7 @@ export async function addHoliday(req: Request, res: Response) {
       });
     }
 
+    await cacheManager.delete(`holiday:${year}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holiday added successfully",
     });
@@ -402,6 +435,7 @@ export async function deleteHoliday(req: Request, res: Response) {
       where: { id: record.id },
       data: { holidays: newList },
     });
+    await cacheManager.delete(`holiday:${year}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holiday deleted successfully",
     });
@@ -438,6 +472,7 @@ export async function addEvent(req: Request, res: Response) {
     };
     events.push(newEvent);
     await prisma.user.update({ where: { id: userId }, data: { events } });
+    await cacheManager.delete(`calendar:events:${userId}`);
     return apiResponse(res, RESPONSE_STATUS.CREATED, {
       message: "Event added successfully",
       data: newEvent,
@@ -491,6 +526,7 @@ export async function editCalendarEvent(req: Request, res: Response) {
       _id: events[idx]._id,
     };
     await prisma.user.update({ where: { id: userId }, data: { events } });
+    await cacheManager.delete(`calendar:events:${userId}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Event updated successfully",
       data: events[idx],
@@ -531,6 +567,7 @@ export async function deleteCalendarEvent(req: Request, res: Response) {
       where: { id: userId },
       data: { events: newEvents },
     });
+    await cacheManager.delete(`calendar:events:${userId}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Event deleted successfully",
     });

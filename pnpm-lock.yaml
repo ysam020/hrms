@@ -129,6 +129,9 @@ importers:
       "@grpc/grpc-js":
         specifier: ^1.12.3
         version: 1.14.3
+      "@hrms/cache":
+        specifier: workspace:*
+        version: link:../../packages/cache
       "@hrms/common":
         specifier: workspace:*
         version: link:../../packages/common
@@ -171,6 +174,9 @@ importers:
       html-pdf-node:
         specifier: ^1.0.8
         version: 1.0.8
+      http2-express-bridge:
+        specifier: ^1.0.7
+        version: 1.0.7
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
@@ -738,6 +744,9 @@ importers:
       vite:
         specifier: ^8.0.3
         version: 8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@22.19.17)(sass@1.99.0)
+      vite-plugin-pwa:
+        specifier: ^1.2.0
+        version: 1.2.0(vite@8.0.3)(workbox-build@7.4.0)(workbox-window@7.4.0)
       vite-plugin-svgr:
         specifier: ^4.2.0
         version: 4.5.0(rollup@2.80.0)(typescript@6.0.2)(vite@8.0.3)
@@ -750,8 +759,26 @@ importers:
       wabt:
         specifier: ^1.0.39
         version: 1.0.39
+      workbox-cacheable-response:
+        specifier: ^7.4.0
+        version: 7.4.0
       workbox-cli:
         specifier: ^7.3.0
+        version: 7.4.0
+      workbox-expiration:
+        specifier: ^7.4.0
+        version: 7.4.0
+      workbox-precaching:
+        specifier: ^7.4.0
+        version: 7.4.0
+      workbox-routing:
+        specifier: ^7.4.0
+        version: 7.4.0
+      workbox-strategies:
+        specifier: ^7.4.0
+        version: 7.4.0
+      workbox-window:
+        specifier: ^7.4.0
         version: 7.4.0
 
   packages/cache:
@@ -11275,6 +11302,14 @@ packages:
     engines: { node: ">=0.10" }
     dev: false
 
+  /depd@1.1.2:
+    resolution:
+      {
+        integrity: sha512-7emPTl6Dpo6JRXOXjLRxck+FlLRX5847cLKEn00PLAgc3g2hTZZgr+e4c2v6QpSmLeFP3n5yUo7ft6avBK/5jQ==,
+      }
+    engines: { node: ">= 0.6" }
+    dev: false
+
   /depd@2.0.0:
     resolution:
       {
@@ -11289,6 +11324,13 @@ packages:
         integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==,
       }
     engines: { node: ">=6" }
+
+  /destroy@1.0.4:
+    resolution:
+      {
+        integrity: sha512-3NdhDuEXnfun/z7x9GOElY49LoqVHoGScmOKwmxhsS8N5Y+Z8KyPPDnaSzqWgYt/ji4mqwfTS34Htrk0zPIXVg==,
+      }
+    dev: false
 
   /destroy@1.2.0:
     resolution:
@@ -11602,6 +11644,14 @@ packages:
       {
         integrity: sha512-AKrN98kuwOzMIdAizXGI86UFBoo26CL21UM763y1h/GMSJ4/OHU9k2YlsmBpyScFo/wbLzWQJBMCW4+IO3/+OQ==,
       }
+    dev: false
+
+  /encodeurl@1.0.2:
+    resolution:
+      {
+        integrity: sha512-TPJXq8JqFaVYm2CWmPvnP2Iyo4ZSM7/QKcSmuMLDObfpH5fi7RUGmd/rTDf+rut/saiDiQEeVTNgAmJEdAOx0w==,
+      }
+    engines: { node: ">= 0.8" }
     dev: false
 
   /encodeurl@2.0.0:
@@ -12265,7 +12315,7 @@ packages:
     engines: { node: ">= 10.17.0" }
     hasBin: true
     dependencies:
-      debug: 4.3.1
+      debug: 4.4.3
       get-stream: 5.2.0
       yauzl: 2.10.0
     optionalDependencies:
@@ -13386,6 +13436,20 @@ packages:
       readable-stream: 3.6.2
     dev: false
 
+  /http-errors@1.8.1:
+    resolution:
+      {
+        integrity: sha512-Kpk9Sm7NmI+RHhnj6OIWDI1d6fIoFAtFt9RLaTMRlg/8w49juAStsrBgp0Dp4OdxdVbRIeKhtCUvoi/RuAhO4g==,
+      }
+    engines: { node: ">= 0.6" }
+    dependencies:
+      depd: 1.1.2
+      inherits: 2.0.4
+      setprototypeof: 1.2.0
+      statuses: 1.5.0
+      toidentifier: 1.0.1
+    dev: false
+
   /http-errors@2.0.1:
     resolution:
       {
@@ -13423,6 +13487,20 @@ packages:
     dev: false
     optional: true
 
+  /http2-express-bridge@1.0.7:
+    resolution:
+      {
+        integrity: sha512-bmzZSyn3nuzXRqs/+WgH7IGOQYMCIZNJeqTJ/1AoDgMPTSP5wXQCxPGsdUbGzzxwiHrMwyT4Z7t8ccbsKqiHrw==,
+      }
+    engines: { node: ">= 10.0.0" }
+    dependencies:
+      merge-descriptors: 1.0.3
+      send: 0.17.2
+      setprototypeof: 1.2.0
+    transitivePeerDependencies:
+      - supports-color
+    dev: false
+
   /https-proxy-agent@5.0.0:
     resolution:
       {
@@ -13431,7 +13509,7 @@ packages:
     engines: { node: ">= 6" }
     dependencies:
       agent-base: 6.0.2
-      debug: 4.3.1
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -16285,6 +16363,16 @@ packages:
       }
     dev: true
 
+  /on-finished@2.3.0:
+    resolution:
+      {
+        integrity: sha512-ikqdkGAAyf/X/gPhXGvfgAytDZtDbr+bkNUJ0N9h5MI/dmdgCs3l6hoHrcUv41sRKew3jIwrp4qQDXiK99Utww==,
+      }
+    engines: { node: ">= 0.8" }
+    dependencies:
+      ee-first: 1.1.1
+    dev: false
+
   /on-finished@2.4.1:
     resolution:
       {
@@ -16783,6 +16871,14 @@ packages:
         integrity: sha512-FFw039TmrBqFK8ma/7OL3sDz/VytdtJr044/QUJtH0wK9lb9jLq9tJyIxUwtQJHwar2BqtiA4iCWSwo9JLkzFg==,
       }
     engines: { node: ">=6" }
+    dev: true
+
+  /pretty-bytes@6.1.1:
+    resolution:
+      {
+        integrity: sha512-mQUvGU6aUFQ+rNvTIAcZuWGRT9a6f6Yrg9bHs4ImKF+HZCEK+plBvnAZYSIQztknZF2qnzNtr6F8s0+IuptdlQ==,
+      }
+    engines: { node: ^14.13.1 || >=16.0.0 }
     dev: true
 
   /pretty-format@27.5.1:
@@ -18046,6 +18142,30 @@ packages:
     engines: { node: ">=10" }
     hasBin: true
 
+  /send@0.17.2:
+    resolution:
+      {
+        integrity: sha512-UJYB6wFSJE3G00nEivR5rgWp8c2xXvJ3OPWPhmuteU0IKj8nKbG3DrjiOmLwpnHGYWAVwA69zmTm++YG0Hmwww==,
+      }
+    engines: { node: ">= 0.8.0" }
+    dependencies:
+      debug: 2.6.9
+      depd: 1.1.2
+      destroy: 1.0.4
+      encodeurl: 1.0.2
+      escape-html: 1.0.3
+      etag: 1.8.1
+      fresh: 0.5.2
+      http-errors: 1.8.1
+      mime: 1.6.0
+      ms: 2.1.3
+      on-finished: 2.3.0
+      range-parser: 1.2.1
+      statuses: 1.5.0
+    transitivePeerDependencies:
+      - supports-color
+    dev: false
+
   /send@0.19.2:
     resolution:
       {
@@ -18562,6 +18682,14 @@ packages:
       {
         integrity: sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A==,
       }
+    dev: false
+
+  /statuses@1.5.0:
+    resolution:
+      {
+        integrity: sha512-OpZ3zP+jT1PI7I8nemJX4AKmAX070ZkYPVWV/AaKTJl+tXCTGyVdC1a4SL8RUQYEwk/f34ZX8UTykN68FwrqAA==,
+      }
+    engines: { node: ">= 0.6" }
     dev: false
 
   /statuses@2.0.2:
@@ -19968,6 +20096,31 @@ packages:
       }
     engines: { node: ">= 0.8" }
     dev: false
+
+  /vite-plugin-pwa@1.2.0(vite@8.0.3)(workbox-build@7.4.0)(workbox-window@7.4.0):
+    resolution:
+      {
+        integrity: sha512-a2xld+SJshT9Lgcv8Ji4+srFJL4k/1bVbd1x06JIkvecpQkwkvCncD1+gSzcdm3s+owWLpMJerG3aN5jupJEVw==,
+      }
+    engines: { node: ">=16.0.0" }
+    peerDependencies:
+      "@vite-pwa/assets-generator": ^1.0.0
+      vite: ^3.1.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
+      workbox-build: ^7.4.0
+      workbox-window: ^7.4.0
+    peerDependenciesMeta:
+      "@vite-pwa/assets-generator":
+        optional: true
+    dependencies:
+      debug: 4.4.3
+      pretty-bytes: 6.1.1
+      tinyglobby: 0.2.15
+      vite: 8.0.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@22.19.17)(sass@1.99.0)
+      workbox-build: 7.4.0
+      workbox-window: 7.4.0
+    transitivePeerDependencies:
+      - supports-color
+    dev: true
 
   /vite-plugin-svgr@4.5.0(rollup@2.80.0)(typescript@6.0.2)(vite@8.0.3):
     resolution:

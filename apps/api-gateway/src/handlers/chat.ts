@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 
 // SSRF protection — block requests to private/loopback/link-local address ranges,
 // including IPv4-mapped IPv6 addresses (::ffff:127.0.0.1 etc.)
@@ -52,10 +53,17 @@ function withId<
 }
 
 async function resolveUsername(userId: string): Promise<string | null> {
+  const cacheKey = `user:username:${userId}`;
+  const cached = await cacheManager.get<string>(cacheKey);
+  if (cached) return cached;
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { username: true },
   });
+  if (user?.username) {
+    await cacheManager.set(cacheKey, user.username, "user");
+  }
   return user?.username ?? null;
 }
 
@@ -327,21 +335,22 @@ export async function getUnreadCounts(req: Request, res: Response) {
       select: { id: true },
     });
 
-    const countsArr = await Promise.all(
-      rooms.map(async (room: any) => ({
-        roomId: room.id,
-        count: await prisma.message.count({
-          where: {
-            chatRoomId: room.id,
-            isDeleted: false,
-            NOT: [{ sender: username }, { readBy: { has: username } }],
-          },
-        }),
-      })),
-    );
+    const roomIds = rooms.map((r: any) => r.id);
+    const rawCounts = await prisma.message.groupBy({
+      by: ["chatRoomId"],
+      where: {
+        chatRoomId: { in: roomIds },
+        isDeleted: false,
+        NOT: [{ sender: username }, { readBy: { has: username } }],
+      },
+      _count: { id: true },
+    });
 
+    const countMap = Object.fromEntries(
+      rawCounts.map((r: any) => [r.chatRoomId, r._count.id]),
+    );
     const counts = Object.fromEntries(
-      countsArr.map(({ roomId, count }: any) => [roomId, count]),
+      roomIds.map((id: string) => [id, countMap[id] ?? 0]),
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Unread counts retrieved",

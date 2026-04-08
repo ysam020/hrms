@@ -1,10 +1,11 @@
+import http2Express from "http2-express-bridge";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import { doubleCsrf } from "csrf-csrf";
-import https from "https";
+import http2 from "http2";
 import http from "http";
 import fs from "fs";
 import path from "path";
@@ -17,7 +18,7 @@ import { configureSwagger } from "./config/swaggerSetup";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
 
-const app = express();
+const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
 
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
@@ -118,7 +119,7 @@ app.use(
 app.use("/api", generalLimiter);
 
 app.use(auditLogMiddleware);
-configureSwagger(app);
+configureSwagger(app as any);
 app.get("/api/csrf-token", (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
@@ -166,16 +167,16 @@ async function resolveSocketUsername(token: string): Promise<string | null> {
   }
 }
 
-function startServer(server: http.Server | https.Server) {
+function startServer(server: http.Server | http2.Http2SecureServer) {
   const { io, redisAdapter } = configureSocketIO(
-    server,
+    server as any,
     allowedOrigins,
     resolveSocketUsername,
   );
   setupChatSocket(io, redisAdapter);
 
   server.listen(PORT, () => {
-    const protocol = server instanceof https.Server ? "https" : "http";
+    const protocol = server instanceof http.Server ? "http" : "https";
     logger.info(`API Gateway running on ${protocol} port ${PORT}`);
   });
 
@@ -192,9 +193,13 @@ function startServer(server: http.Server | https.Server) {
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   startServer(
-    https.createServer(
-      { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) },
-      app,
+    http2.createSecureServer(
+      {
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath),
+        allowHTTP1: true,
+      },
+      app as any,
     ),
   );
 } else {

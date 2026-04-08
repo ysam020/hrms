@@ -5,6 +5,7 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { jsPDF } from "jspdf";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 
 export async function getHrActivities(req: Request, res: Response) {
   try {
@@ -12,6 +13,16 @@ export async function getHrActivities(req: Request, res: Response) {
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
     const statusFilter = (req.query.status as string) || "Active";
     const skip = (page - 1) * limit;
+
+    const cacheKey = `hrm:activities:${page}:${limit}:${statusFilter}`;
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "HR activities listed successfully",
+        status: 0,
+        data: cached,
+      });
+    }
 
     const where: any = { status: { not: "deleted" } };
     if (statusFilter && statusFilter.toLowerCase() !== "all") {
@@ -28,29 +39,31 @@ export async function getHrActivities(req: Request, res: Response) {
       prisma.hrActivity.count({ where }),
     ]);
 
+    const data = {
+      activities: activities.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description || "",
+        date: a.date || "",
+        time: a.time || "",
+        status: a.status || "",
+        createdBy: a.createdBy || "",
+        createdOn: a.createdOn ? a.createdOn.toISOString() : "",
+        lastUpdatedBy: a.lastUpdatedBy || "",
+        lastUpdatedOn: a.lastUpdatedOn ? a.lastUpdatedOn.toISOString() : "",
+      })),
+      pagination: {
+        totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    };
+    await cacheManager.set(cacheKey, data, "hrActivity");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "HR activities listed successfully",
       status: 0,
-      data: {
-        activities: activities.map((a: any) => ({
-          id: a.id,
-          title: a.title,
-          description: a.description || "",
-          date: a.date || "",
-          time: a.time || "",
-          status: a.status || "",
-          createdBy: a.createdBy || "",
-          createdOn: a.createdOn ? a.createdOn.toISOString() : "",
-          lastUpdatedBy: a.lastUpdatedBy || "",
-          lastUpdatedOn: a.lastUpdatedOn ? a.lastUpdatedOn.toISOString() : "",
-        })),
-        pagination: {
-          totalCount,
-          page,
-          limit,
-          totalPages: Math.ceil(totalCount / limit),
-        },
-      },
+      data,
     });
   } catch (error: any) {
     logger.error("GET /get-hr-activities error:", { error });
@@ -80,6 +93,7 @@ export async function addHrActivity(req: Request, res: Response) {
       ...req.body,
       createdBy: user!.userId,
     });
+    await cacheManager.invalidatePattern("hrm:activities:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
@@ -96,6 +110,7 @@ export async function editHrActivity(req: Request, res: Response) {
       id: req.params._id,
       updatedBy: user!.userId,
     });
+    await cacheManager.invalidatePattern("hrm:activities:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
@@ -123,6 +138,7 @@ export async function deleteHrActivity(req: Request, res: Response) {
         deletedOn: new Date(),
       },
     });
+    await cacheManager.invalidatePattern("hrm:activities:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "HR activity deleted successfully",
       status: 0,
@@ -148,6 +164,16 @@ export async function getRules(req: Request, res: Response) {
     const limitNum = Math.min(parseInt(limit) || 50, 200);
     const skip = (pageNum - 1) * limitNum;
 
+    const cacheKey = `hrm:rules:${pageNum}:${limitNum}:${category || "all"}:${ruleStatus || "all"}`;
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Rules listed successfully",
+        status: 0,
+        ...cached,
+      });
+    }
+
     const where: any = {};
     if (category && category !== "all") where.category = category;
     if (ruleStatus && ruleStatus !== "all") where.status = ruleStatus;
@@ -163,13 +189,17 @@ export async function getRules(req: Request, res: Response) {
     ]);
 
     const data = rules.map((r: any) => ({ ...r, _id: r.id }));
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      message: "Rules listed successfully",
-      status: 0,
+    const payload = {
       data,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum),
+    };
+    await cacheManager.set(cacheKey, payload, "system");
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Rules listed successfully",
+      status: 0,
+      ...payload,
     });
   } catch (error: any) {
     logger.error("GET /rules error:", { error });
@@ -211,6 +241,7 @@ export async function createRule(req: Request, res: Response) {
         createdBy: user!.userId,
       },
     });
+    await cacheManager.invalidatePattern("hrm:rules:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Rule created successfully",
       status: 0,
@@ -261,6 +292,7 @@ export async function updateRule(req: Request, res: Response) {
         lastModifiedBy: user!.userId,
       },
     });
+    await cacheManager.invalidatePattern("hrm:rules:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Rule updated successfully",
       status: 0,
@@ -277,6 +309,7 @@ export async function updateRule(req: Request, res: Response) {
 export async function deleteRule(req: Request, res: Response) {
   try {
     await prisma.rule.delete({ where: { id: String(req.params.id) } });
+    await cacheManager.invalidatePattern("hrm:rules:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Rule deleted successfully",
       status: 0,
@@ -297,6 +330,7 @@ export async function updateRuleStatus(req: Request, res: Response) {
       where: { id: String(req.params.id) },
       data: { status, lastModifiedBy: user!.userId },
     });
+    await cacheManager.invalidatePattern("hrm:rules:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Rule status updated",
       status: 0,
@@ -391,6 +425,16 @@ export async function getPolicies(req: Request, res: Response) {
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
     const skip = (page - 1) * limit;
 
+    const cacheKey = `hrm:policies:${page}:${limit}`;
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Policies listed",
+        status: 0,
+        ...cached,
+      });
+    }
+
     const notDeleted = { status: { notIn: ["deleted", "Deleted"] } };
     const [policies, total] = await Promise.all([
       prisma.policy.findMany({
@@ -410,13 +454,12 @@ export async function getPolicies(req: Request, res: Response) {
       updatedAt: p.lastUpdatedOn,
     }));
 
+    const payload = { data, total, page, totalPages: Math.ceil(total / limit) };
+    await cacheManager.set(cacheKey, payload, "system");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Policies listed",
       status: 0,
-      data,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
+      ...payload,
     });
   } catch (error: any) {
     logger.error("GET /policies error:", { error });
@@ -454,6 +497,7 @@ export async function createOrUpdatePolicy(req: Request, res: Response) {
           lastUpdatedBy: user!.userId,
         },
       });
+      await cacheManager.invalidatePattern("hrm:policies:*");
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         message: "Policy updated successfully",
         status: 0,
@@ -471,6 +515,7 @@ export async function createOrUpdatePolicy(req: Request, res: Response) {
         createdOn: new Date(),
       },
     });
+    await cacheManager.invalidatePattern("hrm:policies:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Policy created successfully",
       status: 0,
@@ -838,6 +883,7 @@ export async function updatePolicy(req: Request, res: Response) {
         lastUpdatedBy: user?.userId || "",
       },
     });
+    await cacheManager.invalidatePattern("hrm:policies:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Policy updated successfully",
       status: 0,
@@ -857,6 +903,7 @@ export async function deletePolicy(req: Request, res: Response) {
       where: { id: String(req.params.id) },
       data: { status: "Deleted" },
     });
+    await cacheManager.invalidatePattern("hrm:policies:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Policy deleted successfully",
       status: 0,

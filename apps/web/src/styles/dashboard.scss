@@ -228,7 +228,7 @@ th {
       border: 1px solid rgba(255, 255, 255, 0.32);
       border-bottom: none;
       border-radius: 18px 18px 0 0;
-      padding: 8px 28px 5px;
+      padding: 5px 24px 12px;
       box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.1);
     }
 
@@ -246,36 +246,17 @@ th {
         margin 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 
       .p-dock-action {
-        width: 44px !important;
-        height: 44px !important;
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
         transition: none;
         cursor: pointer;
+        padding: 0 !important;
       }
 
+      // Labels are now rendered inline inside DockIcon; hide the PrimeReact tooltip
       .p-dock-item-tooltip {
-        display: block !important;
-        opacity: 0 !important;
-        position: absolute !important;
-        bottom: calc(100% + 7px) !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        transition: opacity 0.15s ease !important;
-        pointer-events: none;
-        white-space: nowrap;
-        font-size: 0.68rem;
-        font-weight: 600;
-        letter-spacing: 0.01em;
-        color: #1f2937;
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        border-radius: 6px;
-        padding: 2px 8px;
-      }
-
-      &.p-dock-item-current .p-dock-item-tooltip {
-        opacity: 1 !important;
+        display: none !important;
       }
     }
 
@@ -304,12 +285,6 @@ th {
     background: rgba(17, 27, 33, 0.75);
     border-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 -6px 32px rgba(0, 0, 0, 0.32);
-  }
-
-  .p-dock .p-dock-item .p-dock-item-tooltip {
-    color: #f3f4f6;
-    background: rgba(28, 38, 46, 0.92);
-    border-color: rgba(255, 255, 255, 0.1);
   }
 }
 

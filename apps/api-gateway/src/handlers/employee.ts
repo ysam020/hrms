@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -59,6 +60,17 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       wfh,
       joiningDate,
     });
+    // Department/designation changes affect analytics and dashboard caches
+    if (
+      department !== undefined ||
+      designation !== undefined ||
+      wfh !== undefined
+    ) {
+      await Promise.all([
+        cacheManager.invalidatePattern("analytics:*"),
+        cacheManager.delete("dashboard:employee-insights"),
+      ]);
+    }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
@@ -82,6 +94,15 @@ export async function getEmployeeDetails(req: Request, res: Response) {
 
 export async function employeeInsights(_req: Request, res: Response) {
   try {
+    const cacheKey = "dashboard:employee-insights";
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Employee insights fetched",
+        data: cached,
+      });
+    }
+
     const [active, resigned, terminated, absconded, total, deptGroups] =
       await Promise.all([
         prisma.user.count({ where: { employeeStatus: "Active" } }),
@@ -103,18 +124,20 @@ export async function employeeInsights(_req: Request, res: Response) {
         count: g._count.id,
         activeCount: g._count.id,
       }));
+    const data = {
+      overview: {
+        activeEmployees: active,
+        resignedEmployees: resigned,
+        terminatedEmployees: terminated,
+        abscondedEmployees: absconded,
+        totalEmployees: total,
+      },
+      departmentBreakdown,
+    };
+    await cacheManager.set(cacheKey, data, "dashboard");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Employee insights fetched",
-      data: {
-        overview: {
-          activeEmployees: active,
-          resignedEmployees: resigned,
-          terminatedEmployees: terminated,
-          abscondedEmployees: absconded,
-          totalEmployees: total,
-        },
-        departmentBreakdown,
-      },
+      data,
     });
   } catch (error: any) {
     logger.error("employee-insights error:", { error });
