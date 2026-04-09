@@ -47,7 +47,7 @@ export const getTodayAttendance = async (
       data: record,
     };
     // Short TTL: today's record can change on check-out
-    await cacheManager.set(cacheKey, response, "attendance");
+    await cacheManager.set(cacheKey, response, "notification");
     return callback(null, response);
   } catch (err) {
     logger.error("GetTodayAttendance error:", { err });

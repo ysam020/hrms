@@ -93,8 +93,18 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+    invalidatePattern: jest.fn(),
+  },
+}));
+
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
@@ -131,7 +141,13 @@ const makeReq = (overrides: any = {}) =>
   }) as any;
 
 describe("hrmHandlers", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (cacheManager.get as jest.Mock).mockResolvedValue(null);
+    (cacheManager.set as jest.Mock).mockResolvedValue(undefined);
+    (cacheManager.delete as jest.Mock).mockResolvedValue(undefined);
+    (cacheManager.invalidatePattern as jest.Mock).mockResolvedValue(undefined);
+  });
 
   describe("getHrActivities", () => {
     it("returns paginated activities with default status filter", async () => {
