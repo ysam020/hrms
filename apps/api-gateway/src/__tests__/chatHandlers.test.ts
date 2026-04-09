@@ -30,6 +30,7 @@ jest.mock("@hrms/db", () => ({
       findMany: jest.fn(),
       findUnique: jest.fn(),
       count: jest.fn(),
+      groupBy: jest.fn(),
       update: jest.fn(),
     },
   },
@@ -53,7 +54,17 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+    invalidatePattern: jest.fn(),
+  },
+}));
+
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 import dns from "dns";
 
 const mockApiResponse = apiResponse as jest.Mock;
@@ -68,6 +79,7 @@ const mockChatRoomUpdate = (prisma as any).chatRoom.update as jest.Mock;
 const mockMessageFindMany = (prisma as any).message.findMany as jest.Mock;
 const mockMessageFindUnique = (prisma as any).message.findUnique as jest.Mock;
 const mockMessageCount = (prisma as any).message.count as jest.Mock;
+const mockMessageGroupBy = (prisma as any).message.groupBy as jest.Mock;
 const mockMessageUpdate = (prisma as any).message.update as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
@@ -83,6 +95,10 @@ const makeReq = (overrides: any = {}) =>
 describe("chatHandlers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (cacheManager.get as jest.Mock).mockResolvedValue(null);
+    (cacheManager.set as jest.Mock).mockResolvedValue(undefined);
+    (cacheManager.delete as jest.Mock).mockResolvedValue(undefined);
+    (cacheManager.invalidatePattern as jest.Mock).mockResolvedValue(undefined);
     // Default: resolve username for user-1
     mockUserFindUnique.mockResolvedValue({ username: "alice" });
   });
@@ -360,7 +376,9 @@ describe("chatHandlers", () => {
 
     it("returns unread counts keyed by roomId", async () => {
       mockChatRoomFindMany.mockResolvedValue([{ id: "r1" }, { id: "r2" }]);
-      mockMessageCount.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+      mockMessageGroupBy.mockResolvedValue([
+        { chatRoomId: "r1", _count: { id: 3 } },
+      ]);
       const res = makeRes();
       await getUnreadCounts(makeReq(), res);
       const call = mockApiResponse.mock.calls[0];

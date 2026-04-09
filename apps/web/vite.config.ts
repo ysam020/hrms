@@ -1,10 +1,34 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import fs from "fs";
 import path from "path";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "firebase-messaging-sw.ts",
+      // We handle SW registration ourselves in firebase.tsx / index.html
+      injectRegister: false,
+      // We have our own manifest.json in public/
+      manifest: false,
+      injectManifest: {
+        // Only precache assets that are part of the build output
+        globPatterns: ["**/*.{js,css,html,ico,png,webp,svg,woff2}"],
+        // Exclude large/dynamic files from precaching
+        globIgnores: ["**/node_modules/**", "offline.html"],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
+      },
+      devOptions: {
+        enabled: true,
+        type: "module",
+        navigateFallback: "index.html",
+      },
+    }),
+  ],
   resolve: {
     dedupe: [
       "react",
@@ -39,7 +63,7 @@ export default defineConfig({
       "/api": {
         target: "https://localhost:9002",
         changeOrigin: true,
-        secure: false, // accept self-signed cert on the gateway
+        secure: false,
       },
     },
   },

@@ -48,6 +48,15 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+    invalidatePattern: jest.fn(),
+  },
+}));
+
 jest.mock("../config/s3", () => ({
   s3Client: {},
   S3_BUCKET: "test-bucket",
@@ -63,6 +72,7 @@ jest.mock("@aws-sdk/s3-request-presigner", () => ({
 }));
 
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const mockApiResponse = apiResponse as jest.Mock;
@@ -88,7 +98,13 @@ const makeReq = (overrides: any = {}) =>
   }) as any;
 
 describe("generalHandlers", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (cacheManager.get as jest.Mock).mockResolvedValue(null);
+    (cacheManager.set as jest.Mock).mockResolvedValue(undefined);
+    (cacheManager.delete as jest.Mock).mockResolvedValue(undefined);
+    (cacheManager.invalidatePattern as jest.Mock).mockResolvedValue(undefined);
+  });
 
   describe("sanitizePart", () => {
     it("strips path traversal and replaces slashes with underscores", () => {

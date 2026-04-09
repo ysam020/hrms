@@ -7,7 +7,6 @@ import {
   List,
   ListItem,
   ListItemButton,
-  ListItemText,
   Typography,
   Chip,
   Fade,
@@ -198,18 +197,63 @@ function SpotlightModal({ open, handleClose }) {
                       selected={highlightedIndex === index}
                       onClick={() => handleSuggestionClick(route.path)}
                       data-index={index}
-                      sx={{ borderRadius: 2 }}
+                      sx={{
+                        borderRadius: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        py: 0.9,
+                      }}
                     >
-                      <ListItemText
-                        primary={route.name}
-                        secondary={
-                          route.category
-                            ? `${route.category} › ${route.path}`
-                            : route.path
-                        }
-                      />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          noWrap
+                          sx={{ fontSize: "0.9rem" }}
+                        >
+                          {route.name}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                            mt: 0.25,
+                          }}
+                        >
+                          {route.category && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "text.secondary",
+                                fontSize: "0.7rem",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {route.category} ›
+                            </Typography>
+                          )}
+                          <Typography
+                            variant="caption"
+                            noWrap
+                            sx={{
+                              color: "text.disabled",
+                              fontFamily: "monospace",
+                              fontSize: "0.68rem",
+                            }}
+                          >
+                            {route.path}
+                          </Typography>
+                        </Box>
+                      </Box>
                       {highlightedIndex === index && (
-                        <Chip label="↵" size="small" color="primary" />
+                        <Chip
+                          label="↵"
+                          size="small"
+                          color="primary"
+                          sx={{ flexShrink: 0 }}
+                        />
                       )}
                     </ListItemButton>
                   </ListItem>
