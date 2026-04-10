@@ -50,20 +50,20 @@ const DockIcon = ({
   >
     <Box
       sx={{
-        width: 34,
-        height: 34,
-        borderRadius: "9px",
+        width: 28,
+        height: 28,
+        borderRadius: "8px",
         bgcolor: color,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: `0 2px 8px ${color}55`,
+        boxShadow: `0 2px 6px ${color}55`,
         cursor: "pointer",
       }}
     >
       <i
         className={`pi ${iconClass}`}
-        style={{ fontSize: 15, color: "#fff" }}
+        style={{ fontSize: 14, color: "#fff" }}
       />
     </Box>
     <Box
