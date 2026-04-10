@@ -5,7 +5,7 @@ import * as h from "../handlers/analytics";
 
 const analyticsLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 100,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },

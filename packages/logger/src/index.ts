@@ -1,4 +1,29 @@
 import winston from "winston";
+import WinstonCloudWatch from "winston-cloudwatch";
+
+const transports: winston.transport[] = [
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.printf(({ timestamp, level, message, ...meta }) => {
+        const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : "";
+        return `${timestamp} [${level}]: ${message} ${metaStr}`;
+      }),
+    ),
+  }),
+];
+
+const env = process.env.NODE_ENV === "production" ? "production" : "dev";
+
+transports.push(
+  new WinstonCloudWatch({
+    logGroupName: `/hrms/api-gateway/${env}`,
+    logStreamName: process.env.AWS_CLOUDWATCH_LOG_STREAM || "app",
+    awsRegion: process.env.AWS_REGION || "ap-south-1",
+    jsonMessage: true,
+    retentionInDays: env === "production" ? 90 : 7,
+  }),
+);
 
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || "info",
@@ -7,17 +32,7 @@ export const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json(),
   ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : "";
-          return `${timestamp} [${level}]: ${message} ${metaStr}`;
-        }),
-      ),
-    }),
-  ],
+  transports,
 });
 
 export const apiRequestLogger = (req: any, res: any, next: any) => {

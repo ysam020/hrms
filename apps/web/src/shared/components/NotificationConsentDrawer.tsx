@@ -34,6 +34,7 @@ function NotificationConsentDrawer({
   }, [showConsentDrawer, setDrawerOpen]);
 
   const handleAllow = async () => {
+    localStorage.setItem("notificationConsentDismissed", "true");
     setShowConsentDrawer(false);
     if (onEnableNotifications) {
       await onEnableNotifications();
@@ -41,6 +42,7 @@ function NotificationConsentDrawer({
   };
 
   const handleDeny = () => {
+    localStorage.setItem("notificationConsentDismissed", "true");
     setShowConsentDrawer(false);
     setAlert({
       open: true,

@@ -205,6 +205,13 @@ function HomePage(props) {
               showConsentDrawer={showConsentDrawer}
               setShowConsentDrawer={setShowConsentDrawer}
               setAlert={setAlert}
+              onEnableNotifications={async () => {
+                await refreshFcmToken(
+                  setShowConsentDrawer,
+                  setAlert,
+                  user?.fcmTokens,
+                );
+              }}
             />
             <GlobalDock />
           </TabValueContext.Provider>
