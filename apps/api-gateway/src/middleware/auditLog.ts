@@ -58,7 +58,7 @@ export function auditLogMiddleware(
 
     if (!isSuccessfulMutation && !isFailedAuth) return;
 
-    const userId = req.user?.userId || "anonymous";
+    const userId = req.user?.userId || null;
     const entityType = deriveEntityType(req.path);
     const description = `${action || "GET"} ${sanitizePath(req.originalUrl)} → ${res.statusCode}`;
     // Use req.ip which respects trust proxy setting, falling back to socket address

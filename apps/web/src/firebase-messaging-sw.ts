@@ -43,7 +43,7 @@ onBackgroundMessage(messaging, (payload) => {
       timestamp: Date.now(),
       notificationId: payload.messageId ?? Date.now(),
     },
-  });
+  } as NotificationOptions);
 });
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
