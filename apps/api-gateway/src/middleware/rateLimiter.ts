@@ -1,16 +1,16 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { RateLimitRequestHandler } from "express-rate-limit";
 
-export const defaultLimiter = rateLimit({
+export const defaultLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60 * 1000,
-  max: 100,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
 });
 
-export const authLimiter = rateLimit({
+export const authLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },

@@ -13,8 +13,10 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.1028.0",
     "@grpc/grpc-js": "^1.12.3",
-    "winston": "^3.16.0"
+    "winston": "^3.16.0",
+    "winston-cloudwatch": "^6.3.0"
   },
   "devDependencies": {
     "@hrms/typescript-config": "workspace:*"

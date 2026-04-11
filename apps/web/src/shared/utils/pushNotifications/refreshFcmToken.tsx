@@ -39,7 +39,9 @@ export const refreshFcmToken = async (
         }
       }
     } else if (permissionStatus.state === "prompt") {
-      setShowConsentDrawer(true);
+      if (localStorage.getItem("notificationConsentDismissed") !== "true") {
+        setShowConsentDrawer(true);
+      }
       return null;
     } else if (permissionStatus.state === "denied") {
       setAlert({
