@@ -1,0 +1,76 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: api-gateway
+    static_configs:
+      - targets: ["api-gateway:9003"]
+        labels:
+          service: api-gateway
+
+  - job_name: auth-service
+    static_configs:
+      - targets: ["auth-service:9101"]
+        labels:
+          service: auth-service
+
+  - job_name: user-service
+    static_configs:
+      - targets: ["user-service:9102"]
+        labels:
+          service: user-service
+
+  - job_name: employee-service
+    static_configs:
+      - targets: ["employee-service:9103"]
+        labels:
+          service: employee-service
+
+  - job_name: attendance-service
+    static_configs:
+      - targets: ["attendance-service:9104"]
+        labels:
+          service: attendance-service
+
+  - job_name: leave-service
+    static_configs:
+      - targets: ["leave-service:9105"]
+        labels:
+          service: leave-service
+
+  - job_name: recruitment-service
+    static_configs:
+      - targets: ["recruitment-service:9106"]
+        labels:
+          service: recruitment-service
+
+  - job_name: hrm-service
+    static_configs:
+      - targets: ["hrm-service:9107"]
+        labels:
+          service: hrm-service
+
+  - job_name: salary-service
+    static_configs:
+      - targets: ["salary-service:9108"]
+        labels:
+          service: salary-service
+
+  - job_name: analytics-service
+    static_configs:
+      - targets: ["analytics-service:9109"]
+        labels:
+          service: analytics-service
+
+  - job_name: notification-service
+    static_configs:
+      - targets: ["notification-service:9110"]
+        labels:
+          service: notification-service
+
+  - job_name: scheduler-service
+    static_configs:
+      - targets: ["scheduler-service:9111"]
+        labels:
+          service: scheduler-service

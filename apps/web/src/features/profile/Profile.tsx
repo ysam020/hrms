@@ -126,26 +126,24 @@ function Profile() {
         )}
 
         {value === 1 && (
-          <div className="profile-container">
-            <React.Suspense
-              fallback={
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    p: 4,
-                  }}
-                >
-                  <CircularProgress size={24} />
-                </Box>
-              }
-            >
-              <ErrorBoundary fallback={<ErrorFallback />}>
-                <PushNotifications />
-              </ErrorBoundary>
-            </React.Suspense>
-          </div>
+          <React.Suspense
+            fallback={
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  p: 4,
+                }}
+              >
+                <CircularProgress size={24} />
+              </Box>
+            }
+          >
+            <ErrorBoundary fallback={<ErrorFallback />}>
+              <PushNotifications />
+            </ErrorBoundary>
+          </React.Suspense>
         )}
 
         {value === 2 && (

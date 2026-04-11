@@ -2,7 +2,7 @@
   "name": "api-gateway-service",
   "version": "1.0.0",
   "scripts": {
-    "dev": "tsx --watch src/bootstrap.ts",
+    "dev": "LOKI_URL=http://localhost:3100 METRICS_PORT=9003 tsx --watch src/bootstrap.ts",
     "prod": "node dist/bootstrap.js",
     "build": "tsc -b"
   },

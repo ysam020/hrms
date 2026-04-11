@@ -71,6 +71,9 @@ const Chat = lazy(() => import("@web/features/chat/Chat"));
 // Policy
 const Policy = lazy(() => import("@web/features/policy/Policy"));
 
+// Monitoring
+const Monitoring = lazy(() => import("@web/features/monitoring/Monitoring"));
+
 const routesConfig = () => {
   return [
     {
@@ -134,6 +137,13 @@ const routesConfig = () => {
       element: <Chat />,
       allowedModules: [],
       name: "Chat",
+      category: null,
+    },
+    {
+      path: "/monitoring/*",
+      element: <Monitoring />,
+      allowedModules: [],
+      name: "Monitoring",
       category: null,
     },
     {

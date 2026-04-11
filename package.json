@@ -11,7 +11,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "turbo run dev --concurrency=25",
+    "dev": "bash scripts/dev.sh",
     "build": "turbo run build",
     "test": "jest && pnpm --filter web test:run",
     "start:prod": "turbo run start:prod",
