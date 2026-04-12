@@ -30,6 +30,7 @@ import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
 import useChat from "@web/shared/hooks/useChat";
 import apiClient from "@web/core/http/axiosConfig";
+import { useApiClient } from "@web/shared/hooks/useApiClient";
 import "../../styles/chat.scss";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
@@ -487,6 +488,7 @@ function Chat() {
   const { user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
   const { clearRoomUnread } = useContext(ChatUnreadContext);
+  const api = useApiClient();
 
   const {
     conversations,
@@ -606,7 +608,7 @@ function Chat() {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await apiClient.get(
+        const res = await api.get(
           `/get-all-users?search=${encodeURIComponent(userSearch)}&limit=10`,
         );
         const users = res.data.data?.users || res.data.data || [];

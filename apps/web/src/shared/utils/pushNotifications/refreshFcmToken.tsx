@@ -39,10 +39,15 @@ export const refreshFcmToken = async (
         }
       }
     } else if (permissionStatus.state === "prompt") {
-      if (localStorage.getItem("notificationConsentDismissed") !== "true") {
+      // Use the DB as the source of truth: if this device has been enrolled
+      // before, don't nag the user again. Show the drawer only on first use.
+      const { deviceFingerprint } = await generateDeviceFingerprint();
+      const devicePreviouslyEnrolled = fcmTokens?.some(
+        (t) => t.deviceFingerprint === deviceFingerprint,
+      );
+      if (!devicePreviouslyEnrolled) {
         setShowConsentDrawer(true);
       }
-      return null;
     } else if (permissionStatus.state === "denied") {
       setAlert({
         open: true,

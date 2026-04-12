@@ -76,6 +76,7 @@ model User {
   salaryPt                    Float?
   reference_by                String?
   // Auth
+  refreshToken                String?
   webAuthnCredentials         Json?
   fcmTokens                   Json?
   events                      Json?
