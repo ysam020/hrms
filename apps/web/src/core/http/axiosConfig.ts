@@ -6,6 +6,7 @@ declare module "axios" {
     isProto?: boolean;
     _authRetried?: boolean;
     _csrfRetried?: boolean;
+    _requestId?: string;
   }
 }
 
@@ -26,7 +27,6 @@ export const getAccessToken = () => _accessToken;
 export const setAccessToken = (token: string) => {
   _accessToken = token;
   localStorage.setItem(TOKEN_KEY, token);
-  invalidateCsrfToken();
 };
 
 const clearAccessToken = () => {
@@ -53,24 +53,40 @@ const isExpiringSoon = (token: string, bufferSec = 60) => {
 const API_URL = import.meta.env.VITE_API_STRING;
 
 // CSRF token — fetched lazily on the first mutating request and cached.
-// Must be invalidated after login/logout (session identifier changes).
+// Must be invalidated after logout (session identifier changes).
 let _csrfToken: string | null = null;
+// Deduplication: concurrent callers share a single in-flight fetch so the
+// server only ever sets one csrf-token cookie per logical fetch, avoiding a
+// race where two different cookie values are set and one request ends up
+// holding a token that doesn't match the cookie the browser kept.
+let _csrfPromise: Promise<string> | null = null;
 
 const fetchCsrfToken = async (): Promise<string> => {
   if (_csrfToken) return _csrfToken;
+  if (_csrfPromise) return _csrfPromise;
+
   // Mirror the Authorization header so the server's getSessionIdentifier
   // produces the same session key here as on subsequent mutating requests.
   const token = getAccessToken();
-  const res = await axios.get<{ csrfToken: string }>(`${API_URL}/csrf-token`, {
-    withCredentials: true,
-    ...(token && { headers: { Authorization: `Bearer ${token}` } }),
-  });
-  _csrfToken = res.data.csrfToken;
-  return _csrfToken;
+  _csrfPromise = axios
+    .get<{ csrfToken: string }>(`${API_URL}/csrf-token`, {
+      withCredentials: true,
+      ...(token && { headers: { Authorization: `Bearer ${token}` } }),
+    })
+    .then((res) => {
+      _csrfToken = res.data.csrfToken;
+      return _csrfToken;
+    })
+    .finally(() => {
+      _csrfPromise = null;
+    });
+
+  return _csrfPromise;
 };
 
 export const invalidateCsrfToken = () => {
   _csrfToken = null;
+  _csrfPromise = null;
 };
 
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
@@ -81,6 +97,24 @@ const apiClient = axios.create({
   timeout: 30000,
 });
 
+// ─── AbortController registry ─────────────────────────────────────────────────
+// Every in-flight request is tracked here.  GET requests are keyed by their
+// canonical URL+params so a new call to the same endpoint automatically
+// supersedes the previous one.  All other requests are keyed by a UUID.
+// cancelAllPendingRequests() is meant to be called on logout.
+const pendingRequests = new Map<string, AbortController>();
+
+const buildRequestKey = (config: InternalAxiosRequestConfig): string => {
+  const params = config.params ? JSON.stringify(config.params) : "";
+  return `${config.method?.toUpperCase()}:${config.url}:${params}`;
+};
+
+export const cancelAllPendingRequests = (reason = "cancelled") => {
+  pendingRequests.forEach((ctrl) => ctrl.abort(reason));
+  pendingRequests.clear();
+};
+
+// ─── Token refresh ────────────────────────────────────────────────────────────
 // Shared refresh promise — deduplicated so concurrent requests don't
 // trigger multiple simultaneous refresh calls.
 let _refreshPromise: Promise<string> | null = null;
@@ -138,10 +172,10 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// Request interceptor — attaches the token and proactively refreshes if
-// it's about to expire.
+// ─── Request interceptor ──────────────────────────────────────────────────────
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // ── Token refresh ──────────────────────────────────────────────
     let token = getAccessToken();
 
     if (token && isExpiringSoon(token, 60)) {
@@ -173,19 +207,79 @@ apiClient.interceptors.request.use(
       config.headers["x-csrf-token"] = await fetchCsrfToken();
     }
 
+    // ── AbortController ────────────────────────────────────────────
+    const method = config.method?.toLowerCase() ?? "";
+    const isRetry = config._authRetried || config._csrfRetried;
+
+    const controller = new AbortController();
+
+    // If the caller supplied a signal (e.g. from a component's useEffect
+    // cleanup), link it so either side can abort the request.
+    if (config.signal instanceof AbortSignal) {
+      const callerSignal = config.signal;
+      if (callerSignal.aborted) {
+        controller.abort(callerSignal.reason);
+      } else {
+        callerSignal.addEventListener(
+          "abort",
+          () => controller.abort(callerSignal.reason),
+          { once: true },
+        );
+      }
+    }
+    config.signal = controller.signal;
+
+    // GET deduplication: cancel the previous in-flight call to the same
+    // endpoint so the UI always reflects the latest data.  Retried requests
+    // are exempt — they must not cancel the fresh call that triggered them.
+    const requestId =
+      method === "get" && !isRetry
+        ? buildRequestKey(config)
+        : crypto.randomUUID();
+
+    if (method === "get" && !isRetry) {
+      pendingRequests.get(requestId)?.abort("superseded");
+    }
+
+    pendingRequests.set(requestId, controller);
+    config._requestId = requestId;
+
+    // ── Idempotency key ────────────────────────────────────────────
+    // Assign a stable UUID to POST / PUT / PATCH so the server can detect
+    // duplicate submissions caused by network retries.  The key is preserved
+    // on _authRetried / _csrfRetried retries so all attempts carry the same key.
+    if (
+      ["post", "put", "patch"].includes(method) &&
+      !config.headers["Idempotency-Key"]
+    ) {
+      config.headers["Idempotency-Key"] = crypto.randomUUID();
+    }
+
     return config;
   },
 );
 
-// Response interceptor — on 401, attempt one token refresh then retry.
-// If the refresh also fails, force logout.
+// ─── Response interceptor ─────────────────────────────────────────────────────
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config._requestId) {
+      pendingRequests.delete(response.config._requestId);
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config as InternalAxiosRequestConfig;
 
+    // Always clean up the registry for the failed request.
+    if (originalRequest?._requestId) {
+      pendingRequests.delete(originalRequest._requestId);
+    }
+
     if (error.response?.status === 403 && !originalRequest._csrfRetried) {
       originalRequest._csrfRetried = true;
+      // Clear the old signal so the interceptor assigns a fresh AbortController
+      // — the original signal may already be in an aborted state.
+      originalRequest.signal = undefined;
       invalidateCsrfToken();
       originalRequest.headers = originalRequest.headers || {};
       originalRequest.headers["x-csrf-token"] = await fetchCsrfToken();
@@ -195,6 +289,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       if (!originalRequest._authRetried) {
         originalRequest._authRetried = true;
+        originalRequest.signal = undefined;
 
         try {
           const newToken = await performRefresh();

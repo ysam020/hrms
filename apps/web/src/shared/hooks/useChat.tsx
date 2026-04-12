@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext, useRef, useCallback } from "react";
 import apiClient from "@web/core/http/axiosConfig";
+import { useApiClient } from "@web/shared/hooks/useApiClient";
 import { UserContext } from "@web/app/providers/UserContext";
 import { useSocket } from "@web/app/providers/SocketContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
@@ -33,6 +34,7 @@ function useChat() {
   const typingTimeoutsRef = useRef({}); // roomId:username -> timeout
   const dbLoadedRoomsRef = useRef(new Set());
   const prevConnectedRef = useRef(false);
+  const api = useApiClient();
 
   // IndexedDB helpers
 
@@ -67,7 +69,7 @@ function useChat() {
         );
       }
 
-      const res = await apiClient.get(API_ENDPOINTS.GET_CONVERSATIONS);
+      const res = await api.get(API_ENDPOINTS.GET_CONVERSATIONS);
       const fresh = res.data.data || [];
       setConversations(fresh);
       saveConversations(fresh).catch(console.error);
@@ -76,59 +78,60 @@ function useChat() {
     } finally {
       setLoadingConversations(false);
     }
-  }, []);
+  }, [api]);
 
-  const fetchMessages = useCallback(async (roomId, before = null) => {
-    setLoadingMessages(true);
-    try {
-      // Load from IndexedDB first (instant) for initial room opens
-      if (!before) {
-        const cached = (await getMessagesByRoom(roomId)) as any[];
-        if (cached.length > 0) {
+  const fetchMessages = useCallback(
+    async (roomId, before = null) => {
+      setLoadingMessages(true);
+      try {
+        // Load from IndexedDB first (instant) for initial room opens
+        if (!before) {
+          const cached = (await getMessagesByRoom(roomId)) as any[];
+          if (cached.length > 0) {
+            setMessages((prev) => ({
+              ...prev,
+              [roomId]: cached,
+            }));
+          }
+        }
+
+        const params = before ? `?before=${before}` : "";
+        const res = await api.get(API_ENDPOINTS.GET_MESSAGES(roomId) + params);
+        const fetched = res.data.data || [];
+
+        if (!before) {
+          // Merge cached + fetched so we never lose optimistic messages
+          setMessages((prev) => {
+            const merged = mergeMessages(prev[roomId] || [], fetched);
+            return { ...prev, [roomId]: merged };
+          });
+          // Persist to IndexedDB
+          saveMessages(fetched).catch(console.error);
+          dbLoadedRoomsRef.current.add(roomId);
+        } else {
           setMessages((prev) => ({
             ...prev,
-            [roomId]: cached,
+            [roomId]: [...fetched, ...(prev[roomId] || [])],
           }));
+          saveMessages(fetched).catch(console.error);
         }
+      } catch (err) {
+        console.error("fetchMessages error:", err);
+      } finally {
+        setLoadingMessages(false);
       }
-
-      const params = before ? `?before=${before}` : "";
-      const res = await apiClient.get(
-        API_ENDPOINTS.GET_MESSAGES(roomId) + params,
-      );
-      const fetched = res.data.data || [];
-
-      if (!before) {
-        // Merge cached + fetched so we never lose optimistic messages
-        setMessages((prev) => {
-          const merged = mergeMessages(prev[roomId] || [], fetched);
-          return { ...prev, [roomId]: merged };
-        });
-        // Persist to IndexedDB
-        saveMessages(fetched).catch(console.error);
-        dbLoadedRoomsRef.current.add(roomId);
-      } else {
-        setMessages((prev) => ({
-          ...prev,
-          [roomId]: [...fetched, ...(prev[roomId] || [])],
-        }));
-        saveMessages(fetched).catch(console.error);
-      }
-    } catch (err) {
-      console.error("fetchMessages error:", err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  }, []);
+    },
+    [api],
+  );
 
   const fetchUnreadCounts = useCallback(async () => {
     try {
-      const res = await apiClient.get(API_ENDPOINTS.GET_UNREAD_COUNTS);
+      const res = await api.get(API_ENDPOINTS.GET_UNREAD_COUNTS);
       setUnreadCounts(res.data.data || {});
     } catch (err) {
       console.error("fetchUnreadCounts error:", err);
     }
-  }, []);
+  }, [api]);
 
   const startConversation = useCallback(async (recipientUsername) => {
     const res = await apiClient.post(API_ENDPOINTS.START_CONVERSATION, {

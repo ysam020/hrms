@@ -9,7 +9,7 @@ import {
 } from "react";
 import { SocketContext } from "./SocketContext";
 import { UserContext } from "./UserContext";
-import apiClient from "@web/core/http/axiosConfig";
+import { useApiClient } from "@web/shared/hooks/useApiClient";
 
 export const ChatUnreadContext = createContext<{
   totalUnread: number;
@@ -44,16 +44,17 @@ export function ChatUnreadProvider({ children }: { children: ReactNode }) {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   // Prevent sound on the very first fetch (existing unread at page load)
   const initialFetchDone = useRef(false);
+  const api = useApiClient();
 
   const fetchUnread = useCallback(async () => {
     if (!user?.username) return;
     try {
-      const res = await apiClient.get("/chat/unread-counts");
+      const res = await api.get("/chat/unread-counts");
       setUnreadCounts(res.data.data || {});
     } catch {
       // silent
     }
-  }, [user?.username]);
+  }, [user?.username, api]);
 
   // Fetch on mount and on reconnect
   useEffect(() => {

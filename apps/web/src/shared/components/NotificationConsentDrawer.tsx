@@ -10,12 +10,12 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import UpdateIcon from "@mui/icons-material/Update";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { useBottomDrawer } from "@web/app/providers/BottomDrawerContext";
+import { generateToken } from "@web/shared/utils/pushNotifications/generateFcmToken";
 
 function NotificationConsentDrawer({
   showConsentDrawer,
   setShowConsentDrawer,
   setAlert,
-  onEnableNotifications,
 }: {
   showConsentDrawer: boolean;
   setShowConsentDrawer: (open: boolean) => void;
@@ -24,7 +24,6 @@ function NotificationConsentDrawer({
     message: string;
     severity: "error" | "info" | "success" | "warning";
   }) => void;
-  onEnableNotifications?: () => Promise<void>;
 }) {
   const { theme } = useContext(ThemeContext);
   const { setDrawerOpen } = useBottomDrawer();
@@ -34,15 +33,11 @@ function NotificationConsentDrawer({
   }, [showConsentDrawer, setDrawerOpen]);
 
   const handleAllow = async () => {
-    localStorage.setItem("notificationConsentDismissed", "true");
     setShowConsentDrawer(false);
-    if (onEnableNotifications) {
-      await onEnableNotifications();
-    }
+    await generateToken(setAlert);
   };
 
   const handleDeny = () => {
-    localStorage.setItem("notificationConsentDismissed", "true");
     setShowConsentDrawer(false);
     setAlert({
       open: true,

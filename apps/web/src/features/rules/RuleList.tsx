@@ -46,6 +46,7 @@ import InactiveIcon from "@mui/icons-material/Cancel";
 import DraftIcon from "@mui/icons-material/Schedule";
 import FilterIcon from "@mui/icons-material/FilterList";
 import apiClient from "@web/core/http/axiosConfig";
+import { useApiClient } from "@web/shared/hooks/useApiClient";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
@@ -56,6 +57,7 @@ type SnackbarState = {
 };
 
 const RuleList = ({ onEditRule, onCreateRule }) => {
+  const api = useApiClient();
   // State management
   const [rules, setRules] = useState<any[]>([]);
   const [filteredRules, setFilteredRules] = useState<any[]>([]);
@@ -98,7 +100,7 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
   const loadRules = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get(API_ENDPOINTS.GET_RULES);
+      const response = await api.get(API_ENDPOINTS.GET_RULES);
       setRules(response.data.data || []);
     } catch (error) {
       console.error("Error loading rules:", error);

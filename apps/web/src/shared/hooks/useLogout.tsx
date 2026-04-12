@@ -1,6 +1,8 @@
 import { useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import apiClient from "@web/core/http/axiosConfig";
+import apiClient, {
+  cancelAllPendingRequests,
+} from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function useLogout(setUser) {
@@ -41,7 +43,7 @@ function useLogout(setUser) {
         withCredentials: true,
       });
       if (res.data.success) {
-        // Clear the favicon notification dot
+        cancelAllPendingRequests("logout");
         clearFaviconDot();
 
         const theme = localStorage.getItem("theme");
