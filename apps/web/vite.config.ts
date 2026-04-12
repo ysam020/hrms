@@ -65,6 +65,16 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      "/prometheus": {
+        target: "http://localhost:9090",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/prometheus/, ""),
+      },
+      "/loki": {
+        target: "http://localhost:3100",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/loki/, ""),
+      },
     },
   },
 });

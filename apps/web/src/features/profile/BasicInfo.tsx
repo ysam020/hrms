@@ -206,7 +206,7 @@ function BasicInfo({ user }) {
   };
 
   // Section component
-  const Section = ({ title, children, icon }) => (
+  const Section = ({ title, children, icon, gridCols = 1 }) => (
     <Box
       sx={{
         backgroundColor: "var(--card-background)",
@@ -245,7 +245,16 @@ function BasicInfo({ user }) {
         />
       </Typography>
 
-      <Stack spacing={{ xs: 1, sm: 1 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: gridCols > 1 ? `repeat(${gridCols}, 1fr)` : "1fr",
+          },
+          gap: 1,
+        }}
+      >
         {React.Children.map(children, (child, index) => (
           <Card key={index} variant="outlined">
             <CardContent
@@ -258,7 +267,7 @@ function BasicInfo({ user }) {
             </CardContent>
           </Card>
         ))}
-      </Stack>
+      </Box>
     </Box>
   );
 
@@ -387,7 +396,11 @@ function BasicInfo({ user }) {
         >
           <Stack spacing={{ xs: 2, sm: 2 }}>
             {/* Personal Information */}
-            <Section title="Personal Information" icon={<Person />}>
+            <Section
+              title="Personal Information"
+              icon={<Person />}
+              gridCols={2}
+            >
               <DataField
                 icon={<Badge />}
                 label="Username"
@@ -411,7 +424,7 @@ function BasicInfo({ user }) {
             </Section>
 
             {/* Contact Information */}
-            <Section title="Contact Information" icon={<Phone />}>
+            <Section title="Contact Information" icon={<Phone />} gridCols={2}>
               <DataField
                 icon={<Email />}
                 label="Personal Email"
@@ -433,7 +446,11 @@ function BasicInfo({ user }) {
             </Section>
 
             {/* Employment Information */}
-            <Section title="Employment Information" icon={<Work />}>
+            <Section
+              title="Employment Information"
+              icon={<Work />}
+              gridCols={2}
+            >
               <DataField
                 icon={<Work />}
                 label="Designation"
@@ -514,7 +531,7 @@ function BasicInfo({ user }) {
             </Box>
 
             {/* Documents */}
-            <Section title="Documents" icon={<Description />}>
+            <Section title="Documents" icon={<Description />} gridCols={2}>
               <DataField
                 icon={<Description />}
                 label="AADHAR Number"

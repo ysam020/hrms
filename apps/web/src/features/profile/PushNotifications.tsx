@@ -275,7 +275,7 @@ function PushNotifications() {
   return (
     <Grid container>
       <Grid size={12}>
-        <List sx={{ width: "100%" }}>
+        <List disablePadding sx={{ width: "100%" }}>
           <ListItem
             alignItems="flex-start"
             sx={{

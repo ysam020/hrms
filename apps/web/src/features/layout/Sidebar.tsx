@@ -31,6 +31,9 @@ const AccountTreeIcon = React.lazy(
 const ChecklistIcon = React.lazy(() => import("@mui/icons-material/Checklist"));
 const ForumIcon = React.lazy(() => import("@mui/icons-material/Forum"));
 const PolicyIcon = React.lazy(() => import("@mui/icons-material/Policy"));
+const MonitorHeartIcon = React.lazy(
+  () => import("@mui/icons-material/MonitorHeart"),
+);
 function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -58,6 +61,7 @@ function Sidebar() {
       { title: "Rules", icon: <ChecklistIcon />, path: "/rules" },
       { title: "Analytics", icon: <EqualizerIcon />, path: "/analytics" },
       { title: "Policy", icon: <PolicyIcon />, path: "/policy" },
+      { title: "Monitoring", icon: <MonitorHeartIcon />, path: "/monitoring" },
       { title: "Help", icon: <LiveHelpIcon />, path: "/help" },
     ];
   }, []);

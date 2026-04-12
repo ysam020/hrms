@@ -274,7 +274,7 @@ function WebAuthnDevices() {
   return (
     <Grid container>
       <Grid size={12}>
-        <List sx={{ width: "100%" }}>
+        <List disablePadding sx={{ width: "100%" }}>
           <ListItem
             alignItems="flex-start"
             sx={{
@@ -340,10 +340,17 @@ function WebAuthnDevices() {
 
             {credentials.map((credential, index) => (
               <Box key={index} sx={getThemedListItemStyles(credential)}>
-                <Box sx={{ display: "flex", gap: 1, width: "100%" }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    width: "100%",
+                    p: { xs: 1.5, sm: 0 },
+                  }}
+                >
                   <Box
                     sx={{
-                      display: "flex",
+                      display: { xs: "none", sm: "flex" },
                       alignItems: "center",
                       margin: 2,
                     }}
@@ -360,43 +367,60 @@ function WebAuthnDevices() {
                     <Box
                       sx={{
                         display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        flexWrap: "wrap",
+                        flexDirection: "column",
+                        gap: 0.5,
                         flex: 1,
                       }}
                     >
-                      <Typography variant="body1" fontWeight="medium">
-                        {getBrowserName(credential)}
-                      </Typography>
-                      {isCurrentDevice(credential.credentialID) && (
-                        <Chip
-                          label="This Device"
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      )}
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <Box
+                          sx={{ display: { xs: "inline-flex", sm: "none" } }}
+                        >
+                          {getTransportIcon(credential.transports)}
+                        </Box>
+                        <Typography variant="body1" fontWeight="medium">
+                          {getBrowserName(credential)}
+                        </Typography>
+                        {isCurrentDevice(credential.credentialID) && (
+                          <Chip
+                            label="This Device"
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          {getOSName(credential)} •
+                          {getTransportDescription(credential.transports)}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: "block" }}
+                        >
+                          Registered: {formatLastUsed(credential.createdAt)}
+                        </Typography>
+                      </Box>
                     </Box>
 
-                    <Box sx={{ mr: 2, flex: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {getOSName(credential)} •
-                        {getTransportDescription(credential.transports)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Registered: {formatLastUsed(credential.createdAt)}
-                      </Typography>
-                    </Box>
-
-                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", mr: 2 }}>
                       <Button
                         style={{
                           backgroundColor: "#ff9800",
                           color: "white",
                           fontSize: "12px",
                           padding: "4px 8px",
-                          marginRight: "10px",
+                          marginRight: 0,
                           marginTop: 0,
                         }}
                         onClick={() =>

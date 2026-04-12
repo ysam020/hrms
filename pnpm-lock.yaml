@@ -921,12 +921,18 @@ importers:
       "@grpc/grpc-js":
         specifier: ^1.12.3
         version: 1.14.3
+      prom-client:
+        specifier: ^15.1.3
+        version: 15.1.3
       winston:
         specifier: ^3.16.0
         version: 3.19.0
       winston-cloudwatch:
         specifier: ^6.3.0
         version: 6.3.0(@aws-sdk/client-cloudwatch-logs@3.1028.0)(winston@3.19.0)
+      winston-loki:
+        specifier: ^6.1.3
+        version: 6.1.4(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
     devDependencies:
       "@hrms/typescript-config":
         specifier: workspace:*
@@ -3928,7 +3934,6 @@ packages:
     dependencies:
       "@emnapi/wasi-threads": 1.2.1
       tslib: 2.8.1
-    dev: true
     optional: true
 
   /@emnapi/runtime@1.9.2:
@@ -3938,7 +3943,6 @@ packages:
       }
     dependencies:
       tslib: 2.8.1
-    dev: true
     optional: true
 
   /@emnapi/wasi-threads@1.2.1:
@@ -3948,7 +3952,6 @@ packages:
       }
     dependencies:
       tslib: 2.8.1
-    dev: true
     optional: true
 
   /@emotion/babel-plugin@11.13.5:
@@ -6508,6 +6511,226 @@ packages:
       - "@types/react"
     dev: false
 
+  /@napi-rs/snappy-android-arm-eabi@7.3.3:
+    resolution:
+      {
+        integrity: sha512-d4vUFFzNBvazGfB/KU8MnEax6itTIgRWXodPdZDnWKHy9HwVBndpCiedQDcSNHcZNYV36rx034rpn7SAuTL2NA==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm]
+    os: [android]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-android-arm64@7.3.3:
+    resolution:
+      {
+        integrity: sha512-Uh+w18dhzjVl85MGhRnojb7OLlX2ErvMsYIunO/7l3Frvc2zQvfqsWsFJanu2dwqlE2YDooeNP84S+ywgN9sxg==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm64]
+    os: [android]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-darwin-arm64@7.3.3:
+    resolution:
+      {
+        integrity: sha512-AmJn+6yOu/0V0YNHLKmRUNYkn93iv/1wtPayC7O1OHtfY6YqHQ31/MVeeRBiEYtQW9TwVZxXrDirxSB1PxRdtw==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm64]
+    os: [darwin]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-darwin-x64@7.3.3:
+    resolution:
+      {
+        integrity: sha512-biLTXBmPjPmO7HIpv+5BaV9Gy/4+QJSUNJW8Pjx1UlWAVnocPy7um+zbvAWStZssTI5sfn/jOClrAegD4w09UA==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [x64]
+    os: [darwin]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-freebsd-x64@7.3.3:
+    resolution:
+      {
+        integrity: sha512-E3R3ewm8Mrjm0yL2TC3VgnphDsQaCPixNJqBbGiz3NTshVDhlPlOgPKF0NGYqKiKaDGdD9PKtUgOR4vagUtn7g==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [x64]
+    os: [freebsd]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-arm-gnueabihf@7.3.3:
+    resolution:
+      {
+        integrity: sha512-ZuNgtmk9j0KyT7TfLyEnvZJxOhbkyNR761nk04F0Q4NTHMICP28wQj0xgEsnCHUsEeA9OXrRL4R7waiLn+rOQA==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-arm64-gnu@7.3.3:
+    resolution:
+      {
+        integrity: sha512-KIzwtq0dAzshzpqZWjg0Q9lUx93iZN7wCCUzCdLYIQ+mvJZKM10VCdn0RcuQze1R3UJTPwpPLXQIVskNMBYyPA==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-arm64-musl@7.3.3:
+    resolution:
+      {
+        integrity: sha512-AAED4cQS74xPvktsyVmz5sy8vSxG/+3d7Rq2FDBZzj3Fv6v5vux6uZnECPCAqpALCdTtJ61unqpOyqO7hZCt1Q==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-ppc64-gnu@7.3.3:
+    resolution:
+      {
+        integrity: sha512-pofO5eSLg8ZTBwVae4WHHwJxJGZI8NEb4r5Mppvq12J/1/Hq1HecClXmfY3A7bdT2fsS2Td+Q7CI9VdBOj2sbA==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [ppc64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-riscv64-gnu@7.3.3:
+    resolution:
+      {
+        integrity: sha512-OiHYdeuwj0TVBXADUmmQDQ4lL1TB+8EwmXnFgOutoDVXHaUl0CJFyXLa6tYUXe+gRY8hs1v7eb0vyE97LKY06Q==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [riscv64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-s390x-gnu@7.3.3:
+    resolution:
+      {
+        integrity: sha512-66QdmuV9CTq/S/xifZXlMy3PsZTviAgkqqpZ+7vPCmLtuP+nqhaeupShOFf/sIDsS0gZePazPosPTeTBbhkLHg==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [s390x]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-x64-gnu@7.3.3:
+    resolution:
+      {
+        integrity: sha512-g6KURjOxrgb8yXDEZMuIcHkUr/7TKlDwSiydEQtMtP3n4iI4sNjkcE/WNKlR3+t9bZh1pFGAq7NFRBtouQGHpQ==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-linux-x64-musl@7.3.3:
+    resolution:
+      {
+        integrity: sha512-6UvOyczHknpaKjrlKKSlX3rwpOrfJwiMG6qA0NRKJFgbcCAEUxmN9A8JvW4inP46DKdQ0bekdOxwRtAhFiTDfg==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-openharmony-arm64@7.3.3:
+    resolution:
+      {
+        integrity: sha512-I5mak/5rTprobf7wMCk0vFhClmWOL/QiIJM4XontysnadmP/R9hAcmuFmoMV2GaxC9MblqLA7Z++gy8ou5hJVw==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm64]
+    os: [openharmony]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-wasm32-wasi@7.3.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2):
+    resolution:
+      {
+        integrity: sha512-+EroeygVYo9RksOchjF206frhMkfD2PaIun3yH4Zp5j/Y0oIEgs/+VhAYx/f+zHRylQYUIdLzDRclcoepvlR8Q==,
+      }
+    engines: { node: ">=14.0.0" }
+    cpu: [wasm32]
+    requiresBuild: true
+    dependencies:
+      "@napi-rs/wasm-runtime": 1.1.2(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+    transitivePeerDependencies:
+      - "@emnapi/core"
+      - "@emnapi/runtime"
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-win32-arm64-msvc@7.3.3:
+    resolution:
+      {
+        integrity: sha512-rxqfntBsCfzgOha/OlG8ld2hs6YSMGhpMUbFjeQLyVDbooY041fRXv3S7yk52DfO6H4QQhLT5+p7cW0mYdhyiQ==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [arm64]
+    os: [win32]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-win32-ia32-msvc@7.3.3:
+    resolution:
+      {
+        integrity: sha512-joRV16DsRtqjGt0CdSpxGCkO0UlHGeTZ/GqvdscoALpRKbikR2Top4C61dxEchmOd3lSYsXutuwWWGg3Nr++WA==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [ia32]
+    os: [win32]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@napi-rs/snappy-win32-x64-msvc@7.3.3:
+    resolution:
+      {
+        integrity: sha512-cEnQwcsdJyOU7HSZODWsHpKuQoSYM4jaqw/hn9pOXYbRN1+02WxYppD3fdMuKN6TOA6YG5KA5PHRNeVilNX86Q==,
+      }
+    engines: { node: ">= 10" }
+    cpu: [x64]
+    os: [win32]
+    requiresBuild: true
+    dev: false
+    optional: true
+
   /@napi-rs/wasm-runtime@1.1.2(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2):
     resolution:
       {
@@ -6521,7 +6744,6 @@ packages:
       "@emnapi/core": 1.9.2
       "@emnapi/runtime": 1.9.2
       "@tybys/wasm-util": 0.10.1
-    dev: true
     optional: true
 
   /@opentelemetry/api@1.9.1:
@@ -6532,7 +6754,6 @@ packages:
     engines: { node: ">=8.0.0" }
     requiresBuild: true
     dev: false
-    optional: true
 
   /@oxc-project/types@0.122.0:
     resolution:
@@ -8981,7 +9202,6 @@ packages:
     requiresBuild: true
     dependencies:
       tslib: 2.8.1
-    dev: true
     optional: true
 
   /@types/aria-query@5.0.4:
@@ -10479,6 +10699,14 @@ packages:
       js-tokens: 10.0.0
     dev: true
 
+  /async-exit-hook@2.0.1:
+    resolution:
+      {
+        integrity: sha512-NW2cX8m1Q7KPA7a5M2ULQeZ2wR5qI5PAbw5L0UOMxdioVk9PMZ0h1TmyZEkPYrCvYjDlFICusOu1dlEKAAeXBw==,
+      }
+    engines: { node: ">=0.12.0" }
+    dev: false
+
   /async-function@1.0.0:
     resolution:
       {
@@ -10794,6 +11022,13 @@ packages:
     engines: { node: ">=8" }
     dev: true
 
+  /bintrees@1.0.2:
+    resolution:
+      {
+        integrity: sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw==,
+      }
+    dev: false
+
   /bl@4.1.0:
     resolution:
       {
@@ -10936,6 +11171,15 @@ packages:
     dependencies:
       node-int64: 0.4.0
     dev: true
+
+  /btoa@1.2.1:
+    resolution:
+      {
+        integrity: sha512-SB4/MIGlsiVkMcHmT+pSmIPoNDoHg+7cMzmt3Uxt628MTz2487DKSqK/fuhFBrkuqrYv5UCEnACpF4dTFNKc/g==,
+      }
+    engines: { node: ">= 0.4.0" }
+    hasBin: true
+    dev: false
 
   /buffer-crc32@0.2.13:
     resolution:
@@ -17873,6 +18117,17 @@ packages:
     engines: { node: ">=0.4.0" }
     dev: false
 
+  /prom-client@15.1.3:
+    resolution:
+      {
+        integrity: sha512-6ZiOBfCywsD4k1BN9IX0uZhF+tJkV8q8llP64G5Hajs4JOeVLPCwpPVcpXy3BwYiUGgyJzsJJQeOIv7+hDSq8g==,
+      }
+    engines: { node: ^16 || ^18 || >=20 }
+    dependencies:
+      "@opentelemetry/api": 1.9.1
+      tdigest: 0.1.2
+    dev: false
+
   /prompts@2.4.2:
     resolution:
       {
@@ -19369,6 +19624,38 @@ packages:
       tslib: 2.8.1
     dev: true
 
+  /snappy@7.3.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2):
+    resolution:
+      {
+        integrity: sha512-UDJVCunvgblRpfTOjo/uT7pQzfrTsSICJ4yVS4aq7SsGBaUSpJwaVP15nF//jqinSLpN7boe/BqbUmtWMTQ5MQ==,
+      }
+    engines: { node: ">= 10" }
+    requiresBuild: true
+    optionalDependencies:
+      "@napi-rs/snappy-android-arm-eabi": 7.3.3
+      "@napi-rs/snappy-android-arm64": 7.3.3
+      "@napi-rs/snappy-darwin-arm64": 7.3.3
+      "@napi-rs/snappy-darwin-x64": 7.3.3
+      "@napi-rs/snappy-freebsd-x64": 7.3.3
+      "@napi-rs/snappy-linux-arm-gnueabihf": 7.3.3
+      "@napi-rs/snappy-linux-arm64-gnu": 7.3.3
+      "@napi-rs/snappy-linux-arm64-musl": 7.3.3
+      "@napi-rs/snappy-linux-ppc64-gnu": 7.3.3
+      "@napi-rs/snappy-linux-riscv64-gnu": 7.3.3
+      "@napi-rs/snappy-linux-s390x-gnu": 7.3.3
+      "@napi-rs/snappy-linux-x64-gnu": 7.3.3
+      "@napi-rs/snappy-linux-x64-musl": 7.3.3
+      "@napi-rs/snappy-openharmony-arm64": 7.3.3
+      "@napi-rs/snappy-wasm32-wasi": 7.3.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+      "@napi-rs/snappy-win32-arm64-msvc": 7.3.3
+      "@napi-rs/snappy-win32-ia32-msvc": 7.3.3
+      "@napi-rs/snappy-win32-x64-msvc": 7.3.3
+    transitivePeerDependencies:
+      - "@emnapi/core"
+      - "@emnapi/runtime"
+    dev: false
+    optional: true
+
   /socket.io-adapter@2.5.6:
     resolution:
       {
@@ -20127,6 +20414,15 @@ packages:
       fs-constants: 1.0.0
       inherits: 2.0.4
       readable-stream: 3.6.2
+    dev: false
+
+  /tdigest@0.1.2:
+    resolution:
+      {
+        integrity: sha512-+G0LLgjjo9BZX2MfdvPfH+MKLCrxlXSYec5DaPYP1fe6Iyhf0/fSmJ0bFiZ1F8BT6cGXl2LpltQptzjXKWEkKA==,
+      }
+    dependencies:
+      bintrees: 1.0.2
     dev: false
 
   /teeny-request@9.0.0:
@@ -20904,6 +21200,13 @@ packages:
       punycode: 2.3.1
     dev: true
 
+  /url-polyfill@1.1.14:
+    resolution:
+      {
+        integrity: sha512-p4f3TTAG6ADVF3mwbXw7hGw+QJyw5CnNGvYh5fCuQQZIiuKUswqcznyV3pGDP9j0TSmC4UvRKm8kl1QsX1diiQ==,
+      }
+    dev: false
+
   /use-sync-external-store@1.6.0(react@18.3.1):
     resolution:
       {
@@ -21460,6 +21763,24 @@ packages:
       lodash.isempty: 4.4.0
       lodash.iserror: 3.1.1
       winston: 3.19.0
+    dev: false
+
+  /winston-loki@6.1.4(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2):
+    resolution:
+      {
+        integrity: sha512-/j/Zf7TGLjgSBck29BkPnpJlEnGQr5xqlx8A0N6LZnXYYYvyK7lFk6FPpWiD+VMO8xjaxOu1KNF9SzWaRDsigA==,
+      }
+    dependencies:
+      async-exit-hook: 2.0.1
+      btoa: 1.2.1
+      protobufjs: 7.5.4
+      url-polyfill: 1.1.14
+      winston-transport: 4.9.0
+    optionalDependencies:
+      snappy: 7.3.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+    transitivePeerDependencies:
+      - "@emnapi/core"
+      - "@emnapi/runtime"
     dev: false
 
   /winston-transport@4.9.0:
