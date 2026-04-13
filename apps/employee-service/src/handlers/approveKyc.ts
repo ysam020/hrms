@@ -3,11 +3,12 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
+import { employee } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 export const approveKyc = async (
-  call: ServerUnaryCall<any, any>,
-  callback: sendUnaryData<any>,
+  call: ServerUnaryCall<employee.KycRequest, employee.KycResponse>,
+  callback: sendUnaryData<employee.KycResponse>,
 ) => {
   try {
     const { employeeId } = call.request;

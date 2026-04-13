@@ -7,6 +7,7 @@ export const employeeRouter: Router = Router();
 employeeRouter.put(
   "/edit-employee-details",
   authenticate,
+  h.validateEditEmployee,
   h.editEmployeeDetails,
 );
 employeeRouter.get(
@@ -15,12 +16,18 @@ employeeRouter.get(
   h.getEmployeeDetails,
 );
 employeeRouter.get("/employee-insights", authenticate, h.employeeInsights);
-employeeRouter.post("/complete-kyc", authenticate, h.completeKyc);
-employeeRouter.put("/edit-kyc", authenticate, h.editKyc);
+employeeRouter.post(
+  "/complete-kyc",
+  authenticate,
+  h.validateKyc,
+  h.completeKyc,
+);
+employeeRouter.put("/edit-kyc", authenticate, h.validateKyc, h.editKyc);
 employeeRouter.post(
   "/kyc-approval",
   authenticate,
   requireSuperUser,
+  h.validateKycApproval,
   h.kycApproval,
 );
 employeeRouter.get(

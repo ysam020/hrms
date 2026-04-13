@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(protoc --version)",
+      "Bash(node generate.js)",
+      "Bash(pnpm setup:project)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm add:*)",
+      "Bash(node -e ':*)",
+      "Bash(node_modules/.bin/workbox injectManifest workbox-config.cjs)",
+      "Bash(ls \"c:/Users/user/Downloads/hrms/node_modules/.pnpm/workbox-cli\"*/node_modules/workbox-cli/build/bin.js)",
+      "Bash(node scripts/dev.mjs)",
+      "Bash(grep -r \"\\\\\"dev\\\\\":\" c:/Users/user/Downloads/hrms/apps/*/package.json)",
+      "Bash(grep -r \"\\\\\"[a-z:]*\\\\\": \\\\\"LOKI_URL\\\\|METRICS_PORT\\\\|NODE_ENV\\\\|PORT=\" c:/Users/user/Downloads/hrms/apps/*/package.json)",
+      "Bash(pnpm dev:*)",
+      "Bash(taskkill /F /IM \"node.exe\" /T)",
+      "Bash(taskkill //F //IM node.exe //T)",
+      "Bash(xargs grep:*)",
+      "Bash(openssl version:*)",
+      "Bash(openssl req:*)",
+      "Bash(docker --version)",
+      "Bash(docker compose:*)",
+      "Bash(ls \"c:/Users/user/Downloads/hrms/.env\"*)",
+      "Bash(grep '\"name\"' c:/Users/user/Downloads/hrms/apps/*/package.json)",
+      "Bash(xargs ls:*)",
+      "Bash(xargs -I {} bash -c \"ls {} | wc -l\")"
+    ]
+  }
+}

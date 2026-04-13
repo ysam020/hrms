@@ -61,21 +61,24 @@ export const responseMessage = {
 export const errorMessage = {
   AUTH: {
     UNAUTHORIZED: "Unauthorized access",
+    UNAUTHORIZED_SHORT: "Unauthorized",
     INVALID_CREDENTIALS: "Invalid credentials",
     TOKEN_EXPIRED: "Token expired",
-    INVALID_TOKEN: "Invalid token",
+    INVALID_TOKEN: "Invalid or expired token",
+    FORBIDDEN: "Forbidden",
   },
   USER: {
     NOT_FOUND: "User not found",
     ALREADY_EXISTS: "User already exists",
     UPDATE_FAILED: "Failed to update user",
+    INVALID_ID: "Invalid user ID",
   },
   EMPLOYEE: {
     NOT_FOUND: "Employee not found",
     ALREADY_EXISTS: "Employee already exists",
   },
   GENERAL: {
-    INTERNAL_ERROR: "Internal server error",
+    INTERNAL_ERROR: "Internal Server Error",
     NOT_FOUND: "Resource not found",
     VALIDATION_ERROR: "Validation error",
     FORBIDDEN: "Access forbidden",

@@ -2,8 +2,9 @@ ARG APP_DIR=api-gateway
 ARG PROJECT=api-gateway
 ARG PORT=9002
 
-FROM node:20-alpine AS slim
-RUN apk update
+FROM node:22-alpine AS slim
+# apk upgrade ensures the base image has the latest OS-level security patches
+RUN apk update && apk upgrade --no-cache
 RUN apk add --no-cache libc6-compat
 RUN apk add --no-cache openssl
 
@@ -28,7 +29,7 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/out/json/ .
 
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --no-frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 

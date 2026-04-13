@@ -3,11 +3,15 @@ import { generateAuthenticationOptions } from "@simplewebauthn/server";
 import { prisma } from "@hrms/db";
 import { getRedisClient } from "../services/redis";
 import { logger } from "@hrms/logger";
+import { auth } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 export const webAuthnAuthenticationOptions = async (
-  call: ServerUnaryCall<any, any>,
-  callback: sendUnaryData<any>,
+  call: ServerUnaryCall<
+    auth.WebAuthnAuthenticationOptionsRequest,
+    auth.WebAuthnOptionsResponse
+  >,
+  callback: sendUnaryData<auth.WebAuthnOptionsResponse>,
 ) => {
   try {
     const { username } = call.request;

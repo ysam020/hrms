@@ -12,8 +12,10 @@ const swaggerDefinition = {
     {
       url:
         process.env.NODE_ENV === "production"
-          ? "https://api.praesto.cloud"
-          : "https://localhost:9002",
+          ? "https://api.praesto.cloud/api/v1"
+          : "https://localhost:9002/api/v1",
+      description:
+        process.env.NODE_ENV === "production" ? "Production" : "Local dev",
     },
   ],
   components: {
