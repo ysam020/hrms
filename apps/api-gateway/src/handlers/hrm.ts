@@ -1,11 +1,79 @@
 import { Request, Response } from "express";
-import { hrmClient, grpcCall } from "../grpc/clients";
+import { z } from "zod";
+import { hrmCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { jsPDF } from "jspdf";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, errorMessage } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
+import { validateBody } from "../middleware/validate";
+
+// ─── Schemas ──────────────────────────────────────────────────────────────────
+
+const hrActivitySchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(1000).optional().default(""),
+  date: z.string().max(50).optional().default(""),
+  time: z.string().max(20).optional().default(""),
+  status: z.string().max(50).optional().default("Active"),
+});
+
+const conditionSchema = z.object({
+  field: z.string().max(100),
+  operator: z.enum([
+    "equals",
+    "greater_than",
+    "less_than",
+    "greater_or_equal",
+    "less_or_equal",
+    "between",
+    "not_between",
+  ]),
+  value: z.union([z.string(), z.number()]),
+  valueTo: z.union([z.string(), z.number()]).optional(),
+});
+
+const actionSchema = z.object({
+  type: z.string().max(100),
+  params: z.record(z.unknown()).optional(),
+});
+
+const ruleSchema = z.object({
+  name: z.string().min(1).max(200),
+  category: z.string().min(1).max(100),
+  description: z.string().max(1000).optional(),
+  priority: z.number().int().min(0).optional().default(0),
+  status: z.enum(["draft", "active", "inactive"]).optional().default("draft"),
+  tags: z.array(z.string().max(50)).optional().default([]),
+  conditions: z.array(conditionSchema).optional(),
+  conditionLogic: z.enum(["AND", "OR"]).optional().default("AND"),
+  actions: z.array(actionSchema).optional(),
+  effectiveFrom: z.string().max(50).optional(),
+  effectiveTo: z.string().max(50).optional(),
+});
+
+const updateRuleStatusSchema = z.object({
+  status: z.enum(["draft", "active", "inactive"]),
+});
+
+const policySchema = z.object({
+  policyType: z.string().min(1).max(100),
+  policyName: z.string().max(200).optional().default(""),
+  content: z.string().min(1).max(100_000),
+});
+
+export const validateAddHrActivity = validateBody(hrActivitySchema);
+export const validateEditHrActivity = validateBody(
+  hrActivitySchema.partial().extend({
+    title: z.string().min(1).max(200).optional(),
+  }),
+);
+export const validateCreateRule = validateBody(ruleSchema);
+export const validateUpdateRule = validateBody(ruleSchema.partial());
+export const validateUpdateRuleStatus = validateBody(updateRuleStatusSchema);
+export const validateCreatePolicy = validateBody(policySchema);
+export const validateUpdatePolicy = validateBody(policySchema.partial());
 
 export async function getHrActivities(req: Request, res: Response) {
   try {
@@ -67,21 +135,21 @@ export async function getHrActivities(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("GET /get-hr-activities error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
 
 export async function getHrActivity(req: Request, res: Response) {
   try {
-    const response = await grpcCall(hrmClient, "getHrActivity", {
+    const response = await hrmCall("getHrActivity", {
       id: req.params._id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -89,15 +157,20 @@ export async function getHrActivity(req: Request, res: Response) {
 export async function addHrActivity(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const response = await grpcCall(hrmClient, "createHrActivity", {
-      ...req.body,
+    const { title, description, date, time, status } = req.body;
+    const response = await hrmCall("createHrActivity", {
+      title,
+      description,
+      date,
+      time,
+      status,
       createdBy: user!.userId,
     });
     await cacheManager.invalidatePattern("hrm:activities:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -105,16 +178,21 @@ export async function addHrActivity(req: Request, res: Response) {
 export async function editHrActivity(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const response = await grpcCall(hrmClient, "updateHrActivity", {
-      ...req.body,
+    const { title, description, date, time, status } = req.body;
+    const response = await hrmCall("updateHrActivity", {
+      title,
+      description,
+      date,
+      time,
+      status,
       id: req.params._id,
       updatedBy: user!.userId,
     });
     await cacheManager.invalidatePattern("hrm:activities:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -145,8 +223,8 @@ export async function deleteHrActivity(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("DELETE /delete-hr-activity error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -203,8 +281,8 @@ export async function getRules(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("GET /rules error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -249,8 +327,8 @@ export async function createRule(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("POST /rules error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -300,8 +378,8 @@ export async function updateRule(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("PUT /rules/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -316,8 +394,8 @@ export async function deleteRule(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("DELETE /rules/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -338,8 +416,8 @@ export async function updateRuleStatus(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("PATCH /rules/:id/status error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -413,8 +491,8 @@ export async function testRule(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("POST /rules/test error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -463,8 +541,8 @@ export async function getPolicies(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("GET /policies error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -523,8 +601,8 @@ export async function createOrUpdatePolicy(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("POST /policies error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -850,21 +928,21 @@ export async function getPolicyPdf(req: Request, res: Response) {
     return res.send(pdfBuffer);
   } catch (error: any) {
     logger.error("GET /policies/:id/pdf error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
 
 export async function getPolicy(req: Request, res: Response) {
   try {
-    const response = await grpcCall(hrmClient, "getPolicy", {
+    const response = await hrmCall("getPolicy", {
       id: req.params.id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -891,8 +969,8 @@ export async function updatePolicy(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("PUT /policies/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -910,23 +988,23 @@ export async function deletePolicy(req: Request, res: Response) {
     });
   } catch (error: any) {
     logger.error("DELETE /policies/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
 
 export async function isSuperuser(req: Request, res: Response) {
   try {
-    const response = await grpcCall(hrmClient, "checkPermission", {
+    const response = await hrmCall("checkPermission", {
       userId: req.params.username,
       resource: "superuser",
       action: "access",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }

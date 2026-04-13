@@ -7,10 +7,10 @@ import {
   getAttendanceSummary,
 } from "../handlers/attendance";
 
-jest.mock("../grpc/clients", () => ({
-  attendanceClient: {},
-  grpcCall: jest.fn(),
-}));
+jest.mock("../grpc/clients", () => {
+  const fn = jest.fn();
+  return { attendanceClient: {}, grpcCall: fn, attendanceCall: fn };
+});
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -31,6 +31,7 @@ jest.mock("@hrms/common", () => ({
     FORBIDDEN: 403,
     INTERNAL_SERVER_ERROR: 500,
   },
+  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -69,7 +70,6 @@ describe("addAttendance", () => {
     await addAttendance(makeReq({ body: { type: "CHECK_IN" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "markAttendance",
       expect.objectContaining({ userId: "user-id-1", type: "CHECK_IN" }),
     );
@@ -85,7 +85,6 @@ describe("addAttendance", () => {
     await addAttendance(makeReq({ body: { type: "CHECK_OUT" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "markAttendance",
       expect.objectContaining({
         latitude: 0,
@@ -123,7 +122,6 @@ describe("getAttendances", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getAttendance",
       expect.objectContaining({
         startDate: "2024-03-01",
@@ -139,7 +137,7 @@ describe("getAttendances", () => {
       res,
     );
 
-    const call = mockGrpcCall.mock.calls[0][2];
+    const call = mockGrpcCall.mock.calls[0][1];
     expect(call.startDate).toBe("2024-05-01");
     expect(call.endDate).toBe("2024-05-31");
   });
@@ -152,7 +150,6 @@ describe("getAttendances", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getAttendance",
       expect.objectContaining({ userId: "user-id-1" }),
     );
@@ -173,7 +170,6 @@ describe("getAllAttendances", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getAttendance",
       expect.objectContaining({ userId: "" }),
     );
@@ -189,7 +185,7 @@ describe("getAllAttendances", () => {
       res,
     );
 
-    const call = mockGrpcCall.mock.calls[0][2];
+    const call = mockGrpcCall.mock.calls[0][1];
     expect(call.limit).toBe(200);
   });
 
@@ -200,7 +196,7 @@ describe("getAllAttendances", () => {
       res,
     );
 
-    const call = mockGrpcCall.mock.calls[0][2];
+    const call = mockGrpcCall.mock.calls[0][1];
     expect(call.limit).toBe(50);
   });
 });
@@ -239,7 +235,6 @@ describe("attendanceCorrection", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "correctAttendance",
       expect.objectContaining({ username: "john", correctedBy: "manager" }),
     );

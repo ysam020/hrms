@@ -22,6 +22,10 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+jest.mock("@hrms/common", () => ({
+  aesEncrypt: jest.fn((v: string) => `enc:${v}`),
+}));
+
 const mockFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUpdate = prisma.user.update as jest.Mock;
 const mockFindMany = prisma.user.findMany as jest.Mock;
@@ -79,8 +83,9 @@ describe("submitKyc", () => {
       expect.objectContaining({
         where: { id: "u1" },
         data: expect.objectContaining({
-          aadhar_no: "1234-5678-9012",
-          pan_no: "ABCDE1234F",
+          aadhar_no: "enc:1234-5678-9012",
+          pan_no: "enc:ABCDE1234F",
+          bank_account_no: "enc:ACC123",
           kyc_approval: "Pending",
         }),
       }),

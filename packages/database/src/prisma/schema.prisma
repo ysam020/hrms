@@ -37,6 +37,10 @@ model User {
   department                  String?
   joining_date                String?
   employee_photo              String?
+  // IMPORTANT: face_descriptor stores biometric face embeddings (float arrays).
+  // This is sensitive biometric data under GDPR Art. 9. Before writing this field,
+  // the application MUST encrypt the serialised JSON using aesEncrypt (@hrms/common)
+  // and decrypt it on read with safeDecrypt. Do NOT store raw embeddings in plaintext.
   face_descriptor             Json?
   // Address
   permanent_address_line_1    String?
@@ -89,6 +93,13 @@ model User {
   notifications               NotificationRecipient[]
   salaryStructures            SalaryStructure[]
 
+  @@index([email])
+  @@index([official_email])
+  @@index([department])
+  @@index([designation])
+  @@index([employeeStatus])
+  @@index([dob])
+  @@index([joining_date])
   @@map("users")
 }
 
@@ -108,6 +119,8 @@ model AttendanceRecord {
   user         User?    @relation(fields: [username], references: [username])
 
   @@unique([username, date])
+  @@index([date])
+  @@index([username])
   @@map("attendance_records")
 }
 
@@ -130,6 +143,8 @@ model LeaveApplication {
 
   user              User?    @relation(fields: [username], references: [username])
 
+  @@index([username])
+  @@index([status])
   @@map("leaves")
 }
 
@@ -171,6 +186,8 @@ model JobOpening {
 
   applications       JobApplication[]
 
+  @@index([status])
+  @@index([department])
   @@map("jobopenings")
 }
 
@@ -245,6 +262,8 @@ model SalaryStructure {
 
   user            User?    @relation(fields: [username], references: [username])
 
+  @@index([username])
+  @@index([year, month])
   @@map("salarystructures")
 }
 
@@ -261,6 +280,7 @@ model Notification {
 
   recipients NotificationRecipient[]
 
+  @@index([timeStamp])
   @@map("notifications")
 }
 
@@ -273,6 +293,8 @@ model NotificationRecipient {
   notification   Notification @relation(fields: [notificationId], references: [id])
   user           User         @relation(fields: [userId], references: [id])
 
+  @@index([userId])
+  @@index([notificationId])
   @@map("notification_recipients")
 }
 
@@ -321,6 +343,7 @@ model ChatRoom {
 
   messages     Message[]
 
+  @@index([lastActivity])
   @@map("chatrooms")
 }
 
@@ -359,6 +382,9 @@ model AuditLog {
   userAgent   String?
   timestamp   DateTime? @default(now())
 
+  @@index([userId, timestamp])
+  @@index([timestamp])
+  @@index([entityType])
   @@map("auditlogs")
 }
 

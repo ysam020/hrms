@@ -1,25 +1,30 @@
 import { Request, Response } from "express";
-import { leaveClient, grpcCall } from "../grpc/clients";
+import { z } from "zod";
+import { leaveCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, errorMessage } from "@hrms/common";
+import { validateBody } from "../middleware/validate";
+import { resolveUsername, isSuperUser } from "../utils/userHelpers";
 
-async function resolveUsername(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { username: true },
-  });
-  return user?.username ?? null;
-}
+// ─── Schemas ──────────────────────────────────────────────────────────────────
 
-async function isSuperUser(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
-  return user?.isSuperUser === true;
-}
+const addLeaveSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "from must be YYYY-MM-DD"),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "to must be YYYY-MM-DD"),
+  leaveType: z.string().min(1).max(50),
+  reason: z.string().max(500).optional().default(""),
+  sick_leave: z.boolean().optional().default(false),
+  medicalCertificate: z.string().max(500).optional().default(""),
+});
+
+const updateLeaveStatusSchema = z.object({
+  action: z.enum(["approve", "reject", "cancel"]),
+  leaveId: z.string().min(1).max(100),
+});
+
+export const validateAddLeave = validateBody(addLeaveSchema);
+export const validateUpdateLeaveStatus = validateBody(updateLeaveStatusSchema);
 
 export async function addLeave(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -32,7 +37,7 @@ export async function addLeave(req: Request, res: Response) {
 
     const { from, to, leaveType, reason, sick_leave, medicalCertificate } =
       req.body;
-    const response = await grpcCall(leaveClient, "applyLeave", {
+    const response = await leaveCall("applyLeave", {
       username,
       leaveType,
       from,
@@ -45,7 +50,7 @@ export async function addLeave(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("POST /add-leave error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -64,7 +69,7 @@ export async function getLeaveApplications(req: Request, res: Response) {
       username = (await resolveUsername(user!.userId)) ?? undefined;
     }
 
-    const response = await grpcCall(leaveClient, "getLeaves", {
+    const response = await leaveCall("getLeaves", {
       userId: username,
       status: req.query.status || "",
       page: parseInt(req.query.page as string) || 1,
@@ -74,7 +79,7 @@ export async function getLeaveApplications(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("GET /get-leave-applications error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -108,12 +113,12 @@ export async function updateLeaveStatus(req: Request, res: Response) {
       });
     }
 
-    const response = await grpcCall(leaveClient, method, payload);
+    const response = await leaveCall(method, payload);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     logger.error("PUT /update-leave-status error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }
@@ -137,14 +142,14 @@ export async function getAvailablePaidLeaves(req: Request, res: Response) {
         message: "User not found",
       });
 
-    const response = await grpcCall(leaveClient, "getLeaveBalance", {
+    const response = await leaveCall("getLeaveBalance", {
       username,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     logger.error("GET /get-available-paid-leaves error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+      message: errorMessage.GENERAL.INTERNAL_ERROR,
     });
   }
 }

@@ -17,6 +17,12 @@ import { setupChatSocket } from "./config/chatSocket";
 import { configureSwagger } from "./config/swaggerSetup";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
+import {
+  authLimiter as routerAuthLimiter,
+  makeRedisStore,
+  userAwareKeyGenerator,
+} from "./middleware/rateLimiter";
+import { errorMessage } from "@hrms/common";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -53,13 +59,25 @@ const allowedOrigins = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.split(",").map((o) => o.trim())
   : [];
 
+// Swagger UI requires unsafe-inline for its bundled styles.
+// Apply a relaxed CSP only for that route before the global Helmet middleware.
+app.use("/api-docs", (req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https: data:;",
+  );
+  next();
+});
+
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        // unsafe-inline removed: this gateway only serves JSON responses and
+        // does not need inline styles outside of the /api-docs Swagger UI.
+        styleSrc: ["'self'"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         connectSrc: ["'self'", ...allowedOrigins],
         fontSrc: ["'self'", "https:", "data:"],
@@ -77,53 +95,56 @@ app.use(cookieParser());
 app.use(doubleCsrfProtection);
 app.use(apiRequestLogger);
 
-// Body parsers
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+// Body parsers — keep limits tight to reduce DoS surface
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// Rate limiters
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests, please try again later" },
-});
+// ─── Rate limiters ────────────────────────────────────────────────────────────
+// All limiters key by userId for authenticated requests, IP for anonymous ones.
+const authLimiter = routerAuthLimiter;
 
 const generalLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: userAwareKeyGenerator,
+  store: makeRedisStore(60 * 1000, "rl:general:"),
   message: { message: "Too many requests, please try again later" },
 });
 
-// Stricter limiter for unauthenticated public endpoints (careers, job application)
 const publicLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 250,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: userAwareKeyGenerator,
+  store: makeRedisStore(15 * 60 * 1000, "rl:public:"),
   message: { message: "Too many requests, please try again later" },
 });
 
+// ─── API v1 routes ────────────────────────────────────────────────────────────
+const API_PREFIX = "/api/v1";
+
 app.use(
-  /^\/api\/(webauthn-login|webauthn-verify-login|webauthn-login-options|webauthn-credential-check|auth\/google)/,
+  new RegExp(
+    `^${API_PREFIX}/(webauthn-login|webauthn-verify-login|webauthn-login-options|webauthn-credential-check|auth/google)`,
+  ),
   authLimiter,
 );
-app.use("/api/refresh-token", authLimiter);
+app.use(`${API_PREFIX}/refresh-token`, authLimiter);
 app.use(
-  /^\/api\/(public\/careers|get-job-titles|apply-for-job)/,
+  new RegExp(`^${API_PREFIX}/(public/careers|get-job-titles|apply-for-job)`),
   publicLimiter,
 );
-app.use("/api", generalLimiter);
+app.use(API_PREFIX, generalLimiter);
 
 app.use(auditLogMiddleware);
 configureSwagger(app as any);
-app.get("/api/csrf-token", (req, res) => {
+app.get(`${API_PREFIX}/csrf-token`, (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
-app.use("/api", rootRouter);
+app.use(API_PREFIX, rootRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "healthy" }));
 
@@ -132,7 +153,9 @@ app.use((error: any, _req: any, res: any, _next: any) => {
   const status = error.status || 500;
   // Never expose internal error details to the client
   const message =
-    status < 500 ? error.message || "Bad request" : "Internal Server Error";
+    status < 500
+      ? error.message || "Bad request"
+      : errorMessage.GENERAL.INTERNAL_ERROR;
   res.status(status).json({ message });
 });
 

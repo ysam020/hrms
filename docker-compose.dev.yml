@@ -1,10 +1,27 @@
+# gRPC TLS — set GRPC_TLS_ENABLED=true in .env after running:
+#   bash scripts/gen-grpc-certs.sh
+# The generated certs are mounted read-only into every service container.
+x-grpc-certs: &grpc-certs
+  volumes:
+    - ./packages/certificates/grpc:/app/packages/certificates/grpc:ro
+
+# Default resource envelope for Node.js services (dev values — tighten for prod).
+x-service-resources: &service-resources
+  deploy:
+    resources:
+      limits:
+        cpus: "0.50"
+        memory: 512M
+      reservations:
+        cpus: "0.10"
+        memory: 128M
+
 services:
   api-gateway:
     container_name: api-gateway
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=api-gateway
         - PROJECT=api-gateway
@@ -20,166 +37,335 @@ services:
       - SALARY_SERVICE_HOST=salary-service
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
+      # gRPC TLS — paths match the volume mount above
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+      - GRPC_CLIENT_CERT=/app/packages/certificates/grpc/client.crt
+      - GRPC_CLIENT_KEY=/app/packages/certificates/grpc/client.key
     ports:
       - "9002:9002"
     env_file: .env
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   auth-service:
     container_name: auth-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=auth-service
         - PROJECT=auth-service
         - PORT=50051
-    ports:
-      - "50051:50051"
+    # No host port mapping — only reachable within the Docker network by the api-gateway
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50051,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   user-service:
     container_name: user-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=user-service
         - PROJECT=user-service
         - PORT=50052
-    ports:
-      - "50052:50052"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50052,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   employee-service:
     container_name: employee-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=employee-service
         - PROJECT=@hrms/employee-service
         - PORT=50053
-    ports:
-      - "50053:50053"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50053,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   attendance-service:
     container_name: attendance-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=attendance-service
         - PROJECT=@hrms/attendance-service
         - PORT=50054
-    ports:
-      - "50054:50054"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50054,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   leave-service:
     container_name: leave-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=leave-service
         - PROJECT=@hrms/leave-service
         - PORT=50055
-    ports:
-      - "50055:50055"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50055,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   recruitment-service:
     container_name: recruitment-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=recruitment-service
         - PROJECT=@hrms/recruitment-service
         - PORT=50056
-    ports:
-      - "50056:50056"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50056,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   hrm-service:
     container_name: hrm-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=hrm-service
         - PROJECT=@hrms/hrm-service
         - PORT=50057
-    ports:
-      - "50057:50057"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50057,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   salary-service:
     container_name: salary-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=salary-service
         - PROJECT=@hrms/salary-service
         - PORT=50058
-    ports:
-      - "50058:50058"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50058,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   analytics-service:
     container_name: analytics-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=analytics-service
         - PROJECT=@hrms/analytics-service
         - PORT=50059
-    ports:
-      - "50059:50059"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50059,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   notification-service:
     container_name: notification-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=notification-service
         - PROJECT=@hrms/notification-service
         - PORT=50060
-    ports:
-      - "50060:50060"
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(50060,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   scheduler-service:
     container_name: scheduler-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=scheduler-service
         - PROJECT=@hrms/scheduler-service
     env_file: .env
+    environment:
+      - GRPC_SERVER_CERT=/app/packages/certificates/grpc/server.crt
+      - GRPC_SERVER_KEY=/app/packages/certificates/grpc/server.key
+      - GRPC_CA_CERT=/app/packages/certificates/grpc/ca.crt
+    <<: [*grpc-certs, *service-resources]
 
   web:
     container_name: web
     build:
       context: .
       dockerfile: ./docker/web.Dockerfile
-      no_cache: true
     ports:
       - "80:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

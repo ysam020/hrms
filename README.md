@@ -237,6 +237,20 @@ Required variables are documented in `.env.example`. You will need:
 - Firebase service account (for FCM)
 - AWS credentials (for Secrets Manager in production)
 
+> **API versioning:** The gateway now mounts all routes under `/api/v1`. Set the frontend env variable accordingly:
+>
+> ```
+> VITE_API_STRING=https://localhost:9002/api/v1   # local dev
+> VITE_API_STRING=https://api.yourdomain.com/api/v1  # production
+> ```
+>
+> **Encryption key format:** `AES_SECRET_KEY` must be a 64-character hex string (32 bytes).
+> Generate one with:
+>
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+> ```
+
 ### 3. Generate protobuf types
 
 ```bash

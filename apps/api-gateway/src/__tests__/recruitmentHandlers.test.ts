@@ -25,10 +25,10 @@ import {
   resignationInsights,
 } from "../handlers/recruitment";
 
-jest.mock("../grpc/clients", () => ({
-  recruitmentClient: {},
-  grpcCall: jest.fn(),
-}));
+jest.mock("../grpc/clients", () => {
+  const fn = jest.fn();
+  return { recruitmentClient: {}, grpcCall: fn, recruitmentCall: fn };
+});
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -56,10 +56,20 @@ jest.mock("@hrms/common", () => ({
     CREATED: 201,
     INTERNAL_SERVER_ERROR: 500,
   },
+  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(undefined),
+    invalidatePattern: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -109,7 +119,6 @@ describe("recruitmentHandlers", () => {
   it("viewJobOpenings calls listJobOpenings", async () => {
     await viewJobOpenings(makeReq({ query: { status: "Open" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "listJobOpenings",
       expect.objectContaining({ jobStatus: "Open" }),
     );
@@ -118,7 +127,6 @@ describe("recruitmentHandlers", () => {
   it("viewJobOpening calls getJobOpening with id", async () => {
     await viewJobOpening(makeReq({ params: { id: "j-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getJobOpening",
       expect.objectContaining({ id: "j-1" }),
     );
@@ -131,7 +139,6 @@ describe("recruitmentHandlers", () => {
       res,
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "createJobOpening",
       expect.objectContaining({ jobTitle: "SWE" }),
     );
@@ -148,7 +155,6 @@ describe("recruitmentHandlers", () => {
       makeRes(),
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "updateJobOpening",
       expect.objectContaining({ id: "j-1" }),
     );
@@ -157,7 +163,6 @@ describe("recruitmentHandlers", () => {
   it("deleteJobOpening calls deleteJobOpening with params id", async () => {
     await deleteJobOpening(makeReq({ params: { _id: "j-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "deleteJobOpening",
       expect.objectContaining({ id: "j-1" }),
     );
@@ -166,7 +171,6 @@ describe("recruitmentHandlers", () => {
   it("publicCareers calls listJobOpenings with status Open", async () => {
     await publicCareers(makeReq(), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "listJobOpenings",
       expect.objectContaining({ jobStatus: "Open" }),
     );
@@ -175,7 +179,6 @@ describe("recruitmentHandlers", () => {
   it("getJobTitles calls listJobOpenings with large limit", async () => {
     await getJobTitles(makeReq(), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "listJobOpenings",
       expect.objectContaining({ limit: 1000 }),
     );
@@ -187,7 +190,6 @@ describe("recruitmentHandlers", () => {
       makeRes(),
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "applyForJob",
       expect.objectContaining({ jobId: "j-1" }),
     );
@@ -196,7 +198,6 @@ describe("recruitmentHandlers", () => {
   it("viewApplications calls listApplications with jobTitleId", async () => {
     await viewApplications(makeReq({ params: { id: "j-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "listApplications",
       expect.objectContaining({ jobTitleId: "j-1" }),
     );
@@ -208,7 +209,6 @@ describe("recruitmentHandlers", () => {
       makeRes(),
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "updateApplicationStatus",
       expect.objectContaining({ id: "app-1", status: "Shortlisted" }),
     );
@@ -217,7 +217,6 @@ describe("recruitmentHandlers", () => {
   it("hireCandidate calls updateApplicationStatus with Hired status", async () => {
     await hireCandidate(makeReq({ body: { id: "app-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "updateApplicationStatus",
       expect.objectContaining({ id: "app-1", status: "Hired" }),
     );
@@ -226,22 +225,21 @@ describe("recruitmentHandlers", () => {
   it("rejectApplication calls updateApplicationStatus with Rejected status", async () => {
     await rejectApplication(makeReq({ body: { id: "app-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "updateApplicationStatus",
       expect.objectContaining({ id: "app-1", status: "Rejected" }),
     );
   });
 
-  it("addResignation calls submitResignation with user's userId as username", async () => {
+  it("addResignation calls submitResignation with resolved username", async () => {
+    // beforeEach mocks findUnique to return { username: "admin", isSuperUser: false }
     await addResignation(
       makeReq({ body: { reason: "Better opportunity" } }),
       makeRes(),
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "submitResignation",
       expect.objectContaining({
-        username: "user-1",
+        username: "admin",
         reason: "Better opportunity",
       }),
     );
@@ -257,7 +255,6 @@ describe("recruitmentHandlers", () => {
         makeRes(),
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
-        expect.anything(),
         "listResignations",
         expect.objectContaining({ username: "john" }),
       );
@@ -272,7 +269,6 @@ describe("recruitmentHandlers", () => {
         makeRes(),
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
-        expect.anything(),
         "listResignations",
         expect.objectContaining({ username: "jane" }),
       );
@@ -282,7 +278,6 @@ describe("recruitmentHandlers", () => {
   it("approveResignation calls approveResignation with params id", async () => {
     await approveResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "approveResignation",
       expect.objectContaining({ id: "res-1" }),
     );
@@ -291,7 +286,6 @@ describe("recruitmentHandlers", () => {
   it("rejectResignation calls rejectResignation with params id", async () => {
     await rejectResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "rejectResignation",
       expect.objectContaining({ id: "res-1" }),
     );
@@ -300,7 +294,6 @@ describe("recruitmentHandlers", () => {
   it("withdrawResignation calls rejectResignation with Withdrawn status", async () => {
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "rejectResignation",
       expect.objectContaining({ id: "res-1", status: "Withdrawn" }),
     );

@@ -16,10 +16,10 @@ import {
   googleAuthCallback,
 } from "../handlers/auth";
 
-jest.mock("../grpc/clients", () => ({
-  authClient: {},
-  grpcCall: jest.fn(),
-}));
+jest.mock("../grpc/clients", () => {
+  const fn = jest.fn();
+  return { authClient: {}, grpcCall: fn, authCall: fn };
+});
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -41,6 +41,9 @@ jest.mock("@hrms/common", () => ({
     INTERNAL_SERVER_ERROR: 500,
     UN_AUTHORIZED: 401,
   },
+  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
+  safeDecrypt: jest.fn((v: any) => v || ""),
+  grpcToHttpStatus: jest.fn(() => 500),
 }));
 
 jest.mock("@hrms/crypto", () => ({
@@ -49,7 +52,6 @@ jest.mock("@hrms/crypto", () => ({
     if (v === "bad-token") throw new Error("Decrypt failed");
     return v;
   }),
-  safeDecrypt: jest.fn((v: any) => v || ""),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -85,7 +87,7 @@ const makeRes = () =>
 
 const makeReq = (overrides: any = {}) =>
   ({
-    user: { userId: "user-1", email: "user@test.com" },
+    user: { userId: "aabbccddeeff001122334455", email: "user@test.com" },
     query: {},
     params: {},
     body: {},
@@ -212,8 +214,8 @@ describe("authHandlers", () => {
       mockGrpcCall.mockResolvedValue({ message: "Logged out" });
       const res = makeRes();
       await logout(makeReq(), res);
-      expect(mockGrpcCall).toHaveBeenCalledWith(expect.anything(), "logout", {
-        userId: "user-1",
+      expect(mockGrpcCall).toHaveBeenCalledWith("logout", {
+        userId: "aabbccddeeff001122334455",
       });
       expect(res.clearCookie).toHaveBeenCalledWith(
         "refresh_token",
@@ -440,9 +442,8 @@ describe("authHandlers", () => {
       const res = makeRes();
       await webAuthnRegister(makeReq(), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
-        expect.anything(),
         "webAuthnRegistrationOptions",
-        expect.objectContaining({ userId: "user-1" }),
+        expect.objectContaining({ userId: "aabbccddeeff001122334455" }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
@@ -465,10 +466,9 @@ describe("authHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
-        expect.anything(),
         "webAuthnRegistrationVerify",
         expect.objectContaining({
-          userId: "user-1",
+          userId: "aabbccddeeff001122334455",
           credential: expect.any(String),
         }),
       );

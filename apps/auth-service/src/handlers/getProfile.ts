@@ -1,11 +1,12 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { auth } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 export const getProfile = async (
-  call: ServerUnaryCall<any, any>,
-  callback: sendUnaryData<any>,
+  call: ServerUnaryCall<auth.GetProfileRequest, auth.GetProfileResponse>,
+  callback: sendUnaryData<auth.GetProfileResponse>,
 ) => {
   try {
     const { userId } = call.request;

@@ -1,11 +1,12 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { revokeRefreshToken } from "../services/redis";
 import { logger } from "@hrms/logger";
+import { auth } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 export const logout = async (
-  call: ServerUnaryCall<any, any>,
-  callback: sendUnaryData<any>,
+  call: ServerUnaryCall<auth.LogoutRequest, auth.LogoutResponse>,
+  callback: sendUnaryData<auth.LogoutResponse>,
 ) => {
   try {
     const { userId } = call.request;

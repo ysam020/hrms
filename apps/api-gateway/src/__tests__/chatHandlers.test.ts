@@ -48,6 +48,7 @@ jest.mock("@hrms/common", () => ({
     INTERNAL_SERVER_ERROR: 500,
     UN_AUTHORIZED: 401,
   },
+  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({
