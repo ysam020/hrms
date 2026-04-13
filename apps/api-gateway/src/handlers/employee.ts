@@ -283,6 +283,12 @@ export async function kycApproval(req: Request, res: Response) {
   try {
     const { username, kyc_approval } = req.body;
 
+    if (!username || !kyc_approval) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "username and kyc_approval are required",
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { username },
       select: { id: true },

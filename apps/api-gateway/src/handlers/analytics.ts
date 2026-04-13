@@ -72,7 +72,7 @@ export const validatePerformanceAnalytics = validateQuery(
 export async function getDashboardStats(req: Request, res: Response) {
   try {
     const response = await analyticsCall("GetDashboardStats", {
-      period: req.query.period,
+      period: (req.query.period as string) || "month",
       department: req.query.department,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
@@ -174,7 +174,7 @@ export async function getTurnoverAnalytics(req: Request, res: Response) {
 export async function getPerformanceAnalytics(req: Request, res: Response) {
   try {
     const response = await analyticsCall("GetPerformanceAnalytics", {
-      period: req.query.period,
+      period: (req.query.period as string) || "quarter",
       department: req.query.department,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);

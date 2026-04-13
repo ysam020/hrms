@@ -379,6 +379,16 @@ export async function addHoliday(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const { name, date } = req.body; // already validated by validateAddHoliday
+    if (!name || !date) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "name and date are required",
+      });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "date must be YYYY-MM-DD",
+      });
+    }
     const d = new Date(date);
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
@@ -446,6 +456,16 @@ export async function addHoliday(req: Request, res: Response) {
 export async function deleteHoliday(req: Request, res: Response) {
   try {
     const { date } = req.body; // already validated by validateDeleteHoliday
+    if (!date) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "date is required",
+      });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "date must be YYYY-MM-DD",
+      });
+    }
     const d = new Date(date);
     const year = d.getFullYear();
     const month = d.getMonth() + 1;

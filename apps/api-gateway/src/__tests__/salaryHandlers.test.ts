@@ -5,10 +5,10 @@ import {
   generateSalarySlip,
 } from "../handlers/salary";
 
-jest.mock("../grpc/clients", () => ({
-  salaryClient: {},
-  grpcCall: jest.fn(),
-}));
+jest.mock("../grpc/clients", () => {
+  const fn = jest.fn();
+  return { salaryClient: {}, grpcCall: fn, salaryCall: fn };
+});
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -27,10 +27,20 @@ jest.mock("@hrms/common", () => ({
     FORBIDDEN: 403,
     INTERNAL_SERVER_ERROR: 500,
   },
+  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(undefined),
+    invalidatePattern: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -72,7 +82,6 @@ describe("updateSalary", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "updateSalaryStructure",
       expect.objectContaining({
         userId: "emp-1",
@@ -94,7 +103,6 @@ describe("updateSalary", () => {
     await updateSalary(makeReq({ body: {} }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "updateSalaryStructure",
       expect.objectContaining({
         userId: "",
@@ -110,7 +118,7 @@ describe("updateSalary", () => {
     const res = makeRes();
     await updateSalary(makeReq({ body: { components: "not-an-array" } }), res);
 
-    const call = mockGrpcCall.mock.calls[0][2];
+    const call = mockGrpcCall.mock.calls[0][1];
     expect(call.components).toEqual([]);
   });
 
@@ -145,7 +153,6 @@ describe("getUserSalary", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getPayslip",
       expect.objectContaining({ username: "john", year: 2024, month: 3 }),
     );
@@ -205,7 +212,7 @@ describe("getUserSalary", () => {
       res,
     );
 
-    const call = mockGrpcCall.mock.calls[0][2];
+    const call = mockGrpcCall.mock.calls[0][1];
     expect(typeof call.year).toBe("number");
     expect(typeof call.month).toBe("number");
     expect(call.year).toBe(2024);
@@ -250,7 +257,6 @@ describe("generateSalarySlip", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getPayslip",
       expect.objectContaining({ username: "john" }),
     );

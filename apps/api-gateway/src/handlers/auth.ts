@@ -1,12 +1,16 @@
 import { Request, Response } from "express";
 import { authCall } from "../grpc/clients";
-import { grpcToHttpStatus } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  errorMessage,
+  safeDecrypt,
+  grpcToHttpStatus,
+} from "@hrms/common";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS, errorMessage } from "@hrms/common";
 import { aesEncrypt, aesDecrypt } from "@hrms/crypto";
-import { safeDecrypt } from "@hrms/common";
 
 /** Returns true only for a 24-character lowercase hex string (MongoDB ObjectId). */
 function isValidObjectId(id: unknown): id is string {
@@ -173,6 +177,11 @@ export async function refreshToken(req: Request, res: Response) {
     const response = (await authCall("refreshToken", {
       refreshToken: token,
     })) as any;
+    if (!response.accessToken) {
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: response.message || "Authentication failed",
+      });
+    }
     // Rotate the refresh token cookie
     if (response.refreshToken) {
       res.cookie(

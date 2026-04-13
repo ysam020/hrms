@@ -6,10 +6,10 @@ import {
   getAvailablePaidLeaves,
 } from "../handlers/leave";
 
-jest.mock("../grpc/clients", () => ({
-  leaveClient: {},
-  grpcCall: jest.fn(),
-}));
+jest.mock("../grpc/clients", () => {
+  const fn = jest.fn();
+  return { leaveClient: {}, grpcCall: fn, leaveCall: fn };
+});
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -28,10 +28,20 @@ jest.mock("@hrms/common", () => ({
     FORBIDDEN: 403,
     INTERNAL_SERVER_ERROR: 500,
   },
+  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(undefined),
+    invalidatePattern: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -91,7 +101,6 @@ describe("addLeave", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "applyLeave",
       expect.objectContaining({
         username: "john",
@@ -134,7 +143,6 @@ describe("getLeaveApplications", () => {
     await getLeaveApplications(makeReq({ query: { username: "other" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getLeaves",
       expect.objectContaining({ userId: "john" }),
     );
@@ -150,7 +158,6 @@ describe("getLeaveApplications", () => {
     await getLeaveApplications(makeReq({ query: { username: "jane" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "getLeaves",
       expect.objectContaining({ userId: "jane" }),
     );
@@ -197,7 +204,6 @@ describe("updateLeaveStatus", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "approveLeave",
       expect.objectContaining({ id: "l1", approvedByUsername: "manager" }),
     );
@@ -211,7 +217,6 @@ describe("updateLeaveStatus", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "rejectLeave",
       expect.objectContaining({ id: "l1" }),
     );
@@ -225,7 +230,6 @@ describe("updateLeaveStatus", () => {
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
       "cancelLeave",
       expect.objectContaining({ id: "l1", username: "manager" }),
     );
@@ -296,11 +300,9 @@ describe("getAvailablePaidLeaves", () => {
       res,
     );
 
-    expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
-      "getLeaveBalance",
-      { username: "john" },
-    );
+    expect(mockGrpcCall).toHaveBeenCalledWith("getLeaveBalance", {
+      username: "john",
+    });
   });
 
   it("allows superuser to query any employee's balance via route param", async () => {
@@ -312,10 +314,8 @@ describe("getAvailablePaidLeaves", () => {
       res,
     );
 
-    expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
-      "getLeaveBalance",
-      { username: "jane" },
-    );
+    expect(mockGrpcCall).toHaveBeenCalledWith("getLeaveBalance", {
+      username: "jane",
+    });
   });
 });
