@@ -4,12 +4,7 @@ import * as h from "../handlers/attendance";
 
 export const attendanceRouter: Router = Router();
 
-attendanceRouter.post(
-  "/add-attendance",
-  authenticate,
-  h.validateAddAttendance,
-  h.addAttendance,
-);
+attendanceRouter.post("/add-attendance", authenticate, h.addAttendance);
 attendanceRouter.get(
   "/get-attendances/:month/:year",
   authenticate,
@@ -24,7 +19,6 @@ attendanceRouter.get(
 attendanceRouter.put(
   "/attendance-correction",
   authenticate,
-  h.validateAttendanceCorrection,
   h.attendanceCorrection,
 );
 attendanceRouter.get(

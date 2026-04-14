@@ -1,9 +1,4 @@
-import {
-  sendUnaryData,
-  ServerUnaryCall,
-  status,
-  Metadata,
-} from "@grpc/grpc-js";
+import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import {
   verifyRefreshToken,
   signAccessToken,
@@ -15,38 +10,33 @@ import {
   revokeRefreshToken,
 } from "../services/redis";
 import { logger } from "@hrms/logger";
-import { auth } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 export const refreshToken = async (
-  call: ServerUnaryCall<auth.RefreshTokenRequest, auth.RefreshTokenResponse>,
-  callback: sendUnaryData<auth.RefreshTokenResponse>,
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
 ) => {
   try {
     const { refreshToken: token } = call.request;
 
     const payload = verifyRefreshToken(token);
     if (!payload) {
-      return callback(
-        {
-          code: status.UNAUTHENTICATED,
-          message: MESSAGES.INVALID_REFRESH_TOKEN,
-          metadata: new Metadata(),
-        },
-        null,
-      );
+      return callback(null, {
+        message: MESSAGES.INVALID_REFRESH_TOKEN,
+        status: status.UNAUTHENTICATED,
+        accessToken: "",
+        refreshToken: "",
+      });
     }
 
     const isValid = await validateRefreshToken(payload.userId, token);
     if (!isValid) {
-      return callback(
-        {
-          code: status.UNAUTHENTICATED,
-          message: MESSAGES.REFRESH_TOKEN_REVOKED,
-          metadata: new Metadata(),
-        },
-        null,
-      );
+      return callback(null, {
+        message: MESSAGES.REFRESH_TOKEN_REVOKED,
+        status: status.UNAUTHENTICATED,
+        accessToken: "",
+        refreshToken: "",
+      });
     }
 
     // Rotate: revoke old token, issue new pair
@@ -57,18 +47,17 @@ export const refreshToken = async (
 
     return callback(null, {
       message: MESSAGES.TOKEN_REFRESHED,
+      status: status.OK,
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
     });
   } catch (err) {
     logger.error("RefreshToken error:", { err });
-    return callback(
-      {
-        code: status.INTERNAL,
-        message: MESSAGES.INTERNAL_SERVER_ERROR,
-        metadata: new Metadata(),
-      },
-      null,
-    );
+    return callback(null, {
+      message: MESSAGES.INTERNAL_SERVER_ERROR,
+      status: status.INTERNAL,
+      accessToken: "",
+      refreshToken: "",
+    });
   }
 };

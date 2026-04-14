@@ -2,15 +2,11 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { auth } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 export const webAuthnRegistrationOptions = async (
-  call: ServerUnaryCall<
-    auth.WebAuthnRegistrationOptionsRequest,
-    auth.WebAuthnOptionsResponse
-  >,
-  callback: sendUnaryData<auth.WebAuthnOptionsResponse>,
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
 ) => {
   try {
     const { userId, email } = call.request;

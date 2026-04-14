@@ -2,15 +2,11 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { employee } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 export const listEmployees = async (
-  call: ServerUnaryCall<
-    employee.ListEmployeesRequest,
-    employee.ListEmployeesResponse
-  >,
-  callback: sendUnaryData<employee.ListEmployeesResponse>,
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
 ) => {
   try {
     const {
@@ -54,35 +50,9 @@ export const listEmployees = async (
       ];
     }
 
-    // PII/KYC fields are intentionally excluded from the list view.
-    // Use getEmployee (by ID) when the full record including decrypted PII is needed.
-    const select = {
-      id: true,
-      username: true,
-      email: true,
-      official_email: true,
-      first_name: true,
-      middle_name: true,
-      last_name: true,
-      role: true,
-      permissions: true,
-      isSuperUser: true,
-      employeeStatus: true,
-      designation: true,
-      department: true,
-      joining_date: true,
-      employee_photo: true,
-      wfh: true,
-      assets: true,
-      note: true,
-      createdAt: true,
-      updatedAt: true,
-    };
-
     const [employees, total] = await Promise.all([
       prisma.user.findMany({
         where,
-        select,
         skip,
         take: limitNum,
         orderBy: { createdAt: "desc" },

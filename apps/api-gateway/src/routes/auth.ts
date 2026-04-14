@@ -6,7 +6,7 @@ export const authRouter: Router = Router();
 
 authRouter.get("/profile", authenticate, h.getProfile);
 authRouter.post("/refresh-token", h.refreshToken);
-authRouter.post("/logout", authenticate, h.logout);
+authRouter.get("/logout", authenticate, h.logout);
 
 authRouter.get("/webauthn-register", authenticate, h.webAuthnRegisterOptions);
 authRouter.get("/webauthn-credentials", authenticate, h.getWebAuthnCredentials);

@@ -1,40 +1,5 @@
 import React, { useState, useContext, useCallback } from "react";
 import DOMPurify from "dompurify";
-
-// Strict allowlist for policy HTML content produced by the Quill rich-text
-// editor. Only structure/formatting tags are permitted — no scripts, iframes,
-// forms, or event-handler attributes.
-const POLICY_SANITIZE_CONFIG: DOMPurify.Config = {
-  ALLOWED_TAGS: [
-    "p",
-    "br",
-    "strong",
-    "em",
-    "u",
-    "s",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "ul",
-    "ol",
-    "li",
-    "blockquote",
-    "pre",
-    "code",
-    "a",
-    "span",
-    "div",
-  ],
-  // "style" intentionally excluded — arbitrary CSS enables UI redressing and
-  // data-exfiltration via background-image URLs. Quill output uses classes only.
-  ALLOWED_ATTR: ["href", "target", "rel", "class"],
-  ALLOW_DATA_ATTR: false,
-  // Force external links to open safely
-  FORCE_BODY: true,
-};
 import {
   MaterialReactTable,
   useMaterialReactTable,
@@ -186,10 +151,7 @@ function PolicyViewer({ policy, onClose, theme }) {
           color: "text.primary",
         }}
         dangerouslySetInnerHTML={{
-          __html: DOMPurify.sanitize(
-            policy?.content || "",
-            POLICY_SANITIZE_CONFIG,
-          ),
+          __html: DOMPurify.sanitize(policy?.content || ""),
         }}
       />
 
@@ -241,8 +203,7 @@ function EditPolicyModal({ policy, onClose, onSaved, theme }) {
     if (policyType === "Other" && !policyName.trim()) e.policyName = "Required";
     if (
       !content ||
-      DOMPurify.sanitize(content, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }).trim()
-        .length < 10
+      DOMPurify.sanitize(content, { ALLOWED_TAGS: [] }).trim().length < 10
     )
       e.content = "Content must be at least 10 characters";
     return e;

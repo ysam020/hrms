@@ -4,7 +4,6 @@ import { prisma } from "@hrms/db";
 import { signAccessToken, signRefreshToken } from "../services/jwt";
 import { storeRefreshToken, getRedisClient } from "../services/redis";
 import { logger } from "@hrms/logger";
-import { auth } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 function toBase64url(value: any): string | undefined {
@@ -19,11 +18,8 @@ function toBase64url(value: any): string | undefined {
 }
 
 export const webAuthnAuthenticationVerify = async (
-  call: ServerUnaryCall<
-    auth.WebAuthnAuthenticationVerifyRequest,
-    auth.WebAuthnVerifyResponse
-  >,
-  callback: sendUnaryData<auth.WebAuthnVerifyResponse>,
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
 ) => {
   try {
     const { userId, username, credential } = call.request;

@@ -1,4 +1,3 @@
-import Redis from "ioredis";
 import { logger } from "@hrms/logger";
 import { getRedisClient } from "./client";
 
@@ -23,80 +22,13 @@ const ENTITY_TTL: Record<string, number> = {
 const MAX_MEMORY_SIZE = 1000;
 const DEFAULT_TTL = 3600;
 
-// Set CACHE_MEMORY_DISABLED=true when running multiple api-gateway instances.
-// With the in-memory tier enabled each instance has its own local copy that
-// won't see Redis-side invalidations issued by other instances.
-const MEMORY_DISABLED = process.env.CACHE_MEMORY_DISABLED === "true";
-
-// Redis Pub/Sub channel used to broadcast invalidation events to every instance.
-const INVALIDATION_CHANNEL = "cache:invalidate";
-
 export class CacheManager {
   private memoryCache: Map<string, unknown>;
   private memoryTTL: Map<string, number>;
-  private subscriber: Redis | null = null;
 
   constructor() {
     this.memoryCache = new Map();
     this.memoryTTL = new Map();
-    if (!MEMORY_DISABLED) {
-      this.subscribeToInvalidations();
-    }
-  }
-
-  /**
-   * Subscribe to the Redis invalidation channel so that delete/invalidate
-   * calls made by other instances are reflected in this instance's memory cache.
-   */
-  private subscribeToInvalidations(): void {
-    try {
-      // Use a dedicated connection for subscriptions (ioredis requirement).
-      this.subscriber = new Redis(
-        process.env.REDIS_URL || "redis://localhost:6379",
-      );
-      this.subscriber.on("error", (err) =>
-        logger.error("Cache invalidation subscriber error:", { err }),
-      );
-      this.subscriber.subscribe(INVALIDATION_CHANNEL, (err) => {
-        if (err)
-          logger.error("Failed to subscribe to invalidation channel:", { err });
-      });
-      this.subscriber.on("message", (_channel, message) => {
-        try {
-          const { type, key, pattern } = JSON.parse(message) as {
-            type: "key" | "pattern";
-            key?: string;
-            pattern?: string;
-          };
-          if (type === "key" && key) {
-            this.memoryCache.delete(key);
-            this.memoryTTL.delete(key);
-          } else if (type === "pattern" && pattern) {
-            this.evictMemoryByPattern(pattern);
-          }
-        } catch {
-          // Malformed message — ignore
-        }
-      });
-    } catch (err) {
-      logger.error("Could not set up cache invalidation subscriber:", { err });
-    }
-  }
-
-  /** Publish an invalidation event so all instances can evict the same key. */
-  private async publishInvalidation(
-    payload:
-      | { type: "key"; key: string }
-      | { type: "pattern"; pattern: string },
-  ): Promise<void> {
-    try {
-      await getRedisClient().publish(
-        INVALIDATION_CHANNEL,
-        JSON.stringify(payload),
-      );
-    } catch (err) {
-      logger.error("Failed to publish cache invalidation:", { err });
-    }
   }
 
   private getTTL(entityType?: string): number {
@@ -109,7 +41,6 @@ export class CacheManager {
     value: unknown,
     ttlSeconds: number,
   ): void {
-    if (MEMORY_DISABLED) return;
     // Evict LRU entry when at capacity (Map preserves insertion order)
     if (
       this.memoryCache.size >= MAX_MEMORY_SIZE &&
@@ -126,7 +57,6 @@ export class CacheManager {
   }
 
   private getMemoryCache(key: string): unknown | null {
-    if (MEMORY_DISABLED) return null;
     if (!this.memoryCache.has(key)) return null;
     const ttl = this.memoryTTL.get(key);
     if (ttl && Date.now() > ttl) {
@@ -139,19 +69,6 @@ export class CacheManager {
     this.memoryCache.delete(key);
     this.memoryCache.set(key, value);
     return value ?? null;
-  }
-
-  /** Evict all memory-cache entries whose key matches a glob pattern. */
-  private evictMemoryByPattern(pattern: string): void {
-    const prefix = pattern.endsWith(":*")
-      ? pattern.slice(0, -1)
-      : pattern.replace(/\*/g, "");
-    for (const key of this.memoryCache.keys()) {
-      if (key.startsWith(prefix) || this.matchesGlob(key, pattern)) {
-        this.memoryCache.delete(key);
-        this.memoryTTL.delete(key);
-      }
-    }
   }
 
   async get<T = unknown>(key: string): Promise<T | null> {
@@ -197,8 +114,6 @@ export class CacheManager {
       this.memoryTTL.delete(key);
       const redis = getRedisClient();
       await redis.del(key);
-      // Broadcast to other instances so they also evict this key
-      await this.publishInvalidation({ type: "key", key });
     } catch (err) {
       logger.error("CacheManager.delete error:", { key, err });
     }
@@ -207,7 +122,6 @@ export class CacheManager {
   /**
    * Delete all Redis keys matching a glob pattern AND evict matching memory entries.
    * Uses SCAN to avoid blocking Redis on large keyspaces.
-   * Broadcasts the invalidation via Pub/Sub so other instances stay consistent.
    */
   async invalidatePattern(pattern: string): Promise<void> {
     try {
@@ -227,9 +141,15 @@ export class CacheManager {
         }
       } while (cursor !== "0");
 
-      this.evictMemoryByPattern(pattern);
-      // Broadcast to other instances
-      await this.publishInvalidation({ type: "pattern", pattern });
+      const prefix = pattern.endsWith(":*")
+        ? pattern.slice(0, -1)
+        : pattern.replace(/\*/g, "");
+      for (const key of this.memoryCache.keys()) {
+        if (key.startsWith(prefix) || this.matchesGlob(key, pattern)) {
+          this.memoryCache.delete(key);
+          this.memoryTTL.delete(key);
+        }
+      }
     } catch (err) {
       logger.error("CacheManager.invalidatePattern error:", { pattern, err });
     }
@@ -256,17 +176,9 @@ export class CacheManager {
 
   getCacheStats() {
     return {
-      memoryDisabled: MEMORY_DISABLED,
-      memoryEntries: MEMORY_DISABLED ? 0 : this.memoryCache.size,
+      memoryEntries: this.memoryCache.size,
       maxSize: MAX_MEMORY_SIZE,
     };
-  }
-
-  async disconnect(): Promise<void> {
-    if (this.subscriber) {
-      await this.subscriber.quit();
-      this.subscriber = null;
-    }
   }
 
   async healthCheck() {

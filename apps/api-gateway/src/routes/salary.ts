@@ -8,7 +8,6 @@ salaryRouter.post(
   "/update-salary",
   authenticate,
   requireSuperUser,
-  h.validateUpdateSalary,
   h.updateSalary,
 );
 salaryRouter.get(

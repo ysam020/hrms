@@ -50,13 +50,12 @@ describe("refreshToken", () => {
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "bad-token" }), cb);
 
-    expect(cb).toHaveBeenCalledWith(
-      expect.objectContaining({
-        code: status.UNAUTHENTICATED,
-        message: MESSAGES.INVALID_REFRESH_TOKEN,
-      }),
-      null,
-    );
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.INVALID_REFRESH_TOKEN,
+      status: status.UNAUTHENTICATED,
+      accessToken: "",
+      refreshToken: "",
+    });
     expect(mockValidateRefreshToken).not.toHaveBeenCalled();
   });
 
@@ -67,13 +66,12 @@ describe("refreshToken", () => {
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "revoked-token" }), cb);
 
-    expect(cb).toHaveBeenCalledWith(
-      expect.objectContaining({
-        code: status.UNAUTHENTICATED,
-        message: MESSAGES.REFRESH_TOKEN_REVOKED,
-      }),
-      null,
-    );
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.REFRESH_TOKEN_REVOKED,
+      status: status.UNAUTHENTICATED,
+      accessToken: "",
+      refreshToken: "",
+    });
     expect(mockRevokeRefreshToken).not.toHaveBeenCalled();
   });
 
@@ -97,6 +95,7 @@ describe("refreshToken", () => {
     );
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.TOKEN_REFRESHED,
+      status: status.OK,
       accessToken: "new-access-token",
       refreshToken: "new-refresh-token",
     });
@@ -129,12 +128,11 @@ describe("refreshToken", () => {
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "any-token" }), cb);
 
-    expect(cb).toHaveBeenCalledWith(
-      expect.objectContaining({
-        code: status.INTERNAL,
-        message: MESSAGES.INTERNAL_SERVER_ERROR,
-      }),
-      null,
-    );
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.INTERNAL_SERVER_ERROR,
+      status: status.INTERNAL,
+      accessToken: "",
+      refreshToken: "",
+    });
   });
 });

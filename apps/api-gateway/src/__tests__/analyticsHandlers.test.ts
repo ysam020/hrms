@@ -9,17 +9,16 @@ import {
   getPerformanceAnalytics,
 } from "../handlers/analytics";
 
-jest.mock("../grpc/clients", () => {
-  const fn = jest.fn();
-  return { analyticsClient: {}, grpcCall: fn, analyticsCall: fn };
-});
+jest.mock("../grpc/clients", () => ({
+  analyticsClient: {},
+  grpcCall: jest.fn(),
+}));
 
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
   ),
   RESPONSE_STATUS: { SUCCESS: 200, INTERNAL_SERVER_ERROR: 500 },
-  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -50,6 +49,7 @@ describe("analytics handlers", () => {
       res,
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetDashboardStats",
       expect.objectContaining({ period: "week", department: "Engineering" }),
     );
@@ -63,6 +63,7 @@ describe("analytics handlers", () => {
   it("getDashboardStats defaults period to 'month'", async () => {
     await getDashboardStats(makeReq(), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetDashboardStats",
       expect.objectContaining({ period: "month" }),
     );
@@ -82,6 +83,7 @@ describe("analytics handlers", () => {
   it("getHeadcount calls GetHeadcount", async () => {
     await getHeadcount(makeReq({ query: { department: "HR" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetHeadcount",
       expect.objectContaining({ department: "HR" }),
     );
@@ -93,6 +95,7 @@ describe("analytics handlers", () => {
       makeRes(),
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetAttendanceAnalytics",
       expect.objectContaining({ month: "3", year: "2024" }),
     );
@@ -101,6 +104,7 @@ describe("analytics handlers", () => {
   it("getLeaveAnalytics calls GetLeaveAnalytics with leaveType", async () => {
     await getLeaveAnalytics(makeReq({ query: { leaveType: "PL" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetLeaveAnalytics",
       expect.objectContaining({ leaveType: "PL" }),
     );
@@ -109,6 +113,7 @@ describe("analytics handlers", () => {
   it("getRecruitmentAnalytics calls GetRecruitmentAnalytics", async () => {
     await getRecruitmentAnalytics(makeReq(), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetRecruitmentAnalytics",
       expect.any(Object),
     );
@@ -117,6 +122,7 @@ describe("analytics handlers", () => {
   it("getSalaryAnalytics calls GetSalaryAnalytics", async () => {
     await getSalaryAnalytics(makeReq({ query: { year: "2024" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetSalaryAnalytics",
       expect.objectContaining({ year: "2024" }),
     );
@@ -125,6 +131,7 @@ describe("analytics handlers", () => {
   it("getTurnoverAnalytics calls GetTurnoverAnalytics", async () => {
     await getTurnoverAnalytics(makeReq(), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetTurnoverAnalytics",
       expect.any(Object),
     );
@@ -133,6 +140,7 @@ describe("analytics handlers", () => {
   it("getPerformanceAnalytics calls GetPerformanceAnalytics with default quarter", async () => {
     await getPerformanceAnalytics(makeReq(), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
       "GetPerformanceAnalytics",
       expect.objectContaining({ period: "quarter" }),
     );

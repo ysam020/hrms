@@ -1,42 +1,14 @@
 import { Request, Response } from "express";
-import { z } from "zod";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS, errorMessage } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { randomBytes } from "crypto";
 import path from "path";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client, S3_BUCKET, s3FileUrl } from "../config/s3";
-import { validateBody } from "../middleware/validate";
-
-// ─── Schemas ──────────────────────────────────────────────────────────────────
-
-const addHolidaySchema = z.object({
-  name: z.string().min(1).max(200),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
-});
-
-const deleteHolidaySchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
-});
-
-const addEventSchema = z.object({
-  title: z.string().min(1).max(200),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
-  startTime: z.string().max(10).optional().default(""),
-  endTime: z.string().max(10).optional().default(""),
-  description: z.string().max(1000).optional().default(""),
-});
-
-const editEventSchema = addEventSchema.partial();
-
-export const validateAddHoliday = validateBody(addHolidaySchema);
-export const validateDeleteHoliday = validateBody(deleteHolidaySchema);
-export const validateAddEvent = validateBody(addEventSchema);
-export const validateEditEvent = validateBody(editEventSchema);
 
 // File validation
 
@@ -156,7 +128,7 @@ export async function getHolidays(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("get-holidays error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
       data: [],
     });
   }
@@ -213,7 +185,7 @@ export async function getCalendarEvents(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("get-calendar-events error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
       data: [],
     });
   }
@@ -241,17 +213,8 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
       });
     }
 
-    // Filter at DB level using zero-padded month substring ("*-MM-*").
-    // Dates are stored as YYYY-MM-DD strings, so this reliably matches the month.
-    const monthStr = String(monthNum).padStart(2, "0");
     const employees = await prisma.user.findMany({
-      where: {
-        employeeStatus: { not: "Terminated" },
-        OR: [
-          { dob: { contains: `-${monthStr}-` } },
-          { joining_date: { contains: `-${monthStr}-` } },
-        ],
-      },
+      where: { employeeStatus: { not: "Terminated" } },
       select: {
         first_name: true,
         last_name: true,
@@ -308,7 +271,7 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("birthdays-anniversaries error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
       data: [],
     });
   }
@@ -320,12 +283,8 @@ export async function getAuditLogs(req: Request, res: Response) {
       days = "30",
       entityType = "",
       userName = "",
-      cursor = "",
-      limit: limitStr = "50",
     } = req.query as Record<string, string>;
-
-    const daysNum = Math.min(Math.max(parseInt(days) || 30, 1), 365);
-    const pageLimit = Math.min(Math.max(parseInt(limitStr) || 50, 1), 200);
+    const daysNum = parseInt(days) || 1;
     const pastDate = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000);
 
     const where: any = { timestamp: { gte: pastDate } };
@@ -341,15 +300,10 @@ export async function getAuditLogs(req: Request, res: Response) {
     const logs = await prisma.auditLog.findMany({
       where,
       orderBy: { timestamp: "desc" },
-      take: pageLimit + 1, // fetch one extra to determine if there's a next page
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: 200,
     });
 
-    const hasNextPage = logs.length > pageLimit;
-    const page = hasNextPage ? logs.slice(0, pageLimit) : logs;
-    const nextCursor = hasNextPage ? page[page.length - 1]?.id : null;
-
-    const data = page.map((l: any) => ({
+    const data = logs.map((l: any) => ({
       _id: l.id,
       action: l.action,
       entityType: l.entityType,
@@ -364,12 +318,11 @@ export async function getAuditLogs(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Audit logs retrieved successfully",
       data,
-      pagination: { limit: pageLimit, nextCursor, hasNextPage },
     });
   } catch (error: any) {
     logger.error("audit-logs error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
       data: [],
     });
   }
@@ -378,32 +331,24 @@ export async function getAuditLogs(req: Request, res: Response) {
 export async function addHoliday(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const { name, date } = req.body; // already validated by validateAddHoliday
-    if (!name || !date) {
+    const { name, date } = req.body;
+    if (!name || !date)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "name and date are required",
+        message: "Name and date are required",
       });
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "date must be YYYY-MM-DD",
-      });
-    }
+
     const d = new Date(date);
+    if (isNaN(d.getTime()))
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Invalid date format",
+      });
+
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const formattedDate = `${year}-${String(month).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
     const existing = await prisma.holiday.findFirst({ where: { year, month } });
-
-    // Resolve the actual username for the audit trail (not the raw userId)
-    const dbUser = user?.userId
-      ? await prisma.user.findUnique({
-          where: { id: user.userId },
-          select: { username: true },
-        })
-      : null;
-    const createdBy = dbUser?.username || "system";
+    const username = user?.userId || "system";
 
     if (existing) {
       const list = Array.isArray(existing.holidays)
@@ -417,7 +362,7 @@ export async function addHoliday(req: Request, res: Response) {
       list.push({
         name,
         date: formattedDate,
-        createdBy,
+        createdBy: username,
         createdOn: new Date().toISOString(),
       });
       await prisma.holiday.update({
@@ -433,7 +378,7 @@ export async function addHoliday(req: Request, res: Response) {
             {
               name,
               date: formattedDate,
-              createdBy,
+              createdBy: username,
               createdOn: new Date().toISOString(),
             },
           ],
@@ -448,25 +393,25 @@ export async function addHoliday(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("add-holiday error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
 
 export async function deleteHoliday(req: Request, res: Response) {
   try {
-    const { date } = req.body; // already validated by validateDeleteHoliday
-    if (!date) {
+    const { date } = req.body;
+    if (!date)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "date is required",
+        message: "Date is required",
       });
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "date must be YYYY-MM-DD",
-      });
-    }
+
     const d = new Date(date);
+    if (isNaN(d.getTime()))
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Invalid date format",
+      });
+
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const formattedDate = `${year}-${String(month).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -497,7 +442,7 @@ export async function deleteHoliday(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("delete-holiday error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -535,7 +480,7 @@ export async function addEvent(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("add-event error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -589,7 +534,7 @@ export async function editCalendarEvent(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("edit-calendar-event error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -629,7 +574,7 @@ export async function deleteCalendarEvent(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("delete-calendar-event error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -689,7 +634,7 @@ export async function getPresignedUrl(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("presigned-url error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }

@@ -4,17 +4,16 @@ import {
   clearAllNotifications,
 } from "../handlers/notification";
 
-jest.mock("../grpc/clients", () => {
-  const fn = jest.fn();
-  return { notificationClient: {}, grpcCall: fn, notificationCall: fn };
-});
+jest.mock("../grpc/clients", () => ({
+  notificationClient: {},
+  grpcCall: jest.fn(),
+}));
 
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
   ),
   RESPONSE_STATUS: { SUCCESS: 200, INTERNAL_SERVER_ERROR: 500 },
-  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -44,6 +43,7 @@ describe("notificationHandlers", () => {
       const res = makeRes();
       await getNotifications(makeReq({ query: {} }), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "getNotifications",
         expect.objectContaining({ userId: "user-1", page: 1, limit: 50 }),
       );
@@ -57,6 +57,7 @@ describe("notificationHandlers", () => {
     it("caps limit at 100", async () => {
       await getNotifications(makeReq({ query: { limit: "999" } }), makeRes());
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "getNotifications",
         expect.objectContaining({ limit: 100 }),
       );
@@ -68,6 +69,7 @@ describe("notificationHandlers", () => {
         makeRes(),
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "getNotifications",
         expect.objectContaining({ unreadOnly: true }),
       );
@@ -90,6 +92,7 @@ describe("notificationHandlers", () => {
       const res = makeRes();
       await clearNotification(makeReq({ params: { _id: "notif-1" } }), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "markAsRead",
         expect.objectContaining({
           userId: "user-1",
@@ -120,6 +123,7 @@ describe("notificationHandlers", () => {
       const res = makeRes();
       await clearAllNotifications(makeReq(), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "markAllAsRead",
         expect.objectContaining({ userId: "user-1", notificationIds: [] }),
       );

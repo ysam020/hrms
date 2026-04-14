@@ -3,8 +3,8 @@ import dns from "dns";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS, errorMessage } from "@hrms/common";
-import { resolveUsername } from "../utils/userHelpers";
+import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 
 // SSRF protection — block requests to private/loopback/link-local address ranges,
 // including IPv4-mapped IPv6 addresses (::ffff:127.0.0.1 etc.)
@@ -50,6 +50,21 @@ function withId<
   if ("chatRoomId" in obj) out.chatRoom = obj.chatRoomId;
   if ("replyToId" in obj) out.replyTo = obj.replyToId ?? null;
   return out;
+}
+
+async function resolveUsername(userId: string): Promise<string | null> {
+  const cacheKey = `user:username:${userId}`;
+  const cached = await cacheManager.get<string>(cacheKey);
+  if (cached) return cached;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { username: true },
+  });
+  if (user?.username) {
+    await cacheManager.set(cacheKey, user.username, "user");
+  }
+  return user?.username ?? null;
 }
 
 export async function getConversations(req: Request, res: Response) {
@@ -140,7 +155,7 @@ export async function getConversations(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("GET /chat/conversations error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -204,7 +219,7 @@ export async function startConversation(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("POST /chat/conversations/start error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -255,7 +270,7 @@ export async function getMessages(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("GET /chat/conversations/:roomId/messages error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -298,7 +313,7 @@ export async function markMessagesRead(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("POST /chat/conversations/:roomId/read error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -344,7 +359,7 @@ export async function getUnreadCounts(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("GET /chat/unread-counts error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -386,7 +401,7 @@ export async function deleteMessage(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("DELETE /chat/messages/:messageId error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -421,7 +436,7 @@ export async function deleteConversation(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("DELETE /chat/conversations/:roomId error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }

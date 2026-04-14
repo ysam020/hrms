@@ -1,42 +1,14 @@
 import { Request, Response } from "express";
-import { z } from "zod";
-import { attendanceCall } from "../grpc/clients";
+import { attendanceClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS, errorMessage } from "@hrms/common";
-import { validateBody } from "../middleware/validate";
-
-// ─── Schemas ──────────────────────────────────────────────────────────────────
-
-const addAttendanceSchema = z.object({
-  type: z.enum(["in", "out", "In", "Out"]),
-  latitude: z.number().min(-90).max(90).optional().default(0),
-  longitude: z.number().min(-180).max(180).optional().default(0),
-  deviceInfo: z.string().max(200).optional().default(""),
-  imageUrl: z.string().max(500).optional().default(""),
-});
-
-const attendanceCorrectionSchema = z.object({
-  username: z.string().min(1).max(100),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD")
-    .optional()
-    .default(""),
-  timeIn: z.string().max(20).optional().default(""),
-  timeOut: z.string().max(20).optional().default(""),
-});
-
-export const validateAddAttendance = validateBody(addAttendanceSchema);
-export const validateAttendanceCorrection = validateBody(
-  attendanceCorrectionSchema,
-);
+import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 
 export async function addAttendance(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const response = await attendanceCall("markAttendance", {
+    const response = await grpcCall(attendanceClient, "markAttendance", {
       userId: user!.userId,
       type: req.body.type,
       latitude: req.body.latitude || 0,
@@ -47,7 +19,7 @@ export async function addAttendance(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -59,7 +31,7 @@ export async function getAttendances(req: Request, res: Response) {
     const year = String(req.params.year);
     const startDate = `${year}-${month.padStart(2, "0")}-01`;
     const endDate = `${year}-${month.padStart(2, "0")}-31`;
-    const response = await attendanceCall("getAttendance", {
+    const response = await grpcCall(attendanceClient, "getAttendance", {
       userId: user!.userId,
       startDate,
       endDate,
@@ -69,7 +41,7 @@ export async function getAttendances(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -80,7 +52,7 @@ export async function getAllAttendances(req: Request, res: Response) {
     const year = String(req.params.year);
     const startDate = `${year}-${month.padStart(2, "0")}-01`;
     const endDate = `${year}-${month.padStart(2, "0")}-31`;
-    const response = await attendanceCall("getAttendance", {
+    const response = await grpcCall(attendanceClient, "getAttendance", {
       userId: "",
       startDate,
       endDate,
@@ -90,7 +62,7 @@ export async function getAllAttendances(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -112,7 +84,7 @@ export async function attendanceCorrection(req: Request, res: Response) {
         })
       )?.username || user!.userId;
 
-    const response = await attendanceCall("correctAttendance", {
+    const response = await grpcCall(attendanceClient, "correctAttendance", {
       username,
       date: date || "",
       timeIn: timeIn || "",
@@ -123,7 +95,7 @@ export async function attendanceCorrection(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("PUT /attendance-correction error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -223,7 +195,7 @@ export async function getAttendanceSummary(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("get-attendance-summary error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -265,8 +237,6 @@ export async function attendanceInsights(req: Request, res: Response) {
     const [records, users] = await Promise.all([
       prisma.attendanceRecord.findMany({
         where: { date: { gte: startDate, lte: endDate } },
-        // Safety cap: prevents OOM on large datasets. Adjust if headcount > ~200.
-        take: 50_000,
       }),
       prisma.user.findMany({ select: { username: true, department: true } }),
     ]);
@@ -482,7 +452,7 @@ export async function attendanceInsights(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("GET /attendance-insights error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }

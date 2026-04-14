@@ -72,9 +72,9 @@ describe("grpcToHttpStatus", () => {
     );
   });
 
-  it("maps UNAVAILABLE → 503", () => {
+  it("maps UNAVAILABLE → 500", () => {
     expect(grpcToHttpStatus(GrpcStatus.UNAVAILABLE)).toBe(
-      RESPONSE_STATUS.SERVICE_UNAVAILABLE,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
     );
   });
 

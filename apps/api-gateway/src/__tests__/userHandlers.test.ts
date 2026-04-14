@@ -6,10 +6,10 @@ import {
   disablePushNotifications,
 } from "../handlers/user";
 
-jest.mock("../grpc/clients", () => {
-  const fn = jest.fn();
-  return { userClient: {}, grpcCall: fn, userCall: fn };
-});
+jest.mock("../grpc/clients", () => ({
+  userClient: {},
+  grpcCall: jest.fn(),
+}));
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -23,7 +23,6 @@ jest.mock("@hrms/common", () => ({
   ),
   camelToSnake: jest.fn((obj: any) => obj),
   RESPONSE_STATUS: { SUCCESS: 200, INTERNAL_SERVER_ERROR: 500 },
-  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -59,6 +58,7 @@ describe("userHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "listUsers",
         expect.objectContaining({
           page: 2,
@@ -77,6 +77,7 @@ describe("userHandlers", () => {
     it("caps limit at 200", async () => {
       await getAllUsers(makeReq({ query: { limit: "999" } }), makeRes());
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "listUsers",
         expect.objectContaining({ limit: 200 }),
       );
@@ -99,6 +100,7 @@ describe("userHandlers", () => {
       const res = makeRes();
       await getUserData(makeReq({ params: { username: "john" } }), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "getUser",
         expect.objectContaining({ userId: "john" }),
       );
@@ -145,6 +147,7 @@ describe("userHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "registerFcmToken",
         expect.objectContaining({
           userId: "user-1",
@@ -180,6 +183,7 @@ describe("userHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "removeFcmToken",
         expect.objectContaining({ userId: "user-1", disableAll: true }),
       );
@@ -191,6 +195,7 @@ describe("userHandlers", () => {
         makeRes(),
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "removeFcmToken",
         expect.objectContaining({ deviceFingerprint: "fp-1" }),
       );

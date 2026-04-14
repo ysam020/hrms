@@ -10,10 +10,10 @@ import {
   getKycInsights,
 } from "../handlers/employee";
 
-jest.mock("../grpc/clients", () => {
-  const fn = jest.fn();
-  return { employeeClient: {}, grpcCall: fn, employeeCall: fn };
-});
+jest.mock("../grpc/clients", () => ({
+  employeeClient: {},
+  grpcCall: jest.fn(),
+}));
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -36,7 +36,6 @@ jest.mock("@hrms/common", () => ({
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
   },
-  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -91,9 +90,10 @@ describe("employeeHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "updateEmployee",
         expect.objectContaining({
-          id: "user-1",
+          username: "user-1",
           firstName: "John",
           lastName: "Doe",
         }),
@@ -118,14 +118,14 @@ describe("employeeHandlers", () => {
   });
 
   describe("getEmployeeDetails", () => {
-    it("calls grpcCall getEmployee with resolved id from params", async () => {
-      mockUserFindUnique.mockResolvedValue({ id: "employee-id-1" });
+    it("calls grpcCall getEmployee with username from params", async () => {
       mockGrpcCall.mockResolvedValue({ data: {} });
       const res = makeRes();
       await getEmployeeDetails(makeReq({ params: { username: "alice" } }), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "getEmployee",
-        expect.objectContaining({ id: "employee-id-1" }),
+        expect.objectContaining({ username: "alice" }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
@@ -134,19 +134,7 @@ describe("employeeHandlers", () => {
       );
     });
 
-    it("returns NOT_FOUND when username does not exist", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await getEmployeeDetails(makeReq({ params: { username: "ghost" } }), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.NOT_FOUND,
-        expect.any(Object),
-      );
-    });
-
     it("returns INTERNAL_SERVER_ERROR on error", async () => {
-      mockUserFindUnique.mockResolvedValue({ id: "employee-id-1" });
       mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
       const res = makeRes();
       await getEmployeeDetails(makeReq({ params: { username: "alice" } }), res);
@@ -229,6 +217,7 @@ describe("employeeHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "submitKyc",
         expect.objectContaining({
           userId: "user-1",
@@ -264,6 +253,7 @@ describe("employeeHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "submitKyc",
         expect.objectContaining({ userId: "user-1", bankName: "HDFC" }),
       );
@@ -318,9 +308,11 @@ describe("employeeHandlers", () => {
         makeReq({ body: { username: "john", kyc_approval: "Approved" } }),
         res,
       );
-      expect(mockGrpcCall).toHaveBeenCalledWith("approveKyc", {
-        employeeId: "u1",
-      });
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "approveKyc",
+        { employeeId: "u1" },
+      );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
@@ -336,9 +328,11 @@ describe("employeeHandlers", () => {
         makeReq({ body: { username: "john", kyc_approval: "Rejected" } }),
         res,
       );
-      expect(mockGrpcCall).toHaveBeenCalledWith("rejectKyc", {
-        employeeId: "u1",
-      });
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "rejectKyc",
+        { employeeId: "u1" },
+      );
     });
 
     it("returns INTERNAL_SERVER_ERROR on error", async () => {

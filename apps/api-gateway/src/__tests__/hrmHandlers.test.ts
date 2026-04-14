@@ -46,10 +46,10 @@ jest.mock("jspdf", () => ({
   })),
 }));
 
-jest.mock("../grpc/clients", () => {
-  const fn = jest.fn();
-  return { hrmClient: {}, grpcCall: fn, hrmCall: fn };
-});
+jest.mock("../grpc/clients", () => ({
+  hrmClient: {},
+  grpcCall: jest.fn(),
+}));
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -87,7 +87,6 @@ jest.mock("@hrms/common", () => ({
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
   },
-  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -212,6 +211,7 @@ describe("hrmHandlers", () => {
       const res = makeRes();
       await getHrActivity(makeReq({ params: { _id: "a1" } }), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "getHrActivity",
         expect.objectContaining({ id: "a1" }),
       );
@@ -232,6 +232,7 @@ describe("hrmHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "createHrActivity",
         expect.objectContaining({ title: "Workshop", createdBy: "user-1" }),
       );
@@ -252,6 +253,7 @@ describe("hrmHandlers", () => {
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "updateHrActivity",
         expect.objectContaining({
           id: "a1",
@@ -681,6 +683,7 @@ describe("hrmHandlers", () => {
       const res = makeRes();
       await getPolicy(makeReq({ params: { id: "p1" } }), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "getPolicy",
         expect.objectContaining({ id: "p1" }),
       );
@@ -745,6 +748,7 @@ describe("hrmHandlers", () => {
       const res = makeRes();
       await isSuperuser(makeReq({ params: { username: "alice" } }), res);
       expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
         "checkPermission",
         expect.objectContaining({
           userId: "alice",

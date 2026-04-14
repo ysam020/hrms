@@ -1,10 +1,3 @@
-x-aws-credentials: &aws-credentials
-  volumes:
-    - type: bind
-      source: ${USERPROFILE}/.aws
-      target: /home/nodejs/.aws
-      read_only: true
-
 services:
   api-gateway:
     container_name: api-gateway
@@ -14,7 +7,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=api-gateway
-        - PROJECT=api-gateway-service
+        - PROJECT=api-gateway
         - PORT=9002
     environment:
       - AUTH_SERVICE_HOST=auth-service
@@ -32,7 +25,7 @@ services:
     ports:
       - "9002:9002"
       - "9003:9003"
-    <<: *aws-credentials
+    env_file: .env.local
 
   auth-service:
     container_name: auth-service
@@ -50,7 +43,7 @@ services:
     ports:
       - "50051:50051"
       - "9101:9101"
-    <<: *aws-credentials
+    env_file: .env.local
 
   user-service:
     container_name: user-service
@@ -68,7 +61,7 @@ services:
     ports:
       - "50052:50052"
       - "9102:9102"
-    <<: *aws-credentials
+    env_file: .env.local
 
   employee-service:
     container_name: employee-service
@@ -78,7 +71,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=employee-service
-        - PROJECT=employee-service
+        - PROJECT=@hrms/employee-service
         - PORT=50053
     environment:
       - METRICS_PORT=9103
@@ -86,7 +79,7 @@ services:
     ports:
       - "50053:50053"
       - "9103:9103"
-    <<: *aws-credentials
+    env_file: .env.local
 
   attendance-service:
     container_name: attendance-service
@@ -96,7 +89,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=attendance-service
-        - PROJECT=attendance-service
+        - PROJECT=@hrms/attendance-service
         - PORT=50054
     environment:
       - METRICS_PORT=9104
@@ -104,7 +97,7 @@ services:
     ports:
       - "50054:50054"
       - "9104:9104"
-    <<: *aws-credentials
+    env_file: .env.local
 
   leave-service:
     container_name: leave-service
@@ -114,7 +107,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=leave-service
-        - PROJECT=leave-service
+        - PROJECT=@hrms/leave-service
         - PORT=50055
     environment:
       - METRICS_PORT=9105
@@ -122,7 +115,7 @@ services:
     ports:
       - "50055:50055"
       - "9105:9105"
-    <<: *aws-credentials
+    env_file: .env.local
 
   recruitment-service:
     container_name: recruitment-service
@@ -132,7 +125,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=recruitment-service
-        - PROJECT=recruitment-service
+        - PROJECT=@hrms/recruitment-service
         - PORT=50056
     environment:
       - METRICS_PORT=9106
@@ -140,7 +133,7 @@ services:
     ports:
       - "50056:50056"
       - "9106:9106"
-    <<: *aws-credentials
+    env_file: .env.local
 
   hrm-service:
     container_name: hrm-service
@@ -150,7 +143,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=hrm-service
-        - PROJECT=hrm-service
+        - PROJECT=@hrms/hrm-service
         - PORT=50057
     environment:
       - METRICS_PORT=9107
@@ -158,7 +151,7 @@ services:
     ports:
       - "50057:50057"
       - "9107:9107"
-    <<: *aws-credentials
+    env_file: .env.local
 
   salary-service:
     container_name: salary-service
@@ -168,7 +161,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=salary-service
-        - PROJECT=salary-service
+        - PROJECT=@hrms/salary-service
         - PORT=50058
     environment:
       - METRICS_PORT=9108
@@ -176,7 +169,7 @@ services:
     ports:
       - "50058:50058"
       - "9108:9108"
-    <<: *aws-credentials
+    env_file: .env.local
 
   analytics-service:
     container_name: analytics-service
@@ -186,7 +179,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=analytics-service
-        - PROJECT=analytics-service
+        - PROJECT=@hrms/analytics-service
         - PORT=50059
     environment:
       - METRICS_PORT=9109
@@ -194,7 +187,7 @@ services:
     ports:
       - "50059:50059"
       - "9109:9109"
-    <<: *aws-credentials
+    env_file: .env.local
 
   notification-service:
     container_name: notification-service
@@ -204,7 +197,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=notification-service
-        - PROJECT=notification-service
+        - PROJECT=@hrms/notification-service
         - PORT=50060
     environment:
       - METRICS_PORT=9110
@@ -212,7 +205,7 @@ services:
     ports:
       - "50060:50060"
       - "9110:9110"
-    <<: *aws-credentials
+    env_file: .env.local
 
   scheduler-service:
     container_name: scheduler-service
@@ -222,13 +215,13 @@ services:
       no_cache: true
       args:
         - APP_DIR=scheduler-service
-        - PROJECT=scheduler-service
+        - PROJECT=@hrms/scheduler-service
     environment:
       - METRICS_PORT=9111
       - LOKI_URL=http://loki:3100
     ports:
       - "9111:9111"
-    <<: *aws-credentials
+    env_file: .env.local
 
   web:
     container_name: web
