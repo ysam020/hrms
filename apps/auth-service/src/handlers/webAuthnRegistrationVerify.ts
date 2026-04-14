@@ -3,7 +3,6 @@ import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { getRedisClient } from "../services/redis";
-import { auth } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
 function toBase64url(value: any): string | undefined {
@@ -18,11 +17,8 @@ function toBase64url(value: any): string | undefined {
 }
 
 export const webAuthnRegistrationVerify = async (
-  call: ServerUnaryCall<
-    auth.WebAuthnRegistrationVerifyRequest,
-    auth.WebAuthnVerifyResponse
-  >,
-  callback: sendUnaryData<auth.WebAuthnVerifyResponse>,
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
 ) => {
   try {
     const {

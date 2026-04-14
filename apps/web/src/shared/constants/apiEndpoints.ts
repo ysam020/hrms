@@ -22,10 +22,11 @@ const PERMISSIONS = {
 };
 
 const CALENDAR = {
-  DELETE_CALENDAR_EVENT: (id: string | number) => `/events/${id}`,
-  GET_CALENDAR_EVENTS: "/calendar-events",
-  EDIT_CALENDAR_EVENT: (id: string | number) => `/events/${id}`,
-  ADD_EVENT: "/events",
+  DELETE_CALENDAR_EVENT: (id: string | number) =>
+    `/delete-calendar-event/${id}`,
+  GET_CALENDAR_EVENTS: "/get-calendar-events",
+  EDIT_CALENDAR_EVENT: (id: string | number) => `/edit-calendar-event/${id}`,
+  ADD_EVENT: "/add-event",
 };
 
 const ATTENDANCE = {
@@ -65,19 +66,19 @@ const EMPLOYEE = {
 };
 
 const HOLIDAYS = {
-  ADD_HOLIDAY: "/holidays",
-  DELETE_HOLIDAY: "/holidays",
-  GET_HOLIDAYS: (year: number) => `/holidays/${year}`,
+  ADD_HOLIDAY: "/add-holiday",
+  DELETE_HOLIDAY: "/delete-holiday",
+  GET_HOLIDAYS: (year: number) => `/get-holidays/${year}`,
   GET_BIRTHDAYS_ANNIVERSARIES: (month: number, year: number) =>
     `/birthdays-anniversaries?month=${month}&year=${year}`,
 };
 
 const HR_ACTIVITIES = {
-  ADD_HR_ACTIVITY: "/hr-activities",
-  EDIT_HR_ACTIVITY: (id: string | number) => `/hr-activities/${id}`,
+  ADD_HR_ACTIVITY: "/add-hr-activity",
+  EDIT_HR_ACTIVITY: (id: string | number) => `/edit-hr-activity/${id}`,
   GET_HR_ACTIVITIES: (page = 1, limit = 10, statusFilter = "Active") =>
-    `/hr-activities?page=${page}&limit=${limit}&status=${statusFilter}`,
-  DELETE_HR_ACTIVITY: (id: string | number) => `/hr-activities/${id}`,
+    `/get-hr-activities?page=${page}&limit=${limit}&status=${statusFilter}`,
+  DELETE_HR_ACTIVITY: (id: string | number) => `/delete-hr-activity/${id}`,
 };
 
 const JOB_OPENINGS = {

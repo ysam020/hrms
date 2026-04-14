@@ -12,9 +12,9 @@ afterAll(() => {
 });
 
 describe("aesEncrypt / aesDecrypt", () => {
-  it("encrypts a string and produces a hex:hex:hex format", () => {
+  it("encrypts a string and produces a hex:hex format", () => {
     const encrypted = aesEncrypt("hello");
-    expect(encrypted).toMatch(/^[a-f0-9]+:[a-f0-9]+:[a-f0-9]+$/i);
+    expect(encrypted).toMatch(/^[a-f0-9]+:[a-f0-9]+$/i);
   });
 
   it("round-trips: decrypt(encrypt(x)) === x", () => {

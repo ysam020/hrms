@@ -42,7 +42,6 @@ jest.mock("@hrms/common", () => ({
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
   },
-  errorMessage: { GENERAL: { INTERNAL_ERROR: "Internal server error" } },
 }));
 
 jest.mock("@hrms/logger", () => ({

@@ -1,28 +1,17 @@
 import { Request, Response } from "express";
-import { authCall } from "../grpc/clients";
-import {
-  apiResponse,
-  RESPONSE_STATUS,
-  errorMessage,
-  safeDecrypt,
-  grpcToHttpStatus,
-} from "@hrms/common";
+import { authClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { aesEncrypt, aesDecrypt } from "@hrms/crypto";
-
-/** Returns true only for a 24-character lowercase hex string (MongoDB ObjectId). */
-function isValidObjectId(id: unknown): id is string {
-  return typeof id === "string" && /^[a-f0-9]{24}$/i.test(id);
-}
+import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: true,
   sameSite: "strict" as const,
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: "/api/v1/refresh-token",
+  path: "/api/refresh-token",
 };
 
 const jsRedirect = (res: Response, url: string) => {
@@ -31,7 +20,6 @@ const jsRedirect = (res: Response, url: string) => {
 };
 
 async function fetchFullProfile(userId: string) {
-  if (!isValidObjectId(userId)) return null;
   const rows = (await prisma.user.aggregateRaw({
     pipeline: [
       { $match: { $expr: { $eq: ["$_id", { $toObjectId: userId }] } } },
@@ -153,7 +141,7 @@ export async function getProfile(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("GET /profile error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -174,12 +162,12 @@ export async function refreshToken(req: Request, res: Response) {
         message: "Invalid refresh token",
       });
     }
-    const response = (await authCall("refreshToken", {
+    const response = await grpcCall<any, any>(authClient, "refreshToken", {
       refreshToken: token,
-    })) as any;
+    });
     if (!response.accessToken) {
       return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: response.message || "Authentication failed",
+        message: response.message,
       });
     }
     // Rotate the refresh token cookie
@@ -195,14 +183,8 @@ export async function refreshToken(req: Request, res: Response) {
       message: response.message,
     });
   } catch (error: any) {
-    // authCall now throws proper gRPC errors (UNAUTHENTICATED, INTERNAL, etc.)
-    // grpcToHttpStatus maps them to correct HTTP codes (401, 503, etc.)
-    const httpStatus =
-      error?.code !== undefined
-        ? grpcToHttpStatus(error.code)
-        : RESPONSE_STATUS.INTERNAL_SERVER_ERROR;
-    return apiResponse(res, httpStatus, {
-      message: error?.message || errorMessage.GENERAL.INTERNAL_ERROR,
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
     });
   }
 }
@@ -210,7 +192,7 @@ export async function refreshToken(req: Request, res: Response) {
 export async function logout(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const response = await authCall("logout", {
+    const response = await grpcCall<any, any>(authClient, "logout", {
       userId: user!.userId,
     });
     res.clearCookie("refresh_token", REFRESH_COOKIE_OPTIONS);
@@ -219,7 +201,7 @@ export async function logout(req: Request, res: Response) {
     });
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -227,31 +209,30 @@ export async function logout(req: Request, res: Response) {
 export async function webAuthnRegisterOptions(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const response = await authCall("webAuthnRegistrationOptions", {
-      userId: user!.userId,
-      email: user!.email,
-    });
-    if (!(response as any).options)
+    const response = await grpcCall<any, any>(
+      authClient,
+      "webAuthnRegistrationOptions",
+      {
+        userId: user!.userId,
+        email: user!.email,
+      },
+    );
+    if (!response.options)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: (response as any).message,
+        message: response.message,
       });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: JSON.parse((response as any).options),
+      data: JSON.parse(response.options),
     });
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
 
 export async function getWebAuthnCredentials(req: Request, res: Response) {
   const { user } = req as AuthRequest;
-  if (!isValidObjectId(user!.userId)) {
-    return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-      message: "Invalid user ID",
-    });
-  }
   try {
     const rows = (await prisma.user.aggregateRaw({
       pipeline: [
@@ -272,7 +253,7 @@ export async function getWebAuthnCredentials(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("GET /webauthn-credentials error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -280,16 +261,10 @@ export async function getWebAuthnCredentials(req: Request, res: Response) {
 export async function webAuthnCredentialCheck(req: Request, res: Response) {
   try {
     const { username } = req.body;
-    if (!username || typeof username !== "string")
+    if (!username)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         hasCredentials: false,
         message: "username required",
-      });
-    // Reject oversized or structurally invalid usernames before hitting the DB
-    if (username.length > 100 || !/^[\w.\-@]+$/.test(username))
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        hasCredentials: false,
-        message: "invalid username format",
       });
 
     const rows = (await prisma.user.aggregateRaw({
@@ -306,7 +281,7 @@ export async function webAuthnCredentialCheck(req: Request, res: Response) {
     logger.error("POST /webauthn-credential-check error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       hasCredentials: false,
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -316,12 +291,6 @@ export async function disableWebAuthn(req: Request, res: Response) {
   try {
     const { credentialId, disableAll } = req.body;
     const userId = user!.userId;
-
-    if (!isValidObjectId(userId)) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "Invalid user ID",
-      });
-    }
 
     const rows = (await prisma.user.aggregateRaw({
       pipeline: [
@@ -360,7 +329,7 @@ export async function disableWebAuthn(req: Request, res: Response) {
   } catch (error: any) {
     logger.error("DELETE /disable-webauthn error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -368,14 +337,18 @@ export async function disableWebAuthn(req: Request, res: Response) {
 export async function webAuthnRegister(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const response = await authCall("webAuthnRegistrationOptions", {
-      userId: user!.userId,
-      email: user!.email,
-    });
+    const response = await grpcCall<any, any>(
+      authClient,
+      "webAuthnRegistrationOptions",
+      {
+        userId: user!.userId,
+        email: user!.email,
+      },
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -383,46 +356,58 @@ export async function webAuthnRegister(req: Request, res: Response) {
 export async function webAuthnVerifyRegistration(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const response = await authCall("webAuthnRegistrationVerify", {
-      userId: user!.userId,
-      credential: JSON.stringify(req.body.credential),
-      deviceInfo: JSON.stringify(req.body.credential?.deviceInfo || {}),
-    });
+    const response = await grpcCall<any, any>(
+      authClient,
+      "webAuthnRegistrationVerify",
+      {
+        userId: user!.userId,
+        credential: JSON.stringify(req.body.credential),
+        deviceInfo: JSON.stringify(req.body.credential?.deviceInfo || {}),
+      },
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
 
 export async function webAuthnLoginOptions(req: Request, res: Response) {
   try {
-    const response = await authCall("webAuthnAuthenticationOptions", {
-      username: req.body.username,
-    });
-    if (!(response as any).options) {
+    const response = await grpcCall<any, any>(
+      authClient,
+      "webAuthnAuthenticationOptions",
+      {
+        username: req.body.username,
+      },
+    );
+    if (!response.options) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         success: false,
-        message: (response as any).message,
+        message: response.message,
       });
     }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: JSON.parse((response as any).options),
+      data: JSON.parse(response.options),
     });
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
 
 export async function webAuthnVerifyLogin(req: Request, res: Response) {
   try {
-    const response = (await authCall("webAuthnAuthenticationVerify", {
-      username: req.body.username,
-      credential: JSON.stringify(req.body.credential),
-    })) as any;
+    const response = await grpcCall<any, any>(
+      authClient,
+      "webAuthnAuthenticationVerify",
+      {
+        username: req.body.username,
+        credential: JSON.stringify(req.body.credential),
+      },
+    );
     if (!response.accessToken) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         success: false,
@@ -442,7 +427,7 @@ export async function webAuthnVerifyLogin(req: Request, res: Response) {
     });
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: errorMessage.GENERAL.INTERNAL_ERROR,
+      message: "Internal Server Error",
     });
   }
 }
@@ -499,9 +484,11 @@ export async function googleAuthCallback(req: Request, res: Response) {
   }
 
   try {
-    const response = (await authCall("googleOAuthCallback", {
-      code: String(code),
-    })) as any;
+    const response = await grpcCall<any, any>(
+      authClient,
+      "googleOAuthCallback",
+      { code: String(code) },
+    );
 
     if (!response.accessToken) {
       return jsRedirect(

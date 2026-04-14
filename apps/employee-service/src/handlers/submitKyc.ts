@@ -3,17 +3,11 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
-import { aesEncrypt } from "@hrms/common";
-import { employee } from "@hrms/proto";
 import { MESSAGES } from "../constants/messages";
 
-/** Encrypt a value if non-empty, otherwise return null. */
-const enc = (v: string | undefined | null): string | null =>
-  v ? aesEncrypt(v) : null;
-
 export const submitKyc = async (
-  call: ServerUnaryCall<employee.KycRequest, employee.KycResponse>,
-  callback: sendUnaryData<employee.KycResponse>,
+  call: ServerUnaryCall<any, any>,
+  callback: sendUnaryData<any>,
 ) => {
   try {
     const {
@@ -46,22 +40,20 @@ export const submitKyc = async (
       });
     }
 
-    // Encrypt all PII before persisting.
-    // Non-sensitive lookup fields (kyc_date, kyc_approval) are stored in plaintext.
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        aadhar_no: enc(aadharNo),
-        aadhar_photo_front: enc(aadharPhotoFront),
-        aadhar_photo_back: enc(aadharPhotoBack),
-        pan_no: enc(panNo),
-        pan_photo: enc(panPhoto),
-        bank_account_no: enc(bankAccountNo),
+        aadhar_no: aadharNo || null,
+        aadhar_photo_front: aadharPhotoFront || null,
+        aadhar_photo_back: aadharPhotoBack || null,
+        pan_no: panNo || null,
+        pan_photo: panPhoto || null,
+        bank_account_no: bankAccountNo || null,
         bank_name: bankName || null,
         ifsc_code: ifscCode || null,
-        pf_no: enc(pfNo),
-        uan_no: enc(uanNo),
-        esic_no: enc(esicNo),
+        pf_no: pfNo || null,
+        uan_no: uanNo || null,
+        esic_no: esicNo || null,
         kyc_date: new Date().toISOString(),
         kyc_approval: "Pending",
       },
@@ -96,6 +88,7 @@ export const submitKyc = async (
     return callback(null, {
       message: MESSAGES.KYC_SUBMITTED,
       status: status.OK,
+      data: updatedUser,
     });
   } catch (err) {
     logger.error("SubmitKyc error:", { err });

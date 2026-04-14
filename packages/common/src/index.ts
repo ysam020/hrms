@@ -1,6 +1,6 @@
 export { tokenFns } from "./tokens";
 export { responseMessage, errorMessage } from "./messages";
-export { aesEncrypt, aesDecrypt, safeDecrypt } from "./encryption";
+export { aesEncrypt, aesDecrypt } from "./encryption";
 export { sendEmail } from "./email";
 export { asyncHandler } from "./asyncHandler";
 export { healthCheck } from "./healthCheck";

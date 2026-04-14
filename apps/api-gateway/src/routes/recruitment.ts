@@ -10,14 +10,12 @@ recruitmentRouter.post(
   "/add-job-opening",
   authenticate,
   requireSuperUser,
-  h.validateAddJobOpening,
   h.addJobOpening,
 );
 recruitmentRouter.put(
   "/edit-job-opening/:_id",
   authenticate,
   requireSuperUser,
-  h.validateEditJobOpening,
   h.editJobOpening,
 );
 recruitmentRouter.delete(
@@ -28,7 +26,7 @@ recruitmentRouter.delete(
 );
 recruitmentRouter.get("/public/careers", h.publicCareers);
 recruitmentRouter.get("/get-job-titles", h.getJobTitles);
-recruitmentRouter.post("/apply-for-job", h.validateApplyForJob, h.applyForJob);
+recruitmentRouter.post("/apply-for-job", h.applyForJob);
 recruitmentRouter.get(
   "/view-applications/:id",
   authenticate,
@@ -39,29 +37,21 @@ recruitmentRouter.put(
   "/update-candidate-status",
   authenticate,
   requireSuperUser,
-  h.validateUpdateCandidateStatus,
   h.updateCandidateStatus,
 );
 recruitmentRouter.put(
   "/hire-candidate",
   authenticate,
   requireSuperUser,
-  h.validateHireCandidate,
   h.hireCandidate,
 );
 recruitmentRouter.put(
   "/reject-application",
   authenticate,
   requireSuperUser,
-  h.validateRejectApplication,
   h.rejectApplication,
 );
-recruitmentRouter.post(
-  "/add-resignation",
-  authenticate,
-  h.validateAddResignation,
-  h.addResignation,
-);
+recruitmentRouter.post("/add-resignation", authenticate, h.addResignation);
 recruitmentRouter.get("/view-resignations", authenticate, h.viewResignations);
 recruitmentRouter.put(
   "/approve-resignation/:_id",
@@ -89,21 +79,18 @@ recruitmentRouter.put(
   "/schedule-interview",
   authenticate,
   requireSuperUser,
-  h.validateScheduleInterview,
   h.scheduleInterview,
 );
 recruitmentRouter.put(
   "/reschedule-interview",
   authenticate,
   requireSuperUser,
-  h.validateRescheduleInterview,
   h.rescheduleInterview,
 );
 recruitmentRouter.put(
   "/reassign-interviewer",
   authenticate,
   requireSuperUser,
-  h.validateReassignInterviewer,
   h.reassignInterviewer,
 );
 recruitmentRouter.get(
@@ -115,15 +102,9 @@ recruitmentRouter.put(
   "/update-resignation/:_id",
   authenticate,
   requireSuperUser,
-  h.validateUpdateResignation,
   h.updateResignation,
 );
-recruitmentRouter.post(
-  "/add-exit-feedback",
-  authenticate,
-  h.validateExitFeedback,
-  h.addExitFeedback,
-);
+recruitmentRouter.post("/add-exit-feedback", authenticate, h.addExitFeedback);
 recruitmentRouter.get(
   "/resignation-insights",
   authenticate,
