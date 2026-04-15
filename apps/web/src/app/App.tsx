@@ -10,7 +10,10 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import apiClient from "@web/core/http/axiosConfig";
+import apiClient, {
+  performRefresh,
+  getAccessToken,
+} from "@web/core/http/axiosConfig";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -97,40 +100,31 @@ function App() {
   // useEffect can change the URL to /login (child effects run before parent effects).
   const initialSearch = React.useRef(location.search);
 
-  // On every page load, restore the session. The access token is read from
-  // localStorage synchronously at module load, so /profile has a token
-  // attached immediately — no async boot step needed.
-  // Also handles the ?oauth_success=1 redirect from Google OAuth.
+  // On every page load, silently exchange the HttpOnly refresh-token cookie
+  // for a new access token (stored in memory only — never localStorage).
+  // If the refresh fails the user has no valid session and sees the login page.
+  // This is the standard production pattern: access token in memory,
+  // refresh token in HttpOnly cookie.
   useEffect(() => {
     const params = new URLSearchParams(initialSearch.current);
     if (params.get("oauth_success") === "1") {
       window.history.replaceState({}, "", window.location.pathname);
-      // OAuth just issued a fresh refresh-token cookie — clear the explicit-logout
-      // flag so the profile check can proceed normally.
-      localStorage.removeItem("hrms_explicit_logout");
     }
 
-    // User explicitly logged out — skip the profile call entirely to avoid the
-    // session cookie re-authenticating them and flashing the dashboard.
-    if (localStorage.getItem("hrms_explicit_logout")) {
-      localStorage.removeItem("hrms_explicit_logout");
-      setBooting(false);
-      return;
-    }
-
-    apiClient
-      .get("/profile")
+    // If a stored token exists, go straight to /profile — the 401 interceptor
+    // will silently refresh it if it has expired. Only call performRefresh()
+    // first when there is no token (first visit, post-logout, OAuth callback).
+    (getAccessToken()
+      ? apiClient.get("/profile")
+      : performRefresh().then(() => apiClient.get("/profile"))
+    )
       .then((res) => {
-        if (res.data?.success) {
-          setUser(res.data.data.user);
-        }
+        if (res.data?.success) setUser(res.data.data.user);
       })
       .catch(() => {
-        // No valid token or session — user will see login page.
+        // No valid session — login page will be shown.
       })
-      .finally(() => {
-        setBooting(false);
-      });
+      .finally(() => setBooting(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showSidebar, setShowSidebar] = useState(true);
