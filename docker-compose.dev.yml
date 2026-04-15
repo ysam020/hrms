@@ -1,6 +1,6 @@
 x-aws-credentials: &aws-credentials
   volumes:
-    - ${USERPROFILE}/.aws:/root/.aws:ro
+    - ${USERPROFILE:-${HOME}}/.aws:/root/.aws:ro
 
 services:
   api-gateway:
@@ -299,6 +299,6 @@ volumes:
 
 secrets:
   aws_credentials:
-    file: ${USERPROFILE}/.aws/credentials
+    file: ${USERPROFILE:-${HOME}}/.aws/credentials
   aws_config:
-    file: ${USERPROFILE}/.aws/config
+    file: ${USERPROFILE:-${HOME}}/.aws/config

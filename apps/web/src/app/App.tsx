@@ -1,5 +1,6 @@
 import "./App.scss";
 import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { flushSync } from "react-dom";
 import DomMagnifier from "@web/shared/components/DomMagnifier";
 import ProfilerOverlay from "@web/shared/components/ProfilerOverlay";
 import {
@@ -77,7 +78,9 @@ function App() {
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      setBooting(true);
+      // flushSync commits setBooting(true) to the DOM synchronously so the
+      // stale cached content is never visible — even for a single frame.
+      flushSync(() => setBooting(true));
       apiClient
         .get("/profile")
         .then((res) => {
@@ -102,6 +105,17 @@ function App() {
     const params = new URLSearchParams(initialSearch.current);
     if (params.get("oauth_success") === "1") {
       window.history.replaceState({}, "", window.location.pathname);
+      // OAuth just issued a fresh refresh-token cookie — clear the explicit-logout
+      // flag so the profile check can proceed normally.
+      localStorage.removeItem("hrms_explicit_logout");
+    }
+
+    // User explicitly logged out — skip the profile call entirely to avoid the
+    // session cookie re-authenticating them and flashing the dashboard.
+    if (localStorage.getItem("hrms_explicit_logout")) {
+      localStorage.removeItem("hrms_explicit_logout");
+      setBooting(false);
+      return;
     }
 
     apiClient

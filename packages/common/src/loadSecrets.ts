@@ -22,10 +22,4 @@ export async function loadSecrets(secretName: string): Promise<void> {
       process.env[key] = String(value);
     }
   }
-
-  // Prisma schema expects MONGO_URI; secrets are stored as DEV_MONGODB_URI / PROD_MONGODB_URI
-  if (!process.env.MONGO_URI) {
-    process.env.MONGO_URI =
-      process.env.DEV_MONGODB_URI ?? process.env.PROD_MONGODB_URI ?? "";
-  }
 }

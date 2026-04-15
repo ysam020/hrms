@@ -8,7 +8,7 @@ RUN apk add --no-cache libc6-compat openssl protobuf protobuf-dev
 
 FROM slim AS base
 RUN npm install -g pnpm@8.15.6 turbo
-RUN pnpm config set store-dir ~/.pnpm-store
+RUN pnpm config set store-dir /root/.pnpm-store
 RUN pnpm config set manage-package-manager-versions false
 
 FROM base AS pruner
@@ -26,16 +26,19 @@ WORKDIR /app
 
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm fetch --ignore-scripts
+
 COPY --from=pruner /app/out/json/ .
 
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --no-frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm install --prefer-offline --no-frozen-lockfile --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 
 RUN pnpm proto:gen
 RUN pnpm db:generate
 RUN turbo build --filter=${PROJECT}
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm prune --prod --no-optional
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm prune --prod --no-optional
 RUN rm -rf ./**/*/src
 
 FROM base AS runner
