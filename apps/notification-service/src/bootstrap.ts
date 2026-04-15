@@ -4,7 +4,7 @@ import { logger } from "@hrms/logger";
 async function bootstrap() {
   await loadSecrets("hrms/config");
 
-  // Dynamic imports so Prisma initializes after MONGO_URI is set
+  // Dynamic imports so Prisma initializes after DEV_MONGODB_URI is set
   const { startEmailWorker } = await import("./workers/emailWorker");
   const { startNotificationWorker } =
     await import("./workers/notificationWorker");
@@ -18,7 +18,7 @@ async function bootstrap() {
   startNotificationWorker();
   logger.info("BullMQ workers started (email, notification)");
 
-  // Retry any jobs that failed while the worker was broken (e.g. MONGO_URI not set)
+  // Retry any jobs that failed while the worker was broken (e.g. DEV_MONGODB_URI not set)
   try {
     const queue = getNotificationQueue();
     const failedCount = await queue.getFailedCount();

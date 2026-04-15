@@ -27,6 +27,7 @@ export const getAccessToken = () => _accessToken;
 export const setAccessToken = (token: string) => {
   _accessToken = token;
   localStorage.setItem(TOKEN_KEY, token);
+  localStorage.removeItem("hrms_explicit_logout");
 };
 
 const clearAccessToken = () => {

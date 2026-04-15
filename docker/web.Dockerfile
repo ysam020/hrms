@@ -3,7 +3,7 @@ RUN apk update && apk add --no-cache libc6-compat
 
 FROM slim AS base
 RUN npm install -g pnpm turbo
-RUN pnpm config set store-dir ~/.pnpm-store
+RUN pnpm config set store-dir /root/.pnpm-store
 
 FROM base AS pruner
 WORKDIR /app
@@ -15,9 +15,12 @@ WORKDIR /app
 
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm fetch --ignore-scripts
+
 COPY --from=pruner /app/out/json/ .
 
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --no-frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm install --offline --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 
