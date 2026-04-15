@@ -3,47 +3,23 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
-import { doubleCsrf } from "csrf-csrf";
 import http2 from "http2";
 import http from "http";
 import fs from "fs";
 import path from "path";
-import jwt from "jsonwebtoken";
 import { apiRequestLogger, logger } from "@hrms/logger";
 import { configureSocketIO } from "@hrms/websocket";
-import { prisma } from "@hrms/db";
 import { setupChatSocket } from "./config/chatSocket";
 import { configureSwagger } from "./config/swaggerSetup";
+import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
+import { applyRateLimiters } from "./config/rateLimiters";
+import { resolveSocketUsername } from "./config/socketAuth";
+import { registerGracefulShutdown } from "./config/gracefulShutdown";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
-
-const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET!,
-  getSessionIdentifier: (req) => {
-    // Tie the CSRF token to the authenticated user when possible
-    const auth = req.headers.authorization;
-    if (auth?.startsWith("Bearer ")) {
-      try {
-        const payload = jwt.decode(auth.slice(7)) as any;
-        if (payload?.userId) return payload.userId as string;
-      } catch {}
-    }
-    return req.ip ?? "";
-  },
-  cookieName: "csrf-token",
-  cookieOptions: {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  },
-  size: 64,
-  getCsrfTokenFromRequest: (req) => req.headers["x-csrf-token"],
-});
 
 // Trust the first proxy hop so req.ip is correct and rate limiters
 // work properly behind a reverse proxy / load balancer.
@@ -81,42 +57,7 @@ app.use(apiRequestLogger);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiters
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests, please try again later" },
-});
-
-const generalLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests, please try again later" },
-});
-
-// Stricter limiter for unauthenticated public endpoints (careers, job application)
-const publicLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 250,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests, please try again later" },
-});
-
-app.use(
-  /^\/api\/(webauthn-login|webauthn-verify-login|webauthn-login-options|webauthn-credential-check|auth\/google)/,
-  authLimiter,
-);
-app.use("/api/refresh-token", authLimiter);
-app.use(
-  /^\/api\/(public\/careers|get-job-titles|apply-for-job)/,
-  publicLimiter,
-);
-app.use("/api", generalLimiter);
+applyRateLimiters(app);
 
 app.use(auditLogMiddleware);
 configureSwagger(app as any);
@@ -150,23 +91,6 @@ const keyPath = process.env.SSL_KEY_FILE
   ? path.resolve(process.env.SSL_KEY_FILE)
   : path.resolve(__dirname, "../../../packages/certificates/key.pem");
 
-// Verifies a WebSocket JWT access token and resolves it to the user's username.
-// Returns null for any invalid/expired token or unknown user.
-async function resolveSocketUsername(token: string): Promise<string | null> {
-  try {
-    const payload = jwt.verify(token, process.env.ACCESS_JWT_TOKEN!, {
-      algorithms: ["HS256"],
-    }) as any;
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: { username: true },
-    });
-    return user?.username ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function startServer(server: http.Server | http2.Http2SecureServer) {
   const { io, redisAdapter } = configureSocketIO(
     server as any,
@@ -180,15 +104,7 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     logger.info(`API Gateway running on ${protocol} port ${PORT}`);
   });
 
-  // Graceful shutdown
-  const shutdown = async () => {
-    logger.info("API Gateway shutting down...");
-    await redisAdapter.cleanup();
-    server.close(() => process.exit(0));
-  };
-
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
+  registerGracefulShutdown(server, redisAdapter);
 }
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
