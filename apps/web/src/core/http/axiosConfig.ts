@@ -16,10 +16,11 @@ export const setUnauthorizedHandler = (fn: () => void) => {
   _onUnauthorized = fn;
 };
 
+// Access token is persisted to localStorage so it survives page refreshes.
+// It is cleared on explicit logout, so there is no stale-session flash.
+// The refresh-token HttpOnly cookie is still used to silently obtain a new
+// access token when the stored one is missing or nearing expiry.
 const TOKEN_KEY = "hrms_access_token";
-
-// Access token stored in memory for fast access + localStorage for persistence
-// across hard refreshes and new tabs.
 let _accessToken: string | null = localStorage.getItem(TOKEN_KEY);
 
 export const getAccessToken = () => _accessToken;
@@ -27,7 +28,6 @@ export const getAccessToken = () => _accessToken;
 export const setAccessToken = (token: string) => {
   _accessToken = token;
   localStorage.setItem(TOKEN_KEY, token);
-  localStorage.removeItem("hrms_explicit_logout");
 };
 
 const clearAccessToken = () => {

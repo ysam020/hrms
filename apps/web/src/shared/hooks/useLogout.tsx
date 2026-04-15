@@ -49,7 +49,6 @@ function useLogout(setUser) {
         const theme = localStorage.getItem("theme");
         localStorage.clear();
         if (theme) localStorage.setItem("theme", theme);
-        localStorage.setItem("hrms_explicit_logout", "1");
 
         // Reset user state and navigate
         setUser(null);
@@ -61,7 +60,6 @@ function useLogout(setUser) {
       const theme = localStorage.getItem("theme");
       localStorage.clear();
       if (theme) localStorage.setItem("theme", theme);
-      localStorage.setItem("hrms_explicit_logout", "1");
       setUser(null);
       navigate("/login", { replace: true });
     }
