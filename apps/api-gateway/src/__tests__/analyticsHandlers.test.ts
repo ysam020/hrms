@@ -145,4 +145,81 @@ describe("analytics handlers", () => {
       expect.objectContaining({ period: "quarter" }),
     );
   });
+
+  it("getHeadcount returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await getHeadcount(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
+  it("getAttendanceAnalytics returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await getAttendanceAnalytics(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
+  it("getLeaveAnalytics returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await getLeaveAnalytics(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
+  it("getRecruitmentAnalytics returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await getRecruitmentAnalytics(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
+  it("getSalaryAnalytics returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await getSalaryAnalytics(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
+  it("getTurnoverAnalytics returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await getTurnoverAnalytics(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
+  it("getPerformanceAnalytics returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await getPerformanceAnalytics(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
 });

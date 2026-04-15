@@ -1,13 +1,16 @@
+x-aws-credentials: &aws-credentials
+  volumes:
+    - ${USERPROFILE}/.aws:/root/.aws:ro
+
 services:
   api-gateway:
     container_name: api-gateway
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=api-gateway
-        - PROJECT=api-gateway
+        - PROJECT=api-gateway-service
         - PORT=9002
     environment:
       - AUTH_SERVICE_HOST=auth-service
@@ -20,166 +23,282 @@ services:
       - SALARY_SERVICE_HOST=salary-service
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
+      - METRICS_PORT=9003
+      - LOKI_URL=http://loki:3100
     ports:
       - "9002:9002"
-    env_file: .env
+      - "9003:9003"
+    <<: *aws-credentials
 
   auth-service:
     container_name: auth-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=auth-service
         - PROJECT=auth-service
         - PORT=50051
+    environment:
+      - METRICS_PORT=9101
+      - LOKI_URL=http://loki:3100
     ports:
       - "50051:50051"
-    env_file: .env
+      - "9101:9101"
+    <<: *aws-credentials
 
   user-service:
     container_name: user-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=user-service
         - PROJECT=user-service
         - PORT=50052
+    environment:
+      - METRICS_PORT=9102
+      - LOKI_URL=http://loki:3100
     ports:
       - "50052:50052"
-    env_file: .env
+      - "9102:9102"
+    <<: *aws-credentials
 
   employee-service:
     container_name: employee-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=employee-service
-        - PROJECT=@hrms/employee-service
+        - PROJECT=employee-service
         - PORT=50053
+    environment:
+      - METRICS_PORT=9103
+      - LOKI_URL=http://loki:3100
     ports:
       - "50053:50053"
-    env_file: .env
+      - "9103:9103"
+    <<: *aws-credentials
 
   attendance-service:
     container_name: attendance-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=attendance-service
-        - PROJECT=@hrms/attendance-service
+        - PROJECT=attendance-service
         - PORT=50054
+    environment:
+      - METRICS_PORT=9104
+      - LOKI_URL=http://loki:3100
     ports:
       - "50054:50054"
-    env_file: .env
+      - "9104:9104"
+    <<: *aws-credentials
 
   leave-service:
     container_name: leave-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=leave-service
-        - PROJECT=@hrms/leave-service
+        - PROJECT=leave-service
         - PORT=50055
+    environment:
+      - METRICS_PORT=9105
+      - LOKI_URL=http://loki:3100
     ports:
       - "50055:50055"
-    env_file: .env
+      - "9105:9105"
+    <<: *aws-credentials
 
   recruitment-service:
     container_name: recruitment-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=recruitment-service
-        - PROJECT=@hrms/recruitment-service
+        - PROJECT=recruitment-service
         - PORT=50056
+    environment:
+      - METRICS_PORT=9106
+      - LOKI_URL=http://loki:3100
     ports:
       - "50056:50056"
-    env_file: .env
+      - "9106:9106"
+    <<: *aws-credentials
 
   hrm-service:
     container_name: hrm-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=hrm-service
-        - PROJECT=@hrms/hrm-service
+        - PROJECT=hrm-service
         - PORT=50057
+    environment:
+      - METRICS_PORT=9107
+      - LOKI_URL=http://loki:3100
     ports:
       - "50057:50057"
-    env_file: .env
+      - "9107:9107"
+    <<: *aws-credentials
 
   salary-service:
     container_name: salary-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=salary-service
-        - PROJECT=@hrms/salary-service
+        - PROJECT=salary-service
         - PORT=50058
+    environment:
+      - METRICS_PORT=9108
+      - LOKI_URL=http://loki:3100
     ports:
       - "50058:50058"
-    env_file: .env
+      - "9108:9108"
+    <<: *aws-credentials
 
   analytics-service:
     container_name: analytics-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=analytics-service
-        - PROJECT=@hrms/analytics-service
+        - PROJECT=analytics-service
         - PORT=50059
+    environment:
+      - METRICS_PORT=9109
+      - LOKI_URL=http://loki:3100
     ports:
       - "50059:50059"
-    env_file: .env
+      - "9109:9109"
+    <<: *aws-credentials
 
   notification-service:
     container_name: notification-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=notification-service
-        - PROJECT=@hrms/notification-service
+        - PROJECT=notification-service
         - PORT=50060
+    environment:
+      - METRICS_PORT=9110
+      - LOKI_URL=http://loki:3100
     ports:
       - "50060:50060"
-    env_file: .env
+      - "9110:9110"
+    <<: *aws-credentials
 
   scheduler-service:
     container_name: scheduler-service
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=scheduler-service
-        - PROJECT=@hrms/scheduler-service
-    env_file: .env
+        - PROJECT=scheduler-service
+    environment:
+      - METRICS_PORT=9111
+      - LOKI_URL=http://loki:3100
+    ports:
+      - "9111:9111"
+    <<: *aws-credentials
 
   web:
     container_name: web
     build:
       context: .
       dockerfile: ./docker/web.Dockerfile
-      no_cache: true
+      secrets:
+        - aws_credentials
+        - aws_config
     ports:
       - "80:80"
+
+  mongodb:
+    container_name: hrms-mongodb
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: hrms
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    container_name: hrms-redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  prometheus:
+    container_name: hrms-prometheus
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+
+  loki:
+    container_name: hrms-loki
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki/data
+    command: -config.file=/etc/loki/local-config.yaml
+
+  grafana:
+    container_name: hrms-grafana
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  mongo-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  loki-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+secrets:
+  aws_credentials:
+    file: ${USERPROFILE}/.aws/credentials
+  aws_config:
+    file: ${USERPROFILE}/.aws/config

@@ -2,7 +2,7 @@
   "name": "user-service",
   "version": "1.0.0",
   "scripts": {
-    "dev": "LOKI_URL=http://localhost:3100 METRICS_PORT=9102 tsx --watch src/bootstrap.ts",
+    "dev": "node dist/bootstrap.js",
     "prod": "node dist/bootstrap.js",
     "build": "tsc -b"
   },

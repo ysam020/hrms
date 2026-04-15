@@ -117,6 +117,53 @@ describe("userHandlers", () => {
       );
     });
 
+    it("transforms user data with camelToSnake and parses role when response.data is present", async () => {
+      const userData = {
+        id: "u1",
+        role: "HR,Manager",
+        isSuperUser: true,
+        employeeStatus: "Active",
+        dateOfTermination: null,
+        reasonForTermination: null,
+        dateOfAbscond: null,
+      };
+      mockGrpcCall.mockResolvedValue({
+        data: userData,
+        message: "User fetched",
+        status: 0,
+      });
+      const res = makeRes();
+      await getUserData(makeReq({ params: { username: "john" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            role: ["HR", "Manager"],
+            isSuperUser: true,
+            employeeStatus: "Active",
+          }),
+        }),
+      );
+    });
+
+    it("sets role to empty array when role field is empty", async () => {
+      mockGrpcCall.mockResolvedValue({
+        data: { id: "u2", role: "", isSuperUser: false },
+        message: "OK",
+        status: 0,
+      });
+      const res = makeRes();
+      await getUserData(makeReq({ params: { username: "john" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: expect.objectContaining({ role: [] }),
+        }),
+      );
+    });
+
     it("returns INTERNAL on error", async () => {
       mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
       const res = makeRes();

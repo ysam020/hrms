@@ -4,12 +4,12 @@ ARG PORT=9002
 
 FROM node:20-alpine AS slim
 RUN apk update
-RUN apk add --no-cache libc6-compat
-RUN apk add --no-cache openssl
+RUN apk add --no-cache libc6-compat openssl protobuf protobuf-dev
 
 FROM slim AS base
-RUN npm install pnpm turbo --global
+RUN npm install -g pnpm@8.15.6 turbo
 RUN pnpm config set store-dir ~/.pnpm-store
+RUN pnpm config set manage-package-manager-versions false
 
 FROM base AS pruner
 ARG PROJECT
@@ -28,7 +28,7 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/out/json/ .
 
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --no-frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --no-frozen-lockfile --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 
@@ -51,4 +51,4 @@ COPY --from=builder --chown=nodejs:nodejs /app .
 WORKDIR /app/apps/${APP_DIR}
 
 EXPOSE ${PORT}
-CMD [ "pnpm", "start:prod" ]
+CMD [ "pnpm", "dev" ]

@@ -117,6 +117,81 @@ describe("permissionsHandlers", () => {
     });
   });
 
+  describe("getRoleAndPermissions", () => {
+    it("returns roles mapped to _id, name, and permissions", async () => {
+      mockRoleFindMany.mockResolvedValue([
+        { id: "r-1", name: "HR", permissions: ["view_employees"] },
+      ]);
+      const res = makeRes();
+      await getRoleAndPermissions(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({ _id: "r-1", name: "HR" }),
+          ]),
+        }),
+      );
+    });
+
+    it("returns empty array on DB error", async () => {
+      mockRoleFindMany.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await getRoleAndPermissions(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        { data: [] },
+      );
+    });
+  });
+
+  describe("getUserPermissions", () => {
+    it("returns permissions and role for existing user", async () => {
+      mockUserFindFirst.mockResolvedValue({
+        permissions: ["view_employees"],
+        role: ["HR"],
+      });
+      const res = makeRes();
+      await getUserPermissions(makeReq({ params: { username: "john" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: { permissions: ["view_employees"], role: ["HR"] },
+        }),
+      );
+    });
+
+    it("returns empty arrays when user not found", async () => {
+      mockUserFindFirst.mockResolvedValue(null);
+      const res = makeRes();
+      await getUserPermissions(
+        makeReq({ params: { username: "unknown" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: { permissions: [], role: [] },
+        }),
+      );
+    });
+
+    it("returns empty arrays on DB error", async () => {
+      mockUserFindFirst.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await getUserPermissions(makeReq({ params: { username: "john" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({ data: { permissions: [], role: [] } }),
+      );
+    });
+  });
+
   describe("createRole", () => {
     it("returns BAD_REQUEST when name is missing", async () => {
       const res = makeRes();
@@ -152,6 +227,17 @@ describe("permissionsHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockRoleFindFirst.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await createRole(makeReq({ body: { name: "Manager" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
@@ -198,6 +284,17 @@ describe("permissionsHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockRoleFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await deleteRole(makeReq({ params: { _id: "r-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("updateRolePermissions", () => {
@@ -235,6 +332,20 @@ describe("permissionsHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockRoleFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await updateRolePermissions(
+        makeReq({ params: { _id: "r-1" }, body: {} }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("getRolePermissions", () => {
@@ -260,6 +371,17 @@ describe("permissionsHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockRoleFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await getRolePermissions(makeReq({ params: { _id: "r-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
@@ -290,9 +412,7 @@ describe("permissionsHandlers", () => {
         last_name: "Doe",
         employee_photo: null,
       };
-      mockUserFindFirst
-        .mockResolvedValueOnce(user) // find user
-        .mockResolvedValueOnce(null); // find role doc (no role to assign)
+      mockUserFindFirst.mockResolvedValue(user);
       mockUserUpdate.mockResolvedValue({});
       const res = makeRes();
       await saveUserPermissions(
@@ -309,6 +429,111 @@ describe("permissionsHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("assigns role to user and adds to role's assignedTo list", async () => {
+      const user = {
+        id: "u1",
+        username: "john",
+        role: [],
+        permissions: [],
+        first_name: "John",
+        last_name: "Doe",
+        employee_photo: "photo.jpg",
+      };
+      const roleDoc = {
+        id: "r-1",
+        name: "HR",
+        assignedTo: [],
+        permissions: ["view_employees"],
+      };
+      mockUserFindFirst.mockResolvedValue(user);
+      mockUserUpdate.mockResolvedValue({});
+      mockRoleFindFirst.mockResolvedValue(roleDoc);
+      mockRoleUpdate.mockResolvedValue({});
+
+      const res = makeRes();
+      await saveUserPermissions(
+        makeReq({
+          body: {
+            selectedUser: "john",
+            permissions: ["view_employees"],
+            selectedRole: "HR",
+          },
+        }),
+        res,
+      );
+
+      expect(mockRoleUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "r-1" },
+          data: expect.objectContaining({
+            assignedTo: expect.arrayContaining([
+              expect.objectContaining({ username: "john" }),
+            ]),
+          }),
+        }),
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("skips adding to assignedTo when user already assigned to role", async () => {
+      const user = {
+        id: "u1",
+        username: "john",
+        role: ["HR"],
+        permissions: [],
+        first_name: "John",
+        last_name: "Doe",
+        employee_photo: null,
+      };
+      const roleDoc = {
+        id: "r-1",
+        name: "HR",
+        assignedTo: [{ username: "john" }],
+        permissions: [],
+      };
+      mockUserFindFirst.mockResolvedValue(user);
+      mockUserUpdate.mockResolvedValue({});
+      mockRoleFindFirst.mockResolvedValue(roleDoc);
+
+      const res = makeRes();
+      await saveUserPermissions(
+        makeReq({
+          body: {
+            selectedUser: "john",
+            permissions: [],
+            selectedRole: "HR",
+          },
+        }),
+        res,
+      );
+
+      // role.update should NOT be called since user is already in assignedTo
+      expect(mockRoleUpdate).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockUserFindFirst.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await saveUserPermissions(
+        makeReq({ body: { selectedUser: "john", permissions: [] } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
@@ -343,6 +568,20 @@ describe("permissionsHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockUserFindFirst.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await updateSuperuser(
+        makeReq({ params: { username: "john" }, body: { isSuperUser: true } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
@@ -387,6 +626,81 @@ describe("permissionsHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("removes role from user and user from role's assignedTo", async () => {
+      (prisma as any).role.findUnique.mockResolvedValue({
+        id: "r-1",
+        name: "HR",
+        permissions: ["view_employees"],
+        assignedTo: [{ username: "john" }, { username: "alice" }],
+      });
+      (prisma as any).user.findFirst.mockResolvedValue({
+        id: "u1",
+        username: "john",
+        role: ["HR", "Manager"],
+        permissions: ["view_employees", "edit_employees"],
+      });
+      mockUserUpdate.mockResolvedValue({});
+      mockRoleUpdate.mockResolvedValue({});
+
+      const res = makeRes();
+      await deleteUserRole(
+        makeReq({ body: { username: "john", roleId: "r-1" } }),
+        res,
+      );
+
+      expect(mockUserUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ role: ["Manager"] }),
+        }),
+      );
+      expect(mockRoleUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            assignedTo: [{ username: "alice" }],
+          }),
+        }),
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns NOT_FOUND when user not found", async () => {
+      (prisma as any).role.findUnique.mockResolvedValue({
+        id: "r-1",
+        name: "HR",
+        permissions: [],
+        assignedTo: [],
+      });
+      (prisma as any).user.findFirst.mockResolvedValue(null);
+      const res = makeRes();
+      await deleteUserRole(
+        makeReq({ body: { username: "unknown", roleId: "r-1" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      (prisma as any).role.findUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await deleteUserRole(
+        makeReq({ body: { username: "john", roleId: "r-1" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("getTeams", () => {
@@ -400,6 +714,17 @@ describe("permissionsHandlers", () => {
         res,
         RESPONSE_STATUS.SUCCESS,
         expect.any(Object),
+      );
+    });
+
+    it("returns empty array on DB error", async () => {
+      mockTeamFindMany.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await getTeams(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        { data: [] },
       );
     });
   });
@@ -430,6 +755,34 @@ describe("permissionsHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("returns BAD_REQUEST when team name already exists", async () => {
+      mockTeamFindFirst.mockResolvedValue({ id: "t-1", teamName: "Alpha" });
+      const res = makeRes();
+      await createTeam(
+        makeReq({ body: { teamName: "Alpha", teamLeader: "alice" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockTeamFindFirst.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await createTeam(
+        makeReq({ body: { teamName: "Alpha", teamLeader: "alice" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("deleteTeam", () => {
@@ -449,6 +802,17 @@ describe("permissionsHandlers", () => {
       mockTeamDelete.mockResolvedValue({});
       await deleteTeam(makeReq({ params: { _id: "t-1" } }), makeRes());
       expect(mockTeamDelete).toHaveBeenCalledWith({ where: { id: "t-1" } });
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockTeamFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await deleteTeam(makeReq({ params: { _id: "t-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
     });
   });
 
@@ -493,6 +857,20 @@ describe("permissionsHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockTeamFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await addTeamMembers(
+        makeReq({ body: { teamId: "t-1", members: ["alice"] } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
@@ -546,6 +924,20 @@ describe("permissionsHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockTeamFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await deleteUserFromTeam(
+        makeReq({ body: { teamId: "t-1", username: "alice" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });

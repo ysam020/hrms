@@ -19,9 +19,11 @@ import {
   withdrawResignation,
   jobOpeningsInsights,
   scheduleInterview,
+  rescheduleInterview,
   reassignInterviewer,
   getInterviewerList,
   updateResignation,
+  addExitFeedback,
   resignationInsights,
 } from "../handlers/recruitment";
 
@@ -264,9 +266,7 @@ describe("recruitmentHandlers", () => {
     });
 
     it("allows superuser to view any user's resignation", async () => {
-      mockUserFindUnique
-        .mockResolvedValueOnce({ isSuperUser: true })
-        .mockResolvedValueOnce({ username: "admin" });
+      mockUserFindUnique.mockResolvedValueOnce({ isSuperUser: true });
       await viewResignations(
         makeReq({ query: { username: "jane" } }),
         makeRes(),
@@ -275,6 +275,17 @@ describe("recruitmentHandlers", () => {
         expect.anything(),
         "listResignations",
         expect.objectContaining({ username: "jane" }),
+      );
+    });
+
+    it("returns INTERNAL on error", async () => {
+      mockUserFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await viewResignations(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
       );
     });
   });
@@ -288,6 +299,17 @@ describe("recruitmentHandlers", () => {
     );
   });
 
+  it("approveResignation returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await approveResignation(makeReq({ params: { _id: "res-1" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
   it("rejectResignation calls rejectResignation with params id", async () => {
     await rejectResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
@@ -297,12 +319,34 @@ describe("recruitmentHandlers", () => {
     );
   });
 
+  it("rejectResignation returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await rejectResignation(makeReq({ params: { _id: "res-1" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+
   it("withdrawResignation calls rejectResignation with Withdrawn status", async () => {
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "rejectResignation",
       expect.objectContaining({ id: "res-1", status: "Withdrawn" }),
+    );
+  });
+
+  it("withdrawResignation returns INTERNAL on error", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+    const res = makeRes();
+    await withdrawResignation(makeReq({ params: { _id: "res-1" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
     );
   });
 
@@ -375,6 +419,17 @@ describe("recruitmentHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("returns INTERNAL on error", async () => {
+      mockAppFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await scheduleInterview(makeReq({ body: { _id: "app-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("reassignInterviewer", () => {
@@ -423,6 +478,17 @@ describe("recruitmentHandlers", () => {
       );
       expect(interview.interviewer).toBe("Bob");
     });
+
+    it("returns INTERNAL on error", async () => {
+      mockAppFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await reassignInterviewer(makeReq({ body: { _id: "app-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("getInterviewerList", () => {
@@ -448,6 +514,17 @@ describe("recruitmentHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL on error", async () => {
+      mockUserFindMany.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await getInterviewerList(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
@@ -484,6 +561,37 @@ describe("recruitmentHandlers", () => {
         }),
       );
     });
+
+    it("updates fnfDone field when status is FnF Done", async () => {
+      mockResignFindUnique.mockResolvedValue({ id: "res-1" });
+      mockResignUpdate.mockResolvedValue({ id: "res-1" });
+      await updateResignation(
+        makeReq({
+          params: { _id: "res-1" },
+          body: { status: "FnF Done", value: true },
+        }),
+        makeRes(),
+      );
+      expect(mockResignUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ fnfDone: true }),
+        }),
+      );
+    });
+
+    it("returns INTERNAL on error", async () => {
+      mockResignFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await updateResignation(
+        makeReq({ params: { _id: "res-1" }, body: {} }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("resignationInsights", () => {
@@ -505,6 +613,160 @@ describe("recruitmentHandlers", () => {
             overview: expect.objectContaining({ total: 10, approved: 5 }),
           }),
         }),
+      );
+    });
+
+    it("returns INTERNAL on error", async () => {
+      mockResignCount.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await resignationInsights(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("rescheduleInterview", () => {
+    it("returns NOT_FOUND when application not found", async () => {
+      mockAppFindUnique.mockResolvedValue(null);
+      const res = makeRes();
+      await rescheduleInterview(makeReq({ body: { _id: "app-99" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
+        expect.any(Object),
+      );
+    });
+
+    it("pushes rescheduled interview and updates status", async () => {
+      mockAppFindUnique.mockResolvedValue({ id: "app-1", interviews: [] });
+      mockAppUpdate.mockResolvedValue({});
+      const res = makeRes();
+      await rescheduleInterview(
+        makeReq({
+          body: {
+            _id: "app-1",
+            roundNumber: 2,
+            interviewDateTime: "2024-04-10",
+            interviewStartTime: "10:00",
+            interviewEndTime: "11:00",
+            interviewer: "Bob",
+          },
+        }),
+        res,
+      );
+      expect(mockAppUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "app-1" },
+          data: expect.objectContaining({ status: "Round 2 Rescheduled" }),
+        }),
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockAppFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await rescheduleInterview(makeReq({ body: { _id: "app-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("addExitFeedback", () => {
+    it("returns NOT_FOUND when user does not exist", async () => {
+      mockUserFindUnique.mockResolvedValue(null);
+      const res = makeRes();
+      await addExitFeedback(makeReq({ body: {} }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST when no approved resignation exists", async () => {
+      mockUserFindUnique.mockResolvedValue({ username: "john" });
+      mockResignFindFirst.mockResolvedValue(null);
+      const res = makeRes();
+      await addExitFeedback(makeReq({ body: {} }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.objectContaining({
+          message: expect.stringContaining("approved resignation"),
+        }),
+      );
+    });
+
+    it("returns BAD_REQUEST when feedback already submitted", async () => {
+      mockUserFindUnique.mockResolvedValue({ username: "john" });
+      mockResignFindFirst.mockResolvedValue({
+        id: "res-1",
+        status: "Approved",
+        overallJobSatisfaction: 4,
+      });
+      const res = makeRes();
+      await addExitFeedback(makeReq({ body: {} }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.objectContaining({
+          message: expect.stringContaining("already been submitted"),
+        }),
+      );
+    });
+
+    it("saves exit feedback and returns CREATED", async () => {
+      mockUserFindUnique.mockResolvedValue({ username: "john" });
+      mockResignFindFirst.mockResolvedValue({
+        id: "res-1",
+        status: "Approved",
+        overallJobSatisfaction: 0,
+      });
+      mockResignUpdate.mockResolvedValue({ id: "res-1" });
+      const res = makeRes();
+      await addExitFeedback(
+        makeReq({
+          body: {
+            overall_job_satisfaction: 4,
+            quality_of_communication: "Good",
+            support_from_manager: "Excellent",
+            suggestions: "Better onboarding",
+          },
+        }),
+        res,
+      );
+      expect(mockResignUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "res-1" },
+          data: expect.objectContaining({ overallJobSatisfaction: 4 }),
+        }),
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.CREATED,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockUserFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await addExitFeedback(makeReq({ body: {} }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
       );
     });
   });

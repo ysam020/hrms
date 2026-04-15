@@ -1,7 +1,9 @@
 import { doubleCsrf } from "csrf-csrf";
 import jwt from "jsonwebtoken";
 
-export const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
+type CsrfResult = ReturnType<typeof doubleCsrf>;
+
+const csrfResult = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET!,
   getSessionIdentifier: (req) => {
     // Tie the CSRF token to the authenticated user when possible
@@ -24,3 +26,8 @@ export const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   size: 64,
   getCsrfTokenFromRequest: (req) => req.headers["x-csrf-token"],
 });
+
+export const generateCsrfToken: CsrfResult["generateCsrfToken"] =
+  csrfResult.generateCsrfToken;
+export const doubleCsrfProtection: CsrfResult["doubleCsrfProtection"] =
+  csrfResult.doubleCsrfProtection;
