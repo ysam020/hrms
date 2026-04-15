@@ -20,6 +20,8 @@ jest.mock("@hrms/queue", () => ({
   })),
 }));
 
+import { getNotificationQueue } from "@hrms/queue";
+
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
@@ -29,6 +31,7 @@ const mockUpdate = (prisma as any).jobApplication.update as jest.Mock;
 const mockJobOpeningUpdate = (prisma as any).jobOpening.update as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
+const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
@@ -127,6 +130,26 @@ describe("updateApplicationStatus", () => {
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 13 }),
+    );
+  });
+
+  it("enqueues notification when HR users exist", async () => {
+    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
+
+    mockFindUnique.mockResolvedValue(application);
+    mockUpdate.mockResolvedValue({ ...application, status: "Shortlisted" });
+    mockUserFindMany.mockResolvedValue([{ id: "u1", username: "hr1" }]);
+
+    await updateApplicationStatus(
+      makeCall({ id: "app-1", applicationStatus: "Shortlisted" }),
+      makeCallback(),
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      "applicationStatusUpdated",
+      expect.any(Object),
     );
   });
 });

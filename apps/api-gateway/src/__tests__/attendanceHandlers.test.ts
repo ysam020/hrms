@@ -5,6 +5,7 @@ import {
   getAllAttendances,
   attendanceCorrection,
   getAttendanceSummary,
+  attendanceInsights,
 } from "../handlers/attendance";
 
 jest.mock("../grpc/clients", () => ({
@@ -14,7 +15,7 @@ jest.mock("../grpc/clients", () => ({
 
 jest.mock("@hrms/db", () => ({
   prisma: {
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findMany: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
     leaveBalance: { findUnique: jest.fn() },
   },
@@ -43,6 +44,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
+const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockRecordFindMany = (prisma as any).attendanceRecord
   .findMany as jest.Mock;
 const mockLeaveBalanceFindUnique = (prisma as any).leaveBalance
@@ -344,6 +346,203 @@ describe("getAttendanceSummary", () => {
       res,
     );
 
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
+    );
+  });
+});
+
+describe("attendanceInsights", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUserFindMany.mockResolvedValue([]);
+    mockRecordFindMany.mockResolvedValue([]);
+  });
+
+  it("returns SUCCESS with correct top-level shape on empty data", async () => {
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
+
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          primaryMetrics: expect.objectContaining({
+            overallAttendanceRate: 0,
+            correctionRate: 0,
+            automationRate: 0,
+          }),
+          employeeRiskAssessment: [],
+          teamPerformance: [],
+          trendAnalysis: expect.objectContaining({ trendDirection: "stable" }),
+          attendancePatterns: expect.objectContaining({ peakHours: [] }),
+        }),
+      }),
+    );
+  });
+
+  it("calculates overallAttendanceRate from Present and Half Day records", async () => {
+    mockRecordFindMany.mockResolvedValue([
+      {
+        username: "alice",
+        status: "Present",
+        isCorrected: false,
+        workingHours: 8,
+        timeIn: "09:00",
+        date: new Date("2024-03-01"),
+      },
+      {
+        username: "alice",
+        status: "Half Day",
+        isCorrected: false,
+        workingHours: 4,
+        timeIn: "09:00",
+        date: new Date("2024-03-04"),
+      },
+      {
+        username: "alice",
+        status: "Absent",
+        isCorrected: false,
+        workingHours: null,
+        timeIn: null,
+        date: new Date("2024-03-05"),
+      },
+      {
+        username: "alice",
+        status: "Late",
+        isCorrected: false,
+        workingHours: 7,
+        timeIn: "10:00",
+        date: new Date("2024-03-06"),
+      },
+    ]);
+    mockUserFindMany.mockResolvedValue([
+      { username: "alice", department: "Engineering" },
+    ]);
+
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
+
+    const call = mockApiResponse.mock.calls[0][2];
+    // 3 out of 4 records are Present/Late/HalfDay → 75%
+    expect(call.data.primaryMetrics.overallAttendanceRate).toBe(75);
+  });
+
+  it("assigns High risk level when attendance rate is 0", async () => {
+    mockRecordFindMany.mockResolvedValue([
+      {
+        username: "bob",
+        status: "Absent",
+        isCorrected: true,
+        workingHours: null,
+        timeIn: null,
+        date: new Date("2024-03-01"),
+      },
+    ]);
+    mockUserFindMany.mockResolvedValue([{ username: "bob", department: "HR" }]);
+
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
+
+    const call = mockApiResponse.mock.calls[0][2];
+    const emp = call.data.employeeRiskAssessment[0];
+    expect(emp.username).toBe("bob");
+    expect(emp.riskLevel).toBe("High");
+  });
+
+  it("assigns Low risk level for perfect attendance with full hours", async () => {
+    mockRecordFindMany.mockResolvedValue([
+      {
+        username: "carol",
+        status: "Present",
+        isCorrected: false,
+        workingHours: 9,
+        timeIn: "09:00",
+        date: new Date("2024-03-01"),
+      },
+    ]);
+    mockUserFindMany.mockResolvedValue([
+      { username: "carol", department: "Finance" },
+    ]);
+
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
+
+    const call = mockApiResponse.mock.calls[0][2];
+    const emp = call.data.employeeRiskAssessment[0];
+    expect(emp.riskLevel).toBe("Low");
+  });
+
+  it("groups records by department for teamPerformance", async () => {
+    mockRecordFindMany.mockResolvedValue([
+      {
+        username: "alice",
+        status: "Present",
+        isCorrected: false,
+        workingHours: 8,
+        timeIn: "09:00",
+        date: new Date("2024-03-01"),
+      },
+      {
+        username: "bob",
+        status: "Absent",
+        isCorrected: false,
+        workingHours: null,
+        timeIn: null,
+        date: new Date("2024-03-01"),
+      },
+    ]);
+    mockUserFindMany.mockResolvedValue([
+      { username: "alice", department: "Engineering" },
+      { username: "bob", department: "HR" },
+    ]);
+
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
+
+    const call = mockApiResponse.mock.calls[0][2];
+    const depts = call.data.teamPerformance.map((t: any) => t.department);
+    expect(depts).toContain("Engineering");
+    expect(depts).toContain("HR");
+  });
+
+  it("handles last_month period without error", async () => {
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: { period: "last_month" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.any(Object),
+    );
+  });
+
+  it("handles quarter period without error", async () => {
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: { period: "quarter" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.any(Object),
+    );
+  });
+
+  it("handles year period without error", async () => {
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: { period: "year" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.any(Object),
+    );
+  });
+
+  it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+    mockRecordFindMany.mockRejectedValue(new Error("DB error"));
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
       RESPONSE_STATUS.INTERNAL_SERVER_ERROR,

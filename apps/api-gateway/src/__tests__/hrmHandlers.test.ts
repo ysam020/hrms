@@ -16,6 +16,7 @@ import {
   getPolicy,
   updatePolicy,
   deletePolicy,
+  getPolicyPdf,
   isSuperuser,
 } from "../handlers/hrm";
 
@@ -102,12 +103,14 @@ jest.mock("@hrms/cache", () => ({
   },
 }));
 
+import { jsPDF } from "jspdf";
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
+const mockJsPDF = jsPDF as jest.Mock;
 const mockActivityFindMany = (prisma as any).hrActivity.findMany as jest.Mock;
 const mockActivityCount = (prisma as any).hrActivity.count as jest.Mock;
 const mockActivityFindUnique = (prisma as any).hrActivity
@@ -693,6 +696,17 @@ describe("hrmHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("returns INTERNAL on error", async () => {
+      mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+      const res = makeRes();
+      await getPolicy(makeReq({ params: { id: "p1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("updatePolicy", () => {
@@ -721,6 +735,20 @@ describe("hrmHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("returns INTERNAL on error", async () => {
+      mockPolicyUpdate.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await updatePolicy(
+        makeReq({ params: { id: "p1" }, body: { policyName: "X" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("deletePolicy", () => {
@@ -737,6 +765,17 @@ describe("hrmHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL on error", async () => {
+      mockPolicyUpdate.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await deletePolicy(makeReq({ params: { id: "p1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
@@ -761,6 +800,160 @@ describe("hrmHandlers", () => {
         RESPONSE_STATUS.SUCCESS,
         expect.any(Object),
       );
+    });
+
+    it("returns INTERNAL on error", async () => {
+      mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+      const res = makeRes();
+      await isSuperuser(makeReq({ params: { username: "alice" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("getPolicyPdf", () => {
+    it("returns NOT_FOUND when policy does not exist", async () => {
+      mockPolicyFindUnique.mockResolvedValue(null);
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p-99" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
+        expect.any(Object),
+      );
+    });
+
+    it("sends PDF buffer when policy exists", async () => {
+      mockPolicyFindUnique.mockResolvedValue({
+        id: "p1",
+        policyType: "Leave",
+        policyName: "Leave Policy",
+        createdBy: "admin",
+        createdOn: new Date("2024-01-01"),
+        content:
+          "<h1>Leave Policy</h1><p>All employees are entitled to 20 days of leave.</p><ul><li>Paid leave</li><li>Sick leave</li></ul>",
+      });
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p1" } }), res);
+      expect(res.set).toHaveBeenCalledWith(
+        expect.objectContaining({ "Content-Type": "application/pdf" }),
+      );
+      expect(res.send).toHaveBeenCalled();
+    });
+
+    it("uses policyName as title when policyType is Other", async () => {
+      mockPolicyFindUnique.mockResolvedValue({
+        id: "p2",
+        policyType: "Other",
+        policyName: "Custom Policy",
+        createdBy: "admin",
+        createdOn: new Date("2024-01-01"),
+        content: "<p>Custom content</p>",
+      });
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p2" } }), res);
+      // When policyType is "Other" and policyName exists, policyName is used as displayTitle
+      expect(res.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          "Content-Disposition": expect.stringContaining("custom_policy"),
+        }),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
+      mockPolicyFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+
+    it("renders gap text (text before first tag) as a paragraph block", async () => {
+      mockPolicyFindUnique.mockResolvedValue({
+        id: "p3",
+        policyType: "HR",
+        policyName: "HR Policy",
+        createdBy: "admin",
+        createdOn: new Date("2024-01-01"),
+        content: "gap text before tag<p>paragraph content</p>",
+      });
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p3" } }), res);
+      expect(res.send).toHaveBeenCalled();
+    });
+
+    it("renders tail text (text after last tag) as a paragraph block", async () => {
+      mockPolicyFindUnique.mockResolvedValue({
+        id: "p4",
+        policyType: "HR",
+        policyName: "HR Policy",
+        createdBy: "admin",
+        createdOn: new Date("2024-01-01"),
+        content: "<p>paragraph content</p>trailing text after tag",
+      });
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p4" } }), res);
+      expect(res.send).toHaveBeenCalled();
+    });
+
+    it("renders h3-h6 tags as h2 blocks", async () => {
+      mockPolicyFindUnique.mockResolvedValue({
+        id: "p5",
+        policyType: "HR",
+        policyName: "HR Policy",
+        createdBy: "admin",
+        createdOn: new Date("2024-01-01"),
+        content:
+          "<h3>Section A</h3><h4>Section B</h4><h5>Section C</h5><h6>Section D</h6>",
+      });
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p5" } }), res);
+      expect(res.send).toHaveBeenCalled();
+    });
+
+    it("calls addPage when content overflows the page height", async () => {
+      const mockAddPage = jest.fn();
+      mockJsPDF.mockImplementationOnce(() => ({
+        internal: {
+          pageSize: {
+            getWidth: jest.fn().mockReturnValue(210),
+            getHeight: jest.fn().mockReturnValue(25), // tiny page — cursorY(23) + any neededH > 25-16=9
+          },
+          getNumberOfPages: jest.fn().mockReturnValue(2),
+        },
+        setFillColor: jest.fn(),
+        setTextColor: jest.fn(),
+        setFontSize: jest.fn(),
+        setFont: jest.fn(),
+        setDrawColor: jest.fn(),
+        setLineWidth: jest.fn(),
+        setPage: jest.fn(),
+        text: jest.fn(),
+        rect: jest.fn(),
+        circle: jest.fn(),
+        line: jest.fn(),
+        lines: jest.fn(),
+        addPage: mockAddPage,
+        splitTextToSize: jest.fn().mockReturnValue(["line"]),
+        output: jest.fn().mockReturnValue(new ArrayBuffer(8)),
+      }));
+      mockPolicyFindUnique.mockResolvedValue({
+        id: "p6",
+        policyType: "HR",
+        policyName: "HR Policy",
+        createdBy: "admin",
+        createdOn: new Date("2024-01-01"),
+        content: "<h1>Title that forces overflow</h1>",
+      });
+      const res = makeRes();
+      await getPolicyPdf(makeReq({ params: { id: "p6" } }), res);
+      expect(mockAddPage).toHaveBeenCalled();
     });
   });
 });

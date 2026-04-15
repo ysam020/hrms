@@ -50,10 +50,14 @@ export default defineConfig({
     },
   },
   server: {
-    https: {
-      key: fs.readFileSync("../../packages/certificates/key.pem"),
-      cert: fs.readFileSync("../../packages/certificates/cert.pem"),
-    },
+    https:
+      fs.existsSync("../../packages/certificates/key.pem") &&
+      fs.existsSync("../../packages/certificates/cert.pem")
+        ? {
+            key: fs.readFileSync("../../packages/certificates/key.pem"),
+            cert: fs.readFileSync("../../packages/certificates/cert.pem"),
+          }
+        : undefined,
     port: 5173,
     headers: {
       "Document-Policy": "js-profiling",

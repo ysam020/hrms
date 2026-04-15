@@ -25,6 +25,8 @@ jest.mock("@hrms/queue", () => ({
   }),
 }));
 
+import { getNotificationQueue } from "@hrms/queue";
+
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
@@ -36,7 +38,9 @@ const mockJobFindUnique = (prisma as any).jobOpening.findUnique as jest.Mock;
 const mockAppFindFirst = (prisma as any).jobApplication.findFirst as jest.Mock;
 const mockAppCreate = (prisma as any).jobApplication.create as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
+const mockUserFindFirst = prisma.user.findFirst as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
+const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
 
 const openJob = {
   id: "job-1",
@@ -185,5 +189,52 @@ describe("applyForJob", () => {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,
     });
+  });
+
+  it("enqueues notification when HR users exist", async () => {
+    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
+
+    mockJobFindUnique.mockResolvedValue(openJob);
+    mockAppFindFirst.mockResolvedValue(null);
+    mockAppCreate.mockResolvedValue({
+      id: "app-1",
+      ...validRequest,
+      status: "Applied",
+    });
+    mockUserFindMany.mockResolvedValue([{ id: "u1", username: "hr1" }]);
+
+    await applyForJob(makeCall(validRequest), makeCallback());
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      "jobApplicationReceived",
+      expect.objectContaining({ recipients: ["u1"] }),
+    );
+  });
+
+  it("includes hiring manager in notification when hiringManager is set and found", async () => {
+    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
+
+    const jobWithManager = { ...openJob, hiringManager: "manager1" };
+    mockJobFindUnique.mockResolvedValue(jobWithManager);
+    mockAppFindFirst.mockResolvedValue(null);
+    mockAppCreate.mockResolvedValue({
+      id: "app-1",
+      ...validRequest,
+      status: "Applied",
+    });
+    mockUserFindMany.mockResolvedValue([]); // no HR users
+    mockUserFindFirst.mockResolvedValue({ id: "hm1", username: "manager1" });
+
+    await applyForJob(makeCall(validRequest), makeCallback());
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockUserFindFirst).toHaveBeenCalled();
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      "jobApplicationReceived",
+      expect.objectContaining({ recipients: ["hm1"] }),
+    );
   });
 });

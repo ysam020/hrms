@@ -25,6 +25,8 @@ jest.mock("@hrms/queue", () => ({
   }),
 }));
 
+import { getNotificationQueue } from "@hrms/queue";
+
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
@@ -38,6 +40,7 @@ const mockResignationCreate = (prisma as any).resignation.create as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockTeamFindMany = (prisma as any).team.findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
+const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
 
 const validRequest = {
   username: "john",
@@ -175,5 +178,40 @@ describe("submitResignation", () => {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,
     });
+  });
+
+  it("enqueues notification when HR users exist", async () => {
+    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
+
+    mockResignationCreate.mockResolvedValue({ id: "res-1" });
+    mockUserFindMany.mockResolvedValue([{ id: "u1", username: "hr1" }]);
+
+    await submitResignation(makeCall(validRequest), makeCallback());
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      "resignationSubmitted",
+      expect.objectContaining({ recipients: ["u1"] }),
+    );
+  });
+
+  it("includes team leader in notification when team has a leader", async () => {
+    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
+
+    mockResignationCreate.mockResolvedValue({ id: "res-1" });
+    mockUserFindMany
+      .mockResolvedValueOnce([]) // HR users (first findMany call)
+      .mockResolvedValueOnce([{ id: "tl1", username: "leader1" }]); // team leader users
+    mockTeamFindMany.mockResolvedValue([{ teamLeader: "leader1" }]);
+
+    await submitResignation(makeCall(validRequest), makeCallback());
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      "resignationSubmitted",
+      expect.objectContaining({ recipients: ["tl1"] }),
+    );
   });
 });
