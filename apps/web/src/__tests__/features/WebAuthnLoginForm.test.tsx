@@ -114,6 +114,11 @@ describe("WebAuthnLoginForm – rendering", () => {
 describe("WebAuthnLoginForm – form submission errors", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("shows an error alert when the API call throws", async () => {

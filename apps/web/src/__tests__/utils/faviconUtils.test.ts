@@ -129,6 +129,7 @@ describe("updateFaviconWithDot", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
       "data:image/png;base64,test",
     );
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {

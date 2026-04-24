@@ -31,8 +31,13 @@ const wrapper = ({ children }: any) => (
 describe("useLogout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, "error").mockImplementation(() => {});
     localStorage.setItem("theme", JSON.stringify("dark"));
     localStorage.setItem("someOtherKey", "someValue");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("returns a function", () => {
