@@ -4,17 +4,37 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
+const isObjectId = (v: string) => /^[0-9a-f]{24}$/i.test(v);
+
 export const getTodayAttendance = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username } = call.request;
+    const { userId } = call.request;
+
+    if (!userId) {
+      return callback(null, {
+        message: MESSAGES.USERNAME_REQUIRED,
+        status: status.INVALID_ARGUMENT,
+      });
+    }
+
+    let username: string | undefined;
+    if (isObjectId(userId)) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true },
+      });
+      username = user?.username;
+    } else {
+      username = userId;
+    }
 
     if (!username) {
       return callback(null, {
         message: MESSAGES.USERNAME_REQUIRED,
-        status: status.INVALID_ARGUMENT,
+        status: status.NOT_FOUND,
       });
     }
 

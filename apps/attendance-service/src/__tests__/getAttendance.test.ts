@@ -150,14 +150,10 @@ describe("getAttendance", () => {
     const result = cb.mock.calls[0][1];
     expect(result.status).toBe(status.OK);
     expect(result.data[0]).toEqual({
-      id: "rec-1",
-      userId: "john",
       date: sampleRecord.date.toISOString(),
       checkIn: sampleRecord.timeIn,
       checkOut: sampleRecord.timeOut,
       status: "Present",
-      latitude: 0,
-      longitude: 0,
       workHours: "9",
     });
     expect(result.total).toBe(1);

@@ -168,6 +168,9 @@ importers:
       express-rate-limit:
         specifier: ^8.3.2
         version: 8.3.2(express@4.22.1)
+      geoip-lite:
+        specifier: ^1.4.10
+        version: 1.4.10
       helmet:
         specifier: ^8.1.0
         version: 8.1.0
@@ -208,6 +211,9 @@ importers:
       "@types/express":
         specifier: ^5.0.0
         version: 5.0.6
+      "@types/geoip-lite":
+        specifier: ^1.4.4
+        version: 1.4.4
       "@types/jsonwebtoken":
         specifier: ^9.0.7
         version: 9.0.10
@@ -665,6 +671,9 @@ importers:
       react-linkify:
         specifier: ^1.0.0-alpha
         version: 1.0.0-alpha
+      react-resizable:
+        specifier: ^3.0.4
+        version: 3.1.3(react-dom@18.3.1)(react@18.3.1)
       react-router-dom:
         specifier: ^6.28.1
         version: 6.30.3(react-dom@18.3.1)(react@18.3.1)
@@ -9659,6 +9668,13 @@ packages:
       "@types/serve-static": 2.2.0
     dev: true
 
+  /@types/geoip-lite@1.4.4:
+    resolution:
+      {
+        integrity: sha512-2uVfn+C6bX/H356H6mjxsWUA5u8LO8dJgSBIRO/NFlpMe4DESzacutD/rKYrTDKm1Ugv78b4Wz1KvpHrlv3jSw==,
+      }
+    dev: true
+
   /@types/geojson@7946.0.16:
     resolution:
       {
@@ -10725,6 +10741,15 @@ packages:
       retry: 0.13.1
     dev: false
     optional: true
+
+  /async@2.6.4:
+    resolution:
+      {
+        integrity: sha512-mzo5dfJYwAn29PeiJ0zvwTo04zj8HDJj0Mn8TD7sno7q12prdbnasKJHhkm2c1LgrhlJ0teaea8860oxi51mGA==,
+      }
+    dependencies:
+      lodash: 4.18.1
+    dev: false
 
   /async@3.2.6:
     resolution:
@@ -14050,6 +14075,22 @@ packages:
     engines: { node: ">=6.9.0" }
     dev: true
 
+  /geoip-lite@1.4.10:
+    resolution:
+      {
+        integrity: sha512-4N69uhpS3KFd97m00wiFEefwa+L+HT5xZbzPhwu+sDawStg6UN/dPwWtUfkQuZkGIY1Cj7wDVp80IsqNtGMi2w==,
+      }
+    engines: { node: ">=10.3.0" }
+    dependencies:
+      async: 2.6.4
+      chalk: 4.1.2
+      iconv-lite: 0.4.24
+      ip-address: 5.9.4
+      lazy: 1.0.11
+      rimraf: 2.7.1
+      yauzl: 2.10.0
+    dev: false
+
   /get-caller-file@2.0.5:
     resolution:
       {
@@ -14901,6 +14942,18 @@ packages:
         integrity: sha512-XXADHxXmvT9+CRxhXg56LJovE+bmWnEWB78LB83VZTprKTmaC5QfruXocxzTZ2Kl0DNwKuBdlIhjL8LeY8Sf8Q==,
       }
     engines: { node: ">= 12" }
+    dev: false
+
+  /ip-address@5.9.4:
+    resolution:
+      {
+        integrity: sha512-dHkI3/YNJq4b/qQaz+c8LuarD3pY24JqZWfjB8aZx1gtpc2MDILu9L9jpZe1sHpzo/yWFweQVn+U//FhazUxmw==,
+      }
+    engines: { node: ">= 0.10" }
+    dependencies:
+      jsbn: 1.1.0
+      lodash: 4.18.1
+      sprintf-js: 1.1.2
     dev: false
 
   /ipaddr.js@1.9.1:
@@ -16003,6 +16056,13 @@ packages:
     dependencies:
       argparse: 2.0.1
 
+  /jsbn@1.1.0:
+    resolution:
+      {
+        integrity: sha512-4bYVV3aAMtDTTu4+xsDYa6sy9GyJ69/amsu9sYF2zqjiEoZA5xJi3BrfX3uY+/IekIu7MwdObdbDWpoZdBv3/A==,
+      }
+    dev: false
+
   /jsdom@29.0.2:
     resolution:
       {
@@ -16242,6 +16302,14 @@ packages:
     dependencies:
       package-json: 10.0.1
     dev: true
+
+  /lazy@1.0.11:
+    resolution:
+      {
+        integrity: sha512-Y+CjUfLmIpoUCCRl0ub4smrYtGGr5AOa2AKOaWelGHOGz33X/Y/KizefGqbkwfz44+cnq/+9habclf8vOmu2LA==,
+      }
+    engines: { node: ">=0.2.0" }
+    dev: false
 
   /leven@3.1.0:
     resolution:
@@ -19087,6 +19155,17 @@ packages:
     dev: false
     optional: true
 
+  /rimraf@2.7.1:
+    resolution:
+      {
+        integrity: sha512-uWjbaKIK3T1OSVptzX7Nl6PvQ3qAGtKEtVRjRuazjfL3Bx5eI409VZSqgND+4UNnmzLVdPj9FqFJNPqBZFve4w==,
+      }
+    deprecated: Rimraf versions prior to v4 are no longer supported
+    hasBin: true
+    dependencies:
+      glob: 7.2.3
+    dev: false
+
   /rimraf@3.0.2:
     resolution:
       {
@@ -19837,6 +19916,13 @@ packages:
         integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==,
       }
     dev: true
+
+  /sprintf-js@1.1.2:
+    resolution:
+      {
+        integrity: sha512-VE0SOVEHCk7Qc8ulkWw3ntAzXuqf7S2lvwQaDLRnUeIEaKNQJzV6BwmLKhOqT61aGhfUMrXeaBk+oDGCzvhcug==,
+      }
+    dev: false
 
   /ssf@0.11.2:
     resolution:

@@ -24,21 +24,44 @@ export async function addAttendance(req: Request, res: Response) {
   }
 }
 
+function monthDateRange(year: string | string[], month: string | string[]) {
+  year = Array.isArray(year) ? year[0] : year;
+  month = Array.isArray(month) ? month[0] : month;
+  const y = parseInt(year, 10);
+  const m = parseInt(month, 10);
+  const startDate = `${year}-${month.padStart(2, "0")}-01`;
+  // Last day of the month: day 0 of the next month rolls back to the final day.
+  const lastDay = new Date(y, m, 0).getDate();
+  const endDate = `${year}-${month.padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { startDate, endDate };
+}
+
 export async function getAttendances(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const month = String(req.params.month);
-    const year = String(req.params.year);
-    const startDate = `${year}-${month.padStart(2, "0")}-01`;
-    const endDate = `${year}-${month.padStart(2, "0")}-31`;
-    const response = await grpcCall(attendanceClient, "getAttendance", {
-      userId: user!.userId,
-      startDate,
-      endDate,
-      page: 1,
-      limit: 100,
-    });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    const { startDate, endDate } = monthDateRange(
+      req.params.year,
+      req.params.month,
+    );
+    const response = await grpcCall<any, any>(
+      attendanceClient,
+      "getAttendance",
+      {
+        userId: user!.userId,
+        startDate,
+        endDate,
+        page: 1,
+        limit: 100,
+      },
+    );
+    const data = (response.data ?? []).map((r: any) => ({
+      date: r.date,
+      checkIn: r.checkIn,
+      checkOut: r.checkOut,
+      status: r.status,
+      workHours: r.workHours,
+    }));
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { ...response, data });
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -48,10 +71,10 @@ export async function getAttendances(req: Request, res: Response) {
 
 export async function getAllAttendances(req: Request, res: Response) {
   try {
-    const month = String(req.params.month);
-    const year = String(req.params.year);
-    const startDate = `${year}-${month.padStart(2, "0")}-01`;
-    const endDate = `${year}-${month.padStart(2, "0")}-31`;
+    const { startDate, endDate } = monthDateRange(
+      req.params.year,
+      req.params.month,
+    );
     const response = await grpcCall(attendanceClient, "getAttendance", {
       userId: "",
       startDate,
