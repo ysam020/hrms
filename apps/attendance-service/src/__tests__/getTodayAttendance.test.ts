@@ -44,7 +44,7 @@ describe("getTodayAttendance", () => {
     const cached = { message: "ok", status: 0, data: { status: "Present" } };
     mockCacheGet.mockResolvedValue(cached);
     const cb = makeCallback();
-    await getTodayAttendance(makeCall({ username: "john" }), cb);
+    await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(mockFindUnique).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, cached);
   });
@@ -52,7 +52,7 @@ describe("getTodayAttendance", () => {
   it("returns NOT_FOUND when no record exists for today", async () => {
     mockFindUnique.mockResolvedValue(null);
     const cb = makeCallback();
-    await getTodayAttendance(makeCall({ username: "john" }), cb);
+    await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 5, data: null }),
@@ -64,7 +64,7 @@ describe("getTodayAttendance", () => {
     const record = { id: "rec-1", username: "john", status: "Present" };
     mockFindUnique.mockResolvedValue(record);
     const cb = makeCallback();
-    await getTodayAttendance(makeCall({ username: "john" }), cb);
+    await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0, data: record }),
@@ -79,7 +79,7 @@ describe("getTodayAttendance", () => {
   it("returns INTERNAL on database error", async () => {
     mockFindUnique.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await getTodayAttendance(makeCall({ username: "john" }), cb);
+    await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 13 }),

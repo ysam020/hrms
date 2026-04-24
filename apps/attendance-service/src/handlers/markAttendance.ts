@@ -20,17 +20,38 @@ function calcWorkingHours(timeIn: string, timeOut: Date): number {
   return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 }
 
+const isObjectId = (v: string) => /^[0-9a-f]{24}$/i.test(v);
+
 export const markAttendance = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username, type } = call.request;
+    const { userId, type } = call.request;
 
-    if (!username || !type) {
+    if (!userId || !type) {
       return callback(null, {
         message: MESSAGES.USERNAME_TYPE_REQUIRED,
         status: status.INVALID_ARGUMENT,
+      });
+    }
+
+    // Resolve username from ObjectId; fall back to treating it as a plain username.
+    let username: string | undefined;
+    if (isObjectId(userId)) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true },
+      });
+      username = user?.username;
+    } else {
+      username = userId;
+    }
+
+    if (!username) {
+      return callback(null, {
+        message: MESSAGES.USERNAME_TYPE_REQUIRED,
+        status: status.NOT_FOUND,
       });
     }
 

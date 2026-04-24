@@ -60,7 +60,12 @@ jest.mock("jsonwebtoken", () => ({
   __esModule: true,
   default: {
     verify: jest.fn(),
+    decode: jest.fn().mockReturnValue(null),
   },
+}));
+
+jest.mock("../services/loginEventService", () => ({
+  recordLoginEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { grpcCall } from "../grpc/clients";

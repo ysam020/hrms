@@ -67,10 +67,7 @@ describe("markAttendance", () => {
         timeIn: "2024-03-04T08:00:00.000Z",
       });
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_IN" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
       expect(cb).toHaveBeenCalledWith(null, {
         message: MESSAGES.ALREADY_CHECKED_IN,
         status: status.ALREADY_EXISTS,
@@ -83,10 +80,7 @@ describe("markAttendance", () => {
       mockCreate.mockResolvedValue(record);
 
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_IN" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -110,10 +104,7 @@ describe("markAttendance", () => {
       mockUpdate.mockResolvedValue(updated);
 
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_IN" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
 
       expect(mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -133,10 +124,7 @@ describe("markAttendance", () => {
       mockCreate.mockResolvedValue({ id: "rec-1", status: "Late" });
 
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_IN" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
 
       const response = cb.mock.calls[0][1];
       expect(response.message).toContain("(late)");
@@ -152,10 +140,7 @@ describe("markAttendance", () => {
       mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
 
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_IN" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
 
       const response = cb.mock.calls[0][1];
       expect(response.message).not.toContain("(late)");
@@ -168,7 +153,7 @@ describe("markAttendance", () => {
       mockCreate.mockResolvedValue({ id: "rec-1" });
 
       await markAttendance(
-        makeCall({ username: "john", type: "CHECK_IN" }),
+        makeCall({ userId: "john", type: "CHECK_IN" }),
         makeCallback(),
       );
 
@@ -182,10 +167,7 @@ describe("markAttendance", () => {
     it("returns NOT_FOUND when no check-in record exists", async () => {
       mockFindUnique.mockResolvedValue(null);
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_OUT" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_OUT" }), cb);
       expect(cb).toHaveBeenCalledWith(null, {
         message: MESSAGES.NO_CHECKIN_FOUND,
         status: status.NOT_FOUND,
@@ -199,10 +181,7 @@ describe("markAttendance", () => {
         timeOut: null,
       });
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_OUT" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_OUT" }), cb);
       expect(cb).toHaveBeenCalledWith(null, {
         message: MESSAGES.NO_CHECKIN_FOUND,
         status: status.NOT_FOUND,
@@ -216,10 +195,7 @@ describe("markAttendance", () => {
         timeOut: "2024-03-04T17:00:00.000Z",
       });
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_OUT" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_OUT" }), cb);
       expect(cb).toHaveBeenCalledWith(null, {
         message: MESSAGES.ALREADY_CHECKED_OUT,
         status: status.ALREADY_EXISTS,
@@ -241,10 +217,7 @@ describe("markAttendance", () => {
       mockUpdate.mockResolvedValue(updated);
 
       const cb = makeCallback();
-      await markAttendance(
-        makeCall({ username: "john", type: "CHECK_OUT" }),
-        cb,
-      );
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_OUT" }), cb);
 
       const updateCall = mockUpdate.mock.calls[0][0];
       expect(updateCall.data.status).toBe("Half Day");
@@ -266,7 +239,7 @@ describe("markAttendance", () => {
       mockUpdate.mockResolvedValue({ id: "rec-1", status: "Late" });
 
       await markAttendance(
-        makeCall({ username: "john", type: "CHECK_OUT" }),
+        makeCall({ userId: "john", type: "CHECK_OUT" }),
         makeCallback(),
       );
 
@@ -286,7 +259,7 @@ describe("markAttendance", () => {
       mockUpdate.mockResolvedValue({});
 
       await markAttendance(
-        makeCall({ username: "john", type: "CHECK_OUT" }),
+        makeCall({ userId: "john", type: "CHECK_OUT" }),
         makeCallback(),
       );
 
@@ -298,7 +271,7 @@ describe("markAttendance", () => {
   it("returns INVALID_ARGUMENT for unknown attendance type", async () => {
     mockFindUnique.mockResolvedValue(null);
     const cb = makeCallback();
-    await markAttendance(makeCall({ username: "john", type: "UNKNOWN" }), cb);
+    await markAttendance(makeCall({ userId: "john", type: "UNKNOWN" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.INVALID_ATTENDANCE_TYPE,
       status: status.INVALID_ARGUMENT,
@@ -308,7 +281,7 @@ describe("markAttendance", () => {
   it("returns INTERNAL on database error", async () => {
     mockFindUnique.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await markAttendance(makeCall({ username: "john", type: "CHECK_IN" }), cb);
+    await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.INTERNAL_ERROR,
       status: status.INTERNAL,

@@ -88,6 +88,7 @@ model User {
   leaveBalance                LeaveBalance?
   notifications               NotificationRecipient[]
   salaryStructures            SalaryStructure[]
+  loginEvents                 LoginEvent[]
 
   @@map("users")
 }
@@ -425,4 +426,30 @@ model Team {
   members     String[]
 
   @@map("teams")
+}
+
+// ─── Login Events ─────────────────────────────────────────────────────────────
+
+model LoginEvent {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String   @db.ObjectId
+  timestamp         DateTime @default(now())
+  ip                String
+  country           String?
+  city              String?
+  latitude          Float?
+  longitude         Float?
+  userAgent         String
+  deviceFingerprint String
+  // "GOOGLE_OAUTH" | "WEBAUTHN"
+  loginMethod       String
+  userEmail         String?
+  riskScore         Int      @default(0)
+  riskReasons       String[]
+  isAnomaly         Boolean  @default(false)
+
+  user              User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, timestamp])
+  @@map("login_events")
 }

@@ -1,10 +1,12 @@
 import { Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import { authClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
+import { recordLoginEvent } from "../services/loginEventService";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -422,6 +424,19 @@ export async function webAuthnVerifyLogin(req: Request, res: Response) {
         REFRESH_COOKIE_OPTIONS,
       );
     }
+
+    const payload = jwt.decode(response.accessToken) as {
+      userId?: string;
+    } | null;
+    if (payload?.userId) {
+      recordLoginEvent({
+        userId: payload.userId,
+        ip: req.ip || req.socket.remoteAddress || "",
+        userAgent: req.headers["user-agent"] || "",
+        loginMethod: "WEBAUTHN",
+      }).catch((err) => logger.error("Failed to record login event", { err }));
+    }
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { tempToken: response.accessToken, verified: true },
     });
@@ -503,6 +518,18 @@ export async function googleAuthCallback(req: Request, res: Response) {
         aesEncrypt(response.refreshToken),
         REFRESH_COOKIE_OPTIONS,
       );
+    }
+
+    const payload = jwt.decode(response.accessToken) as {
+      userId?: string;
+    } | null;
+    if (payload?.userId) {
+      recordLoginEvent({
+        userId: payload.userId,
+        ip: req.ip || req.socket.remoteAddress || "",
+        userAgent: req.headers["user-agent"] || "",
+        loginMethod: "GOOGLE_OAUTH",
+      }).catch((err) => logger.error("Failed to record login event", { err }));
     }
 
     return jsRedirect(res, `${clientUrl}/?oauth_success=1`);
