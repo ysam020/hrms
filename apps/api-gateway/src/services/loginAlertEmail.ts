@@ -11,6 +11,15 @@ interface LoginAlertEmailOptions {
   riskReasons: string[];
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 function formatTimestamp(d: Date): string {
   return d.toUTCString().replace("GMT", "UTC");
 }
@@ -20,8 +29,9 @@ function formatLocation(
   city: string | null,
   country: string | null,
 ): string {
-  const parts = [city, country].filter(Boolean);
-  return parts.length > 0 ? `${parts.join(", ")} (${ip})` : ip;
+  const parts = [city, country].filter(Boolean).map(escapeHtml);
+  const safeIp = escapeHtml(ip);
+  return parts.length > 0 ? `${parts.join(", ")} (${safeIp})` : safeIp;
 }
 
 function formatMethod(method: LoginMethod): string {
@@ -55,7 +65,7 @@ export function buildLoginAlertEmail(opts: LoginAlertEmailOptions): string {
         <td colspan="2" style="padding:12px 0 4px 0;">
           <strong style="color:#c0392b;">Risk signals detected:</strong>
           <ul style="margin:6px 0 0 0;padding-left:20px;color:#555;font-size:14px;">
-            ${riskReasons.map((r) => `<li>${r}</li>`).join("")}
+            ${riskReasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}
           </ul>
         </td>
       </tr>`
@@ -112,7 +122,7 @@ export function buildLoginAlertEmail(opts: LoginAlertEmailOptions): string {
                 </tr>
                 <tr style="border-bottom:1px solid #eee;">
                   <td style="padding:10px 0;color:#888;">Device</td>
-                  <td style="padding:10px 0;color:#222;word-break:break-word;">${userAgent}</td>
+                  <td style="padding:10px 0;color:#222;word-break:break-word;">${escapeHtml(userAgent)}</td>
                 </tr>
                 <tr style="border-bottom:1px solid #eee;">
                   <td style="padding:10px 0;color:#888;">Method</td>
