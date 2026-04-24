@@ -88,9 +88,12 @@ function App() {
         .get("/profile")
         .then((res) => {
           setUser(res.data?.success ? res.data.data.user : null);
+          setBooting(false);
         })
-        .catch(() => setUser(null))
-        .finally(() => setBooting(false));
+        .catch(() => {
+          setUser(null);
+          setBooting(false);
+        });
     };
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
@@ -106,6 +109,8 @@ function App() {
   // This is the standard production pattern: access token in memory,
   // refresh token in HttpOnly cookie.
   useEffect(() => {
+    let cancelled = false;
+
     const params = new URLSearchParams(initialSearch.current);
     if (params.get("oauth_success") === "1") {
       window.history.replaceState({}, "", window.location.pathname);
@@ -119,12 +124,22 @@ function App() {
       : performRefresh().then(() => apiClient.get("/profile"))
     )
       .then((res) => {
+        if (cancelled) return;
+        // setUser and setBooting in the same callback so React batches them
+        // into a single render — prevents a flash of the login page.
         if (res.data?.success) setUser(res.data.data.user);
+        setBooting(false);
       })
       .catch(() => {
-        // No valid session — login page will be shown.
-      })
-      .finally(() => setBooting(false));
+        if (!cancelled) setBooting(false);
+      });
+
+    // Cleanup prevents stale state updates when React StrictMode double-fires
+    // the effect; the cancellation flag stops the first (aborted) request from
+    // setting booting=false while user is still null.
+    return () => {
+      cancelled = true;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showSidebar, setShowSidebar] = useState(true);
