@@ -26,17 +26,14 @@ WORKDIR /app
 
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
-
-RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm fetch --ignore-scripts
-
 COPY --from=pruner /app/out/json/ .
 
-RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm install --prefer-offline --no-frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true pnpm install --no-frozen-lockfile --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 
 RUN pnpm proto:gen
-RUN pnpm db:generate
+RUN PATH="/app/node_modules/.bin:$PATH" pnpm db:generate
 RUN turbo build --filter=${PROJECT}
 RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm prune --prod --no-optional
 RUN rm -rf ./**/*/src
