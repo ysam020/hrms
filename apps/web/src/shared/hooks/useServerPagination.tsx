@@ -87,6 +87,10 @@ function useServerPagination(
           setTotalCount(0);
         }
       } catch (err) {
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") {
+          setLoading(false);
+          return;
+        }
         setError(err);
         setData([]);
         setTotalCount(0);

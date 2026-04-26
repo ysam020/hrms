@@ -46,6 +46,8 @@ function KycInsights() {
       const response = await apiClient(API_ENDPOINTS.GET_KYC_INSIGHTS);
       setInsights(response.data.data);
     } catch (error) {
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
+        return;
       setAlert({
         open: true,
         message:

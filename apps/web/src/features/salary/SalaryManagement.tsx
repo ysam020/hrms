@@ -37,6 +37,8 @@ function EmployeeManagement() {
           totalCount: response.data.data.pagination?.totalCount,
         };
       } catch (err) {
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError")
+          throw err;
         setAlert({
           open: true,
           message:

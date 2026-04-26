@@ -84,7 +84,8 @@ function ViewHrActivities({ refreshKey = 0 }) {
           totalCount: response.data.data.pagination.totalCount || 0,
         };
       } catch (error) {
-        console.error("Fetch error:", error);
+        if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
+          throw error;
         setAlert({
           open: true,
           message: "Failed to fetch HR activities",

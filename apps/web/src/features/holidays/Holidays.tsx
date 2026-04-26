@@ -169,6 +169,8 @@ function ViewAddHolidays() {
       const res = await apiClient(API_ENDPOINTS.GET_HOLIDAYS(selectedYear));
       setData(res.data.data);
     } catch (error) {
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
+        return;
       setAlert({
         open: true,
         message: "Failed to fetch holidays. Please try again.",

@@ -102,6 +102,8 @@ function ViewLeaveApplications() {
           records.length;
         return { data: records, totalCount: total };
       } catch (error) {
+        if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
+          throw error;
         setAlert({
           open: true,
           message: "Failed to fetch leave applications. Please try again.",

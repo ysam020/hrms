@@ -29,7 +29,9 @@ function formatLocation(
   city: string | null,
   country: string | null,
 ): string {
-  const parts = [city, country].filter(Boolean).map(escapeHtml);
+  const parts = [city, country]
+    .filter((s): s is string => Boolean(s))
+    .map(escapeHtml);
   const safeIp = escapeHtml(ip);
   return parts.length > 0 ? `${parts.join(", ")} (${safeIp})` : safeIp;
 }
