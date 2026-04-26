@@ -73,7 +73,8 @@ function useChat() {
       const fresh = res.data.data || [];
       setConversations(fresh);
       saveConversations(fresh).catch(console.error);
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
       console.error("fetchConversations error:", err);
     } finally {
       setLoadingConversations(false);
@@ -128,7 +129,8 @@ function useChat() {
     try {
       const res = await api.get(API_ENDPOINTS.GET_UNREAD_COUNTS);
       setUnreadCounts(res.data.data || {});
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
       console.error("fetchUnreadCounts error:", err);
     }
   }, [api]);

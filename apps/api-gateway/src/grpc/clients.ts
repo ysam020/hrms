@@ -1,4 +1,6 @@
-import { credentials } from "@grpc/grpc-js";
+import { credentials, ChannelCredentials } from "@grpc/grpc-js";
+import fs from "fs";
+import path from "path";
 import {
   auth,
   user,
@@ -12,7 +14,19 @@ import {
   analytics,
 } from "@hrms/proto";
 
-const creds = credentials.createInsecure();
+function buildClientCredentials(): ChannelCredentials {
+  const caFile =
+    process.env.GRPC_TLS_CA_FILE ??
+    path.resolve(__dirname, "../../../../packages/certificates/rootCA.pem");
+
+  // Internal Docker hostnames (auth-service, etc.) won't match the cert CN
+  // issued for localhost — skip hostname verification on the private network.
+  return credentials.createSsl(fs.readFileSync(caFile), null, null, {
+    checkServerIdentity: () => undefined,
+  });
+}
+
+const creds = buildClientCredentials();
 
 const addr = (
   host: string | undefined,

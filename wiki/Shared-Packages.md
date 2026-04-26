@@ -166,14 +166,20 @@ return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, null);
 Bootstrap helper used by every microservice to start its gRPC server.
 
 ```typescript
-import { createGrpcServer } from "@hrms/grpc-server";
+import { BaseGrpcServer } from "@hrms/grpc-server";
 
-const server = createGrpcServer();
-server.addService(AuthServiceService, handlers);
-server.bindAsync(`0.0.0.0:${PORT}`, ServerCredentials.createInsecure(), () => {
-  server.start();
-});
+class MyServer extends BaseGrpcServer {
+  constructor() {
+    super();
+    this.addService(MyServiceService, handlers);
+  }
+}
+
+const server = new MyServer();
+server.start(`0.0.0.0:${PORT}`); // TLS auto-configured from env vars
 ```
+
+TLS is enabled automatically when `GRPC_TLS_CRT_FILE` and `GRPC_TLS_KEY_FILE` are set (or when the shared `packages/certificates/` files are present). Falls back to insecure if neither is available.
 
 ---
 
@@ -184,15 +190,16 @@ server.bindAsync(`0.0.0.0:${PORT}`, ServerCredentials.createInsecure(), () => {
 gRPC channel factory used by the API gateway to connect to services.
 
 ```typescript
-import { createGrpcClient, grpcCall } from "@hrms/grpc-client";
+import { BaseGrpcClient } from "@hrms/grpc-client";
 
-const employeeClient = createGrpcClient(
-  EmployeeServiceClient,
-  "localhost:50053",
-);
+const client = new BaseGrpcClient({
+  serviceName: "employee-service",
+  address: "localhost:50053",
+  // credentials omitted → TLS auto-configured from GRPC_TLS_CA_FILE env var
+  // or packages/certificates/rootCA.pem; falls back to insecure if absent
+});
 
-// Convert callback-style gRPC to Promise
-const result = await grpcCall(employeeClient, "getEmployee", { username });
+const result = await client.makeCall("getEmployee", { username });
 ```
 
 ---

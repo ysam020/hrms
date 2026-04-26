@@ -23,7 +23,10 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Button from "@mui/material/Button";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import Linkify from "react-linkify";
+import _Linkify from "react-linkify";
+// react-linkify is an old CJS alpha; esbuild may expose the module namespace
+// object instead of .default — normalise across both interop modes.
+const Linkify: React.ComponentType<any> = (_Linkify as any).default ?? _Linkify;
 import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";

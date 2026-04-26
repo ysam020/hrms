@@ -1,4 +1,6 @@
 import * as grpc from "@grpc/grpc-js";
+import fs from "fs";
+import path from "path";
 
 export interface GrpcClientConfig {
   serviceName: string;
@@ -20,6 +22,16 @@ export class BaseGrpcClient {
     this.setupClient();
   }
 
+  private buildDefaultCredentials(): grpc.ChannelCredentials {
+    const caFile =
+      process.env.GRPC_TLS_CA_FILE ??
+      path.resolve(__dirname, "../../certificates/rootCA.pem");
+
+    return grpc.credentials.createSsl(fs.readFileSync(caFile), null, null, {
+      checkServerIdentity: () => undefined,
+    });
+  }
+
   private setupClient() {
     const options = {
       "grpc.keepalive_time_ms": 120000,
@@ -31,7 +43,7 @@ export class BaseGrpcClient {
 
     this.client = new grpc.Client(
       this.config.address,
-      this.config.credentials || grpc.credentials.createInsecure(),
+      this.config.credentials ?? this.buildDefaultCredentials(),
       {
         ...options,
         ...this.config.options,
