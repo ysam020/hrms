@@ -26,8 +26,14 @@ let _accessToken: string | null = localStorage.getItem(TOKEN_KEY);
 export const getAccessToken = () => _accessToken;
 
 export const setAccessToken = (token: string) => {
+  const wasUnauthenticated = _accessToken === null;
   _accessToken = token;
   localStorage.setItem(TOKEN_KEY, token);
+  // Session identifier changes from req.ip → userId on login; stale CSRF must
+  // be dropped so the next fetch generates a fresh token under the new identity.
+  if (wasUnauthenticated) {
+    invalidateCsrfToken();
+  }
 };
 
 const clearAccessToken = () => {

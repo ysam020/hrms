@@ -1,5 +1,7 @@
 import * as grpc from "@grpc/grpc-js";
-import { grpcApiRequestLogger, logger } from "@hrms/logger";
+import fs from "fs";
+import path from "path";
+import { logger, grpcApiRequestLogger } from "@hrms/logger";
 import { errorHandler } from "./error-handling";
 import { validationMiddleware } from "./middleware/validation";
 
@@ -79,14 +81,29 @@ export class BaseGrpcServer {
     };
   }
 
-  public start(address: string) {
+  private buildServerCredentials(): grpc.ServerCredentials {
+    const certFile =
+      process.env.GRPC_TLS_CRT_FILE ??
+      path.resolve(__dirname, "../../certificates/cert.pem");
+    const keyFile =
+      process.env.GRPC_TLS_KEY_FILE ??
+      path.resolve(__dirname, "../../certificates/key.pem");
+
+    return grpc.ServerCredentials.createSsl(null, [
+      {
+        cert_chain: fs.readFileSync(certFile),
+        private_key: fs.readFileSync(keyFile),
+      },
+    ]);
+  }
+
+  public start(address: string, credentials?: grpc.ServerCredentials): void {
     this.server.bindAsync(
       address,
-      grpc.ServerCredentials.createInsecure(),
-      (error, port) => {
+      credentials ?? this.buildServerCredentials(),
+      (error) => {
         if (error) {
           logger.error(`Failed to start gRPC server: ${error}`);
-          return;
         }
       },
     );
