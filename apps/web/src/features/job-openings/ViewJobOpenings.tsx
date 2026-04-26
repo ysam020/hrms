@@ -94,6 +94,8 @@ function ViewJobOpenings({ refreshKey = 0 }) {
       const res = await apiClient(url);
       setData(res.data.data);
     } catch (error) {
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
+        return;
       setAlert({
         open: true,
         message: error.response?.data?.message || "Failed to load job openings",

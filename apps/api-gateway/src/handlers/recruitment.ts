@@ -344,23 +344,268 @@ export async function withdrawResignation(req: Request, res: Response) {
 
 export async function jobOpeningsInsights(_req: Request, res: Response) {
   try {
-    const [total, open, closed, groups] = await Promise.all([
-      prisma.jobOpening.count(),
-      prisma.jobOpening.count({
-        where: { status: { in: ["Open", "Active"] } },
+    const now = new Date();
+    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const monthFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const [jobs, appStatusGroups] = await Promise.all([
+      prisma.jobOpening.findMany({
+        where: { deletedOn: null },
+        include: { _count: { select: { applications: true } } },
       }),
-      prisma.jobOpening.count({
-        where: { status: { in: ["Closed", "Hired"] } },
+      prisma.jobApplication.groupBy({
+        by: ["status"],
+        _count: { id: true },
       }),
-      prisma.jobOpening.groupBy({ by: ["status"], _count: { id: true } }),
     ]);
-    const statusBreakdown = groups.map((g: any) => ({
-      status: g.status,
-      count: g._count.id,
-    }));
+
+    // Overview
+    const totalJobOpenings = jobs.length;
+    const activeJobOpenings = jobs.filter((j) =>
+      ["Active", "Open"].includes(j.status),
+    ).length;
+    const totalApplications = appStatusGroups.reduce(
+      (sum, g) => sum + g._count.id,
+      0,
+    );
+    const totalCandidatesHired = jobs.reduce(
+      (sum, j) => sum + (j.candidatesHired || 0),
+      0,
+    );
+    const hiringSuccessRate =
+      totalApplications > 0
+        ? Math.round((totalCandidatesHired / totalApplications) * 100)
+        : 0;
+    const averageApplicationsPerJob =
+      totalJobOpenings > 0
+        ? Math.round(totalApplications / totalJobOpenings)
+        : 0;
+
+    // Applications by status
+    const applicationsByStatus: Record<string, number> = {};
+    for (const g of appStatusGroups) {
+      applicationsByStatus[g.status] = g._count.id;
+    }
+
+    // Top performing jobs
+    const topPerformingJobs = jobs
+      .map((j) => ({
+        jobTitle: j.jobTitle,
+        totalApplications: j._count.applications,
+        hired: j.candidatesHired,
+        hiringRate:
+          j._count.applications > 0
+            ? Math.round((j.candidatesHired / j._count.applications) * 100)
+            : 0,
+      }))
+      .sort((a, b) => b.totalApplications - a.totalApplications)
+      .slice(0, 8);
+
+    // Experience requirements
+    const expValues = jobs.map((j) => j.experience || 0);
+    const avgExp =
+      expValues.length > 0
+        ? parseFloat(
+            (expValues.reduce((s, v) => s + v, 0) / expValues.length).toFixed(
+              1,
+            ),
+          )
+        : 0;
+    const expBreakdown: Record<string, number> = {
+      "0-2 years": 0,
+      "2-5 years": 0,
+      "5-8 years": 0,
+      "8+ years": 0,
+    };
+    for (const exp of expValues) {
+      if (exp < 2) expBreakdown["0-2 years"]++;
+      else if (exp < 5) expBreakdown["2-5 years"]++;
+      else if (exp < 8) expBreakdown["5-8 years"]++;
+      else expBreakdown["8+ years"]++;
+    }
+    const mostCommonRange =
+      Object.entries(expBreakdown).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "N/A";
+
+    // Budget analysis
+    const budgetValues = jobs
+      .map((j) => {
+        const b = j.budget ?? [];
+        if (b.length === 0) return null;
+        return b.length === 1 ? b[0] : (b[0] + b[1]) / 2;
+      })
+      .filter((v): v is number => v !== null);
+    const avgBudget =
+      budgetValues.length > 0
+        ? parseFloat(
+            (
+              budgetValues.reduce((s, v) => s + v, 0) / budgetValues.length
+            ).toFixed(2),
+          )
+        : 0;
+    const totalBudgetAllocation = parseFloat(
+      budgetValues.reduce((s, v) => s + v, 0).toFixed(2),
+    );
+    const budgetRanges: Record<string, number> = {
+      "< 5L": 0,
+      "5-10L": 0,
+      "10-20L": 0,
+      "20L+": 0,
+    };
+    for (const bv of budgetValues) {
+      if (bv < 5) budgetRanges["< 5L"]++;
+      else if (bv < 10) budgetRanges["5-10L"]++;
+      else if (bv < 20) budgetRanges["10-20L"]++;
+      else budgetRanges["20L+"]++;
+    }
+
+    // Deadlines
+    const deadlinesThisWeek = jobs.filter(
+      (j) =>
+        j.applicationDeadline >= now &&
+        j.applicationDeadline <= weekFromNow &&
+        ["Active", "Open"].includes(j.status),
+    ).length;
+    const deadlinesThisMonth = jobs.filter(
+      (j) =>
+        j.applicationDeadline >= now &&
+        j.applicationDeadline <= monthFromNow &&
+        ["Active", "Open"].includes(j.status),
+    ).length;
+    const overdueJobs = jobs.filter(
+      (j) =>
+        j.applicationDeadline < now && !["Closed", "Hired"].includes(j.status),
+    ).length;
+    const activeDaysToDeadline = jobs
+      .filter(
+        (j) =>
+          ["Active", "Open"].includes(j.status) && j.applicationDeadline >= now,
+      )
+      .map((j) =>
+        Math.ceil(
+          (j.applicationDeadline.getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      );
+    const averageDaysToDeadline =
+      activeDaysToDeadline.length > 0
+        ? Math.round(
+            activeDaysToDeadline.reduce((s, v) => s + v, 0) /
+              activeDaysToDeadline.length,
+          )
+        : 0;
+
+    // Hiring managers
+    const managerMap: Record<
+      string,
+      { totalJobs: number; activeJobs: number; totalHired: number }
+    > = {};
+    for (const j of jobs) {
+      const mgr = j.hiringManager || "Unknown";
+      if (!managerMap[mgr])
+        managerMap[mgr] = { totalJobs: 0, activeJobs: 0, totalHired: 0 };
+      managerMap[mgr].totalJobs++;
+      if (["Active", "Open"].includes(j.status)) managerMap[mgr].activeJobs++;
+      managerMap[mgr].totalHired += j.candidatesHired || 0;
+    }
+    const topPerformers = Object.entries(managerMap)
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => b.totalHired - a.totalHired)
+      .slice(0, 5);
+
+    // Monthly trends (last 6 months)
+    const monthlyPostingMap = jobs
+      .filter((j) => j.jobPostingDate && j.jobPostingDate >= sixMonthsAgo)
+      .reduce((acc: Record<string, number>, j) => {
+        const key = j.jobPostingDate!.toISOString().slice(0, 7);
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+    const monthlyJobPostings = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - (5 - i));
+      const key = d.toISOString().slice(0, 7);
+      return {
+        month: d.toLocaleString("default", { month: "short", year: "2-digit" }),
+        count: monthlyPostingMap[key] || 0,
+      };
+    });
+
+    // Actionable insights
+    const actionableInsights: {
+      type: string;
+      title: string;
+      message: string;
+      priority: string;
+      action: string;
+    }[] = [];
+    if (overdueJobs > 0) {
+      actionableInsights.push({
+        type: "warning",
+        title: `${overdueJobs} Overdue Job Posting${overdueJobs > 1 ? "s" : ""}`,
+        message: `${overdueJobs} job opening${overdueJobs > 1 ? "s have" : " has"} passed the application deadline. Consider updating the status.`,
+        priority: "high",
+        action: "Update Status",
+      });
+    }
+    const pendingApps = applicationsByStatus["Applied"] || 0;
+    if (pendingApps > 10) {
+      actionableInsights.push({
+        type: "info",
+        title: "Applications Pending Review",
+        message: `${pendingApps} applications are pending review.`,
+        priority: "medium",
+        action: "Review Applications",
+      });
+    }
+    if (deadlinesThisWeek > 0) {
+      actionableInsights.push({
+        type: "warning",
+        title: `${deadlinesThisWeek} Closing This Week`,
+        message: `${deadlinesThisWeek} job opening${deadlinesThisWeek > 1 ? "s are" : " is"} closing within the next 7 days.`,
+        priority: "low",
+        action: "Review Openings",
+      });
+    }
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Job opening insights fetched",
-      data: { total, open, closed, statusBreakdown },
+      data: {
+        overview: {
+          activeJobOpenings,
+          totalJobOpenings,
+          totalApplications,
+          hiringSuccessRate,
+          averageApplicationsPerJob,
+        },
+        applications: { applicationsByStatus, totalApplications },
+        topPerformingJobs,
+        experienceRequirements: {
+          averageExperience: avgExp,
+          mostCommonRange,
+          breakdown: expBreakdown,
+        },
+        budgetAnalysis: {
+          averageBudget: avgBudget,
+          totalBudgetAllocation,
+          budgetRanges,
+        },
+        deadlines: {
+          deadlinesThisWeek,
+          deadlinesThisMonth,
+          overdueJobs,
+          averageDaysToDeadline,
+        },
+        hiringManagers: { topPerformers },
+        trends: {
+          monthlyJobPostings,
+          monthlyApplications: [],
+          monthlyHirings: [],
+        },
+        actionableInsights,
+        lastUpdated: now.toISOString(),
+      },
     });
   } catch (err: any) {
     logger.error("job-openings-insights error:", { err });

@@ -54,6 +54,8 @@ function ViewResignations() {
           totalCount: response.data.totalCount || 0,
         };
       } catch (error) {
+        if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
+          throw error;
         setAlert({
           open: true,
           message: "Failed to fetch resignations",

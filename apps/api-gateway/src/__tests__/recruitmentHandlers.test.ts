@@ -35,8 +35,12 @@ jest.mock("../grpc/clients", () => ({
 jest.mock("@hrms/db", () => ({
   prisma: {
     user: { findUnique: jest.fn(), findMany: jest.fn() },
-    jobOpening: { count: jest.fn(), groupBy: jest.fn() },
-    jobApplication: { findUnique: jest.fn(), update: jest.fn() },
+    jobOpening: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
+    jobApplication: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      groupBy: jest.fn(),
+    },
     resignation: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -73,9 +77,11 @@ const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockJobCount = (prisma as any).jobOpening.count as jest.Mock;
 const mockJobGroupBy = (prisma as any).jobOpening.groupBy as jest.Mock;
+const mockJobFindMany = (prisma as any).jobOpening.findMany as jest.Mock;
 const mockAppFindUnique = (prisma as any).jobApplication
   .findUnique as jest.Mock;
 const mockAppUpdate = (prisma as any).jobApplication.update as jest.Mock;
+const mockAppGroupBy = (prisma as any).jobApplication.groupBy as jest.Mock;
 const mockResignFindUnique = (prisma as any).resignation
   .findUnique as jest.Mock;
 const mockResignUpdate = (prisma as any).resignation.update as jest.Mock;
@@ -104,6 +110,8 @@ describe("recruitmentHandlers", () => {
     mockUserFindMany.mockResolvedValue([]);
     mockJobCount.mockResolvedValue(5);
     mockJobGroupBy.mockResolvedValue([]);
+    mockJobFindMany.mockResolvedValue([]);
+    mockAppGroupBy.mockResolvedValue([]);
     mockResignCount.mockResolvedValue(0);
     mockResignFindMany.mockResolvedValue([]);
   });
@@ -351,25 +359,49 @@ describe("recruitmentHandlers", () => {
   });
 
   describe("jobOpeningsInsights", () => {
+    const makeJob = (overrides: any = {}) => ({
+      id: "job-1",
+      jobTitle: "Engineer",
+      status: "Active",
+      experience: 3,
+      budget: [10, 15],
+      applicationDeadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      hiringManager: "Alice",
+      candidatesHired: 1,
+      jobPostingDate: new Date(),
+      deletedOn: null,
+      _count: { applications: 5 },
+      ...overrides,
+    });
+
     it("returns overview with counts", async () => {
-      mockJobCount
-        .mockResolvedValueOnce(10) // total
-        .mockResolvedValueOnce(6) // open
-        .mockResolvedValueOnce(3); // closed
-      mockJobGroupBy.mockResolvedValue([{ status: "Open", _count: { id: 6 } }]);
+      mockJobFindMany.mockResolvedValue([
+        makeJob({ id: "job-1", status: "Active", _count: { applications: 5 } }),
+        makeJob({ id: "job-2", status: "Open", _count: { applications: 3 } }),
+      ]);
+      mockAppGroupBy.mockResolvedValue([
+        { status: "Applied", _count: { id: 6 } },
+        { status: "Hired", _count: { id: 1 } },
+      ]);
       const res = makeRes();
       await jobOpeningsInsights(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
         expect.objectContaining({
-          data: expect.objectContaining({ total: 10, open: 6 }),
+          data: expect.objectContaining({
+            overview: expect.objectContaining({
+              totalJobOpenings: 2,
+              activeJobOpenings: 2,
+              totalApplications: 7,
+            }),
+          }),
         }),
       );
     });
 
     it("returns INTERNAL on error", async () => {
-      mockJobCount.mockRejectedValue(new Error("DB error"));
+      mockJobFindMany.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await jobOpeningsInsights(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(

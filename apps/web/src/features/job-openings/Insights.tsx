@@ -46,6 +46,7 @@ const JobOpeningsInsights = () => {
       const response = await apiClient(API_ENDPOINTS.JOB_OPENINGS_INSIGHTS);
       setInsights(response.data.data);
     } catch (err) {
+      if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
       console.error("Error fetching insights:", err);
       setError(err.message);
     } finally {
