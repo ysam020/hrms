@@ -1,5 +1,6 @@
 import { loadSecrets } from "@hrms/common";
 import { spawn } from "child_process";
+import { createRequire } from "module";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -22,12 +23,12 @@ function run(cmd, args) {
   });
 }
 
+const require = createRequire(import.meta.url);
+const workboxBin = require.resolve("workbox-cli/build/bin.js");
+
 await run("node", ["scripts/build-wasm.js"]);
 await run("node", ["./node_modules/vite/bin/vite.js", "build"]);
 await run("node", ["scripts/optimize-images.js"]);
-await run("./node_modules/.bin/workbox", [
-  "injectManifest",
-  "workbox-config.cjs",
-]);
+await run("node", [workboxBin, "injectManifest", "workbox-config.cjs"]);
 await run("node", ["scripts/optimize-css-loading.js"]);
 await run("node", ["scripts/purge-css.js"]);
