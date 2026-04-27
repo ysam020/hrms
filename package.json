@@ -31,6 +31,7 @@
     "ts:check": "pnpm -r exec tsc -b",
     "docker:monitoring": "docker compose -f docker-compose.dev.yml up -d prometheus grafana loki",
     "docker:monitoring:down": "docker compose -f docker-compose.dev.yml stop prometheus grafana loki",
+    "docker:push": "docker compose -f docker-compose.dev.yml push",
     "docker:build": "node scripts/generate-certs.mjs && cross-env COMPOSE_PARALLEL_LIMIT=4 docker compose -f docker-compose.dev.yml build",
     "docker:up": "node scripts/generate-certs.mjs && docker compose -f docker-compose.dev.yml up",
     "docker:down": "docker compose -f docker-compose.dev.yml down",

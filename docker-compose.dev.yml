@@ -17,6 +17,7 @@ x-backend-service: &backend-service
 services:
   api-gateway:
     container_name: api-gateway
+    image: ysam090/hrms-api-gateway:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -49,6 +50,7 @@ services:
 
   auth-service:
     container_name: auth-service
+    image: ysam090/hrms-auth-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -71,6 +73,7 @@ services:
 
   user-service:
     container_name: user-service
+    image: ysam090/hrms-user-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -93,6 +96,7 @@ services:
 
   employee-service:
     container_name: employee-service
+    image: ysam090/hrms-employee-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -115,6 +119,7 @@ services:
 
   attendance-service:
     container_name: attendance-service
+    image: ysam090/hrms-attendance-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -137,6 +142,7 @@ services:
 
   leave-service:
     container_name: leave-service
+    image: ysam090/hrms-leave-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -159,6 +165,7 @@ services:
 
   recruitment-service:
     container_name: recruitment-service
+    image: ysam090/hrms-recruitment-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -181,6 +188,7 @@ services:
 
   hrm-service:
     container_name: hrm-service
+    image: ysam090/hrms-hrm-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -203,6 +211,7 @@ services:
 
   salary-service:
     container_name: salary-service
+    image: ysam090/hrms-salary-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -225,6 +234,7 @@ services:
 
   analytics-service:
     container_name: analytics-service
+    image: ysam090/hrms-analytics-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -247,6 +257,7 @@ services:
 
   notification-service:
     container_name: notification-service
+    image: ysam090/hrms-notification-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -269,6 +280,7 @@ services:
 
   scheduler-service:
     container_name: scheduler-service
+    image: ysam090/hrms-scheduler-service:latest
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
@@ -289,6 +301,7 @@ services:
 
   web:
     container_name: web
+    image: ysam090/hrms-web:latest
     build:
       context: .
       dockerfile: ./docker/web.Dockerfile
@@ -297,6 +310,9 @@ services:
         - aws_config
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./packages/certificates:/app/packages/certificates:ro
     restart: on-failure
 
   mongodb:

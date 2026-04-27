@@ -20,7 +20,13 @@ const pems = await selfsigned.generate(attrs, {
   algorithm: "sha256",
   keySize: 2048,
   extensions: [
-    { name: "subjectAltName", altNames: [{ type: 2, value: "localhost" }] },
+    {
+      name: "subjectAltName",
+      altNames: [
+        { type: 2, value: "localhost" },
+        { type: 2, value: "praesto.cloud" },
+      ],
+    },
   ],
 });
 
