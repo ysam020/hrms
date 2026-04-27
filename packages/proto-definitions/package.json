@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "generate": "mkdir -p src/generated && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/generated --ts_proto_opt=outputServices=grpc-js,esModuleInterop=true,env=node,useDate=false -I./src/proto $(find ./src/proto -name '*.proto')",
+    "generate": "node generate.mjs",
     "build": "pnpm generate && tsc -b"
   },
   "devDependencies": {
