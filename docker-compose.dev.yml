@@ -1,6 +1,18 @@
-x-aws-credentials: &aws-credentials
+# Shared config applied to every backend service:
+#   • AWS credentials (read-only) so bootstrap.js can call Secrets Manager
+#   • TLS certificates (read-only) generated on the host by `pnpm certs:generate`
+#
+# ${USERPROFILE:-${HOME}} resolves to the correct home directory on every OS:
+#   Windows  → %USERPROFILE%  (e.g. C:\Users\sam)
+#   macOS    → $HOME          (e.g. /Users/sam)
+#   Linux    → $HOME          (e.g. /home/sam)
+x-backend-service: &backend-service
+  env_file:
+    - ./docker/backend.env
   volumes:
-    - ${USERPROFILE:-${HOME}}/.aws:/root/.aws:ro
+    - ${USERPROFILE:-${HOME}}/.aws:/app/.aws:ro
+    - ./packages/certificates:/app/packages/certificates:ro
+  restart: on-failure
 
 services:
   api-gateway:
@@ -28,7 +40,12 @@ services:
     ports:
       - "9002:9002"
       - "9003:9003"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   auth-service:
     container_name: auth-service
@@ -45,7 +62,12 @@ services:
     ports:
       - "50051:50051"
       - "9101:9101"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   user-service:
     container_name: user-service
@@ -62,7 +84,12 @@ services:
     ports:
       - "50052:50052"
       - "9102:9102"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   employee-service:
     container_name: employee-service
@@ -79,7 +106,12 @@ services:
     ports:
       - "50053:50053"
       - "9103:9103"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   attendance-service:
     container_name: attendance-service
@@ -96,7 +128,12 @@ services:
     ports:
       - "50054:50054"
       - "9104:9104"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   leave-service:
     container_name: leave-service
@@ -113,7 +150,12 @@ services:
     ports:
       - "50055:50055"
       - "9105:9105"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   recruitment-service:
     container_name: recruitment-service
@@ -130,7 +172,12 @@ services:
     ports:
       - "50056:50056"
       - "9106:9106"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   hrm-service:
     container_name: hrm-service
@@ -147,7 +194,12 @@ services:
     ports:
       - "50057:50057"
       - "9107:9107"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   salary-service:
     container_name: salary-service
@@ -164,7 +216,12 @@ services:
     ports:
       - "50058:50058"
       - "9108:9108"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   analytics-service:
     container_name: analytics-service
@@ -181,7 +238,12 @@ services:
     ports:
       - "50059:50059"
       - "9109:9109"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   notification-service:
     container_name: notification-service
@@ -198,7 +260,12 @@ services:
     ports:
       - "50060:50060"
       - "9110:9110"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   scheduler-service:
     container_name: scheduler-service
@@ -213,7 +280,12 @@ services:
       - LOKI_URL=http://loki:3100
     ports:
       - "9111:9111"
-    <<: *aws-credentials
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
 
   web:
     container_name: web
@@ -225,6 +297,7 @@ services:
         - aws_config
     ports:
       - "80:80"
+    restart: on-failure
 
   mongodb:
     container_name: hrms-mongodb
@@ -235,6 +308,13 @@ services:
       MONGO_INITDB_DATABASE: hrms
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
 
   redis:
     container_name: hrms-redis
@@ -243,6 +323,13 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
   prometheus:
     container_name: hrms-prometheus
@@ -257,16 +344,19 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=15d"
       - "--web.enable-lifecycle"
+    restart: unless-stopped
 
   loki:
     container_name: hrms-loki
     image: grafana/loki:latest
+    user: "0"
     ports:
       - "3100:3100"
     volumes:
       - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki/data
     command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
 
   grafana:
     container_name: hrms-grafana
@@ -284,6 +374,7 @@ services:
     depends_on:
       - prometheus
       - loki
+    restart: unless-stopped
 
 volumes:
   mongo-data:

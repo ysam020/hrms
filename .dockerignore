@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Dependencies — reinstalled inside the container
+node_modules
+**/node_modules
+
+# Build outputs — rebuilt inside the container
+dist
+**/dist
+build
+**/build
+.turbo
+**/.turbo
+
+# Generated certs — never bake private keys into image layers
+# They are mounted as a volume at runtime via docker-compose.dev.yml
+packages/certificates/*.pem
+packages/certificates/*.crt
+packages/certificates/*.key
+
+# Local monitoring data
+.monitoring
+
+# Logs
+*.log
+**/*.log
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# Test coverage
+coverage
+**/coverage
