@@ -13,14 +13,16 @@ RUN turbo prune --scope=web --docker
 FROM base AS builder
 WORKDIR /app
 
+# Override API URL so the bundle proxies through nginx, not the raw gateway port.
+# Must be set before secrets load (loadSecrets skips already-set env vars).
+ENV VITE_API_STRING=/api
+
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
-
-RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm fetch --ignore-scripts
-
 COPY --from=pruner /app/out/json/ .
 
-RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm install --offline --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store \
+    pnpm install --no-frozen-lockfile --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 

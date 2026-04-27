@@ -3,8 +3,7 @@ ARG PROJECT=api-gateway
 ARG PORT=9002
 
 FROM node:20-alpine AS slim
-RUN apk update
-RUN apk add --no-cache libc6-compat openssl protobuf protobuf-dev
+RUN apk update && apk add --no-cache libc6-compat openssl protobuf protobuf-dev
 
 FROM slim AS base
 RUN npm install -g pnpm@8.15.6 turbo
@@ -13,22 +12,21 @@ RUN pnpm config set manage-package-manager-versions false
 
 FROM base AS pruner
 ARG PROJECT
-
 WORKDIR /app
 COPY . .
 RUN turbo prune --scope=${PROJECT} --docker
 
-# setting up the build getting all the required external dependencies
 FROM base AS builder
 ARG PROJECT
-
 WORKDIR /app
 
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/out/json/ .
 
-RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true pnpm install --no-frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    pnpm install --no-frozen-lockfile --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 
@@ -36,14 +34,20 @@ RUN pnpm proto:gen
 RUN PATH="/app/node_modules/.bin:$PATH" pnpm db:generate
 RUN turbo build --filter=${PROJECT}
 RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm prune --prod --no-optional
-RUN rm -rf ./**/*/src
+RUN find . -path "*/src" -type d \
+    ! -path "./node_modules/*" \
+    ! -path "./.pnpm/*" \
+    ! -path "./packages/certificates/*" \
+    -exec rm -rf {} + 2>/dev/null || true
 
-FROM base AS runner
+FROM slim AS runner
 ARG APP_DIR
 ARG PORT
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
+ENV AWS_SHARED_CREDENTIALS_FILE=/app/.aws/credentials
+ENV AWS_CONFIG_FILE=/app/.aws/config
 USER nodejs
 
 WORKDIR /app
@@ -51,4 +55,4 @@ COPY --from=builder --chown=nodejs:nodejs /app .
 WORKDIR /app/apps/${APP_DIR}
 
 EXPOSE ${PORT}
-CMD [ "pnpm", "dev" ]
+CMD ["node", "dist/bootstrap.js"]
