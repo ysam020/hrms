@@ -110,7 +110,7 @@ import { cacheManager } from "@hrms/cache";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
-const mockJsPDF = jsPDF as jest.Mock;
+const mockJsPDF = jsPDF as unknown as jest.Mock;
 const mockActivityFindMany = (prisma as any).hrActivity.findMany as jest.Mock;
 const mockActivityCount = (prisma as any).hrActivity.count as jest.Mock;
 const mockActivityFindUnique = (prisma as any).hrActivity
