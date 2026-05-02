@@ -9,7 +9,7 @@ const PUBLIC_ROUTES_REGEX =
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
@@ -17,15 +17,17 @@ const authLimiter = rateLimit({
 
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 1000,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
+  // /profile is called on every page load and tab focus — exempt it
+  skip: (req) => req.path === "/profile",
 });
 
 const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 250,
+  max: 2500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },

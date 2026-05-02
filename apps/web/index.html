@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- ✅ FIX: no %PUBLIC_URL% in Vite -->
     <link rel="icon" href="/favicon.ico" />
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -23,7 +22,6 @@
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/logo192.png" />
 
-    <!-- ✅ FIX -->
     <link rel="apple-touch-icon" href="/logo192.png" />
     <link rel="manifest" href="/manifest.json" />
 
@@ -51,7 +49,6 @@
 
     <title>Praesto - HR Management System</title>
 
-    <!-- Theme Script (unchanged ✅) -->
     <script>
       (function () {
         try {
@@ -64,7 +61,6 @@
       })();
     </script>
 
-    <!-- ✅ KEEP ALL YOUR CSS (no change needed) -->
     <style>
       /* (your entire CSS unchanged) */
     </style>
@@ -92,7 +88,9 @@
         animation: _spin 0.75s linear infinite;
       }
       @keyframes _spin {
-        to { transform: rotate(360deg); }
+        to {
+          transform: rotate(360deg);
+        }
       }
     </style>
   </head>
@@ -102,7 +100,6 @@
       <div class="loading-spinner" id="initial-loader"></div>
     </div>
 
-    <!-- ✅ IMPORTANT: Vite entry -->
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- Service Worker -->
@@ -122,7 +119,9 @@
                     navigator.serviceWorker.controller
                   ) {
                     // Dispatch a custom event so the React app can show a toast
-                    window.dispatchEvent(new CustomEvent("sw-update-available", { detail: reg }));
+                    window.dispatchEvent(
+                      new CustomEvent("sw-update-available", { detail: reg }),
+                    );
                   }
                 });
               });
