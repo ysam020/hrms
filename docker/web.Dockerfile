@@ -16,6 +16,9 @@ WORKDIR /app
 # Override API URL so the bundle proxies through nginx, not the raw gateway port.
 # Must be set before secrets load (loadSecrets skips already-set env vars).
 ENV VITE_API_STRING=/api
+# Empty string so the Google OAuth redirect becomes a relative URL (/api/auth/google)
+# that nginx proxies to api-gateway — prevents the production domain being baked in.
+ENV VITE_SERVER_URL=
 
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
@@ -30,7 +33,7 @@ RUN pnpm db:generate
 
 RUN --mount=type=secret,id=aws_credentials,target=/root/.aws/credentials \
     --mount=type=secret,id=aws_config,target=/root/.aws/config \
-    turbo build --filter=web
+    turbo build --filter=web --force
 
 FROM nginx:alpine AS runner
 
