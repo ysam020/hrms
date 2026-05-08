@@ -19,7 +19,7 @@ paths:
                     type: object
                     properties:
                       id: { type: string, example: "6672a2501aa931b68b091faf" }
-                      email: { type: string, example: "sameer@praesto.cloud" }
+                      email: { type: string, example: "user@example.com" }
                       username: { type: string, example: "sameer_yadav" }
                       role: { type: string, example: "admin" }
                       isSuperUser: { type: boolean, example: false }
@@ -222,7 +222,7 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: "sameer@praesto.cloud"
+                  example: "user@example.com"
       responses:
         "200":
           description: Credential check result
@@ -266,7 +266,7 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: "sameer@praesto.cloud"
+                  example: "user@example.com"
       responses:
         "200":
           description: Login options returned
