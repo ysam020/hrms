@@ -484,6 +484,9 @@ importers:
       "@hrms/queue":
         specifier: workspace:*
         version: link:../../packages/queue
+      pdf-parse:
+        specifier: ^1.1.4
+        version: 1.1.4
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -491,6 +494,9 @@ importers:
       "@hrms/typescript-config":
         specifier: workspace:*
         version: link:../../packages/typescript-config
+      "@types/pdf-parse":
+        specifier: ^1.1.5
+        version: 1.1.5
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
@@ -9986,6 +9992,15 @@ packages:
       "@types/express": 5.0.6
     dev: true
 
+  /@types/pdf-parse@1.1.5:
+    resolution:
+      {
+        integrity: sha512-kBfrSXsloMnUJOKi25s3+hRmkycHfLK6A09eRGqF/N8BkQoPUmaCr+q8Cli5FnfohEz/rsv82zAiPz/LXtOGhA==,
+      }
+    dependencies:
+      "@types/node": 22.19.17
+    dev: true
+
   /@types/prop-types@15.7.15:
     resolution:
       {
@@ -17557,6 +17572,13 @@ packages:
     requiresBuild: true
     optional: true
 
+  /node-ensure@0.0.0:
+    resolution:
+      {
+        integrity: sha512-DRI60hzo2oKN1ma0ckc6nQWlHU69RH6xN0sjQTjMpChPfTYvKZdcQFfdYK2RWbJcKyUizSIy/l8OTGxMAM1QDw==,
+      }
+    dev: false
+
   /node-fetch@2.1.2:
     resolution:
       {
@@ -18112,6 +18134,16 @@ packages:
       {
         integrity: sha512-KG8UEiEVkR3wGEb4m5yZkVCzigAD+cVEJck2CzYZO37ZGJfctvVptVO192MwrtPhzONn6go8ylnOdMhKqi4nfg==,
       }
+    dev: false
+
+  /pdf-parse@1.1.4:
+    resolution:
+      {
+        integrity: sha512-XRIRcLgk6ZnUbsHsYXExMw+krrPE81hJ6FQPLdBNhhBefqIQKXu/WeTgNBGSwPrfU0v+UCEwn7AoAUOsVKHFvQ==,
+      }
+    engines: { node: ">=6.8.1" }
+    dependencies:
+      node-ensure: 0.0.0
     dev: false
 
   /pend@1.2.0:
