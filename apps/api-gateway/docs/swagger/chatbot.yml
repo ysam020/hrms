@@ -1,0 +1,83 @@
+paths:
+  /api/chatbot/message:
+    post:
+      summary: Send a message to the HRMS chatbot
+      description: >
+        Sends a user message to the AI chatbot and streams the response as
+        Server-Sent Events (SSE). The chatbot can answer HR-related questions
+        by fetching real-time data (leave balance, attendance, salary, policies,
+        etc.) for the authenticated user. Non-HR questions are out of scope.
+
+
+        The response is streamed as `text/event-stream`. Each event is a JSON
+        object on a `data:` line. Token events carry `{ "token": "..." }`;
+        the final event carries `{ "done": true }`. On error, an event carries
+        `{ "error": "..." }`. Validation errors before the stream begins are
+        returned as regular JSON with `400`.
+      tags: [Chatbot]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  description: The user's message (max 1000 characters)
+                  example: "What is my leave balance?"
+                  maxLength: 1000
+                history:
+                  type: array
+                  description: >
+                    Conversation history for context (up to last 10 messages).
+                    Each entry must have a role of "user" or "assistant".
+                  items:
+                    type: object
+                    required: [role, content]
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant]
+                        example: "user"
+                      content:
+                        type: string
+                        example: "How many paid leaves do I have left?"
+      responses:
+        "200":
+          description: >
+            SSE stream of chatbot response tokens. Content-Type is
+            `text/event-stream`. Each line is a `data: <json>` event.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  Newline-delimited SSE events. Each event is one of:
+
+                  - `data: {"token": "..."}` — next response token
+
+                  - `data: {"done": true}` — stream complete
+
+                  - `data: {"error": "..."}` — error during streaming
+              example: |
+                data: {"token":"You"}
+                data: {"token":" have"}
+                data: {"token":" 9"}
+                data: {"token":" paid"}
+                data: {"token":" leaves"}
+                data: {"token":" remaining."}
+                data: {"done":true}
+        "400":
+          description: Validation error (message missing or exceeds 1000 characters)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Message is required" }
+        "401":
+          description: Unauthorized
