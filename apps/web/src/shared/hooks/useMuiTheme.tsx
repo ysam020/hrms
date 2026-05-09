@@ -55,6 +55,15 @@ function useMuiTheme(theme) {
       borderRadius: 8,
     },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          "html, body, #root": {
+            backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
+            height: "100%",
+          },
+        },
+      },
+
       // Svg Icons - Default theme-based colors
       MuiSvgIcon: {
         styleOverrides: {

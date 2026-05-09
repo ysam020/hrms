@@ -9,18 +9,31 @@ import React, {
 const BottomDrawerContext = createContext<{
   isAnyOpen: boolean;
   setDrawerOpen: (isOpen: any) => void;
-}>({ isAnyOpen: false, setDrawerOpen: () => {} });
+  dockVisible: boolean;
+  setDockVisible: (v: boolean) => void;
+}>({
+  isAnyOpen: false,
+  setDrawerOpen: () => {},
+  dockVisible: false,
+  setDockVisible: () => {},
+});
 
 export function BottomDrawerProvider({ children }: { children: ReactNode }) {
   const [openCount, setOpenCount] = useState(0);
+  const [dockVisible, setDockVisible] = useState(false);
 
   const setDrawerOpen = useCallback((isOpen: boolean) => {
     setOpenCount((prev) => (isOpen ? prev + 1 : Math.max(0, prev - 1)));
   }, []);
 
   const value = React.useMemo(
-    () => ({ isAnyOpen: openCount > 0, setDrawerOpen }),
-    [openCount, setDrawerOpen],
+    () => ({
+      isAnyOpen: openCount > 0,
+      setDrawerOpen,
+      dockVisible,
+      setDockVisible,
+    }),
+    [openCount, setDrawerOpen, dockVisible],
   );
 
   return (

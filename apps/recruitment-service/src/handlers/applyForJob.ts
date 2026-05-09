@@ -2,7 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getResumeParsingQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
 
 export const applyForJob = async (
@@ -55,6 +55,13 @@ export const applyForJob = async (
 
     await cacheManager.invalidatePattern("applications:*");
 
+    // Enqueue resume scoring (fire-and-forget — worker updates DB asynchronously)
+    getResumeParsingQueue()
+      .add("scoreResume", { applicationId: application.id })
+      .catch((err) =>
+        logger.warn("[applyForJob] Resume parsing enqueue failed:", { err }),
+      );
+
     // Notify HR + hiring manager (fire-and-forget)
     prisma.user
       .findMany({
@@ -103,7 +110,16 @@ export const applyForJob = async (
     return callback(null, {
       message: MESSAGES.APPLICATION_SUBMITTED,
       status: status.OK,
-      data: application,
+      data: {
+        id: application.id,
+        jobTitleId: application.jobTitleId,
+        name: application.name,
+        email: application.email,
+        mobile: application.mobile ?? "",
+        status: application.status,
+        resumeScore: application.resumeScore ?? 0,
+        aiNotes: application.aiNotes ?? "",
+      },
     });
   } catch (err) {
     logger.error("ApplyForJob error:", { err });

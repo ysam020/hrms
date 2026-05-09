@@ -64,8 +64,8 @@ function useNotifications() {
       try {
         setLoading(true);
 
-        // show cached notifications immediately
-        const cached = await getNotifications();
+        // show cached notifications immediately (skip already-cleared entries)
+        const cached = (await getNotifications()).filter((n) => !n.isRead);
         if (cached.length > 0 && currentRequestId === requestIdRef.current) {
           setNotifications(cached);
         }
@@ -76,12 +76,14 @@ function useNotifications() {
 
         if (currentRequestId !== requestIdRef.current) return;
 
-        const fresh = (res.data.data || []).map((n) => ({
-          ...n,
-          _id: n._id || n.id,
-          message: n.message || n.body,
-          timeStamp: n.timeStamp || n.createdAt,
-        }));
+        const fresh = (res.data.data || [])
+          .filter((n) => !n.isRead)
+          .map((n) => ({
+            ...n,
+            _id: n._id || n.id,
+            message: n.message || n.body,
+            timeStamp: n.timeStamp || n.createdAt,
+          }));
 
         setNotifications(fresh);
 

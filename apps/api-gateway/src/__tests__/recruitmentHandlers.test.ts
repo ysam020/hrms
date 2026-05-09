@@ -193,13 +193,13 @@ describe("recruitmentHandlers", () => {
 
   it("applyForJob calls applyForJob with body data", async () => {
     await applyForJob(
-      makeReq({ body: { jobId: "j-1", applicantName: "Jane Doe" } }),
+      makeReq({ body: { jobTitleId: "j-1", name: "Jane Doe" } }),
       makeRes(),
     );
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "applyForJob",
-      expect.objectContaining({ jobId: "j-1" }),
+      expect.objectContaining({ jobTitleId: "j-1" }),
     );
   });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useFormik } from "formik";
 import { z } from "zod";
@@ -7,7 +7,6 @@ import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
-import MenuItem from "@mui/material/MenuItem";
 import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
@@ -36,17 +35,9 @@ const validationSchema = toFormikValidationSchema(
 function JobApplicationPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [jobTitles, setJobTitles] = useState<any[]>([]);
   const [resumeFileName, setResumeFileName] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState("");
-
-  useEffect(() => {
-    apiClient
-      .get(API_ENDPOINTS.GET_JOB_TITLES)
-      .then((res) => setJobTitles(res.data?.data ?? []))
-      .catch(() => setJobTitles([]));
-  }, []);
 
   const formik = useFormik({
     initialValues: {
@@ -164,9 +155,6 @@ function JobApplicationPage() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
             Personal Details
           </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.6, mb: 3 }}>
-            Fill in your details to submit your application.
-          </Typography>
 
           {serverError && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -232,27 +220,6 @@ function JobApplicationPage() {
               error={formik.touched.aadharNo && Boolean(formik.errors.aadharNo)}
               helperText={formik.touched.aadharNo && formik.errors.aadharNo}
             />
-
-            <TextField
-              fullWidth
-              select
-              id="jobTitle"
-              name="jobTitle"
-              label="Position"
-              size="small"
-              value={formik.values.jobTitle}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              error={formik.touched.jobTitle && Boolean(formik.errors.jobTitle)}
-              helperText={formik.touched.jobTitle && formik.errors.jobTitle}
-              disabled={!!id}
-            >
-              {jobTitles.map((job) => (
-                <MenuItem key={job._id} value={job._id}>
-                  {job.jobTitle}
-                </MenuItem>
-              ))}
-            </TextField>
 
             <Divider sx={{ borderColor: "var(--text-input-border)" }} />
 

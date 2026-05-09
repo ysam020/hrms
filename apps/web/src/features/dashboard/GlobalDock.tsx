@@ -193,7 +193,7 @@ function GlobalDock() {
   const { theme } = useContext(ThemeContext);
   const isDark = theme === "dark";
   const navigate = useNavigate();
-  const { isAnyOpen: isDrawerOpen } = useBottomDrawer();
+  const { isAnyOpen: isDrawerOpen, setDockVisible } = useBottomDrawer();
 
   const [visible, setVisible] = useState(false);
   const visibleRef = useRef(false);
@@ -216,12 +216,14 @@ function GlobalDock() {
         if (!visibleRef.current) {
           visibleRef.current = true;
           setVisible(true);
+          setDockVisible(true);
         }
       } else if (distFromBottom > HIDE_THRESHOLD && visibleRef.current) {
         if (!hideTimerRef.current) {
           hideTimerRef.current = setTimeout(() => {
             visibleRef.current = false;
             setVisible(false);
+            setDockVisible(false);
             hideTimerRef.current = null;
           }, 300);
         }

@@ -5,7 +5,12 @@
       "Bash(node --input-type=module -e \"import {createRequire} from 'module'; const r=createRequire\\('file:///c:/Users/user/Downloads/hrms/apps/web/scripts/x.mjs'\\); console.log\\(r.resolve\\('workbox-cli'\\)\\);\")",
       "Bash(node scripts/generate-certs.mjs)",
       "Bash(node -e \"const { createServer } = require\\('vite'\\); console.log\\(process.version\\)\")",
-      "Bash(pnpm --filter web test:run)"
+      "Bash(pnpm --filter web test:run)",
+      "Bash(pnpm jest *)",
+      "Bash(npx vitest *)",
+      "Bash(npx tsc *)",
+      "Bash(git stash *)",
+      "Bash(xargs cat)"
     ]
   }
 }

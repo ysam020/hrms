@@ -23,6 +23,9 @@ jest.mock("@hrms/queue", () => ({
   getNotificationQueue: jest.fn().mockReturnValue({
     add: jest.fn().mockResolvedValue(undefined),
   }),
+  getResumeParsingQueue: jest.fn().mockReturnValue({
+    add: jest.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 import { getNotificationQueue } from "@hrms/queue";
@@ -148,7 +151,16 @@ describe("applyForJob", () => {
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.APPLICATION_SUBMITTED,
       status: status.OK,
-      data: application,
+      data: {
+        id: application.id,
+        jobTitleId: application.jobTitleId,
+        name: application.name,
+        email: application.email,
+        mobile: "",
+        status: application.status,
+        resumeScore: 0,
+        aiNotes: "",
+      },
     });
   });
 

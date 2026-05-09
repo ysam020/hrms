@@ -13,6 +13,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function Help() {
@@ -46,6 +47,13 @@ function Help() {
         description: "Quickly access search functionality",
         keys: ["Shift", "Space"],
         icon: <SearchIcon />,
+        category: "Navigation",
+      },
+      {
+        title: "Toggle AI Assistant",
+        description: "Open or close the HRMS AI Assistant chatbot",
+        keys: [isMac ? "⌘" : "Ctrl", "Shift", "A"],
+        icon: <SmartToyIcon />,
         category: "Navigation",
       },
       {

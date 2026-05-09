@@ -6,7 +6,6 @@ import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid2";
 import Paper from "@mui/material/Paper";
-import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Add from "@mui/icons-material/Add";
 import Description from "@mui/icons-material/Description";
@@ -16,35 +15,19 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
-const POLICY_TYPES = [
-  "POSH Policy",
-  "Advance Salary Policy",
-  "Code of Conduct",
-  "Leave Policy",
-  "Other",
-];
-
 function CreatePolicy({ onSaved }) {
   const { setAlert } = useContext(AlertContext);
   const [policyType, setPolicyType] = useState("");
-  const [policyName, setPolicyName] = useState("");
   const [content, setContent] = useState<string | null>("");
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     policyType?: string;
-    policyName?: string;
     content?: string;
   }>({});
 
   const validate = () => {
-    const newErrors: {
-      policyType?: string;
-      policyName?: string;
-      content?: string;
-    } = {};
-    if (!policyType) newErrors.policyType = "Policy type is required";
-    if (policyType === "Other" && !policyName.trim())
-      newErrors.policyName = "Policy name is required";
+    const newErrors: { policyType?: string; content?: string } = {};
+    if (!policyType.trim()) newErrors.policyType = "Policy type is required";
     if (
       !content ||
       DOMPurify.sanitize(content, { ALLOWED_TAGS: [] }).trim().length < 10
@@ -63,13 +46,10 @@ function CreatePolicy({ onSaved }) {
     setErrors({});
     setSubmitting(true);
     try {
-      const payload: {
-        policyType: string;
-        content: string;
-        policyName?: string;
-      } = { policyType, content: content ?? "" };
-      if (policyType === "Other") payload.policyName = policyName.trim();
-      const res = await apiClient.post(API_ENDPOINTS.CREATE_POLICY, payload);
+      const res = await apiClient.post(API_ENDPOINTS.CREATE_POLICY, {
+        policyType: policyType.trim(),
+        content: content ?? "",
+      });
       const upserted = res.data.data?._upserted;
       setAlert({
         open: true,
@@ -78,7 +58,6 @@ function CreatePolicy({ onSaved }) {
       });
       // Reset only on success
       setPolicyType("");
-      setPolicyName("");
       setContent(null); // null forces PrimeReact Editor to re-render empty
       onSaved?.();
     } catch (err) {
@@ -113,48 +92,19 @@ function CreatePolicy({ onSaved }) {
                     Policy Details
                   </Typography>
                 </Box>
-                <Grid container spacing={1.5}>
-                  <Grid size={policyType === "Other" ? 6 : 12}>
-                    <TextField
-                      fullWidth
-                      select
-                      size="small"
-                      label="Policy Type"
-                      value={policyType}
-                      onChange={(e) => {
-                        setPolicyType(e.target.value);
-                        setPolicyName("");
-                        setErrors((prev) => ({
-                          ...prev,
-                          policyType: undefined,
-                          policyName: undefined,
-                        }));
-                      }}
-                      error={!!errors.policyType}
-                      helperText={errors.policyType}
-                    >
-                      {POLICY_TYPES.map((type) => (
-                        <MenuItem key={type} value={type}>
-                          {type}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-                  {policyType === "Other" && (
-                    <Grid size={6}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        label="Policy Name"
-                        placeholder="e.g. Work From Home Policy"
-                        value={policyName}
-                        onChange={(e) => setPolicyName(e.target.value)}
-                        error={!!errors.policyName}
-                        helperText={errors.policyName}
-                      />
-                    </Grid>
-                  )}
-                </Grid>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Policy Type"
+                  placeholder="e.g. Work From Home Policy"
+                  value={policyType}
+                  onChange={(e) => {
+                    setPolicyType(e.target.value);
+                    setErrors((prev) => ({ ...prev, policyType: undefined }));
+                  }}
+                  error={!!errors.policyType}
+                  helperText={errors.policyType}
+                />
               </Paper>
             </Grid>
 

@@ -14,6 +14,7 @@ const defaultJobOptions = {
 let _emailQueue: Queue | null = null;
 let _notificationQueue: Queue | null = null;
 let _schedulerQueue: Queue | null = null;
+let _resumeParsingQueue: Queue | null = null;
 
 export function getEmailQueue(): Queue {
   if (!_emailQueue) {
@@ -33,6 +34,19 @@ export function getNotificationQueue(): Queue {
     });
   }
   return _notificationQueue;
+}
+
+export function getResumeParsingQueue(): Queue {
+  if (!_resumeParsingQueue) {
+    _resumeParsingQueue = new Queue("resumeParsingQueue", {
+      connection: getBullMQConnection(),
+      defaultJobOptions: {
+        ...defaultJobOptions,
+        attempts: 2,
+      },
+    });
+  }
+  return _resumeParsingQueue;
 }
 
 export function getSchedulerQueue(): Queue {

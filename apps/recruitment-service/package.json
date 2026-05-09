@@ -14,10 +14,12 @@
     "@hrms/logger": "workspace:*",
     "@hrms/proto": "workspace:^",
     "@hrms/queue": "workspace:*",
+    "pdf-parse": "^1.1.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@hrms/typescript-config": "workspace:*",
+    "@types/pdf-parse": "^1.1.4",
     "tsx": "^4.19.2"
   }
 }

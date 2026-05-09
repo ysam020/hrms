@@ -12,6 +12,7 @@ import { generalRouter } from "./general";
 import { analyticsRoutesRouter } from "./analyticsRoutes";
 import { permissionsRouter } from "./permissions";
 import { chatRouter } from "./chat";
+import { chatbotRouter } from "./chatbot";
 import { authLimiter, defaultLimiter } from "../middleware/rateLimiter";
 
 export const rootRouter: Router = Router();
@@ -29,3 +30,4 @@ rootRouter.use(defaultLimiter, generalRouter);
 rootRouter.use(defaultLimiter, analyticsRoutesRouter);
 rootRouter.use(defaultLimiter, permissionsRouter);
 rootRouter.use(defaultLimiter, chatRouter);
+rootRouter.use(defaultLimiter, chatbotRouter);

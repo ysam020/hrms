@@ -38,6 +38,7 @@ services:
       - NOTIFICATION_SERVICE_HOST=notification-service
       - METRICS_PORT=9003
       - LOKI_URL=http://loki:3100
+      - OLLAMA_URL=http://host.docker.internal:11434
     ports:
       - "9002:9002"
       - "9003:9003"
@@ -176,6 +177,7 @@ services:
     environment:
       - METRICS_PORT=9106
       - LOKI_URL=http://loki:3100
+      - OLLAMA_URL=http://host.docker.internal:11434
     ports:
       - "50056:50056"
       - "9106:9106"

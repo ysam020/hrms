@@ -96,6 +96,8 @@ export const invalidateCsrfToken = () => {
   _csrfPromise = null;
 };
 
+export { fetchCsrfToken };
+
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
 
 const apiClient = axios.create({
