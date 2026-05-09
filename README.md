@@ -337,29 +337,70 @@ Output lands in `apps/web/dist/`.
 
 ## Docker
 
-### Local development with full infrastructure
+All Docker operations go through a single script invoked via `pnpm docker <command> [service]`.
+
+### Commands
+
+| Command                             | Description                                  |
+| ----------------------------------- | -------------------------------------------- |
+| `pnpm docker build [service]`       | Build image(s) using the layer cache         |
+| `pnpm docker build:force [service]` | Build image(s) with `--no-cache`             |
+| `pnpm docker up [service]`          | Start MongoDB + Redis, then container(s)     |
+| `pnpm docker down [service]`        | Stop and remove all containers (or stop one) |
+| `pnpm docker push [service]`        | Push image(s) to Docker Hub                  |
+
+Omit `[service]` to target all services. When a service name is provided, only that container is affected.
+
+### Common workflows
+
+**First-time setup / fresh environment:**
 
 ```bash
-docker compose -f docker-compose.local.yml up
+pnpm docker build:force    # build all images from scratch
+pnpm docker up             # start MongoDB + Redis, then all services
 ```
 
-Starts all services plus MongoDB and Redis containers.
-
-### Build images locally (CI)
+**Day-to-day development:**
 
 ```bash
-docker compose -f docker-compose.ci.yml build
+pnpm docker up             # start everything
+pnpm docker down           # stop and clean up
 ```
 
-Uses `docker/base.Dockerfile` for all Node services (Turborepo prune + multi-stage) and `docker/web.Dockerfile` for the React frontend (Vite build + nginx).
-
-### Production
-
-The production compose file (`docker-compose.prod.yml`) pulls pre-built images from the container registry. Images are tagged with `$TAG_NAME` and published by the CI pipeline.
+**Work on a single service:**
 
 ```bash
-TAG_NAME=v1.2.3 docker compose -f docker-compose.prod.yml up -d
+pnpm docker build api-gateway      # rebuild one image
+pnpm docker up api-gateway         # start it
+pnpm docker down api-gateway       # stop it
 ```
+
+**Publish images to Docker Hub:**
+
+```bash
+pnpm docker build:force    # build fresh images
+pnpm docker push           # push all to Docker Hub (ysam090/hrms-*)
+
+pnpm docker push web       # or push a single image
+```
+
+### Service names
+
+| Service      | Name to pass           |
+| ------------ | ---------------------- |
+| API Gateway  | `api-gateway`          |
+| Auth         | `auth-service`         |
+| User         | `user-service`         |
+| Employee     | `employee-service`     |
+| Attendance   | `attendance-service`   |
+| Leave        | `leave-service`        |
+| Recruitment  | `recruitment-service`  |
+| HRM          | `hrm-service`          |
+| Salary       | `salary-service`       |
+| Analytics    | `analytics-service`    |
+| Notification | `notification-service` |
+| Scheduler    | `scheduler-service`    |
+| Frontend     | `web`                  |
 
 ### How the Dockerfiles work
 
