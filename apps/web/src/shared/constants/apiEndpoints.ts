@@ -167,6 +167,10 @@ const POLICY = {
   DOWNLOAD_POLICY_PDF: (id: string | number) => `/policies/${id}/pdf`,
 };
 
+const CHATBOT = {
+  CHATBOT_MESSAGE: "/chatbot/message",
+};
+
 const DEVELOPER = {
   DEVELOPER_STATUS: "/developer/status",
   DEVELOPER_VERIFY_STATUS: "/developer/verify-status",
@@ -195,5 +199,6 @@ export const API_ENDPOINTS = {
   ...RULES,
   ...POLICY,
   ...UPLOAD,
+  ...CHATBOT,
   ...DEVELOPER,
 };

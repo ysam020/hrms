@@ -186,6 +186,8 @@ model JobApplication {
   interviews   Json?
   reason       String?
   status       String   @default("Applied")
+  resumeScore  Float?
+  aiNotes      String?
 
   jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id])
 

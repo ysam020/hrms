@@ -26,6 +26,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { DashboardProvider } from "@web/app/providers/DashboardContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { useDashboardEdit } from "@web/app/providers/DashboardEditContext";
+import { useBottomDrawer } from "@web/app/providers/BottomDrawerContext";
 import "../../styles/dashboard.scss";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -214,7 +215,7 @@ const RightPanel = React.memo(({ isDark }: { isDark: boolean }) => (
   <Box
     sx={{
       width: RIGHT_PANEL_WIDTH,
-      flex: 1,
+      maxHeight: "100%",
       display: "flex",
       flexDirection: "column",
       borderRadius: 2,
@@ -234,9 +235,14 @@ const RightPanel = React.memo(({ isDark }: { isDark: boolean }) => (
   </Box>
 ));
 
+// 10px mainBox paddingTop + 64px MUI Toolbar (AppBar default height on desktop)
+const APPBAR_OFFSET = 74;
+const DOCK_HEIGHT = 72;
+
 function DashboardInner() {
   const { theme } = useContext(ThemeContext);
   const isDark = theme === "dark";
+  const { dockVisible } = useBottomDrawer();
 
   const { editMode, registerReset } = useDashboardEdit();
 
@@ -305,11 +311,11 @@ function DashboardInner() {
 
   return (
     <Box
-      className="dashboard"
+      className={`dashboard dashboard-height-transition`}
       data-dark={isDark ? "true" : undefined}
       sx={{
         display: "flex",
-        height: "calc(100vh - 140px)",
+        height: `calc(100vh - ${APPBAR_OFFSET + (dockVisible ? DOCK_HEIGHT : 0)}px)`,
         overflow: "hidden",
         bgcolor: isDark ? "#111B21" : "#F9FAFB",
       }}
@@ -426,7 +432,16 @@ function DashboardInner() {
       </Box>
 
       {/* sidebar */}
-      <Box sx={{ p: 1, pl: 0, flexShrink: 0, display: "flex" }}>
+      <Box
+        sx={{
+          p: 1,
+          pl: 0,
+          flexShrink: 0,
+          display: "flex",
+          alignSelf: "flex-start",
+          maxHeight: "100%",
+        }}
+      >
         <RightPanel isDark={isDark} />
       </Box>
     </Box>

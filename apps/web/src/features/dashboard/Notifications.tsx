@@ -1,4 +1,10 @@
-import React, { useContext, useMemo, useState, useEffect } from "react";
+import React, {
+  useContext,
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import Box from "@mui/material/Box";
 import Skeleton from "@mui/material/Skeleton";
 import Collapse from "@mui/material/Collapse";
@@ -16,9 +22,11 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { saveNotifications } from "@web/core/db";
 
 function Notifications() {
-  const { notifications, loading } = useContext(NotificationContext);
+  const { notifications, loading, setNotifications } =
+    useContext(NotificationContext);
   const { theme } = useContext(ThemeContext);
   const navigate = useNavigate();
   useUpdateFavicon(notifications);
@@ -68,9 +76,21 @@ function Notifications() {
     [theme],
   );
 
-  const clearNotification = async (notificationId) => {
-    await apiClient.put(API_ENDPOINTS.CLEAR_NOTIFICATION(notificationId));
-  };
+  const clearNotification = useCallback(
+    async (notificationId) => {
+      try {
+        await apiClient.put(API_ENDPOINTS.CLEAR_NOTIFICATION(notificationId));
+      } catch {
+        // still remove from UI even if request fails unexpectedly
+      }
+      setNotifications((prev) => {
+        const updated = prev.filter((n) => (n._id || n.id) !== notificationId);
+        saveNotifications(updated).catch(console.error);
+        return updated;
+      });
+    },
+    [setNotifications],
+  );
 
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp).toLocaleString("en-GB", {
@@ -163,7 +183,7 @@ function Notifications() {
         </Box>
       </Box>
     ),
-    [theme],
+    [theme, clearNotification],
   );
 
   const handleNotificationClick = async (itemTitle) => {
@@ -179,9 +199,15 @@ function Notifications() {
     }));
   };
 
-  const clearAllNotifications = async () => {
-    await apiClient.put(API_ENDPOINTS.CLEAR_ALL_NOTIFICATIONS);
-  };
+  const clearAllNotifications = useCallback(async () => {
+    try {
+      await apiClient.put(API_ENDPOINTS.CLEAR_ALL_NOTIFICATIONS);
+    } catch {
+      // still clear from UI
+    }
+    setNotifications([]);
+    saveNotifications([]).catch(console.error);
+  }, [setNotifications]);
 
   return (
     <Box>

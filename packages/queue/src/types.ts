@@ -32,3 +32,7 @@ export type SchedulerJobName =
 export interface SchedulerJobData {
   jobName: SchedulerJobName;
 }
+
+export interface ResumeParsingJobData {
+  applicationId: string;
+}

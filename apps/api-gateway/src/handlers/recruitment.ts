@@ -3,7 +3,7 @@ import { recruitmentClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 
 async function resolveUsername(userId: string): Promise<string | null> {
   const user = await prisma.user.findUnique({
@@ -161,17 +161,17 @@ export async function getJobTitles(_req: Request, res: Response) {
 
 export async function applyForJob(req: Request, res: Response) {
   try {
-    const { jobId, applicantName, email, phone, resumeUrl, coverLetter } =
-      req.body;
+    const { name, mobile, email, aadharNo, jobTitleId, resume } = req.body;
     const response = await grpcCall(recruitmentClient, "applyForJob", {
-      jobId: jobId || "",
-      applicantName: applicantName || "",
+      jobTitleId: jobTitleId || "",
+      name: name || "",
       email: email || "",
-      phone: phone || "",
-      resumeUrl: resumeUrl || "",
-      coverLetter: coverLetter || "",
+      mobile: mobile || "",
+      resume: resume || "",
+      aadharNo: aadharNo || "",
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    const resp = response as any;
+    return apiResponse(res, grpcToHttpStatus(resp.status), resp);
   } catch (error: any) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -183,7 +183,7 @@ export async function viewApplications(req: Request, res: Response) {
   try {
     const response = await grpcCall(recruitmentClient, "listApplications", {
       jobTitleId: req.params.id,
-      status: req.query.status || "",
+      applicationStatus: req.query.status || "",
       page: parseInt(req.query.page as string) || 1,
       limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
     });
@@ -258,11 +258,12 @@ export async function rejectApplication(req: Request, res: Response) {
 export async function addResignation(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const { reason, lastWorkingDate } = req.body;
+    const { reason, lastDate, resignationDate } = req.body;
     const response = await grpcCall(recruitmentClient, "submitResignation", {
       username: user!.userId,
       reason: reason || "",
-      lastWorkingDate: lastWorkingDate || "",
+      lastDate: lastDate || "",
+      resignationDate: resignationDate || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: any) {

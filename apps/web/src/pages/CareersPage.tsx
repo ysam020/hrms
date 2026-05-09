@@ -114,158 +114,161 @@ function CareersPage() {
           </Box>
         ) : (
           <Grid container spacing={2}>
-            {filtered.map((job) => (
-              <Grid size={12} key={job._id}>
-                <Box
-                  onClick={() => navigate(`/careers/apply/${job._id}`)}
-                  sx={{
-                    p: 3,
-                    borderRadius: 2,
-                    border: "1px solid var(--text-input-border, #e0e0e0)",
-                    backgroundColor: "var(--card-background-secondary, #fff)",
-                    cursor: "pointer",
-                    transition: "box-shadow 0.18s, border-color 0.18s",
-                    "&:hover": {
-                      boxShadow: "0 4px 18px rgba(0,0,0,0.10)",
-                      borderColor: "var(--link-color, #2196f3)",
-                    },
-                  }}
-                >
-                  {/* Top row: title + Apply button */}
+            {filtered.map((job) => {
+              const jobId = job._id || job.id;
+              return (
+                <Grid size={12} key={jobId}>
                   <Box
+                    onClick={() => navigate(`/careers/apply/${jobId}`)}
                     sx={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      justifyContent: "space-between",
-                      gap: 2,
-                      flexWrap: "wrap",
+                      p: 3,
+                      borderRadius: 2,
+                      border: "1px solid var(--text-input-border, #e0e0e0)",
+                      backgroundColor: "var(--card-background-secondary, #fff)",
+                      cursor: "pointer",
+                      transition: "box-shadow 0.18s, border-color 0.18s",
+                      "&:hover": {
+                        boxShadow: "0 4px 18px rgba(0,0,0,0.10)",
+                        borderColor: "var(--link-color, #2196f3)",
+                      },
                     }}
                   >
-                    <Box>
-                      <Typography
-                        variant="subtitle1"
+                    {/* Top row: title + Apply button */}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: 2,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            fontWeight: 700,
+                            textTransform: "capitalize",
+                            fontSize: "1rem",
+                          }}
+                        >
+                          {job.jobTitle}
+                        </Typography>
+                        {job.hiringManager && (
+                          <Typography variant="caption" sx={{ opacity: 0.55 }}>
+                            Hiring Manager: {job.hiringManager}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        endIcon={<ArrowForward sx={{ fontSize: 15 }} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/careers/apply/${jobId}`);
+                        }}
                         sx={{
-                          fontWeight: 700,
-                          textTransform: "capitalize",
-                          fontSize: "1rem",
+                          textTransform: "none",
+                          fontWeight: 600,
+                          borderRadius: "6px",
+                          flexShrink: 0,
+                          backgroundColor: "var(--btn-bg)",
+                          color: "var(--btn-color)",
+                          boxShadow: "none",
+                          "&:hover": { boxShadow: "none" },
                         }}
                       >
-                        {job.jobTitle}
-                      </Typography>
-                      {job.hiringManager && (
-                        <Typography variant="caption" sx={{ opacity: 0.55 }}>
-                          Hiring Manager: {job.hiringManager}
-                        </Typography>
+                        Apply Now
+                      </Button>
+                    </Box>
+
+                    {/* Meta chips row */}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 1,
+                        mt: 1.5,
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
+                      {job.numberOfVacancies && (
+                        <Chip
+                          icon={<Group sx={{ fontSize: 13 }} />}
+                          label={`${job.numberOfVacancies} ${job.numberOfVacancies === 1 ? "vacancy" : "vacancies"}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: 11 }}
+                        />
+                      )}
+                      {job.experience != null && (
+                        <Chip
+                          icon={<Star sx={{ fontSize: 13 }} />}
+                          label={`${job.experience}+ yrs exp`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: 11 }}
+                        />
+                      )}
+                      {job.budgetRange && (
+                        <Chip
+                          icon={<AttachMoney sx={{ fontSize: 13 }} />}
+                          label={job.budgetRange}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: 11 }}
+                        />
+                      )}
+                      {job.formattedDeadline && (
+                        <Chip
+                          icon={<CalendarToday sx={{ fontSize: 12 }} />}
+                          label={`Apply by ${job.formattedDeadline}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: 11 }}
+                        />
                       )}
                     </Box>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      endIcon={<ArrowForward sx={{ fontSize: 15 }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/careers/apply/${job._id}`);
-                      }}
-                      sx={{
-                        textTransform: "none",
-                        fontWeight: 600,
-                        borderRadius: "6px",
-                        flexShrink: 0,
-                        backgroundColor: "var(--btn-bg)",
-                        color: "var(--btn-color)",
-                        boxShadow: "none",
-                        "&:hover": { boxShadow: "none" },
-                      }}
-                    >
-                      Apply Now
-                    </Button>
-                  </Box>
 
-                  {/* Meta chips row */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 1,
-                      mt: 1.5,
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                    }}
-                  >
-                    {job.numberOfVacancies && (
-                      <Chip
-                        icon={<Group sx={{ fontSize: 13 }} />}
-                        label={`${job.numberOfVacancies} ${job.numberOfVacancies === 1 ? "vacancy" : "vacancies"}`}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: 11 }}
-                      />
+                    {/* Description */}
+                    {job.jobDescription && (
+                      <>
+                        <Divider
+                          sx={{
+                            my: 1.5,
+                            borderColor: "var(--text-input-border)",
+                          }}
+                        />
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            opacity: 0.75,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          {job.jobDescription}
+                        </Typography>
+                      </>
                     )}
-                    {job.experience != null && (
-                      <Chip
-                        icon={<Star sx={{ fontSize: 13 }} />}
-                        label={`${job.experience}+ yrs exp`}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: 11 }}
-                      />
-                    )}
-                    {job.budgetRange && (
-                      <Chip
-                        icon={<AttachMoney sx={{ fontSize: 13 }} />}
-                        label={job.budgetRange}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: 11 }}
-                      />
-                    )}
-                    {job.formattedDeadline && (
-                      <Chip
-                        icon={<CalendarToday sx={{ fontSize: 12 }} />}
-                        label={`Apply by ${job.formattedDeadline}`}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: 11 }}
-                      />
-                    )}
-                  </Box>
 
-                  {/* Description */}
-                  {job.jobDescription && (
-                    <>
-                      <Divider
-                        sx={{
-                          my: 1.5,
-                          borderColor: "var(--text-input-border)",
-                        }}
-                      />
+                    {/* Skills */}
+                    {job.requiredSkills && (
                       <Typography
-                        variant="body2"
-                        sx={{
-                          opacity: 0.75,
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                          lineHeight: 1.6,
-                        }}
+                        variant="caption"
+                        sx={{ display: "block", mt: 1, opacity: 0.6 }}
                       >
-                        {job.jobDescription}
+                        Skills: {job.requiredSkills}
                       </Typography>
-                    </>
-                  )}
-
-                  {/* Skills */}
-                  {job.requiredSkills && (
-                    <Typography
-                      variant="caption"
-                      sx={{ display: "block", mt: 1, opacity: 0.6 }}
-                    >
-                      Skills: {job.requiredSkills}
-                    </Typography>
-                  )}
-                </Box>
-              </Grid>
-            ))}
+                    )}
+                  </Box>
+                </Grid>
+              );
+            })}
           </Grid>
         )}
       </Box>

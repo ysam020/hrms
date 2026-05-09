@@ -21,13 +21,15 @@ message JobOpening {
 
 message JobApplication {
   string id = 1;
-  string jobId = 2;
-  string applicantName = 3;
+  string jobTitleId = 2;
+  string name = 3;
   string email = 4;
-  string phone = 5;
-  string resumeUrl = 6;
+  string mobile = 5;
+  string resume = 6;
   string status = 7;
   string appliedAt = 8;
+  float resumeScore = 9;
+  string aiNotes = 10;
 }
 
 message Resignation {
@@ -96,12 +98,13 @@ message ListJobsResponse {
 }
 
 message ApplyJobRequest {
-  string jobId = 1;
-  string applicantName = 2;
+  string jobTitleId = 1;
+  string name = 2;
   string email = 3;
-  string phone = 4;
-  string resumeUrl = 5;
-  string coverLetter = 6;
+  string mobile = 4;
+  string resume = 5;
+  string aadharNo = 6;
+  string reason = 7;
 }
 
 message ApplicationResponse {
@@ -111,8 +114,8 @@ message ApplicationResponse {
 }
 
 message ListApplicationsRequest {
-  string jobId = 1;
-  string status = 2;
+  string jobTitleId = 1;
+  string applicationStatus = 2;
   int32 page = 3;
   int32 limit = 4;
 }
@@ -140,9 +143,12 @@ message UpdateStatusRequest {
 }
 
 message SubmitResignationRequest {
-  string userId = 1;
+  string username = 1;
   string reason = 2;
-  string lastWorkingDate = 3;
+  string lastDate = 3;
+  string resignationDate = 4;
+  float overallJobSatisfaction = 5;
+  string suggestions = 6;
 }
 
 message ResignationResponse {

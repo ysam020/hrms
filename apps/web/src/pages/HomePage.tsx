@@ -27,6 +27,8 @@ import useSpotlightModal from "@web/shared/hooks/useSpotlightModal";
 import GlobalDock from "@web/features/dashboard/GlobalDock";
 import { BottomDrawerProvider } from "@web/app/providers/BottomDrawerContext";
 
+const ChatbotFab = React.lazy(() => import("@web/features/chatbot/Chatbot"));
+
 const UnAuthorisedRoute = React.lazy(
   () => import("@web/app/router/UnAuthorisedRoute"),
 );
@@ -80,7 +82,7 @@ function HomePage(props) {
       flexGrow: 1,
       width: { lg: `calc(100% - ${drawerWidth}px)` },
       backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
-      height: "calc(100vh - 70px)",
+      height: "100vh",
       overflow: "scroll",
       padding: "0px",
       paddingTop: "10px",
@@ -128,7 +130,12 @@ function HomePage(props) {
         <NotificationContext.Provider value={notificationContextValue}>
           <TabValueContext.Provider value={tabValueContextValue}>
             <Tour run={run} setRun={setRun} />
-            <Box sx={{ display: "flex" }}>
+            <Box
+              sx={{
+                display: "flex",
+                bgcolor: theme === "light" ? "#F9FAFB" : "#111B21",
+              }}
+            >
               <CssBaseline />
               <ErrorBoundary fallback={<ErrorFallback />}>
                 <AppbarComponent
@@ -207,6 +214,9 @@ function HomePage(props) {
               setAlert={setAlert}
             />
             <GlobalDock />
+            <Suspense fallback={null}>
+              <ChatbotFab />
+            </Suspense>
           </TabValueContext.Provider>
 
           <Suspense fallback={<LoadingState />}>
