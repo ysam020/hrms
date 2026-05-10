@@ -8,6 +8,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { apiRequestLogger, logger } from "@hrms/logger";
+import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
 import { configureSwagger } from "./config/swaggerSetup";
@@ -61,20 +62,23 @@ applyRateLimiters(app);
 
 app.use(auditLogMiddleware);
 configureSwagger(app as any);
-app.get("/api/csrf-token", (req, res) => {
+app.get("/api/v1/csrf-token", (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
-app.use("/api", rootRouter);
+app.use("/api/v1", rootRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "healthy" }));
 
 app.use((error: any, _req: any, res: any, _next: any) => {
   logger.error("Unhandled error:", { error });
-  const status = error.status || 500;
-  // Never expose internal error details to the client
+  const httpStatus = error.status || 500;
   const message =
-    status < 500 ? error.message || "Bad request" : "Internal Server Error";
-  res.status(status).json({ message });
+    httpStatus < 500 ? error.message || "Bad request" : "Internal Server Error";
+  const status =
+    httpStatus < 500
+      ? RESPONSE_STATUS.BAD_REQUEST
+      : RESPONSE_STATUS.INTERNAL_SERVER_ERROR;
+  return apiResponse(res, status, { message });
 });
 
 process.on("uncaughtException", (error) =>

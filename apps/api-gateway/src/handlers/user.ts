@@ -1,19 +1,20 @@
 import { Request, Response } from "express";
 import { userClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
+import { prisma } from "@hrms/db";
 import { camelToSnake, apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { parsePagination, PAGINATION } from "../utils/pagination";
 
 export async function getAllUsers(req: Request, res: Response) {
   try {
     const response = await grpcCall(userClient, "listUsers", {
-      page: parseInt(req.query.page as string) || 1,
-      limit: Math.min(parseInt(req.query.limit as string) || 50, 200),
+      ...parsePagination(req.query, PAGINATION.DEFAULT_LIMIT_LARGE, PAGINATION.MAX_LIMIT_LARGE),
       search: req.query.search || "",
       role: req.query.role || "",
       department: req.query.department || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -21,6 +22,7 @@ export async function getAllUsers(req: Request, res: Response) {
 }
 
 export async function getUserData(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
     const response = (await grpcCall(userClient, "getUser", {
       userId: req.params.username,
@@ -36,12 +38,25 @@ export async function getUserData(req: Request, res: Response) {
     snake.dateOfTermination = u.dateOfTermination;
     snake.reasonForTermination = u.reasonForTermination;
     snake.dateOfAbscond = u.dateOfAbscond;
+    // Strip PII that only the owner or a superuser may see
+    const callerIsOwner = user?.userId === req.params.username;
+    if (!callerIsOwner) {
+      const caller = await prisma.user.findUnique({
+        where: { id: user!.userId },
+        select: { isSuperUser: true },
+      });
+      if (!caller?.isSuperUser) {
+        delete snake.aadhar_no;
+        delete snake.bank_account_no;
+        delete snake.pan_no;
+      }
+    }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: response.message,
       status: response.status,
       data: snake,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -62,7 +77,7 @@ export async function saveFcmToken(req: Request, res: Response) {
       ipAddress: req.ip || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -79,7 +94,7 @@ export async function disablePushNotifications(req: Request, res: Response) {
       disableAll: !!disableAll,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });

@@ -51,7 +51,7 @@ const getTokenExpiry = (token: string) => {
   }
 };
 
-const isExpiringSoon = (token: string, bufferSec = 60) => {
+export const isExpiringSoon = (token: string, bufferSec = 60) => {
   const exp = getTokenExpiry(token);
   if (!exp) return true;
   return exp - Date.now() / 1000 < bufferSec;
@@ -121,6 +121,19 @@ const buildRequestKey = (config: InternalAxiosRequestConfig): string => {
 export const cancelAllPendingRequests = (reason = "cancelled") => {
   pendingRequests.forEach((ctrl) => ctrl.abort(reason));
   pendingRequests.clear();
+};
+
+// Allow non-axios callers (e.g. SSE streams) to participate in the registry
+// so cancelAllPendingRequests() covers them too.
+export const registerPendingAbort = (
+  key: string,
+  controller: AbortController,
+) => {
+  pendingRequests.set(key, controller);
+};
+
+export const unregisterPendingAbort = (key: string) => {
+  pendingRequests.delete(key);
 };
 
 // ─── Token refresh ────────────────────────────────────────────────────────────

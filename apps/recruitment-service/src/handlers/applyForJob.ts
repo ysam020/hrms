@@ -104,7 +104,7 @@ export const applyForJob = async (
         });
       })
       .catch((err) =>
-        logger.warn("[applyForJob] Notification enqueue failed:", { err }),
+        logger.error("[applyForJob] Notification enqueue failed:", { err }),
       );
 
     return callback(null, {

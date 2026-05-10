@@ -54,7 +54,7 @@ export const approveKyc = async (
         priority: "medium",
       })
       .catch((err) =>
-        logger.warn("[approveKyc] Notification enqueue failed:", { err }),
+        logger.error("[approveKyc] Notification enqueue failed:", { err }),
       );
 
     return callback(null, {

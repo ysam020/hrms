@@ -1,5 +1,5 @@
 paths:
-  /api/get-hr-activities:
+  /api/v1/get-hr-activities:
     get:
       summary: List HR activities
       description: Returns all HR activities (warnings, commendations, PIPs, etc.)
@@ -28,7 +28,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/hr-activity/{_id}:
+  /api/v1/hr-activity/{_id}:
     get:
       summary: Get a specific HR activity
       description: Returns details of a single HR activity record
@@ -48,7 +48,7 @@ paths:
         "404":
           description: HR activity not found
 
-  /api/add-hr-activity:
+  /api/v1/add-hr-activity:
     post:
       summary: Create HR activity
       description: Record a new HR activity for an employee
@@ -83,7 +83,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/edit-hr-activity/{_id}:
+  /api/v1/edit-hr-activity/{_id}:
     put:
       summary: Edit HR activity
       description: Update an existing HR activity record
@@ -111,7 +111,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/delete-hr-activity/{_id}:
+  /api/v1/delete-hr-activity/{_id}:
     delete:
       summary: Delete HR activity
       description: Remove an HR activity record
@@ -129,7 +129,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/rules:
+  /api/v1/rules:
     get:
       summary: List business rules
       description: Returns all configured business/rule-engine rules
@@ -185,7 +185,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/rules/{id}:
+  /api/v1/rules/{id}:
     put:
       summary: Update a business rule
       tags: [Rule Engine]
@@ -228,7 +228,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/rules/{id}/status:
+  /api/v1/rules/{id}/status:
     patch:
       summary: Toggle rule active status
       description: Enable or disable a business rule
@@ -255,7 +255,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/rules/test:
+  /api/v1/rules/test:
     post:
       summary: Test a business rule
       description: Evaluate a rule against sample data without persisting results
@@ -293,7 +293,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/policies:
+  /api/v1/policies:
     get:
       summary: List all policies
       description: Returns all HR policies
@@ -347,7 +347,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/policies/{id}:
+  /api/v1/policies/{id}:
     get:
       summary: Get a specific policy
       tags: [Policies]
@@ -406,7 +406,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/policies/{id}/pdf:
+  /api/v1/policies/{id}/pdf:
     get:
       summary: Download policy as PDF
       description: Generates and returns a PDF version of the policy
@@ -429,7 +429,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/is-superuser/{username}:
+  /api/v1/is-superuser/{username}:
     get:
       summary: Check if user is a superuser
       description: Returns whether the specified user has superuser privileges

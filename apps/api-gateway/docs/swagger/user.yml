@@ -1,5 +1,5 @@
 paths:
-  /api/get-all-users:
+  /api/v1/get-all-users:
     get:
       summary: List all users
       description: Returns a paginated list of users with optional filters
@@ -55,7 +55,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-user-data/{username}:
+  /api/v1/get-user-data/{username}:
     get:
       summary: Get user data by username
       description: Returns detailed information for a specific user
@@ -92,7 +92,7 @@ paths:
         "404":
           description: User not found
 
-  /api/save-fcm-token:
+  /api/v1/save-fcm-token:
     put:
       summary: Save FCM push notification token
       description: Registers a Firebase Cloud Messaging token for the current user's device
@@ -128,7 +128,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/disable-push-notifications:
+  /api/v1/disable-push-notifications:
     delete:
       summary: Disable push notifications
       description: Removes the FCM token for the current user, disabling push notifications

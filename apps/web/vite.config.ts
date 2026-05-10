@@ -81,4 +81,35 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes("react-dom") ||
+            id.includes("react-router-dom") ||
+            id.includes("react-error-boundary") ||
+            id.includes("/react/")
+          )
+            return "vendor-react";
+          if (
+            id.includes("@mui/material") ||
+            id.includes("@mui/icons-material") ||
+            id.includes("@emotion/react") ||
+            id.includes("@emotion/styled")
+          )
+            return "vendor-mui";
+          if (id.includes("primereact") || id.includes("primeicons"))
+            return "vendor-primereact";
+          if (id.includes("recharts")) return "vendor-charts";
+          if (
+            id.includes("/axios/") ||
+            id.includes("/dayjs/") ||
+            id.includes("socket.io-client")
+          )
+            return "vendor-utils";
+        },
+      },
+    },
+  },
 });

@@ -1,5 +1,5 @@
 paths:
-  /api/view-job-openings:
+  /api/v1/view-job-openings:
     get:
       summary: List all job openings (internal)
       description: Returns all job openings visible to authenticated employees
@@ -29,7 +29,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/view-job-opening/{id}:
+  /api/v1/view-job-opening/{id}:
     get:
       summary: Get a specific job opening
       description: Returns details of a single job opening
@@ -65,7 +65,7 @@ paths:
         "404":
           description: Job opening not found
 
-  /api/add-job-opening:
+  /api/v1/add-job-opening:
     post:
       summary: Create a job opening
       description: Add a new job opening (admin/HR only)
@@ -102,7 +102,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/edit-job-opening/{_id}:
+  /api/v1/edit-job-opening/{_id}:
     put:
       summary: Edit a job opening
       description: Update an existing job opening
@@ -132,7 +132,7 @@ paths:
         "404":
           description: Not found
 
-  /api/delete-job-opening/{_id}:
+  /api/v1/delete-job-opening/{_id}:
     delete:
       summary: Delete a job opening
       description: Permanently remove a job opening
@@ -150,7 +150,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/public/careers:
+  /api/v1/public/careers:
     get:
       summary: Public careers page
       description: Returns open job listings for public career pages (no authentication required)
@@ -175,7 +175,7 @@ paths:
                         location: { type: string }
                         employmentType: { type: string }
 
-  /api/get-job-titles:
+  /api/v1/get-job-titles:
     get:
       summary: Get all job titles
       description: Returns a list of all unique job titles in the system
@@ -191,7 +191,7 @@ paths:
                   success: { type: boolean, example: true }
                   data: { type: array, items: { type: string } }
 
-  /api/apply-for-job:
+  /api/v1/apply-for-job:
     post:
       summary: Submit a job application
       description: Public endpoint to apply for a job opening (no auth required)
@@ -228,7 +228,7 @@ paths:
         "400":
           description: Invalid application data
 
-  /api/view-applications/{id}:
+  /api/v1/view-applications/{id}:
     get:
       summary: View applications for a job opening
       description: Returns all candidates who applied for a specific job
@@ -247,7 +247,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/update-candidate-status:
+  /api/v1/update-candidate-status:
     put:
       summary: Update candidate application status
       description: Move a candidate through the recruitment pipeline stages
@@ -273,7 +273,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/hire-candidate:
+  /api/v1/hire-candidate:
     put:
       summary: Hire a candidate
       description: Mark a candidate as hired and trigger onboarding
@@ -297,7 +297,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/reject-application:
+  /api/v1/reject-application:
     put:
       summary: Reject a job application
       description: Reject a candidate's application with an optional reason
@@ -320,7 +320,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/schedule-interview:
+  /api/v1/schedule-interview:
     put:
       summary: Schedule an interview
       description: Set interview date, time, and interviewer for a candidate
@@ -349,7 +349,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/reschedule-interview:
+  /api/v1/reschedule-interview:
     put:
       summary: Reschedule an interview
       description: Update the date/time of a scheduled interview
@@ -373,7 +373,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/reassign-interviewer:
+  /api/v1/reassign-interviewer:
     put:
       summary: Reassign interviewer
       description: Change the interviewer assigned to a candidate
@@ -396,7 +396,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-interviewer-list:
+  /api/v1/get-interviewer-list:
     get:
       summary: Get list of interviewers
       description: Returns employees eligible to conduct interviews
@@ -409,7 +409,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/job-openings-insights:
+  /api/v1/job-openings-insights:
     get:
       summary: Job openings insights
       description: Returns aggregate statistics about job openings and applications
@@ -434,7 +434,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/add-resignation:
+  /api/v1/add-resignation:
     post:
       summary: Submit resignation
       description: Submit a resignation request for the authenticated employee
@@ -458,7 +458,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/view-resignations:
+  /api/v1/view-resignations:
     get:
       summary: View resignations
       description: Returns resignation requests. Employees see their own; admin/HR see all.
@@ -471,7 +471,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/approve-resignation/{_id}:
+  /api/v1/approve-resignation/{_id}:
     put:
       summary: Approve a resignation
       description: Admin/HR approves an employee's resignation
@@ -489,7 +489,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/reject-resignation/{_id}:
+  /api/v1/reject-resignation/{_id}:
     put:
       summary: Reject a resignation
       description: Admin/HR rejects an employee's resignation request
@@ -507,7 +507,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/withdraw-resignation/{_id}:
+  /api/v1/withdraw-resignation/{_id}:
     put:
       summary: Withdraw a resignation
       description: Employee withdraws their submitted resignation
@@ -525,7 +525,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/update-resignation/{_id}:
+  /api/v1/update-resignation/{_id}:
     put:
       summary: Update resignation details
       description: Update a pending resignation's last working date or reason
@@ -552,7 +552,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/add-exit-feedback:
+  /api/v1/add-exit-feedback:
     post:
       summary: Submit exit feedback
       description: Employee submits exit interview feedback before leaving
@@ -577,7 +577,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/resignation-insights:
+  /api/v1/resignation-insights:
     get:
       summary: Resignation insights
       description: Returns aggregate statistics about resignations and attrition

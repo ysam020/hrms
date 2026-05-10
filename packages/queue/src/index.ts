@@ -4,6 +4,7 @@ export {
   getNotificationQueue,
   getResumeParsingQueue,
   getSchedulerQueue,
+  getDeadLetterQueue,
 } from "./queues";
 export type {
   EmailJobData,

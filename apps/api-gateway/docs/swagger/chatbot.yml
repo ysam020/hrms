@@ -1,5 +1,5 @@
 paths:
-  /api/chatbot/message:
+  /api/v1/chatbot/message:
     post:
       summary: Send a message to the HRMS chatbot
       description: >

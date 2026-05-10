@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { analyticsClient, grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { logger } from "@hrms/logger";
+import { handleError } from "../utils/handleError";
 
 export async function getDashboardStats(req: Request, res: Response) {
   try {
@@ -9,10 +11,9 @@ export async function getDashboardStats(req: Request, res: Response) {
       department: req.query.department || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -23,10 +24,9 @@ export async function getHeadcount(req: Request, res: Response) {
       period: req.query.period || "current",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -38,10 +38,9 @@ export async function getAttendanceAnalytics(req: Request, res: Response) {
       department: req.query.department || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -54,10 +53,9 @@ export async function getLeaveAnalytics(req: Request, res: Response) {
       leaveType: req.query.leaveType || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -72,10 +70,9 @@ export async function getRecruitmentAnalytics(req: Request, res: Response) {
       },
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -87,10 +84,9 @@ export async function getSalaryAnalytics(req: Request, res: Response) {
       department: req.query.department || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -101,10 +97,9 @@ export async function getTurnoverAnalytics(req: Request, res: Response) {
       department: req.query.department || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -119,9 +114,8 @@ export async function getPerformanceAnalytics(req: Request, res: Response) {
       },
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("analytics handler error:", { error });
+    return handleError(res, error);
   }
 }

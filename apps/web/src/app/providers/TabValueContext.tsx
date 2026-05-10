@@ -1,3 +1,15 @@
-import { createContext } from "react";
+import { createContext, useContext } from "react";
 
-export const TabValueContext = createContext<any>(null);
+export interface TabValueContextValue {
+  tabValue: number;
+  setTabValue: React.Dispatch<React.SetStateAction<number>>;
+}
+
+export const TabValueContext = createContext<TabValueContextValue>({
+  tabValue: 0,
+  setTabValue: () => {},
+});
+
+export function useTabValue() {
+  return useContext(TabValueContext);
+}

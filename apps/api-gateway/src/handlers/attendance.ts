@@ -4,6 +4,8 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { handleError } from "../utils/handleError";
+import { parsePagination, PAGINATION } from "../utils/pagination";
 
 export async function addAttendance(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -17,10 +19,8 @@ export async function addAttendance(req: Request, res: Response) {
       imageUrl: req.body.imageUrl || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -62,10 +62,8 @@ export async function getAttendances(req: Request, res: Response) {
       workHours: r.workHours,
     }));
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { ...response, data });
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -79,14 +77,11 @@ export async function getAllAttendances(req: Request, res: Response) {
       userId: "",
       startDate,
       endDate,
-      page: parseInt(req.query.page as string) || 1,
-      limit: Math.min(parseInt(req.query.limit as string) || 50, 200),
+      ...parsePagination(req.query, PAGINATION.DEFAULT_LIMIT_LARGE, PAGINATION.MAX_LIMIT_LARGE),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -99,13 +94,20 @@ export async function attendanceCorrection(req: Request, res: Response) {
         message: "username is required",
       });
 
-    const correctedBy =
-      (
-        await prisma.user.findUnique({
-          where: { id: user!.userId },
-          select: { username: true },
-        })
-      )?.username || user!.userId;
+    const requestingUser = await prisma.user.findUnique({
+      where: { id: user!.userId },
+      select: { username: true, isSuperUser: true },
+    });
+    if (!requestingUser)
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: "User not found",
+      });
+    if (!requestingUser.isSuperUser && requestingUser.username !== username)
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+
+    const correctedBy = requestingUser.username || user!.userId;
 
     const response = await grpcCall(attendanceClient, "correctAttendance", {
       username,
@@ -115,11 +117,9 @@ export async function attendanceCorrection(req: Request, res: Response) {
       correctedBy,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("PUT /attendance-correction error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -215,11 +215,9 @@ export async function getAttendanceSummary(req: Request, res: Response) {
         maxCorrectionsPerMonth,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("get-attendance-summary error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -260,8 +258,19 @@ export async function attendanceInsights(req: Request, res: Response) {
     const [records, users] = await Promise.all([
       prisma.attendanceRecord.findMany({
         where: { date: { gte: startDate, lte: endDate } },
+        select: {
+          username: true,
+          date: true,
+          status: true,
+          workingHours: true,
+          isCorrected: true,
+          timeIn: true,
+        },
       }),
-      prisma.user.findMany({ select: { username: true, department: true } }),
+      prisma.user.findMany({
+        where: { employeeStatus: "Active" },
+        select: { username: true, department: true },
+      }),
     ]);
 
     const userDeptMap = new Map<string, string>(
@@ -472,10 +481,8 @@ export async function attendanceInsights(req: Request, res: Response) {
         attendancePatterns: { peakHours },
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /attendance-insights error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }

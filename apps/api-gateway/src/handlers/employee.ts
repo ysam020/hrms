@@ -5,6 +5,7 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
+import { parsePagination } from "../utils/pagination";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -72,7 +73,7 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       ]);
     }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -85,7 +86,7 @@ export async function getEmployeeDetails(req: Request, res: Response) {
       username: req.params.username,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -139,7 +140,7 @@ export async function employeeInsights(_req: Request, res: Response) {
       message: "Employee insights fetched",
       data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("employee-insights error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -178,7 +179,7 @@ export async function completeKyc(req: Request, res: Response) {
       esicNo,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -216,7 +217,7 @@ export async function editKyc(req: Request, res: Response) {
       esicNo,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -249,7 +250,7 @@ export async function kycApproval(req: Request, res: Response) {
       employeeId: user.id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -258,8 +259,7 @@ export async function kycApproval(req: Request, res: Response) {
 
 export async function viewAllKycs(req: Request, res: Response) {
   try {
-    const page = parseInt(String(req.query.page || "1"));
-    const limit = Math.min(parseInt(String(req.query.limit || "10")), 100);
+    const { page, limit } = parsePagination(req.query, 10);
     const skip = (page - 1) * limit;
 
     const match: any = { employeeStatus: "Active" };
@@ -321,7 +321,7 @@ export async function viewAllKycs(req: Request, res: Response) {
         },
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("view-all-kycs error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -365,7 +365,7 @@ export async function getKycInsights(_req: Request, res: Response) {
         },
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("get-kyc-insights error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",

@@ -11,7 +11,7 @@ import {
 } from "@web/core/db";
 
 function useNotifications() {
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<import("@web/app/providers/NotificationContext").NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const { user } = useContext(UserContext);
@@ -20,7 +20,7 @@ function useNotifications() {
   // prevents stale async overwrite
   const requestIdRef = useRef(0);
 
-  const handleNotification = useCallback((data) => {
+  const handleNotification = useCallback((data: import("@web/app/providers/NotificationContext").NotificationItem) => {
     setNotifications((prev) => {
       const exists = prev.some(
         (notif) =>
@@ -28,8 +28,8 @@ function useNotifications() {
           (notif.title === data.title &&
             notif.message === data.message &&
             Math.abs(
-              new Date(notif.timeStamp).getTime() -
-                new Date(data.timeStamp).getTime(),
+              new Date(notif.timeStamp ?? 0).getTime() -
+                new Date(data.timeStamp ?? 0).getTime(),
             ) < 1000),
       );
       return exists ? prev : [data, ...prev];

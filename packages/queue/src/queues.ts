@@ -3,7 +3,9 @@ import { getBullMQConnection } from "./connection";
 
 const defaultJobOptions = {
   removeOnComplete: 100,
-  removeOnFail: 50,
+  // Keep all failed jobs so nothing is silently discarded. The DLQ listener
+  // in each worker forwards them after all retries are exhausted.
+  removeOnFail: false,
   attempts: 3,
   backoff: {
     type: "exponential" as const,
@@ -15,6 +17,7 @@ let _emailQueue: Queue | null = null;
 let _notificationQueue: Queue | null = null;
 let _schedulerQueue: Queue | null = null;
 let _resumeParsingQueue: Queue | null = null;
+let _deadLetterQueue: Queue | null = null;
 
 export function getEmailQueue(): Queue {
   if (!_emailQueue) {
@@ -60,4 +63,19 @@ export function getSchedulerQueue(): Queue {
     });
   }
   return _schedulerQueue;
+}
+
+// Dead-letter queue — receives jobs that have exhausted all retry attempts.
+// Inspect with: bullmq UI, or `queue.getFailed()` + `queue.retryJobs()`.
+export function getDeadLetterQueue(): Queue {
+  if (!_deadLetterQueue) {
+    _deadLetterQueue = new Queue("deadLetterQueue", {
+      connection: getBullMQConnection(),
+      defaultJobOptions: {
+        removeOnComplete: 500,
+        removeOnFail: false,
+      },
+    });
+  }
+  return _deadLetterQueue;
 }

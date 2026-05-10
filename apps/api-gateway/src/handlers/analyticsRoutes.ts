@@ -25,8 +25,8 @@ export async function getEmploymentTypeBreakdown(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employment-type-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { wfhCount: 0, officeCount: 0, totalEmployees: 0 },
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
     });
   }
 }
@@ -55,7 +55,9 @@ export async function getEmployeeStatusDistribution(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-status-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -79,7 +81,9 @@ export async function getEmployeeDepartments(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-departments error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -103,7 +107,9 @@ export async function getEmployeeDesignations(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-designations error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -114,36 +120,56 @@ export async function getAgeDistribution(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const users = await prisma.user.findMany({
-      where: { NOT: { dob: null } },
-      select: { dob: true },
+    const bucketResult = await (prisma.user as any).aggregateRaw({
+      pipeline: [
+        { $match: { dob: { $ne: null } } },
+        {
+          $addFields: {
+            joiningDateParsed: {
+              $dateFromString: { dateString: "$dob", onError: null },
+            },
+          },
+        },
+        { $match: { joiningDateParsed: { $ne: null } } },
+        {
+          $addFields: {
+            ageYears: {
+              $subtract: [{ $year: "$$NOW" }, { $year: "$joiningDateParsed" }],
+            },
+          },
+        },
+        {
+          $bucket: {
+            groupBy: "$ageYears",
+            boundaries: [0, 25, 35, 45, 55],
+            default: "55+",
+            output: { count: { $sum: 1 } },
+          },
+        },
+      ],
     });
-    const buckets: Record<string, number> = {
-      "<25": 0,
-      "25-34": 0,
-      "35-44": 0,
-      "45-54": 0,
-      "55+": 0,
+    const ageLabel: Record<string | number, string> = {
+      0: "<25",
+      25: "25-34",
+      35: "35-44",
+      45: "45-54",
+      "55+": "55+",
     };
-    const now = new Date();
-    for (const u of users) {
-      if (!u.dob) continue;
-      const age = now.getFullYear() - new Date(u.dob).getFullYear();
-      if (age < 25) buckets["<25"]++;
-      else if (age < 35) buckets["25-34"]++;
-      else if (age < 45) buckets["35-44"]++;
-      else if (age < 55) buckets["45-54"]++;
-      else buckets["55+"]++;
+    const ageCount: Record<string, number> = {};
+    for (const b of bucketResult as any[]) {
+      ageCount[ageLabel[b._id] ?? String(b._id)] = b.count;
     }
-    const data = Object.entries(buckets).map(([_id, count]) => ({
+    const data = ["<25", "25-34", "35-44", "45-54", "55+"].map((_id) => ({
       _id,
-      count,
+      count: ageCount[_id] ?? 0,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-age-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -154,26 +180,30 @@ export async function getJoiningData(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const users = await prisma.user.findMany({
-      where: { NOT: { joining_date: null } },
-      select: { joining_date: true },
+    const result = await (prisma.user as any).aggregateRaw({
+      pipeline: [
+        { $match: { joining_date: { $ne: null } } },
+        {
+          $group: {
+            _id: { $substr: ["$joining_date", 0, 7] },
+            count: { $sum: 1 },
+          },
+        },
+        { $match: { _id: { $ne: "" } } },
+        { $sort: { _id: 1 } },
+      ],
     });
-    const counts: Record<string, number> = {};
-    for (const u of users) {
-      if (!u.joining_date) continue;
-      const d = new Date(u.joining_date);
-      if (isNaN(d.getTime())) continue;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      counts[key] = (counts[key] || 0) + 1;
-    }
-    const data = Object.entries(counts)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, count]) => ({ formattedDate: key, count }));
+    const data = (result as any[]).map((r: any) => ({
+      formattedDate: r._id,
+      count: r.count,
+    }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-joining-data error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -184,38 +214,62 @@ export async function getTenureDistribution(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const users = await prisma.user.findMany({
-      where: { employeeStatus: "Active", NOT: { joining_date: null } },
-      select: { joining_date: true },
+    const YEAR_MS = 365.25 * 24 * 3600 * 1000;
+    const bucketResult = await (prisma.user as any).aggregateRaw({
+      pipeline: [
+        { $match: { employeeStatus: "Active", joining_date: { $ne: null } } },
+        {
+          $addFields: {
+            joiningDateParsed: {
+              $dateFromString: { dateString: "$joining_date", onError: null },
+            },
+          },
+        },
+        { $match: { joiningDateParsed: { $ne: null } } },
+        {
+          $addFields: {
+            tenureYears: {
+              $divide: [
+                { $subtract: ["$$NOW", "$joiningDateParsed"] },
+                YEAR_MS,
+              ],
+            },
+          },
+        },
+        {
+          $bucket: {
+            groupBy: "$tenureYears",
+            boundaries: [0, 1, 2, 3, 5],
+            default: "5+ yrs",
+            output: { count: { $sum: 1 } },
+          },
+        },
+      ],
     });
-    const buckets: Record<string, number> = {
-      "<1 yr": 0,
-      "1-2 yrs": 0,
-      "2-3 yrs": 0,
-      "3-5 yrs": 0,
-      "5+ yrs": 0,
+    const tenureLabel: Record<string | number, string> = {
+      0: "<1 yr",
+      1: "1-2 yrs",
+      2: "2-3 yrs",
+      3: "3-5 yrs",
+      "5+ yrs": "5+ yrs",
     };
-    const now = new Date();
-    for (const u of users) {
-      if (!u.joining_date) continue;
-      const years =
-        (now.getTime() - new Date(u.joining_date).getTime()) /
-        (365.25 * 24 * 3600 * 1000);
-      if (years < 1) buckets["<1 yr"]++;
-      else if (years < 2) buckets["1-2 yrs"]++;
-      else if (years < 3) buckets["2-3 yrs"]++;
-      else if (years < 5) buckets["3-5 yrs"]++;
-      else buckets["5+ yrs"]++;
+    const tenureCount: Record<string, number> = {};
+    for (const b of bucketResult as any[]) {
+      tenureCount[tenureLabel[b._id] ?? String(b._id)] = b.count;
     }
-    const data = Object.entries(buckets).map(([_id, count]) => ({
-      _id,
-      count,
-    }));
+    const data = ["<1 yr", "1-2 yrs", "2-3 yrs", "3-5 yrs", "5+ yrs"].map(
+      (_id) => ({
+        _id,
+        count: tenureCount[_id] ?? 0,
+      }),
+    );
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-tenure-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -226,24 +280,25 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const months = 12;
-    const users = await prisma.user.findMany({
-      where: { NOT: { joining_date: null } },
-      select: { joining_date: true },
-    });
-    const monthlyJoinings: Record<string, number> = {};
     const now = new Date();
-    for (let i = months - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      monthlyJoinings[key] = 0;
-    }
-    for (const u of users) {
-      if (!u.joining_date) continue;
-      const d = new Date(u.joining_date);
-      if (isNaN(d.getTime())) continue;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (key in monthlyJoinings) monthlyJoinings[key]++;
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const cutoff = `${twelveMonthsAgo.getFullYear()}-${String(twelveMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
+
+    const result = await (prisma.user as any).aggregateRaw({
+      pipeline: [
+        { $match: { joining_date: { $ne: null, $gte: cutoff } } },
+        {
+          $group: {
+            _id: { $substr: ["$joining_date", 0, 7] },
+            joinings: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ],
+    });
+    const monthlyMap: Record<string, number> = {};
+    for (const r of result as any[]) {
+      if (r._id) monthlyMap[r._id] = r.joinings;
     }
     const monthNames = [
       "Jan",
@@ -260,23 +315,25 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
       "Dec",
     ];
     let cumulative = 0;
-    const data = Object.entries(monthlyJoinings)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, joinings]) => {
-        cumulative += joinings;
-        const [yr, mn] = key.split("-");
-        return {
-          monthName: monthNames[parseInt(mn) - 1],
-          year: parseInt(yr),
-          joinings,
-          cumulativeHeadcount: cumulative,
-        };
-      });
+    const data = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const joinings = monthlyMap[key] ?? 0;
+      cumulative += joinings;
+      return {
+        monthName: monthNames[d.getMonth()],
+        year: d.getFullYear(),
+        joinings,
+        cumulativeHeadcount: cumulative,
+      };
+    });
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-headcount-growth error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -299,8 +356,8 @@ export async function getLeaveApprovalRate(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-leave-approval-rate error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { approvalRate: 0, approved: 0, pending: 0, rejected: 0, total: 0 },
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
     });
   }
 }
@@ -326,7 +383,9 @@ export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-leave-type-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -337,24 +396,33 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const leaves = await prisma.leaveApplication.findMany({
-      where: { status: "Approved" },
-      select: { from: true, leaveType: true, days: true },
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+    const twelveMonthsAgoStr = twelveMonthsAgo.toISOString().split("T")[0];
+
+    const result = await (prisma.leaveApplication as any).aggregateRaw({
+      pipeline: [
+        { $match: { status: "Approved", from: { $gte: twelveMonthsAgoStr } } },
+        {
+          $group: {
+            _id: { $substr: ["$from", 0, 7] },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ],
     });
-    const patterns: Record<string, number> = {};
-    for (const l of leaves) {
-      if (!l.from) continue;
-      const key = l.from.substring(0, 7);
-      patterns[key] = (patterns[key] || 0) + 1;
-    }
-    const data = Object.entries(patterns)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, count]) => ({ month, count }));
+    const data = (result as any[]).map((r: any) => ({
+      month: r._id,
+      count: r.count,
+    }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-monthly-leave-patterns error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -365,42 +433,53 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const records = await prisma.attendanceRecord.findMany({
-      select: { date: true, status: true, workingHours: true },
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+
+    const result = await (prisma.attendanceRecord as any).aggregateRaw({
+      pipeline: [
+        {
+          $match: { date: { $gte: { $date: twelveMonthsAgo.toISOString() } } },
+        },
+        {
+          $group: {
+            _id: { year: { $year: "$date" }, month: { $month: "$date" } },
+            total: { $sum: 1 },
+            present: {
+              $sum: {
+                $cond: [
+                  {
+                    $in: [
+                      { $toLower: { $ifNull: ["$status", ""] } },
+                      ["present", "late", "half day"],
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            hours: { $sum: { $ifNull: ["$workingHours", 0] } },
+          },
+        },
+        { $sort: { "_id.year": 1, "_id.month": 1 } },
+        { $limit: 12 },
+      ],
     });
-    const monthly: Record<
-      string,
-      { total: number; present: number; hours: number }
-    > = {};
-    for (const r of records) {
-      if (!r.date) continue;
-      const d = new Date(r.date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (!monthly[key]) monthly[key] = { total: 0, present: 0, hours: 0 };
-      monthly[key].total++;
-      const s = (r.status || "").toLowerCase();
-      if (s === "present" || s === "late" || s === "half day")
-        monthly[key].present++;
-      monthly[key].hours += r.workingHours ?? 0;
-    }
-    const data = Object.entries(monthly)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([key, v]) => {
-        const [year, month] = key.split("-").map(Number);
-        return {
-          _id: { year, month },
-          attendanceRate:
-            v.total > 0 ? Math.round((v.present / v.total) * 1000) / 10 : 0,
-          avgWorkingHours:
-            v.total > 0 ? Math.round((v.hours / v.total) * 100) / 100 : 0,
-        };
-      });
+    const data = (result as any[]).map((r: any) => ({
+      _id: { year: r._id.year, month: r._id.month },
+      attendanceRate:
+        r.total > 0 ? Math.round((r.present / r.total) * 1000) / 10 : 0,
+      avgWorkingHours:
+        r.total > 0 ? Math.round((r.hours / r.total) * 100) / 100 : 0,
+    }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-attendance-trends error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -414,34 +493,49 @@ export async function getWorkingHoursDistribution(
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const records = await prisma.attendanceRecord.findMany({
-      where: { NOT: { workingHours: null } },
-      select: { workingHours: true },
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+
+    const bucketResult = await (prisma.attendanceRecord as any).aggregateRaw({
+      pipeline: [
+        {
+          $match: {
+            date: { $gte: { $date: twelveMonthsAgo.toISOString() } },
+            workingHours: { $ne: null },
+          },
+        },
+        {
+          $bucket: {
+            groupBy: "$workingHours",
+            boundaries: [0, 4, 6, 8, 9],
+            default: "9+h",
+            output: { count: { $sum: 1 } },
+          },
+        },
+      ],
     });
-    const buckets: Record<string, number> = {
-      "<4h": 0,
-      "4-6h": 0,
-      "6-8h": 0,
-      "8-9h": 0,
-      "9+h": 0,
+    const hoursLabel: Record<string | number, string> = {
+      0: "<4h",
+      4: "4-6h",
+      6: "6-8h",
+      8: "8-9h",
+      "9+h": "9+h",
     };
-    for (const r of records) {
-      const h = r.workingHours ?? 0;
-      if (h < 4) buckets["<4h"]++;
-      else if (h < 6) buckets["4-6h"]++;
-      else if (h < 8) buckets["6-8h"]++;
-      else if (h < 9) buckets["8-9h"]++;
-      else buckets["9+h"]++;
+    const hoursCount: Record<string, number> = {};
+    for (const b of bucketResult as any[]) {
+      hoursCount[hoursLabel[b._id] ?? String(b._id)] = b.count;
     }
-    const data = Object.entries(buckets).map(([_id, count]) => ({
+    const data = ["<4h", "4-6h", "6-8h", "8-9h", "9+h"].map((_id) => ({
       _id,
-      count,
+      count: hoursCount[_id] ?? 0,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-working-hours-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -464,7 +558,9 @@ export async function getJobOpeningsByStatus(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-job-openings-by-status error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -475,8 +571,9 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const jobs = await prisma.jobOpening.findMany({
-      select: { jobTitle: true, status: true },
+    const groups: any[] = await (prisma.jobOpening.groupBy as any)({
+      by: ["jobTitle", "status"],
+      _count: { _all: true },
     });
     const byRole: Record<
       string,
@@ -488,8 +585,8 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
         hired: number;
       }
     > = {};
-    for (const j of jobs) {
-      const title = j.jobTitle || "Unknown";
+    for (const g of groups) {
+      const title = g.jobTitle || "Unknown";
       if (!byRole[title])
         byRole[title] = {
           jobTitle: title,
@@ -498,18 +595,21 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
           interviewed: 0,
           hired: 0,
         };
-      byRole[title].totalApplications++;
-      const s = (j.status || "").toLowerCase();
-      if (s === "shortlisted") byRole[title].shortlisted++;
-      else if (s === "interviewed") byRole[title].interviewed++;
-      else if (s === "hired" || s === "closed") byRole[title].hired++;
+      byRole[title].totalApplications += g._count._all;
+      const s = (g.status || "").toLowerCase();
+      if (s === "shortlisted") byRole[title].shortlisted += g._count._all;
+      else if (s === "interviewed") byRole[title].interviewed += g._count._all;
+      else if (s === "hired" || s === "closed")
+        byRole[title].hired += g._count._all;
     }
     const data = Object.values(byRole);
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-applications-by-job-role error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -553,18 +653,8 @@ export async function getHiringFunnel(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-hiring-funnel error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: {
-        applied: 0,
-        shortlisted: 0,
-        interviewed: 0,
-        offered: 0,
-        hired: 0,
-        shortlistRate: 0,
-        interviewRate: 0,
-        offerRate: 0,
-        hireRate: 0,
-      },
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
     });
   }
 }
@@ -579,26 +669,28 @@ export async function getHiringManagerPerformance(
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const jobs = await prisma.jobOpening.findMany({
-      select: { hiringManager: true, status: true },
+    const groups: any[] = await (prisma.jobOpening.groupBy as any)({
+      by: ["hiringManager", "status"],
+      where: { hiringManager: { not: null } },
+      _count: { _all: true },
     });
     const byManager: Record<
       string,
       { totalJobs: number; activeJobs: number; closedJobs: number }
     > = {};
-    for (const j of jobs) {
-      if (!j.hiringManager) continue;
-      if (!byManager[j.hiringManager])
-        byManager[j.hiringManager] = {
+    for (const g of groups) {
+      if (!g.hiringManager) continue;
+      if (!byManager[g.hiringManager])
+        byManager[g.hiringManager] = {
           totalJobs: 0,
           activeJobs: 0,
           closedJobs: 0,
         };
-      byManager[j.hiringManager].totalJobs++;
-      const s = (j.status || "").toLowerCase();
+      byManager[g.hiringManager].totalJobs += g._count._all;
+      const s = (g.status || "").toLowerCase();
       if (s === "closed" || s === "hired")
-        byManager[j.hiringManager].closedJobs++;
-      else byManager[j.hiringManager].activeJobs++;
+        byManager[g.hiringManager].closedJobs += g._count._all;
+      else byManager[g.hiringManager].activeJobs += g._count._all;
     }
     const data = Object.entries(byManager).map(([hiringManager, stats]) => ({
       hiringManager,
@@ -614,7 +706,9 @@ export async function getHiringManagerPerformance(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-hiring-manager-performance error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -649,7 +743,9 @@ export async function getSalaryDistributionByDepartment(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-salary-distribution-by-department error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -685,16 +781,8 @@ export async function getCompensationBreakdown(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-compensation-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: {
-        employeeCount: 0,
-        avgBasicPay: 0,
-        avgHRA: 0,
-        avgConveyance: 0,
-        avgPF: 0,
-        avgESI: 0,
-        avgPT: 0,
-      },
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
     });
   }
 }
@@ -731,7 +819,9 @@ export async function getAverageSalaryByDesignation(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-average-salary-by-designation error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -742,34 +832,37 @@ export async function getSalaryBands(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    const users = await prisma.user.findMany({
-      where: { NOT: { salary: null } },
-      select: { salary: true },
+    const bucketResult = await (prisma.user as any).aggregateRaw({
+      pipeline: [
+        { $match: { salary: { $ne: null } } },
+        {
+          $bucket: {
+            groupBy: "$salary",
+            boundaries: [0, 20000, 40000, 60000, 100000],
+            default: "100K+",
+            output: { count: { $sum: 1 }, avgSalary: { $avg: "$salary" } },
+          },
+        },
+      ],
     });
-    const bands = [
-      { range: "<20K", min: 0, max: 20000 },
-      { range: "20-40K", min: 20000, max: 40000 },
-      { range: "40-60K", min: 40000, max: 60000 },
-      { range: "60-100K", min: 60000, max: 100000 },
-      { range: "100K+", min: 100000, max: Infinity },
-    ];
-    const data = bands.map((band) => {
-      const inBand = users.filter(
-        (u: any) => (u.salary ?? 0) >= band.min && (u.salary ?? 0) < band.max,
-      );
-      const avgSalary =
-        inBand.length > 0
-          ? Math.round(
-              inBand.reduce((s: any, u: any) => s + (u.salary ?? 0), 0) /
-                inBand.length,
-            )
-          : 0;
-      return { range: band.range, count: inBand.length, avgSalary };
-    });
+    const labelMap: Record<string, string> = {
+      "0": "<20K",
+      "20000": "20-40K",
+      "40000": "40-60K",
+      "60000": "60-100K",
+      "100K+": "100K+",
+    };
+    const data = (bucketResult as any[]).map((b: any) => ({
+      range: labelMap[String(b._id)] ?? String(b._id),
+      count: b.count,
+      avgSalary: Math.round(b.avgSalary ?? 0),
+    }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-salary-bands error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }

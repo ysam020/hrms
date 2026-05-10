@@ -1,5 +1,5 @@
 paths:
-  /api/get-holidays/{year}:
+  /api/v1/get-holidays/{year}:
     get:
       summary: Get holidays for a year
       description: Returns the list of public/company holidays for the given year
@@ -34,7 +34,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/add-holiday:
+  /api/v1/add-holiday:
     post:
       summary: Add a holiday
       description: Add a new holiday to the company calendar (admin only)
@@ -67,7 +67,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/delete-holiday:
+  /api/v1/delete-holiday:
     put:
       summary: Delete a holiday
       description: Remove a holiday from the company calendar
@@ -95,7 +95,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-calendar-events:
+  /api/v1/get-calendar-events:
     get:
       summary: Get calendar events
       description: Returns all calendar events visible to the authenticated user
@@ -134,7 +134,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/add-event:
+  /api/v1/add-event:
     post:
       summary: Add a calendar event
       description: Create a new calendar event
@@ -166,7 +166,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/edit-calendar-event/{_id}:
+  /api/v1/edit-calendar-event/{_id}:
     put:
       summary: Edit a calendar event
       description: Update details of an existing calendar event
@@ -195,7 +195,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/delete-calendar-event/{_id}:
+  /api/v1/delete-calendar-event/{_id}:
     delete:
       summary: Delete a calendar event
       description: Remove a calendar event permanently
@@ -213,7 +213,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/birthdays-anniversaries:
+  /api/v1/birthdays-anniversaries:
     get:
       summary: Get birthdays and work anniversaries
       description: Returns upcoming employee birthdays and work anniversaries
@@ -251,7 +251,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/audit-logs:
+  /api/v1/audit-logs:
     get:
       summary: Get audit logs
       description: Returns system audit logs (admin only)
@@ -302,7 +302,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/upload/presigned-url:
+  /api/v1/upload/presigned-url:
     post:
       summary: Get S3 presigned upload URL
       description: Generates a pre-signed S3 URL for direct file upload from the client

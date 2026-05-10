@@ -57,7 +57,7 @@ export const approveResignation = async (
         priority: "medium",
       })
       .catch((err) =>
-        logger.warn("[approveResignation] Notification enqueue failed:", {
+        logger.error("[approveResignation] Notification enqueue failed:", {
           err,
         }),
       );

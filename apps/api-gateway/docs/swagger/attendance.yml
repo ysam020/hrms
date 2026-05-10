@@ -1,5 +1,5 @@
 paths:
-  /api/add-attendance:
+  /api/v1/add-attendance:
     post:
       summary: Add attendance record
       description: Log a check-in/check-out attendance entry for the authenticated user
@@ -46,7 +46,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-attendances/{month}/{year}:
+  /api/v1/get-attendances/{month}/{year}:
     get:
       summary: Get own attendance for a month
       description: Returns the authenticated user's attendance records for the given month/year
@@ -86,7 +86,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-all-attendances/{year}/{month}:
+  /api/v1/get-all-attendances/{year}/{month}:
     get:
       summary: Get all employees' attendance for a month
       description: Returns attendance records for all employees (admin/HR only)
@@ -123,7 +123,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/attendance-correction:
+  /api/v1/attendance-correction:
     put:
       summary: Request attendance correction
       description: Submit a correction request for an incorrect attendance record
@@ -156,7 +156,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-attendance-summary/{username}/{year}/{month}:
+  /api/v1/get-attendance-summary/{username}/{year}/{month}:
     get:
       summary: Get attendance summary for a user
       description: Returns aggregated attendance summary (present/absent/leave days) for a user
@@ -200,7 +200,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/attendance-insights:
+  /api/v1/attendance-insights:
     get:
       summary: Attendance insights
       description: Returns aggregate attendance statistics across the organization

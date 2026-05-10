@@ -3,6 +3,8 @@ import { salaryClient, grpcCall } from "../grpc/clients";
 import { prisma } from "@hrms/db";
 import { AuthRequest } from "../middleware/authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { logger } from "@hrms/logger";
+import { handleError } from "../utils/handleError";
 
 async function resolveUsername(userId: string): Promise<string | null> {
   const user = await prisma.user.findUnique({
@@ -32,10 +34,9 @@ export async function updateSalary(req: Request, res: Response) {
       createdBy: createdBy || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("updateSalary error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -59,10 +60,9 @@ export async function getUserSalary(req: Request, res: Response) {
       month: parseInt(String(req.params.month)),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("getUserSalary error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -85,9 +85,8 @@ export async function generateSalarySlip(req: Request, res: Response) {
       month: parseInt(String(req.params.month)),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("generateSalarySlip error:", { error });
+    return handleError(res, error);
   }
 }

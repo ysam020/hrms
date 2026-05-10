@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { prisma } from "@hrms/db";
-import { getBullMQConnection } from "@hrms/queue";
+import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import { logger } from "@hrms/logger";
 import { getNotificationPublisher } from "@hrms/websocket";
 import { sendPushNotifications } from "@hrms/firebase";
@@ -126,6 +126,19 @@ export function startNotificationWorker(): Worker {
 
   worker.on("failed", (job, err) => {
     logger.error(`Notification job ${job?.id} failed:`, { err });
+    if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+      getDeadLetterQueue()
+        .add("failed-notification", {
+          originalQueue: "notificationQueue",
+          originalJobId: job.id,
+          originalJobData: job.data,
+          failureReason: err.message,
+          failedAt: new Date().toISOString(),
+        })
+        .catch((dlqErr) =>
+          logger.error("Failed to forward job to DLQ:", { dlqErr }),
+        );
+    }
   });
 
   worker.on("stalled", (jobId) => {

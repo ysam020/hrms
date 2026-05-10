@@ -249,6 +249,7 @@ describe("hrmHandlers", () => {
 
   describe("editHrActivity", () => {
     it("calls grpcCall updateHrActivity with body, id, and updatedBy", async () => {
+      mockActivityFindUnique.mockResolvedValue({ createdBy: "user-1" });
       mockGrpcCall.mockResolvedValue({ data: {} });
       const res = makeRes();
       await editHrActivity(
@@ -280,7 +281,7 @@ describe("hrmHandlers", () => {
     });
 
     it("soft-deletes activity by setting status to deleted", async () => {
-      mockActivityFindUnique.mockResolvedValue({ id: "a1", title: "Workshop" });
+      mockActivityFindUnique.mockResolvedValue({ id: "a1", title: "Workshop", createdBy: "user-1" });
       mockActivityUpdate.mockResolvedValue({});
       const res = makeRes();
       await deleteHrActivity(makeReq({ params: { _id: "a1" } }), res);

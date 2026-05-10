@@ -1,6 +1,7 @@
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
+import { getLeaveConfig } from "../config";
 
 interface BalanceEntry {
   month: number;
@@ -10,11 +11,6 @@ interface BalanceEntry {
   usedLWP: number;
   remainingPL: number;
 }
-
-const getLeaveConfig = () => ({
-  monthlyPaidLeaves: Number(process.env.PAID_LEAVES) || 1,
-  carryForwardLeaves: Number(process.env.CARRY_FORWARD_LEAVES) || 15,
-});
 
 function toDateStr(date: Date): string {
   return date.toISOString().split("T")[0];

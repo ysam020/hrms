@@ -1,5 +1,5 @@
 paths:
-  /api/profile:
+  /api/v1/profile:
     get:
       summary: Get authenticated user profile
       description: Returns the full profile of the currently authenticated user
@@ -26,7 +26,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/refresh-token:
+  /api/v1/refresh-token:
     post:
       summary: Refresh access token
       description: Issue a new access token using a valid refresh token
@@ -59,7 +59,7 @@ paths:
         "401":
           description: Invalid or expired refresh token
 
-  /api/logout:
+  /api/v1/logout:
     get:
       summary: Logout current session
       description: Invalidates the current session and clears auth cookies
@@ -79,7 +79,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/auth/google:
+  /api/v1/auth/google:
     get:
       summary: Initiate Google OAuth login
       description: >
@@ -95,7 +95,7 @@ paths:
                 type: string
                 example: "https://accounts.google.com/o/oauth2/auth?..."
 
-  /api/auth/google/callback:
+  /api/v1/auth/google/callback:
     get:
       summary: Google OAuth callback
       description: >
@@ -115,7 +115,7 @@ paths:
         "302":
           description: Redirect to dashboard on success, or login page on failure
 
-  /api/webauthn-register:
+  /api/v1/webauthn-register:
     get:
       summary: Get WebAuthn registration options
       description: Returns PublicKeyCredentialCreationOptions to begin passkey registration
@@ -157,7 +157,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/webauthn-verify-registration:
+  /api/v1/webauthn-verify-registration:
     post:
       summary: Verify WebAuthn registration
       description: Verifies the attestation response and saves the credential
@@ -179,7 +179,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/webauthn-credentials:
+  /api/v1/webauthn-credentials:
     get:
       summary: Get WebAuthn credentials
       description: Returns all registered passkey credentials for the authenticated user
@@ -206,7 +206,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/webauthn-credential-check:
+  /api/v1/webauthn-credential-check:
     post:
       summary: Check if WebAuthn credential exists for email
       description: Returns whether a passkey is enrolled for the given email address
@@ -237,7 +237,7 @@ paths:
                     properties:
                       hasCredential: { type: boolean, example: true }
 
-  /api/disable-webauthn:
+  /api/v1/disable-webauthn:
     delete:
       summary: Disable WebAuthn / remove passkeys
       description: Removes all WebAuthn credentials for the authenticated user
@@ -250,7 +250,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/webauthn-login-options:
+  /api/v1/webauthn-login-options:
     post:
       summary: Get WebAuthn login options
       description: Returns PublicKeyCredentialRequestOptions to begin passkey login
@@ -282,7 +282,7 @@ paths:
                       description: "PublicKeyCredentialRequestOptions",
                     }
 
-  /api/webauthn-verify-login:
+  /api/v1/webauthn-verify-login:
     post:
       summary: Verify WebAuthn login assertion
       description: Verifies the authentication response and issues JWT tokens
@@ -313,7 +313,7 @@ paths:
         "401":
           description: Invalid credential
 
-  /api/webauthn-login:
+  /api/v1/webauthn-login:
     post:
       summary: WebAuthn login (combined)
       description: Combined endpoint to perform a full WebAuthn login flow

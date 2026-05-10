@@ -13,6 +13,7 @@ services:
       - SALARY_SERVICE_HOST=salary-service
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
+      - GRPC_SKIP_HOSTNAME_VERIFICATION=true
     ports:
       - "9002:9002"
     env_file: .env

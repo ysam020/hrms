@@ -1,5 +1,5 @@
 paths:
-  /api/get-employment-type-breakdown:
+  /api/v1/get-employment-type-breakdown:
     get:
       summary: Employment type breakdown
       description: Returns employee count grouped by employment type (full-time, part-time, contract, etc.)
@@ -26,7 +26,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-employee-status-distribution:
+  /api/v1/get-employee-status-distribution:
     get:
       summary: Employee status distribution
       description: Returns employee count grouped by status (active, on leave, resigned, etc.)
@@ -52,7 +52,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-employee-departments:
+  /api/v1/get-employee-departments:
     get:
       summary: Employee count by department
       description: Returns the number of employees in each department
@@ -78,7 +78,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-employee-designations:
+  /api/v1/get-employee-designations:
     get:
       summary: Employee count by designation
       description: Returns the number of employees at each designation/role
@@ -91,7 +91,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-age-distribution:
+  /api/v1/get-age-distribution:
     get:
       summary: Employee age distribution
       description: Returns employee count grouped by age bands
@@ -117,7 +117,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-joining-data:
+  /api/v1/get-joining-data:
     get:
       summary: Employee joining data over time
       description: Returns monthly/yearly employee joining counts
@@ -134,7 +134,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-tenure-distribution:
+  /api/v1/get-tenure-distribution:
     get:
       summary: Employee tenure distribution
       description: Returns employee count grouped by years of service bands
@@ -147,7 +147,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-headcount-growth:
+  /api/v1/get-headcount-growth:
     get:
       summary: Headcount growth over time
       description: Returns net headcount change per period
@@ -172,7 +172,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-leave-approval-rate:
+  /api/v1/get-leave-approval-rate:
     get:
       summary: Leave approval rate
       description: Returns the percentage of leave applications approved vs rejected
@@ -198,7 +198,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-leave-type-breakdown:
+  /api/v1/get-leave-type-breakdown:
     get:
       summary: Leave type breakdown
       description: Returns leave count grouped by leave type
@@ -211,7 +211,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-monthly-leave-patterns:
+  /api/v1/get-monthly-leave-patterns:
     get:
       summary: Monthly leave patterns
       description: Returns leave application counts by month
@@ -228,7 +228,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-attendance-trends:
+  /api/v1/get-attendance-trends:
     get:
       summary: Attendance trends
       description: Returns daily/weekly attendance rate trends
@@ -251,7 +251,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-working-hours-distribution:
+  /api/v1/get-working-hours-distribution:
     get:
       summary: Working hours distribution
       description: Returns distribution of hours worked per day across employees
@@ -264,7 +264,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-job-openings-by-status:
+  /api/v1/get-job-openings-by-status:
     get:
       summary: Job openings by status
       description: Returns job opening count grouped by status (open, closed, paused)
@@ -277,7 +277,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-applications-by-job-role:
+  /api/v1/get-applications-by-job-role:
     get:
       summary: Applications by job role
       description: Returns application count per job title/role
@@ -290,7 +290,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-hiring-funnel:
+  /api/v1/get-hiring-funnel:
     get:
       summary: Hiring funnel metrics
       description: Returns candidate count at each stage of the recruitment pipeline
@@ -316,7 +316,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-hiring-manager-performance:
+  /api/v1/get-hiring-manager-performance:
     get:
       summary: Hiring manager performance
       description: Returns recruitment metrics grouped by hiring manager
@@ -329,7 +329,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-salary-distribution-by-department:
+  /api/v1/get-salary-distribution-by-department:
     get:
       summary: Salary distribution by department
       description: Returns average, min, and max salary per department
@@ -357,7 +357,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-compensation-breakdown:
+  /api/v1/get-compensation-breakdown:
     get:
       summary: Compensation breakdown
       description: Returns aggregate breakdown of salary components (basic, HRA, allowances, deductions)
@@ -370,7 +370,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-average-salary-by-designation:
+  /api/v1/get-average-salary-by-designation:
     get:
       summary: Average salary by designation
       description: Returns average salary grouped by designation
@@ -383,7 +383,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-salary-bands:
+  /api/v1/get-salary-bands:
     get:
       summary: Salary bands
       description: Returns employee count grouped by salary range bands

@@ -82,7 +82,7 @@ export const submitKyc = async (
         });
       })
       .catch((err) =>
-        logger.warn("[submitKyc] Notification enqueue failed:", { err }),
+        logger.error("[submitKyc] Notification enqueue failed:", { err }),
       );
 
     return callback(null, {

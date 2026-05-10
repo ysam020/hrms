@@ -141,7 +141,9 @@ describe("chatHandlers", () => {
           designation: "Dev",
         },
       ]);
-      mockMessageCount.mockResolvedValue(2);
+      mockMessageGroupBy.mockResolvedValue([
+        { chatRoomId: "r1", _count: { id: 2 } },
+      ]);
       const res = makeRes();
       await getConversations(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -336,12 +338,14 @@ describe("chatHandlers", () => {
       );
     });
 
-    it("marks unread messages as read by pushing username to readBy", async () => {
-      mockMessageFindMany.mockResolvedValue([{ id: "m1" }, { id: "m2" }]);
-      mockMessageUpdate.mockResolvedValue({});
+    it("marks messages read via single $runCommandRaw bulk update", async () => {
+      mockChatRoomFindUnique.mockResolvedValue({ id: "r1", participants: ["alice"] });
+      (prisma as any).$runCommandRaw = jest.fn().mockResolvedValue({ n: 2, ok: 1 });
       const res = makeRes();
       await markMessagesRead(makeReq({ params: { roomId: "r1" } }), res);
-      expect(mockMessageUpdate).toHaveBeenCalledTimes(2);
+      expect((prisma as any).$runCommandRaw).toHaveBeenCalledWith(
+        expect.objectContaining({ update: "messages" }),
+      );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
@@ -349,14 +353,13 @@ describe("chatHandlers", () => {
       );
     });
 
-    it("returns SUCCESS without updating when no unread messages", async () => {
-      mockMessageFindMany.mockResolvedValue([]);
+    it("returns NOT_FOUND when chat room does not exist", async () => {
+      mockChatRoomFindUnique.mockResolvedValue(null);
       const res = makeRes();
       await markMessagesRead(makeReq({ params: { roomId: "r1" } }), res);
-      expect(mockMessageUpdate).not.toHaveBeenCalled();
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
-        RESPONSE_STATUS.SUCCESS,
+        RESPONSE_STATUS.NOT_FOUND,
         expect.any(Object),
       );
     });

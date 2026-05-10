@@ -23,7 +23,14 @@ import CloseIcon from "@mui/icons-material/Close";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import { useTheme, alpha } from "@mui/material/styles";
 import { UserContext } from "@web/app/providers/UserContext";
-import { getAccessToken, fetchCsrfToken } from "@web/core/http/axiosConfig";
+import {
+  getAccessToken,
+  fetchCsrfToken,
+  performRefresh,
+  isExpiringSoon,
+  registerPendingAbort,
+  unregisterPendingAbort,
+} from "@web/core/http/axiosConfig";
 
 const API_URL = import.meta.env.VITE_API_STRING as string;
 
@@ -101,6 +108,29 @@ export default function Chatbot() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const streamSse = useCallback(
+    async (
+      token: string | null,
+      csrfToken: string,
+      content: string,
+      history: { role: string; content: string }[],
+      controller: AbortController,
+    ) => {
+      const res = await fetch(`${API_URL}/chatbot/message`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+          "x-csrf-token": csrfToken,
+        },
+        body: JSON.stringify({ message: content, history }),
+        signal: controller.signal,
+      });
+      return res;
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
     async (text?: string) => {
       const content = (text ?? input).trim();
@@ -124,23 +154,40 @@ export default function Chatbot() {
 
       const controller = new AbortController();
       abortRef.current = controller;
+      registerPendingAbort("chatbot:sse", controller);
 
       try {
-        const [token, csrfToken] = await Promise.all([
-          Promise.resolve(getAccessToken()),
-          fetchCsrfToken(),
-        ]);
+        // Mirror the interceptor's proactive refresh so the SSE stream never
+        // starts with a token that will expire mid-stream.
+        let token = getAccessToken();
+        if (token && isExpiringSoon(token, 60)) {
+          try {
+            token = await performRefresh();
+          } catch {}
+        }
 
-        const res = await fetch(`${API_URL}/chatbot/message`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` }),
-            ...(csrfToken && { "x-csrf-token": csrfToken }),
-          },
-          body: JSON.stringify({ message: content, history }),
-          signal: controller.signal,
-        });
+        const csrfToken = await fetchCsrfToken();
+
+        let res = await streamSse(token, csrfToken, content, history, controller);
+
+        // Single 401 retry — mirrors the axios response interceptor.
+        if (res.status === 401) {
+          try {
+            token = await performRefresh();
+            const freshCsrf = await fetchCsrfToken();
+            res = await streamSse(token, freshCsrf, content, history, controller);
+          } catch {
+            setMessages((prev) => {
+              const u = [...prev];
+              u[u.length - 1] = {
+                ...u[u.length - 1],
+                content: "Session expired. Please refresh the page.",
+              };
+              return u;
+            });
+            return;
+          }
+        }
 
         if (!res.ok || !res.body) {
           let errMsg = "Something went wrong. Please try again.";
@@ -209,12 +256,13 @@ export default function Chatbot() {
           return u;
         });
       } finally {
+        unregisterPendingAbort("chatbot:sse");
         abortRef.current = null;
         setStreaming(false);
         setTimeout(() => inputRef.current?.focus(), 50);
       }
     },
-    [input, streaming, messages],
+    [input, streaming, messages, streamSse],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -237,6 +285,10 @@ export default function Chatbot() {
     <>
       {/* ── Floating panel ── */}
       <Box
+        role="dialog"
+        aria-modal="true"
+        aria-label="HRMS AI Assistant"
+        aria-hidden={!open}
         sx={{
           position: "fixed",
           bottom: 88,
@@ -288,12 +340,12 @@ export default function Chatbot() {
           <Box sx={{ display: "flex", alignItems: "center" }}>
             {messages.length > 0 && (
               <Tooltip title="Clear conversation">
-                <IconButton size="small" onClick={clearConversation}>
+                <IconButton size="small" onClick={clearConversation} aria-label="Clear conversation">
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
-            <IconButton size="small" onClick={() => setOpen(false)}>
+            <IconButton size="small" onClick={() => setOpen(false)} aria-label="Close assistant">
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
@@ -529,6 +581,7 @@ export default function Chatbot() {
       <Zoom in={!open}>
         <Fab
           onClick={() => setOpen(true)}
+          aria-label="Open HRMS AI Assistant"
           sx={{
             position: "fixed",
             bottom: 24,

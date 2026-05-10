@@ -5,6 +5,7 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
+import { parsePagination } from "../utils/pagination";
 
 // SSRF protection — block requests to private/loopback/link-local address ranges,
 // including IPv4-mapped IPv6 addresses (::ffff:127.0.0.1 etc.)
@@ -122,17 +123,19 @@ export async function getConversations(req: Request, res: Response) {
     const msgMap = new Map(lastMessages.map((m: any) => [m.id, m]));
     const userMap = new Map(participantUsers.map((u: any) => [u.username, u]));
 
-    const unreadCounts = await Promise.all(
-      roomIds.map((roomId: any) =>
-        prisma.message.count({
-          where: {
-            chatRoomId: roomId,
-            isDeleted: false,
-            NOT: [{ sender: username }, { readBy: { has: username } }],
-          },
-        }),
-      ),
+    const rawCounts = await prisma.message.groupBy({
+      by: ["chatRoomId"],
+      where: {
+        chatRoomId: { in: roomIds },
+        isDeleted: false,
+        NOT: [{ sender: username }, { readBy: { has: username } }],
+      },
+      _count: { id: true },
+    });
+    const countByRoom = new Map(
+      rawCounts.map((r: any) => [r.chatRoomId, r._count.id]),
     );
+    const unreadCounts = roomIds.map((id: string) => countByRoom.get(id) ?? 0);
 
     const result = rooms.map((room: any, i: any) => {
       const lastMsg = room.lastMessageId
@@ -152,7 +155,7 @@ export async function getConversations(req: Request, res: Response) {
       message: "Conversations retrieved",
       data: result,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /chat/conversations error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -216,7 +219,7 @@ export async function startConversation(req: Request, res: Response) {
       message: "Conversation started",
       data: withId(room),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("POST /chat/conversations/start error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -228,7 +231,7 @@ export async function getMessages(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const roomId = String(req.params.roomId);
-    const limit = Math.min(parseInt(String(req.query.limit || "50")), 100);
+    const { limit } = parsePagination(req.query, 50);
     const before = req.query.before as string | undefined;
 
     // Verify caller is a participant of this room before reading messages
@@ -267,7 +270,7 @@ export async function getMessages(req: Request, res: Response) {
       message: "Messages retrieved",
       data: messages.reverse().map(withId),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /chat/conversations/:roomId/messages error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -286,31 +289,38 @@ export async function markMessagesRead(req: Request, res: Response) {
 
     const roomId = String(req.params.roomId);
 
-    const unread = await prisma.message.findMany({
-      where: {
-        chatRoomId: roomId,
-        isDeleted: false,
-        NOT: [{ sender: username }, { readBy: { has: username } }],
-      },
-      select: { id: true },
-    });
+    const room = await prisma.chatRoom.findUnique({ where: { id: roomId } });
+    if (!room)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Conversation not found",
+      });
+    if (!room.participants.includes(username))
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
 
-    if (unread.length > 0) {
-      await Promise.all(
-        unread.map((m: any) =>
-          prisma.message.update({
-            where: { id: m.id },
-            data: { readBy: { push: username } },
-          }),
-        ),
-      );
-    }
+    // Single MongoDB bulk update — replaces findMany + N individual updates
+    await (prisma as any).$runCommandRaw({
+      update: "messages",
+      updates: [
+        {
+          q: {
+            chatRoomId: roomId,
+            isDeleted: false,
+            sender: { $ne: username },
+            readBy: { $not: { $elemMatch: { $eq: username } } },
+          },
+          u: { $addToSet: { readBy: username } },
+          multi: true,
+        },
+      ],
+    });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Messages marked as read",
       data: null,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("POST /chat/conversations/:roomId/read error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -356,7 +366,7 @@ export async function getUnreadCounts(req: Request, res: Response) {
       message: "Unread counts retrieved",
       data: counts,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /chat/unread-counts error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -398,7 +408,7 @@ export async function deleteMessage(req: Request, res: Response) {
         chatRoomId: updated.chatRoomId,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("DELETE /chat/messages/:messageId error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -433,7 +443,7 @@ export async function deleteConversation(req: Request, res: Response) {
       message: "Conversation deleted",
       data: null,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("DELETE /chat/conversations/:roomId error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
