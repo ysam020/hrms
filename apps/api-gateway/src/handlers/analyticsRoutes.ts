@@ -25,7 +25,9 @@ export async function getEmploymentTypeBreakdown(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employment-type-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -53,7 +55,9 @@ export async function getEmployeeStatusDistribution(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-status-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -77,7 +81,9 @@ export async function getEmployeeDepartments(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-departments error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -101,7 +107,9 @@ export async function getEmployeeDesignations(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-employee-designations error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -141,7 +149,11 @@ export async function getAgeDistribution(_req: Request, res: Response) {
       ],
     });
     const ageLabel: Record<string | number, string> = {
-      0: "<25", 25: "25-34", 35: "35-44", 45: "45-54", "55+": "55+",
+      0: "<25",
+      25: "25-34",
+      35: "35-44",
+      45: "45-54",
+      "55+": "55+",
     };
     const ageCount: Record<string, number> = {};
     for (const b of bucketResult as any[]) {
@@ -155,7 +167,9 @@ export async function getAgeDistribution(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-age-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -187,7 +201,9 @@ export async function getJoiningData(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-joining-data error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -231,21 +247,29 @@ export async function getTenureDistribution(_req: Request, res: Response) {
       ],
     });
     const tenureLabel: Record<string | number, string> = {
-      0: "<1 yr", 1: "1-2 yrs", 2: "2-3 yrs", 3: "3-5 yrs", "5+ yrs": "5+ yrs",
+      0: "<1 yr",
+      1: "1-2 yrs",
+      2: "2-3 yrs",
+      3: "3-5 yrs",
+      "5+ yrs": "5+ yrs",
     };
     const tenureCount: Record<string, number> = {};
     for (const b of bucketResult as any[]) {
       tenureCount[tenureLabel[b._id] ?? String(b._id)] = b.count;
     }
-    const data = ["<1 yr", "1-2 yrs", "2-3 yrs", "3-5 yrs", "5+ yrs"].map((_id) => ({
-      _id,
-      count: tenureCount[_id] ?? 0,
-    }));
+    const data = ["<1 yr", "1-2 yrs", "2-3 yrs", "3-5 yrs", "5+ yrs"].map(
+      (_id) => ({
+        _id,
+        count: tenureCount[_id] ?? 0,
+      }),
+    );
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-tenure-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -276,7 +300,20 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
     for (const r of result as any[]) {
       if (r._id) monthlyMap[r._id] = r.joinings;
     }
-    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
     let cumulative = 0;
     const data = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
@@ -294,7 +331,9 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-headcount-growth error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -317,7 +356,9 @@ export async function getLeaveApprovalRate(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-leave-approval-rate error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -342,7 +383,9 @@ export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-leave-type-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -369,12 +412,17 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
         { $sort: { _id: 1 } },
       ],
     });
-    const data = (result as any[]).map((r: any) => ({ month: r._id, count: r.count }));
+    const data = (result as any[]).map((r: any) => ({
+      month: r._id,
+      count: r.count,
+    }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-monthly-leave-patterns error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -390,7 +438,9 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
 
     const result = await (prisma.attendanceRecord as any).aggregateRaw({
       pipeline: [
-        { $match: { date: { $gte: { $date: twelveMonthsAgo.toISOString() } } } },
+        {
+          $match: { date: { $gte: { $date: twelveMonthsAgo.toISOString() } } },
+        },
         {
           $group: {
             _id: { year: { $year: "$date" }, month: { $month: "$date" } },
@@ -418,14 +468,18 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
     });
     const data = (result as any[]).map((r: any) => ({
       _id: { year: r._id.year, month: r._id.month },
-      attendanceRate: r.total > 0 ? Math.round((r.present / r.total) * 1000) / 10 : 0,
-      avgWorkingHours: r.total > 0 ? Math.round((r.hours / r.total) * 100) / 100 : 0,
+      attendanceRate:
+        r.total > 0 ? Math.round((r.present / r.total) * 1000) / 10 : 0,
+      avgWorkingHours:
+        r.total > 0 ? Math.round((r.hours / r.total) * 100) / 100 : 0,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-attendance-trends error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -461,7 +515,11 @@ export async function getWorkingHoursDistribution(
       ],
     });
     const hoursLabel: Record<string | number, string> = {
-      0: "<4h", 4: "4-6h", 6: "6-8h", 8: "8-9h", "9+h": "9+h",
+      0: "<4h",
+      4: "4-6h",
+      6: "6-8h",
+      8: "8-9h",
+      "9+h": "9+h",
     };
     const hoursCount: Record<string, number> = {};
     for (const b of bucketResult as any[]) {
@@ -475,7 +533,9 @@ export async function getWorkingHoursDistribution(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-working-hours-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -498,7 +558,9 @@ export async function getJobOpeningsByStatus(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-job-openings-by-status error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -509,7 +571,6 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const groups: any[] = await (prisma.jobOpening.groupBy as any)({
       by: ["jobTitle", "status"],
       _count: { _all: true },
@@ -538,14 +599,17 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
       const s = (g.status || "").toLowerCase();
       if (s === "shortlisted") byRole[title].shortlisted += g._count._all;
       else if (s === "interviewed") byRole[title].interviewed += g._count._all;
-      else if (s === "hired" || s === "closed") byRole[title].hired += g._count._all;
+      else if (s === "hired" || s === "closed")
+        byRole[title].hired += g._count._all;
     }
     const data = Object.values(byRole);
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-applications-by-job-role error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -589,7 +653,9 @@ export async function getHiringFunnel(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-hiring-funnel error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -603,7 +669,6 @@ export async function getHiringManagerPerformance(
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const groups: any[] = await (prisma.jobOpening.groupBy as any)({
       by: ["hiringManager", "status"],
       where: { hiringManager: { not: null } },
@@ -641,7 +706,9 @@ export async function getHiringManagerPerformance(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-hiring-manager-performance error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -676,7 +743,9 @@ export async function getSalaryDistributionByDepartment(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-salary-distribution-by-department error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -712,7 +781,9 @@ export async function getCompensationBreakdown(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-compensation-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -748,7 +819,9 @@ export async function getAverageSalaryByDesignation(
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-average-salary-by-designation error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
 
@@ -788,6 +861,8 @@ export async function getSalaryBands(_req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (err) {
     logger.error("get-salary-bands error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, { message: "Internal Server Error" });
+    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+      message: "Internal Server Error",
+    });
   }
 }
