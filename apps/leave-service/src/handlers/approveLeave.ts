@@ -56,7 +56,7 @@ export const approveLeave = async (
         priority: "medium",
       })
       .catch((err) =>
-        logger.warn("[approveLeave] Notification enqueue failed:", { err }),
+        logger.error("[approveLeave] Notification enqueue failed:", { err }),
       );
 
     return callback(null, {

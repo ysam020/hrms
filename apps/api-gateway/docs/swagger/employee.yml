@@ -1,5 +1,5 @@
 paths:
-  /api/edit-employee-details:
+  /api/v1/edit-employee-details:
     put:
       summary: Edit employee details
       description: Update employee profile fields for the authenticated user
@@ -38,7 +38,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-employee-details/{username}:
+  /api/v1/get-employee-details/{username}:
     get:
       summary: Get employee details
       description: Returns detailed employee profile for the given username
@@ -74,7 +74,7 @@ paths:
         "404":
           description: Employee not found
 
-  /api/employee-insights:
+  /api/v1/employee-insights:
     get:
       summary: Employee insights
       description: Returns aggregate statistics about employees (counts by department, role, status, etc.)
@@ -99,7 +99,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/complete-kyc:
+  /api/v1/complete-kyc:
     post:
       summary: Submit KYC
       description: Submit KYC (Know Your Customer) documents for the authenticated employee
@@ -140,7 +140,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/edit-kyc:
+  /api/v1/edit-kyc:
     put:
       summary: Edit KYC details
       description: Update a pending or rejected KYC submission
@@ -170,7 +170,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/kyc-approval:
+  /api/v1/kyc-approval:
     post:
       summary: Approve or reject KYC
       description: Admin/HR action to approve or reject an employee KYC submission
@@ -205,7 +205,7 @@ paths:
         "403":
           description: Forbidden
 
-  /api/view-all-kycs:
+  /api/v1/view-all-kycs:
     get:
       summary: View all KYC submissions
       description: Returns all KYC submissions (admin/HR only)
@@ -235,7 +235,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-kyc-insights:
+  /api/v1/get-kyc-insights:
     get:
       summary: KYC insights
       description: Returns aggregate KYC statistics (counts by status, department, etc.)

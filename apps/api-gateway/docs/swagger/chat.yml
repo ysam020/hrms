@@ -1,5 +1,5 @@
 paths:
-  /api/chat/conversations:
+  /api/v1/chat/conversations:
     get:
       summary: Get all conversations
       description: Returns all chat conversations for the authenticated user
@@ -37,7 +37,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/chat/conversations/start:
+  /api/v1/chat/conversations/start:
     post:
       summary: Start a new conversation
       description: Creates a new 1:1 or group chat conversation
@@ -77,7 +77,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/chat/conversations/{roomId}/messages:
+  /api/v1/chat/conversations/{roomId}/messages:
     get:
       summary: Get messages in a conversation
       description: Returns paginated messages for a specific chat room
@@ -122,7 +122,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/chat/conversations/{roomId}/read:
+  /api/v1/chat/conversations/{roomId}/read:
     post:
       summary: Mark messages as read
       description: Marks all unread messages in a conversation as read for the authenticated user
@@ -146,7 +146,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/chat/unread-counts:
+  /api/v1/chat/unread-counts:
     get:
       summary: Get unread message counts
       description: Returns the number of unread messages per conversation for the authenticated user
@@ -172,7 +172,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/chat/messages/{messageId}:
+  /api/v1/chat/messages/{messageId}:
     delete:
       summary: Delete a message
       description: Delete a specific chat message (sender only)
@@ -198,7 +198,7 @@ paths:
         "403":
           description: Cannot delete another user's message
 
-  /api/chat/conversations/{roomId}:
+  /api/v1/chat/conversations/{roomId}:
     delete:
       summary: Delete a conversation
       description: Delete an entire chat conversation and all its messages
@@ -216,7 +216,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/og-preview:
+  /api/v1/og-preview:
     get:
       summary: Fetch Open Graph preview for a URL
       description: Returns Open Graph metadata (title, description, image) for a given URL, used for link previews in chat

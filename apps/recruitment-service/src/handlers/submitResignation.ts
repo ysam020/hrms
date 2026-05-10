@@ -93,7 +93,7 @@ export const submitResignation = async (
         });
       })
       .catch((err) =>
-        logger.warn("[submitResignation] Notification enqueue failed:", {
+        logger.error("[submitResignation] Notification enqueue failed:", {
           err,
         }),
       );

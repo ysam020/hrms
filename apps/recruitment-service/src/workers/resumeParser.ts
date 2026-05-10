@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { getBullMQConnection } from "@hrms/queue";
+import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import type { ResumeParsingJobData } from "@hrms/queue";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -147,6 +147,19 @@ export function startResumeParserWorker(): Worker {
 
   worker.on("failed", (job, err) => {
     logger.error(`[resumeParser] Job ${job?.id} failed:`, { err });
+    if (job) {
+      getDeadLetterQueue()
+        .add("failed-resume-parse", {
+          originalQueue: "resumeParsingQueue",
+          jobId: job.id,
+          data: job.data,
+          failedReason: err.message,
+          failedAt: new Date().toISOString(),
+        })
+        .catch((dlqErr) =>
+          logger.error("[resumeParser] DLQ enqueue failed:", { dlqErr }),
+        );
+    }
   });
 
   worker.on("error", (err) => {

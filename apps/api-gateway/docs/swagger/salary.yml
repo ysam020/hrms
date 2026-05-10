@@ -1,5 +1,5 @@
 paths:
-  /api/update-salary:
+  /api/v1/update-salary:
     post:
       summary: Update employee salary
       description: Set or update the salary details for an employee (admin/HR only)
@@ -39,7 +39,7 @@ paths:
         "403":
           description: Forbidden
 
-  /api/get-user-salary/{username}/{year}/{month}:
+  /api/v1/get-user-salary/{username}/{year}/{month}:
     get:
       summary: Get user salary for a month
       description: Returns the salary breakdown for a specific employee, year, and month
@@ -96,7 +96,7 @@ paths:
         "404":
           description: Salary data not found
 
-  /api/generate-salary-slip/{username}/{year}/{month}:
+  /api/v1/generate-salary-slip/{username}/{year}/{month}:
     get:
       summary: Generate salary slip PDF
       description: Generates and returns a salary slip PDF for the given employee and period

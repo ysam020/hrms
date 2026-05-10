@@ -339,6 +339,7 @@ describe("recruitmentHandlers", () => {
   });
 
   it("withdrawResignation calls rejectResignation with Withdrawn status", async () => {
+    mockResignFindUnique.mockResolvedValue({ username: "admin" });
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
@@ -348,6 +349,7 @@ describe("recruitmentHandlers", () => {
   });
 
   it("withdrawResignation returns INTERNAL on error", async () => {
+    mockResignFindUnique.mockResolvedValue({ username: "admin" });
     mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
     const res = makeRes();
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), res);

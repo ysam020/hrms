@@ -54,7 +54,7 @@ export const rejectKyc = async (
         priority: "medium",
       })
       .catch((err) =>
-        logger.warn("[rejectKyc] Notification enqueue failed:", { err }),
+        logger.error("[rejectKyc] Notification enqueue failed:", { err }),
       );
 
     return callback(null, {

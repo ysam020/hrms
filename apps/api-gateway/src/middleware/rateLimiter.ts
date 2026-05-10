@@ -14,6 +14,4 @@ export const authLimiter: RateLimitRequestHandler = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
-  // /profile is called on every page load and tab focus — exempt it
-  skip: (req) => req.path === "/profile",
 });

@@ -1,6 +1,12 @@
-import { credentials, ChannelCredentials } from "@grpc/grpc-js";
+import {
+  credentials,
+  ChannelCredentials,
+  status as GrpcStatus,
+  ServiceError,
+} from "@grpc/grpc-js";
 import fs from "fs";
 import path from "path";
+import { grpcToHttpStatus } from "@hrms/common";
 import {
   auth,
   user,
@@ -19,11 +25,14 @@ function buildClientCredentials(): ChannelCredentials {
     process.env.GRPC_TLS_CA_FILE ??
     path.resolve(__dirname, "../../../../packages/certificates/rootCA.pem");
 
-  // Internal Docker hostnames (auth-service, etc.) won't match the cert CN
-  // issued for localhost — skip hostname verification on the private network.
-  return credentials.createSsl(fs.readFileSync(caFile), null, null, {
-    checkServerIdentity: () => undefined,
-  });
+  const overrides =
+    process.env.GRPC_SKIP_HOSTNAME_VERIFICATION === "true"
+      ? // Internal Docker hostnames (auth-service, etc.) won't match the cert CN
+        // issued for localhost. Only skip when explicitly opted-in via env var.
+        { checkServerIdentity: () => undefined }
+      : undefined;
+
+  return credentials.createSsl(fs.readFileSync(caFile), null, null, overrides);
 }
 
 const creds = buildClientCredentials();
@@ -95,15 +104,21 @@ export const notificationClient = new notification.NotificationServiceClient(
   creds,
 );
 
-// Promisify a unary gRPC call
+// Promisify a unary gRPC call; annotates rejected errors with httpStatus so
+// handlers can return the correct HTTP code without inspecting gRPC internals.
 export const grpcCall = <Req, Res>(
   client: any,
   method: string,
   request: Req,
 ): Promise<Res> =>
   new Promise((resolve, reject) => {
-    client[method](request, (error: any, response: Res) => {
-      if (error) reject(error);
-      else resolve(response);
+    client[method](request, (error: ServiceError | null, response: Res) => {
+      if (error) {
+        (error as ServiceError & { httpStatus: number }).httpStatus =
+          grpcToHttpStatus(error.code ?? GrpcStatus.UNKNOWN);
+        reject(error);
+      } else {
+        resolve(response);
+      }
     });
   });

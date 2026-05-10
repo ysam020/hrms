@@ -95,6 +95,9 @@ const makeReq = (overrides: any = {}) =>
     params: {},
     body: {},
     cookies: {},
+    ip: "127.0.0.1",
+    socket: { remoteAddress: "127.0.0.1" },
+    headers: { "user-agent": "test-agent" },
     ...overrides,
   }) as any;
 

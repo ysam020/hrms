@@ -3,6 +3,7 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { AuthRequest } from "../middleware/authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { handleError } from "../utils/handleError";
 
 export async function getRoles(_req: Request, res: Response) {
   try {
@@ -17,7 +18,7 @@ export async function getRoles(_req: Request, res: Response) {
     });
   } catch (err) {
     logger.error("get-roles error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return handleError(res, err);
   }
 }
 
@@ -137,7 +138,7 @@ export async function getRoleAndPermissions(_req: Request, res: Response) {
     });
   } catch (err) {
     logger.error("get-role-and-permissions error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return handleError(res, err);
   }
 }
 
@@ -225,9 +226,7 @@ export async function getUserPermissions(req: Request, res: Response) {
     });
   } catch (err) {
     logger.error("get-user-permissions error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { permissions: [], role: [] },
-    });
+    return handleError(res, err);
   }
 }
 
@@ -333,7 +332,7 @@ export async function getTeams(_req: Request, res: Response) {
     });
   } catch (err) {
     logger.error("get-teams error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    return handleError(res, err);
   }
 }
 

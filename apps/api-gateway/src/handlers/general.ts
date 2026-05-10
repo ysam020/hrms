@@ -9,6 +9,7 @@ import path from "path";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client, S3_BUCKET, s3FileUrl } from "../config/s3";
+import { NOTIFICATION_PRUNE_LIMIT } from "../constants";
 
 // File validation
 
@@ -125,7 +126,7 @@ export async function getHolidays(req: Request, res: Response) {
       message: "Holidays retrieved successfully",
       data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("get-holidays error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -182,7 +183,7 @@ export async function getCalendarEvents(req: Request, res: Response) {
       message: "Calendar events retrieved successfully",
       data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("get-calendar-events error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -268,7 +269,7 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
       message: "Birthdays and anniversaries retrieved successfully",
       data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("birthdays-anniversaries error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -300,7 +301,7 @@ export async function getAuditLogs(req: Request, res: Response) {
     const logs = await prisma.auditLog.findMany({
       where,
       orderBy: { timestamp: "desc" },
-      take: 200,
+      take: NOTIFICATION_PRUNE_LIMIT,
     });
 
     const data = logs.map((l: any) => ({
@@ -319,7 +320,7 @@ export async function getAuditLogs(req: Request, res: Response) {
       message: "Audit logs retrieved successfully",
       data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("audit-logs error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -390,7 +391,7 @@ export async function addHoliday(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holiday added successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("add-holiday error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -439,7 +440,7 @@ export async function deleteHoliday(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holiday deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("delete-holiday error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -477,7 +478,7 @@ export async function addEvent(req: Request, res: Response) {
       message: "Event added successfully",
       data: newEvent,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("add-event error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -531,7 +532,7 @@ export async function editCalendarEvent(req: Request, res: Response) {
       message: "Event updated successfully",
       data: events[idx],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("edit-calendar-event error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -571,7 +572,7 @@ export async function deleteCalendarEvent(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Event deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("delete-calendar-event error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
@@ -631,7 +632,7 @@ export async function getPresignedUrl(req: Request, res: Response) {
       message: "Pre-signed URL generated",
       data: { url, key, fileUrl: s3FileUrl(key) },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("presigned-url error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",

@@ -9,8 +9,8 @@ import {
 const DashboardEditContext = createContext<{
   editMode: boolean;
   toggleEditMode: () => void;
-  resetFn: any;
-  registerReset: (fn: any) => void;
+  resetFn: (() => void) | null;
+  registerReset: (fn: () => void) => void;
 }>({
   editMode: false,
   toggleEditMode: () => {},

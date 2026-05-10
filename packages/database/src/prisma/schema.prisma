@@ -90,6 +90,8 @@ model User {
   salaryStructures            SalaryStructure[]
   loginEvents                 LoginEvent[]
 
+  @@index([employeeStatus])
+  @@index([department, employeeStatus])
   @@map("users")
 }
 
@@ -109,6 +111,7 @@ model AttendanceRecord {
   user         User?    @relation(fields: [username], references: [username])
 
   @@unique([username, date])
+  @@index([date])
   @@map("attendance_records")
 }
 
@@ -131,6 +134,8 @@ model LeaveApplication {
 
   user              User?    @relation(fields: [username], references: [username])
 
+  @@index([username])
+  @@index([status])
   @@map("leaves")
 }
 
@@ -191,6 +196,8 @@ model JobApplication {
 
   jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id])
 
+  @@index([jobTitleId])
+  @@index([status])
   @@map("jobapplications")
 }
 
@@ -222,6 +229,8 @@ model Resignation {
   feedbackSubmittedOn         DateTime?
   lastUpdatedOn               DateTime?
 
+  @@index([username])
+  @@index([status])
   @@map("resignations")
 }
 
@@ -248,6 +257,7 @@ model SalaryStructure {
 
   user            User?    @relation(fields: [username], references: [username])
 
+  @@index([username, year, month])
   @@map("salarystructures")
 }
 
@@ -276,6 +286,7 @@ model NotificationRecipient {
   notification   Notification @relation(fields: [notificationId], references: [id])
   user           User         @relation(fields: [userId], references: [id])
 
+  @@index([userId, isCleared])
   @@map("notification_recipients")
 }
 
@@ -324,6 +335,7 @@ model ChatRoom {
 
   messages     Message[]
 
+  @@index([participants])
   @@map("chatrooms")
 }
 
@@ -345,6 +357,8 @@ model Message {
 
   chatRoom     ChatRoom  @relation(fields: [chatRoomId], references: [id])
 
+  @@index([chatRoomId, createdAt])
+  @@index([chatRoomId, isDeleted])
   @@map("messages")
 }
 
@@ -362,6 +376,9 @@ model AuditLog {
   userAgent   String?
   timestamp   DateTime? @default(now())
 
+  @@index([timestamp])
+  @@index([userId, timestamp])
+  @@index([entityType, timestamp])
   @@map("auditlogs")
 }
 
@@ -416,6 +433,8 @@ model Rule {
   createdAt      DateTime? @default(now())
   updatedAt      DateTime? @updatedAt
 
+  @@index([status])
+  @@index([category, status])
   @@map("rules")
 }
 

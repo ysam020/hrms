@@ -105,14 +105,14 @@ describe("permissionsHandlers", () => {
       );
     });
 
-    it("returns empty array on error", async () => {
+    it("returns INTERNAL_SERVER_ERROR on error", async () => {
       mockRoleFindMany.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await getRoles(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
-        RESPONSE_STATUS.SUCCESS,
-        { data: [] },
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
       );
     });
   });
@@ -135,14 +135,14 @@ describe("permissionsHandlers", () => {
       );
     });
 
-    it("returns empty array on DB error", async () => {
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
       mockRoleFindMany.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await getRoleAndPermissions(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
-        RESPONSE_STATUS.SUCCESS,
-        { data: [] },
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
       );
     });
   });
@@ -180,14 +180,14 @@ describe("permissionsHandlers", () => {
       );
     });
 
-    it("returns empty arrays on DB error", async () => {
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
       mockUserFindFirst.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await getUserPermissions(makeReq({ params: { username: "john" } }), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
-        RESPONSE_STATUS.SUCCESS,
-        expect.objectContaining({ data: { permissions: [], role: [] } }),
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
       );
     });
   });
@@ -717,14 +717,14 @@ describe("permissionsHandlers", () => {
       );
     });
 
-    it("returns empty array on DB error", async () => {
+    it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
       mockTeamFindMany.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await getTeams(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
-        RESPONSE_STATUS.SUCCESS,
-        { data: [] },
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
       );
     });
   });

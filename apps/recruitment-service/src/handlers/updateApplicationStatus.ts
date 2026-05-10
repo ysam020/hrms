@@ -65,7 +65,7 @@ export const updateApplicationStatus = async (
         });
       })
       .catch((err) =>
-        logger.warn("[updateApplicationStatus] Notification enqueue failed:", {
+        logger.error("[updateApplicationStatus] Notification enqueue failed:", {
           err,
         }),
       );

@@ -8,7 +8,7 @@ import React, {
 
 const BottomDrawerContext = createContext<{
   isAnyOpen: boolean;
-  setDrawerOpen: (isOpen: any) => void;
+  setDrawerOpen: (isOpen: boolean) => void;
   dockVisible: boolean;
   setDockVisible: (v: boolean) => void;
 }>({

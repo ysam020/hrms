@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { notificationClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { parsePagination } from "../utils/pagination";
 
 export async function getNotifications(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -9,11 +10,10 @@ export async function getNotifications(req: Request, res: Response) {
     const response = await grpcCall(notificationClient, "getNotifications", {
       userId: user!.userId,
       unreadOnly: req.query.unreadOnly === "true",
-      page: parseInt(req.query.page as string) || 1,
-      limit: Math.min(parseInt(req.query.limit as string) || 50, 100),
+      ...parsePagination(req.query, 50),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -28,7 +28,7 @@ export async function clearNotification(req: Request, res: Response) {
       notificationIds: [req.params._id],
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -43,7 +43,7 @@ export async function clearAllNotifications(req: Request, res: Response) {
       notificationIds: [],
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });

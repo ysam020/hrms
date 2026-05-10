@@ -4,6 +4,8 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { handleError } from "../utils/handleError";
+import { parsePagination } from "../utils/pagination";
 
 async function resolveUsername(userId: string): Promise<string | null> {
   const user = await prisma.user.findUnique({
@@ -42,11 +44,9 @@ export async function addLeave(req: Request, res: Response) {
       medicalCertificate: medicalCertificate || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("POST /add-leave error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -67,15 +67,12 @@ export async function getLeaveApplications(req: Request, res: Response) {
     const response = await grpcCall(leaveClient, "getLeaves", {
       userId: username,
       status: req.query.status || "",
-      page: parseInt(req.query.page as string) || 1,
-      limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
+      ...parsePagination(req.query),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /get-leave-applications error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -110,11 +107,9 @@ export async function updateLeaveStatus(req: Request, res: Response) {
 
     const response = await grpcCall(leaveClient, method, payload);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("PUT /update-leave-status error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -141,10 +136,8 @@ export async function getAvailablePaidLeaves(req: Request, res: Response) {
       username,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /get-available-paid-leaves error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }

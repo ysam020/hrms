@@ -129,7 +129,11 @@ function HomePage(props) {
       <DashboardEditProvider>
         <NotificationContext.Provider value={notificationContextValue}>
           <TabValueContext.Provider value={tabValueContextValue}>
-            <Tour run={run} setRun={setRun} />
+            <Suspense fallback={null}>
+              <ErrorBoundary fallback={<ErrorFallback />}>
+                <Tour run={run} setRun={setRun} />
+              </ErrorBoundary>
+            </Suspense>
             <Box
               sx={{
                 display: "flex",
@@ -194,17 +198,25 @@ function HomePage(props) {
                   />
                 </Routes>
 
-                <ActivityDrawer
-                  open={openActivityDrawer}
-                  setOpen={setOpenActivityDrawer}
-                  toggleDrawer={toggleActivityDrawer}
-                />
+                <Suspense fallback={null}>
+                  <ErrorBoundary fallback={<ErrorFallback />}>
+                    <ActivityDrawer
+                      open={openActivityDrawer}
+                      setOpen={setOpenActivityDrawer}
+                      toggleDrawer={toggleActivityDrawer}
+                    />
+                  </ErrorBoundary>
+                </Suspense>
 
-                <NotificationDrawer
-                  open={openNotificationDrawer}
-                  setOpen={setOpenNotificationDrawer}
-                  toggleDrawer={toggleNotificationDrawer}
-                />
+                <Suspense fallback={null}>
+                  <ErrorBoundary fallback={<ErrorFallback />}>
+                    <NotificationDrawer
+                      open={openNotificationDrawer}
+                      setOpen={setOpenNotificationDrawer}
+                      toggleDrawer={toggleNotificationDrawer}
+                    />
+                  </ErrorBoundary>
+                </Suspense>
               </Box>
             </Box>
 
@@ -215,7 +227,9 @@ function HomePage(props) {
             />
             <GlobalDock />
             <Suspense fallback={null}>
-              <ChatbotFab />
+              <ErrorBoundary fallback={null}>
+                <ChatbotFab />
+              </ErrorBoundary>
             </Suspense>
           </TabValueContext.Provider>
 

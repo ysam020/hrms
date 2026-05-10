@@ -5,6 +5,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { handleError } from "../utils/handleError";
 import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
 import { recordLoginEvent } from "../services/loginEventService";
 
@@ -140,11 +141,9 @@ export async function getProfile(req: Request, res: Response) {
       data: { user: profile },
       message: "Profile fetched",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /profile error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -184,10 +183,8 @@ export async function refreshToken(req: Request, res: Response) {
       data: { accessToken: response.accessToken },
       message: response.message,
     });
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -201,10 +198,8 @@ export async function logout(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: response.message,
     });
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -226,10 +221,8 @@ export async function webAuthnRegisterOptions(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: JSON.parse(response.options),
     });
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -252,11 +245,9 @@ export async function getWebAuthnCredentials(req: Request, res: Response) {
     }));
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: { credentials } });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /webauthn-credentials error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -279,7 +270,7 @@ export async function webAuthnCredentialCheck(req: Request, res: Response) {
     const creds = rows[0]?.webAuthnCredentials;
     const hasCredentials = Array.isArray(creds) && creds.length > 0;
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { hasCredentials });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("POST /webauthn-credential-check error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       hasCredentials: false,
@@ -328,11 +319,9 @@ export async function disableWebAuthn(req: Request, res: Response) {
       ? `Disabled all ${existing.length} WebAuthn credential(s)`
       : "WebAuthn credential removed";
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { message });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("DELETE /disable-webauthn error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -348,10 +337,8 @@ export async function webAuthnRegister(req: Request, res: Response) {
       },
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -368,10 +355,8 @@ export async function webAuthnVerifyRegistration(req: Request, res: Response) {
       },
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -393,10 +378,8 @@ export async function webAuthnLoginOptions(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: JSON.parse(response.options),
     });
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -425,9 +408,12 @@ export async function webAuthnVerifyLogin(req: Request, res: Response) {
       );
     }
 
-    const payload = jwt.decode(response.accessToken) as {
-      userId?: string;
-    } | null;
+    let payload: { userId?: string } | null = null;
+    try {
+      payload = jwt.verify(response.accessToken, process.env.ACCESS_JWT_TOKEN!, {
+        algorithms: ["HS256"],
+      }) as { userId?: string };
+    } catch {}
     if (payload?.userId) {
       recordLoginEvent({
         userId: payload.userId,
@@ -440,10 +426,8 @@ export async function webAuthnVerifyLogin(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { tempToken: response.accessToken, verified: true },
     });
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -465,7 +449,7 @@ export async function webAuthnLogin(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { accessToken: tempToken, user: profile },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
       message: "Authentication failed",
     });
@@ -520,9 +504,12 @@ export async function googleAuthCallback(req: Request, res: Response) {
       );
     }
 
-    const payload = jwt.decode(response.accessToken) as {
-      userId?: string;
-    } | null;
+    let payload: { userId?: string } | null = null;
+    try {
+      payload = jwt.verify(response.accessToken, process.env.ACCESS_JWT_TOKEN!, {
+        algorithms: ["HS256"],
+      }) as { userId?: string };
+    } catch {}
     if (payload?.userId) {
       recordLoginEvent({
         userId: payload.userId,
@@ -533,8 +520,8 @@ export async function googleAuthCallback(req: Request, res: Response) {
     }
 
     return jsRedirect(res, `${clientUrl}/?oauth_success=1`);
-  } catch (err: any) {
-    logger.error("[OAuth callback error]", { message: err?.message || err });
+  } catch (err: unknown) {
+    logger.error("[OAuth callback error]", { message: err instanceof Error ? err.message : err });
     return jsRedirect(
       res,
       `${clientUrl}/login?error=${encodeURIComponent("Login failed")}`,

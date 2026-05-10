@@ -1,5 +1,5 @@
 paths:
-  /api/get-notifications:
+  /api/v1/get-notifications:
     get:
       summary: Get notifications
       description: Returns all notifications for the authenticated user
@@ -33,7 +33,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/clear-notification/{_id}:
+  /api/v1/clear-notification/{_id}:
     put:
       summary: Clear a single notification
       description: Marks a specific notification as read/cleared
@@ -60,7 +60,7 @@ paths:
         "404":
           description: Notification not found
 
-  /api/clear-all-notifications:
+  /api/v1/clear-all-notifications:
     put:
       summary: Clear all notifications
       description: Marks all notifications for the authenticated user as read/cleared

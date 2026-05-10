@@ -1,5 +1,5 @@
 paths:
-  /api/add-leave:
+  /api/v1/add-leave:
     post:
       summary: Apply for leave
       description: Submit a leave application for the authenticated employee
@@ -38,7 +38,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-leave-applications:
+  /api/v1/get-leave-applications:
     get:
       summary: Get leave applications
       description: Returns leave applications. Employees see their own; admin/HR see all.
@@ -88,7 +88,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/update-leave-status:
+  /api/v1/update-leave-status:
     put:
       summary: Approve or reject a leave application
       description: Admin/HR action to update the status of a leave application
@@ -125,7 +125,7 @@ paths:
         "404":
           description: Leave application not found
 
-  /api/get-available-paid-leaves/{username}:
+  /api/v1/get-available-paid-leaves/{username}:
     get:
       summary: Get available paid leave balance
       description: Returns the remaining paid leave balance for a user (own or specified username for admin)

@@ -1,10 +1,17 @@
 import { Router } from "express";
 import { authenticate, requireSuperUser } from "../middleware/authenticate";
+import { validate } from "../middleware/validate";
 import * as h from "../handlers/attendance";
+import { addAttendanceSchema, attendanceCorrectionSchema } from "../schemas";
 
 export const attendanceRouter: Router = Router();
 
-attendanceRouter.post("/add-attendance", authenticate, h.addAttendance);
+attendanceRouter.post(
+  "/add-attendance",
+  authenticate,
+  validate(addAttendanceSchema),
+  h.addAttendance,
+);
 attendanceRouter.get(
   "/get-attendances/:month/:year",
   authenticate,
@@ -19,6 +26,7 @@ attendanceRouter.get(
 attendanceRouter.put(
   "/attendance-correction",
   authenticate,
+  validate(attendanceCorrectionSchema),
   h.attendanceCorrection,
 );
 attendanceRouter.get(

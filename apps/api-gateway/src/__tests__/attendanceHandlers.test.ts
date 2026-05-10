@@ -210,7 +210,7 @@ describe("getAllAttendances", () => {
 describe("attendanceCorrection", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUserFindUnique.mockResolvedValue({ username: "manager" });
+    mockUserFindUnique.mockResolvedValue({ username: "manager", isSuperUser: true });
     mockGrpcCall.mockResolvedValue({ message: "Corrected" });
   });
 

@@ -1,5 +1,11 @@
 import { Router } from "express";
 import { authenticate, requireSuperUser } from "../middleware/authenticate";
+import { validate } from "../middleware/validate";
+import {
+  editEmployeeDetailsSchema,
+  completeKycSchema,
+  kycApprovalSchema,
+} from "../schemas";
 import * as h from "../handlers/employee";
 
 export const employeeRouter: Router = Router();
@@ -7,6 +13,7 @@ export const employeeRouter: Router = Router();
 employeeRouter.put(
   "/edit-employee-details",
   authenticate,
+  validate(editEmployeeDetailsSchema),
   h.editEmployeeDetails,
 );
 employeeRouter.get(
@@ -15,12 +22,23 @@ employeeRouter.get(
   h.getEmployeeDetails,
 );
 employeeRouter.get("/employee-insights", authenticate, h.employeeInsights);
-employeeRouter.post("/complete-kyc", authenticate, h.completeKyc);
-employeeRouter.put("/edit-kyc", authenticate, h.editKyc);
+employeeRouter.post(
+  "/complete-kyc",
+  authenticate,
+  validate(completeKycSchema),
+  h.completeKyc,
+);
+employeeRouter.put(
+  "/edit-kyc",
+  authenticate,
+  validate(completeKycSchema),
+  h.editKyc,
+);
 employeeRouter.post(
   "/kyc-approval",
   authenticate,
   requireSuperUser,
+  validate(kycApprovalSchema),
   h.kycApproval,
 );
 employeeRouter.get(

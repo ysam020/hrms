@@ -36,6 +36,7 @@ services:
       - SALARY_SERVICE_HOST=salary-service
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
+      - GRPC_SKIP_HOSTNAME_VERIFICATION=true
       - METRICS_PORT=9003
       - LOKI_URL=http://loki:3100
       - OLLAMA_URL=http://host.docker.internal:11434

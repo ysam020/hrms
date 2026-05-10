@@ -6,11 +6,12 @@ import { logger } from "@hrms/logger";
 import { jsPDF } from "jspdf";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
+import { handleError } from "../utils/handleError";
+import { parsePagination, PAGINATION } from "../utils/pagination";
 
 export async function getHrActivities(req: Request, res: Response) {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
+    const { page, limit } = parsePagination(req.query, 10);
     const statusFilter = (req.query.status as string) || "Active";
     const skip = (page - 1) * limit;
 
@@ -65,11 +66,9 @@ export async function getHrActivities(req: Request, res: Response) {
       status: 0,
       data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /get-hr-activities error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -79,10 +78,8 @@ export async function getHrActivity(req: Request, res: Response) {
       id: req.params._id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -95,16 +92,27 @@ export async function addHrActivity(req: Request, res: Response) {
     });
     await cacheManager.invalidatePattern("hrm:activities:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
 export async function editHrActivity(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
+    const existing = await prisma.hrActivity.findUnique({
+      where: { id: String(req.params._id) },
+      select: { createdBy: true },
+    });
+    if (!existing)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "HR activity not found",
+      });
+    if (existing.createdBy !== user!.userId)
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+
     const response = await grpcCall(hrmClient, "updateHrActivity", {
       ...req.body,
       id: req.params._id,
@@ -112,10 +120,8 @@ export async function editHrActivity(req: Request, res: Response) {
     });
     await cacheManager.invalidatePattern("hrm:activities:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -128,6 +134,10 @@ export async function deleteHrActivity(req: Request, res: Response) {
     if (!existing)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "HR activity not found",
+      });
+    if (existing.createdBy !== user?.userId)
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
       });
 
     await prisma.hrActivity.update({
@@ -143,25 +153,21 @@ export async function deleteHrActivity(req: Request, res: Response) {
       message: "HR activity deleted successfully",
       status: 0,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("DELETE /delete-hr-activity error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
 export async function getRules(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const {
-      category,
-      status: ruleStatus,
-      page = "1",
-      limit = "50",
-    } = req.query as Record<string, string>;
-    const pageNum = parseInt(page) || 1;
-    const limitNum = Math.min(parseInt(limit) || 50, 200);
+    const { category, status: ruleStatus } = req.query as Record<string, string>;
+    const { page: pageNum, limit: limitNum } = parsePagination(
+      req.query,
+      PAGINATION.DEFAULT_LIMIT_LARGE,
+      PAGINATION.MAX_LIMIT_LARGE,
+    );
     const skip = (pageNum - 1) * limitNum;
 
     const cacheKey = `hrm:rules:${pageNum}:${limitNum}:${category || "all"}:${ruleStatus || "all"}`;
@@ -201,11 +207,9 @@ export async function getRules(req: Request, res: Response) {
       status: 0,
       ...payload,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /rules error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -247,11 +251,9 @@ export async function createRule(req: Request, res: Response) {
       status: 0,
       data: { ...rule, _id: rule.id },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("POST /rules error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -298,11 +300,9 @@ export async function updateRule(req: Request, res: Response) {
       status: 0,
       data: { ...rule, _id: rule.id },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("PUT /rules/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -314,11 +314,9 @@ export async function deleteRule(req: Request, res: Response) {
       message: "Rule deleted successfully",
       status: 0,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("DELETE /rules/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -336,11 +334,9 @@ export async function updateRuleStatus(req: Request, res: Response) {
       status: 0,
       data: { ...rule, _id: rule.id },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("PATCH /rules/:id/status error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -411,18 +407,15 @@ export async function testRule(req: Request, res: Response) {
           : [],
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("POST /rules/test error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
 export async function getPolicies(req: Request, res: Response) {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
+    const { page, limit } = parsePagination(req.query, 10);
     const skip = (page - 1) * limit;
 
     const cacheKey = `hrm:policies:${page}:${limit}`;
@@ -461,11 +454,9 @@ export async function getPolicies(req: Request, res: Response) {
       status: 0,
       ...payload,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /policies error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -521,11 +512,9 @@ export async function createOrUpdatePolicy(req: Request, res: Response) {
       status: 0,
       data: policy,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("POST /policies error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -848,11 +837,9 @@ export async function getPolicyPdf(req: Request, res: Response) {
       "Content-Length": pdfBuffer.length,
     });
     return res.send(pdfBuffer);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /policies/:id/pdf error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -862,10 +849,8 @@ export async function getPolicy(req: Request, res: Response) {
       id: req.params.id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -889,11 +874,9 @@ export async function updatePolicy(req: Request, res: Response) {
       status: 0,
       data: policy,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("PUT /policies/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -908,11 +891,9 @@ export async function deletePolicy(req: Request, res: Response) {
       message: "Policy deleted successfully",
       status: 0,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("DELETE /policies/:id error:", { error });
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -924,9 +905,7 @@ export async function isSuperuser(req: Request, res: Response) {
       action: "access",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }

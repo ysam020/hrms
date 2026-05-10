@@ -9,6 +9,9 @@ A full-stack, production-grade HRMS built as a **pnpm monorepo**. The backend is
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
+- [AI Features](#ai-features)
+- [Security](#security)
+- [Observability](#observability)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
@@ -27,11 +30,13 @@ HRMS covers the core lifecycle of an employee — from onboarding (KYC, biometri
 - **Attendance** — mark attendance, corrections, reports
 - **Leave** — apply, approve/reject, leave balance tracking
 - **Payroll** — salary structures, components, payslips
-- **Recruitment** — job openings, applications, interview scheduling
+- **Recruitment** — job openings, applications, AI resume scoring, interview scheduling
 - **HR activities** — appraisals, feedback, policies, events
 - **Analytics** — workforce, attendance, salary, recruitment dashboards
 - **Notifications** — real-time push (FCM) and in-app (Socket.IO)
 - **Permissions** — role-based access control, teams
+- **AI Chatbot** — HRMS-scoped assistant powered by a local Ollama model
+- **Security** — login risk scoring, impossible-travel detection, anomaly email alerts
 
 ---
 
@@ -41,7 +46,7 @@ HRMS covers the core lifecycle of an employee — from onboarding (KYC, biometri
                         ┌─────────────────┐
                         │   React (web)   │  Vite + nginx
                         └────────┬────────┘
-                                 │ HTTPS / REST
+                                 │ HTTPS / REST + SSE
                         ┌────────▼────────┐
                         │   API Gateway   │  Express · JWT · Socket.IO
                         └────────┬────────┘
@@ -56,10 +61,15 @@ HRMS covers the core lifecycle of an employee — from onboarding (KYC, biometri
                          │   scheduler   │  BullMQ jobs
                          └───────────────┘
 
-      ┌─────────────────────────────────────────────────┐
-      │                 Shared Infrastructure            │
-      │   MongoDB (Prisma)   Redis   Firebase (FCM)      │
-      └─────────────────────────────────────────────────┘
+      ┌─────────────────────────────────────────────────────────────┐
+      │                   Shared Infrastructure                      │
+      │   MongoDB (Prisma)   Redis   Firebase (FCM)   Ollama (AI)   │
+      └─────────────────────────────────────────────────────────────┘
+
+      ┌─────────────────────────────────────────────────────────────┐
+      │                     Observability                            │
+      │        Prometheus  ·  Grafana  ·  Loki  ·  CloudWatch       │
+      └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Key architectural decisions
@@ -83,7 +93,7 @@ Cross-cutting concerns are extracted into workspace packages so no logic is dupl
 | `@hrms/cache`            | Redis client with per-entity TTL strategy                          |
 | `@hrms/queue`            | BullMQ connection factory + job definitions                        |
 | `@hrms/crypto`           | AES-256 encryption for sensitive fields                            |
-| `@hrms/logger`           | Winston logger (structured JSON in prod)                           |
+| `@hrms/logger`           | Winston logger + prom-client metrics server (structured JSON)      |
 | `@hrms/common`           | Shared API response helpers, status codes                          |
 | `@hrms/grpc-client`      | gRPC channel factory for the gateway                               |
 | `@hrms/grpc-server`      | gRPC server bootstrap helpers                                      |
@@ -100,31 +110,166 @@ Cross-cutting concerns are extracted into workspace packages so no logic is dupl
 **Authentication**
 
 - Email-first flow: user enters email → if WebAuthn credential enrolled → biometric prompt, else → Google OAuth redirect
-- Access token in memory (never persisted to localStorage or cookies) — lost on page refresh, silently renewed via the httpOnly refresh token cookie
+- Access token stored in `localStorage` and proactively refreshed 60 seconds before expiry; also refreshed on tab `visibilitychange`
 - Refresh token: `httpOnly; Secure; SameSite=Strict; Path=/api/refresh-token` — inaccessible to JavaScript, scoped to the one endpoint that needs it
+- Google OAuth 2.0: gateway redirects to Google, callback issues JWT tokens and redirects the browser back into the SPA
 - Hidden admin fallback: username + password, separate endpoint, not exposed in the UI
+- Every login (WebAuthn or OAuth) is scored for risk and triggers an alert email if anomalous
 
 **Real-time**
 Socket.IO is configured via `@hrms/websocket` and attached to the API gateway's HTTPS server. Chat, notifications, and presence use named rooms per user.
+
+**HTTP client (frontend)**
+The axios instance in `apps/web` has a layered interceptor pipeline:
+
+- **Token refresh** — proactively refreshes the JWT 60 s before expiry; concurrent requests share a single in-flight refresh promise
+- **CSRF** — fetches a double-submit token lazily on the first mutating request; token is invalidated on logout and after a 403
+- **AbortController** — every request is tracked in a registry; GET requests to the same URL supersede the previous in-flight call automatically; `cancelAllPendingRequests()` is called on logout to avoid stale callbacks
+- **Idempotency keys** — POST/PUT/PATCH automatically receive a `Idempotency-Key` UUID header; the key is preserved on auth/CSRF retries so the server sees the same key for all attempts
 
 ---
 
 ## Tech Stack
 
-| Layer              | Technology                                           |
-| ------------------ | ---------------------------------------------------- |
-| Frontend           | React 18, Vite 8, TypeScript, MUI v6, PrimeReact v10 |
-| State / forms      | React Context, Formik, Zod                           |
-| API gateway        | Node.js, Express, gRPC-js, Socket.IO                 |
-| Microservices      | Node.js, TypeScript, gRPC                            |
-| ORM                | Prisma (MongoDB provider)                            |
-| Database           | MongoDB                                              |
-| Cache / sessions   | Redis (ioredis)                                      |
-| Job queue          | BullMQ                                               |
-| Push notifications | Firebase Cloud Messaging                             |
-| Build system       | Turborepo, pnpm workspaces                           |
-| Containerisation   | Docker, nginx                                        |
-| Code quality       | Husky, Prettier, Conventional Commits                |
+| Layer              | Technology                                                    |
+| ------------------ | ------------------------------------------------------------- |
+| Frontend           | React 18, Vite 8, TypeScript, MUI v6, PrimeReact v10          |
+| State / forms      | React Context, Formik, Zod                                    |
+| API gateway        | Node.js, Express, gRPC-js, Socket.IO                          |
+| Microservices      | Node.js, TypeScript, gRPC                                     |
+| ORM                | Prisma (MongoDB provider)                                     |
+| Database           | MongoDB                                                       |
+| Cache / sessions   | Redis (ioredis)                                               |
+| Job queue          | BullMQ                                                        |
+| Push notifications | Firebase Cloud Messaging                                      |
+| AI inference       | Ollama (local LLM server, default model: `qwen2.5-coder:14b`) |
+| Observability      | Prometheus, Grafana, Loki, Winston, CloudWatch                |
+| Build system       | Turborepo, pnpm workspaces                                    |
+| Containerisation   | Docker, nginx                                                 |
+| Code quality       | Husky, Prettier, Conventional Commits                         |
+
+---
+
+## AI Features
+
+### HRMS Chatbot
+
+An AI assistant available to every employee, powered by a locally-running Ollama instance. The chatbot is scoped exclusively to HR topics — it refuses off-topic questions.
+
+**How it works:**
+
+1. The frontend sends the user's message and up to 10 messages of conversation history to `POST /api/chatbot/message`.
+2. The gateway runs a **tool-calling loop** (up to 5 iterations) against Ollama: if the model requests data, the gateway executes the corresponding tool against the database and feeds the result back.
+3. Once the model has all the data it needs, the final answer is streamed back to the browser as **Server-Sent Events** (`text/event-stream`).
+
+**Available tools** (all scoped to the authenticated user's own data):
+
+| Tool                   | Data fetched                                        |
+| ---------------------- | --------------------------------------------------- |
+| `get_user_profile`     | Name, DOB, blood group, department, designation     |
+| `get_leave_balance`    | Remaining leave by type (paid, sick, casual, etc.)  |
+| `get_leave_applications` | Recent leave history with status                  |
+| `get_attendance`       | Attendance records and summary for any month        |
+| `get_salary_info`      | Salary components, deductions, latest payslip       |
+| `get_policies`         | Company HR policies, searchable by keyword          |
+
+Privacy rules are enforced at the prompt level: the chatbot will never reveal another employee's personal data.
+
+**Configuration:**
+
+```env
+OLLAMA_URL=http://localhost:11434   # Ollama server address
+OLLAMA_MODEL=qwen2.5-coder:14b     # Model to use
+```
+
+### AI Resume Scoring
+
+When a candidate submits a job application via `POST /api/apply-for-job`, a BullMQ job is enqueued in the background (fire-and-forget). The `resumeParser` worker in `recruitment-service`:
+
+1. Extracts text from the uploaded resume PDF using `pdf-parse`.
+2. Sends the resume text, job title, required skills, job description, and minimum experience to Ollama.
+3. Ollama returns a score (0–10) and a brief explanation.
+4. The score and notes are persisted back to `JobApplication.resumeScore` / `JobApplication.aiNotes`.
+5. Applications scoring below the threshold (default 7/10) are automatically moved to `Rejected`.
+
+This runs entirely asynchronously — the candidate receives an immediate confirmation while scoring happens in the background.
+
+---
+
+## Security
+
+### Google OAuth 2.0
+
+`GET /api/auth/google` redirects the browser to Google's authorization endpoint. After the user consents, Google redirects to `GET /api/auth/google/callback`, which exchanges the code for tokens, looks up or provisions the user account, issues JWT access/refresh tokens, and redirects the browser back into the SPA.
+
+### WebAuthn (Passkeys)
+
+Employees can register a passkey (biometric or hardware key) as their primary login method. The registration and authentication flows follow the WebAuthn Level 2 spec. Once enrolled, the login page skips the OAuth redirect entirely and uses the passkey prompt instead.
+
+### Login Risk Analysis
+
+Every successful login — whether via Google OAuth or WebAuthn — is scored against the user's login history using six weighted signals:
+
+| Signal              | Weight | Description                                              |
+| ------------------- | ------ | -------------------------------------------------------- |
+| Impossible travel   | 60     | >500 km displacement in under 6 hours (Haversine)        |
+| New country         | 35     | First sign-in from this country                          |
+| New device          | 20     | Unrecognized browser/device fingerprint                  |
+| Unusual hour        | 15     | Login time falls in a rarely-used 3-hour bucket          |
+| New IP subnet       | 10     | First sign-in from this /24 subnet                       |
+| New auth method     | 10     | First use of this login method (OAuth vs passkey)        |
+
+- Score ≥ 30 → notification email sent to the user with login details
+- Score ≥ 50 → email is flagged as **Suspicious Sign-In Detected** with a warning banner
+
+The first-ever login from a new account scores 0 (no baseline to compare against).
+
+### CSRF Protection
+
+All mutating requests (POST / PUT / PATCH / DELETE) require a `x-csrf-token` header. The token is fetched lazily from `GET /csrf-token` and cached in memory. Concurrent fetches are deduplicated so the server sets exactly one cookie per logical fetch. Tokens are invalidated on logout and automatically re-fetched on a 403 response.
+
+---
+
+## Observability
+
+### Metrics (Prometheus + Grafana)
+
+Every service in the monorepo exposes a Prometheus `/metrics` endpoint on a dedicated `METRICS_PORT` sidecar (separate from the main service port). Metrics are collected via `prom-client` in `@hrms/logger` and include:
+
+- **`http_request_duration_ms`** — histogram of HTTP request latency by method, route, status, and service
+- **`http_requests_total`** — counter of HTTP requests
+- **`grpc_request_duration_ms`** — histogram of gRPC call latency by method and service
+- **`grpc_requests_total`** — counter of gRPC calls
+- Default Node.js process metrics (CPU, memory, event loop lag) via `collectDefaultMetrics`
+
+Prometheus scrapes all services, and Grafana reads from Prometheus. A pre-built dashboard (`monitoring/grafana/dashboards/hrms.json`) is provisioned automatically.
+
+### Logs (Loki + CloudWatch)
+
+Logs are shipped in parallel to two backends depending on environment:
+
+- **Loki** (local / dev) — when `LOKI_URL` is set, Winston sends structured JSON logs to Loki via `winston-loki`. Grafana queries Loki alongside Prometheus on the same dashboard.
+- **CloudWatch** (production) — `winston-cloudwatch` ships logs to AWS CloudWatch Logs under `/hrms/<service>/<env>`. Retention is 90 days in production and 7 days in dev.
+
+### Monitoring stack (local)
+
+The monitoring stack (Prometheus + Loki + Grafana) runs as a separate Docker Compose file and starts automatically with `pnpm dev`:
+
+```bash
+# Start monitoring stack manually
+docker compose -f docker-compose.monitoring.yml up -d
+
+# Stop it
+pnpm monitoring:stop
+```
+
+| Service    | URL                       | Credentials    |
+| ---------- | ------------------------- | -------------- |
+| Grafana    | `http://localhost:3000`   | admin / admin  |
+| Prometheus | `http://localhost:9090`   | —              |
+| Loki       | `http://localhost:3100`   | —              |
+
+The Grafana dashboard is also accessible from within the app itself — the frontend reads from Prometheus directly via the `/prometheus` proxy path and renders live charts in the monitoring section.
 
 ---
 
@@ -140,7 +285,7 @@ Socket.IO is configured via `@hrms/websocket` and attached to the API gateway's 
 │   ├── employee-service/      # gRPC: employee profiles, KYC, org
 │   ├── attendance-service/    # gRPC: check-in/out, reports
 │   ├── leave-service/         # gRPC: leave requests and approvals
-│   ├── recruitment-service/   # gRPC: jobs, applications, interviews
+│   ├── recruitment-service/   # gRPC: jobs, applications, AI resume scoring, interviews
 │   ├── hrm-service/           # gRPC: appraisals, policies, HR activities
 │   ├── salary-service/        # gRPC: salary structures, payslips
 │   ├── analytics-service/     # gRPC: workforce and business analytics
@@ -153,7 +298,7 @@ Socket.IO is configured via `@hrms/websocket` and attached to the API gateway's 
 │   ├── cache/                 # Redis client + TTL helpers
 │   ├── queue/                 # BullMQ connection + job types
 │   ├── crypto/                # AES-256 field encryption
-│   ├── logger/                # Winston structured logger
+│   ├── logger/                # Winston logger + prom-client metrics sidecar
 │   ├── common/                # API response helpers
 │   ├── grpc-client/           # gRPC channel factory
 │   ├── grpc-server/           # gRPC server bootstrap
@@ -168,18 +313,27 @@ Socket.IO is configured via `@hrms/websocket` and attached to the API gateway's 
 │   ├── validation-utils/      # Validation patterns
 │   └── typescript-config/     # Base tsconfig presets
 │
+├── monitoring/
+│   ├── prometheus.yml             # Prometheus scrape config (Docker)
+│   ├── prometheus-local.yml       # Prometheus scrape config (local dev)
+│   ├── loki-config.yml            # Loki storage config
+│   └── grafana/
+│       ├── provisioning/          # Auto-provisioned datasources + dashboards
+│       └── dashboards/hrms.json   # Pre-built HRMS Grafana dashboard
+│
 ├── docker/
 │   ├── base.Dockerfile        # Multi-stage build for all Node services
 │   ├── web.Dockerfile         # Multi-stage build for the React frontend
 │   └── nginx.conf             # nginx config for the web container
 │
-├── docker-compose.local.yml   # Local dev (includes MongoDB + Redis)
-├── docker-compose.dev.yml     # Dev environment (no infra, uses remote)
-├── docker-compose.ci.yml      # CI build and smoke test
-├── docker-compose.prod.yml    # Production (pulls images from registry)
-├── turbo.json                 # Turborepo task graph
+├── docker-compose.local.yml      # Local dev (includes MongoDB + Redis)
+├── docker-compose.dev.yml        # Dev environment (no infra, uses remote)
+├── docker-compose.ci.yml         # CI build and smoke test
+├── docker-compose.prod.yml       # Production (pulls images from registry)
+├── docker-compose.monitoring.yml # Prometheus + Loki + Grafana stack
+├── turbo.json                    # Turborepo task graph
 ├── pnpm-workspace.yaml
-└── GIT_HOOKS.md               # Git hooks documentation
+└── GIT_HOOKS.md                  # Git hooks documentation
 ```
 
 ---
@@ -192,6 +346,7 @@ Socket.IO is configured via `@hrms/websocket` and attached to the API gateway's 
 | pnpm                             | 8.15.6 (set by `packageManager` field) |
 | Docker + Docker Compose          | For containerised local dev            |
 | `protoc` + `protoc-gen-ts_proto` | For regenerating gRPC types            |
+| Ollama                           | For AI chatbot and resume scoring      |
 
 Install `protoc` on macOS:
 
@@ -204,6 +359,14 @@ Install the pnpm version declared in `package.json`:
 ```bash
 corepack enable
 corepack prepare pnpm@8.15.6 --activate
+```
+
+Install and start Ollama:
+
+```bash
+# Install from https://ollama.com
+ollama pull qwen2.5-coder:14b
+ollama serve
 ```
 
 ---
@@ -236,6 +399,9 @@ Required variables are documented in `.env.example`. You will need:
 - Google OAuth credentials (client ID + secret + callback URL)
 - Firebase service account (for FCM)
 - AWS credentials (for Secrets Manager in production)
+- `OLLAMA_URL` and `OLLAMA_MODEL` (for AI chatbot and resume scoring)
+- `LOKI_URL` (optional, for local log shipping to Loki)
+- `METRICS_PORT` per service (for Prometheus scraping)
 
 ### 3. Generate protobuf types
 
@@ -289,6 +455,15 @@ Turborepo runs up to 20 tasks concurrently and streams logs with its TUI. Indivi
 | API Gateway        | `https://localhost:9002`                       |
 | API Docs (Swagger) | `https://localhost:9002/api-docs`              |
 | Prisma Studio      | `http://localhost:5555` (run `pnpm db:studio`) |
+| Grafana            | `http://localhost:3000` (admin / admin)        |
+| Prometheus         | `http://localhost:9090`                        |
+| Loki               | `http://localhost:3100`                        |
+
+The monitoring stack (Prometheus + Loki + Grafana) starts automatically alongside `pnpm dev`. To stop it independently:
+
+```bash
+pnpm monitoring:stop
+```
 
 ### Useful commands
 

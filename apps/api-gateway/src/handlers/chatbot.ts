@@ -293,7 +293,7 @@ async function executeToolCall(
       default:
         return JSON.stringify({ error: "Unknown tool" });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(`Chatbot tool call error [${toolName}]:`, { error });
     return JSON.stringify({ error: "Failed to fetch data" });
   }
@@ -511,11 +511,12 @@ RESPONSE STYLE:
 
     send({ done: true });
     res.end();
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Record<string, any>;
     const isTimeout =
-      error.name === "TimeoutError" ||
-      error.name === "AbortError" ||
-      error.cause?.code === "UND_ERR_CONNECT_ERR";
+      err.name === "TimeoutError" ||
+      err.name === "AbortError" ||
+      err.cause?.code === "UND_ERR_CONNECT_ERR";
 
     const msg = isTimeout
       ? "AI service is unavailable. Please ensure Ollama is running."

@@ -4,6 +4,8 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
+import { handleError } from "../utils/handleError";
+import { parsePagination, PAGINATION } from "../utils/pagination";
 
 async function resolveUsername(userId: string): Promise<string | null> {
   const user = await prisma.user.findUnique({
@@ -24,15 +26,12 @@ async function isSuperUser(userId: string): Promise<boolean> {
 export async function viewJobOpenings(req: Request, res: Response) {
   try {
     const response = await grpcCall(recruitmentClient, "listJobOpenings", {
-      page: parseInt(req.query.page as string) || 1,
-      limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
+      ...parsePagination(req.query),
       jobStatus: req.query.status || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -42,10 +41,8 @@ export async function viewJobOpening(req: Request, res: Response) {
       id: req.params.id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -76,10 +73,8 @@ export async function addJobOpening(req: Request, res: Response) {
       createdBy: createdBy || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -109,10 +104,8 @@ export async function editJobOpening(req: Request, res: Response) {
       jobStatus: jobStatus || "Open",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -122,10 +115,8 @@ export async function deleteJobOpening(req: Request, res: Response) {
       id: req.params._id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -137,10 +128,8 @@ export async function publicCareers(_req: Request, res: Response) {
       jobStatus: "Open",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -148,14 +137,12 @@ export async function getJobTitles(_req: Request, res: Response) {
   try {
     const response = await grpcCall(recruitmentClient, "listJobOpenings", {
       page: 1,
-      limit: 1000,
+      limit: PAGINATION.ALL_RECORDS_LIMIT,
       jobStatus: "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -172,10 +159,8 @@ export async function applyForJob(req: Request, res: Response) {
     });
     const resp = response as any;
     return apiResponse(res, grpcToHttpStatus(resp.status), resp);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -184,14 +169,11 @@ export async function viewApplications(req: Request, res: Response) {
     const response = await grpcCall(recruitmentClient, "listApplications", {
       jobTitleId: req.params.id,
       applicationStatus: req.query.status || "",
-      page: parseInt(req.query.page as string) || 1,
-      limit: Math.min(parseInt(req.query.limit as string) || 20, 100),
+      ...parsePagination(req.query),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -208,10 +190,8 @@ export async function updateCandidateStatus(req: Request, res: Response) {
       },
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -228,10 +208,8 @@ export async function hireCandidate(req: Request, res: Response) {
       },
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -248,10 +226,8 @@ export async function rejectApplication(req: Request, res: Response) {
       },
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -266,10 +242,8 @@ export async function addResignation(req: Request, res: Response) {
       resignationDate: resignationDate || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -287,17 +261,14 @@ export async function viewResignations(req: Request, res: Response) {
     }
 
     const response = await grpcCall(recruitmentClient, "listResignations", {
-      page: parseInt(String(req.query.page || "1")),
-      limit: Math.min(parseInt(String(req.query.limit || "10")), 100),
+      ...parsePagination(req.query, 10),
       username,
       status: String(req.query.status || ""),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("GET /view-resignations error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -308,10 +279,8 @@ export async function approveResignation(req: Request, res: Response) {
       status: "Approved",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -322,24 +291,35 @@ export async function rejectResignation(req: Request, res: Response) {
       status: "Rejected",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
 export async function withdrawResignation(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
+    const resignation = await prisma.resignation.findUnique({
+      where: { id: String(req.params._id) },
+      select: { username: true },
+    });
+    if (!resignation)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, { message: "Resignation not found" });
+
+    const caller = await prisma.user.findUnique({
+      where: { id: user!.userId },
+      select: { username: true, isSuperUser: true },
+    });
+    if (!caller?.isSuperUser && caller?.username !== resignation.username)
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, { message: "Forbidden" });
+
     const response = await grpcCall(recruitmentClient, "rejectResignation", {
       id: req.params._id,
       status: "Withdrawn",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: any) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -608,11 +588,9 @@ export async function jobOpeningsInsights(_req: Request, res: Response) {
         lastUpdated: now.toISOString(),
       },
     });
-  } catch (err: any) {
-    logger.error("job-openings-insights error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("job-openings-insights error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -651,11 +629,9 @@ export async function scheduleInterview(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview scheduled successfully",
     });
-  } catch (err: any) {
-    logger.error("schedule-interview error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("schedule-interview error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -694,11 +670,9 @@ export async function rescheduleInterview(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview rescheduled successfully",
     });
-  } catch (err: any) {
-    logger.error("reschedule-interview error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("reschedule-interview error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -728,11 +702,9 @@ export async function reassignInterviewer(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interviewer reassigned successfully",
     });
-  } catch (err: any) {
-    logger.error("reassign-interviewer error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("reassign-interviewer error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -755,11 +727,9 @@ export async function getInterviewerList(_req: Request, res: Response) {
       email: u.email || "",
     }));
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err: any) {
-    logger.error("get-interviewer-list error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("get-interviewer-list error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -786,11 +756,9 @@ export async function updateResignation(req: Request, res: Response) {
       message: "Resignation updated successfully",
       data: updated,
     });
-  } catch (err: any) {
-    logger.error("update-resignation error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("update-resignation error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -848,11 +816,9 @@ export async function addExitFeedback(req: Request, res: Response) {
       message: "Exit feedback submitted successfully",
       data: updated,
     });
-  } catch (err: any) {
-    logger.error("add-exit-feedback error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("add-exit-feedback error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -899,10 +865,8 @@ export async function resignationInsights(_req: Request, res: Response) {
         })),
       },
     });
-  } catch (err: any) {
-    logger.error("resignation-insights error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+  } catch (error: unknown) {
+    logger.error("resignation-insights error:", { error });
+    return handleError(res, error);
   }
 }

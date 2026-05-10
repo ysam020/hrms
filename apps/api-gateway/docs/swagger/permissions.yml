@@ -1,5 +1,5 @@
 paths:
-  /api/get-roles:
+  /api/v1/get-roles:
     get:
       summary: Get all roles
       description: Returns all defined roles in the system
@@ -27,7 +27,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/create-role:
+  /api/v1/create-role:
     post:
       summary: Create a role
       description: Define a new role with a set of permissions
@@ -61,7 +61,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/delete-role/{_id}:
+  /api/v1/delete-role/{_id}:
     delete:
       summary: Delete a role
       description: Remove a role from the system
@@ -79,7 +79,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/update-role-permissions/{_id}:
+  /api/v1/update-role-permissions/{_id}:
     put:
       summary: Update role permissions
       description: Replace the permissions set for an existing role
@@ -110,7 +110,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-role-permissions/{_id}:
+  /api/v1/get-role-permissions/{_id}:
     get:
       summary: Get permissions for a role
       description: Returns the list of permissions assigned to a specific role
@@ -140,7 +140,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-role-and-permissions:
+  /api/v1/get-role-and-permissions:
     get:
       summary: Get all roles with their permissions
       description: Returns all roles along with their complete permission sets
@@ -153,7 +153,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/save-user-permissions:
+  /api/v1/save-user-permissions:
     put:
       summary: Save user-level permissions
       description: Set custom (overriding) permissions for a specific user
@@ -179,7 +179,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-user-permissions/{username}:
+  /api/v1/get-user-permissions/{username}:
     get:
       summary: Get user-level permissions
       description: Returns the effective permissions for a specific user (role + custom)
@@ -210,7 +210,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/update-superuser/{username}:
+  /api/v1/update-superuser/{username}:
     put:
       summary: Toggle superuser status
       description: Grant or revoke superuser privileges for a user
@@ -237,7 +237,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/delete-user-role:
+  /api/v1/delete-user-role:
     post:
       summary: Remove a role from a user
       description: Unassign a role from a specific user
@@ -260,7 +260,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/get-teams:
+  /api/v1/get-teams:
     get:
       summary: Get all teams
       description: Returns all defined teams with their members
@@ -293,7 +293,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/create-team:
+  /api/v1/create-team:
     post:
       summary: Create a team
       description: Create a new team
@@ -320,7 +320,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/delete-team/{_id}:
+  /api/v1/delete-team/{_id}:
     delete:
       summary: Delete a team
       description: Remove a team permanently
@@ -338,7 +338,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/add-team-members:
+  /api/v1/add-team-members:
     put:
       summary: Add members to a team
       description: Add one or more users to an existing team
@@ -364,7 +364,7 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/delete-user-from-team:
+  /api/v1/delete-user-from-team:
     post:
       summary: Remove a user from a team
       description: Remove a specific user from a team

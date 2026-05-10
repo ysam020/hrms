@@ -15,7 +15,7 @@ WORKDIR /app
 
 # Override API URL so the bundle proxies through nginx, not the raw gateway port.
 # Must be set before secrets load (loadSecrets skips already-set env vars).
-ENV VITE_API_STRING=/api
+ENV VITE_API_STRING=/api/v1
 # Empty string so the Google OAuth redirect becomes a relative URL (/api/auth/google)
 # that nginx proxies to api-gateway — prevents the production domain being baked in.
 ENV VITE_SERVER_URL=

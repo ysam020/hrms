@@ -1,5 +1,6 @@
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { getLeaveConfig } from "../config";
 
 interface BalanceEntry {
   month: number;
@@ -9,10 +10,6 @@ interface BalanceEntry {
   usedLWP: number;
   remainingPL: number;
 }
-
-const getLeaveConfig = () => ({
-  carryForwardLeaves: Number(process.env.CARRY_FORWARD_LEAVES) || 15,
-});
 
 export async function updateLeaveBalance(): Promise<void> {
   try {
