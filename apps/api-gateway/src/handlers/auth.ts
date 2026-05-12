@@ -14,7 +14,7 @@ const REFRESH_COOKIE_OPTIONS = {
   secure: true,
   sameSite: "strict" as const,
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: "/api/refresh-token",
+  path: "/api/v1/refresh-token",
 };
 
 const jsRedirect = (res: Response, url: string) => {
@@ -410,9 +410,13 @@ export async function webAuthnVerifyLogin(req: Request, res: Response) {
 
     let payload: { userId?: string } | null = null;
     try {
-      payload = jwt.verify(response.accessToken, process.env.ACCESS_JWT_TOKEN!, {
-        algorithms: ["HS256"],
-      }) as { userId?: string };
+      payload = jwt.verify(
+        response.accessToken,
+        process.env.ACCESS_JWT_TOKEN!,
+        {
+          algorithms: ["HS256"],
+        },
+      ) as { userId?: string };
     } catch {}
     if (payload?.userId) {
       recordLoginEvent({
@@ -506,9 +510,13 @@ export async function googleAuthCallback(req: Request, res: Response) {
 
     let payload: { userId?: string } | null = null;
     try {
-      payload = jwt.verify(response.accessToken, process.env.ACCESS_JWT_TOKEN!, {
-        algorithms: ["HS256"],
-      }) as { userId?: string };
+      payload = jwt.verify(
+        response.accessToken,
+        process.env.ACCESS_JWT_TOKEN!,
+        {
+          algorithms: ["HS256"],
+        },
+      ) as { userId?: string };
     } catch {}
     if (payload?.userId) {
       recordLoginEvent({
@@ -519,9 +527,14 @@ export async function googleAuthCallback(req: Request, res: Response) {
       }).catch((err) => logger.error("Failed to record login event", { err }));
     }
 
-    return jsRedirect(res, `${clientUrl}/?oauth_success=1`);
+    return jsRedirect(
+      res,
+      `${clientUrl}/?oauth_success=1&access_token=${encodeURIComponent(response.accessToken)}`,
+    );
   } catch (err: unknown) {
-    logger.error("[OAuth callback error]", { message: err instanceof Error ? err.message : err });
+    logger.error("[OAuth callback error]", {
+      message: err instanceof Error ? err.message : err,
+    });
     return jsRedirect(
       res,
       `${clientUrl}/login?error=${encodeURIComponent("Login failed")}`,

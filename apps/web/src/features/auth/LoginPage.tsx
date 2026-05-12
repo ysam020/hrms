@@ -66,7 +66,7 @@ function LoginPage() {
   );
 
   const handleGoogleSignIn = useCallback(() => {
-    window.location.href = `${import.meta.env.VITE_SERVER_URL || ""}/api/auth/google`;
+    window.location.href = `${import.meta.env.VITE_SERVER_URL || ""}/api/v1/auth/google`;
   }, []);
 
   const features = [

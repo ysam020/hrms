@@ -136,7 +136,7 @@ if (!workbox) {
 
   // Notifications - NetworkFirst since they need to be real-time
   workbox.routing.registerRoute(
-    ({ url }) => url.pathname.startsWith("/api/get-notifications"),
+    ({ url }) => url.pathname.startsWith("/api/v1/get-notifications"),
     new workbox.strategies.NetworkFirst({
       cacheName: "api-notifications-v1",
       networkTimeoutSeconds: 3,
@@ -154,7 +154,7 @@ if (!workbox) {
 
   // Auth - short cache, needs to be fresh
   workbox.routing.registerRoute(
-    ({ url }) => url.pathname.startsWith("/api/verify-user"),
+    ({ url }) => url.pathname.startsWith("/api/v1/verify-user"),
     new workbox.strategies.CacheFirst({
       cacheName: "api-auth-v1",
       plugins: [
@@ -172,7 +172,7 @@ if (!workbox) {
   // All other GET API routes - catch-all
   workbox.routing.registerRoute(
     ({ url, request }) =>
-      url.pathname.startsWith("/api/") && request.method === "GET",
+      url.pathname.startsWith("/api/v1/") && request.method === "GET",
     new workbox.strategies.CacheFirst({
       cacheName: "api-general-v1",
       plugins: [
@@ -191,7 +191,7 @@ if (!workbox) {
   workbox.routing.registerRoute(
     ({ request, url }) =>
       ["POST", "PUT", "DELETE", "PATCH"].includes(request.method) &&
-      url.pathname.startsWith("/api/"),
+      url.pathname.startsWith("/api/v1/"),
     new workbox.strategies.NetworkOnly({
       plugins: [
         new workbox.backgroundSync.BackgroundSyncPlugin("formSubmissionQueue", {

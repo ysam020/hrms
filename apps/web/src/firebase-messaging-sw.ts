@@ -141,7 +141,7 @@ registerRoute(
 
 // ── API: Notifications (real-time, very short cache) ─────────────────────────
 registerRoute(
-  ({ url }) => url.pathname.startsWith("/api/get-notifications"),
+  ({ url }) => url.pathname.startsWith("/api/v1/get-notifications"),
   new NetworkFirst({
     cacheName: "api-notifications-v1",
     networkTimeoutSeconds: 3,
@@ -157,9 +157,9 @@ registerRoute(
   ({ url }) =>
     url.pathname.includes("insights") ||
     url.pathname.includes("analytics") ||
-    url.pathname.startsWith("/api/get-holidays") ||
-    url.pathname.startsWith("/api/birthdays-anniversaries") ||
-    url.pathname.startsWith("/api/get-hr-activities"),
+    url.pathname.startsWith("/api/v1/get-holidays") ||
+    url.pathname.startsWith("/api/v1/birthdays-anniversaries") ||
+    url.pathname.startsWith("/api/v1/get-hr-activities"),
   new NetworkFirst({
     cacheName: "api-dashboard-v1",
     networkTimeoutSeconds: 5,
@@ -173,7 +173,7 @@ registerRoute(
 // ── API: All other GET routes ────────────────────────────────────────────────
 registerRoute(
   ({ url, request }) =>
-    url.pathname.startsWith("/api/") && request.method === "GET",
+    url.pathname.startsWith("/api/v1/") && request.method === "GET",
   new NetworkFirst({
     cacheName: "api-general-v1",
     networkTimeoutSeconds: 5,

@@ -9,6 +9,10 @@ FROM slim AS base
 RUN npm install -g pnpm@8.15.6 turbo
 RUN pnpm config set store-dir /root/.pnpm-store
 RUN pnpm config set manage-package-manager-versions false
+RUN pnpm config set fetch-retries 5
+RUN pnpm config set fetch-retry-mintimeout 20000
+RUN pnpm config set fetch-retry-maxtimeout 120000
+RUN pnpm config set fetch-timeout 300000
 
 FROM base AS pruner
 ARG PROJECT

@@ -54,4 +54,3 @@ authRouter.post(
 );
 
 authRouter.get("/auth/google", h.googleAuthRedirect);
-authRouter.get("/auth/google/callback", h.googleAuthCallback);

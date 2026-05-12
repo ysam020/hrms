@@ -1,4 +1,7 @@
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit, {
+  ipKeyGenerator,
+  type RateLimitRequestHandler,
+} from "express-rate-limit";
 import { Application } from "express";
 import jwt from "jsonwebtoken";
 
@@ -24,7 +27,7 @@ const AUTH_ROUTES_REGEX =
 const PUBLIC_ROUTES_REGEX =
   /^\/api\/v1\/(public\/careers|get-job-titles|apply-for-job)/;
 
-const authLimiter = rateLimit({
+export const authLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
   keyGenerator: userOrIpKey,

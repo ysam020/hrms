@@ -13,11 +13,12 @@ import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
 import { configureSwagger } from "./config/swaggerSetup";
 import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
-import { applyRateLimiters } from "./config/rateLimiters";
+import { applyRateLimiters, authLimiter } from "./config/rateLimiters";
 import { resolveSocketUsername } from "./config/socketAuth";
 import { registerGracefulShutdown } from "./config/gracefulShutdown";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
+import { googleAuthCallback } from "./handlers/auth";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -65,6 +66,9 @@ configureSwagger(app as any);
 app.get("/api/v1/csrf-token", (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
+// Callback URL must match the URI registered in Google Cloud Console exactly.
+// It intentionally lives outside /api/v1 so it never needs a version bump.
+app.get("/api/auth/google/callback", authLimiter, googleAuthCallback);
 app.use("/api/v1", rootRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "healthy" }));
