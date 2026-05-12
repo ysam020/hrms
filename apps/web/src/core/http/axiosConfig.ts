@@ -16,19 +16,15 @@ export const setUnauthorizedHandler = (fn: () => void) => {
   _onUnauthorized = fn;
 };
 
-// Access token is persisted to localStorage so it survives page refreshes.
-// It is cleared on explicit logout, so there is no stale-session flash.
-// The refresh-token HttpOnly cookie is still used to silently obtain a new
-// access token when the stored one is missing or nearing expiry.
-const TOKEN_KEY = "hrms_access_token";
-let _accessToken: string | null = localStorage.getItem(TOKEN_KEY);
+// Access token lives in memory only; the HttpOnly refresh-token cookie is used
+// to silently obtain a new one on every page load (see App.tsx boot effect).
+let _accessToken: string | null = null;
 
 export const getAccessToken = () => _accessToken;
 
 export const setAccessToken = (token: string) => {
   const wasUnauthenticated = _accessToken === null;
   _accessToken = token;
-  localStorage.setItem(TOKEN_KEY, token);
   // Session identifier changes from req.ip → userId on login; stale CSRF must
   // be dropped so the next fetch generates a fresh token under the new identity.
   if (wasUnauthenticated) {
@@ -38,7 +34,6 @@ export const setAccessToken = (token: string) => {
 
 const clearAccessToken = () => {
   _accessToken = null;
-  localStorage.removeItem(TOKEN_KEY);
   invalidateCsrfToken();
 };
 
