@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { Application } from "express";
 import jwt from "jsonwebtoken";
 
@@ -15,7 +15,7 @@ const userOrIpKey = (req: any): string => {
       if (payload?.userId) return `user:${payload.userId}`;
     } catch {}
   }
-  return `ip:${req.ip ?? "unknown"}`;
+  return req.ip ? `ip:${ipKeyGenerator(req)}` : "ip:unknown";
 };
 
 const AUTH_ROUTES_REGEX =
