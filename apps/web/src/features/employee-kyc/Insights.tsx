@@ -143,7 +143,7 @@ function KycInsights() {
                   variant="h5"
                   sx={{ mt: 0, mb: 0, color: "#4caf50" }}
                 >
-                  {insights.overview?.completionRate || 0}%
+                  {insights.overview?.completionRate?.toFixed(2) || 0}%
                 </Typography>
                 <Typography variant="caption" color="textSecondary">
                   KYC Completion Rate

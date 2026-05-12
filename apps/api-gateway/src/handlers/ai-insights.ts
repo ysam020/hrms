@@ -816,6 +816,16 @@ export async function generateInsights(req: Request, res: Response) {
     });
   }
 
+  // Switch to SSE after all validation and data-fetching succeed
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const send = (payload: object) =>
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+
   const systemPrompt = modulePrompt + RESPONSE_FORMAT;
 
   try {
@@ -831,40 +841,45 @@ export async function generateInsights(req: Request, res: Response) {
             content: `Here is the complete ${module} data to analyze:\n\n${JSON.stringify(data, null, 2)}`,
           },
         ],
-        stream: false,
-        format: "json",
+        stream: true,
       }),
       signal: AbortSignal.timeout(120_000),
     });
 
-    if (!ollamaRes.ok) throw new Error(`Ollama HTTP ${ollamaRes.status}`);
+    if (!ollamaRes.ok || !ollamaRes.body)
+      throw new Error(`Ollama HTTP ${ollamaRes.status}`);
 
-    const ollamaData: any = await ollamaRes.json();
-    const content = ollamaData.message?.content ?? "";
+    const reader = ollamaRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
 
-    let parsed: any;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        parsed = JSON.parse(match[0]);
-      } else {
-        throw new Error("Failed to parse LLM response as JSON");
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const chunk = JSON.parse(line);
+          const token: string = chunk.message?.content ?? "";
+          if (token) send({ token });
+          if (chunk.done) {
+            send({ done: true });
+            res.end();
+            return;
+          }
+        } catch {
+          // malformed chunk — skip
+        }
       }
     }
 
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      message: "Insights generated successfully",
-      data: {
-        summary: typeof parsed.summary === "string" ? parsed.summary : "",
-        patterns: Array.isArray(parsed.patterns) ? parsed.patterns : [],
-        risks: Array.isArray(parsed.risks) ? parsed.risks : [],
-        recommendations: Array.isArray(parsed.recommendations)
-          ? parsed.recommendations
-          : [],
-      },
-    });
+    send({ done: true });
+    res.end();
   } catch (error: unknown) {
     const err = error as Record<string, any>;
     const isTimeout =
@@ -873,10 +888,11 @@ export async function generateInsights(req: Request, res: Response) {
       err.cause?.code === "UND_ERR_CONNECT_ERR";
 
     logger.error("AI insights Ollama error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: isTimeout
+    send({
+      error: isTimeout
         ? "AI service is unavailable. Please ensure Ollama is running."
         : "Failed to generate insights. Please try again.",
     });
+    res.end();
   }
 }
