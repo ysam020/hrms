@@ -171,6 +171,10 @@ const CHATBOT = {
   CHATBOT_MESSAGE: "/chatbot/message",
 };
 
+const AI_INSIGHTS = {
+  AI_INSIGHTS: "/ai-insights",
+};
+
 const DEVELOPER = {
   DEVELOPER_STATUS: "/developer/status",
   DEVELOPER_VERIFY_STATUS: "/developer/verify-status",
@@ -200,5 +204,6 @@ export const API_ENDPOINTS = {
   ...POLICY,
   ...UPLOAD,
   ...CHATBOT,
+  ...AI_INSIGHTS,
   ...DEVELOPER,
 };

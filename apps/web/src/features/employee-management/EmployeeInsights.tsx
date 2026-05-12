@@ -26,6 +26,7 @@ import Warning from "@mui/icons-material/Warning";
 
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { AIInsightsCard } from "@web/shared/components";
 
 const EmployeeInsights = () => {
   const [insights, setInsights] = useState<any>(null);
@@ -161,6 +162,7 @@ const EmployeeInsights = () => {
 
   return (
     <Box p={1}>
+      <AIInsightsCard module="employee-management" />
       {/* Overview Cards */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {metricCards.map((metric, index) => (

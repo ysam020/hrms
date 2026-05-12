@@ -30,6 +30,7 @@ import TrendingUp from "@mui/icons-material/TrendingUp";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { AIInsightsCard } from "@web/shared/components";
 
 function KycInsights() {
   const [insights, setInsights] = useState<any>(null);
@@ -122,6 +123,7 @@ function KycInsights() {
 
   return (
     <Container maxWidth="xl" sx={{ p: 0 }}>
+      <AIInsightsCard module="employee-kyc" />
       {/* Primary Metrics Cards */}
       <Grid container spacing={1} sx={{ mb: 2 }}>
         <Grid item xs={12} sm={6} md={3}>
