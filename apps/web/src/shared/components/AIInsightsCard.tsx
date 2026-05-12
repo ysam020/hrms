@@ -45,37 +45,108 @@ const parseInsights = (text: string): AIInsights => {
   };
 };
 
-const parsePartialInsights = (raw: string): AIInsights => {
-  const summaryMatch = raw.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)/);
-  const summary = summaryMatch
-    ? summaryMatch[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, "\\")
-    : "";
+// Extracts the summary text from a partial JSON stream without regex,
+// so raw JSON structure never leaks into the display.
+const extractStreamingSummary = (raw: string): string => {
+  const markerIdx = raw.indexOf('"summary"');
+  if (markerIdx === -1) return "";
 
-  const extractItems = (field: string): string[] => {
-    const fieldMatch = raw.match(
-      new RegExp(`"${field}"\\s*:\\s*\\[([\\s\\S]*?)(?:\\]|$)`),
-    );
-    if (!fieldMatch) return [];
-    const items: string[] = [];
-    const re = /"((?:[^"\\]|\\.)*)"/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(fieldMatch[1])) !== null) {
-      items.push(
-        m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\"),
-      );
+  const colonIdx = raw.indexOf(":", markerIdx + 9);
+  if (colonIdx === -1) return "";
+
+  const openQuoteIdx = raw.indexOf('"', colonIdx + 1);
+  if (openQuoteIdx === -1) return "";
+
+  let content = "";
+  let i = openQuoteIdx + 1;
+  while (i < raw.length) {
+    if (raw[i] === '"' && raw[i - 1] !== "\\") break;
+    if (raw[i] === "\\" && i + 1 < raw.length) {
+      const next = raw[i + 1];
+      if (next === "n") {
+        content += "\n";
+        i += 2;
+        continue;
+      }
+      if (next === '"') {
+        content += '"';
+        i += 2;
+        continue;
+      }
+      if (next === "\\") {
+        content += "\\";
+        i += 2;
+        continue;
+      }
+      content += next;
+      i += 2;
+      continue;
     }
-    return items;
-  };
+    content += raw[i];
+    i++;
+  }
+  return content;
+};
 
-  return {
-    summary,
-    patterns: extractItems("patterns"),
-    risks: extractItems("risks"),
-    recommendations: extractItems("recommendations"),
-  };
+const extractStreamingArray = (raw: string, key: string): string[] => {
+  const markerIdx = raw.indexOf(`"${key}"`);
+  if (markerIdx === -1) return [];
+
+  const bracketIdx = raw.indexOf("[", markerIdx);
+  if (bracketIdx === -1) return [];
+
+  const items: string[] = [];
+  let i = bracketIdx + 1;
+
+  while (i < raw.length) {
+    while (i < raw.length && " \n\r\t".includes(raw[i])) i++;
+    if (i >= raw.length || raw[i] === "]") break;
+    if (raw[i] === ",") {
+      i++;
+      continue;
+    }
+
+    if (raw[i] === '"') {
+      let item = "";
+      i++;
+      let closed = false;
+      while (i < raw.length) {
+        if (raw[i] === '"' && raw[i - 1] !== "\\") {
+          closed = true;
+          break;
+        }
+        if (raw[i] === "\\" && i + 1 < raw.length) {
+          const next = raw[i + 1];
+          if (next === "n") {
+            item += "\n";
+            i += 2;
+            continue;
+          }
+          if (next === '"') {
+            item += '"';
+            i += 2;
+            continue;
+          }
+          if (next === "\\") {
+            item += "\\";
+            i += 2;
+            continue;
+          }
+          item += next;
+          i += 2;
+          continue;
+        }
+        item += raw[i];
+        i++;
+      }
+      items.push(item);
+      if (closed) i++;
+    } else {
+      i++;
+    }
+  }
+
+  return items;
 };
 
 export default function AIInsightsCard({
@@ -87,9 +158,18 @@ export default function AIInsightsCard({
   const [error, setError] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState("");
 
-  const displayInsights: AIInsights | null =
-    insights ??
-    (loading && streamingText ? parsePartialInsights(streamingText) : null);
+  const streamingSummary =
+    loading && !insights ? extractStreamingSummary(streamingText) : "";
+  const streamingPatterns =
+    loading && !insights
+      ? extractStreamingArray(streamingText, "patterns")
+      : [];
+  const streamingRisks =
+    loading && !insights ? extractStreamingArray(streamingText, "risks") : [];
+  const streamingRecommendations =
+    loading && !insights
+      ? extractStreamingArray(streamingText, "recommendations")
+      : [];
 
   const generate = async () => {
     setLoading(true);
@@ -161,9 +241,6 @@ export default function AIInsightsCard({
     }
   };
 
-  const summaryStreaming =
-    loading && displayInsights && !displayInsights.patterns.length;
-
   return (
     <Card elevation={1} sx={{ mb: 2 }}>
       <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
@@ -171,7 +248,7 @@ export default function AIInsightsCard({
           display="flex"
           justifyContent="space-between"
           alignItems="center"
-          mb={displayInsights ? 2 : 0}
+          mb={loading || insights ? 2 : 0}
         >
           <Box display="flex" alignItems="center" gap={1}>
             <AutoAwesome sx={{ color: "#7c3aed", fontSize: 18 }} />
@@ -222,15 +299,16 @@ export default function AIInsightsCard({
           </Alert>
         )}
 
-        {displayInsights && (
+        {/* Streaming phase: progressively reveal summary then bullet sections */}
+        {loading && !insights && (
           <Box>
             <Typography
               variant="body2"
               color="text.secondary"
-              sx={{ mb: 2, lineHeight: 1.7 }}
+              sx={{ mb: streamingPatterns.length > 0 ? 2 : 0, lineHeight: 1.7 }}
             >
-              {displayInsights.summary}
-              {summaryStreaming && (
+              {streamingSummary}
+              {streamingPatterns.length === 0 && (
                 <Box
                   component="span"
                   sx={{
@@ -247,8 +325,9 @@ export default function AIInsightsCard({
               )}
             </Typography>
 
-            {displayInsights.patterns.length > 0 && (
+            {streamingPatterns.length > 0 && (
               <>
+                <Divider sx={{ mb: 1.5, mt: 1.5 }} />
                 <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
                   <TrendingUp sx={{ fontSize: 16, color: "#1976d2" }} />
                   <Typography
@@ -262,8 +341,16 @@ export default function AIInsightsCard({
                   </Typography>
                 </Box>
                 <List dense disablePadding sx={{ mb: 1.5 }}>
-                  {displayInsights.patterns.map((p, i) => (
-                    <ListItem key={i} disablePadding sx={{ py: 0.4 }}>
+                  {streamingPatterns.map((p, i) => (
+                    <ListItem
+                      key={i}
+                      disablePadding
+                      sx={{
+                        p: 0,
+                        m: 0,
+                        "&:hover": { backgroundColor: "transparent" },
+                      }}
+                    >
                       <ListItemIcon sx={{ minWidth: 20 }}>
                         <FiberManualRecord
                           sx={{ fontSize: 8, color: "#1976d2" }}
@@ -284,7 +371,7 @@ export default function AIInsightsCard({
               </>
             )}
 
-            {displayInsights.risks.length > 0 && (
+            {streamingRisks.length > 0 && (
               <>
                 <Divider sx={{ mb: 1.5 }} />
                 <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
@@ -300,8 +387,16 @@ export default function AIInsightsCard({
                   </Typography>
                 </Box>
                 <List dense disablePadding sx={{ mb: 1.5 }}>
-                  {displayInsights.risks.map((r, i) => (
-                    <ListItem key={i} disablePadding sx={{ py: 0.4 }}>
+                  {streamingRisks.map((r, i) => (
+                    <ListItem
+                      key={i}
+                      disablePadding
+                      sx={{
+                        p: 0,
+                        m: 0,
+                        "&:hover": { backgroundColor: "transparent" },
+                      }}
+                    >
                       <ListItemIcon sx={{ minWidth: 20 }}>
                         <FiberManualRecord
                           sx={{ fontSize: 8, color: "#f59e0b" }}
@@ -322,7 +417,7 @@ export default function AIInsightsCard({
               </>
             )}
 
-            {displayInsights.recommendations.length > 0 && (
+            {streamingRecommendations.length > 0 && (
               <>
                 <Divider sx={{ mb: 1.5 }} />
                 <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
@@ -338,8 +433,16 @@ export default function AIInsightsCard({
                   </Typography>
                 </Box>
                 <List dense disablePadding>
-                  {displayInsights.recommendations.map((r, i) => (
-                    <ListItem key={i} disablePadding sx={{ py: 0.4 }}>
+                  {streamingRecommendations.map((r, i) => (
+                    <ListItem
+                      key={i}
+                      disablePadding
+                      sx={{
+                        p: 0,
+                        m: 0,
+                        "&:hover": { backgroundColor: "transparent" },
+                      }}
+                    >
                       <ListItemIcon sx={{ minWidth: 20 }}>
                         <FiberManualRecord
                           sx={{ fontSize: 8, color: "#10b981" }}
@@ -359,14 +462,156 @@ export default function AIInsightsCard({
                 </List>
               </>
             )}
+          </Box>
+        )}
 
-            {loading && (
-              <Box display="flex" alignItems="center" gap={0.75} mt={1.5}>
-                <CircularProgress size={10} sx={{ color: "#7c3aed" }} />
-                <Typography variant="caption" color="text.disabled">
-                  Generating...
-                </Typography>
-              </Box>
+        {/* Final phase: full structured layout */}
+        {insights && (
+          <Box>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 2, lineHeight: 1.7 }}
+            >
+              {insights.summary}
+            </Typography>
+
+            {insights.patterns.length > 0 && (
+              <>
+                <Divider sx={{ mb: 1.5, mt: 1.5 }} />
+                <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                  <TrendingUp sx={{ fontSize: 16, color: "#1976d2" }} />
+                  <Typography
+                    variant="caption"
+                    fontWeight={600}
+                    color="#1976d2"
+                    textTransform="uppercase"
+                    letterSpacing={0.5}
+                  >
+                    Patterns
+                  </Typography>
+                </Box>
+                <List dense disablePadding sx={{ mb: 1.5 }}>
+                  {insights.patterns.map((p: string, i: number) => (
+                    <ListItem
+                      key={i}
+                      disablePadding
+                      sx={{
+                        p: 0,
+                        m: 0,
+                        "&:hover": { backgroundColor: "transparent" },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <FiberManualRecord
+                          sx={{ fontSize: 8, color: "#1976d2" }}
+                        />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={p}
+                        slotProps={{
+                          primary: {
+                            variant: "body2",
+                            style: { lineHeight: 1.6 },
+                          },
+                        }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </>
+            )}
+
+            {insights.risks.length > 0 && (
+              <>
+                <Divider sx={{ mb: 1.5 }} />
+                <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                  <Warning sx={{ fontSize: 16, color: "#f59e0b" }} />
+                  <Typography
+                    variant="caption"
+                    fontWeight={600}
+                    color="#f59e0b"
+                    textTransform="uppercase"
+                    letterSpacing={0.5}
+                  >
+                    Risks
+                  </Typography>
+                </Box>
+                <List dense disablePadding sx={{ mb: 1.5 }}>
+                  {insights.risks.map((r: string, i: number) => (
+                    <ListItem
+                      key={i}
+                      disablePadding
+                      sx={{
+                        p: 0,
+                        m: 0,
+                        "&:hover": { backgroundColor: "transparent" },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <FiberManualRecord
+                          sx={{ fontSize: 8, color: "#f59e0b" }}
+                        />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={r}
+                        slotProps={{
+                          primary: {
+                            variant: "body2",
+                            style: { lineHeight: 1.6 },
+                          },
+                        }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </>
+            )}
+
+            {insights.recommendations.length > 0 && (
+              <>
+                <Divider sx={{ mb: 1.5 }} />
+                <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                  <Lightbulb sx={{ fontSize: 16, color: "#10b981" }} />
+                  <Typography
+                    variant="caption"
+                    fontWeight={600}
+                    color="#10b981"
+                    textTransform="uppercase"
+                    letterSpacing={0.5}
+                  >
+                    Recommendations
+                  </Typography>
+                </Box>
+                <List dense disablePadding>
+                  {insights.recommendations.map((r: string, i: number) => (
+                    <ListItem
+                      key={i}
+                      disablePadding
+                      sx={{
+                        p: 0,
+                        m: 0,
+                        "&:hover": { backgroundColor: "transparent" },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 20 }}>
+                        <FiberManualRecord
+                          sx={{ fontSize: 8, color: "#10b981" }}
+                        />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={r}
+                        slotProps={{
+                          primary: {
+                            variant: "body2",
+                            style: { lineHeight: 1.6 },
+                          },
+                        }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </>
             )}
           </Box>
         )}
