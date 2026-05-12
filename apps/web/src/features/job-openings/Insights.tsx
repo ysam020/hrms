@@ -30,6 +30,7 @@ import AttachMoney from "@mui/icons-material/AttachMoney";
 
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { AIInsightsCard } from "@web/shared/components";
 
 const JobOpeningsInsights = () => {
   const [insights, setInsights] = useState<any>(null);
@@ -106,6 +107,7 @@ const JobOpeningsInsights = () => {
 
   return (
     <Box p={0}>
+      <AIInsightsCard module="recruitment" />
       {/* Primary Metrics Cards */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         <Grid item xs={12} sm={6} md={3}>

@@ -24,3 +24,4 @@ export { default as TabsPanel } from "./TabsPanel";
 export { default as ThemedDialog } from "./ThemedDialog";
 export { default as ThemedPaper } from "./ThemedPaper";
 export { default as UserAutoComplete } from "./UserAutoComplete";
+export { default as AIInsightsCard } from "./AIInsightsCard";

@@ -33,6 +33,7 @@ import Assessment from "@mui/icons-material/Assessment";
 
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { AIInsightsCard } from "@web/shared/components";
 
 const Insights = () => {
   const [insights, setInsights] = useState<any>(null);
@@ -126,6 +127,7 @@ const Insights = () => {
 
   return (
     <Box p={0}>
+      <AIInsightsCard module="resignation" />
       {/* Overview Cards */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         <Grid item xs={12} sm={6} md={3}>

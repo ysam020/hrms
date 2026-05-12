@@ -31,6 +31,7 @@ import PersonOutline from "@mui/icons-material/PersonOutline";
 
 import { Dropdown } from "primereact/dropdown";
 import useFetchData from "@web/shared/hooks/useFetchData";
+import { AIInsightsCard } from "@web/shared/components";
 
 const periodOptions = [
   { label: "Current Month", value: "current_month" },
@@ -142,6 +143,8 @@ function AttendanceInsights() {
           />
         </Box>
       </Box>
+
+      <AIInsightsCard module="attendance" params={{ period: selectedPeriod }} />
 
       {/* Primary Metrics Cards */}
       <Grid container spacing={1} sx={{ mb: 2 }}>
