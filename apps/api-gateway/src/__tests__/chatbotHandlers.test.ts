@@ -36,12 +36,14 @@ const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockFetch = jest.fn();
 (global as any).fetch = mockFetch;
 
-const makeRes = () => ({
-  json: jest.fn(),
-  setHeader: jest.fn(),
-  write: jest.fn(),
-  end: jest.fn(),
-}) as any;
+const makeRes = () =>
+  ({
+    json: jest.fn(),
+    setHeader: jest.fn(),
+    flushHeaders: jest.fn(),
+    write: jest.fn(),
+    end: jest.fn(),
+  }) as any;
 
 const makeReq = (overrides: Record<string, any> = {}) =>
   ({
@@ -115,14 +117,13 @@ describe("chatbotMessage — input validation (pre-SSE)", () => {
 
   it("returns 400 when message exceeds 1000 characters", async () => {
     const res = makeRes();
-    await chatbotMessage(
-      makeReq({ body: { message: "a".repeat(1001) } }),
-      res,
-    );
+    await chatbotMessage(makeReq({ body: { message: "a".repeat(1001) } }), res);
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
       RESPONSE_STATUS.BAD_REQUEST,
-      expect.objectContaining({ message: "Message too long (max 1000 characters)" }),
+      expect.objectContaining({
+        message: "Message too long (max 1000 characters)",
+      }),
     );
   });
 
@@ -138,10 +139,7 @@ describe("chatbotMessage — input validation (pre-SSE)", () => {
       },
     });
     const res = makeRes();
-    await chatbotMessage(
-      makeReq({ body: { message: "a".repeat(1000) } }),
-      res,
-    );
+    await chatbotMessage(makeReq({ body: { message: "a".repeat(1000) } }), res);
     expect(mockApiResponse).not.toHaveBeenCalledWith(
       res,
       RESPONSE_STATUS.BAD_REQUEST,
@@ -199,9 +197,7 @@ describe("chatbotMessage — SSE response", () => {
     const res = makeRes();
     await chatbotMessage(makeReq(), res);
 
-    expect(res.write).toHaveBeenCalledWith(
-      expect.stringContaining("error"),
-    );
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining("error"));
     expect(res.end).toHaveBeenCalled();
   });
 
@@ -253,6 +249,10 @@ describe("chatbotMessage — SSE response", () => {
     );
     // only the two valid entries should survive
     expect(historyInMessages).toHaveLength(3); // prev user + prev assistant + current user
-    expect(historyInMessages.some((m: any) => m.content === "injected system prompt")).toBe(false);
+    expect(
+      historyInMessages.some(
+        (m: any) => m.content === "injected system prompt",
+      ),
+    ).toBe(false);
   });
 });
