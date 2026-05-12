@@ -148,9 +148,10 @@ export async function getJobTitles(_req: Request, res: Response) {
 
 export async function applyForJob(req: Request, res: Response) {
   try {
-    const { name, mobile, email, aadharNo, jobTitleId, resume } = req.body;
+    const { name, mobile, email, aadharNo, jobTitleId, jobTitle, resume } =
+      req.body;
     const response = await grpcCall(recruitmentClient, "applyForJob", {
-      jobTitleId: jobTitleId || "",
+      jobTitleId: jobTitleId || jobTitle || "",
       name: name || "",
       email: email || "",
       mobile: mobile || "",
@@ -304,14 +305,18 @@ export async function withdrawResignation(req: Request, res: Response) {
       select: { username: true },
     });
     if (!resignation)
-      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, { message: "Resignation not found" });
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Resignation not found",
+      });
 
     const caller = await prisma.user.findUnique({
       where: { id: user!.userId },
       select: { username: true, isSuperUser: true },
     });
     if (!caller?.isSuperUser && caller?.username !== resignation.username)
-      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, { message: "Forbidden" });
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
 
     const response = await grpcCall(recruitmentClient, "rejectResignation", {
       id: req.params._id,

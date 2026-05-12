@@ -13,6 +13,7 @@ import {
 import apiClient, {
   performRefresh,
   getAccessToken,
+  setAccessToken,
 } from "@web/core/http/axiosConfig";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -113,6 +114,8 @@ function App() {
 
     const params = new URLSearchParams(initialSearch.current);
     if (params.get("oauth_success") === "1") {
+      const oauthToken = params.get("access_token");
+      if (oauthToken) setAccessToken(oauthToken);
       window.history.replaceState({}, "", window.location.pathname);
     }
 

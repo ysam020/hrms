@@ -136,7 +136,7 @@ describe("LoginPage", () => {
     });
     renderLoginPage();
     fireEvent.click(screen.getAllByText("Sign in with Google")[0]);
-    expect(window.location.href).toContain("/api/auth/google");
+    expect(window.location.href).toContain("/api/v1/auth/google");
     Object.defineProperty(window, "location", {
       value: originalLocation,
       writable: true,
