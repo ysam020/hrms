@@ -85,11 +85,32 @@ transports.push(
   }),
 );
 
+// Recursively convert Error instances to plain objects so JSON.stringify
+// captures message/stack (which are non-enumerable on Error).
+const serializeErrors = winston.format((info) => {
+  const convert = (val: unknown): unknown => {
+    if (val instanceof Error) {
+      return { message: val.message, name: val.name, stack: val.stack };
+    }
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      return Object.fromEntries(
+        Object.entries(val as Record<string, unknown>).map(([k, v]) => [
+          k,
+          convert(v),
+        ]),
+      );
+    }
+    return val;
+  };
+  return convert(info) as winston.Logform.TransformableInfo;
+})();
+
 // ── Logger ───────────────────────────────────────────────────────────────────
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || "info",
   format: winston.format.combine(
     winston.format.timestamp(),
+    serializeErrors,
     winston.format.errors({ stack: true }),
     winston.format.json(),
   ),
