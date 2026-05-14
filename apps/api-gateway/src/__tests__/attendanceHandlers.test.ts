@@ -210,11 +210,11 @@ describe("getAllAttendances", () => {
 describe("attendanceCorrection", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUserFindUnique.mockResolvedValue({ username: "manager", isSuperUser: true });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
     mockGrpcCall.mockResolvedValue({ message: "Corrected" });
   });
 
-  it("returns BAD_REQUEST when username is missing", async () => {
+  it("returns BAD_REQUEST when userId is missing", async () => {
     const res = makeRes();
     await attendanceCorrection(makeReq({ body: { date: "2024-03-01" } }), res);
 
@@ -226,12 +226,12 @@ describe("attendanceCorrection", () => {
     expect(mockGrpcCall).not.toHaveBeenCalled();
   });
 
-  it("calls correctAttendance with correctedBy resolved from userId", async () => {
+  it("calls correctAttendance with userId and correctedBy", async () => {
     const res = makeRes();
     await attendanceCorrection(
       makeReq({
         body: {
-          username: "john",
+          userId: "john",
           date: "2024-03-01",
           timeIn: "09:00",
           timeOut: "17:00",
@@ -243,14 +243,14 @@ describe("attendanceCorrection", () => {
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "correctAttendance",
-      expect.objectContaining({ username: "john", correctedBy: "manager" }),
+      expect.objectContaining({ userId: "john", correctedBy: "user-id-1" }),
     );
   });
 
   it("returns INTERNAL_SERVER_ERROR when grpcCall throws", async () => {
     mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
     const res = makeRes();
-    await attendanceCorrection(makeReq({ body: { username: "john" } }), res);
+    await attendanceCorrection(makeReq({ body: { userId: "john" } }), res);
 
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
@@ -434,7 +434,7 @@ describe("attendanceInsights", () => {
   it("assigns High risk level when attendance rate is 0", async () => {
     mockRecordFindMany.mockResolvedValue([
       {
-        username: "bob",
+        userId: "bob-id",
         status: "Absent",
         isCorrected: true,
         workingHours: null,
@@ -442,14 +442,14 @@ describe("attendanceInsights", () => {
         date: new Date("2024-03-01"),
       },
     ]);
-    mockUserFindMany.mockResolvedValue([{ username: "bob", department: "HR" }]);
+    mockUserFindMany.mockResolvedValue([{ id: "bob-id", department: "HR" }]);
 
     const res = makeRes();
     await attendanceInsights(makeReq({ query: {} }), res);
 
     const call = mockApiResponse.mock.calls[0][2];
     const emp = call.data.employeeRiskAssessment[0];
-    expect(emp.username).toBe("bob");
+    expect(emp.userId).toBe("bob-id");
     expect(emp.riskLevel).toBe("High");
   });
 
@@ -479,7 +479,7 @@ describe("attendanceInsights", () => {
   it("groups records by department for teamPerformance", async () => {
     mockRecordFindMany.mockResolvedValue([
       {
-        username: "alice",
+        userId: "alice-id",
         status: "Present",
         isCorrected: false,
         workingHours: 8,
@@ -487,7 +487,7 @@ describe("attendanceInsights", () => {
         date: new Date("2024-03-01"),
       },
       {
-        username: "bob",
+        userId: "bob-id",
         status: "Absent",
         isCorrected: false,
         workingHours: null,
@@ -496,8 +496,8 @@ describe("attendanceInsights", () => {
       },
     ]);
     mockUserFindMany.mockResolvedValue([
-      { username: "alice", department: "Engineering" },
-      { username: "bob", department: "HR" },
+      { id: "alice-id", department: "Engineering" },
+      { id: "bob-id", department: "HR" },
     ]);
 
     const res = makeRes();

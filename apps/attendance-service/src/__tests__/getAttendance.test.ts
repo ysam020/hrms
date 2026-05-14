@@ -69,34 +69,30 @@ describe("getAttendance", () => {
     expect(mockFindMany).not.toHaveBeenCalled();
   });
 
-  it("resolves username from ObjectId via user lookup", async () => {
-    mockUserFindUnique.mockResolvedValue({ username: "john" });
+  it("filters records by userId when provided", async () => {
     mockFindMany.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);
 
     await getAttendance(
-      makeCall({ userId: "507f1f77bcf86cd799439011" }), // valid ObjectId
+      makeCall({ userId: "507f1f77bcf86cd799439011" }),
       makeCallback(),
     );
 
-    expect(mockUserFindUnique).toHaveBeenCalledWith({
-      where: { id: "507f1f77bcf86cd799439011" },
-      select: { username: true },
-    });
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ username: "john" }),
+        where: expect.objectContaining({ userId: "507f1f77bcf86cd799439011" }),
       }),
     );
   });
 
-  it("uses userId directly as username when not an ObjectId", async () => {
+  it("uses userId directly as the DB filter key", async () => {
     await getAttendance(makeCall({ userId: "john_doe" }), makeCallback());
 
     expect(mockUserFindUnique).not.toHaveBeenCalled();
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ username: "john_doe" }),
+        where: expect.objectContaining({ userId: "john_doe" }),
       }),
     );
   });

@@ -1,12 +1,7 @@
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
-const downloadSalarySlip = async (
-  date,
-  username,
-  setIsDownloading,
-  setAlert,
-) => {
+const downloadSalarySlip = async (date, userId, setIsDownloading, setAlert) => {
   if (!date) {
     alert("Please select a month and year");
     return;
@@ -16,7 +11,7 @@ const downloadSalarySlip = async (
   try {
     const response = await apiClient(
       API_ENDPOINTS.GENERATE_SALARY_SLIP(
-        username,
+        userId,
         date.split("-")[0],
         date.split("-")[1],
       ),
@@ -32,7 +27,7 @@ const downloadSalarySlip = async (
 
     // Extract filename from response headers or create default
     const contentDisposition = response.headers["content-disposition"];
-    let filename = `salary_slip_${username}_${date}.pdf`;
+    let filename = `salary_slip_${userId}_${date}.pdf`;
 
     if (contentDisposition) {
       const filenameMatch = contentDisposition.match(/filename="(.+)"/);

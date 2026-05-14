@@ -16,9 +16,9 @@ export const correctAttendance = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username, date, timeIn, timeOut, correctedBy } = call.request;
+    const { userId, date, timeIn, timeOut, correctedBy } = call.request;
 
-    if (!username) {
+    if (!userId) {
       return callback(null, {
         message: MESSAGES.USERNAME_REQUIRED,
         status: status.INVALID_ARGUMENT,
@@ -33,7 +33,7 @@ export const correctAttendance = async (
     );
 
     const existingRecord = await prisma.attendanceRecord.findUnique({
-      where: { username_date: { username, date: dateStart } },
+      where: { userId_date: { userId, date: dateStart } },
     });
 
     const updateData: Record<string, any> = { isCorrected: true };
@@ -59,12 +59,12 @@ export const correctAttendance = async (
     } else {
       record = await prisma.attendanceRecord.create({
         data: {
-          username,
+          userId,
           date: dateStart,
           timeIn: timeIn || "",
           timeOut: timeOut || "",
           isCorrected: true,
-          correctedBy: correctedBy || "",
+          correctedBy: correctedBy || null,
           workingHours: updateData.workingHours,
           status: updateData.status || "Present",
         },
@@ -72,16 +72,16 @@ export const correctAttendance = async (
     }
 
     await Promise.all([
-      cacheManager.invalidatePattern(`attendance:${username}:*`),
-      cacheManager.delete(`todayAttendance:${username}`),
-      cacheManager.invalidatePattern(`attendanceSummary:${username}:*`),
+      cacheManager.invalidatePattern(`attendance:${userId}:*`),
+      cacheManager.delete(`todayAttendance:${userId}`),
+      cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
     ]);
     return callback(null, {
       message: MESSAGES.ATTENDANCE_CORRECTED,
       status: status.OK,
       data: {
         id: record.id,
-        username: record.username,
+        userId: record.userId,
         date: record.date?.toISOString() || "",
         timeIn: record.timeIn || "",
         timeOut: record.timeOut || "",

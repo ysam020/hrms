@@ -10,7 +10,7 @@ export const approveLeave = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { id, approvedByUsername } = call.request;
+    const { id, approvedById } = call.request;
 
     if (!id) {
       return callback(null, {
@@ -39,19 +39,18 @@ export const approveLeave = async (
       where: { id },
       data: {
         status: "Approved",
-        approvedByUsername: approvedByUsername || null,
+        approvedById: approvedById || null,
         approvedOn: new Date().toISOString(),
       },
     });
 
     await cacheManager.invalidatePattern("leaves:*");
 
-    // Notify applicant (fire-and-forget)
     getNotificationQueue()
       .add("leaveApproved", {
         title: "Leave",
         message: MESSAGES.LEAVE_APPROVED,
-        targetUser: updatedLeave.username,
+        targetUser: updatedLeave.userId,
         eventType: "leave_notification",
         priority: "medium",
       })

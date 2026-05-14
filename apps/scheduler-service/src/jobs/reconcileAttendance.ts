@@ -48,7 +48,7 @@ async function getHolidaysInRange(
 }
 
 async function processEmployee(
-  username: string,
+  userId: string,
   startDate: Date,
   endDate: Date,
   targetMonth: number,
@@ -60,7 +60,7 @@ async function processEmployee(
 
   const existing = await prisma.attendanceRecord.findMany({
     where: {
-      username,
+      userId,
       date: { gte: startDate, lte: endDate },
     },
     select: { date: true },
@@ -74,8 +74,7 @@ async function processEmployee(
   const endYear = endDate.getFullYear();
   const holidays = await getHolidaysInRange(startYear, endYear);
 
-  // Get or create leave balance
-  let lb = await prisma.leaveBalance.findUnique({ where: { username } });
+  let lb = await prisma.leaveBalance.findUnique({ where: { userId } });
   const balances: BalanceEntry[] =
     (lb?.balances as unknown as BalanceEntry[]) ?? [];
   const accumulated = lb?.accumulatedPLBeforeCurrentMonth ?? 0;
@@ -84,15 +83,10 @@ async function processEmployee(
     (b) => b.month === targetMonth && b.year === targetYear,
   );
   if (!targetBalance) {
-    const user = await prisma.user.findUnique({
-      where: { username },
-      select: { id: true },
-    });
     if (!lb) {
-      // Create the record first
       lb = await prisma.leaveBalance.create({
         data: {
-          username,
+          userId,
           accumulatedPLBeforeCurrentMonth: accumulated,
           balances: [],
         },
@@ -109,7 +103,6 @@ async function processEmployee(
     balances.push(targetBalance);
   }
 
-  // Categorise missing dates
   const holidayDates: string[] = [];
   const weekOffDates: string[] = [];
   const regularDates: string[] = [];
@@ -127,7 +120,6 @@ async function processEmployee(
     }
   }
 
-  // Calculate leave distribution for regular missing dates
   let remaining = regularDates.length;
   let plUsed = 0;
   let lwpUsed = 0;
@@ -154,7 +146,6 @@ async function processEmployee(
       plUsed += accToUse;
       remaining -= accToUse;
       targetBalance.usedPL += accToUse;
-      // We'll update accumulatedPLBeforeCurrentMonth when we save
     }
 
     if (remaining > 0) {
@@ -165,21 +156,21 @@ async function processEmployee(
 
   const attendanceRecords = [
     ...holidayDates.map((date) => ({
-      username,
+      userId,
       date: new Date(date + "T00:00:00.000Z"),
       workingHours: 0,
       status: "Holiday",
       isCorrected: false,
     })),
     ...weekOffDates.map((date) => ({
-      username,
+      userId,
       date: new Date(date + "T00:00:00.000Z"),
       workingHours: 0,
       status: "Week Off",
       isCorrected: false,
     })),
     ...regularDates.map((date) => ({
-      username,
+      userId,
       date: new Date(date + "T00:00:00.000Z"),
       workingHours: 0,
       status: "Leave",
@@ -188,7 +179,6 @@ async function processEmployee(
   ];
 
   if (attendanceRecords.length > 0) {
-    // skipDuplicates is typed as `never` on this model in the current Prisma version
     await (prisma.attendanceRecord.createMany as any)({
       data: attendanceRecords,
       skipDuplicates: true,
@@ -197,7 +187,7 @@ async function processEmployee(
 
   const now = new Date().toISOString();
   const leaveApplications: Array<{
-    username: string;
+    userId: string;
     from: string;
     to: string;
     leaveType: string;
@@ -205,13 +195,12 @@ async function processEmployee(
     status: string;
     reason: string;
     appliedOn: string;
-    approvedByUsername: string;
     approvedOn: string;
   }> = [];
 
   for (const date of regularDates.slice(0, plUsed)) {
     leaveApplications.push({
-      username,
+      userId,
       from: date,
       to: date,
       leaveType: "PL",
@@ -219,14 +208,13 @@ async function processEmployee(
       status: "Approved",
       reason: "System generated - No attendance record found",
       appliedOn: now,
-      approvedByUsername: "SYSTEM",
       approvedOn: now,
     });
   }
 
   for (const date of regularDates.slice(plUsed)) {
     leaveApplications.push({
-      username,
+      userId,
       from: date,
       to: date,
       leaveType: "LWP",
@@ -234,7 +222,6 @@ async function processEmployee(
       status: "Approved",
       reason: "System generated - No attendance record found",
       appliedOn: now,
-      approvedByUsername: "SYSTEM",
       approvedOn: now,
     });
   }
@@ -243,7 +230,6 @@ async function processEmployee(
     await prisma.leaveApplication.createMany({ data: leaveApplications });
   }
 
-  // Update leave balance
   const newAccumulated = Math.max(
     0,
     (lb?.accumulatedPLBeforeCurrentMonth ?? 0) -
@@ -253,13 +239,13 @@ async function processEmployee(
   );
 
   await prisma.leaveBalance.upsert({
-    where: { username },
+    where: { userId },
     update: {
       accumulatedPLBeforeCurrentMonth: newAccumulated,
       balances: balances as any,
     },
     create: {
-      username,
+      userId,
       accumulatedPLBeforeCurrentMonth: newAccumulated,
       balances: balances as any,
     },
@@ -277,7 +263,6 @@ export async function reconcileAttendance(): Promise<void> {
     let endDate: Date;
 
     if (today.getDate() === 1) {
-      // First of month: process entire previous month
       const firstOfPrevMonth = new Date(
         today.getFullYear(),
         today.getMonth() - 1,
@@ -306,7 +291,7 @@ export async function reconcileAttendance(): Promise<void> {
 
     const employees = await prisma.user.findMany({
       where: { employeeStatus: "Active" },
-      select: { username: true },
+      select: { id: true },
     });
 
     let processed = 0;
@@ -314,7 +299,7 @@ export async function reconcileAttendance(): Promise<void> {
     for (const emp of employees) {
       try {
         await processEmployee(
-          emp.username,
+          emp.id,
           startDate,
           endDate,
           targetMonth,
@@ -323,7 +308,7 @@ export async function reconcileAttendance(): Promise<void> {
         processed++;
       } catch (err) {
         errors++;
-        logger.error(`reconcileAttendance: error processing ${emp.username}`, {
+        logger.error(`reconcileAttendance: error processing ${emp.id}`, {
           err,
         });
       }

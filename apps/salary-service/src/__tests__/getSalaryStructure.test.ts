@@ -23,7 +23,7 @@ describe("getSalaryStructure", () => {
     jest.clearAllMocks();
   });
 
-  it("returns INVALID_ARGUMENT when username is missing", async () => {
+  it("returns INVALID_ARGUMENT when userId is missing", async () => {
     const cb = makeCallback();
     await getSalaryStructure(makeCall({ month: 3, year: 2024 }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
@@ -35,7 +35,7 @@ describe("getSalaryStructure", () => {
   it("returns NOT_FOUND when no salary structure exists", async () => {
     mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
-    await getSalaryStructure(makeCall({ username: "john" }), cb);
+    await getSalaryStructure(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.NO_SALARY_STRUCTURE_FOUND,
       status: status.NOT_FOUND,
@@ -46,14 +46,14 @@ describe("getSalaryStructure", () => {
     mockFindFirst.mockResolvedValue({ id: "sal-1" });
 
     await getSalaryStructure(
-      makeCall({ username: "john", month: "3", year: "2024" }),
+      makeCall({ userId: "john", month: "3", year: "2024" }),
       makeCallback(),
     );
 
     expect(mockFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          username: "john",
+          userId: "john",
           month: 3,
           year: 2024,
         }),
@@ -64,16 +64,16 @@ describe("getSalaryStructure", () => {
   it("queries without month/year filters when they are not provided", async () => {
     mockFindFirst.mockResolvedValue({ id: "sal-1" });
 
-    await getSalaryStructure(makeCall({ username: "john" }), makeCallback());
+    await getSalaryStructure(makeCall({ userId: "john" }), makeCallback());
 
     const callArgs = mockFindFirst.mock.calls[0][0];
-    expect(callArgs.where).toEqual({ username: "john" });
+    expect(callArgs.where).toEqual({ userId: "john" });
   });
 
   it("orders by createdAt descending to get latest record", async () => {
     mockFindFirst.mockResolvedValue({ id: "sal-1" });
 
-    await getSalaryStructure(makeCall({ username: "john" }), makeCallback());
+    await getSalaryStructure(makeCall({ userId: "john" }), makeCallback());
 
     expect(mockFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { createdAt: "desc" } }),
@@ -83,7 +83,7 @@ describe("getSalaryStructure", () => {
   it("returns salary structure data on happy path", async () => {
     const structure = {
       id: "sal-1",
-      username: "john",
+      userId: "john",
       basicPay: 50000,
       month: 3,
       year: 2024,
@@ -92,7 +92,7 @@ describe("getSalaryStructure", () => {
 
     const cb = makeCallback();
     await getSalaryStructure(
-      makeCall({ username: "john", month: "3", year: "2024" }),
+      makeCall({ userId: "john", month: "3", year: "2024" }),
       cb,
     );
 
@@ -106,7 +106,7 @@ describe("getSalaryStructure", () => {
   it("returns INTERNAL on database error", async () => {
     mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await getSalaryStructure(makeCall({ username: "john" }), cb);
+    await getSalaryStructure(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,

@@ -3,11 +3,11 @@ import type { Server as HttpsServer } from "https";
 import { Server, type Socket } from "socket.io";
 import { RedisWebSocketAdapter } from "./RedisWebSocketAdapter";
 
-type AuthenticatedSocket = Socket & { username: string };
+type AuthenticatedSocket = Socket & { userId: string };
 
 /**
  * Async callback provided by the caller to verify a JWT access token and
- * resolve it to the authenticated user's username.  Returns null when the
+ * resolve it to the authenticated user's userId.  Returns null when the
  * token is invalid or the user cannot be found.
  */
 type TokenVerifier = (token: string) => Promise<string | null>;
@@ -41,18 +41,18 @@ export function configureSocketIO(
         if (!token) {
           return next(new Error("Authentication failed: token required"));
         }
-        const username = await verifyToken(token);
-        if (!username) {
+        const userId = await verifyToken(token);
+        if (!userId) {
           return next(new Error("Authentication failed: invalid token"));
         }
-        (socket as AuthenticatedSocket).username = username;
+        (socket as AuthenticatedSocket).userId = userId;
       } else {
         // Fallback for local development when no verifier is provided
-        const username = socket.handshake.auth?.username as string | undefined;
-        if (!username) {
-          return next(new Error("Authentication failed: username is required"));
+        const userId = socket.handshake.auth?.userId as string | undefined;
+        if (!userId) {
+          return next(new Error("Authentication failed: userId is required"));
         }
-        (socket as AuthenticatedSocket).username = username;
+        (socket as AuthenticatedSocket).userId = userId;
       }
       next();
     } catch {

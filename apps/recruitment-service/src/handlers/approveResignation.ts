@@ -52,7 +52,7 @@ export const approveResignation = async (
       .add("resignationApproved", {
         title: "Resignation",
         message: MESSAGES.RESIGNATION_APPROVED,
-        targetUser: updatedResignation.username,
+        targetUser: updatedResignation.userId,
         eventType: "resignation_notification",
         priority: "medium",
       })

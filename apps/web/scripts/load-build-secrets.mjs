@@ -7,7 +7,14 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, "..");
 
-await loadSecrets("hrms/config");
+try {
+  await loadSecrets("hrms/config");
+} catch (err) {
+  console.warn(
+    "[load-build-secrets] AWS Secrets Manager unreachable, continuing with environment variables:",
+    err.message,
+  );
+}
 
 function run(cmd, args) {
   return new Promise((resolve, reject) => {

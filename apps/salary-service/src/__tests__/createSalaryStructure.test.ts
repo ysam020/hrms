@@ -26,7 +26,7 @@ describe("createSalaryStructure", () => {
   it("returns INVALID_ARGUMENT when required fields are missing", async () => {
     const cb = makeCallback();
     await createSalaryStructure(
-      makeCall({ username: "john", basicPay: "50000" }),
+      makeCall({ userId: "john", basicPay: "50000" }),
       cb,
     );
     expect(cb).toHaveBeenCalledWith(null, {
@@ -53,7 +53,7 @@ describe("createSalaryStructure", () => {
 
     await createSalaryStructure(
       makeCall({
-        username: "john",
+        userId: "john",
         basicPay: "40000",
         hra: "10000",
         conveyance: "2000",
@@ -79,7 +79,7 @@ describe("createSalaryStructure", () => {
 
     await createSalaryStructure(
       makeCall({
-        username: "john",
+        userId: "john",
         basicPay: "50000",
         pf: "1800",
         esi: "750",
@@ -105,7 +105,7 @@ describe("createSalaryStructure", () => {
 
     await createSalaryStructure(
       makeCall({
-        username: "john",
+        userId: "john",
         basicPay: "50000",
         hra: "10000",
         pf: "1800",
@@ -130,7 +130,7 @@ describe("createSalaryStructure", () => {
 
     await createSalaryStructure(
       makeCall({
-        username: "john",
+        userId: "john",
         basicPay: "30000",
         month: "3",
         year: "2024",
@@ -154,7 +154,7 @@ describe("createSalaryStructure", () => {
 
     await createSalaryStructure(
       makeCall({
-        username: "john",
+        userId: "john",
         basicPay: "30000",
         month: "3",
         year: "2024",
@@ -172,7 +172,7 @@ describe("createSalaryStructure", () => {
   it("returns OK with created structure on happy path", async () => {
     const structure = {
       id: "sal-1",
-      username: "john",
+      userId: "john",
       basicPay: 50000,
       netPayable: 48000,
     };
@@ -181,7 +181,7 @@ describe("createSalaryStructure", () => {
     const cb = makeCallback();
     await createSalaryStructure(
       makeCall({
-        username: "john",
+        userId: "john",
         basicPay: "50000",
         month: "3",
         year: "2024",
@@ -201,7 +201,7 @@ describe("createSalaryStructure", () => {
     const cb = makeCallback();
     await createSalaryStructure(
       makeCall({
-        username: "john",
+        userId: "john",
         basicPay: "50000",
         month: "3",
         year: "2024",

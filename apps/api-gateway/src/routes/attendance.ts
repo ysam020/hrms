@@ -30,7 +30,7 @@ attendanceRouter.put(
   h.attendanceCorrection,
 );
 attendanceRouter.get(
-  "/get-attendance-summary/:username/:year/:month",
+  "/get-attendance-summary/:userId/:year/:month",
   authenticate,
   h.getAttendanceSummary,
 );

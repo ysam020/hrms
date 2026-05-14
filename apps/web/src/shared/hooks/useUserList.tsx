@@ -11,10 +11,9 @@ function useUserList() {
     null,
   );
 
-  // Transform the data to extract usernames
   const userList = useMemo(() => {
     if (!usersData || !Array.isArray(usersData)) return [];
-    return usersData.map((user) => user.username);
+    return usersData.map((user) => ({ value: user.id, label: user.username }));
   }, [usersData]);
 
   return userList;

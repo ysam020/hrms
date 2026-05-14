@@ -55,7 +55,7 @@ function CreateTeamModal(props) {
         const res = await apiClient.post(API_ENDPOINTS.CREATE_TEAM, {
           team_name: values.team_name.trim(),
           members: values.members,
-          team_leader: values.team_leader,
+          teamLeaderId: values.team_leader,
         });
 
         setAlert({
@@ -217,6 +217,8 @@ function CreateTeamModal(props) {
                     value={formik.values.members}
                     onChange={(e) => formik.setFieldValue("members", e.value)}
                     options={userList}
+                    optionLabel="label"
+                    optionValue="value"
                     placeholder="Select team members..."
                     maxSelectedLabels={3}
                     appendTo="self"
@@ -294,7 +296,11 @@ function CreateTeamModal(props) {
                     onChange={(e) =>
                       formik.setFieldValue("team_leader", e.value)
                     }
-                    options={formik.values.members}
+                    options={userList.filter((u) =>
+                      formik.values.members.includes(u.value),
+                    )}
+                    optionLabel="label"
+                    optionValue="value"
                     placeholder="Select team leader..."
                     style={{ width: "100%" }}
                     disabled={formik.values.members.length === 0}
@@ -350,8 +356,7 @@ function CreateTeamModal(props) {
                         }}
                       >
                         <PersonIcon sx={{ fontSize: 14 }} />
-                        {`${formik.values.team_leader} 
-                        selected as team leader`}
+                        {`${userList.find((u) => u.value === formik.values.team_leader)?.label || formik.values.team_leader} selected as team leader`}
                       </Typography>
                     </Box>
                   )}

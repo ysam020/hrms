@@ -242,7 +242,7 @@ describe("recruitmentHandlers", () => {
     );
   });
 
-  it("addResignation calls submitResignation with user's userId as username", async () => {
+  it("addResignation calls submitResignation with user's userId", async () => {
     await addResignation(
       makeReq({ body: { reason: "Better opportunity" } }),
       makeRes(),
@@ -251,38 +251,33 @@ describe("recruitmentHandlers", () => {
       expect.anything(),
       "submitResignation",
       expect.objectContaining({
-        username: "user-1",
+        userId: "user-1",
         reason: "Better opportunity",
       }),
     );
   });
 
   describe("viewResignations", () => {
-    it("scopes to own username for non-superuser", async () => {
-      mockUserFindUnique
-        .mockResolvedValueOnce({ isSuperUser: false }) // isSuperUser check
-        .mockResolvedValueOnce({ username: "john" }); // resolveUsername
+    it("scopes to own userId for non-superuser", async () => {
+      mockUserFindUnique.mockResolvedValueOnce({ isSuperUser: false });
       await viewResignations(
-        makeReq({ query: { username: "other" } }),
+        makeReq({ query: { userId: "other" } }),
         makeRes(),
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
         expect.anything(),
         "listResignations",
-        expect.objectContaining({ username: "john" }),
+        expect.objectContaining({ userId: "user-1" }),
       );
     });
 
     it("allows superuser to view any user's resignation", async () => {
       mockUserFindUnique.mockResolvedValueOnce({ isSuperUser: true });
-      await viewResignations(
-        makeReq({ query: { username: "jane" } }),
-        makeRes(),
-      );
+      await viewResignations(makeReq({ query: { userId: "jane" } }), makeRes());
       expect(mockGrpcCall).toHaveBeenCalledWith(
         expect.anything(),
         "listResignations",
-        expect.objectContaining({ username: "jane" }),
+        expect.objectContaining({ userId: "jane" }),
       );
     });
 
@@ -339,7 +334,7 @@ describe("recruitmentHandlers", () => {
   });
 
   it("withdrawResignation calls rejectResignation with Withdrawn status", async () => {
-    mockResignFindUnique.mockResolvedValue({ username: "admin" });
+    mockResignFindUnique.mockResolvedValue({ userId: "user-1" });
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
@@ -349,7 +344,7 @@ describe("recruitmentHandlers", () => {
   });
 
   it("withdrawResignation returns INTERNAL on error", async () => {
-    mockResignFindUnique.mockResolvedValue({ username: "admin" });
+    mockResignFindUnique.mockResolvedValue({ userId: "user-1" });
     mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
     const res = makeRes();
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), res);
@@ -717,19 +712,7 @@ describe("recruitmentHandlers", () => {
   });
 
   describe("addExitFeedback", () => {
-    it("returns NOT_FOUND when user does not exist", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await addExitFeedback(makeReq({ body: {} }), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.NOT_FOUND,
-        expect.any(Object),
-      );
-    });
-
     it("returns BAD_REQUEST when no approved resignation exists", async () => {
-      mockUserFindUnique.mockResolvedValue({ username: "john" });
       mockResignFindFirst.mockResolvedValue(null);
       const res = makeRes();
       await addExitFeedback(makeReq({ body: {} }), res);
@@ -743,7 +726,6 @@ describe("recruitmentHandlers", () => {
     });
 
     it("returns BAD_REQUEST when feedback already submitted", async () => {
-      mockUserFindUnique.mockResolvedValue({ username: "john" });
       mockResignFindFirst.mockResolvedValue({
         id: "res-1",
         status: "Approved",
@@ -761,7 +743,6 @@ describe("recruitmentHandlers", () => {
     });
 
     it("saves exit feedback and returns CREATED", async () => {
-      mockUserFindUnique.mockResolvedValue({ username: "john" });
       mockResignFindFirst.mockResolvedValue({
         id: "res-1",
         status: "Approved",
@@ -794,7 +775,7 @@ describe("recruitmentHandlers", () => {
     });
 
     it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
-      mockUserFindUnique.mockRejectedValue(new Error("DB error"));
+      mockResignFindFirst.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await addExitFeedback(makeReq({ body: {} }), res);
       expect(mockApiResponse).toHaveBeenCalledWith(

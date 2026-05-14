@@ -18,7 +18,7 @@ export const ROUTES = {
   EMPLOYEE_MANAGEMENT_INSIGHTS: "/employee-management/insights",
   EMPLOYEE_MANAGEMENT_DETAILS: "/employee-management/:username",
   SALARY_MANAGEMENT: "/salary-management",
-  SALARY_MANAGEMENT_EDIT: "/salary-management/:username",
+  SALARY_MANAGEMENT_EDIT: "/salary-management/:userId",
   HOLIDAYS: "/holidays",
   JOB_OPENINGS: "/job-openings/*",
   VIEW_JOB_OPENING: "/view-job-opening/:_id",

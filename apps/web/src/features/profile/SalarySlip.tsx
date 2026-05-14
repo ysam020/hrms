@@ -35,7 +35,7 @@ function SalarySlip() {
     try {
       const { default: downloadSalarySlip } =
         await import("@web/shared/utils/downloadSalarySlip");
-      await downloadSalarySlip(date, user.username, setIsDownloading, setAlert);
+      await downloadSalarySlip(date, user.id, setIsDownloading, setAlert);
     } catch (error) {
       console.error("Error downloading salary slip:", error);
       setIsDownloading(false);

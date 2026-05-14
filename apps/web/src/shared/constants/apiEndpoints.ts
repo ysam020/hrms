@@ -32,8 +32,8 @@ const CALENDAR = {
 const ATTENDANCE = {
   ADD_ATTENDANCE: "/add-attendance",
   ATTENDANCE_CORRECTION: "/attendance-correction",
-  GET_ATTENDANCE_SUMMARY: (username: string, year: number, month: number) =>
-    `/get-attendance-summary/${username}/${year}/${month}`,
+  GET_ATTENDANCE_SUMMARY: (userId: string, year: number, month: number) =>
+    `/get-attendance-summary/${userId}/${year}/${month}`,
   GET_ALL_ATTENDANCES: (
     year: number,
     month: number,
@@ -108,8 +108,8 @@ const RESIGNATION = {
 };
 
 const SALARY_MANAGEMENT = {
-  GET_USER_SALARY: (username: string, year: number, month: number) =>
-    `/get-user-salary/${username}/${year}/${month}`,
+  GET_USER_SALARY: (userId: string, year: number, month: number) =>
+    `/get-user-salary/${userId}/${year}/${month}`,
   UPDATE_SALARY: "/update-salary",
 };
 
@@ -128,8 +128,8 @@ const USER = {
   WEBAUTHN_LOGIN: "/webauthn-login",
   WEBAUTHN_VERIFY_REGISTRATION: "/webauthn-verify-registration",
   // Salary
-  GENERATE_SALARY_SLIP: (username: string, year: number, month: number) =>
-    `/generate-salary-slip/${username}/${year}/${month}`,
+  GENERATE_SALARY_SLIP: (userId: string, year: number, month: number) =>
+    `/generate-salary-slip/${userId}/${year}/${month}`,
 };
 
 const UPLOAD = {

@@ -35,50 +35,50 @@ describe("getLeaveBalance", () => {
   it("returns NO_LEAVE_BALANCE message when no balance record exists", async () => {
     mockFindUnique.mockResolvedValue(null);
     const cb = makeCallback();
-    await getLeaveBalance(makeCall({ username: "john" }), cb);
+    await getLeaveBalance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.NO_LEAVE_BALANCE,
       status: status.OK,
       data: null,
-      username: "john",
+      userId: "john",
     });
   });
 
   it("returns balance data when record exists", async () => {
     const balance = {
       id: "bal-1",
-      username: "john",
+      userId: "john",
       accumulatedPLBeforeCurrentMonth: 5,
       balances: { casual: 10, sick: 7 },
     };
     mockFindUnique.mockResolvedValue(balance);
 
     const cb = makeCallback();
-    await getLeaveBalance(makeCall({ username: "john" }), cb);
+    await getLeaveBalance(makeCall({ userId: "john" }), cb);
 
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.LEAVE_FETCHED,
       status: status.OK,
       data: {
         id: "bal-1",
-        username: "john",
+        userId: "john",
         accumulatedPlBeforeCurrentMonth: 5,
         balances: JSON.stringify({ casual: 10, sick: 7 }),
       },
-      username: "john",
+      userId: "john",
     });
   });
 
   it("defaults accumulatedPLBeforeCurrentMonth to 0 when null", async () => {
     mockFindUnique.mockResolvedValue({
       id: "bal-1",
-      username: "jane",
+      userId: "jane",
       accumulatedPLBeforeCurrentMonth: null,
       balances: null,
     });
 
     const cb = makeCallback();
-    await getLeaveBalance(makeCall({ username: "jane" }), cb);
+    await getLeaveBalance(makeCall({ userId: "jane" }), cb);
 
     const result = cb.mock.calls[0][1];
     expect(result.data.accumulatedPlBeforeCurrentMonth).toBe(0);
@@ -88,7 +88,7 @@ describe("getLeaveBalance", () => {
   it("returns INTERNAL on database error", async () => {
     mockFindUnique.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await getLeaveBalance(makeCall({ username: "john" }), cb);
+    await getLeaveBalance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,

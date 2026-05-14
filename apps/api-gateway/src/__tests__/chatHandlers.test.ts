@@ -54,22 +54,11 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-jest.mock("@hrms/cache", () => ({
-  cacheManager: {
-    get: jest.fn(),
-    set: jest.fn(),
-    delete: jest.fn(),
-    invalidatePattern: jest.fn(),
-  },
-}));
-
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
-import { cacheManager } from "@hrms/cache";
 import dns from "dns";
 
 const mockApiResponse = apiResponse as jest.Mock;
 const mockDnsLookup = (dns as any).promises.lookup as jest.Mock;
-const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockChatRoomFindMany = (prisma as any).chatRoom.findMany as jest.Mock;
 const mockChatRoomFindUnique = (prisma as any).chatRoom.findUnique as jest.Mock;
@@ -78,7 +67,6 @@ const mockChatRoomCreate = (prisma as any).chatRoom.create as jest.Mock;
 const mockChatRoomUpdate = (prisma as any).chatRoom.update as jest.Mock;
 const mockMessageFindMany = (prisma as any).message.findMany as jest.Mock;
 const mockMessageFindUnique = (prisma as any).message.findUnique as jest.Mock;
-const mockMessageCount = (prisma as any).message.count as jest.Mock;
 const mockMessageGroupBy = (prisma as any).message.groupBy as jest.Mock;
 const mockMessageUpdate = (prisma as any).message.update as jest.Mock;
 
@@ -95,30 +83,13 @@ const makeReq = (overrides: any = {}) =>
 describe("chatHandlers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (cacheManager.get as jest.Mock).mockResolvedValue(null);
-    (cacheManager.set as jest.Mock).mockResolvedValue(undefined);
-    (cacheManager.delete as jest.Mock).mockResolvedValue(undefined);
-    (cacheManager.invalidatePattern as jest.Mock).mockResolvedValue(undefined);
-    // Default: resolve username for user-1
-    mockUserFindUnique.mockResolvedValue({ username: "alice" });
   });
 
   describe("getConversations", () => {
-    it("returns UN_AUTHORIZED when user not found", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await getConversations(makeReq(), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.UN_AUTHORIZED,
-        expect.any(Object),
-      );
-    });
-
     it("returns conversations with participantDetails and unreadCount", async () => {
       const room = {
         id: "r1",
-        participants: ["alice", "bob"],
+        participants: ["user-1", "user-2"],
         lastMessageId: null,
         lastActivity: new Date(),
         deletedFor: [],
@@ -127,6 +98,7 @@ describe("chatHandlers", () => {
       mockMessageFindMany.mockResolvedValue([]);
       mockUserFindMany.mockResolvedValue([
         {
+          id: "user-1",
           username: "alice",
           first_name: "Alice",
           last_name: "Doe",
@@ -134,6 +106,7 @@ describe("chatHandlers", () => {
           designation: "HR",
         },
         {
+          id: "user-2",
           username: "bob",
           first_name: "Bob",
           last_name: "Smith",
@@ -170,21 +143,7 @@ describe("chatHandlers", () => {
   });
 
   describe("startConversation", () => {
-    it("returns UN_AUTHORIZED when user not found", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await startConversation(
-        makeReq({ body: { recipientUsername: "bob" } }),
-        res,
-      );
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.UN_AUTHORIZED,
-        expect.any(Object),
-      );
-    });
-
-    it("returns BAD_REQUEST when recipientUsername missing", async () => {
+    it("returns BAD_REQUEST when recipientUserId missing", async () => {
       const res = makeRes();
       await startConversation(makeReq({ body: {} }), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -197,7 +156,7 @@ describe("chatHandlers", () => {
     it("returns BAD_REQUEST when starting conversation with self", async () => {
       const res = makeRes();
       await startConversation(
-        makeReq({ body: { recipientUsername: "alice" } }),
+        makeReq({ body: { recipientUserId: "user-1" } }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -210,14 +169,14 @@ describe("chatHandlers", () => {
     it("returns existing conversation when one already exists", async () => {
       const room = {
         id: "r1",
-        participants: ["alice", "bob"],
+        participants: ["user-1", "user-2"],
         type: "direct",
         deletedFor: [],
       };
       mockChatRoomFindFirst.mockResolvedValue(room);
       const res = makeRes();
       await startConversation(
-        makeReq({ body: { recipientUsername: "bob" } }),
+        makeReq({ body: { recipientUserId: "user-2" } }),
         res,
       );
       expect(mockChatRoomCreate).not.toHaveBeenCalled();
@@ -234,7 +193,7 @@ describe("chatHandlers", () => {
       mockChatRoomFindFirst.mockResolvedValue(null);
       const newRoom = {
         id: "r2",
-        participants: ["alice", "bob"],
+        participants: ["user-1", "user-2"],
         type: "direct",
         deletedFor: [],
         lastActivity: new Date(),
@@ -242,7 +201,7 @@ describe("chatHandlers", () => {
       mockChatRoomCreate.mockResolvedValue(newRoom);
       const res = makeRes();
       await startConversation(
-        makeReq({ body: { recipientUsername: "bob" } }),
+        makeReq({ body: { recipientUserId: "user-2" } }),
         res,
       );
       expect(mockChatRoomCreate).toHaveBeenCalled();
@@ -257,17 +216,6 @@ describe("chatHandlers", () => {
   });
 
   describe("getMessages", () => {
-    it("returns UN_AUTHORIZED when user not found", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await getMessages(makeReq({ params: { roomId: "r1" } }), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.UN_AUTHORIZED,
-        expect.any(Object),
-      );
-    });
-
     it("returns NOT_FOUND when room does not exist", async () => {
       mockChatRoomFindUnique.mockResolvedValue(null);
       const res = makeRes();
@@ -282,7 +230,7 @@ describe("chatHandlers", () => {
     it("returns FORBIDDEN when caller is not a participant", async () => {
       mockChatRoomFindUnique.mockResolvedValue({
         id: "r1",
-        participants: ["bob", "charlie"],
+        participants: ["user-2", "user-3"],
       });
       const res = makeRes();
       await getMessages(makeReq({ params: { roomId: "r1" } }), res);
@@ -296,13 +244,13 @@ describe("chatHandlers", () => {
     it("returns messages in chronological order", async () => {
       mockChatRoomFindUnique.mockResolvedValue({
         id: "r1",
-        participants: ["alice", "bob"],
+        participants: ["user-1", "user-2"],
       });
       const messages = [
         {
           id: "m1",
           content: "Hello",
-          sender: "alice",
+          senderId: "user-1",
           chatRoomId: "r1",
           replyToId: null,
           createdAt: new Date("2024-03-01"),
@@ -310,7 +258,7 @@ describe("chatHandlers", () => {
         {
           id: "m2",
           content: "Hi",
-          sender: "bob",
+          senderId: "user-2",
           chatRoomId: "r1",
           replyToId: null,
           createdAt: new Date("2024-03-02"),
@@ -327,20 +275,14 @@ describe("chatHandlers", () => {
   });
 
   describe("markMessagesRead", () => {
-    it("returns UN_AUTHORIZED when user not found", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await markMessagesRead(makeReq({ params: { roomId: "r1" } }), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.UN_AUTHORIZED,
-        expect.any(Object),
-      );
-    });
-
     it("marks messages read via single $runCommandRaw bulk update", async () => {
-      mockChatRoomFindUnique.mockResolvedValue({ id: "r1", participants: ["alice"] });
-      (prisma as any).$runCommandRaw = jest.fn().mockResolvedValue({ n: 2, ok: 1 });
+      mockChatRoomFindUnique.mockResolvedValue({
+        id: "r1",
+        participants: ["user-1"],
+      });
+      (prisma as any).$runCommandRaw = jest
+        .fn()
+        .mockResolvedValue({ n: 2, ok: 1 });
       const res = makeRes();
       await markMessagesRead(makeReq({ params: { roomId: "r1" } }), res);
       expect((prisma as any).$runCommandRaw).toHaveBeenCalledWith(
@@ -366,17 +308,6 @@ describe("chatHandlers", () => {
   });
 
   describe("getUnreadCounts", () => {
-    it("returns UN_AUTHORIZED when user not found", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await getUnreadCounts(makeReq(), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.UN_AUTHORIZED,
-        expect.any(Object),
-      );
-    });
-
     it("returns unread counts keyed by roomId", async () => {
       mockChatRoomFindMany.mockResolvedValue([{ id: "r1" }, { id: "r2" }]);
       mockMessageGroupBy.mockResolvedValue([
@@ -392,17 +323,6 @@ describe("chatHandlers", () => {
   });
 
   describe("deleteMessage", () => {
-    it("returns UN_AUTHORIZED when user not found", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await deleteMessage(makeReq({ params: { messageId: "m1" } }), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.UN_AUTHORIZED,
-        expect.any(Object),
-      );
-    });
-
     it("returns NOT_FOUND when message does not exist", async () => {
       mockMessageFindUnique.mockResolvedValue(null);
       const res = makeRes();
@@ -417,7 +337,7 @@ describe("chatHandlers", () => {
     it("returns FORBIDDEN when caller is not the sender", async () => {
       mockMessageFindUnique.mockResolvedValue({
         id: "m1",
-        sender: "bob",
+        senderId: "user-2",
         chatRoomId: "r1",
       });
       const res = makeRes();
@@ -432,7 +352,7 @@ describe("chatHandlers", () => {
     it("soft-deletes message when caller is sender", async () => {
       mockMessageFindUnique.mockResolvedValue({
         id: "m1",
-        sender: "alice",
+        senderId: "user-1",
         chatRoomId: "r1",
       });
       mockMessageUpdate.mockResolvedValue({
@@ -460,17 +380,6 @@ describe("chatHandlers", () => {
   });
 
   describe("deleteConversation", () => {
-    it("returns UN_AUTHORIZED when user not found", async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      const res = makeRes();
-      await deleteConversation(makeReq({ params: { roomId: "r1" } }), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.UN_AUTHORIZED,
-        expect.any(Object),
-      );
-    });
-
     it("returns NOT_FOUND when room does not exist", async () => {
       mockChatRoomFindUnique.mockResolvedValue(null);
       const res = makeRes();
@@ -482,7 +391,7 @@ describe("chatHandlers", () => {
       );
     });
 
-    it("pushes username to deletedFor list", async () => {
+    it("pushes userId to deletedFor list", async () => {
       mockChatRoomFindUnique.mockResolvedValue({ id: "r1", deletedFor: [] });
       mockChatRoomUpdate.mockResolvedValue({});
       const res = makeRes();
@@ -490,7 +399,7 @@ describe("chatHandlers", () => {
       expect(mockChatRoomUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "r1" },
-          data: { deletedFor: { push: "alice" } },
+          data: { deletedFor: { push: "user-1" } },
         }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -503,7 +412,7 @@ describe("chatHandlers", () => {
     it("does not update deletedFor when already in list", async () => {
       mockChatRoomFindUnique.mockResolvedValue({
         id: "r1",
-        deletedFor: ["alice"],
+        deletedFor: ["user-1"],
       });
       const res = makeRes();
       await deleteConversation(makeReq({ params: { roomId: "r1" } }), res);

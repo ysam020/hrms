@@ -92,7 +92,7 @@ export const addAttendanceSchema = z.object({
 });
 
 export const attendanceCorrectionSchema = z.object({
-  username: z.string().min(1).max(64),
+  userId: z.string().min(1).max(64),
   date: z.string().max(32).optional(),
   timeIn: z.string().max(16).optional(),
   timeOut: z.string().max(16).optional(),
@@ -100,7 +100,9 @@ export const attendanceCorrectionSchema = z.object({
 
 // ── Leave ─────────────────────────────────────────────────────────────────────
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD");
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD");
 
 export const addLeaveSchema = z.object({
   from: isoDate,
@@ -128,7 +130,10 @@ export const editEmployeeDetailsSchema = z.object({
   firstName: z.string().max(64).optional(),
   lastName: z.string().max(64).optional(),
   middleName: z.string().max(64).optional(),
-  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
+  dob: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
+    .optional(),
   blood_group: z.string().max(8).optional(),
   mobile: z.string().max(20).optional(),
   official_email: z.string().email().max(256).optional(),
@@ -145,7 +150,10 @@ export const editEmployeeDetailsSchema = z.object({
   permanent_address_state: z.string().max(64).optional(),
   permanent_address_pincode: z.string().max(16).optional(),
   wfh: z.boolean().optional(),
-  joiningDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
+  joiningDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
+    .optional(),
   employee_photo: z.string().max(4096).optional(),
 });
 
@@ -183,9 +191,11 @@ export const updateSalarySchema = z.object({
 export const saveFcmTokenSchema = z.object({
   fcmToken: z.string().max(512).optional(),
   deviceFingerprint: z.string().max(256).optional(),
-  deviceInfo: z.object({
-    browser: z.string().max(128).optional(),
-    os: z.string().max(128).optional(),
-    deviceType: z.string().max(64).optional(),
-  }).optional(),
+  deviceInfo: z
+    .object({
+      browser: z.string().max(128).optional(),
+      os: z.string().max(128).optional(),
+      deviceType: z.string().max(64).optional(),
+    })
+    .optional(),
 });

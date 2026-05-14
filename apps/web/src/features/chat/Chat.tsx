@@ -65,8 +65,20 @@ const TableChartIcon = React.lazy(
 const ArticleIcon = React.lazy(() => import("@mui/icons-material/Article"));
 const VideoFileIcon = React.lazy(() => import("@mui/icons-material/VideoFile"));
 
-function getOtherParticipant(room, myUsername) {
-  return room.participants?.find((p) => p !== myUsername) || "Unknown";
+function getOtherParticipant(room, myUserId) {
+  const otherId = room.participants?.find((p) => p !== myUserId);
+  if (!otherId) return "Unknown";
+  const detail = room.participantDetails?.find(
+    (p) => p.id === otherId || p._id === otherId,
+  );
+  if (detail) {
+    return (
+      `${detail.first_name || ""} ${detail.last_name || ""}`.trim() ||
+      detail.username ||
+      otherId
+    );
+  }
+  return otherId;
 }
 
 function formatTime(dateStr) {
@@ -255,10 +267,11 @@ function MessageBubble({
   onDelete,
   roomParticipants,
   onImageClick,
+  senderName = "",
 }) {
   const isRead =
     isMine &&
-    roomParticipants.some((p) => p !== msg.sender && msg.readBy?.includes(p));
+    roomParticipants.some((p) => p !== msg.senderId && msg.readBy?.includes(p));
 
   if (msg.isDeleted) {
     return (
@@ -273,7 +286,7 @@ function MessageBubble({
               alignSelf: "flex-end",
             }}
           >
-            {msg.sender?.[0]?.toUpperCase()}
+            {senderName?.[0]?.toUpperCase()}
           </Avatar>
         )}
         <div className="chat-bubble-wrapper">
@@ -307,7 +320,7 @@ function MessageBubble({
             alignSelf: "flex-end",
           }}
         >
-          {msg.sender?.[0]?.toUpperCase()}
+          {senderName?.[0]?.toUpperCase()}
         </Avatar>
       )}
       <div className="chat-bubble-wrapper">
@@ -315,7 +328,7 @@ function MessageBubble({
         {msg.replyTo && (
           <div className="chat-reply-preview">
             <Typography variant="caption" fontWeight={600}>
-              {msg.replyTo.sender}
+              {senderName}
             </Typography>
             <Typography variant="caption" noWrap sx={{ display: "block" }}>
               {msg.replyTo.content || msg.replyTo.fileName || "File"}
@@ -437,8 +450,8 @@ function MessageBubble({
   );
 }
 
-function ConversationItem({ conv, myUsername, isActive, onClick, unread }) {
-  const other = getOtherParticipant(conv, myUsername);
+function ConversationItem({ conv, myUserId, isActive, onClick, unread }) {
+  const other = getOtherParticipant(conv, myUserId);
   const lastMsg = conv.lastMessage;
   const preview = lastMsg
     ? lastMsg.isDeleted
@@ -553,8 +566,8 @@ function Chat() {
     [typingUsers, activeRoomId],
   );
   const otherUser = useMemo(
-    () => (activeRoom ? getOtherParticipant(activeRoom, user?.username) : null),
-    [activeRoom, user?.username],
+    () => (activeRoom ? getOtherParticipant(activeRoom, user?.id) : null),
+    [activeRoom, user?.id],
   );
 
   // Auto-scroll
@@ -615,7 +628,7 @@ function Chat() {
           `/get-all-users?search=${encodeURIComponent(userSearch)}&limit=10`,
         );
         const users = res.data.data?.users || res.data.data || [];
-        setSearchResults(users.filter((u) => u.username !== user?.username));
+        setSearchResults(users.filter((u) => u.id !== user?.id));
       } catch {
         setSearchResults([]);
       } finally {
@@ -623,13 +636,13 @@ function Chat() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [userSearch, user?.username]);
+  }, [userSearch, user?.id]);
 
   const handleStartConversation = useCallback(
     async (targetUser) => {
       setUserSearch("");
       setSearchResults([]);
-      const room = await startConversation(targetUser.username);
+      const room = await startConversation(targetUser.id);
       await openRoom(room);
     },
     [startConversation, openRoom],
@@ -832,7 +845,7 @@ function Chat() {
               <ConversationItem
                 key={conv._id}
                 conv={conv}
-                myUsername={user?.username}
+                myUserId={user?.id}
                 isActive={conv._id === activeRoomId}
                 onClick={openRoom}
                 unread={unreadCounts[conv._id] || 0}
@@ -941,17 +954,28 @@ function Chat() {
                   </Typography>
                 </div>
               )}
-              {activeMessages.map((msg) => (
-                <MessageBubble
-                  key={msg._id}
-                  msg={msg}
-                  isMine={msg.sender === user?.username}
-                  onReply={setReplyTo}
-                  onDelete={setDeleteTargetMsg}
-                  roomParticipants={activeRoomParticipants}
-                  onImageClick={setLightboxUrl}
-                />
-              ))}
+              {activeMessages.map((msg) => {
+                const senderDetail = activeRoom?.participantDetails?.find(
+                  (p) => p.id === msg.senderId || p._id === msg.senderId,
+                );
+                const senderName = senderDetail
+                  ? `${senderDetail.first_name || ""} ${senderDetail.last_name || ""}`.trim() ||
+                    senderDetail.username ||
+                    ""
+                  : "";
+                return (
+                  <MessageBubble
+                    key={msg._id}
+                    msg={msg}
+                    isMine={msg.senderId === user?.id}
+                    onReply={setReplyTo}
+                    onDelete={setDeleteTargetMsg}
+                    roomParticipants={activeRoomParticipants}
+                    onImageClick={setLightboxUrl}
+                    senderName={senderName}
+                  />
+                );
+              })}
               {activeTypingUsers.length > 0 && (
                 <TypingIndicator names={activeTypingUsers} />
               )}
@@ -967,7 +991,7 @@ function Chat() {
                     fontWeight={700}
                     color="primary"
                   >
-                    Replying to {replyTo.sender}
+                    Replying to {replyTo.senderName || replyTo.senderId}
                   </Typography>
                   <Typography variant="caption" noWrap>
                     {replyTo.content || replyTo.fileName || "File"}

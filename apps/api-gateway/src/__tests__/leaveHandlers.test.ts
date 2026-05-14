@@ -13,7 +13,7 @@ jest.mock("../grpc/clients", () => ({
 
 jest.mock("@hrms/db", () => ({
   prisma: {
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findMany: jest.fn() },
   },
 }));
 
@@ -40,6 +40,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
+const mockUserFindMany = prisma.user.findMany as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: Record<string, any> = {}) =>
@@ -54,29 +55,10 @@ const makeReq = (overrides: Record<string, any> = {}) =>
 describe("addLeave", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUserFindUnique.mockResolvedValue({ username: "john" });
     mockGrpcCall.mockResolvedValue({ message: "Leave applied", status: 0 });
   });
 
-  it("returns NOT_FOUND when user cannot be resolved", async () => {
-    mockUserFindUnique.mockResolvedValue(null);
-    const res = makeRes();
-    await addLeave(
-      makeReq({
-        body: { from: "2024-03-01", to: "2024-03-05", leaveType: "Casual" },
-      }),
-      res,
-    );
-
-    expect(mockApiResponse).toHaveBeenCalledWith(
-      res,
-      RESPONSE_STATUS.NOT_FOUND,
-      expect.any(Object),
-    );
-    expect(mockGrpcCall).not.toHaveBeenCalled();
-  });
-
-  it("calls grpcCall with applyLeave and resolved username", async () => {
+  it("calls grpcCall with applyLeave and userId", async () => {
     const res = makeRes();
     await addLeave(
       makeReq({
@@ -94,7 +76,7 @@ describe("addLeave", () => {
       expect.anything(),
       "applyLeave",
       expect.objectContaining({
-        username: "john",
+        userId: "user-id-1",
         leaveType: "Casual",
         from: "2024-03-01",
       }),
@@ -123,31 +105,27 @@ describe("getLeaveApplications", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGrpcCall.mockResolvedValue({ data: [] });
+    mockUserFindMany.mockResolvedValue([]);
   });
 
-  it("scopes to own username for non-superuser", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ isSuperUser: false }) // isSuperUser check
-      .mockResolvedValueOnce({ username: "john" }); // resolveUsername
+  it("scopes to own userId for non-superuser", async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: false });
 
     const res = makeRes();
-    await getLeaveApplications(makeReq({ query: { username: "other" } }), res);
+    await getLeaveApplications(makeReq({ query: { userId: "other" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "getLeaves",
-      expect.objectContaining({ userId: "john" }),
+      expect.objectContaining({ userId: "user-id-1" }),
     );
   });
 
   it("allows superuser to query any employee's leaves via query param", async () => {
-    mockUserFindUnique.mockResolvedValue({
-      isSuperUser: true,
-      username: "admin",
-    });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
 
     const res = makeRes();
-    await getLeaveApplications(makeReq({ query: { username: "jane" } }), res);
+    await getLeaveApplications(makeReq({ query: { userId: "jane" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
@@ -173,7 +151,6 @@ describe("getLeaveApplications", () => {
 describe("updateLeaveStatus", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUserFindUnique.mockResolvedValue({ username: "manager" });
     mockGrpcCall.mockResolvedValue({ message: "OK" });
   });
 
@@ -189,7 +166,7 @@ describe("updateLeaveStatus", () => {
     expect(mockGrpcCall).not.toHaveBeenCalled();
   });
 
-  it("calls approveLeave with approvedByUsername for action=approve", async () => {
+  it("calls approveLeave with approvedById for action=approve", async () => {
     const res = makeRes();
     await updateLeaveStatus(
       makeReq({ body: { leaveId: "l1", action: "approve" } }),
@@ -199,7 +176,7 @@ describe("updateLeaveStatus", () => {
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "approveLeave",
-      expect.objectContaining({ id: "l1", approvedByUsername: "manager" }),
+      expect.objectContaining({ id: "l1", approvedById: "user-id-1" }),
     );
   });
 
@@ -217,7 +194,7 @@ describe("updateLeaveStatus", () => {
     );
   });
 
-  it("calls cancelLeave with username for action=cancel", async () => {
+  it("calls cancelLeave with userId for action=cancel", async () => {
     const res = makeRes();
     await updateLeaveStatus(
       makeReq({ body: { leaveId: "l1", action: "cancel" } }),
@@ -227,7 +204,7 @@ describe("updateLeaveStatus", () => {
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "cancelLeave",
-      expect.objectContaining({ id: "l1", username: "manager" }),
+      expect.objectContaining({ id: "l1", userId: "user-id-1" }),
     );
   });
 
@@ -267,39 +244,16 @@ describe("getAvailablePaidLeaves", () => {
     mockGrpcCall.mockResolvedValue({ data: {} });
   });
 
-  it("returns NOT_FOUND when username cannot be resolved for non-superuser", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ isSuperUser: false })
-      .mockResolvedValueOnce(null); // resolveUsername returns null
+  it("scopes to own userId for non-superuser", async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: false });
 
     const res = makeRes();
-    await getAvailablePaidLeaves(
-      makeReq({ params: { username: "john" } }),
-      res,
-    );
-
-    expect(mockApiResponse).toHaveBeenCalledWith(
-      res,
-      RESPONSE_STATUS.NOT_FOUND,
-      expect.any(Object),
-    );
-  });
-
-  it("scopes to own username for non-superuser", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ isSuperUser: false })
-      .mockResolvedValueOnce({ username: "john" });
-
-    const res = makeRes();
-    await getAvailablePaidLeaves(
-      makeReq({ params: { username: "other" } }),
-      res,
-    );
+    await getAvailablePaidLeaves(makeReq({ params: { userId: "other" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "getLeaveBalance",
-      { username: "john" },
+      { userId: "user-id-1" },
     );
   });
 
@@ -307,15 +261,12 @@ describe("getAvailablePaidLeaves", () => {
     mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
 
     const res = makeRes();
-    await getAvailablePaidLeaves(
-      makeReq({ params: { username: "jane" } }),
-      res,
-    );
+    await getAvailablePaidLeaves(makeReq({ params: { userId: "jane" } }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "getLeaveBalance",
-      { username: "jane" },
+      { userId: "jane" },
     );
   });
 });

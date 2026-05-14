@@ -66,11 +66,11 @@ describe("listResignations", () => {
     );
   });
 
-  it("filters by username when provided", async () => {
+  it("filters by userId when provided", async () => {
     const cb = makeCallback();
-    await listResignations(makeCall({ username: "john" }), cb);
+    await listResignations(makeCall({ userId: "john" }), cb);
     const where = mockFindMany.mock.calls[0][0].where;
-    expect(where.username).toBe("john");
+    expect(where.userId).toBe("john");
   });
 
   it("filters by status when provided", async () => {

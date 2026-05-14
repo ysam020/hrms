@@ -81,19 +81,19 @@ describe("approveLeave", () => {
   });
 
   it("approves leave and returns updated record on happy path", async () => {
-    const pending = { id: "leave-1", status: "Pending", username: "john" };
+    const pending = { id: "leave-1", status: "Pending", userId: "john-id" };
     const approved = {
       id: "leave-1",
       status: "Approved",
-      username: "john",
-      approvedByUsername: "manager1",
+      userId: "john-id",
+      approvedById: "manager-id",
     };
     mockFindUnique.mockResolvedValue(pending);
     mockUpdate.mockResolvedValue(approved);
 
     const cb = makeCallback();
     await approveLeave(
-      makeCall({ id: "leave-1", approvedByUsername: "manager1" }),
+      makeCall({ id: "leave-1", approvedById: "manager-id" }),
       cb,
     );
 
@@ -101,7 +101,7 @@ describe("approveLeave", () => {
       where: { id: "leave-1" },
       data: expect.objectContaining({
         status: "Approved",
-        approvedByUsername: "manager1",
+        approvedById: "manager-id",
         approvedOn: expect.any(String),
       }),
     });

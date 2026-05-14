@@ -9,7 +9,7 @@ export const createSalaryStructure = async (
 ) => {
   try {
     const {
-      username,
+      userId,
       basicPay,
       hra,
       conveyance,
@@ -22,7 +22,7 @@ export const createSalaryStructure = async (
       year,
     } = call.request;
 
-    if (!username || !basicPay || !month || !year) {
+    if (!userId || !basicPay || !month || !year) {
       return callback(null, {
         message: MESSAGES.USERNAME_BASIC_MONTH_YEAR_REQUIRED,
         status: status.INVALID_ARGUMENT,
@@ -44,7 +44,7 @@ export const createSalaryStructure = async (
 
     const salaryStructure = await prisma.salaryStructure.create({
       data: {
-        username,
+        userId,
         basicPay: basic,
         hra: hraAmt,
         conveyance: conv,

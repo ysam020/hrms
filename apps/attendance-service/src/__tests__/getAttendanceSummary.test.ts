@@ -112,19 +112,6 @@ describe("getAttendanceSummary", () => {
     expect(data.totalLeaves).toBe(3);
   });
 
-  it("resolves username from DB when userId looks like an ObjectId", async () => {
-    mockRecordFindMany.mockResolvedValue([]);
-    mockUserFindUnique.mockResolvedValue({ username: "john" });
-    const cb = makeCallback();
-    await getAttendanceSummary(
-      makeCall({ userId: "507f1f77bcf86cd799439011", month: 3, year: 2024 }),
-      cb,
-    );
-    expect(mockUserFindUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "507f1f77bcf86cd799439011" } }),
-    );
-  });
-
   it("caches the response after computation", async () => {
     mockRecordFindMany.mockResolvedValue([]);
     const cb = makeCallback();

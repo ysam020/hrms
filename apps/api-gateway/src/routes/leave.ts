@@ -24,7 +24,7 @@ leaveRouter.put(
   h.updateLeaveStatus,
 );
 leaveRouter.get(
-  "/get-available-paid-leaves/:username?",
+  "/get-available-paid-leaves/:userId?",
   authenticate,
   h.getAvailablePaidLeaves,
 );

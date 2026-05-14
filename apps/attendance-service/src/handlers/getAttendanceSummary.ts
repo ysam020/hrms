@@ -4,8 +4,6 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
-const isObjectId = (v: string) => /^[0-9a-f]{24}$/i.test(v);
-
 export const getAttendanceSummary = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
@@ -37,16 +35,6 @@ export const getAttendanceSummary = async (
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
-    // Resolve username
-    let username: string = userId;
-    if (isObjectId(userId)) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { username: true },
-      });
-      username = user?.username || userId;
-    }
-
     const monthNum = parseInt(String(month));
     const yearNum = parseInt(String(year));
     const monthPadded = String(monthNum).padStart(2, "0");
@@ -60,7 +48,7 @@ export const getAttendanceSummary = async (
 
     const records = await prisma.attendanceRecord.findMany({
       where: {
-        username,
+        userId,
         date: {
           gte: new Date(yearNum, monthNum - 1, 1),
           lte: new Date(yearNum, monthNum - 1, endDay, 23, 59, 59),
@@ -77,7 +65,6 @@ export const getAttendanceSummary = async (
       if (r.isCorrected) correctionsUsed++;
     }
 
-    // Count by status across all days of the month up to today
     let presents = 0,
       halfDays = 0,
       leaves = 0,
@@ -93,11 +80,10 @@ export const getAttendanceSummary = async (
       else leaves++;
     }
 
-    // Fetch leave balance for paidLeaves / unpaidLeaves
     let usedPL = 0,
       usedLWP = 0;
     const leaveBalance = await prisma.leaveBalance.findUnique({
-      where: { username },
+      where: { userId },
       select: { balances: true },
     });
     if (leaveBalance?.balances && Array.isArray(leaveBalance.balances)) {

@@ -7,14 +7,6 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
 
-async function resolveUsername(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { username: true },
-  });
-  return user?.username ?? null;
-}
-
 async function isSuperUser(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -26,16 +18,10 @@ async function isSuperUser(userId: string): Promise<boolean> {
 export async function addLeave(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
-        message: "User not found",
-      });
-
     const { from, to, leaveType, reason, sick_leave, medicalCertificate } =
       req.body;
     const response = await grpcCall(leaveClient, "applyLeave", {
-      username,
+      userId: user!.userId,
       leaveType,
       from,
       to,
@@ -54,21 +40,36 @@ export async function getLeaveApplications(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const superUser = await isSuperUser(user!.userId);
-    let username: string | undefined;
+    let userId: string | undefined;
 
-    if (superUser && req.query.username) {
-      // Superusers may query any employee's leaves
-      username = req.query.username as string;
+    if (superUser && req.query.userId) {
+      userId = req.query.userId as string;
     } else {
-      // Everyone else can only see their own leaves
-      username = (await resolveUsername(user!.userId)) ?? undefined;
+      userId = user!.userId;
     }
 
-    const response = await grpcCall(leaveClient, "getLeaves", {
-      userId: username,
+    const response = (await grpcCall(leaveClient, "getLeaves", {
+      userId,
       status: req.query.status || "",
       ...parsePagination(req.query),
-    });
+    })) as any;
+
+    const records: any[] = response?.data ?? [];
+    if (records.length > 0) {
+      const userIds = [
+        ...new Set(records.map((l: any) => l.userId).filter(Boolean)),
+      ] as string[];
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u.username]));
+      response.data = records.map((l: any) => ({
+        ...l,
+        username: userMap.get(l.userId) ?? l.userId,
+      }));
+    }
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     logger.error("GET /get-leave-applications error:", { error });
@@ -90,15 +91,13 @@ export async function updateLeaveStatus(req: Request, res: Response) {
 
     if (action === "approve") {
       method = "approveLeave";
-      const approverUsername = await resolveUsername(user!.userId);
-      payload = { id: leaveId, approvedByUsername: approverUsername };
+      payload = { id: leaveId, approvedById: user!.userId };
     } else if (action === "reject") {
       method = "rejectLeave";
       payload = { id: leaveId };
     } else if (action === "cancel") {
       method = "cancelLeave";
-      const username = await resolveUsername(user!.userId);
-      payload = { id: leaveId, username };
+      payload = { id: leaveId, userId: user!.userId };
     } else {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Invalid action. Use approve, reject or cancel",
@@ -117,24 +116,15 @@ export async function getAvailablePaidLeaves(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const superUser = await isSuperUser(user!.userId);
-    let username: string | undefined;
+    let userId: string;
 
-    if (superUser && req.params.username) {
-      // Superusers may query any employee's balance
-      username = String(req.params.username);
+    if (superUser && req.params.userId) {
+      userId = String(req.params.userId);
     } else {
-      // Everyone else is scoped to their own balance
-      username = (await resolveUsername(user!.userId)) ?? undefined;
+      userId = user!.userId;
     }
 
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
-        message: "User not found",
-      });
-
-    const response = await grpcCall(leaveClient, "getLeaveBalance", {
-      username,
-    });
+    const response = await grpcCall(leaveClient, "getLeaveBalance", { userId });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     logger.error("GET /get-available-paid-leaves error:", { error });

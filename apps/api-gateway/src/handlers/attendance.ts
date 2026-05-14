@@ -77,7 +77,11 @@ export async function getAllAttendances(req: Request, res: Response) {
       userId: "",
       startDate,
       endDate,
-      ...parsePagination(req.query, PAGINATION.DEFAULT_LIMIT_LARGE, PAGINATION.MAX_LIMIT_LARGE),
+      ...parsePagination(
+        req.query,
+        PAGINATION.DEFAULT_LIMIT_LARGE,
+        PAGINATION.MAX_LIMIT_LARGE,
+      ),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -88,33 +92,31 @@ export async function getAllAttendances(req: Request, res: Response) {
 export async function attendanceCorrection(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const { username, date, timeIn, timeOut } = req.body;
-    if (!username)
+    const { userId: targetUserId, date, timeIn, timeOut } = req.body;
+    if (!targetUserId)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "username is required",
+        message: "userId is required",
       });
 
     const requestingUser = await prisma.user.findUnique({
       where: { id: user!.userId },
-      select: { username: true, isSuperUser: true },
+      select: { isSuperUser: true },
     });
     if (!requestingUser)
       return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
         message: "User not found",
       });
-    if (!requestingUser.isSuperUser && requestingUser.username !== username)
+    if (!requestingUser.isSuperUser && user!.userId !== targetUserId)
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
 
-    const correctedBy = requestingUser.username || user!.userId;
-
     const response = await grpcCall(attendanceClient, "correctAttendance", {
-      username,
+      userId: targetUserId,
       date: date || "",
       timeIn: timeIn || "",
       timeOut: timeOut || "",
-      correctedBy,
+      correctedBy: user!.userId,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -125,7 +127,7 @@ export async function attendanceCorrection(req: Request, res: Response) {
 
 export async function getAttendanceSummary(req: Request, res: Response) {
   try {
-    const username = String(req.params.username);
+    const userId = String(req.params.userId);
     const yearNum = parseInt(String(req.params.year));
     const monthNum = parseInt(String(req.params.month));
     const monthPadded = String(monthNum).padStart(2, "0");
@@ -140,7 +142,7 @@ export async function getAttendanceSummary(req: Request, res: Response) {
     const [records, leaveBalance] = await Promise.all([
       prisma.attendanceRecord.findMany({
         where: {
-          username,
+          userId,
           date: {
             gte: new Date(yearNum, monthNum - 1, 1),
             lte: new Date(yearNum, monthNum - 1, endDay, 23, 59, 59),
@@ -149,7 +151,7 @@ export async function getAttendanceSummary(req: Request, res: Response) {
         select: { date: true, status: true, isCorrected: true },
       }),
       prisma.leaveBalance.findUnique({
-        where: { username },
+        where: { userId },
         select: { balances: true },
       }),
     ]);
@@ -259,7 +261,7 @@ export async function attendanceInsights(req: Request, res: Response) {
       prisma.attendanceRecord.findMany({
         where: { date: { gte: startDate, lte: endDate } },
         select: {
-          username: true,
+          userId: true,
           date: true,
           status: true,
           workingHours: true,
@@ -269,13 +271,13 @@ export async function attendanceInsights(req: Request, res: Response) {
       }),
       prisma.user.findMany({
         where: { employeeStatus: "Active" },
-        select: { username: true, department: true },
+        select: { id: true, department: true },
       }),
     ]);
 
     const userDeptMap = new Map<string, string>(
       users.map(
-        (u: any) => [u.username, u.department || "Unknown"] as [string, string],
+        (u: any) => [u.id, u.department || "Unknown"] as [string, string],
       ),
     );
 
@@ -326,11 +328,11 @@ export async function attendanceInsights(req: Request, res: Response) {
 
     const byEmployee = new Map<string, typeof records>();
     for (const r of records) {
-      if (!byEmployee.has(r.username)) byEmployee.set(r.username, []);
-      byEmployee.get(r.username)!.push(r);
+      if (!byEmployee.has(r.userId)) byEmployee.set(r.userId, []);
+      byEmployee.get(r.userId)!.push(r);
     }
     const employeeRiskAssessment = Array.from(byEmployee.entries())
-      .map(([username, recs]) => {
+      .map(([userId, recs]) => {
         const t = recs.length;
         const p = recs.filter(
           (r: any) =>
@@ -365,7 +367,7 @@ export async function attendanceInsights(req: Request, res: Response) {
               10,
           ) / 10;
         return {
-          username,
+          userId,
           attendanceRate,
           avgWorkingHours: avgHours,
           correctionFrequency: corrFreq,
@@ -378,7 +380,7 @@ export async function attendanceInsights(req: Request, res: Response) {
 
     const byDept = new Map<string, typeof records>();
     for (const r of records) {
-      const dept = userDeptMap.get(r.username) || "Unknown";
+      const dept = userDeptMap.get(r.userId) || "Unknown";
       if (!byDept.has(dept)) byDept.set(dept, []);
       byDept.get(dept)!.push(r);
     }
@@ -394,7 +396,7 @@ export async function attendanceInsights(req: Request, res: Response) {
         const hoursRecs = recs.filter((r: any) => r.workingHours);
         return {
           department,
-          employeeCount: new Set(recs.map((r: any) => r.username)).size,
+          employeeCount: new Set(recs.map((r: any) => r.userId)).size,
           attendanceRate: t > 0 ? Math.round((p / t) * 100) : 0,
           avgWorkingHours:
             hoursRecs.length > 0

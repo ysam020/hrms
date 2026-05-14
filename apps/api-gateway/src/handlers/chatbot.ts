@@ -128,7 +128,6 @@ async function executeToolCall(
   toolName: string,
   args: Record<string, any>,
   userId: string,
-  username: string,
 ): Promise<string> {
   try {
     switch (toolName) {
@@ -158,15 +157,15 @@ async function executeToolCall(
 
       case "get_leave_balance": {
         const balance = await prisma.leaveBalance.findUnique({
-          where: { username },
+          where: { userId },
         });
-        return JSON.stringify(balance ?? { username, balances: {} });
+        return JSON.stringify(balance ?? { userId, balances: {} });
       }
 
       case "get_leave_applications": {
         const limit = Math.min(Number(args.limit) || 5, 10);
         const leaves = await prisma.leaveApplication.findMany({
-          where: { username },
+          where: { userId },
           orderBy: { appliedOn: "desc" },
           take: limit,
           select: {
@@ -178,7 +177,7 @@ async function executeToolCall(
             status: true,
             reason: true,
             appliedOn: true,
-            approvedByUsername: true,
+            approvedById: true,
             approvedOn: true,
           },
         });
@@ -192,7 +191,7 @@ async function executeToolCall(
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 0, 23, 59, 59);
         const records = await prisma.attendanceRecord.findMany({
-          where: { username, date: { gte: startDate, lte: endDate } },
+          where: { userId, date: { gte: startDate, lte: endDate } },
           orderBy: { date: "asc" },
           select: {
             date: true,
@@ -228,7 +227,7 @@ async function executeToolCall(
             },
           }),
           prisma.salaryStructure.findFirst({
-            where: { username },
+            where: { userId },
             orderBy: [{ year: "desc" }, { month: "desc" }],
             select: {
               month: true,
@@ -426,7 +425,6 @@ RESPONSE STYLE:
             toolCall.function.name,
             toolCall.function.arguments ?? {},
             user!.userId,
-            username,
           );
           fullMessages.push({ role: "tool", content: result });
         }
@@ -435,7 +433,6 @@ RESPONSE STYLE:
           textCall.name,
           textCall.arguments,
           user!.userId,
-          username,
         );
         fullMessages.push({
           role: "assistant",

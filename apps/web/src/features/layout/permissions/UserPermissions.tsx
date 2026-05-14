@@ -122,9 +122,9 @@ function UserPermissions() {
       }
 
       const lowerQuery = query.toLowerCase();
-      const results = userList.filter((user) =>
-        user.toLowerCase().includes(lowerQuery),
-      );
+      const results = userList
+        .filter((user) => user.label.toLowerCase().includes(lowerQuery))
+        .map((user) => user.label);
       setFilteredUsers(results);
     },
     [userList],

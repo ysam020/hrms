@@ -133,7 +133,7 @@ function EmployeeManagement() {
               <IconButton
                 size="small"
                 onClick={() =>
-                  navigate(`/salary-management/${cell.row.original.username}`)
+                  navigate(`/salary-management/${cell.row.original.id}`)
                 }
                 sx={{
                   width: 28,

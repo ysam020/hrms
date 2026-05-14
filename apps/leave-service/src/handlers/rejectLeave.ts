@@ -42,12 +42,11 @@ export const rejectLeave = async (
 
     await cacheManager.invalidatePattern("leaves:*");
 
-    // Notify applicant (fire-and-forget)
     getNotificationQueue()
       .add("leaveRejected", {
         title: "Leave",
         message: MESSAGES.LEAVE_REJECTED,
-        targetUser: updatedLeave.username,
+        targetUser: updatedLeave.userId,
         eventType: "leave_notification",
         priority: "medium",
       })

@@ -20,8 +20,6 @@ function calcWorkingHours(timeIn: string, timeOut: Date): number {
   return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 }
 
-const isObjectId = (v: string) => /^[0-9a-f]{24}$/i.test(v);
-
 export const markAttendance = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
@@ -36,25 +34,6 @@ export const markAttendance = async (
       });
     }
 
-    // Resolve username from ObjectId; fall back to treating it as a plain username.
-    let username: string | undefined;
-    if (isObjectId(userId)) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { username: true },
-      });
-      username = user?.username;
-    } else {
-      username = userId;
-    }
-
-    if (!username) {
-      return callback(null, {
-        message: MESSAGES.USERNAME_TYPE_REQUIRED,
-        status: status.NOT_FOUND,
-      });
-    }
-
     const now = new Date();
     const todayStart = new Date(
       now.getFullYear(),
@@ -63,7 +42,7 @@ export const markAttendance = async (
     );
 
     const existingRecord = await prisma.attendanceRecord.findUnique({
-      where: { username_date: { username, date: todayStart } },
+      where: { userId_date: { userId, date: todayStart } },
     });
 
     if (type === "CHECK_IN") {
@@ -83,7 +62,7 @@ export const markAttendance = async (
           })
         : await prisma.attendanceRecord.create({
             data: {
-              username,
+              userId,
               date: todayStart,
               timeIn: now.toISOString(),
               status: attendanceStatus,
@@ -91,9 +70,9 @@ export const markAttendance = async (
           });
 
       await Promise.all([
-        cacheManager.invalidatePattern(`attendance:${username}:*`),
-        cacheManager.delete(`todayAttendance:${username}`),
-        cacheManager.invalidatePattern(`attendanceSummary:${username}:*`),
+        cacheManager.invalidatePattern(`attendance:${userId}:*`),
+        cacheManager.delete(`todayAttendance:${userId}`),
+        cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
       ]);
       return callback(null, {
         message: `${MESSAGES.CHECKED_IN_SUCCESSFULLY}${attendanceStatus === "Late" ? " (late)" : ""}`,
@@ -129,9 +108,9 @@ export const markAttendance = async (
       });
 
       await Promise.all([
-        cacheManager.invalidatePattern(`attendance:${username}:*`),
-        cacheManager.delete(`todayAttendance:${username}`),
-        cacheManager.invalidatePattern(`attendanceSummary:${username}:*`),
+        cacheManager.invalidatePattern(`attendance:${userId}:*`),
+        cacheManager.delete(`todayAttendance:${userId}`),
+        cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
       ]);
       return callback(null, {
         message: MESSAGES.CHECKED_OUT_SUCCESSFULLY,

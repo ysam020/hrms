@@ -8,16 +8,16 @@ export const getSalaryStructure = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username, month, year } = call.request;
+    const { userId, month, year } = call.request;
 
-    if (!username) {
+    if (!userId) {
       return callback(null, {
         message: MESSAGES.USERNAME_REQUIRED,
         status: status.INVALID_ARGUMENT,
       });
     }
 
-    const where: any = { username };
+    const where: any = { userId };
     if (month) where.month = parseInt(String(month));
     if (year) where.year = parseInt(String(year));
 
