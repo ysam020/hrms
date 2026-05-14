@@ -218,7 +218,7 @@ const routesConfig = () => {
       category: "HR & Management",
     },
     {
-      path: "/salary-management/:username",
+      path: "/salary-management/:userId",
       element: <EditSalaryStructure />,
       allowedModules: ["Salary Management"],
       name: "Salary Management",

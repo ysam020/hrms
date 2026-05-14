@@ -15,7 +15,7 @@ export class RedisNotificationPublisher {
    * holds the user's socket via Redis, then routes via pub/sub.
    */
   async sendToUser(
-    username: string,
+    userId: string,
     eventName: string,
     payload: unknown,
   ): Promise<boolean> {
@@ -23,11 +23,11 @@ export class RedisNotificationPublisher {
       const redisClient = getWebSocketRedis("client");
       const publisher = getWebSocketRedis("publisher");
 
-      const socketEntry = await redisClient.hget("user:sockets", username);
+      const socketEntry = await redisClient.hget("user:sockets", userId);
 
       if (!socketEntry) {
         logger.warn(
-          `[RedisNotificationPublisher] ${username} not found in user:sockets — user may be offline`,
+          `[RedisNotificationPublisher] ${userId} not found in user:sockets — user may be offline`,
         );
         return false;
       }
@@ -36,12 +36,12 @@ export class RedisNotificationPublisher {
 
       await publisher.publish(
         `socket:worker-${pid}`,
-        JSON.stringify({ username, eventName, payload }),
+        JSON.stringify({ userId, eventName, payload }),
       );
       return true;
     } catch (err) {
       logger.error("[RedisNotificationPublisher] sendToUser error:", {
-        username,
+        userId,
         err,
       });
       return false;

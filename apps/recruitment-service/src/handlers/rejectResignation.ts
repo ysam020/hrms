@@ -52,7 +52,7 @@ export const rejectResignation = async (
       .add("resignationRejected", {
         title: "Resignation",
         message: MESSAGES.RESIGNATION_REJECTED,
-        targetUser: updatedResignation.username,
+        targetUser: updatedResignation.userId,
         eventType: "resignation_notification",
         priority: "medium",
       })

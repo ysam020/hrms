@@ -165,7 +165,24 @@ export const performRefresh = () => {
         setAccessToken(newToken);
         return newToken;
       }
-      throw new Error("Refresh failed");
+      console.error(
+        "[performRefresh] Server returned failure:",
+        res.status,
+        res.data,
+      );
+      throw new Error(res.data?.message || "Refresh failed");
+    })
+    .catch((err) => {
+      if (err?.response) {
+        console.error(
+          "[performRefresh] HTTP",
+          err.response.status,
+          err.response.data,
+        );
+      } else if (err?.message !== "Refresh failed") {
+        console.error("[performRefresh] Error:", err?.message);
+      }
+      throw err;
     })
     .finally(() => {
       _refreshPromise = null;

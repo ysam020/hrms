@@ -53,7 +53,7 @@ describe("correctAttendance", () => {
     mockCacheDelete.mockResolvedValue(undefined);
   });
 
-  it("returns INVALID_ARGUMENT when username is missing", async () => {
+  it("returns INVALID_ARGUMENT when userId is missing", async () => {
     const cb = makeCallback();
     await correctAttendance(makeCall({ date: "2024-03-04" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -73,7 +73,7 @@ describe("correctAttendance", () => {
     const cb = makeCallback();
     await correctAttendance(
       makeCall({
-        username: "john",
+        userId: "john",
         date: "2024-03-04",
         timeIn: "09:00",
         timeOut: "17:00",
@@ -109,7 +109,7 @@ describe("correctAttendance", () => {
     const cb = makeCallback();
     await correctAttendance(
       makeCall({
-        username: "john",
+        userId: "john",
         date: "2024-03-04",
         timeIn: "09:00",
         timeOut: "12:00",
@@ -131,7 +131,7 @@ describe("correctAttendance", () => {
     const cb = makeCallback();
     await correctAttendance(
       makeCall({
-        username: "john",
+        userId: "john",
         date: "2024-03-04",
         timeIn: "09:00",
         timeOut: "17:00",
@@ -148,7 +148,7 @@ describe("correctAttendance", () => {
     const cb = makeCallback();
     await correctAttendance(
       makeCall({
-        username: "john",
+        userId: "john",
         date: "2024-03-04",
         timeIn: "09:00",
         timeOut: "17:00",
@@ -169,7 +169,7 @@ describe("correctAttendance", () => {
     const cb = makeCallback();
     await correctAttendance(
       makeCall({
-        username: "john",
+        userId: "john",
         date: "2024-03-04",
         timeIn: "09:00",
         timeOut: "17:00",
@@ -183,7 +183,7 @@ describe("correctAttendance", () => {
   it("returns INTERNAL on database error", async () => {
     mockRecordFindUnique.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await correctAttendance(makeCall({ username: "john" }), cb);
+    await correctAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 13 }),

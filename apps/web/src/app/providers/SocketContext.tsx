@@ -30,7 +30,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
 
   const initializeSocket = useCallback(async () => {
-    if (!user?.username) return;
+    if (!user?.id) return;
 
     const token = getAccessToken();
     if (!token) return; // Wait until access token is available in memory
@@ -70,7 +70,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.on("connect_error", (error) => {
       console.error("Socket connection error:", error);
     });
-  }, [user?.username]);
+  }, [user?.id]);
 
   const disconnectSocket = useCallback(() => {
     if (socketRef.current) {
@@ -85,11 +85,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (user?.username) {
+    if (user?.id) {
       initializeSocket();
     }
     return () => disconnectSocket();
-  }, [user?.username, initializeSocket, disconnectSocket]);
+  }, [user?.id, initializeSocket, disconnectSocket]);
 
   // Only reconnect for bfcache restore (back/forward navigation).
   // Do NOT disconnect on tab/window focus loss — chat must stay live in background.
@@ -98,7 +98,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       if (e.persisted) disconnectSocket();
     };
     const handlePageShow = (e: PageTransitionEvent) => {
-      if (e.persisted && user?.username) initializeSocket();
+      if (e.persisted && user?.id) initializeSocket();
     };
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("pageshow", handlePageShow);
@@ -106,7 +106,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
     };
-  }, [user?.username, initializeSocket, disconnectSocket]);
+  }, [user?.id, initializeSocket, disconnectSocket]);
 
   return (
     <SocketContext.Provider value={{ socketRef, connected }}>

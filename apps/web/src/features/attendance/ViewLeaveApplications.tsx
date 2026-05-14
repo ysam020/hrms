@@ -183,7 +183,7 @@ function ViewLeaveApplications() {
       }
 
       const exportData = allData.map((item) => ({
-        username: item.username,
+        userId: item.userId,
         from: item.from,
         to: item.to,
         reason: item.reason,
@@ -350,7 +350,7 @@ function ViewLeaveApplications() {
         size: 120,
         Cell: ({ cell }) => {
           const canTakeAction =
-            user?.isSuperUser || cell.row.original.username !== user?.username;
+            user?.isSuperUser || cell.row.original.userId !== user?.id;
 
           if (!canTakeAction) {
             return (

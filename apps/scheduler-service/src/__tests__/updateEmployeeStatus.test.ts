@@ -4,7 +4,7 @@ import { updateEmployeeStatus } from "../jobs/updateEmployeeStatus";
 jest.mock("@hrms/db", () => ({
   prisma: {
     resignation: { findMany: jest.fn() },
-    user: { updateMany: jest.fn() },
+    user: { update: jest.fn() },
   },
 }));
 
@@ -13,12 +13,12 @@ jest.mock("@hrms/logger", () => ({
 }));
 
 const mockFindMany = (prisma as any).resignation.findMany as jest.Mock;
-const mockUpdateMany = prisma.user.updateMany as jest.Mock;
+const mockUpdate = prisma.user.update as jest.Mock;
 
 describe("updateEmployeeStatus", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUpdateMany.mockResolvedValue({ count: 1 });
+    mockUpdate.mockResolvedValue({ count: 1 });
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0)); // March 5, 2024 noon
   });
@@ -30,7 +30,7 @@ describe("updateEmployeeStatus", () => {
   it("does nothing when no resignations have yesterday as lastDate", async () => {
     mockFindMany.mockResolvedValue([]);
     await updateEmployeeStatus();
-    expect(mockUpdateMany).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("queries resignations where lastDate is yesterday", async () => {
@@ -45,31 +45,31 @@ describe("updateEmployeeStatus", () => {
 
   it("updates each employee with resignation lastDate to Resigned", async () => {
     mockFindMany.mockResolvedValue([
-      { username: "john", lastDate: "2024-03-04" },
-      { username: "jane", lastDate: "2024-03-04" },
+      { userId: "john-id", lastDate: "2024-03-04" },
+      { userId: "jane-id", lastDate: "2024-03-04" },
     ]);
 
     await updateEmployeeStatus();
 
-    expect(mockUpdateMany).toHaveBeenCalledTimes(2);
-    expect(mockUpdateMany).toHaveBeenCalledWith({
-      where: { username: "john" },
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "john-id" },
       data: { employeeStatus: "Resigned" },
     });
-    expect(mockUpdateMany).toHaveBeenCalledWith({
-      where: { username: "jane" },
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "jane-id" },
       data: { employeeStatus: "Resigned" },
     });
   });
 
-  it("skips resignations with null or missing username", async () => {
+  it("skips resignations with null or missing userId", async () => {
     mockFindMany.mockResolvedValue([
-      { username: null, lastDate: "2024-03-04" },
-      { username: undefined, lastDate: "2024-03-04" },
+      { userId: null, lastDate: "2024-03-04" },
+      { userId: undefined, lastDate: "2024-03-04" },
     ]);
 
     await updateEmployeeStatus();
-    expect(mockUpdateMany).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("correctly computes yesterday across a month boundary", async () => {

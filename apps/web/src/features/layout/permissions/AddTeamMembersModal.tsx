@@ -133,6 +133,8 @@ function AddTeamMembersModal(props) {
                 value={formik.values.members}
                 onChange={(e) => formik.setFieldValue("members", e.value)}
                 options={userList}
+                optionLabel="label"
+                optionValue="value"
                 placeholder="Choose team members..."
                 maxSelectedLabels={3}
                 appendTo="self"

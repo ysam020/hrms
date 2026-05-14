@@ -1,20 +1,15 @@
 import jwt from "jsonwebtoken";
-import { prisma } from "@hrms/db";
 
-// Verifies a WebSocket JWT access token and resolves it to the user's username.
-// Returns null for any invalid/expired token or unknown user.
-export async function resolveSocketUsername(
+// Verifies a WebSocket JWT access token and returns the userId from the payload.
+// Returns null for any invalid/expired token.
+export async function resolveSocketUserId(
   token: string,
 ): Promise<string | null> {
   try {
     const payload = jwt.verify(token, process.env.ACCESS_JWT_TOKEN!, {
       algorithms: ["HS256"],
     }) as any;
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: { username: true },
-    });
-    return user?.username ?? null;
+    return payload.userId ?? null;
   } catch {
     return null;
   }

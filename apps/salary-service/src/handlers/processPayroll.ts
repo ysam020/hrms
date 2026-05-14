@@ -8,7 +8,7 @@ export const processPayroll = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { month, year, usernames } = call.request;
+    const { month, year, userIds } = call.request;
 
     if (!month || !year) {
       return callback(null, {
@@ -24,8 +24,7 @@ export const processPayroll = async (
     const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
 
     const employeeWhere: any = { employeeStatus: "Active" };
-    if (usernames && usernames.length > 0)
-      employeeWhere.username = { in: usernames };
+    if (userIds && userIds.length > 0) employeeWhere.id = { in: userIds };
 
     const employees = await prisma.user.findMany({
       where: employeeWhere,
@@ -44,7 +43,7 @@ export const processPayroll = async (
       try {
         const salaryStructure = await prisma.salaryStructure.findFirst({
           where: {
-            username: employee.username,
+            userId: employee.id,
             month: monthNum,
             year: yearNum,
           },
@@ -53,6 +52,7 @@ export const processPayroll = async (
 
         if (!salaryStructure) {
           payrollResults.push({
+            userId: employee.id,
             username: employee.username,
             status: "skipped",
             reason: "No salary structure",
@@ -62,7 +62,7 @@ export const processPayroll = async (
 
         const records = await prisma.attendanceRecord.findMany({
           where: {
-            username: employee.username,
+            userId: employee.id,
             date: { gte: startDate, lte: endDate },
           },
         });
@@ -84,6 +84,7 @@ export const processPayroll = async (
         );
 
         payrollResults.push({
+          userId: employee.id,
           username: employee.username,
           month: monthNum,
           year: yearNum,
@@ -96,8 +97,9 @@ export const processPayroll = async (
           status: "processed",
         });
       } catch (empErr) {
-        logger.error(`Payroll error for ${employee.username}:`, { empErr });
+        logger.error(`Payroll error for ${employee.id}:`, { empErr });
         payrollResults.push({
+          userId: employee.id,
           username: employee.username,
           status: "error",
           reason: String(empErr),

@@ -88,6 +88,7 @@ describe("processPayroll", () => {
 
     const result = cb.mock.calls[0][1];
     expect(result.data[0]).toEqual({
+      userId: "emp-1",
       username: "john",
       status: "skipped",
       reason: "No salary structure",
@@ -156,17 +157,17 @@ describe("processPayroll", () => {
     expect(payroll.lopDeduction).toBeCloseTo(500, 1); // 0.5 days × 1000/day
   });
 
-  it("filters employees by usernames when provided", async () => {
+  it("filters employees by userIds when provided", async () => {
     mockUserFindMany.mockResolvedValue([]);
 
     await processPayroll(
-      makeCall({ month: "3", year: "2024", usernames: ["john", "jane"] }),
+      makeCall({ month: "3", year: "2024", userIds: ["emp-1", "emp-2"] }),
       makeCallback(),
     );
 
     expect(mockUserFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ username: { in: ["john", "jane"] } }),
+        where: expect.objectContaining({ id: { in: ["emp-1", "emp-2"] } }),
       }),
     );
   });

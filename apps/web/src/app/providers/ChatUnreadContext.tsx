@@ -47,14 +47,14 @@ export function ChatUnreadProvider({ children }: { children: ReactNode }) {
   const api = useApiClient();
 
   const fetchUnread = useCallback(async () => {
-    if (!user?.username) return;
+    if (!user?.id) return;
     try {
       const res = await api.get("/chat/unread-counts");
       setUnreadCounts(res.data.data || {});
     } catch {
       // silent
     }
-  }, [user?.username, api]);
+  }, [user?.id, api]);
 
   // Fetch on mount and on reconnect
   useEffect(() => {
@@ -66,13 +66,13 @@ export function ChatUnreadProvider({ children }: { children: ReactNode }) {
 
   // Socket listeners
   useEffect(() => {
-    if (!user?.username || !connected || !socketRef) return;
+    if (!user?.id || !connected || !socketRef) return;
     const socket = socketRef.current;
     if (!socket) return;
 
-    const handleMessage = (msg: { chatRoom?: unknown; sender?: string }) => {
+    const handleMessage = (msg: { chatRoom?: unknown; senderId?: string }) => {
       const roomId = String(msg.chatRoom ?? "");
-      if (msg.sender !== user.username) {
+      if (msg.senderId !== user.id) {
         setUnreadCounts((prev) => ({
           ...prev,
           [roomId]: (prev[roomId] || 0) + 1,
@@ -88,7 +88,7 @@ export function ChatUnreadProvider({ children }: { children: ReactNode }) {
       roomId: string;
       reader: string;
     }) => {
-      if (reader === user.username) {
+      if (reader === user.id) {
         setUnreadCounts((prev) => ({ ...prev, [roomId]: 0 }));
       }
     };
@@ -99,7 +99,7 @@ export function ChatUnreadProvider({ children }: { children: ReactNode }) {
       socket.off("chat:message", handleMessage);
       socket.off("chat:read", handleRead);
     };
-  }, [user?.username, connected, socketRef]);
+  }, [user?.id, connected, socketRef]);
 
   const clearRoomUnread = useCallback((roomId: string) => {
     setUnreadCounts((prev) => ({ ...prev, [roomId]: 0 }));

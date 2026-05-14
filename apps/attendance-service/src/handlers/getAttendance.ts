@@ -4,8 +4,6 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
-const isObjectId = (v: string) => /^[0-9a-f]{24}$/i.test(v);
-
 // Returns every calendar date between start and end (inclusive) as YYYY-MM-DD.
 function eachDay(start: Date, end: Date): string[] {
   const days: string[] = [];
@@ -31,26 +29,12 @@ export const getAttendance = async (
     const limitNum = parseInt(String(limit)) || 31;
     const skip = (pageNum - 1) * limitNum;
 
-    // Resolve username from ObjectId, or treat value as plain username.
-    let username: string | undefined;
-    if (userId) {
-      if (isObjectId(userId)) {
-        const user = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { username: true },
-        });
-        username = user?.username;
-      } else {
-        username = userId;
-      }
-    }
-
-    const cacheKey = `attendance:${username || ""}:${startDate || ""}:${endDate || ""}:p${pageNum}:l${limitNum}`;
+    const cacheKey = `attendance:${userId || ""}:${startDate || ""}:${endDate || ""}:p${pageNum}:l${limitNum}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
     const where: Record<string, any> = {};
-    if (username) where.username = username;
+    if (userId) where.userId = userId;
     if (startDate || endDate) {
       where.date = {};
       if (startDate) where.date.gte = new Date(startDate);
@@ -67,15 +51,11 @@ export const getAttendance = async (
       prisma.attendanceRecord.count({ where }),
     ]);
 
-    // Index DB records by their calendar date (YYYY-MM-DD) for O(1) lookup.
     const byDate = new Map<string, (typeof records)[0]>();
     for (const r of records) {
       if (r.date) byDate.set(r.date.toISOString().slice(0, 10), r);
     }
 
-    // When fetching for a specific user over a date range, fill every calendar
-    // date that has no DB record with a synthetic "Leave" entry — but only for
-    // dates strictly in the past (today hasn't ended yet).
     const todayKey = new Date().toISOString().slice(0, 10);
 
     type AttendanceRow = {
@@ -87,7 +67,7 @@ export const getAttendance = async (
     };
     let data: AttendanceRow[];
 
-    if (username && startDate && endDate) {
+    if (userId && startDate && endDate) {
       const allDays = eachDay(new Date(startDate), new Date(endDate));
 
       data = allDays
@@ -102,9 +82,7 @@ export const getAttendance = async (
               workHours: r.workingHours != null ? String(r.workingHours) : "",
             };
           }
-          // Future dates and today (employee may still check in): omit.
           if (dateKey >= todayKey) return null;
-          // Past date with no record → Leave.
           return {
             date: new Date(dateKey).toISOString(),
             checkIn: "",
@@ -115,7 +93,6 @@ export const getAttendance = async (
         })
         .filter((x): x is AttendanceRow => x !== null);
     } else {
-      // Admin / open query — return raw DB rows without filling.
       data = records.map((r) => ({
         date: r.date ? r.date.toISOString() : "",
         checkIn: r.timeIn || "",
@@ -129,7 +106,7 @@ export const getAttendance = async (
       message: MESSAGES.ATTENDANCE_RECORDS_FETCHED,
       status: status.OK,
       data,
-      total: username && startDate && endDate ? data.length : dbTotal,
+      total: userId && startDate && endDate ? data.length : dbTotal,
     };
     await cacheManager.set(cacheKey, response, "attendance");
     return callback(null, response);

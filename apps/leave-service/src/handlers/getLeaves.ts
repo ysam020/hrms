@@ -20,7 +20,7 @@ export const getLeaves = async (
     if (cached) return callback(null, cached);
 
     const where: Record<string, any> = {};
-    if (userId) where.username = userId;
+    if (userId) where.userId = userId;
     if (leaveStatus && leaveStatus.toLowerCase() !== "all")
       where.status = leaveStatus;
 
@@ -31,14 +31,14 @@ export const getLeaves = async (
 
     const data = leaves.map((l) => ({
       id: l.id,
-      username: l.username,
+      userId: l.userId,
       leaveType: l.leaveType,
       from: l.from || "",
       to: l.to || "",
       days: l.days ?? 0,
       reason: l.reason || "",
       status: l.status || "",
-      approvedByUsername: l.approvedByUsername || "",
+      approvedById: l.approvedById || "",
       appliedOn: l.appliedOn || "",
       sickLeave: l.sickLeave || false,
       medicalCertificate: l.medicalCertificate || "",

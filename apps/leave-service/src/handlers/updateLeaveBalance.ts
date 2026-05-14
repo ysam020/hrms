@@ -8,10 +8,9 @@ export const updateLeaveBalance = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username, balances, accumulatedPLBeforeCurrentMonth } =
-      call.request;
+    const { userId, balances, accumulatedPLBeforeCurrentMonth } = call.request;
 
-    if (!username) {
+    if (!userId) {
       return callback(null, {
         message: MESSAGES.USERNAME_REQUIRED,
         status: status.INVALID_ARGUMENT,
@@ -19,9 +18,9 @@ export const updateLeaveBalance = async (
     }
 
     const balance = await prisma.leaveBalance.upsert({
-      where: { username },
+      where: { userId },
       create: {
-        username,
+        userId,
         balances: balances ?? {},
         accumulatedPLBeforeCurrentMonth: accumulatedPLBeforeCurrentMonth ?? 0,
       },

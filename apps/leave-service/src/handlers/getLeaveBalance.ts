@@ -8,9 +8,9 @@ export const getLeaveBalance = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username } = call.request;
+    const { userId } = call.request;
 
-    if (!username) {
+    if (!userId) {
       return callback(null, {
         message: MESSAGES.USERNAME_REQUIRED,
         status: status.INVALID_ARGUMENT,
@@ -18,13 +18,13 @@ export const getLeaveBalance = async (
     }
 
     const balance = await prisma.leaveBalance.findUnique({
-      where: { username },
+      where: { userId },
     });
 
     const data = balance
       ? {
           id: balance.id,
-          username: balance.username,
+          userId: balance.userId,
           accumulatedPlBeforeCurrentMonth:
             balance.accumulatedPLBeforeCurrentMonth ?? 0,
           balances: balance.balances ? JSON.stringify(balance.balances) : "",
@@ -35,7 +35,7 @@ export const getLeaveBalance = async (
       message: balance ? MESSAGES.LEAVE_FETCHED : MESSAGES.NO_LEAVE_BALANCE,
       status: status.OK,
       data,
-      username,
+      userId,
     });
   } catch (err) {
     logger.error("GetLeaveBalance error:", { err });

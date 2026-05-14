@@ -4,7 +4,6 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
-import { cacheManager } from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
 
 // SSRF protection — block requests to private/loopback/link-local address ranges,
@@ -53,34 +52,15 @@ function withId<
   return out;
 }
 
-async function resolveUsername(userId: string): Promise<string | null> {
-  const cacheKey = `user:username:${userId}`;
-  const cached = await cacheManager.get<string>(cacheKey);
-  if (cached) return cached;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { username: true },
-  });
-  if (user?.username) {
-    await cacheManager.set(cacheKey, user.username, "user");
-  }
-  return user?.username ?? null;
-}
-
 export async function getConversations(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
+    const userId = user!.userId;
 
     const rooms = await prisma.chatRoom.findMany({
       where: {
-        participants: { has: username },
-        NOT: { deletedFor: { has: username } },
+        participants: { has: userId },
+        NOT: { deletedFor: { has: userId } },
       },
       orderBy: { lastActivity: "desc" },
     });
@@ -90,6 +70,10 @@ export async function getConversations(req: Request, res: Response) {
       .map((r: any) => r.lastMessageId)
       .filter(Boolean) as string[];
 
+    const allParticipantIds = [
+      ...new Set(rooms.flatMap((r: any) => r.participants)),
+    ];
+
     const [lastMessages, participantUsers] = await Promise.all([
       lastMessageIds.length
         ? prisma.message.findMany({
@@ -97,7 +81,7 @@ export async function getConversations(req: Request, res: Response) {
             select: {
               id: true,
               content: true,
-              sender: true,
+              senderId: true,
               type: true,
               createdAt: true,
               isDeleted: true,
@@ -105,12 +89,9 @@ export async function getConversations(req: Request, res: Response) {
           })
         : Promise.resolve([]),
       prisma.user.findMany({
-        where: {
-          username: {
-            in: [...new Set(rooms.flatMap((r: any) => r.participants))],
-          },
-        },
+        where: { id: { in: allParticipantIds } },
         select: {
+          id: true,
           username: true,
           first_name: true,
           last_name: true,
@@ -121,14 +102,14 @@ export async function getConversations(req: Request, res: Response) {
     ]);
 
     const msgMap = new Map(lastMessages.map((m: any) => [m.id, m]));
-    const userMap = new Map(participantUsers.map((u: any) => [u.username, u]));
+    const userMap = new Map(participantUsers.map((u: any) => [u.id, u]));
 
     const rawCounts = await prisma.message.groupBy({
       by: ["chatRoomId"],
       where: {
         chatRoomId: { in: roomIds },
         isDeleted: false,
-        NOT: [{ sender: username }, { readBy: { has: username } }],
+        NOT: [{ senderId: userId }, { readBy: { has: userId } }],
       },
       _count: { id: true },
     });
@@ -145,7 +126,7 @@ export async function getConversations(req: Request, res: Response) {
         ...room,
         lastMessage: lastMsg ? withId(lastMsg as any) : null,
         participantDetails: room.participants.map(
-          (p: any) => userMap.get(p) ?? { username: p },
+          (p: any) => userMap.get(p) ?? { id: p },
         ),
         unreadCount: unreadCounts[i],
       });
@@ -166,18 +147,14 @@ export async function getConversations(req: Request, res: Response) {
 export async function startConversation(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
+    const userId = user!.userId;
 
-    const { recipientUsername } = req.body;
-    if (!recipientUsername)
+    const { recipientUserId } = req.body;
+    if (!recipientUserId)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "recipientUsername is required",
+        message: "recipientUserId is required",
       });
-    if (recipientUsername === username)
+    if (recipientUserId === userId)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Cannot start a conversation with yourself",
       });
@@ -185,17 +162,17 @@ export async function startConversation(req: Request, res: Response) {
     const existing = await prisma.chatRoom.findFirst({
       where: {
         type: "direct",
-        participants: { hasEvery: [username, recipientUsername] },
+        participants: { hasEvery: [userId, recipientUserId] },
       },
     });
 
     if (existing) {
-      const room = existing.deletedFor?.includes(username)
+      const room = existing.deletedFor?.includes(userId)
         ? await prisma.chatRoom.update({
             where: { id: existing.id },
             data: {
               deletedFor: {
-                set: existing.deletedFor.filter((u: any) => u !== username),
+                set: existing.deletedFor.filter((u: any) => u !== userId),
               },
             },
           })
@@ -208,7 +185,7 @@ export async function startConversation(req: Request, res: Response) {
 
     const room = await prisma.chatRoom.create({
       data: {
-        participants: [username, recipientUsername],
+        participants: [userId, recipientUserId],
         type: "direct",
         lastActivity: new Date(),
         deletedFor: [],
@@ -234,19 +211,14 @@ export async function getMessages(req: Request, res: Response) {
     const { limit } = parsePagination(req.query, 50);
     const before = req.query.before as string | undefined;
 
-    // Verify caller is a participant of this room before reading messages
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
+    const userId = user!.userId;
 
     const room = await prisma.chatRoom.findUnique({ where: { id: roomId } });
     if (!room)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Conversation not found",
       });
-    if (!room.participants.includes(username))
+    if (!room.participants.includes(userId))
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -281,12 +253,7 @@ export async function getMessages(req: Request, res: Response) {
 export async function markMessagesRead(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
-
+    const userId = user!.userId;
     const roomId = String(req.params.roomId);
 
     const room = await prisma.chatRoom.findUnique({ where: { id: roomId } });
@@ -294,7 +261,7 @@ export async function markMessagesRead(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Conversation not found",
       });
-    if (!room.participants.includes(username))
+    if (!room.participants.includes(userId))
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -307,10 +274,10 @@ export async function markMessagesRead(req: Request, res: Response) {
           q: {
             chatRoomId: roomId,
             isDeleted: false,
-            sender: { $ne: username },
-            readBy: { $not: { $elemMatch: { $eq: username } } },
+            senderId: { $ne: { $oid: userId } },
+            readBy: { $not: { $elemMatch: { $eq: { $oid: userId } } } },
           },
-          u: { $addToSet: { readBy: username } },
+          u: { $addToSet: { readBy: { $oid: userId } } },
           multi: true,
         },
       ],
@@ -331,16 +298,12 @@ export async function markMessagesRead(req: Request, res: Response) {
 export async function getUnreadCounts(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
+    const userId = user!.userId;
 
     const rooms = await prisma.chatRoom.findMany({
       where: {
-        participants: { has: username },
-        NOT: { deletedFor: { has: username } },
+        participants: { has: userId },
+        NOT: { deletedFor: { has: userId } },
       },
       select: { id: true },
     });
@@ -351,7 +314,7 @@ export async function getUnreadCounts(req: Request, res: Response) {
       where: {
         chatRoomId: { in: roomIds },
         isDeleted: false,
-        NOT: [{ sender: username }, { readBy: { has: username } }],
+        NOT: [{ senderId: userId }, { readBy: { has: userId } }],
       },
       _count: { id: true },
     });
@@ -377,12 +340,7 @@ export async function getUnreadCounts(req: Request, res: Response) {
 export async function deleteMessage(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
-
+    const userId = user!.userId;
     const messageId = String(req.params.messageId);
     const msg = await prisma.message.findUnique({ where: { id: messageId } });
 
@@ -390,7 +348,7 @@ export async function deleteMessage(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Message not found",
       });
-    if (msg.sender !== username)
+    if (msg.senderId !== userId)
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Cannot delete another user's message",
       });
@@ -419,12 +377,7 @@ export async function deleteMessage(req: Request, res: Response) {
 export async function deleteConversation(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const username = await resolveUsername(user!.userId);
-    if (!username)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
-
+    const userId = user!.userId;
     const roomId = String(req.params.roomId);
     const room = await prisma.chatRoom.findUnique({ where: { id: roomId } });
     if (!room)
@@ -432,10 +385,10 @@ export async function deleteConversation(req: Request, res: Response) {
         message: "Conversation not found",
       });
 
-    if (!room.deletedFor.includes(username)) {
+    if (!room.deletedFor.includes(userId)) {
       await prisma.chatRoom.update({
         where: { id: roomId },
-        data: { deletedFor: { push: username } },
+        data: { deletedFor: { push: userId } },
       });
     }
 

@@ -11,7 +11,7 @@ export const submitResignation = async (
 ) => {
   try {
     const {
-      username,
+      userId,
       resignationDate,
       lastDate,
       reason,
@@ -19,7 +19,7 @@ export const submitResignation = async (
       suggestions,
     } = call.request;
 
-    if (!username || !resignationDate) {
+    if (!userId || !resignationDate) {
       return callback(null, {
         message: MESSAGES.USERNAME_RESIGNATION_DATE_REQUIRED,
         status: status.INVALID_ARGUMENT,
@@ -27,7 +27,7 @@ export const submitResignation = async (
     }
 
     const existing = await prisma.resignation.findFirst({
-      where: { username, status: { in: ["Submitted", "Approved"] } },
+      where: { userId, status: { in: ["Submitted", "Approved"] } },
     });
     if (existing) {
       return callback(null, {
@@ -38,7 +38,7 @@ export const submitResignation = async (
 
     const resignation = await prisma.resignation.create({
       data: {
-        username,
+        userId,
         resignationDate,
         lastDate: lastDate || null,
         reason: reason || null,
@@ -55,27 +55,32 @@ export const submitResignation = async (
 
     // Notify HR + team leaders (fire-and-forget)
     Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true },
+      }),
       prisma.user.findMany({
         where: { department: "HUMAN RESOURCES" },
         select: { id: true, username: true },
       }),
       prisma.team.findMany({
         where: {
-          OR: [{ members: { has: username } }, { teamLeader: username }],
+          OR: [{ members: { has: userId } }, { teamLeaderId: userId }],
         },
-        select: { teamLeader: true },
+        select: { teamLeaderId: true },
       }),
     ])
-      .then(async ([hrUsers, teams]) => {
-        const teamLeaderUsernames = [
+      .then(async ([applicant, hrUsers, teams]) => {
+        const applicantUsername = applicant?.username || userId;
+        const teamLeaderIds = [
           ...new Set(
-            teams.map((t) => t.teamLeader).filter((tl) => tl !== username),
+            teams.map((t) => t.teamLeaderId).filter((id) => id !== userId),
           ),
         ];
         const teamLeaderUsers =
-          teamLeaderUsernames.length > 0
+          teamLeaderIds.length > 0
             ? await prisma.user.findMany({
-                where: { username: { in: teamLeaderUsernames } },
+                where: { id: { in: teamLeaderIds } },
                 select: { id: true, username: true },
               })
             : [];
@@ -85,7 +90,7 @@ export const submitResignation = async (
         if (uniqueUsernames.length === 0) return;
         await getNotificationQueue().add("resignationSubmitted", {
           title: "Resignation",
-          message: `${username} has submitted resignation form`,
+          message: `${applicantUsername} has submitted resignation form`,
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           eventType: "resignation_notification",

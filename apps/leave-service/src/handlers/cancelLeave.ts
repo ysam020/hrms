@@ -9,7 +9,7 @@ export const cancelLeave = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { id, username } = call.request;
+    const { id, userId } = call.request;
 
     if (!id) {
       return callback(null, {
@@ -34,7 +34,7 @@ export const cancelLeave = async (
       });
     }
 
-    if (username && leave.username !== username) {
+    if (userId && leave.userId !== userId) {
       return callback(null, {
         message: MESSAGES.CANNOT_CANCEL_OTHERS_LEAVE,
         status: status.PERMISSION_DENIED,

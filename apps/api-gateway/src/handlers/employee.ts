@@ -288,6 +288,7 @@ export async function viewAllKycs(req: Request, res: Response) {
           {
             $project: {
               _id: 0,
+              id: { $toString: "$_id" },
               username: 1,
               first_name: 1,
               middle_name: 1,

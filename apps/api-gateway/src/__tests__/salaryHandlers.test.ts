@@ -134,20 +134,18 @@ describe("getUserSalary", () => {
   });
 
   it("allows superuser to access any employee payslip", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "admin", isSuperUser: false }) // resolveUsername
-      .mockResolvedValueOnce({ isSuperUser: true }); // isSuperUser check
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
 
     const res = makeRes();
     await getUserSalary(
-      makeReq({ params: { username: "john", year: "2024", month: "3" } }),
+      makeReq({ params: { userId: "emp-1", year: "2024", month: "3" } }),
       res,
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "getPayslip",
-      expect.objectContaining({ username: "john", year: 2024, month: 3 }),
+      expect.objectContaining({ userId: "emp-1", year: 2024, month: 3 }),
     );
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
@@ -157,13 +155,11 @@ describe("getUserSalary", () => {
   });
 
   it("allows non-superuser to access their own payslip", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "john", isSuperUser: false }) // resolveUsername
-      .mockResolvedValueOnce({ isSuperUser: false }); // isSuperUser check
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: false });
 
     const res = makeRes();
     await getUserSalary(
-      makeReq({ params: { username: "john", year: "2024", month: "3" } }),
+      makeReq({ params: { userId: "user-id-1", year: "2024", month: "3" } }),
       res,
     );
 
@@ -176,13 +172,11 @@ describe("getUserSalary", () => {
   });
 
   it("returns FORBIDDEN when non-superuser tries to access another user's payslip", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "jane", isSuperUser: false }) // resolveUsername
-      .mockResolvedValueOnce({ isSuperUser: false }); // isSuperUser check
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: false });
 
     const res = makeRes();
     await getUserSalary(
-      makeReq({ params: { username: "john", year: "2024", month: "3" } }),
+      makeReq({ params: { userId: "other-id", year: "2024", month: "3" } }),
       res,
     );
 
@@ -195,13 +189,11 @@ describe("getUserSalary", () => {
   });
 
   it("parses year and month as integers", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "john", isSuperUser: false })
-      .mockResolvedValueOnce({ isSuperUser: true });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
 
     const res = makeRes();
     await getUserSalary(
-      makeReq({ params: { username: "john", year: "2024", month: "03" } }),
+      makeReq({ params: { userId: "emp-1", year: "2024", month: "03" } }),
       res,
     );
 
@@ -213,14 +205,12 @@ describe("getUserSalary", () => {
   });
 
   it("returns INTERNAL_SERVER_ERROR when grpcCall throws", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "john", isSuperUser: false })
-      .mockResolvedValueOnce({ isSuperUser: true });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
     mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
 
     const res = makeRes();
     await getUserSalary(
-      makeReq({ params: { username: "john", year: "2024", month: "3" } }),
+      makeReq({ params: { userId: "emp-1", year: "2024", month: "3" } }),
       res,
     );
 
@@ -239,31 +229,27 @@ describe("generateSalarySlip", () => {
   });
 
   it("allows superuser to generate slip for any employee", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "admin", isSuperUser: false })
-      .mockResolvedValueOnce({ isSuperUser: true });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
 
     const res = makeRes();
     await generateSalarySlip(
-      makeReq({ params: { username: "john", year: "2024", month: "3" } }),
+      makeReq({ params: { userId: "emp-1", year: "2024", month: "3" } }),
       res,
     );
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "getPayslip",
-      expect.objectContaining({ username: "john" }),
+      expect.objectContaining({ userId: "emp-1" }),
     );
   });
 
   it("returns FORBIDDEN when non-superuser tries to generate another user's slip", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "jane", isSuperUser: false })
-      .mockResolvedValueOnce({ isSuperUser: false });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: false });
 
     const res = makeRes();
     await generateSalarySlip(
-      makeReq({ params: { username: "john", year: "2024", month: "3" } }),
+      makeReq({ params: { userId: "other-id", year: "2024", month: "3" } }),
       res,
     );
 
@@ -276,14 +262,12 @@ describe("generateSalarySlip", () => {
   });
 
   it("returns INTERNAL_SERVER_ERROR on grpc failure", async () => {
-    mockUserFindUnique
-      .mockResolvedValueOnce({ username: "john", isSuperUser: false })
-      .mockResolvedValueOnce({ isSuperUser: true });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
     mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
 
     const res = makeRes();
     await generateSalarySlip(
-      makeReq({ params: { username: "john", year: "2024", month: "3" } }),
+      makeReq({ params: { userId: "emp-1", year: "2024", month: "3" } }),
       res,
     );
 

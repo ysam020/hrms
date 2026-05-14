@@ -9,23 +9,18 @@ export const listResignations = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      username,
-      status: filterStatus,
-    } = call.request;
+    const { page = 1, limit = 10, userId, status: filterStatus } = call.request;
 
     const pageNum = parseInt(String(page)) || 1;
     const limitNum = parseInt(String(limit)) || 10;
     const skip = (pageNum - 1) * limitNum;
 
-    const cacheKey = `resignations:${username || ""}:${filterStatus || "all"}:p${pageNum}:l${limitNum}`;
+    const cacheKey = `resignations:${userId || ""}:${filterStatus || "all"}:p${pageNum}:l${limitNum}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
     const where: any = {};
-    if (username) where.username = username;
+    if (userId) where.userId = userId;
     if (filterStatus) where.status = filterStatus;
 
     const [resignations, totalCount] = await Promise.all([
@@ -45,7 +40,7 @@ export const listResignations = async (
       status: status.OK,
       data: resignations.map((r) => ({
         id: r.id,
-        username: r.username ?? "",
+        userId: r.userId ?? "",
         reason: r.reason ?? "",
         rejectionReason: r.rejectionReason ?? "",
         resignationDate: r.resignationDate ?? "",

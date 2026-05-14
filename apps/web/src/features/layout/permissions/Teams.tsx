@@ -176,7 +176,7 @@ function Teams() {
                   members,
                   cell.row.original._id,
                   cell.row.original.team_name,
-                  cell.row.original.team_leader,
+                  cell.row.original.teamLeaderId,
                 )
               }
               sx={{

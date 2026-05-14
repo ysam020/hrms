@@ -8,9 +8,9 @@ export const getMyResignation = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username } = call.request;
+    const { userId } = call.request;
 
-    if (!username) {
+    if (!userId) {
       return callback(null, {
         message: MESSAGES.USERNAME_REQUIRED,
         status: status.INVALID_ARGUMENT,
@@ -18,7 +18,7 @@ export const getMyResignation = async (
     }
 
     const resignation = await prisma.resignation.findFirst({
-      where: { username },
+      where: { userId },
       orderBy: { submittedOn: "desc" },
     });
 

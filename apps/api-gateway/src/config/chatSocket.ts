@@ -4,14 +4,14 @@ import { logger } from "@hrms/logger";
 import { sendPushNotifications } from "@hrms/firebase";
 import type { RedisWebSocketAdapter } from "@hrms/websocket";
 
-type AuthenticatedSocket = Socket & { username: string };
+type AuthenticatedSocket = Socket & { userId: string };
 
 export function setupChatSocket(
   io: SocketServer,
   redisAdapter: RedisWebSocketAdapter,
 ): void {
   io.on("connection", (socket) => {
-    const username = (socket as AuthenticatedSocket).username;
+    const userId = (socket as AuthenticatedSocket).userId;
 
     // Per-connection cache of roomId → participants[] to avoid repeated DB hits
     const roomParticipantsCache = new Map<string, string[]>();
@@ -33,7 +33,7 @@ export function setupChatSocket(
       try {
         await getParticipants(roomId);
       } catch (err) {
-        logger.error(`chat:join error for ${username}:`, { err });
+        logger.error(`chat:join error for ${userId}:`, { err });
       }
     });
 
@@ -62,7 +62,7 @@ export function setupChatSocket(
         try {
           // Verify sender is a participant of this room
           const participants = await getParticipants(roomId);
-          if (!participants.includes(username)) {
+          if (!participants.includes(userId)) {
             socket.emit("chat:error", {
               message: "Not a participant of this room",
             });
@@ -80,7 +80,7 @@ export function setupChatSocket(
           const message = await prisma.message.create({
             data: {
               chatRoomId: roomId,
-              sender: username,
+              senderId: userId,
               content: content ?? null,
               type: type ?? "text",
               fileUrl: fileUrl ?? null,
@@ -116,7 +116,7 @@ export function setupChatSocket(
           );
 
           // FCM push to other participants (non-blocking)
-          const others = participants.filter((p) => p !== username);
+          const others = participants.filter((p) => p !== userId);
           if (others.length > 0) {
             const pushBody =
               type === "image"
@@ -126,14 +126,14 @@ export function setupChatSocket(
                   : type === "file"
                     ? `${fileName || "Sent a file"}`
                     : (content ?? "");
-            sendPushNotifications(others, username, pushBody, {
+            sendPushNotifications(others, userId, pushBody, {
               latestOnly: true,
             }).catch((err) =>
               logger.error("[chat:send] FCM push error:", { err }),
             );
           }
         } catch (err) {
-          logger.error(`chat:send error for ${username}:`, { err });
+          logger.error(`chat:send error for ${userId}:`, { err });
           socket.emit("chat:error", { message: "Failed to send message" });
         }
       },
@@ -145,9 +145,9 @@ export function setupChatSocket(
         const participants = await getParticipants(roomId);
         await Promise.all(
           participants
-            .filter((p) => p !== username)
+            .filter((p) => p !== userId)
             .map((p) =>
-              redisAdapter.sendToUser(p, "chat:typing", { roomId, username }),
+              redisAdapter.sendToUser(p, "chat:typing", { roomId, userId }),
             ),
         );
       } catch {
@@ -161,11 +161,11 @@ export function setupChatSocket(
         const participants = await getParticipants(roomId);
         await Promise.all(
           participants
-            .filter((p) => p !== username)
+            .filter((p) => p !== userId)
             .map((p) =>
               redisAdapter.sendToUser(p, "chat:stop-typing", {
                 roomId,
-                username,
+                userId,
               }),
             ),
         );
@@ -181,7 +181,7 @@ export function setupChatSocket(
           where: {
             chatRoomId: roomId,
             isDeleted: false,
-            NOT: [{ sender: username }, { readBy: { has: username } }],
+            NOT: [{ senderId: userId }, { readBy: { has: userId } }],
           },
           select: { id: true },
         });
@@ -191,7 +191,7 @@ export function setupChatSocket(
             unread.map((m: any) =>
               prisma.message.update({
                 where: { id: m.id },
-                data: { readBy: { push: username } },
+                data: { readBy: { push: userId } },
               }),
             ),
           );
@@ -200,16 +200,16 @@ export function setupChatSocket(
         const participants = await getParticipants(roomId);
         await Promise.all(
           participants
-            .filter((p) => p !== username)
+            .filter((p) => p !== userId)
             .map((p) =>
               redisAdapter.sendToUser(p, "chat:read", {
                 roomId,
-                reader: username,
+                reader: userId,
               }),
             ),
         );
       } catch (err) {
-        logger.error(`chat:read error for ${username}:`, { err });
+        logger.error(`chat:read error for ${userId}:`, { err });
       }
     });
 
@@ -228,7 +228,7 @@ export function setupChatSocket(
             ),
           );
         } catch (err) {
-          logger.error(`chat:delete-message error for ${username}:`, { err });
+          logger.error(`chat:delete-message error for ${userId}:`, { err });
         }
       },
     );

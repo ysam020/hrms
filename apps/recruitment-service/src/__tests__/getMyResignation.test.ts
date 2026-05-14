@@ -16,7 +16,7 @@ const mockFindFirst = (prisma as any).resignation.findFirst as jest.Mock;
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
 
-const resignation = { id: "res-1", username: "john", status: "Submitted" };
+const resignation = { id: "res-1", userId: "john", status: "Submitted" };
 
 describe("getMyResignation", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -34,7 +34,7 @@ describe("getMyResignation", () => {
   it("returns NOT_FOUND when no resignation found for username", async () => {
     mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
-    await getMyResignation(makeCall({ username: "john" }), cb);
+    await getMyResignation(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 5 }),
@@ -44,10 +44,10 @@ describe("getMyResignation", () => {
   it("returns most recent resignation for username", async () => {
     mockFindFirst.mockResolvedValue(resignation);
     const cb = makeCallback();
-    await getMyResignation(makeCall({ username: "john" }), cb);
+    await getMyResignation(makeCall({ userId: "john" }), cb);
     expect(mockFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { username: "john" },
+        where: { userId: "john" },
         orderBy: { submittedOn: "desc" },
       }),
     );
@@ -60,7 +60,7 @@ describe("getMyResignation", () => {
   it("returns INTERNAL on database error", async () => {
     mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await getMyResignation(makeCall({ username: "john" }), cb);
+    await getMyResignation(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 13 }),

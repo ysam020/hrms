@@ -74,7 +74,7 @@ describe("getLeaves", () => {
     const cb = makeCallback();
     await getLeaves(makeCall({ userId: "john" }), cb);
     const where = mockFindMany.mock.calls[0][0].where;
-    expect(where.username).toBe("john");
+    expect(where.userId).toBe("john");
   });
 
   it("filters by status when provided and not 'all'", async () => {

@@ -49,7 +49,7 @@ export function DashboardProvider({
   user,
   children,
 }: {
-  user: { username?: string } | null;
+  user: { id?: string } | null;
   children: ReactNode;
 }) {
   const currentDate = new Date();
@@ -85,7 +85,7 @@ export function DashboardProvider({
   });
 
   const fetchDashboardData = useCallback(() => {
-    if (!user?.username) return;
+    if (!user?.id) return;
 
     const controller = new AbortController();
     const signal = controller.signal;
@@ -108,7 +108,7 @@ export function DashboardProvider({
             signal,
           }),
           apiClient.get(
-            API_ENDPOINTS.GET_ATTENDANCE_SUMMARY(user.username!, year, month),
+            API_ENDPOINTS.GET_ATTENDANCE_SUMMARY(user.id!, year, month),
             { signal },
           ),
           apiClient.get(API_ENDPOINTS.GET_HR_ACTIVITIES(), { signal }),
@@ -203,7 +203,7 @@ export function DashboardProvider({
     return () => {
       controller.abort();
     };
-  }, [user?.username, month, year]);
+  }, [user?.id, month, year]);
 
   useEffect(() => {
     const cleanup = fetchDashboardData();

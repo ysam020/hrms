@@ -8,13 +8,12 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { apiRequestLogger, logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
 import { configureSwagger } from "./config/swaggerSetup";
 import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
 import { applyRateLimiters, authLimiter } from "./config/rateLimiters";
-import { resolveSocketUsername } from "./config/socketAuth";
+import { resolveSocketUserId } from "./config/socketAuth";
 import { registerGracefulShutdown } from "./config/gracefulShutdown";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
@@ -75,14 +74,10 @@ app.get("/health", (_req, res) => res.json({ status: "healthy" }));
 
 app.use((error: any, _req: any, res: any, _next: any) => {
   logger.error("Unhandled error:", { error });
-  const httpStatus = error.status || 500;
+  const httpStatus = error.status || error.statusCode || 500;
   const message =
     httpStatus < 500 ? error.message || "Bad request" : "Internal Server Error";
-  const status =
-    httpStatus < 500
-      ? RESPONSE_STATUS.BAD_REQUEST
-      : RESPONSE_STATUS.INTERNAL_SERVER_ERROR;
-  return apiResponse(res, status, { message });
+  return res.status(httpStatus).json({ success: false, message });
 });
 
 process.on("uncaughtException", (error) =>
@@ -103,7 +98,7 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   const { io, redisAdapter } = configureSocketIO(
     server as any,
     allowedOrigins,
-    resolveSocketUsername,
+    resolveSocketUserId,
   );
   setupChatSocket(io, redisAdapter);
 

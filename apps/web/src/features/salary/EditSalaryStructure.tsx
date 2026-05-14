@@ -32,7 +32,7 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 function ViewEditSalaryStructure() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentSalaryData, setCurrentSalaryData] = useState<any>(null);
-  const { username } = useParams();
+  const { userId } = useParams();
   const { setAlert } = useContext(AlertContext);
 
   const [date, setDate] = useState(() => {
@@ -51,9 +51,9 @@ function ViewEditSalaryStructure() {
 
   // Fetch user data including salary structure using custom hook
   const { data: userData, loading } = useFetchData(
-    `/get-user-data/${username}`,
+    `/get-user-data/${userId}`,
     "get",
-    [username],
+    [userId],
     null,
     null,
   );
@@ -109,7 +109,7 @@ function ViewEditSalaryStructure() {
           grossEarnings: parseFloat(calculatedGrossEarnings.toFixed(2)),
           netPayable: parseFloat(calculatedNetPayable.toFixed(2)),
         },
-        username,
+        userId,
         year,
         month,
       };
@@ -174,7 +174,7 @@ function ViewEditSalaryStructure() {
       const year = date.split("-")[0];
       const month = date.split("-")[1];
       const res = await apiClient(
-        API_ENDPOINTS.GET_USER_SALARY(username!, Number(year), Number(month)),
+        API_ENDPOINTS.GET_USER_SALARY(userId!, Number(year), Number(month)),
       );
       if (
         res.data.data &&
@@ -196,7 +196,7 @@ function ViewEditSalaryStructure() {
       const [year, month] = date.split("-");
       const res = await apiClient(
         API_ENDPOINTS.GET_ATTENDANCE_SUMMARY(
-          username!,
+          userId!,
           Number(year),
           Number(month),
         ),
@@ -335,7 +335,7 @@ function ViewEditSalaryStructure() {
     return () => {
       isMounted = false;
     };
-  }, [date, grossSalary, username]);
+  }, [date, grossSalary, userId]);
 
   if (loading) {
     return (

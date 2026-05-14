@@ -14,12 +14,12 @@ salaryRouter.post(
   h.updateSalary,
 );
 salaryRouter.get(
-  "/get-user-salary/:username/:year/:month",
+  "/get-user-salary/:userId/:year/:month",
   authenticate,
   h.getUserSalary,
 );
 salaryRouter.get(
-  "/generate-salary-slip/:username/:year/:month",
+  "/generate-salary-slip/:userId/:year/:month",
   authenticate,
   h.generateSalarySlip,
 );

@@ -135,9 +135,9 @@ function useChat() {
     }
   }, [api]);
 
-  const startConversation = useCallback(async (recipientUsername) => {
+  const startConversation = useCallback(async (recipientUserId) => {
     const res = await apiClient.post(API_ENDPOINTS.START_CONVERSATION, {
-      recipientUsername,
+      recipientUserId,
     });
     const room = res.data.data;
     setConversations((prev) => {
@@ -319,7 +319,7 @@ function useChat() {
         );
       });
 
-      if (msg.sender !== user?.username && roomId !== activeRoomId) {
+      if (msg.senderId !== user?.id && roomId !== activeRoomId) {
         setUnreadCounts((prev) => ({
           ...prev,
           [roomId]: (prev[roomId] || 0) + 1,
@@ -330,7 +330,7 @@ function useChat() {
         emitRead(roomId);
       }
     },
-    [user?.username, activeRoomId, emitRead],
+    [user?.id, activeRoomId, emitRead],
   );
 
   const handleTyping = useCallback(({ roomId, username }) => {
@@ -391,14 +391,14 @@ function useChat() {
   // Socket subscriptions
 
   useEffect(() => {
-    if (!user?.username) return;
+    if (!user?.id) return;
     fetchConversations();
     fetchUnreadCounts();
-  }, [user?.username, fetchConversations, fetchUnreadCounts]);
+  }, [user?.id, fetchConversations, fetchUnreadCounts]);
 
   // Reconnect: refetch + flush outbox
   useEffect(() => {
-    if (!user?.username) return;
+    if (!user?.id) return;
 
     const wasConnected = prevConnectedRef.current;
     prevConnectedRef.current = connected;
@@ -415,7 +415,7 @@ function useChat() {
     }
   }, [
     connected,
-    user?.username,
+    user?.id,
     activeRoomId,
     fetchConversations,
     fetchUnreadCounts,
@@ -424,7 +424,7 @@ function useChat() {
   ]);
 
   useEffect(() => {
-    if (!user?.username || !connected) return;
+    if (!user?.id || !connected) return;
 
     const socket = socketRef.current;
     if (!socket) return;
@@ -443,7 +443,7 @@ function useChat() {
       socket.off("chat:message-deleted", handleMessageDeleted);
     };
   }, [
-    user?.username,
+    user?.id,
     connected,
     socketRef,
     handleIncomingMessage,

@@ -24,7 +24,7 @@ const makeCallback = () => jest.fn();
 
 const salaryRow = {
   id: "ss-1",
-  username: "john",
+  userId: "u1",
   month: 3,
   year: 2024,
   netPayable: 50000,
@@ -45,7 +45,7 @@ describe("getPayslip", () => {
     mockAttendanceFindMany.mockResolvedValue([]);
   });
 
-  it("returns INVALID_ARGUMENT when username is missing", async () => {
+  it("returns INVALID_ARGUMENT when userId is missing", async () => {
     const cb = makeCallback();
     await getPayslip(makeCall({}), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -58,7 +58,7 @@ describe("getPayslip", () => {
   it("returns NOT_FOUND when no salary structure found", async () => {
     mockSalaryFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
-    await getPayslip(makeCall({ username: "john" }), cb);
+    await getPayslip(makeCall({ userId: "u1" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 5 }),
@@ -69,7 +69,7 @@ describe("getPayslip", () => {
   it("returns NOT_FOUND when employee not found", async () => {
     mockUserFindUnique.mockResolvedValue(null);
     const cb = makeCallback();
-    await getPayslip(makeCall({ username: "john" }), cb);
+    await getPayslip(makeCall({ userId: "u1" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 5 }),
@@ -78,7 +78,7 @@ describe("getPayslip", () => {
 
   it("returns payslip without attendance summary when month/year not provided", async () => {
     const cb = makeCallback();
-    await getPayslip(makeCall({ username: "john" }), cb);
+    await getPayslip(makeCall({ userId: "u1" }), cb);
     const response = cb.mock.calls[0][1];
     expect(response.status).toBe(0);
     expect(response.data.attendanceSummary).toBeNull();
@@ -94,10 +94,7 @@ describe("getPayslip", () => {
       { status: "Late" },
     ]);
     const cb = makeCallback();
-    await getPayslip(
-      makeCall({ username: "john", month: "3", year: "2024" }),
-      cb,
-    );
+    await getPayslip(makeCall({ userId: "u1", month: "3", year: "2024" }), cb);
     const { attendanceSummary } = cb.mock.calls[0][1].data;
     expect(attendanceSummary).not.toBeNull();
     expect(attendanceSummary.presentDays).toBe(3); // Present + Late
@@ -106,10 +103,7 @@ describe("getPayslip", () => {
 
   it("filters salary by month and year when provided", async () => {
     const cb = makeCallback();
-    await getPayslip(
-      makeCall({ username: "john", month: "3", year: "2024" }),
-      cb,
-    );
+    await getPayslip(makeCall({ userId: "u1", month: "3", year: "2024" }), cb);
     const where = mockSalaryFindFirst.mock.calls[0][0].where;
     expect(where.month).toBe(3);
     expect(where.year).toBe(2024);
@@ -118,7 +112,7 @@ describe("getPayslip", () => {
   it("returns INTERNAL on database error", async () => {
     mockSalaryFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await getPayslip(makeCall({ username: "john" }), cb);
+    await getPayslip(makeCall({ userId: "u1" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 13 }),

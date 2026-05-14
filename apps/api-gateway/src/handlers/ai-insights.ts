@@ -43,7 +43,7 @@ async function fetchAttendanceData(period: string) {
     prisma.attendanceRecord.findMany({
       where: { date: { gte: startDate, lte: endDate } },
       select: {
-        username: true,
+        userId: true,
         date: true,
         status: true,
         workingHours: true,
@@ -53,14 +53,17 @@ async function fetchAttendanceData(period: string) {
     }),
     prisma.user.findMany({
       where: { employeeStatus: "Active" },
-      select: { username: true, department: true, designation: true },
+      select: { id: true, username: true, department: true, designation: true },
     }),
   ]);
 
   const userDeptMap = new Map<string, string>(
     users.map(
-      (u: any) => [u.username, u.department || "Unknown"] as [string, string],
+      (u: any) => [u.id, u.department || "Unknown"] as [string, string],
     ),
+  );
+  const userNameMap = new Map<string, string>(
+    users.map((u: any) => [u.id, u.username] as [string, string]),
   );
 
   const total = records.length;
@@ -93,11 +96,11 @@ async function fetchAttendanceData(period: string) {
   // Per-employee risk
   const byEmployee = new Map<string, typeof records>();
   for (const r of records) {
-    if (!byEmployee.has(r.username)) byEmployee.set(r.username, []);
-    byEmployee.get(r.username)!.push(r);
+    if (!byEmployee.has(r.userId)) byEmployee.set(r.userId, []);
+    byEmployee.get(r.userId)!.push(r);
   }
   const employeeRiskAssessment = Array.from(byEmployee.entries())
-    .map(([username, recs]) => {
+    .map(([userId, recs]) => {
       const t = recs.length;
       const p = recs.filter(
         (r: any) =>
@@ -132,8 +135,8 @@ async function fetchAttendanceData(period: string) {
             10,
         ) / 10;
       return {
-        username,
-        department: userDeptMap.get(username) || "Unknown",
+        username: userNameMap.get(userId) || userId,
+        department: userDeptMap.get(userId) || "Unknown",
         attendanceRate,
         avgWorkingHours: avgHours,
         correctionFrequency: corrFreq,
@@ -153,7 +156,7 @@ async function fetchAttendanceData(period: string) {
   // Department performance
   const byDept = new Map<string, typeof records>();
   for (const r of records) {
-    const dept = userDeptMap.get(r.username) || "Unknown";
+    const dept = userDeptMap.get(r.userId) || "Unknown";
     if (!byDept.has(dept)) byDept.set(dept, []);
     byDept.get(dept)!.push(r);
   }
@@ -169,7 +172,7 @@ async function fetchAttendanceData(period: string) {
       const hoursRecs = recs.filter((r: any) => r.workingHours);
       return {
         department,
-        employeeCount: new Set(recs.map((r: any) => r.username)).size,
+        employeeCount: new Set(recs.map((r: any) => r.userId)).size,
         attendanceRate: t > 0 ? Math.round((p / t) * 100) : 0,
         avgWorkingHours:
           hoursRecs.length > 0
@@ -618,12 +621,11 @@ async function fetchResignationData() {
         status: "Approved",
         lastWorkingDay: { lte: nextMonth, gte: new Date() },
       },
-      select: { username: true, lastWorkingDay: true },
+      select: { userId: true, lastWorkingDay: true },
       orderBy: { lastWorkingDay: "asc" },
     }),
     prisma.resignation.findMany({
       select: {
-        username: true,
         status: true,
         lastUpdatedOn: true,
         lastWorkingDay: true,
@@ -665,7 +667,7 @@ async function fetchResignationData() {
       pendingReview: submitted,
     },
     upcomingDepartures: upcomingDepartures.map((r: any) => ({
-      username: r.username,
+      userId: r.userId,
       lastWorkingDay: r.lastWorkingDay,
     })),
     monthlyTrend,

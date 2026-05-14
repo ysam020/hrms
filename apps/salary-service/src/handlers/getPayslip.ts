@@ -8,16 +8,16 @@ export const getPayslip = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username, month, year } = call.request;
+    const { userId, month, year } = call.request;
 
-    if (!username) {
+    if (!userId) {
       return callback(null, {
         message: MESSAGES.USERNAME_REQUIRED,
         status: status.INVALID_ARGUMENT,
       });
     }
 
-    const where: any = { username };
+    const where: any = { userId };
     if (month) where.month = parseInt(String(month));
     if (year) where.year = parseInt(String(year));
 
@@ -34,7 +34,7 @@ export const getPayslip = async (
     }
 
     const employee = await prisma.user.findUnique({
-      where: { username },
+      where: { id: userId },
       select: {
         id: true,
         username: true,
@@ -62,7 +62,7 @@ export const getPayslip = async (
       const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
 
       const records = await prisma.attendanceRecord.findMany({
-        where: { username, date: { gte: startDate, lte: endDate } },
+        where: { userId, date: { gte: startDate, lte: endDate } },
       });
 
       const presentStatuses = ["present", "late", "half day"];

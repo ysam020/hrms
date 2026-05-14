@@ -5,11 +5,11 @@ import {
   closeWebSocketRedisConnections,
 } from "./connection";
 
-type AuthenticatedSocket = Socket & { username: string };
+type AuthenticatedSocket = Socket & { userId: string };
 
 export class RedisWebSocketAdapter {
   private io: SocketServer;
-  /** Local map: username → socket.id (only sockets on this process) */
+  /** Local map: userId → socket.id (only sockets on this process) */
   private userSockets: Map<string, string>;
 
   constructor(io: SocketServer) {
@@ -52,59 +52,59 @@ export class RedisWebSocketAdapter {
 
   private setupSocketHandlers(): void {
     this.io.on("connection", (socket) => {
-      const username = (socket as AuthenticatedSocket).username;
+      const userId = (socket as AuthenticatedSocket).userId;
       const socketEntry = `${process.pid}:${socket.id}`;
       const redisClient = getWebSocketRedis("client");
 
-      this.userSockets.set(username, socket.id);
+      this.userSockets.set(userId, socket.id);
 
       redisClient
-        .hset("user:sockets", username, socketEntry)
+        .hset("user:sockets", userId, socketEntry)
         .then(() =>
           logger.info(
-            `[WS] Worker ${process.pid} registered socket: ${username} => ${socketEntry}`,
+            `[WS] Worker ${process.pid} registered socket: ${userId} => ${socketEntry}`,
           ),
         )
         .catch((err) =>
-          logger.error(`Worker ${process.pid} - hset error for ${username}:`, {
+          logger.error(`Worker ${process.pid} - hset error for ${userId}:`, {
             err,
           }),
         );
 
       socket.on("disconnect", async () => {
-        this.userSockets.delete(username);
+        this.userSockets.delete(userId);
         try {
           // Only delete if this socket is still the current entry in Redis.
           // A reconnect to another worker may have already replaced it.
-          const current = await redisClient.hget("user:sockets", username);
+          const current = await redisClient.hget("user:sockets", userId);
           if (current === socketEntry) {
-            await redisClient.hdel("user:sockets", username);
+            await redisClient.hdel("user:sockets", userId);
           }
         } catch (err) {
-          logger.error(`Worker ${process.pid} - hdel error for ${username}:`, {
+          logger.error(`Worker ${process.pid} - hdel error for ${userId}:`, {
             err,
           });
         }
       });
 
       socket.on("error", (err) => {
-        logger.error(`Socket error for user ${username}:`, { err });
+        logger.error(`Socket error for user ${userId}:`, { err });
       });
     });
   }
 
   private handleUserMessage(data: {
-    username: string;
+    userId: string;
     eventName: string;
     payload: unknown;
   }): void {
-    const { username, eventName, payload } = data;
-    const socketId = this.userSockets.get(username);
+    const { userId, eventName, payload } = data;
+    const socketId = this.userSockets.get(userId);
     if (socketId) {
       this.io.to(socketId).emit(eventName, payload);
     } else {
       logger.warn(
-        `[WS] Worker ${process.pid} - user ${username} not in local socket map, dropping message`,
+        `[WS] Worker ${process.pid} - user ${userId} not in local socket map, dropping message`,
       );
     }
   }
@@ -124,18 +124,18 @@ export class RedisWebSocketAdapter {
    * if the user is connected to a different process.
    */
   async sendToUser(
-    username: string,
+    userId: string,
     eventName: string,
     payload: unknown,
   ): Promise<boolean> {
     const redisClient = getWebSocketRedis("client");
     const publisher = getWebSocketRedis("publisher");
 
-    const socketEntry = await redisClient.hget("user:sockets", username);
+    const socketEntry = await redisClient.hget("user:sockets", userId);
 
     if (!socketEntry) {
       logger.warn(
-        `[sendToUser] ${username} not in Redis user:sockets — user may be offline`,
+        `[sendToUser] ${userId} not in Redis user:sockets — user may be offline`,
       );
       return false;
     }
@@ -144,21 +144,21 @@ export class RedisWebSocketAdapter {
 
     if (parseInt(pid, 10) === process.pid) {
       // User is on this worker — use local map for accuracy (avoids stale Redis socket ID)
-      const localSocketId = this.userSockets.get(username);
+      const localSocketId = this.userSockets.get(userId);
       if (localSocketId) {
         this.io.to(localSocketId).emit(eventName, payload);
         return true;
       }
       // PID matches but socket gone — fall through to pub/sub
       logger.warn(
-        `[sendToUser] PID matches but ${username} not in local userSockets — falling through to pub/sub`,
+        `[sendToUser] PID matches but ${userId} not in local userSockets — falling through to pub/sub`,
       );
     }
 
     // User is on a different worker/process — route via pub/sub
     await publisher.publish(
       `socket:worker-${pid}`,
-      JSON.stringify({ username, eventName, payload }),
+      JSON.stringify({ userId, eventName, payload }),
     );
     return true;
   }

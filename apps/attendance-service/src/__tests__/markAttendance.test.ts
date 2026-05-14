@@ -41,9 +41,9 @@ describe("markAttendance", () => {
     mockDelete.mockResolvedValue(undefined);
   });
 
-  it("returns INVALID_ARGUMENT when username or type is missing", async () => {
+  it("returns INVALID_ARGUMENT when userId or type is missing", async () => {
     const cb = makeCallback();
-    await markAttendance(makeCall({ username: "john" }), cb);
+    await markAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.USERNAME_TYPE_REQUIRED,
       status: status.INVALID_ARGUMENT,
@@ -76,7 +76,7 @@ describe("markAttendance", () => {
 
     it("creates new record when no existing record", async () => {
       mockFindUnique.mockResolvedValue(null);
-      const record = { id: "rec-1", username: "john", status: "Present" };
+      const record = { id: "rec-1", userId: "john", status: "Present" };
       mockCreate.mockResolvedValue(record);
 
       const cb = makeCallback();
@@ -85,7 +85,7 @@ describe("markAttendance", () => {
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            username: "john",
+            userId: "john",
             timeIn: expect.any(String),
             status: expect.stringMatching(/^(Present|Late)$/),
           }),

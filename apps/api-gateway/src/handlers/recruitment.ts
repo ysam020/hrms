@@ -7,14 +7,6 @@ import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 
-async function resolveUsername(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { username: true },
-  });
-  return user?.username ?? null;
-}
-
 async function isSuperUser(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -237,7 +229,7 @@ export async function addResignation(req: Request, res: Response) {
   try {
     const { reason, lastDate, resignationDate } = req.body;
     const response = await grpcCall(recruitmentClient, "submitResignation", {
-      username: user!.userId,
+      userId: user!.userId,
       reason: reason || "",
       lastDate: lastDate || "",
       resignationDate: resignationDate || "",
@@ -252,20 +244,31 @@ export async function viewResignations(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const superUser = await isSuperUser(user!.userId);
-    let username: string;
+    const userId =
+      superUser && req.query.userId ? String(req.query.userId) : user!.userId;
 
-    if (superUser && req.query.username) {
-      username = String(req.query.username);
-    } else {
-      // Non-superusers can only view their own resignation
-      username = (await resolveUsername(user!.userId)) ?? "";
+    const response = (await grpcCall(recruitmentClient, "listResignations", {
+      ...parsePagination(req.query, 10),
+      userId,
+      status: String(req.query.status || ""),
+    })) as any;
+
+    const records: any[] = response?.data ?? [];
+    if (records.length > 0) {
+      const userIds = [
+        ...new Set(records.map((r: any) => r.userId).filter(Boolean)),
+      ] as string[];
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u.username]));
+      response.data = records.map((r: any) => ({
+        ...r,
+        username: userMap.get(r.userId) ?? r.userId,
+      }));
     }
 
-    const response = await grpcCall(recruitmentClient, "listResignations", {
-      ...parsePagination(req.query, 10),
-      username,
-      status: String(req.query.status || ""),
-    });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     logger.error("GET /view-resignations error:", { error });
@@ -302,7 +305,7 @@ export async function withdrawResignation(req: Request, res: Response) {
   try {
     const resignation = await prisma.resignation.findUnique({
       where: { id: String(req.params._id) },
-      select: { username: true },
+      select: { userId: true },
     });
     if (!resignation)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
@@ -311,9 +314,9 @@ export async function withdrawResignation(req: Request, res: Response) {
 
     const caller = await prisma.user.findUnique({
       where: { id: user!.userId },
-      select: { username: true, isSuperUser: true },
+      select: { isSuperUser: true },
     });
-    if (!caller?.isSuperUser && caller?.username !== resignation.username)
+    if (!caller?.isSuperUser && user!.userId !== resignation.userId)
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -770,18 +773,8 @@ export async function updateResignation(req: Request, res: Response) {
 export async function addExitFeedback(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const userId = user!.userId;
-    const dbUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { username: true },
-    });
-    if (!dbUser)
-      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
-        message: "User not found",
-      });
-
     const resignation = await prisma.resignation.findFirst({
-      where: { username: dbUser.username, status: "Approved" },
+      where: { userId: user!.userId, status: "Approved" },
     });
     if (!resignation)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
@@ -849,7 +842,7 @@ export async function resignationInsights(_req: Request, res: Response) {
         status: "Approved",
         lastWorkingDay: { lte: nextMonth, gte: new Date() },
       },
-      select: { username: true, lastWorkingDay: true },
+      select: { userId: true, lastWorkingDay: true },
       orderBy: { lastWorkingDay: "asc" },
     });
 
@@ -865,7 +858,7 @@ export async function resignationInsights(_req: Request, res: Response) {
           approvalRate,
         },
         upcomingDepartures: upcomingDepartures.map((r: any) => ({
-          username: r.username,
+          userId: r.userId,
           lastWorkingDay: r.lastWorkingDay,
         })),
       },

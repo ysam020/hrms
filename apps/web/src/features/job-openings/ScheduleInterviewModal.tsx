@@ -35,7 +35,8 @@ function ScheduleInterviewModal({
   const { setAlert } = useContext(AlertContext);
   const [mode, setMode] = useState("schedule");
   const { name, email, round } = applicantData || {};
-  const userList = useUserList();
+  const userListRaw = useUserList();
+  const userList = userListRaw.map((u) => u.label);
 
   const validationSchema = toFormikValidationSchema(
     z.object({

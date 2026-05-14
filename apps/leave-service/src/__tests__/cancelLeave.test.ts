@@ -57,10 +57,10 @@ describe("cancelLeave", () => {
     mockFindUnique.mockResolvedValue({
       id: "leave-1",
       status: "Approved",
-      username: "john",
+      userId: "john",
     });
     const cb = makeCallback();
-    await cancelLeave(makeCall({ id: "leave-1", username: "john" }), cb);
+    await cancelLeave(makeCall({ id: "leave-1", userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.ONLY_PENDING_CAN_BE_CANCELLED,
       status: status.FAILED_PRECONDITION,
@@ -71,10 +71,10 @@ describe("cancelLeave", () => {
     mockFindUnique.mockResolvedValue({
       id: "leave-1",
       status: "Rejected",
-      username: "john",
+      userId: "john",
     });
     const cb = makeCallback();
-    await cancelLeave(makeCall({ id: "leave-1", username: "john" }), cb);
+    await cancelLeave(makeCall({ id: "leave-1", userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.ONLY_PENDING_CAN_BE_CANCELLED,
       status: status.FAILED_PRECONDITION,
@@ -85,27 +85,27 @@ describe("cancelLeave", () => {
     mockFindUnique.mockResolvedValue({
       id: "leave-1",
       status: "Pending",
-      username: "john",
+      userId: "john",
     });
     const cb = makeCallback();
-    await cancelLeave(makeCall({ id: "leave-1", username: "jane" }), cb);
+    await cancelLeave(makeCall({ id: "leave-1", userId: "jane" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.CANNOT_CANCEL_OTHERS_LEAVE,
       status: status.PERMISSION_DENIED,
     });
   });
 
-  it("cancels leave when username matches owner", async () => {
+  it("cancels leave when userId matches owner", async () => {
     mockFindUnique.mockResolvedValue({
       id: "leave-1",
       status: "Pending",
-      username: "john",
+      userId: "john",
     });
     const cancelled = { id: "leave-1", status: "Cancelled" };
     mockUpdate.mockResolvedValue(cancelled);
 
     const cb = makeCallback();
-    await cancelLeave(makeCall({ id: "leave-1", username: "john" }), cb);
+    await cancelLeave(makeCall({ id: "leave-1", userId: "john" }), cb);
 
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "leave-1" },
@@ -118,11 +118,11 @@ describe("cancelLeave", () => {
     });
   });
 
-  it("allows cancellation when username is not provided (no ownership check)", async () => {
+  it("allows cancellation when userId is not provided (no ownership check)", async () => {
     mockFindUnique.mockResolvedValue({
       id: "leave-1",
       status: "Pending",
-      username: "john",
+      userId: "john",
     });
     mockUpdate.mockResolvedValue({ id: "leave-1", status: "Cancelled" });
 

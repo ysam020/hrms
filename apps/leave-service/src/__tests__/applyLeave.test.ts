@@ -10,7 +10,7 @@ jest.mock("@hrms/db", () => ({
       findMany: jest.fn(),
       create: jest.fn(),
     },
-    user: { findMany: jest.fn() },
+    user: { findMany: jest.fn(), findUnique: jest.fn() },
     team: { findMany: jest.fn() },
   },
 }));
@@ -41,7 +41,7 @@ const mockTeamFindMany = (prisma as any).team.findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 
 const validRequest = {
-  username: "john",
+  userId: "john",
   leaveType: "Casual",
   from: "2024-03-01",
   to: "2024-03-05",
@@ -59,7 +59,7 @@ describe("applyLeave", () => {
 
   it("returns INVALID_ARGUMENT when required fields are missing", async () => {
     const cb = makeCallback();
-    await applyLeave(makeCall({ username: "john" }), cb);
+    await applyLeave(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.USERNAME_LEAVE_TYPE_FROM_TO_REQUIRED,
       status: status.INVALID_ARGUMENT,

@@ -90,6 +90,7 @@ model User {
   salaryStructures            SalaryStructure[]
   loginEvents                 LoginEvent[]
 
+
   @@index([employeeStatus])
   @@index([department, employeeStatus])
   @@map("users")
@@ -99,18 +100,18 @@ model User {
 
 model AttendanceRecord {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  username     String
+  userId       String   @db.ObjectId
   date         DateTime
   timeIn       String?
   timeOut      String?
   workingHours Float?
   status       String?
   isCorrected  Boolean  @default(false)
-  correctedBy  String?
+  correctedBy  String?  @db.ObjectId
 
-  user         User?    @relation(fields: [username], references: [username])
+  user         User?    @relation(fields: [userId], references: [id])
 
-  @@unique([username, date])
+  @@unique([userId, date])
   @@index([date])
   @@map("attendance_records")
 }
@@ -119,7 +120,7 @@ model AttendanceRecord {
 
 model LeaveApplication {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  username          String
+  userId            String   @db.ObjectId
   from              String
   to                String
   leaveType         String
@@ -129,25 +130,25 @@ model LeaveApplication {
   sickLeave         Boolean?
   medicalCertificate String?
   appliedOn         String?
-  approvedByUsername String?
+  approvedById      String?  @db.ObjectId
   approvedOn        String?
 
-  user              User?    @relation(fields: [username], references: [username])
+  user              User?    @relation(fields: [userId], references: [id])
 
-  @@index([username])
+  @@index([userId])
   @@index([status])
   @@map("leaves")
 }
 
 model LeaveBalance {
   id                              String   @id @default(auto()) @map("_id") @db.ObjectId
-  username                        String   @unique
+  userId                          String   @unique @db.ObjectId
   accumulatedPLBeforeCurrentMonth Float    @default(0)
   balances                        Json?
   createdAt                       DateTime? @default(now())
   updatedAt                       DateTime? @updatedAt
 
-  user                            User?    @relation(fields: [username], references: [username])
+  user                            User?    @relation(fields: [userId], references: [id])
 
   @@map("leavebalances")
 }
@@ -205,7 +206,7 @@ model JobApplication {
 
 model Resignation {
   id                          String    @id @default(auto()) @map("_id") @db.ObjectId
-  username                    String?
+  userId                      String?   @db.ObjectId
   resignationDate             String?
   lastDate                    String?
   lastWorkingDay              DateTime?
@@ -229,7 +230,7 @@ model Resignation {
   feedbackSubmittedOn         DateTime?
   lastUpdatedOn               DateTime?
 
-  @@index([username])
+  @@index([userId])
   @@index([status])
   @@map("resignations")
 }
@@ -238,7 +239,7 @@ model Resignation {
 
 model SalaryStructure {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  username        String
+  userId          String   @db.ObjectId
   grossSalary     Float
   month           Int
   year            Int
@@ -255,9 +256,9 @@ model SalaryStructure {
   createdAt       DateTime? @default(now())
   updatedAt       DateTime? @updatedAt
 
-  user            User?    @relation(fields: [username], references: [username])
+  user            User?    @relation(fields: [userId], references: [id])
 
-  @@index([username, year, month])
+  @@index([userId, year, month])
   @@map("salarystructures")
 }
 
@@ -323,17 +324,17 @@ model HrActivity {
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 model ChatRoom {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  participants String[]
-  type         String    @default("direct")
-  name         String?
-  lastMessageId String?  @db.ObjectId
-  lastActivity DateTime? @default(now())
-  deletedFor   String[]
-  createdAt    DateTime? @default(now())
-  updatedAt    DateTime? @updatedAt
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  participants  String[]  @db.ObjectId
+  type          String    @default("direct")
+  name          String?
+  lastMessageId String?   @db.ObjectId
+  lastActivity  DateTime? @default(now())
+  deletedFor    String[]  @db.ObjectId
+  createdAt     DateTime? @default(now())
+  updatedAt     DateTime? @updatedAt
 
-  messages     Message[]
+  messages      Message[]
 
   @@index([participants])
   @@map("chatrooms")
@@ -342,7 +343,7 @@ model ChatRoom {
 model Message {
   id           String    @id @default(auto()) @map("_id") @db.ObjectId
   chatRoomId   String    @db.ObjectId
-  sender       String
+  senderId     String    @db.ObjectId
   content      String?
   type         String    @default("text")
   fileUrl      String?
@@ -350,7 +351,7 @@ model Message {
   fileMimeType String?
   fileSize     Float?
   replyToId    String?   @db.ObjectId
-  readBy       String[]
+  readBy       String[]  @db.ObjectId
   isDeleted    Boolean   @default(false)
   createdAt    DateTime? @default(now())
   updatedAt    DateTime? @updatedAt
@@ -441,10 +442,10 @@ model Rule {
 // ─── Teams ────────────────────────────────────────────────────────────────────
 
 model Team {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  teamName    String
-  teamLeader  String
-  members     String[]
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamName     String
+  teamLeaderId String   @db.ObjectId
+  members      String[] @db.ObjectId
 
   @@map("teams")
 }

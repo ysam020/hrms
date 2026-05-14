@@ -260,10 +260,10 @@ function ViewResignations() {
           const rowData = cell.row.original;
           const canApproveReject =
             !["Withdrawn", "Rejected", "Approved"].includes(rowData.status) &&
-            (user?.isSuperUser || rowData.username !== user.username);
+            (user?.isSuperUser || rowData.userId !== user.id);
           const canWithdraw =
             !["Withdrawn"].includes(rowData.status) &&
-            (rowData.username === user.username || user?.isSuperUser);
+            (rowData.userId === user.id || user?.isSuperUser);
 
           return (
             <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
@@ -401,7 +401,7 @@ function ViewResignations() {
         Cell: ({ cell }) => {
           const rowData = cell.row.original;
           const canEdit =
-            (user?.isSuperUser || rowData.username !== user.username) &&
+            (user?.isSuperUser || rowData.userId !== user.id) &&
             rowData.status !== "Withdrawn" &&
             rowData.status !== "Rejected";
 
@@ -444,7 +444,7 @@ function ViewResignations() {
         Cell: ({ cell }) => {
           const rowData = cell.row.original;
           const canEdit =
-            (user?.isSuperUser || rowData.username !== user.username) &&
+            (user?.isSuperUser || rowData.userId !== user.id) &&
             rowData.status !== "Withdrawn" &&
             rowData.status !== "Rejected";
 

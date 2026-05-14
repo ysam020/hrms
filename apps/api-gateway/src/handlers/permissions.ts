@@ -326,7 +326,7 @@ export async function getTeams(_req: Request, res: Response) {
       data: teams.map((t: any) => ({
         _id: t.id,
         teamName: t.teamName,
-        teamLeader: t.teamLeader,
+        teamLeaderId: t.teamLeaderId,
         members: t.members,
       })),
     });
@@ -341,13 +341,13 @@ export async function createTeam(req: Request, res: Response) {
     const {
       team_name,
       teamName,
-      team_leader,
-      teamLeader,
+      team_leader_id,
+      teamLeaderId,
       members = [],
     } = req.body;
     const name = team_name || teamName;
-    const leader = team_leader || teamLeader;
-    if (!name || !leader)
+    const leaderId = team_leader_id || teamLeaderId;
+    if (!name || !leaderId)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Team name and team leader are required",
       });
@@ -357,7 +357,7 @@ export async function createTeam(req: Request, res: Response) {
         message: "Team with this name already exists",
       });
     const team = await prisma.team.create({
-      data: { teamName: name, teamLeader: leader, members },
+      data: { teamName: name, teamLeaderId: leaderId, members },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Team created successfully",
@@ -422,19 +422,19 @@ export async function addTeamMembers(req: Request, res: Response) {
 
 export async function deleteUserFromTeam(req: Request, res: Response) {
   try {
-    const { teamId, username } = req.body;
+    const { teamId, userId } = req.body;
     const team = await prisma.team.findUnique({ where: { id: teamId } });
     if (!team)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Team not found",
       });
-    if (!team.members.includes(username))
+    if (!team.members.includes(userId))
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "User is not a member of this team",
       });
     await prisma.team.update({
       where: { id: teamId },
-      data: { members: team.members.filter((m: any) => m !== username) },
+      data: { members: team.members.filter((m: any) => m !== userId) },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "User removed from team successfully",

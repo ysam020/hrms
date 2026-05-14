@@ -108,8 +108,8 @@ function AuditLogs(props) {
               sx={{ minWidth: 180, mr: 1 }}
             >
               {userList.map((option, index) => (
-                <MenuItem key={index} value={option}>
-                  {option}
+                <MenuItem key={index} value={option.label}>
+                  {option.label}
                 </MenuItem>
               ))}
             </TextField>

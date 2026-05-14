@@ -17,10 +17,10 @@ export async function updateEmployeeStatus(): Promise<void> {
     }
 
     for (const resignation of resignations) {
-      if (!resignation.username) continue;
+      if (!resignation.userId) continue;
 
-      await prisma.user.updateMany({
-        where: { username: resignation.username },
+      await prisma.user.update({
+        where: { id: resignation.userId },
         data: { employeeStatus: "Resigned" },
       });
     }

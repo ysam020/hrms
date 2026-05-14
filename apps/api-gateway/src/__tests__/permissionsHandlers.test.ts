@@ -745,7 +745,7 @@ describe("permissionsHandlers", () => {
       mockTeamCreate.mockResolvedValue({ id: "t-1" });
       const res = makeRes();
       await createTeam(
-        makeReq({ body: { teamName: "Alpha", teamLeader: "alice" } }),
+        makeReq({ body: { teamName: "Alpha", teamLeaderId: "alice" } }),
         res,
       );
       expect(mockTeamCreate).toHaveBeenCalled();
@@ -760,7 +760,7 @@ describe("permissionsHandlers", () => {
       mockTeamFindFirst.mockResolvedValue({ id: "t-1", teamName: "Alpha" });
       const res = makeRes();
       await createTeam(
-        makeReq({ body: { teamName: "Alpha", teamLeader: "alice" } }),
+        makeReq({ body: { teamName: "Alpha", teamLeaderId: "alice" } }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -774,7 +774,7 @@ describe("permissionsHandlers", () => {
       mockTeamFindFirst.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await createTeam(
-        makeReq({ body: { teamName: "Alpha", teamLeader: "alice" } }),
+        makeReq({ body: { teamName: "Alpha", teamLeaderId: "alice" } }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -881,7 +881,7 @@ describe("permissionsHandlers", () => {
       mockTeamFindUnique.mockResolvedValue(null);
       const res = makeRes();
       await deleteUserFromTeam(
-        makeReq({ body: { teamId: "t-99", username: "alice" } }),
+        makeReq({ body: { teamId: "t-99", userId: "alice" } }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -895,7 +895,7 @@ describe("permissionsHandlers", () => {
       mockTeamFindUnique.mockResolvedValue({ id: "t-1", members: ["bob"] });
       const res = makeRes();
       await deleteUserFromTeam(
-        makeReq({ body: { teamId: "t-1", username: "alice" } }),
+        makeReq({ body: { teamId: "t-1", userId: "alice" } }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -913,7 +913,7 @@ describe("permissionsHandlers", () => {
       mockTeamUpdate.mockResolvedValue({});
       const res = makeRes();
       await deleteUserFromTeam(
-        makeReq({ body: { teamId: "t-1", username: "alice" } }),
+        makeReq({ body: { teamId: "t-1", userId: "alice" } }),
         res,
       );
       expect(mockTeamUpdate).toHaveBeenCalledWith(
@@ -932,7 +932,7 @@ describe("permissionsHandlers", () => {
       mockTeamFindUnique.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await deleteUserFromTeam(
-        makeReq({ body: { teamId: "t-1", username: "alice" } }),
+        makeReq({ body: { teamId: "t-1", userId: "alice" } }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(

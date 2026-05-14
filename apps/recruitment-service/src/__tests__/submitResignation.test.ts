@@ -10,7 +10,7 @@ jest.mock("@hrms/db", () => ({
       findFirst: jest.fn(),
       create: jest.fn(),
     },
-    user: { findMany: jest.fn() },
+    user: { findMany: jest.fn(), findUnique: jest.fn() },
     team: { findMany: jest.fn() },
   },
 }));
@@ -38,12 +38,13 @@ const mockResignationFindFirst = (prisma as any).resignation
   .findFirst as jest.Mock;
 const mockResignationCreate = (prisma as any).resignation.create as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockTeamFindMany = (prisma as any).team.findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
 
 const validRequest = {
-  username: "john",
+  userId: "john",
   resignationDate: "2024-04-01",
 };
 
@@ -53,10 +54,11 @@ describe("submitResignation", () => {
     mockInvalidate.mockResolvedValue(undefined);
     mockResignationFindFirst.mockResolvedValue(null);
     mockUserFindMany.mockResolvedValue([]);
+    mockUserFindUnique.mockResolvedValue(null);
     mockTeamFindMany.mockResolvedValue([]);
   });
 
-  it("returns INVALID_ARGUMENT when username is missing", async () => {
+  it("returns INVALID_ARGUMENT when userId is missing", async () => {
     const cb = makeCallback();
     await submitResignation(makeCall({ resignationDate: "2024-04-01" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
@@ -67,7 +69,7 @@ describe("submitResignation", () => {
 
   it("returns INVALID_ARGUMENT when resignationDate is missing", async () => {
     const cb = makeCallback();
-    await submitResignation(makeCall({ username: "john" }), cb);
+    await submitResignation(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.USERNAME_RESIGNATION_DATE_REQUIRED,
       status: status.INVALID_ARGUMENT,
@@ -97,7 +99,7 @@ describe("submitResignation", () => {
 
     expect(mockResignationFindFirst).toHaveBeenCalledWith({
       where: {
-        username: "john",
+        userId: "john",
         status: { in: ["Submitted", "Approved"] },
       },
     });
@@ -127,7 +129,7 @@ describe("submitResignation", () => {
     expect(mockResignationCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          username: "john",
+          userId: "john",
           resignationDate: "2024-04-01",
           lastDate: "2024-04-30",
           reason: "Better opportunity",
@@ -204,7 +206,7 @@ describe("submitResignation", () => {
     mockUserFindMany
       .mockResolvedValueOnce([]) // HR users (first findMany call)
       .mockResolvedValueOnce([{ id: "tl1", username: "leader1" }]); // team leader users
-    mockTeamFindMany.mockResolvedValue([{ teamLeader: "leader1" }]);
+    mockTeamFindMany.mockResolvedValue([{ teamLeaderId: "leader1" }]);
 
     await submitResignation(makeCall(validRequest), makeCallback());
     await new Promise((resolve) => setImmediate(resolve));

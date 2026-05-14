@@ -4,8 +4,6 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
-const isObjectId = (v: string) => /^[0-9a-f]{24}$/i.test(v);
-
 export const getTodayAttendance = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
@@ -20,24 +18,6 @@ export const getTodayAttendance = async (
       });
     }
 
-    let username: string | undefined;
-    if (isObjectId(userId)) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { username: true },
-      });
-      username = user?.username;
-    } else {
-      username = userId;
-    }
-
-    if (!username) {
-      return callback(null, {
-        message: MESSAGES.USERNAME_REQUIRED,
-        status: status.NOT_FOUND,
-      });
-    }
-
     const now = new Date();
     const todayStart = new Date(
       now.getFullYear(),
@@ -45,12 +25,12 @@ export const getTodayAttendance = async (
       now.getDate(),
     );
 
-    const cacheKey = `todayAttendance:${username}`;
+    const cacheKey = `todayAttendance:${userId}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
     const record = await prisma.attendanceRecord.findUnique({
-      where: { username_date: { username, date: todayStart } },
+      where: { userId_date: { userId, date: todayStart } },
     });
 
     if (!record) {
@@ -66,7 +46,6 @@ export const getTodayAttendance = async (
       status: status.OK,
       data: record,
     };
-    // Short TTL: today's record can change on check-out
     await cacheManager.set(cacheKey, response, "notification");
     return callback(null, response);
   } catch (err) {

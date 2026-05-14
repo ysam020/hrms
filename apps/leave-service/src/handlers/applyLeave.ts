@@ -27,9 +27,9 @@ export const applyLeave = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { username, leaveType, from, to, reason, sickLeave } = call.request;
+    const { userId, leaveType, from, to, reason, sickLeave } = call.request;
 
-    if (!username || !leaveType || !from || !to) {
+    if (!userId || !leaveType || !from || !to) {
       return callback(null, {
         message: MESSAGES.USERNAME_LEAVE_TYPE_FROM_TO_REQUIRED,
         status: status.INVALID_ARGUMENT,
@@ -53,9 +53,8 @@ export const applyLeave = async (
       });
     }
 
-    // Check for overlapping pending/approved leaves
     const existing = await prisma.leaveApplication.findMany({
-      where: { username, status: { in: ["Pending", "Approved"] } },
+      where: { userId, status: { in: ["Pending", "Approved"] } },
     });
 
     const overlap = existing.some((l) => {
@@ -75,7 +74,7 @@ export const applyLeave = async (
 
     const leaveApplication = await prisma.leaveApplication.create({
       data: {
-        username,
+        userId,
         leaveType,
         from,
         to,
@@ -91,27 +90,32 @@ export const applyLeave = async (
 
     // Notify HR + team leaders (fire-and-forget)
     Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true },
+      }),
       prisma.user.findMany({
         where: { department: "HUMAN RESOURCES" },
         select: { id: true, username: true },
       }),
       prisma.team.findMany({
         where: {
-          OR: [{ members: { has: username } }, { teamLeader: username }],
+          OR: [{ members: { has: userId } }, { teamLeaderId: userId }],
         },
-        select: { teamLeader: true },
+        select: { teamLeaderId: true },
       }),
     ])
-      .then(async ([hrUsers, teams]) => {
-        const teamLeaderUsernames = [
+      .then(async ([applicant, hrUsers, teams]) => {
+        const applicantUsername = applicant?.username || userId;
+        const teamLeaderIds = [
           ...new Set(
-            teams.map((t) => t.teamLeader).filter((tl) => tl !== username),
+            teams.map((t) => t.teamLeaderId).filter((id) => id !== userId),
           ),
         ];
         const teamLeaderUsers =
-          teamLeaderUsernames.length > 0
+          teamLeaderIds.length > 0
             ? await prisma.user.findMany({
-                where: { username: { in: teamLeaderUsernames } },
+                where: { id: { in: teamLeaderIds } },
                 select: { id: true, username: true },
               })
             : [];
@@ -121,7 +125,7 @@ export const applyLeave = async (
         if (uniqueUsernames.length === 0) return;
         await getNotificationQueue().add("leaveApplied", {
           title: "Leave",
-          message: `${username} has applied for leave from ${from} to ${to}`,
+          message: `${applicantUsername} has applied for leave from ${from} to ${to}`,
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           eventType: "leave_notification",
