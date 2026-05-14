@@ -6,6 +6,10 @@ import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 export async function addAttendance(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -29,10 +33,9 @@ function monthDateRange(year: string | string[], month: string | string[]) {
   month = Array.isArray(month) ? month[0] : month;
   const y = parseInt(year, 10);
   const m = parseInt(month, 10);
-  const startDate = `${year}-${month.padStart(2, "0")}-01`;
-  // Last day of the month: day 0 of the next month rolls back to the final day.
-  const lastDay = new Date(y, m, 0).getDate();
-  const endDate = `${year}-${month.padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const monthStart = dayjs.utc(`${y}-${String(m).padStart(2, "0")}-01`);
+  const startDate = monthStart.format("YYYY-MM-DD");
+  const endDate = monthStart.endOf("month").format("YYYY-MM-DD");
   return { startDate, endDate };
 }
 
@@ -130,24 +133,21 @@ export async function getAttendanceSummary(req: Request, res: Response) {
     const userId = String(req.params.userId);
     const yearNum = parseInt(String(req.params.year));
     const monthNum = parseInt(String(req.params.month));
-    const monthPadded = String(monthNum).padStart(2, "0");
 
-    const today = new Date();
+    const today = dayjs.utc();
     const isCurrentMonth =
-      yearNum === today.getFullYear() && monthNum === today.getMonth() + 1;
-    const endDay = isCurrentMonth
-      ? today.getDate()
-      : new Date(yearNum, monthNum, 0).getDate();
+      yearNum === today.year() && monthNum === today.month() + 1;
+
+    const monthStart = dayjs.utc(
+      `${yearNum}-${String(monthNum).padStart(2, "0")}-01`,
+    );
+    const endDay = isCurrentMonth ? today.date() : monthStart.daysInMonth();
+    const startDate = monthStart.toDate();
+    const endDate = monthStart.date(endDay).endOf("day").toDate();
 
     const [records, leaveBalance] = await Promise.all([
       prisma.attendanceRecord.findMany({
-        where: {
-          userId,
-          date: {
-            gte: new Date(yearNum, monthNum - 1, 1),
-            lte: new Date(yearNum, monthNum - 1, endDay, 23, 59, 59),
-          },
-        },
+        where: { userId, date: { gte: startDate, lte: endDate } },
         select: { date: true, status: true, isCorrected: true },
       }),
       prisma.leaveBalance.findUnique({
@@ -159,7 +159,7 @@ export async function getAttendanceSummary(req: Request, res: Response) {
     const recordMap = new Map<string, string>();
     let correctionsUsed = 0;
     for (const r of records) {
-      const dateStr = new Date(r.date).toISOString().split("T")[0];
+      const dateStr = dayjs.utc(r.date).format("YYYY-MM-DD");
       recordMap.set(dateStr, r.status || "");
       if (r.isCorrected) correctionsUsed++;
     }
@@ -170,7 +170,7 @@ export async function getAttendanceSummary(req: Request, res: Response) {
       weekOffs = 0,
       holidays = 0;
     for (let day = 1; day <= endDay; day++) {
-      const dateStr = `${yearNum}-${monthPadded}-${String(day).padStart(2, "0")}`;
+      const dateStr = monthStart.date(day).format("YYYY-MM-DD");
       const s = recordMap.get(dateStr) || "";
       if (s === "Present") presents++;
       else if (s === "Half Day") halfDays++;
@@ -226,35 +226,28 @@ export async function getAttendanceSummary(req: Request, res: Response) {
 export async function attendanceInsights(req: Request, res: Response) {
   try {
     const period = (req.query.period as string) || "current_month";
-    const now = new Date();
+    const today = dayjs.utc();
 
     let startDate: Date;
-    let endDate: Date = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      23,
-      59,
-      59,
-    );
+    let endDate: Date = today.endOf("day").toDate();
 
     switch (period) {
-      case "last_month":
-        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      case "last_month": {
+        const prevMonth = today.subtract(1, "month");
+        startDate = prevMonth.startOf("month").toDate();
+        endDate = prevMonth.endOf("month").toDate();
         break;
-      case "quarter":
-        startDate = new Date(
-          now.getFullYear(),
-          Math.floor(now.getMonth() / 3) * 3,
-          1,
-        );
+      }
+      case "quarter": {
+        const quarterStartMonth = Math.floor(today.month() / 3) * 3;
+        startDate = today.month(quarterStartMonth).startOf("month").toDate();
         break;
+      }
       case "year":
-        startDate = new Date(now.getFullYear(), 0, 1);
+        startDate = today.startOf("year").toDate();
         break;
       default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        startDate = today.startOf("month").toDate();
     }
 
     const [records, users] = await Promise.all([
@@ -421,13 +414,10 @@ export async function attendanceInsights(req: Request, res: Response) {
 
     const weekMap = new Map<number, { present: number; total: number }>();
     for (const r of records) {
-      const d = new Date(r.date);
-      const startOfYear = new Date(d.getFullYear(), 0, 1);
+      const d = dayjs.utc(r.date);
+      const startOfYear = d.startOf("year");
       const week = Math.ceil(
-        ((d.getTime() - startOfYear.getTime()) / 86400000 +
-          startOfYear.getDay() +
-          1) /
-          7,
+        (d.diff(startOfYear, "day") + startOfYear.day() + 1) / 7,
       );
       if (!weekMap.has(week)) weekMap.set(week, { present: 0, total: 0 });
       const w = weekMap.get(week)!;
@@ -459,8 +449,8 @@ export async function attendanceInsights(req: Request, res: Response) {
     const hourMap = new Map<number, number>();
     for (const r of records) {
       if (r.timeIn) {
-        const hour = parseInt(r.timeIn.split(":")[0]);
-        if (!isNaN(hour)) hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+        const hour = dayjs(r.timeIn).hour();
+        hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
       }
     }
     const peakHours = Array.from(hourMap.entries())

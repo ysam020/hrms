@@ -168,6 +168,9 @@ importers:
       csrf-csrf:
         specifier: ^4.0.3
         version: 4.0.3
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.20
       express:
         specifier: ^4.21.1
         version: 4.22.1
@@ -256,6 +259,9 @@ importers:
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.20
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -376,6 +382,9 @@ importers:
       "@hrms/queue":
         specifier: workspace:*
         version: link:../../packages/queue
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.20
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -410,6 +419,9 @@ importers:
       "@hrms/queue":
         specifier: workspace:*
         version: link:../../packages/queue
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.20
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -484,6 +496,9 @@ importers:
       "@hrms/queue":
         specifier: workspace:*
         version: link:../../packages/queue
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.20
       pdf-parse:
         specifier: ^1.1.4
         version: 1.1.4
@@ -518,6 +533,9 @@ importers:
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.20
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -549,6 +567,9 @@ importers:
       bullmq:
         specifier: ^5.41.7
         version: 5.73.0
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.20
       firebase-admin:
         specifier: ^12.0.0
         version: 12.7.0

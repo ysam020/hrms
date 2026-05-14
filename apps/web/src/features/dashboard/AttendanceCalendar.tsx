@@ -13,9 +13,7 @@ function getBadge(record, isFuture) {
   const { timeIn, timeOut, status } = record;
 
   if (timeIn && timeOut) {
-    const [inH, inM] = timeIn.split(":").map(Number);
-    const [outH, outM] = timeOut.split(":").map(Number);
-    const mins = outH * 60 + outM - (inH * 60 + inM);
+    const mins = dayjs(timeOut).diff(dayjs(timeIn), "minute");
     if (mins > 0) return { label: String(mins), color: "#fff", bg: "#ec4899" };
   }
 

@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
 
 export const submitResignation = async (
   call: ServerUnaryCall<any, any>,
@@ -39,8 +40,8 @@ export const submitResignation = async (
     const resignation = await prisma.resignation.create({
       data: {
         userId,
-        resignationDate,
-        lastDate: lastDate || null,
+        resignationDate: dayjs(resignationDate).toDate(),
+        lastWorkingDay: lastDate ? dayjs(lastDate).toDate() : null,
         reason: reason || null,
         overallJobSatisfaction: overallJobSatisfaction
           ? parseFloat(String(overallJobSatisfaction))

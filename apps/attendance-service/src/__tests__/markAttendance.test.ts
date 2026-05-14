@@ -86,7 +86,7 @@ describe("markAttendance", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             userId: "john",
-            timeIn: expect.any(String),
+            timeIn: expect.any(Date),
             status: expect.stringMatching(/^(Present|Late)$/),
           }),
         }),
@@ -109,7 +109,7 @@ describe("markAttendance", () => {
       expect(mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "rec-1" },
-          data: expect.objectContaining({ timeIn: expect.any(String) }),
+          data: expect.objectContaining({ timeIn: expect.any(Date) }),
         }),
       );
       expect(mockCreate).not.toHaveBeenCalled();

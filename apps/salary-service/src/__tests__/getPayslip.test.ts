@@ -35,6 +35,7 @@ const employeeRow = {
   email: "john@test.com",
   first_name: "John",
   last_name: "Doe",
+  joining_date: null,
 };
 
 describe("getPayslip", () => {

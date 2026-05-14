@@ -1,4 +1,5 @@
 import React, { useContext } from "react";
+import dayjs from "dayjs";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Avatar from "@mui/material/Avatar";
@@ -369,7 +370,10 @@ function BasicInfo({ user }) {
                     fontSize: { xs: "0.875rem", sm: "1rem" },
                   }}
                 >
-                  📅 Joined {user.joining_date}
+                  📅 Joined{" "}
+                  {user.joining_date
+                    ? dayjs(user.joining_date).format("DD MMM YYYY")
+                    : "N/A"}
                 </Typography>
               ) : (
                 <Typography
@@ -414,7 +418,7 @@ function BasicInfo({ user }) {
               <DataField
                 icon={<Cake />}
                 label="Date of Birth"
-                value={user.dob}
+                value={user.dob ? dayjs(user.dob).format("DD MMM YYYY") : ""}
               />
               <DataField
                 icon={<BloodtypeOutlined />}
@@ -466,7 +470,11 @@ function BasicInfo({ user }) {
               <DataField
                 icon={<Badge />}
                 label="Joining Date"
-                value={user.joining_date}
+                value={
+                  user.joining_date
+                    ? dayjs(user.joining_date).format("DD MMM YYYY")
+                    : ""
+                }
                 color="warning.main"
               />
             </Section>

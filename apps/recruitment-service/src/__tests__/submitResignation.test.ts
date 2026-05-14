@@ -130,8 +130,8 @@ describe("submitResignation", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           userId: "john",
-          resignationDate: "2024-04-01",
-          lastDate: "2024-04-30",
+          resignationDate: expect.any(Date),
+          lastWorkingDay: expect.any(Date),
           reason: "Better opportunity",
           overallJobSatisfaction: 4.5,
           suggestions: "Improve processes",
@@ -155,7 +155,7 @@ describe("submitResignation", () => {
     expect(mockResignationCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          lastDate: null,
+          lastWorkingDay: null,
           reason: null,
           overallJobSatisfaction: 0,
           suggestions: null,

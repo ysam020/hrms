@@ -1,5 +1,9 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { Calendar, dayjsLocalizer } from "react-big-calendar";
+import {
+  Calendar,
+  dayjsLocalizer,
+  type NavigateAction,
+} from "react-big-calendar";
 import dayjs from "dayjs";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import "dayjs/locale/en-gb";
@@ -112,7 +116,7 @@ const AttendanceCalendar = (props: {
     date,
   }: {
     label: string;
-    onNavigate: (action: string) => void;
+    onNavigate: (action: NavigateAction) => void;
     date: Date;
   }) => {
     const currentDayjs = dayjs(date);

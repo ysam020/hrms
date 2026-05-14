@@ -2,6 +2,10 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 export const getPayslip = async (
   call: ServerUnaryCall<any, any>,
@@ -58,8 +62,11 @@ export const getPayslip = async (
     if (month && year) {
       const monthNum = parseInt(String(month));
       const yearNum = parseInt(String(year));
-      const startDate = new Date(yearNum, monthNum - 1, 1);
-      const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
+      const monthStart = dayjs.utc(
+        `${yearNum}-${String(monthNum).padStart(2, "0")}-01`,
+      );
+      const startDate = monthStart.toDate();
+      const endDate = monthStart.endOf("month").toDate();
 
       const records = await prisma.attendanceRecord.findMany({
         where: { userId, date: { gte: startDate, lte: endDate } },
@@ -81,7 +88,14 @@ export const getPayslip = async (
     return callback(null, {
       message: MESSAGES.PAYSLIP_FETCHED,
       status: status.OK,
-      data: { employee, salaryStructure, attendanceSummary },
+      data: {
+        employee: {
+          ...employee,
+          joining_date: employee.joining_date?.toISOString() ?? null,
+        },
+        salaryStructure,
+        attendanceSummary,
+      },
     });
   } catch (err) {
     logger.error("GetPayslip error:", { err });

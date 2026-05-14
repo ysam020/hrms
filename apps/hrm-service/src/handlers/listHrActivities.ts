@@ -3,6 +3,7 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
 
 export const listHrActivities = async (
   call: ServerUnaryCall<any, any>,
@@ -44,8 +45,9 @@ export const listHrActivities = async (
         id: a.id,
         title: a.title,
         description: a.description || "",
-        date: a.date || "",
-        time: a.time || "",
+        scheduledAt: a.scheduledAt.toISOString(),
+        date: dayjs(a.scheduledAt).format("YYYY-MM-DD"),
+        time: dayjs(a.scheduledAt).format("HH:mm"),
         status: a.status || "",
         createdBy: a.createdBy || "",
         createdOn: a.createdOn ? a.createdOn.toISOString() : "",

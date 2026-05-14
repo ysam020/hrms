@@ -1,14 +1,23 @@
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 export async function updateEmployeeStatus(): Promise<void> {
   try {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const yesterdayStart = dayjs
+      .utc()
+      .subtract(1, "day")
+      .startOf("day")
+      .toDate();
+    const todayStart = dayjs.utc().startOf("day").toDate();
 
     const resignations = await prisma.resignation.findMany({
-      where: { lastDate: yesterdayStr },
+      where: {
+        lastWorkingDay: { gte: yesterdayStart, lt: todayStart },
+      },
     });
 
     if (resignations.length === 0) {

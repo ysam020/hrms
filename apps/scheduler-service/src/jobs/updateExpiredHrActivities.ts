@@ -1,14 +1,18 @@
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 export async function updateExpiredHrActivities(): Promise<void> {
   try {
-    const today = new Date().toISOString().split("T")[0];
+    const now = dayjs.utc().toDate();
 
     const result = await prisma.hrActivity.updateMany({
       where: {
         status: "Active",
-        date: { lt: today },
+        scheduledAt: { lt: now },
       },
       data: {
         status: "Expired",

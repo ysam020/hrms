@@ -20,7 +20,7 @@ model User {
   middle_name                 String?
   last_name                   String?
   mobile                      String?
-  dob                         String?
+  dob                         DateTime?
   blood_group                 String?
   qualification               String?
   role                        String[]
@@ -31,11 +31,11 @@ model User {
   note                        String?
   employeeStatus              String    @default("Active")
   reasonForTermination        String?
-  dateOfTermination           String?
-  dateOfAbscond               String?
+  dateOfTermination           DateTime?
+  dateOfAbscond               DateTime?
   designation                 String?
   department                  String?
-  joining_date                String?
+  joining_date                DateTime?
   employee_photo              String?
   face_descriptor             Json?
   // Address
@@ -64,7 +64,7 @@ model User {
   bank_account_no             String?
   bank_name                   String?
   ifsc_code                   String?
-  kyc_date                    String?
+  kyc_date                    DateTime?
   kyc_approval                String?
   // Salary (embedded in user)
   salary                      Float?
@@ -102,8 +102,8 @@ model AttendanceRecord {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   userId       String   @db.ObjectId
   date         DateTime
-  timeIn       String?
-  timeOut      String?
+  timeIn       DateTime?
+  timeOut      DateTime?
   workingHours Float?
   status       String?
   isCorrected  Boolean  @default(false)
@@ -121,17 +121,17 @@ model AttendanceRecord {
 model LeaveApplication {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   userId            String   @db.ObjectId
-  from              String
-  to                String
+  from              DateTime
+  to                DateTime
   leaveType         String
   days              Float
   status            String   @default("Pending")
   reason            String?
   sickLeave         Boolean?
   medicalCertificate String?
-  appliedOn         String?
+  appliedOn         DateTime?
   approvedById      String?  @db.ObjectId
-  approvedOn        String?
+  approvedOn        DateTime?
 
   user              User?    @relation(fields: [userId], references: [id])
 
@@ -207,8 +207,7 @@ model JobApplication {
 model Resignation {
   id                          String    @id @default(auto()) @map("_id") @db.ObjectId
   userId                      String?   @db.ObjectId
-  resignationDate             String?
-  lastDate                    String?
+  resignationDate             DateTime?
   lastWorkingDay              DateTime?
   reason                      String?
   comments                    String?
@@ -308,8 +307,7 @@ model HrActivity {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   title         String
   description   String
-  date          String
-  time          String
+  scheduledAt   DateTime
   status        String
   createdBy     String
   createdOn     DateTime? @default(now())

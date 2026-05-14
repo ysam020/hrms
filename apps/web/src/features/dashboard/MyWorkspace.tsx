@@ -147,9 +147,10 @@ function MyWorkspace({ isDark }) {
   // Working hours today
   const workingHoursToday = useMemo(() => {
     if (!todayRecord?.timeIn || !todayRecord?.timeOut) return null;
-    const [inH, inM] = todayRecord.timeIn.split(":").map(Number);
-    const [outH, outM] = todayRecord.timeOut.split(":").map(Number);
-    const mins = outH * 60 + outM - (inH * 60 + inM);
+    const mins = dayjs(todayRecord.timeOut).diff(
+      dayjs(todayRecord.timeIn),
+      "minute",
+    );
     if (mins <= 0) return null;
     return `${Math.floor(mins / 60)}h ${mins % 60}m`;
   }, [todayRecord]);
@@ -351,7 +352,9 @@ function MyWorkspace({ isDark }) {
                       color: todayRecord?.timeIn ? "#10b981" : "text.disabled",
                     }}
                   >
-                    {todayRecord?.timeIn || "—"}
+                    {todayRecord?.timeIn
+                      ? dayjs(todayRecord.timeIn).format("hh:mm A")
+                      : "—"}
                   </Typography>
                 </Box>
               </Box>
@@ -402,7 +405,9 @@ function MyWorkspace({ isDark }) {
                       color: todayRecord?.timeOut ? "#ef4444" : "text.disabled",
                     }}
                   >
-                    {todayRecord?.timeOut || "—"}
+                    {todayRecord?.timeOut
+                      ? dayjs(todayRecord.timeOut).format("hh:mm A")
+                      : "—"}
                   </Typography>
                 </Box>
               </Box>

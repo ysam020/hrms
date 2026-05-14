@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { hrmClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
+import dayjs from "dayjs";
 import { logger } from "@hrms/logger";
 import { jsPDF } from "jspdf";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
@@ -45,8 +46,9 @@ export async function getHrActivities(req: Request, res: Response) {
         id: a.id,
         title: a.title,
         description: a.description || "",
-        date: a.date || "",
-        time: a.time || "",
+        scheduledAt: a.scheduledAt ? a.scheduledAt.toISOString() : "",
+        date: a.scheduledAt ? dayjs(a.scheduledAt).format("YYYY-MM-DD") : "",
+        time: a.scheduledAt ? dayjs(a.scheduledAt).format("HH:mm") : "",
         status: a.status || "",
         createdBy: a.createdBy || "",
         createdOn: a.createdOn ? a.createdOn.toISOString() : "",
@@ -162,7 +164,10 @@ export async function deleteHrActivity(req: Request, res: Response) {
 export async function getRules(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const { category, status: ruleStatus } = req.query as Record<string, string>;
+    const { category, status: ruleStatus } = req.query as Record<
+      string,
+      string
+    >;
     const { page: pageNum, limit: limitNum } = parsePagination(
       req.query,
       PAGINATION.DEFAULT_LIMIT_LARGE,

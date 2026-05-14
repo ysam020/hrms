@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
 
 export const updateHrActivity = async (
   call: ServerUnaryCall<any, any>,
@@ -40,23 +41,22 @@ export const updateHrActivity = async (
       lastUpdatedBy: updatedBy || "",
     };
 
-    const allowedFields = [
-      "title",
-      "description",
-      "date",
-      "time",
-      "type",
-      "location",
-      "activityStatus",
-    ];
-    for (const field of allowedFields) {
-      if (updateData[field] !== undefined && updateData[field] !== null) {
-        if (field === "activityStatus") {
-          cleanedData["status"] = updateData[field];
-        } else {
-          cleanedData[field] = updateData[field];
-        }
-      }
+    if (updateData.title !== undefined && updateData.title !== null)
+      cleanedData.title = updateData.title;
+    if (updateData.description !== undefined && updateData.description !== null)
+      cleanedData.description = updateData.description;
+    if (
+      updateData.activityStatus !== undefined &&
+      updateData.activityStatus !== null
+    )
+      cleanedData.status = updateData.activityStatus;
+
+    if (updateData.date !== undefined || updateData.time !== undefined) {
+      const baseDate =
+        updateData.date || dayjs(existing.scheduledAt).format("YYYY-MM-DD");
+      const baseTime =
+        updateData.time || dayjs(existing.scheduledAt).format("HH:mm");
+      cleanedData.scheduledAt = dayjs(`${baseDate}T${baseTime}`).toDate();
     }
 
     const updated = await prisma.hrActivity.update({
@@ -66,6 +66,9 @@ export const updateHrActivity = async (
 
     await cacheManager.invalidatePattern("hrActivities:*");
 
+    const displayDate = dayjs(updated.scheduledAt).format("YYYY-MM-DD");
+    const displayTime = dayjs(updated.scheduledAt).format("HH:mm");
+
     // Notify all employees (fire-and-forget, skip for deleted activities)
     if (updated.status !== "deleted") {
       prisma.user
@@ -74,7 +77,7 @@ export const updateHrActivity = async (
           if (users.length === 0) return;
           return getNotificationQueue().add("hrActivityUpdated", {
             title: "HR Activity",
-            message: `There is an activity- ${updated.title} on ${updated.date} at ${updated.time}`,
+            message: `There is an activity- ${updated.title} on ${displayDate} at ${displayTime}`,
             recipients: users.map((u) => u.id),
             pushTargets: users.map((u) => u.username),
             eventType: "hr_activity_notification",
@@ -95,8 +98,9 @@ export const updateHrActivity = async (
         id: updated.id,
         title: updated.title,
         description: updated.description || "",
-        date: updated.date || "",
-        time: updated.time || "",
+        scheduledAt: updated.scheduledAt.toISOString(),
+        date: displayDate,
+        time: displayTime,
         status: updated.status || "",
         createdBy: updated.createdBy || "",
         createdOn: updated.createdOn ? updated.createdOn.toISOString() : "",

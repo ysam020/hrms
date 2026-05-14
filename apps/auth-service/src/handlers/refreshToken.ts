@@ -29,8 +29,8 @@ export const refreshToken = async (
       });
     }
 
-    const isValid = await validateRefreshToken(payload.userId, token);
-    if (!isValid) {
+    const validation = await validateRefreshToken(payload.userId, token);
+    if (!validation.ok) {
       return callback(null, {
         message: MESSAGES.REFRESH_TOKEN_REVOKED,
         status: status.UNAUTHENTICATED,
@@ -39,11 +39,23 @@ export const refreshToken = async (
       });
     }
 
-    // Rotate: revoke old token, issue new pair
-    await revokeRefreshToken(payload.userId);
     const newAccessToken = signAccessToken(payload.userId);
+
+    if (validation.currentToken !== token) {
+      // Grace-period retry: the token was already rotated. Re-serve the current
+      // refresh token without rotating again so the client recovers seamlessly.
+      return callback(null, {
+        message: MESSAGES.TOKEN_REFRESHED,
+        status: status.OK,
+        accessToken: newAccessToken,
+        refreshToken: validation.currentToken,
+      });
+    }
+
+    // Normal path: rotate — revoke old token, issue new pair
     const newRefreshToken = signRefreshToken(payload.userId);
-    await storeRefreshToken(payload.userId, newRefreshToken);
+    await revokeRefreshToken(payload.userId);
+    await storeRefreshToken(payload.userId, newRefreshToken, token);
 
     return callback(null, {
       message: MESSAGES.TOKEN_REFRESHED,

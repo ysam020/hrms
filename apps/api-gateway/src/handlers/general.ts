@@ -10,6 +10,10 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client, S3_BUCKET, s3FileUrl } from "../config/s3";
 import { NOTIFICATION_PRUNE_LIMIT } from "../constants";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 // File validation
 
@@ -174,8 +178,7 @@ export async function getCalendarEvents(req: Request, res: Response) {
         description: e.description,
       }))
       .sort(
-        (a: any, b: any) =>
-          new Date(a.date).getTime() - new Date(b.date).getTime(),
+        (a: any, b: any) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf(),
       );
 
     await cacheManager.set(cacheKey, data, "user");
@@ -233,29 +236,29 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
         `${emp.first_name || ""} ${emp.last_name || ""}`.trim() || emp.username;
 
       if (emp.dob) {
-        const dob = new Date(emp.dob);
-        if (!isNaN(dob.getTime()) && dob.getMonth() + 1 === monthNum) {
+        const dob = dayjs.utc(emp.dob);
+        if (dob.isValid() && dob.month() + 1 === monthNum) {
           data.push({
             type: "birthday",
             name: fullName,
             username: emp.username,
             department: emp.department || "",
-            day: dob.getDate(),
+            day: dob.date(),
           });
         }
       }
 
       if (emp.joining_date) {
-        const joining = new Date(emp.joining_date);
-        if (!isNaN(joining.getTime()) && joining.getMonth() + 1 === monthNum) {
-          const years = yearNum - joining.getFullYear();
+        const joining = dayjs.utc(emp.joining_date);
+        if (joining.isValid() && joining.month() + 1 === monthNum) {
+          const years = yearNum - joining.year();
           if (years > 0) {
             data.push({
               type: "anniversary",
               name: fullName,
               username: emp.username,
               department: emp.department || "",
-              day: joining.getDate(),
+              day: joining.date(),
               years,
             });
           }
@@ -286,7 +289,7 @@ export async function getAuditLogs(req: Request, res: Response) {
       userName = "",
     } = req.query as Record<string, string>;
     const daysNum = parseInt(days) || 1;
-    const pastDate = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000);
+    const pastDate = dayjs().subtract(daysNum, "day").toDate();
 
     const where: any = { timestamp: { gte: pastDate } };
     if (entityType) where.entityType = entityType;
@@ -338,15 +341,15 @@ export async function addHoliday(req: Request, res: Response) {
         message: "Name and date are required",
       });
 
-    const d = new Date(date);
-    if (isNaN(d.getTime()))
+    const d = dayjs(date);
+    if (!d.isValid())
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Invalid date format",
       });
 
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const formattedDate = `${year}-${String(month).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const year = d.year();
+    const month = d.month() + 1;
+    const formattedDate = d.format("YYYY-MM-DD");
 
     const existing = await prisma.holiday.findFirst({ where: { year, month } });
     const username = user?.userId || "system";
@@ -407,15 +410,15 @@ export async function deleteHoliday(req: Request, res: Response) {
         message: "Date is required",
       });
 
-    const d = new Date(date);
-    if (isNaN(d.getTime()))
+    const d = dayjs(date);
+    if (!d.isValid())
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Invalid date format",
       });
 
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const formattedDate = `${year}-${String(month).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const year = d.year();
+    const month = d.month() + 1;
+    const formattedDate = d.format("YYYY-MM-DD");
 
     const record = await prisma.holiday.findFirst({ where: { year, month } });
     if (!record)

@@ -111,7 +111,7 @@ describe("useTableConfig – server-side pagination config", () => {
         totalRowCount: 50,
       }),
     );
-    expect(result.current.table.manualPagination).toBe(true);
+    expect((result.current.table as any).manualPagination).toBe(true);
   });
 
   it("forwards totalRowCount as rowCount", () => {
@@ -121,7 +121,7 @@ describe("useTableConfig – server-side pagination config", () => {
         totalRowCount: 123,
       }),
     );
-    expect(result.current.table.rowCount).toBe(123);
+    expect((result.current.table as any).rowCount).toBe(123);
   });
 
   it("calls onPaginationChange when pagination changes", () => {
@@ -134,7 +134,10 @@ describe("useTableConfig – server-side pagination config", () => {
     );
 
     act(() => {
-      result.current.table.onPaginationChange({ pageIndex: 1, pageSize: 10 });
+      (result.current.table as any).onPaginationChange({
+        pageIndex: 1,
+        pageSize: 10,
+      });
     });
 
     expect(onPaginationChange).toHaveBeenCalledWith(
@@ -150,7 +153,10 @@ describe("useTableConfig – server-side pagination config", () => {
     );
 
     act(() => {
-      result.current.table.onPaginationChange({ pageIndex: 3, pageSize: 10 });
+      (result.current.table as any).onPaginationChange({
+        pageIndex: 3,
+        pageSize: 10,
+      });
     });
 
     expect(result.current.pagination?.pageIndex).toBe(3);
@@ -176,6 +182,6 @@ describe("useTableConfig – custom options merging", () => {
         manualPagination: false,
       }),
     );
-    expect(result.current.table.manualPagination).toBe(false);
+    expect((result.current.table as any).manualPagination).toBe(false);
   });
 });

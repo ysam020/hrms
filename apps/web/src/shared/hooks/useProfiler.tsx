@@ -1,7 +1,8 @@
 import { useRef, useState, useCallback } from "react";
 
 const SUPPORTED =
-  typeof window !== "undefined" && typeof window.Profiler === "function";
+  typeof window !== "undefined" &&
+  typeof (window as any).Profiler === "function";
 
 function useProfiler({ sampleInterval = 10, maxBufferSize = 10000 } = {}) {
   const profilerRef = useRef<any>(null);
@@ -11,7 +12,7 @@ function useProfiler({ sampleInterval = 10, maxBufferSize = 10000 } = {}) {
   const start = useCallback(() => {
     if (!SUPPORTED || profilerRef.current) return;
     try {
-      profilerRef.current = new window.Profiler({
+      profilerRef.current = new (window as any).Profiler({
         sampleInterval,
         maxBufferSize,
       });

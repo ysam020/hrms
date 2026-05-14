@@ -18,7 +18,9 @@ export const ChatUnreadContext = createContext<{
 
 async function playNotificationSound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = new (
+      window.AudioContext || (window as any).webkitAudioContext
+    )();
     if (ctx.state === "suspended") await ctx.resume();
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();

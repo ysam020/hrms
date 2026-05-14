@@ -2,6 +2,10 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 export const processPayroll = async (
   call: ServerUnaryCall<any, any>,
@@ -19,9 +23,14 @@ export const processPayroll = async (
 
     const monthNum = parseInt(String(month));
     const yearNum = parseInt(String(year));
-    const lastDay = new Date(yearNum, monthNum, 0).getDate();
-    const startDate = new Date(yearNum, monthNum - 1, 1);
-    const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
+
+    const monthStart = dayjs.utc(
+      `${yearNum}-${String(monthNum).padStart(2, "0")}-01`,
+    );
+    const monthEnd = monthStart.endOf("month");
+    const lastDay = monthStart.daysInMonth();
+    const startDate = monthStart.toDate();
+    const endDate = monthEnd.toDate();
 
     const employeeWhere: any = { employeeStatus: "Active" };
     if (userIds && userIds.length > 0) employeeWhere.id = { in: userIds };

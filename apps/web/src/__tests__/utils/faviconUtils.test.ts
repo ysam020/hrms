@@ -89,7 +89,9 @@ describe("clearFaviconDot", () => {
     });
 
     clearFaviconDot();
-    expect(capturedImg?.src).toContain("favicon.ico");
+    expect((capturedImg as HTMLImageElement | null)?.src).toContain(
+      "favicon.ico",
+    );
   });
 });
 
@@ -193,7 +195,9 @@ describe("updateFaviconWithDot", () => {
 
   it("does nothing when getContext returns null (no ctx guard)", () => {
     vi.restoreAllMocks();
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      null as any,
+    );
 
     const origCreate = document.createElement.bind(document);
     let capturedImg: HTMLImageElement | null = null;

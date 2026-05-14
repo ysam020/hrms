@@ -19,7 +19,7 @@ const mockTableToolbarAutoComplete = vi.fn(() => ({
 
 vi.mock("@web/shared/utils/table/tableToolbarAutoComplete", () => ({
   tableToolbarAutoComplete: (...args: any[]) =>
-    mockTableToolbarAutoComplete(...args),
+    (mockTableToolbarAutoComplete as (...a: any[]) => any)(...args),
 }));
 
 // ── Test data ────────────────────────────────────────────────────────────────
@@ -32,9 +32,9 @@ const setup = () => {
   mockTableToolbarAutoComplete.mockClear();
   const hook = renderHook(() => useUserAutoComplete(USERS));
   // toolbarAutoComplete is called synchronously in useMemo
-  const debouncedSearchUser = mockTableToolbarAutoComplete.mock.calls[0][4] as (
-    q: string,
-  ) => void;
+  const debouncedSearchUser = (
+    mockTableToolbarAutoComplete.mock.calls[0] as any[]
+  )[4] as ((q: string) => void) & { cancel: () => void };
   return { ...hook, debouncedSearchUser };
 };
 
