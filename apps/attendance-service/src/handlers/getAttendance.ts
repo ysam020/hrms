@@ -3,17 +3,18 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 
-// Returns every calendar date between start and end (inclusive) as YYYY-MM-DD.
-function eachDay(start: Date, end: Date): string[] {
+dayjs.extend(utc);
+
+function eachDay(start: string, end: string): string[] {
   const days: string[] = [];
-  const cur = new Date(start);
-  cur.setUTCHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setUTCHours(0, 0, 0, 0);
-  while (cur <= last) {
-    days.push(cur.toISOString().slice(0, 10));
-    cur.setUTCDate(cur.getUTCDate() + 1);
+  let cur = dayjs.utc(start).startOf("day");
+  const last = dayjs.utc(end).startOf("day");
+  while (!cur.isAfter(last)) {
+    days.push(cur.format("YYYY-MM-DD"));
+    cur = cur.add(1, "day");
   }
   return days;
 }
@@ -37,8 +38,9 @@ export const getAttendance = async (
     if (userId) where.userId = userId;
     if (startDate || endDate) {
       where.date = {};
-      if (startDate) where.date.gte = new Date(startDate);
-      if (endDate) where.date.lte = new Date(endDate);
+      if (startDate)
+        where.date.gte = dayjs.utc(startDate).startOf("day").toDate();
+      if (endDate) where.date.lte = dayjs.utc(endDate).endOf("day").toDate();
     }
 
     const [records, dbTotal] = await Promise.all([
@@ -53,10 +55,10 @@ export const getAttendance = async (
 
     const byDate = new Map<string, (typeof records)[0]>();
     for (const r of records) {
-      if (r.date) byDate.set(r.date.toISOString().slice(0, 10), r);
+      if (r.date) byDate.set(dayjs.utc(r.date).format("YYYY-MM-DD"), r);
     }
 
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayKey = dayjs.utc().format("YYYY-MM-DD");
 
     type AttendanceRow = {
       date: string;
@@ -68,7 +70,7 @@ export const getAttendance = async (
     let data: AttendanceRow[];
 
     if (userId && startDate && endDate) {
-      const allDays = eachDay(new Date(startDate), new Date(endDate));
+      const allDays = eachDay(startDate, endDate);
 
       data = allDays
         .map((dateKey) => {
@@ -76,15 +78,15 @@ export const getAttendance = async (
           if (r) {
             return {
               date: r.date!.toISOString(),
-              checkIn: r.timeIn || "",
-              checkOut: r.timeOut || "",
+              checkIn: r.timeIn?.toISOString() || "",
+              checkOut: r.timeOut?.toISOString() || "",
               status: r.status || "",
               workHours: r.workingHours != null ? String(r.workingHours) : "",
             };
           }
           if (dateKey >= todayKey) return null;
           return {
-            date: new Date(dateKey).toISOString(),
+            date: dayjs.utc(dateKey).toISOString(),
             checkIn: "",
             checkOut: "",
             status: "Leave",
@@ -95,8 +97,8 @@ export const getAttendance = async (
     } else {
       data = records.map((r) => ({
         date: r.date ? r.date.toISOString() : "",
-        checkIn: r.timeIn || "",
-        checkOut: r.timeOut || "",
+        checkIn: r.timeIn?.toISOString() || "",
+        checkOut: r.timeOut?.toISOString() || "",
         status: r.status || "",
         workHours: r.workingHours != null ? String(r.workingHours) : "",
       }));

@@ -33,13 +33,18 @@ describe("updateEmployeeStatus", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it("queries resignations where lastDate is yesterday", async () => {
+  it("queries resignations where lastWorkingDay is yesterday", async () => {
     mockFindMany.mockResolvedValue([]);
     await updateEmployeeStatus();
 
     // Yesterday = March 4
     expect(mockFindMany).toHaveBeenCalledWith({
-      where: { lastDate: "2024-03-04" },
+      where: {
+        lastWorkingDay: {
+          gte: new Date("2024-03-04T00:00:00.000Z"),
+          lt: new Date("2024-03-05T00:00:00.000Z"),
+        },
+      },
     });
   });
 
@@ -80,7 +85,12 @@ describe("updateEmployeeStatus", () => {
 
     // Yesterday = March 31
     expect(mockFindMany).toHaveBeenCalledWith({
-      where: { lastDate: "2024-03-31" },
+      where: {
+        lastWorkingDay: {
+          gte: new Date("2024-03-31T00:00:00.000Z"),
+          lt: new Date("2024-04-01T00:00:00.000Z"),
+        },
+      },
     });
   });
 
@@ -91,7 +101,12 @@ describe("updateEmployeeStatus", () => {
     await updateEmployeeStatus();
 
     expect(mockFindMany).toHaveBeenCalledWith({
-      where: { lastDate: "2023-12-31" },
+      where: {
+        lastWorkingDay: {
+          gte: new Date("2023-12-31T00:00:00.000Z"),
+          lt: new Date("2024-01-01T00:00:00.000Z"),
+        },
+      },
     });
   });
 

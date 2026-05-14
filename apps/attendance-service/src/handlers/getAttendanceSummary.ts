@@ -3,6 +3,10 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 export const getAttendanceSummary = async (
   call: ServerUnaryCall<any, any>,
@@ -37,21 +41,21 @@ export const getAttendanceSummary = async (
 
     const monthNum = parseInt(String(month));
     const yearNum = parseInt(String(year));
-    const monthPadded = String(monthNum).padStart(2, "0");
 
-    const today = new Date();
+    const today = dayjs.utc();
     const isCurrentMonth =
-      yearNum === today.getFullYear() && monthNum === today.getMonth() + 1;
-    const endDay = isCurrentMonth
-      ? today.getDate()
-      : new Date(yearNum, monthNum, 0).getDate();
+      yearNum === today.year() && monthNum === today.month() + 1;
+    const monthStart = dayjs.utc(
+      `${yearNum}-${String(monthNum).padStart(2, "0")}-01`,
+    );
+    const endDay = isCurrentMonth ? today.date() : monthStart.daysInMonth();
 
     const records = await prisma.attendanceRecord.findMany({
       where: {
         userId,
         date: {
-          gte: new Date(yearNum, monthNum - 1, 1),
-          lte: new Date(yearNum, monthNum - 1, endDay, 23, 59, 59),
+          gte: monthStart.toDate(),
+          lte: monthStart.date(endDay).endOf("day").toDate(),
         },
       },
       select: { date: true, status: true, isCorrected: true },
@@ -60,7 +64,7 @@ export const getAttendanceSummary = async (
     const recordMap = new Map<string, string>();
     let correctionsUsed = 0;
     for (const r of records) {
-      const dateStr = new Date(r.date).toISOString().split("T")[0];
+      const dateStr = dayjs.utc(r.date).format("YYYY-MM-DD");
       recordMap.set(dateStr, r.status || "");
       if (r.isCorrected) correctionsUsed++;
     }
@@ -71,7 +75,7 @@ export const getAttendanceSummary = async (
       weekOffs = 0,
       holidays = 0;
     for (let day = 1; day <= endDay; day++) {
-      const dateStr = `${yearNum}-${monthPadded}-${String(day).padStart(2, "0")}`;
+      const dateStr = monthStart.date(day).format("YYYY-MM-DD");
       const s = recordMap.get(dateStr) || "";
       if (s === "Present") presents++;
       else if (s === "Half Day") halfDays++;

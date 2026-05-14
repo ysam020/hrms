@@ -12,6 +12,7 @@
     "@hrms/grpc-server": "workspace:*",
     "@hrms/logger": "workspace:*",
     "@hrms/proto": "workspace:^",
+    "dayjs": "^1.11.13",
     "zod": "^3.23.8"
   },
   "devDependencies": {

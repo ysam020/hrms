@@ -31,7 +31,7 @@ describe("updateExpiredHrActivities", () => {
     expect(mockUpdateMany).toHaveBeenCalledWith({
       where: {
         status: "Active",
-        date: { lt: "2024-03-15" },
+        scheduledAt: { lt: expect.any(Date) },
       },
       data: expect.objectContaining({
         status: "Expired",
@@ -55,12 +55,12 @@ describe("updateExpiredHrActivities", () => {
     await expect(updateExpiredHrActivities()).resolves.toBeUndefined();
   });
 
-  it("uses today's ISO date string (YYYY-MM-DD) for the lt filter", async () => {
+  it("uses a Date object for the scheduledAt lt filter", async () => {
     mockUpdateMany.mockResolvedValue({ count: 0 });
     await updateExpiredHrActivities();
 
     const where = mockUpdateMany.mock.calls[0][0].where;
-    expect(where.date.lt).toBe("2024-03-15");
+    expect(where.scheduledAt.lt).toBeInstanceOf(Date);
   });
 
   it("throws when the database call fails", async () => {

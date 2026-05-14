@@ -3,6 +3,10 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 export const getTodayAttendance = async (
   call: ServerUnaryCall<any, any>,
@@ -18,12 +22,7 @@ export const getTodayAttendance = async (
       });
     }
 
-    const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
+    const todayStart = dayjs().utc().startOf("day").toDate();
 
     const cacheKey = `todayAttendance:${userId}`;
     const cached = await cacheManager.get(cacheKey);

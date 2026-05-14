@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
 
 export const createHrActivity = async (
   call: ServerUnaryCall<any, any>,
@@ -27,12 +28,15 @@ export const createHrActivity = async (
       });
     }
 
+    const scheduledAt = time
+      ? dayjs(`${date}T${time}`).toDate()
+      : dayjs(date).startOf("day").toDate();
+
     const activity = await prisma.hrActivity.create({
       data: {
         title,
         description: description || "",
-        date,
-        time: time || "",
+        scheduledAt,
         status: activityType || "active",
         createdBy: createdBy || "",
         createdOn: new Date(),
@@ -41,6 +45,9 @@ export const createHrActivity = async (
 
     await cacheManager.invalidatePattern("hrActivities:*");
 
+    const displayDate = dayjs(activity.scheduledAt).format("YYYY-MM-DD");
+    const displayTime = dayjs(activity.scheduledAt).format("HH:mm");
+
     // Notify all employees (fire-and-forget)
     prisma.user
       .findMany({ select: { id: true, username: true } })
@@ -48,7 +55,7 @@ export const createHrActivity = async (
         if (users.length === 0) return;
         return getNotificationQueue().add("hrActivityCreated", {
           title: "HR Activity",
-          message: `There is an activity- ${activity.title} on ${activity.date} at ${activity.time}`,
+          message: `There is an activity- ${activity.title} on ${displayDate} at ${displayTime}`,
           recipients: users.map((u) => u.id),
           pushTargets: users.map((u) => u.username),
           eventType: "hr_activity_notification",
@@ -66,8 +73,9 @@ export const createHrActivity = async (
         id: activity.id,
         title: activity.title,
         description: activity.description || "",
-        date: activity.date || "",
-        time: activity.time || "",
+        scheduledAt: activity.scheduledAt.toISOString(),
+        date: displayDate,
+        time: displayTime,
         status: activity.status || "",
         createdBy: activity.createdBy || "",
         createdOn: activity.createdOn ? activity.createdOn.toISOString() : "",

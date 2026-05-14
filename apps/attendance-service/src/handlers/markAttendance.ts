@@ -3,20 +3,24 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 const LATE_THRESHOLD_HOUR = 9;
 const LATE_THRESHOLD_MINUTE = 30;
 
 function isLate(t: Date): boolean {
+  const d = dayjs(t);
   return (
-    t.getHours() > LATE_THRESHOLD_HOUR ||
-    (t.getHours() === LATE_THRESHOLD_HOUR &&
-      t.getMinutes() > LATE_THRESHOLD_MINUTE)
+    d.hour() > LATE_THRESHOLD_HOUR ||
+    (d.hour() === LATE_THRESHOLD_HOUR && d.minute() > LATE_THRESHOLD_MINUTE)
   );
 }
 
-function calcWorkingHours(timeIn: string, timeOut: Date): number {
-  const diffMs = timeOut.getTime() - new Date(timeIn).getTime();
+function calcWorkingHours(timeIn: Date, timeOut: Date): number {
+  const diffMs = dayjs(timeOut).diff(dayjs(timeIn));
   return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 }
 
@@ -35,11 +39,7 @@ export const markAttendance = async (
     }
 
     const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
+    const todayStart = dayjs().utc().startOf("day").toDate();
 
     const existingRecord = await prisma.attendanceRecord.findUnique({
       where: { userId_date: { userId, date: todayStart } },
@@ -58,13 +58,13 @@ export const markAttendance = async (
       const record = existingRecord
         ? await prisma.attendanceRecord.update({
             where: { id: existingRecord.id },
-            data: { timeIn: now.toISOString(), status: attendanceStatus },
+            data: { timeIn: now, status: attendanceStatus },
           })
         : await prisma.attendanceRecord.create({
             data: {
               userId,
               date: todayStart,
-              timeIn: now.toISOString(),
+              timeIn: now,
               status: attendanceStatus,
             },
           });
@@ -101,7 +101,7 @@ export const markAttendance = async (
       const record = await prisma.attendanceRecord.update({
         where: { id: existingRecord.id },
         data: {
-          timeOut: now.toISOString(),
+          timeOut: now,
           workingHours,
           status: isHalfDay ? "Half Day" : existingRecord.status,
         },

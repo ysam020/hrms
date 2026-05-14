@@ -36,10 +36,10 @@ const mockCacheSet = cacheManager.set as jest.Mock;
 
 const sampleRecord = {
   id: "rec-1",
-  username: "john",
+  userId: "john",
   date: new Date("2024-03-04"),
-  timeIn: "2024-03-04T08:00:00.000Z",
-  timeOut: "2024-03-04T17:00:00.000Z",
+  timeIn: new Date("2024-03-04T08:00:00.000Z"),
+  timeOut: new Date("2024-03-04T17:00:00.000Z"),
   status: "Present",
   workingHours: 9,
 };
@@ -109,8 +109,8 @@ describe("getAttendance", () => {
 
     const callArgs = mockFindMany.mock.calls[0][0];
     expect(callArgs.where.date).toEqual({
-      gte: new Date("2024-03-01"),
-      lte: new Date("2024-03-31"),
+      gte: new Date("2024-03-01T00:00:00.000Z"),
+      lte: new Date("2024-03-31T23:59:59.999Z"),
     });
   });
 
@@ -147,8 +147,8 @@ describe("getAttendance", () => {
     expect(result.status).toBe(status.OK);
     expect(result.data[0]).toEqual({
       date: sampleRecord.date.toISOString(),
-      checkIn: sampleRecord.timeIn,
-      checkOut: sampleRecord.timeOut,
+      checkIn: sampleRecord.timeIn.toISOString(),
+      checkOut: sampleRecord.timeOut.toISOString(),
       status: "Present",
       workHours: "9",
     });

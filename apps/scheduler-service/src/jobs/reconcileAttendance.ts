@@ -2,6 +2,10 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getLeaveConfig } from "../config";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 interface BalanceEntry {
   month: number;
@@ -10,26 +14,6 @@ interface BalanceEntry {
   usedPL: number;
   usedLWP: number;
   remainingPL: number;
-}
-
-function toDateStr(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function generateAllDates(start: Date, end: Date): string[] {
-  const dates: string[] = [];
-  const current = new Date(start);
-  while (current <= end) {
-    dates.push(toDateStr(current));
-    current.setDate(current.getDate() + 1);
-  }
-  return dates;
 }
 
 async function getHolidaysInRange(
@@ -56,22 +40,29 @@ async function processEmployee(
 ): Promise<void> {
   const leaveConfig = getLeaveConfig();
 
-  const allDates = generateAllDates(startDate, endDate);
+  const start = dayjs.utc(startDate).startOf("day");
+  const end = dayjs.utc(endDate).startOf("day");
+
+  const allDates: string[] = [];
+  let cur = start;
+  while (!cur.isAfter(end)) {
+    allDates.push(cur.format("YYYY-MM-DD"));
+    cur = cur.add(1, "day");
+  }
 
   const existing = await prisma.attendanceRecord.findMany({
-    where: {
-      userId,
-      date: { gte: startDate, lte: endDate },
-    },
+    where: { userId, date: { gte: startDate, lte: endDate } },
     select: { date: true },
   });
-  const existingDates = new Set(existing.map((r) => toDateStr(r.date)));
+  const existingDates = new Set(
+    existing.map((r) => dayjs.utc(r.date).format("YYYY-MM-DD")),
+  );
 
   const missingDates = allDates.filter((d) => !existingDates.has(d));
   if (missingDates.length === 0) return;
 
-  const startYear = startDate.getFullYear();
-  const endYear = endDate.getFullYear();
+  const startYear = start.year();
+  const endYear = end.year();
   const holidays = await getHolidaysInRange(startYear, endYear);
 
   let lb = await prisma.leaveBalance.findUnique({ where: { userId } });
@@ -111,7 +102,7 @@ async function processEmployee(
     if (holidays.has(date)) {
       holidayDates.push(date);
     } else {
-      const dow = new Date(date + "T00:00:00Z").getUTCDay();
+      const dow = dayjs.utc(date).day();
       if (dow === 0 || dow === 6) {
         weekOffDates.push(date);
       } else {
@@ -154,24 +145,26 @@ async function processEmployee(
     }
   }
 
+  const now = new Date();
+
   const attendanceRecords = [
     ...holidayDates.map((date) => ({
       userId,
-      date: new Date(date + "T00:00:00.000Z"),
+      date: dayjs.utc(date).startOf("day").toDate(),
       workingHours: 0,
       status: "Holiday",
       isCorrected: false,
     })),
     ...weekOffDates.map((date) => ({
       userId,
-      date: new Date(date + "T00:00:00.000Z"),
+      date: dayjs.utc(date).startOf("day").toDate(),
       workingHours: 0,
       status: "Week Off",
       isCorrected: false,
     })),
     ...regularDates.map((date) => ({
       userId,
-      date: new Date(date + "T00:00:00.000Z"),
+      date: dayjs.utc(date).startOf("day").toDate(),
       workingHours: 0,
       status: "Leave",
       isCorrected: false,
@@ -185,24 +178,24 @@ async function processEmployee(
     });
   }
 
-  const now = new Date().toISOString();
   const leaveApplications: Array<{
     userId: string;
-    from: string;
-    to: string;
+    from: Date;
+    to: Date;
     leaveType: string;
     days: number;
     status: string;
     reason: string;
-    appliedOn: string;
-    approvedOn: string;
+    appliedOn: Date;
+    approvedOn: Date;
   }> = [];
 
   for (const date of regularDates.slice(0, plUsed)) {
+    const d = dayjs.utc(date).startOf("day").toDate();
     leaveApplications.push({
       userId,
-      from: date,
-      to: date,
+      from: d,
+      to: d,
       leaveType: "PL",
       days: 1,
       status: "Approved",
@@ -213,10 +206,11 @@ async function processEmployee(
   }
 
   for (const date of regularDates.slice(plUsed)) {
+    const d = dayjs.utc(date).startOf("day").toDate();
     leaveApplications.push({
       userId,
-      from: date,
-      to: date,
+      from: d,
+      to: d,
       leaveType: "LWP",
       days: 1,
       status: "Approved",
@@ -254,34 +248,25 @@ async function processEmployee(
 
 export async function reconcileAttendance(): Promise<void> {
   try {
-    const today = new Date();
-    const yesterday = addDays(today, -1);
+    const today = dayjs.utc();
+    const yesterday = today.subtract(1, "day");
 
     let targetMonth: number;
     let targetYear: number;
     let startDate: Date;
     let endDate: Date;
 
-    if (today.getDate() === 1) {
-      const firstOfPrevMonth = new Date(
-        today.getFullYear(),
-        today.getMonth() - 1,
-        1,
-      );
-      const lastOfPrevMonth = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        0,
-      );
-      targetMonth = firstOfPrevMonth.getMonth() + 1;
-      targetYear = firstOfPrevMonth.getFullYear();
-      startDate = firstOfPrevMonth;
-      endDate = lastOfPrevMonth;
+    if (today.date() === 1) {
+      const prevMonth = today.subtract(1, "month");
+      targetMonth = prevMonth.month() + 1;
+      targetYear = prevMonth.year();
+      startDate = prevMonth.startOf("month").toDate();
+      endDate = prevMonth.endOf("month").startOf("day").toDate();
     } else {
-      targetMonth = today.getMonth() + 1;
-      targetYear = today.getFullYear();
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = yesterday;
+      targetMonth = today.month() + 1;
+      targetYear = today.year();
+      startDate = today.startOf("month").toDate();
+      endDate = yesterday.startOf("day").toDate();
     }
 
     if (startDate > endDate) {

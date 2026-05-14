@@ -26,13 +26,12 @@ const makeCallback = () => jest.fn();
 
 const resignationRow = {
   id: "res-1",
-  username: "john",
+  userId: "john",
   reason: "personal",
   rejectionReason: null,
-  resignationDate: "2024-03-01",
+  resignationDate: new Date("2024-03-01"),
   submittedOn: new Date("2024-03-01"),
   lastWorkingDay: new Date("2024-03-31"),
-  lastDate: "2024-03-31",
   status: "Submitted",
 };
 

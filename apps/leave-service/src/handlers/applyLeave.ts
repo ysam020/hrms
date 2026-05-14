@@ -4,20 +4,23 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 
-function isWeekend(date: Date): boolean {
-  const day = date.getDay();
-  return day === 0 || day === 6;
+dayjs.extend(utc);
+
+function isWeekend(d: dayjs.Dayjs): boolean {
+  const dow = d.day();
+  return dow === 0 || dow === 6;
 }
 
-function calculateWorkingDays(from: string, to: string): number {
-  const start = new Date(from);
-  const end = new Date(to);
+function calculateWorkingDays(from: dayjs.Dayjs, to: dayjs.Dayjs): number {
   let count = 0;
-  const current = new Date(start);
-  while (current <= end) {
-    if (!isWeekend(current)) count++;
-    current.setDate(current.getDate() + 1);
+  let cur = from.startOf("day");
+  const end = to.startOf("day");
+  while (!cur.isAfter(end)) {
+    if (!isWeekend(cur)) count++;
+    cur = cur.add(1, "day");
   }
   return count;
 }
@@ -36,17 +39,17 @@ export const applyLeave = async (
       });
     }
 
-    const start = new Date(from);
-    const end = new Date(to);
+    const startDay = dayjs.utc(from).startOf("day");
+    const endDay = dayjs.utc(to).startOf("day");
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    if (!startDay.isValid() || !endDay.isValid()) {
       return callback(null, {
         message: MESSAGES.INVALID_DATE_FORMAT,
         status: status.INVALID_ARGUMENT,
       });
     }
 
-    if (end < start) {
+    if (endDay.isBefore(startDay)) {
       return callback(null, {
         message: MESSAGES.END_DATE_BEFORE_START,
         status: status.INVALID_ARGUMENT,
@@ -58,9 +61,9 @@ export const applyLeave = async (
     });
 
     const overlap = existing.some((l) => {
-      const lStart = new Date(l.from);
-      const lEnd = new Date(l.to);
-      return start <= lEnd && end >= lStart;
+      const lStart = dayjs.utc(l.from);
+      const lEnd = dayjs.utc(l.to);
+      return !startDay.isAfter(lEnd) && !endDay.isBefore(lStart);
     });
 
     if (overlap) {
@@ -70,23 +73,28 @@ export const applyLeave = async (
       });
     }
 
-    const days = calculateWorkingDays(from, to);
+    const days = calculateWorkingDays(startDay, endDay);
+    const fromDate = startDay.toDate();
+    const toDate = endDay.toDate();
 
     const leaveApplication = await prisma.leaveApplication.create({
       data: {
         userId,
         leaveType,
-        from,
-        to,
+        from: fromDate,
+        to: toDate,
         days,
         reason: reason || "",
         sickLeave: sickLeave || false,
         status: "Pending",
-        appliedOn: new Date().toISOString(),
+        appliedOn: new Date(),
       },
     });
 
     await cacheManager.invalidatePattern("leaves:*");
+
+    const fromStr = startDay.format("YYYY-MM-DD");
+    const toStr = endDay.format("YYYY-MM-DD");
 
     // Notify HR + team leaders (fire-and-forget)
     Promise.all([
@@ -125,7 +133,7 @@ export const applyLeave = async (
         if (uniqueUsernames.length === 0) return;
         await getNotificationQueue().add("leaveApplied", {
           title: "Leave",
-          message: `${applicantUsername} has applied for leave from ${from} to ${to}`,
+          message: `${applicantUsername} has applied for leave from ${fromStr} to ${toStr}`,
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           eventType: "leave_notification",

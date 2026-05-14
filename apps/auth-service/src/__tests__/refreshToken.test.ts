@@ -61,7 +61,7 @@ describe("refreshToken", () => {
 
   it("returns UNAUTHENTICATED when token is valid but revoked in Redis", async () => {
     mockVerifyRefreshToken.mockReturnValue({ userId: "user-1" });
-    mockValidateRefreshToken.mockResolvedValue(false);
+    mockValidateRefreshToken.mockResolvedValue({ ok: false });
 
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "revoked-token" }), cb);
@@ -77,7 +77,10 @@ describe("refreshToken", () => {
 
   it("rotates tokens and returns new pair on happy path", async () => {
     mockVerifyRefreshToken.mockReturnValue({ userId: "user-1" });
-    mockValidateRefreshToken.mockResolvedValue(true);
+    mockValidateRefreshToken.mockResolvedValue({
+      ok: true,
+      currentToken: "valid-token",
+    });
     mockRevokeRefreshToken.mockResolvedValue(undefined);
     mockSignAccessToken.mockReturnValue("new-access-token");
     mockSignRefreshToken.mockReturnValue("new-refresh-token");
@@ -92,6 +95,7 @@ describe("refreshToken", () => {
     expect(mockStoreRefreshToken).toHaveBeenCalledWith(
       "user-1",
       "new-refresh-token",
+      "valid-token",
     );
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.TOKEN_REFRESHED,
@@ -101,9 +105,36 @@ describe("refreshToken", () => {
     });
   });
 
+  it("re-serves current token without rotating during grace period retry", async () => {
+    mockVerifyRefreshToken.mockReturnValue({ userId: "user-1" });
+    // currentToken differs from the incoming token — this is the grace-period case
+    mockValidateRefreshToken.mockResolvedValue({
+      ok: true,
+      currentToken: "already-rotated-token",
+    });
+    mockSignAccessToken.mockReturnValue("new-access-token");
+
+    const cb = makeCallback();
+    await refreshToken(makeCall({ refreshToken: "old-token" }), cb);
+
+    // Must NOT rotate again
+    expect(mockRevokeRefreshToken).not.toHaveBeenCalled();
+    expect(mockSignRefreshToken).not.toHaveBeenCalled();
+    expect(mockStoreRefreshToken).not.toHaveBeenCalled();
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.TOKEN_REFRESHED,
+      status: status.OK,
+      accessToken: "new-access-token",
+      refreshToken: "already-rotated-token",
+    });
+  });
+
   it("validates token with correct userId extracted from payload", async () => {
     mockVerifyRefreshToken.mockReturnValue({ userId: "user-42" });
-    mockValidateRefreshToken.mockResolvedValue(true);
+    mockValidateRefreshToken.mockResolvedValue({
+      ok: true,
+      currentToken: "valid-token",
+    });
     mockRevokeRefreshToken.mockResolvedValue(undefined);
     mockSignAccessToken.mockReturnValue("at");
     mockSignRefreshToken.mockReturnValue("rt");

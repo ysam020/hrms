@@ -296,7 +296,7 @@ function AppbarComponent({
                           : "none",
                       }}
                     >
-                      {item.badge && item.badgeCount > 0 ? (
+                      {item.badge && (item.badgeCount ?? 0) > 0 ? (
                         <>
                           <i
                             className={`pi ${item.iconClass}`}
@@ -332,7 +332,7 @@ function AppbarComponent({
                                   : "rgba(17, 27, 33, 0.85)"),
                             }}
                             aria-label={`${
-                              item.badgeCount
+                              item.badgeCount ?? 0
                             } ${item.title.toLowerCase()}`}
                           >
                             {item.badgeCount}
@@ -426,7 +426,7 @@ function AppbarComponent({
               }}
             >
               <ListItemIcon>
-                {item.badge && item.badgeCount > 0 ? (
+                {item.badge && (item.badgeCount ?? 0) > 0 ? (
                   <Badge badgeContent={item.badgeCount} color="error">
                     <i
                       className={`pi ${item.iconClass}`}

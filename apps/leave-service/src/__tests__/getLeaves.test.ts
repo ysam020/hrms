@@ -26,18 +26,18 @@ const makeCallback = () => jest.fn();
 
 const leaveRecord = {
   id: "leave-1",
-  username: "john",
+  userId: "john",
   leaveType: "PL",
-  from: "2024-03-04",
-  to: "2024-03-05",
+  from: new Date("2024-03-04"),
+  to: new Date("2024-03-05"),
   days: 2,
   reason: "Personal",
   status: "Pending",
-  approvedByUsername: "",
-  appliedOn: "2024-03-01",
+  approvedById: "",
+  appliedOn: new Date("2024-03-01"),
   sickLeave: false,
   medicalCertificate: "",
-  approvedOn: "",
+  approvedOn: null,
 };
 
 describe("getLeaves", () => {

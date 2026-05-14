@@ -3,12 +3,14 @@ import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 
-function calcWorkingHours(timeIn: string, timeOut: string): number {
-  const [inH, inM] = timeIn.split(":").map(Number);
-  const [outH, outM] = timeOut.split(":").map(Number);
-  const diffMinutes = outH * 60 + outM - (inH * 60 + inM);
-  return Math.round((diffMinutes / 60) * 100) / 100;
+dayjs.extend(utc);
+
+function calcWorkingHours(timeIn: Date, timeOut: Date): number {
+  const diffMs = dayjs(timeOut).diff(dayjs(timeIn));
+  return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 }
 
 export const correctAttendance = async (
@@ -25,12 +27,8 @@ export const correctAttendance = async (
       });
     }
 
-    const targetDate = date ? new Date(date) : new Date();
-    const dateStart = new Date(
-      targetDate.getFullYear(),
-      targetDate.getMonth(),
-      targetDate.getDate(),
-    );
+    const targetDate = date ? dayjs(date) : dayjs();
+    const dateStart = targetDate.utc().startOf("day").toDate();
 
     const existingRecord = await prisma.attendanceRecord.findUnique({
       where: { userId_date: { userId, date: dateStart } },
@@ -38,11 +36,11 @@ export const correctAttendance = async (
 
     const updateData: Record<string, any> = { isCorrected: true };
     if (correctedBy) updateData.correctedBy = correctedBy;
-    if (timeIn) updateData.timeIn = timeIn;
-    if (timeOut) updateData.timeOut = timeOut;
+    if (timeIn) updateData.timeIn = dayjs(timeIn).toDate();
+    if (timeOut) updateData.timeOut = dayjs(timeOut).toDate();
 
-    const effectiveTimeIn = timeIn || existingRecord?.timeIn;
-    const effectiveTimeOut = timeOut || existingRecord?.timeOut;
+    const effectiveTimeIn = updateData.timeIn ?? existingRecord?.timeIn;
+    const effectiveTimeOut = updateData.timeOut ?? existingRecord?.timeOut;
 
     if (effectiveTimeIn && effectiveTimeOut) {
       const hours = calcWorkingHours(effectiveTimeIn, effectiveTimeOut);
@@ -61,8 +59,8 @@ export const correctAttendance = async (
         data: {
           userId,
           date: dateStart,
-          timeIn: timeIn || "",
-          timeOut: timeOut || "",
+          timeIn: updateData.timeIn ?? null,
+          timeOut: updateData.timeOut ?? null,
           isCorrected: true,
           correctedBy: correctedBy || null,
           workingHours: updateData.workingHours,
@@ -83,8 +81,8 @@ export const correctAttendance = async (
         id: record.id,
         userId: record.userId,
         date: record.date?.toISOString() || "",
-        timeIn: record.timeIn || "",
-        timeOut: record.timeOut || "",
+        timeIn: record.timeIn?.toISOString() || "",
+        timeOut: record.timeOut?.toISOString() || "",
         status: record.status || "",
         workingHours: record.workingHours ?? 0,
       },

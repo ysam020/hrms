@@ -102,7 +102,7 @@ describe("approveLeave", () => {
       data: expect.objectContaining({
         status: "Approved",
         approvedById: "manager-id",
-        approvedOn: expect.any(String),
+        approvedOn: expect.any(Date),
       }),
     });
     expect(cb).toHaveBeenCalledWith(null, {

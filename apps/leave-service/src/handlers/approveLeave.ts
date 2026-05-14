@@ -40,7 +40,7 @@ export const approveLeave = async (
       data: {
         status: "Approved",
         approvedById: approvedById || null,
-        approvedOn: new Date().toISOString(),
+        approvedOn: new Date(),
       },
     });
 

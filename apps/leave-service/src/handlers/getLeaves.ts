@@ -33,16 +33,16 @@ export const getLeaves = async (
       id: l.id,
       userId: l.userId,
       leaveType: l.leaveType,
-      from: l.from || "",
-      to: l.to || "",
+      from: l.from?.toISOString() || "",
+      to: l.to?.toISOString() || "",
       days: l.days ?? 0,
       reason: l.reason || "",
       status: l.status || "",
       approvedById: l.approvedById || "",
-      appliedOn: l.appliedOn || "",
+      appliedOn: l.appliedOn?.toISOString() || "",
       sickLeave: l.sickLeave || false,
       medicalCertificate: l.medicalCertificate || "",
-      approvedOn: l.approvedOn || "",
+      approvedOn: l.approvedOn?.toISOString() || "",
     }));
 
     const response = {

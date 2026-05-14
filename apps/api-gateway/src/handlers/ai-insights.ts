@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import dayjs from "dayjs";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5-coder:14b";
@@ -242,8 +243,8 @@ async function fetchAttendanceData(period: string) {
   const hourMap = new Map<number, number>();
   for (const r of records) {
     if (r.timeIn) {
-      const hour = parseInt(r.timeIn.split(":")[0]);
-      if (!isNaN(hour)) hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+      const hour = dayjs(r.timeIn).hour();
+      hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
     }
   }
   const peakHours = Array.from(hourMap.entries())

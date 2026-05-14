@@ -37,10 +37,10 @@ const makeCallback = () => jest.fn();
 
 const baseRecord = {
   id: "rec-1",
-  username: "john",
-  date: new Date(2024, 2, 4),
-  timeIn: "09:00",
-  timeOut: "17:00",
+  userId: "john",
+  date: new Date("2024-03-04T00:00:00.000Z"),
+  timeIn: new Date("2024-03-04T09:00:00.000Z"),
+  timeOut: new Date("2024-03-04T17:00:00.000Z"),
   workingHours: 8,
   status: "Present",
   isCorrected: false,
@@ -67,16 +67,16 @@ describe("correctAttendance", () => {
     mockRecordFindUnique.mockResolvedValue(baseRecord);
     mockRecordUpdate.mockResolvedValue({
       ...baseRecord,
-      timeIn: "09:00",
-      timeOut: "17:00",
+      timeIn: new Date("2024-03-04T09:00:00.000Z"),
+      timeOut: new Date("2024-03-04T17:00:00.000Z"),
     });
     const cb = makeCallback();
     await correctAttendance(
       makeCall({
         userId: "john",
         date: "2024-03-04",
-        timeIn: "09:00",
-        timeOut: "17:00",
+        timeIn: "2024-03-04T09:00:00.000Z",
+        timeOut: "2024-03-04T17:00:00.000Z",
         correctedBy: "admin",
       }),
       cb,
@@ -103,6 +103,8 @@ describe("correctAttendance", () => {
     });
     mockRecordUpdate.mockResolvedValue({
       ...baseRecord,
+      timeIn: new Date("2024-03-04T09:00:00.000Z"),
+      timeOut: new Date("2024-03-04T12:00:00.000Z"),
       status: "Half Day",
       workingHours: 3,
     });
@@ -111,8 +113,8 @@ describe("correctAttendance", () => {
       makeCall({
         userId: "john",
         date: "2024-03-04",
-        timeIn: "09:00",
-        timeOut: "12:00",
+        timeIn: "2024-03-04T09:00:00.000Z",
+        timeOut: "2024-03-04T12:00:00.000Z",
       }),
       cb,
     );
@@ -133,8 +135,8 @@ describe("correctAttendance", () => {
       makeCall({
         userId: "john",
         date: "2024-03-04",
-        timeIn: "09:00",
-        timeOut: "17:00",
+        timeIn: "2024-03-04T09:00:00.000Z",
+        timeOut: "2024-03-04T17:00:00.000Z",
       }),
       cb,
     );
@@ -150,8 +152,8 @@ describe("correctAttendance", () => {
       makeCall({
         userId: "john",
         date: "2024-03-04",
-        timeIn: "09:00",
-        timeOut: "17:00",
+        timeIn: "2024-03-04T09:00:00.000Z",
+        timeOut: "2024-03-04T17:00:00.000Z",
       }),
       cb,
     );
@@ -171,8 +173,8 @@ describe("correctAttendance", () => {
       makeCall({
         userId: "john",
         date: "2024-03-04",
-        timeIn: "09:00",
-        timeOut: "17:00",
+        timeIn: "2024-03-04T09:00:00.000Z",
+        timeOut: "2024-03-04T17:00:00.000Z",
       }),
       cb,
     );

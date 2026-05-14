@@ -1,6 +1,7 @@
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { getLeaveConfig } from "../config";
+import dayjs from "dayjs";
 
 interface BalanceEntry {
   month: number;
@@ -13,9 +14,9 @@ interface BalanceEntry {
 
 export async function updateLeaveBalance(): Promise<void> {
   try {
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
+    const now = dayjs();
+    const currentMonth = now.month() + 1;
+    const currentYear = now.year();
     const isApril = currentMonth === 4;
     const { carryForwardLeaves } = getLeaveConfig();
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useContext, useCallback } from "react";
+import dayjs from "dayjs";
 import {
   MaterialReactTable,
   useMaterialReactTable,
@@ -214,12 +215,9 @@ function ViewResignations() {
         size: 140,
         Cell: ({ cell }) => {
           const dateValue = cell.row.original?.resignationDate;
-          let displayDate = "N/A";
-          if (typeof dateValue === "string") {
-            displayDate = dateValue.split("-").reverse().join("-");
-          } else if (dateValue instanceof Date) {
-            displayDate = dateValue.toLocaleDateString("en-GB");
-          }
+          const displayDate = dateValue
+            ? dayjs(dateValue).format("DD-MM-YYYY")
+            : "N/A";
           return (
             <Typography variant="body2" fontSize="0.8rem">
               {displayDate}
@@ -228,17 +226,14 @@ function ViewResignations() {
         },
       },
       {
-        accessorKey: "lastDate",
+        accessorKey: "lastWorkingDate",
         header: "Last Date",
         size: 120,
         Cell: ({ cell }) => {
-          const dateValue = cell.row.original?.lastDate;
-          let displayDate = "N/A";
-          if (typeof dateValue === "string") {
-            displayDate = dateValue.split("-").reverse().join("-");
-          } else if (dateValue instanceof Date) {
-            displayDate = dateValue.toLocaleDateString("en-GB");
-          }
+          const dateValue = cell.row.original?.lastWorkingDate;
+          const displayDate = dateValue
+            ? dayjs(dateValue).format("DD-MM-YYYY")
+            : "N/A";
           return (
             <Typography variant="body2" fontSize="0.8rem">
               {displayDate}

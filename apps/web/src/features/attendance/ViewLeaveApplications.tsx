@@ -1,4 +1,5 @@
 import React, { useContext, useState, useMemo, useCallback } from "react";
+import dayjs from "dayjs";
 import {
   MaterialReactTable,
   useMaterialReactTable,
@@ -303,7 +304,9 @@ function ViewLeaveApplications() {
         size: 110,
         Cell: ({ cell }) => (
           <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
+            {cell.getValue()
+              ? dayjs(cell.getValue() as string).format("DD MMM YYYY")
+              : "—"}
           </Typography>
         ),
       },
@@ -313,7 +316,9 @@ function ViewLeaveApplications() {
         size: 110,
         Cell: ({ cell }) => (
           <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
+            {cell.getValue()
+              ? dayjs(cell.getValue() as string).format("DD MMM YYYY")
+              : "—"}
           </Typography>
         ),
       },

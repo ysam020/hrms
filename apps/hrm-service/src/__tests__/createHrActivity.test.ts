@@ -34,8 +34,7 @@ const baseActivity = {
   id: "act-1",
   title: "Team Meeting",
   description: "Monthly sync",
-  date: "2024-03-15",
-  time: "10:00",
+  scheduledAt: new Date("2024-03-15T10:00:00"),
   status: "active",
   createdBy: "admin",
   createdOn: new Date("2024-03-01T12:00:00Z"),
@@ -83,7 +82,7 @@ describe("createHrActivity", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           title: "Team Meeting",
-          date: "2024-03-15",
+          scheduledAt: expect.any(Date),
         }),
       }),
     );

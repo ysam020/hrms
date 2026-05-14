@@ -6,7 +6,7 @@ const togglePermission = (
   permissions,
   setPermissions,
   setHasChanges,
-  originalUserPermissions,
+  originalUserPermissions?,
 ) => {
   // If super user, don't allow toggling
   if (isSuperUser) {
