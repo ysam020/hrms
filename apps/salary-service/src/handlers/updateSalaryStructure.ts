@@ -50,15 +50,13 @@ export const updateSalaryStructure = async (
     const esiAmt = esi !== undefined ? parseFloat(esi) : (existing.esi ?? 0);
     const ptAmt = pt !== undefined ? parseFloat(pt) : (existing.pt ?? 0);
 
-    const grossEarnings = basic + hraAmt + conv + inc;
-    const totalDeduct =
-      pfAmt +
-      esiAmt +
-      ptAmt +
-      (deductions !== undefined
+    const deductAmt =
+      deductions !== undefined
         ? parseFloat(deductions)
-        : (existing.deductions ?? 0));
-    const netPayable = grossEarnings - totalDeduct;
+        : (existing.deductions ?? 0);
+
+    const grossEarnings = basic + hraAmt + conv + inc;
+    const netPayable = grossEarnings - (pfAmt + esiAmt + ptAmt + deductAmt);
 
     const updated = await prisma.salaryStructure.update({
       where: { id },
@@ -70,7 +68,7 @@ export const updateSalaryStructure = async (
         pf: pfAmt,
         esi: esiAmt,
         pt: ptAmt,
-        deductions: totalDeduct,
+        deductions: deductAmt,
         grossEarnings,
         grossSalary: grossEarnings,
         netPayable,

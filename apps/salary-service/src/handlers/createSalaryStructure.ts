@@ -39,8 +39,7 @@ export const createSalaryStructure = async (
     const deductAmt = parseFloat(deductions) || 0;
 
     const grossEarnings = basic + hraAmt + conv + inc;
-    const totalDeduct = pfAmt + esiAmt + ptAmt + deductAmt;
-    const netPayable = grossEarnings - totalDeduct;
+    const netPayable = grossEarnings - (pfAmt + esiAmt + ptAmt + deductAmt);
 
     const salaryStructure = await prisma.salaryStructure.create({
       data: {
@@ -52,7 +51,7 @@ export const createSalaryStructure = async (
         pf: pfAmt,
         esi: esiAmt,
         pt: ptAmt,
-        deductions: totalDeduct,
+        deductions: deductAmt,
         grossEarnings,
         grossSalary: grossEarnings,
         netPayable,
