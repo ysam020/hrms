@@ -100,7 +100,7 @@ describe("createHrActivity", () => {
       cb,
     );
     const createData = mockCreate.mock.calls[0][0].data;
-    expect(createData.status).toBe("active");
+    expect(createData.status).toBe("Active");
   });
 
   it("returns INTERNAL on database error", async () => {

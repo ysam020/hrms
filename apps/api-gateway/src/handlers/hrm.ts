@@ -16,7 +16,7 @@ export async function getHrActivities(req: Request, res: Response) {
     const statusFilter = (req.query.status as string) || "Active";
     const skip = (page - 1) * limit;
 
-    const cacheKey = `hrm:activities:${page}:${limit}:${statusFilter}`;
+    const cacheKey = `hrm:activities:v2:${page}:${limit}:${statusFilter}`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -41,6 +41,24 @@ export async function getHrActivities(req: Request, res: Response) {
       prisma.hrActivity.count({ where }),
     ]);
 
+    const userIds = [
+      ...new Set(
+        activities
+          .flatMap((a: any) => [a.createdBy, a.lastUpdatedBy])
+          .filter((id): id is string => !!id && id.length === 24),
+      ),
+    ];
+    const userMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true },
+      });
+      users.forEach((u) => userMap.set(u.id, u.username));
+    }
+
+    const resolve = (val: string) => userMap.get(val) ?? val;
+
     const data = {
       activities: activities.map((a: any) => ({
         id: a.id,
@@ -50,9 +68,9 @@ export async function getHrActivities(req: Request, res: Response) {
         date: a.scheduledAt ? dayjs(a.scheduledAt).format("YYYY-MM-DD") : "",
         time: a.scheduledAt ? dayjs(a.scheduledAt).format("HH:mm") : "",
         status: a.status || "",
-        createdBy: a.createdBy || "",
+        createdBy: resolve(a.createdBy || ""),
         createdOn: a.createdOn ? a.createdOn.toISOString() : "",
-        lastUpdatedBy: a.lastUpdatedBy || "",
+        lastUpdatedBy: resolve(a.lastUpdatedBy || ""),
         lastUpdatedOn: a.lastUpdatedOn ? a.lastUpdatedOn.toISOString() : "",
       })),
       pagination: {

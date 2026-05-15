@@ -107,7 +107,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
     refresh,
   } = useServerPagination(fetchHrActivities, {
     initialPageSize: 10,
-    deps: [statusFilter],
+    deps: [statusFilter, refreshKey],
   });
 
   const memoizedData = useMemo(() => data || [], [data]);
