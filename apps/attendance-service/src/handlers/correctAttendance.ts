@@ -34,10 +34,17 @@ export const correctAttendance = async (
       where: { userId_date: { userId, date: dateStart } },
     });
 
+    const dateStr = targetDate.format("YYYY-MM-DD");
+    const parseTime = (t: string) => {
+      // Accept full ISO strings or bare HH:MM / HH:MM:SS
+      const d = dayjs(t.includes("T") ? t : `${dateStr}T${t}`);
+      return d.isValid() ? d.toDate() : null;
+    };
+
     const updateData: Record<string, any> = { isCorrected: true };
     if (correctedBy) updateData.correctedBy = correctedBy;
-    if (timeIn) updateData.timeIn = dayjs(timeIn).toDate();
-    if (timeOut) updateData.timeOut = dayjs(timeOut).toDate();
+    if (timeIn) updateData.timeIn = parseTime(timeIn);
+    if (timeOut) updateData.timeOut = parseTime(timeOut);
 
     const effectiveTimeIn = updateData.timeIn ?? existingRecord?.timeIn;
     const effectiveTimeOut = updateData.timeOut ?? existingRecord?.timeOut;

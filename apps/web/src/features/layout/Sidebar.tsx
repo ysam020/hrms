@@ -13,6 +13,7 @@ import Badge from "@mui/material/Badge";
 import IconButton from "@mui/material/IconButton";
 import ListItemButton from "@mui/material/ListItemButton";
 import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
 
@@ -34,7 +35,7 @@ const PolicyIcon = React.lazy(() => import("@mui/icons-material/Policy"));
 const MonitorHeartIcon = React.lazy(
   () => import("@mui/icons-material/MonitorHeart"),
 );
-function Sidebar() {
+function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useContext(UserContext);
@@ -109,9 +110,15 @@ function Sidebar() {
 
       <div className="nav-wrapper">
         {/* Animated background indicator */}
-        <div className="active-indicator" style={indicatorStyle} />
+        {!isMobile && (
+          <div className="active-indicator" style={indicatorStyle} />
+        )}
         {navItems.map((item, index) => (
-          <Tooltip title={item.title} placement="right" key={index}>
+          <Tooltip
+            title={isMobile ? "" : item.title}
+            placement="right"
+            key={index}
+          >
             <ListItemButton
               ref={(el) => (navRefs.current[index] = el)}
               className={`appbar-links ${isActive(item.path) ? "active" : ""}`}
@@ -127,6 +134,19 @@ function Sidebar() {
                   item.icon
                 )}
               </Suspense>
+              {isMobile && (
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "#b2b6bd",
+                    fontWeight: 500,
+                    fontSize: "0.85rem",
+                    ".appbar-links.active &": { color: "#6366f1" },
+                  }}
+                >
+                  {item.title}
+                </Typography>
+              )}
             </ListItemButton>
           </Tooltip>
         ))}

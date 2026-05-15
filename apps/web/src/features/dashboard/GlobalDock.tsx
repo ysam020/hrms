@@ -1,5 +1,6 @@
 import React, { useContext, useState, useMemo, useEffect, useRef } from "react";
 import Box from "@mui/material/Box";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { Dock } from "primereact/dock";
 import { useNavigate } from "react-router-dom";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -194,8 +195,9 @@ function GlobalDock() {
   const isDark = theme === "dark";
   const navigate = useNavigate();
   const { isAnyOpen: isDrawerOpen, setDockVisible } = useBottomDrawer();
+  const isMobile = useMediaQuery("(max-width:899px)");
 
-  const [visible, setVisible] = useState(false);
+  const [hoverVisible, setHoverVisible] = useState(false);
   const visibleRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -204,7 +206,19 @@ function GlobalDock() {
     [navigate, isDark],
   );
 
+  // On mobile the dock is always pinned; sync that into context so the
+  // dashboard height calculation knows it's occupied.
   useEffect(() => {
+    if (isMobile) {
+      setDockVisible(true);
+    } else {
+      setDockVisible(hoverVisible);
+    }
+  }, [isMobile, hoverVisible, setDockVisible]);
+
+  useEffect(() => {
+    if (isMobile) return; // no hover logic needed on touch screens
+
     const handleMouseMove = (e) => {
       const distFromBottom = window.innerHeight - e.clientY;
 
@@ -215,15 +229,13 @@ function GlobalDock() {
         }
         if (!visibleRef.current) {
           visibleRef.current = true;
-          setVisible(true);
-          setDockVisible(true);
+          setHoverVisible(true);
         }
       } else if (distFromBottom > HIDE_THRESHOLD && visibleRef.current) {
         if (!hideTimerRef.current) {
           hideTimerRef.current = setTimeout(() => {
             visibleRef.current = false;
-            setVisible(false);
-            setDockVisible(false);
+            setHoverVisible(false);
             hideTimerRef.current = null;
           }, 300);
         }
@@ -235,11 +247,13 @@ function GlobalDock() {
       window.removeEventListener("mousemove", handleMouseMove);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
-  }, []);
+  }, [isMobile]);
+
+  const showDock = isMobile || (hoverVisible && !isDrawerOpen);
 
   return (
     <Box
-      className={`global-dock${isDark ? " global-dock-dark" : ""}${visible && !isDrawerOpen ? " global-dock-visible" : ""}`}
+      className={`global-dock${isDark ? " global-dock-dark" : ""}${showDock ? " global-dock-visible" : ""}`}
     >
       <Dock model={dockItems} position="bottom" />
     </Box>

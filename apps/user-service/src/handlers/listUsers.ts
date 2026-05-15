@@ -28,6 +28,7 @@ export const listUsers = async (
         { first_name: { contains: search, mode: "insensitive" } },
         { last_name: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
+        { username: { contains: search, mode: "insensitive" } },
       ];
     if (role) where.role = { has: role };
     if (department) where.department = department;

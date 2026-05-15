@@ -80,12 +80,13 @@ function HomePage(props) {
   const mainBoxStyles = useMemo(
     () => ({
       flexGrow: 1,
-      width: { lg: `calc(100% - ${drawerWidth}px)` },
+      width: { md: `calc(100% - ${drawerWidth}px)` },
       backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
       height: "100vh",
       overflow: "scroll",
       padding: "0px",
       paddingTop: "10px",
+      paddingBottom: { xs: "80px", md: 0 },
     }),
     [theme],
   );

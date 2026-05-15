@@ -3,14 +3,14 @@ package leave;
 
 message LeaveApplication {
   string id = 1;
-  string username = 2;
+  string user_id = 2;
   string leave_type = 3;
   string from = 4;
   string to = 5;
   float days = 6;
   string reason = 7;
   string status = 8;
-  string approved_by_username = 9;
+  string approved_by_id = 9;
   string applied_on = 10;
   bool sick_leave = 11;
   string medical_certificate = 12;
@@ -19,13 +19,13 @@ message LeaveApplication {
 
 message LeaveBalance {
   string id = 1;
-  string username = 2;
+  string user_id = 2;
   float accumulated_pl_before_current_month = 3;
   string balances = 4;
 }
 
 message ApplyLeaveRequest {
-  string username = 1;
+  string user_id = 1;
   string leave_type = 2;
   string from = 3;
   string to = 4;
@@ -56,7 +56,7 @@ message GetLeaveResponse {
 
 message ApproveLeaveRequest {
   string id = 1;
-  string approved_by_username = 2;
+  string approved_by_id = 2;
 }
 
 message RejectLeaveRequest {
@@ -65,7 +65,7 @@ message RejectLeaveRequest {
 
 message CancelLeaveRequest {
   string id = 1;
-  string username = 2;
+  string user_id = 2;
 }
 
 message GetLeaveByIdRequest {
@@ -73,14 +73,14 @@ message GetLeaveByIdRequest {
 }
 
 message GetLeaveBalanceRequest {
-  string username = 1;
+  string user_id = 1;
 }
 
 message GetLeaveBalanceResponse {
   string message = 1;
   int32 status = 2;
   LeaveBalance data = 3;
-  string username = 4;
+  string user_id = 4;
 }
 
 message BasicLeaveResponse {

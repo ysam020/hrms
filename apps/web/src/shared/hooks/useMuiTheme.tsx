@@ -76,9 +76,6 @@ function useMuiTheme(theme) {
       // Alert Components
       MuiAlert: {
         styleOverrides: {
-          root: {
-            backgroundColor: theme === "light" ? undefined : "#1A2227",
-          },
           standardSuccess: {
             backgroundColor: theme === "light" ? undefined : "#1E4620",
           },
@@ -90,6 +87,18 @@ function useMuiTheme(theme) {
           },
           standardInfo: {
             backgroundColor: theme === "light" ? undefined : "#1A2B4D",
+          },
+          filledSuccess: {
+            backgroundColor: theme === "light" ? undefined : "#2e7d32",
+          },
+          filledError: {
+            backgroundColor: theme === "light" ? undefined : "#c62828",
+          },
+          filledWarning: {
+            backgroundColor: theme === "light" ? undefined : "#e65100",
+          },
+          filledInfo: {
+            backgroundColor: theme === "light" ? undefined : "#1565c0",
           },
         },
       },
