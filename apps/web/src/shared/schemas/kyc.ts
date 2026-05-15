@@ -10,9 +10,6 @@ const pinCodeRegex = /^\d{6}$/;
 
 export const kycSchema = z.object({
   employee_photo: z.string().min(1, "Employee photo is required"),
-  designation: z.string().min(1, "Designation is required"),
-  department: z.string().min(1, "Department is required"),
-  joining_date: z.string().min(1, "Joining date is required"),
   dob: z.string().min(1, "Date of birth is required"),
   permanent_address_line_1: z.string().min(1, "Address line 1 is required"),
   permanent_address_line_2: z.string().min(1, "Address line 2 is required"),

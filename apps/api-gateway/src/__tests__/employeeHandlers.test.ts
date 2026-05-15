@@ -207,12 +207,16 @@ describe("employeeHandlers", () => {
   });
 
   describe("completeKyc", () => {
-    it("calls grpcCall submitKyc with userId and KYC fields", async () => {
+    it("calls grpcCall submitKyc with userId and mapped camelCase KYC fields", async () => {
       mockGrpcCall.mockResolvedValue({ message: "KYC submitted" });
       const res = makeRes();
       await completeKyc(
         makeReq({
-          body: { aadharNo: "1234", panNo: "ABCDE1234F", bankName: "HDFC" },
+          body: {
+            aadhar_no: "123412341234",
+            pan_no: "ABCDE1234F",
+            bank_name: "HDFC",
+          },
         }),
         res,
       );
@@ -221,8 +225,9 @@ describe("employeeHandlers", () => {
         "submitKyc",
         expect.objectContaining({
           userId: "user-1",
-          aadharNo: "1234",
+          aadharNo: "123412341234",
           panNo: "ABCDE1234F",
+          bankName: "HDFC",
         }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -232,7 +237,7 @@ describe("employeeHandlers", () => {
       );
     });
 
-    it("returns INTERNAL_SERVER_ERROR on error", async () => {
+    it("returns INTERNAL_SERVER_ERROR on gRPC error", async () => {
       mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
       const res = makeRes();
       await completeKyc(makeReq(), res);
@@ -245,21 +250,52 @@ describe("employeeHandlers", () => {
   });
 
   describe("editKyc", () => {
-    it("calls grpcCall submitKyc with user fields (same as completeKyc)", async () => {
+    it("returns BAD_REQUEST when username is missing", async () => {
+      const res = makeRes();
+      await editKyc(makeReq({ body: {} }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
+    it("calls grpcCall submitKyc with username and mapped camelCase KYC fields", async () => {
       mockGrpcCall.mockResolvedValue({ message: "KYC updated" });
       const res = makeRes();
       await editKyc(
-        makeReq({ body: { bankName: "HDFC", ifscCode: "HDFC0001" } }),
+        makeReq({
+          body: {
+            username: "john_doe",
+            bank_name: "HDFC",
+            ifsc_code: "HDFC0001",
+          },
+        }),
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
         expect.anything(),
         "submitKyc",
-        expect.objectContaining({ userId: "user-1", bankName: "HDFC" }),
+        expect.objectContaining({
+          username: "john_doe",
+          bankName: "HDFC",
+          ifscCode: "HDFC0001",
+        }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on gRPC error", async () => {
+      mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+      const res = makeRes();
+      await editKyc(makeReq({ body: { username: "john_doe" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });

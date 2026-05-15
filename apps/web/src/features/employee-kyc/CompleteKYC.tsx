@@ -1,4 +1,4 @@
-import React, { useState, useRef, useContext, useEffect } from "react";
+import React, { useRef, useContext, useEffect } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
@@ -6,7 +6,6 @@ import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
-import Snackbar from "@mui/material/Snackbar";
 import Grid from "@mui/material/Grid2";
 import Person from "@mui/icons-material/Person";
 import Home from "@mui/icons-material/Home";
@@ -30,7 +29,6 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function CompleteKYC(props) {
-  const [fileSnackbar, setFileSnackbar] = useState(false);
   const { username } = useParams();
   const { user } = useContext(UserContext);
 
@@ -84,10 +82,10 @@ function CompleteKYC(props) {
           ? API_ENDPOINTS.EDIT_KYC
           : API_ENDPOINTS.COMPLETE_KYC;
 
-        const res = await apiClient.post(endpoint, {
-          ...values,
-          username: props.username,
-        });
+        const res = await (props.edit ? apiClient.put : apiClient.post)(
+          endpoint,
+          { ...values, username: props.username },
+        );
 
         setAlert({
           open: true,
@@ -177,7 +175,8 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.employeePhoto = el)
                       }
                       accept="image/*"
-                      setFileSnackbar={setFileSnackbar}
+                      setFileSnackbar={() => {}}
+                      setAlert={setAlert}
                       folderName="employee_kyc"
                       username={username || user.username}
                     />
@@ -420,8 +419,9 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.aadharPhotoFront = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={setFileSnackbar}
-                      username={username}
+                      setFileSnackbar={() => {}}
+                      setAlert={setAlert}
+                      username={username || user.username}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -434,8 +434,9 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.aadharPhotoBack = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={setFileSnackbar}
-                      username={username}
+                      setFileSnackbar={() => {}}
+                      setAlert={setAlert}
+                      username={username || user.username}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -448,8 +449,9 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.panPhoto = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={setFileSnackbar}
-                      username={username}
+                      setFileSnackbar={() => {}}
+                      setAlert={setAlert}
+                      username={username || user.username}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -462,9 +464,10 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.educationCertificates = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={setFileSnackbar}
+                      setFileSnackbar={() => {}}
+                      setAlert={setAlert}
                       inputProps={{ multiple: true }}
-                      username={username}
+                      username={username || user.username}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -477,8 +480,9 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.experienceCertificate = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={setFileSnackbar}
-                      username={username}
+                      setFileSnackbar={() => {}}
+                      setAlert={setAlert}
+                      username={username || user.username}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -491,8 +495,9 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.electricityBill = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={setFileSnackbar}
-                      username={username}
+                      setFileSnackbar={() => {}}
+                      setAlert={setAlert}
+                      username={username || user.username}
                     />
                   </Grid>
                 </Grid>
@@ -558,22 +563,6 @@ function CompleteKYC(props) {
             </Grid>
           </Grid>
         </form>
-
-        <Snackbar
-          open={fileSnackbar}
-          autoHideDuration={4000}
-          onClose={() => setFileSnackbar(false)}
-          message="File uploaded successfully!"
-          sx={{
-            left: "auto !important",
-            right: "24px !important",
-            "& .MuiSnackbarContent-root": {
-              backgroundColor: "#10b981",
-              borderRadius: "8px",
-              fontWeight: "500",
-            },
-          }}
-        />
       </CardContent>
     </Card>
   );

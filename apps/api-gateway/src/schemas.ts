@@ -158,22 +158,40 @@ export const editEmployeeDetailsSchema = z.object({
 });
 
 export const completeKycSchema = z.object({
-  aadharNo: z.string().max(20).optional(),
-  aadharPhotoFront: z.string().max(4096).optional(),
-  aadharPhotoBack: z.string().max(4096).optional(),
-  panNo: z.string().max(20).optional(),
-  panPhoto: z.string().max(4096).optional(),
-  bankAccountNo: z.string().max(32).optional(),
-  bankName: z.string().max(128).optional(),
-  ifscCode: z.string().max(16).optional(),
-  pfNo: z.string().max(32).optional(),
-  uanNo: z.string().max(32).optional(),
-  esicNo: z.string().max(32).optional(),
+  username: z.string().max(64).optional(),
+  employee_photo: z.string().max(4096).optional(),
+  dob: z.string().max(32).optional(),
+  blood_group: z.string().max(16).optional(),
+  qualification: z.string().max(256).optional(),
+  mobile: z.string().max(16).optional(),
+  email: z.string().email().max(256).optional(),
+  official_email: z.string().email().max(256).optional(),
+  permanent_address_line_1: z.string().max(256).optional(),
+  permanent_address_line_2: z.string().max(256).optional(),
+  permanent_address_city: z.string().max(128).optional(),
+  permanent_address_state: z.string().max(128).optional(),
+  permanent_address_pincode: z.string().max(16).optional(),
+  communication_address_line_1: z.string().max(256).optional(),
+  communication_address_line_2: z.string().max(256).optional(),
+  communication_address_city: z.string().max(128).optional(),
+  communication_address_state: z.string().max(128).optional(),
+  communication_address_pincode: z.string().max(16).optional(),
+  aadhar_no: z.string().max(20).optional(),
+  aadhar_photo_front: z.string().max(4096).optional(),
+  aadhar_photo_back: z.string().max(4096).optional(),
+  pan_no: z.string().max(20).optional(),
+  pan_photo: z.string().max(4096).optional(),
+  education_certificates: z.array(z.string()).optional(),
+  experience_certificate: z.string().max(4096).optional(),
+  electricity_bill: z.string().max(4096).optional(),
+  bank_account_no: z.string().max(32).optional(),
+  bank_name: z.string().max(128).optional(),
+  ifsc_code: z.string().max(16).optional(),
 });
 
 export const kycApprovalSchema = z.object({
   username: z.string().min(1).max(64),
-  kyc_approval: z.boolean(),
+  kyc_approval: z.enum(["Approved", "Rejected"]),
 });
 
 // ── Salary ────────────────────────────────────────────────────────────────────

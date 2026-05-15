@@ -55,11 +55,14 @@ const InputWrapper = ({
       case "date":
         return (
           <Calendar
-            value={
-              formik.values[name]
-                ? new Date(`${formik.values[name]}T00:00:00`)
-                : null
-            }
+            value={(() => {
+              const v = formik.values[name];
+              if (!v) return null;
+              const d = new Date(
+                typeof v === "string" && !v.includes("T") ? `${v}T00:00:00` : v,
+              );
+              return isNaN(d.getTime()) ? null : d;
+            })()}
             onChange={handleChange}
             onBlur={() => formik.setFieldTouched(name, true)}
             minDate={new Date()}

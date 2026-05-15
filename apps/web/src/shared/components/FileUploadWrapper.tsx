@@ -1,5 +1,6 @@
 import { FileUpload } from "primereact/fileupload";
-import React from "react";
+import React, { useCallback } from "react";
+import handleFileUpload from "@web/shared/utils/handleFileUpload";
 
 function FileUploadWrapper({
   name,
@@ -7,13 +8,13 @@ function FileUploadWrapper({
   formik,
   fileUploadRef,
   accept,
-  setFileSnackbar: _setFileSnackbar,
-  folderName: _folderName,
-  username: _username,
+  setFileSnackbar,
+  folderName,
+  username,
   uploadHandler,
-  setAlert: _setAlert,
+  setAlert,
   maxFileSize = 0,
-  inputProps: _inputProps = undefined,
+  inputProps = undefined,
 }: {
   name: any;
   label: any;
@@ -31,6 +32,29 @@ function FileUploadWrapper({
   const hasError =
     (formik.touched[name] && formik.errors[name]) || formik.errors[name];
 
+  const internalUploadHandler = useCallback(
+    (e: any) =>
+      handleFileUpload(
+        e,
+        formik,
+        name,
+        folderName,
+        setFileSnackbar,
+        inputProps?.multiple ?? false,
+        setAlert,
+        username,
+      ),
+    [
+      formik,
+      name,
+      folderName,
+      setFileSnackbar,
+      setAlert,
+      username,
+      inputProps?.multiple,
+    ],
+  );
+
   return (
     <div className="form-field-container">
       <label htmlFor={name}>{label}</label>
@@ -38,8 +62,9 @@ function FileUploadWrapper({
         ref={fileUploadRef}
         name={name}
         customUpload
-        uploadHandler={uploadHandler}
+        uploadHandler={uploadHandler ?? internalUploadHandler}
         accept={accept}
+        multiple={inputProps?.multiple ?? false}
         maxFileSize={maxFileSize * 1024 * 1024}
         className={hasError ? "p-invalid" : ""}
         emptyTemplate={<p>Drag and drop file here or click to upload.</p>}

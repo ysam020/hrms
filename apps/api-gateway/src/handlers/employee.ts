@@ -148,38 +148,49 @@ export async function employeeInsights(_req: Request, res: Response) {
   }
 }
 
+function toKycGrpcPayload(body: Record<string, any>) {
+  return {
+    employeePhoto: body.employee_photo,
+    dob: body.dob,
+    bloodGroup: body.blood_group,
+    qualification: body.qualification,
+    mobile: body.mobile,
+    email: body.email,
+    officialEmail: body.official_email,
+    permanentAddressLine1: body.permanent_address_line_1,
+    permanentAddressLine2: body.permanent_address_line_2,
+    permanentAddressCity: body.permanent_address_city,
+    permanentAddressState: body.permanent_address_state,
+    permanentAddressPincode: body.permanent_address_pincode,
+    communicationAddressLine1: body.communication_address_line_1,
+    communicationAddressLine2: body.communication_address_line_2,
+    communicationAddressCity: body.communication_address_city,
+    communicationAddressState: body.communication_address_state,
+    communicationAddressPincode: body.communication_address_pincode,
+    aadharNo: body.aadhar_no,
+    aadharPhotoFront: body.aadhar_photo_front,
+    aadharPhotoBack: body.aadhar_photo_back,
+    panNo: body.pan_no,
+    panPhoto: body.pan_photo,
+    educationCertificates: body.education_certificates,
+    experienceCertificate: body.experience_certificate,
+    electricityBill: body.electricity_bill,
+    bankAccountNo: body.bank_account_no,
+    bankName: body.bank_name,
+    ifscCode: body.ifsc_code,
+  };
+}
+
 export async function completeKyc(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const {
-      aadharNo,
-      aadharPhotoFront,
-      aadharPhotoBack,
-      panNo,
-      panPhoto,
-      bankAccountNo,
-      bankName,
-      ifscCode,
-      pfNo,
-      uanNo,
-      esicNo,
-    } = req.body;
     const response = await grpcCall(employeeClient, "submitKyc", {
       userId: user!.userId,
-      aadharNo,
-      aadharPhotoFront,
-      aadharPhotoBack,
-      panNo,
-      panPhoto,
-      bankAccountNo,
-      bankName,
-      ifscCode,
-      pfNo,
-      uanNo,
-      esicNo,
+      ...toKycGrpcPayload(req.body),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
+    logger.error("completeKyc error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
@@ -187,37 +198,20 @@ export async function completeKyc(req: Request, res: Response) {
 }
 
 export async function editKyc(req: Request, res: Response) {
-  const { user } = req as AuthRequest;
   try {
-    const {
-      aadharNo,
-      aadharPhotoFront,
-      aadharPhotoBack,
-      panNo,
-      panPhoto,
-      bankAccountNo,
-      bankName,
-      ifscCode,
-      pfNo,
-      uanNo,
-      esicNo,
-    } = req.body;
+    const { username } = req.body;
+    if (!username) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "username is required",
+      });
+    }
     const response = await grpcCall(employeeClient, "submitKyc", {
-      userId: user!.userId,
-      aadharNo,
-      aadharPhotoFront,
-      aadharPhotoBack,
-      panNo,
-      panPhoto,
-      bankAccountNo,
-      bankName,
-      ifscCode,
-      pfNo,
-      uanNo,
-      esicNo,
+      username,
+      ...toKycGrpcPayload(req.body),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
+    logger.error("editKyc error:", { error });
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
