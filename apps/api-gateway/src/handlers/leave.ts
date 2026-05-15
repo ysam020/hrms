@@ -44,7 +44,22 @@ export async function getLeaveApplications(req: Request, res: Response) {
 
     if (superUser && req.query.userId) {
       userId = req.query.userId as string;
-    } else {
+    } else if (superUser && req.query.search) {
+      const search = String(req.query.search);
+      const found = await prisma.user.findFirst({
+        where: { username: { contains: search, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (!found) {
+        return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+          message: "Leave applications",
+          status: 0,
+          data: [],
+          total: 0,
+        });
+      }
+      userId = found.id;
+    } else if (!superUser) {
       userId = user!.userId;
     }
 

@@ -72,22 +72,116 @@ export async function getAttendances(req: Request, res: Response) {
 
 export async function getAllAttendances(req: Request, res: Response) {
   try {
+    const { page, limit } = parsePagination(
+      req.query,
+      PAGINATION.DEFAULT_LIMIT_LARGE,
+      PAGINATION.MAX_LIMIT_LARGE,
+    );
+    const search = String(req.query.search || "").trim();
     const { startDate, endDate } = monthDateRange(
       req.params.year,
       req.params.month,
     );
-    const response = await grpcCall(attendanceClient, "getAttendance", {
-      userId: "",
-      startDate,
-      endDate,
-      ...parsePagination(
-        req.query,
-        PAGINATION.DEFAULT_LIMIT_LARGE,
-        PAGINATION.MAX_LIMIT_LARGE,
-      ),
+    const year = parseInt(String(req.params.year));
+    const month = parseInt(String(req.params.month));
+    const start = dayjs.utc(startDate).startOf("day").toDate();
+    const end = dayjs.utc(endDate).endOf("day").toDate();
+    const skip = (page - 1) * limit;
+
+    const userWhere: any = { employeeStatus: "Active" };
+    if (search) {
+      userWhere.username = { contains: search, mode: "insensitive" };
+    }
+
+    const [totalCount, users] = await Promise.all([
+      prisma.user.count({ where: userWhere }),
+      prisma.user.findMany({
+        where: userWhere,
+        select: { id: true, username: true },
+        orderBy: { username: "asc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const userIds = users.map((u: any) => u.id);
+    const userMap = new Map(users.map((u: any) => [u.id, u.username]));
+
+    const [attendanceRecords, leaveBalances] = await Promise.all([
+      userIds.length > 0
+        ? prisma.attendanceRecord.findMany({
+            where: { userId: { in: userIds }, date: { gte: start, lte: end } },
+            select: { userId: true, status: true, isCorrected: true },
+          })
+        : Promise.resolve([]),
+      userIds.length > 0
+        ? prisma.leaveBalance.findMany({
+            where: { userId: { in: userIds } },
+            select: { userId: true, balances: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const byUser = new Map<
+      string,
+      { presents: number; halfDays: number; correctionsUsed: number }
+    >();
+    for (const u of users as any[]) {
+      byUser.set(u.id, { presents: 0, halfDays: 0, correctionsUsed: 0 });
+    }
+    for (const r of attendanceRecords as any[]) {
+      const agg = byUser.get(r.userId);
+      if (!agg) continue;
+      if (r.status === "Present") agg.presents++;
+      else if (r.status === "Half Day") agg.halfDays++;
+      if (r.isCorrected) agg.correctionsUsed++;
+    }
+
+    const balanceMap = new Map(
+      (leaveBalances as any[]).map((lb) => [lb.userId, lb]),
+    );
+
+    const records = (users as any[]).map((u) => {
+      const agg = byUser.get(u.id)!;
+      const lb = balanceMap.get(u.id) as any;
+      let paidLeaves = 0,
+        unpaidLeaves = 0;
+      if (lb?.balances && Array.isArray(lb.balances)) {
+        const mb = lb.balances.find(
+          (b: any) =>
+            String(b.year) === String(year) &&
+            String(b.month) === String(month),
+        );
+        if (mb) {
+          paidLeaves = mb.usedPL || 0;
+          unpaidLeaves = mb.usedLWP || 0;
+        }
+      }
+      return {
+        username: userMap.get(u.id),
+        presents: agg.presents,
+        halfDays: agg.halfDays,
+        totalLeaves: paidLeaves + unpaidLeaves,
+        paidLeaves,
+        unpaidLeaves,
+        correctionsUsed: agg.correctionsUsed,
+      };
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Attendance records fetched",
+      data: {
+        records,
+        pagination: {
+          totalCount,
+          page,
+          limit,
+          totalPages: Math.ceil(totalCount / limit),
+        },
+      },
+    });
   } catch (error: unknown) {
+    logger.error("getAllAttendances error:", { error });
     return handleError(res, error);
   }
 }

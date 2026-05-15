@@ -6,90 +6,157 @@ import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
+import { handleError } from "../utils/handleError";
+import { safeDecrypt } from "@hrms/crypto";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
-  const { user } = req as AuthRequest;
   try {
-    // Explicit allowlist — never forward isSuperUser, role, permissions, etc.
     const {
-      firstName,
-      lastName,
-      middleName,
-      dob,
-      blood_group,
-      mobile,
-      official_email,
-      designation,
-      department,
-      communication_address_line_1,
-      communication_address_line_2,
-      communication_address_city,
-      communication_address_state,
-      communication_address_pincode,
-      permanent_address_line_1,
-      permanent_address_line_2,
-      permanent_address_city,
-      permanent_address_state,
-      permanent_address_pincode,
-      employee_photo,
+      username,
+      assets,
+      employeeStatus,
+      pf_no,
+      uan_no,
+      esic_no,
+      salary,
+      salaryStructure,
+      reasonForTermination,
+      dateOfTermination,
+      dateOfAbscond,
       wfh,
-      joiningDate,
     } = req.body;
 
-    const response = await grpcCall(employeeClient, "updateEmployee", {
-      username: user!.userId,
-      firstName,
-      lastName,
-      middleName,
-      dob,
-      blood_group,
-      mobile,
-      official_email,
-      designation,
-      department,
-      communication_address_line_1,
-      communication_address_line_2,
-      communication_address_city,
-      communication_address_state,
-      communication_address_pincode,
-      permanent_address_line_1,
-      permanent_address_line_2,
-      permanent_address_city,
-      permanent_address_state,
-      permanent_address_pincode,
-      employee_photo,
-      wfh,
-      joiningDate,
+    const targetUser = await prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
     });
-    // Department/designation changes affect analytics and dashboard caches
-    if (
-      department !== undefined ||
-      designation !== undefined ||
-      wfh !== undefined
-    ) {
-      await Promise.all([
-        cacheManager.invalidatePattern("analytics:*"),
-        cacheManager.delete("dashboard:employee-insights"),
-      ]);
+
+    if (!targetUser) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Employee not found",
+      });
     }
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+
+    const updateData: Record<string, any> = {};
+
+    if (assets !== undefined) updateData.assets = assets;
+    if (employeeStatus !== undefined)
+      updateData.employeeStatus = employeeStatus;
+    if (pf_no !== undefined) updateData.pf_no = pf_no;
+    if (uan_no !== undefined) updateData.uan_no = uan_no;
+    if (esic_no !== undefined) updateData.esic_no = esic_no;
+    if (wfh !== undefined) updateData.wfh = wfh;
+    if (salary !== undefined) updateData.salary = salary;
+    if (reasonForTermination !== undefined)
+      updateData.reasonForTermination = reasonForTermination;
+    if (dateOfTermination !== undefined)
+      updateData.dateOfTermination = dateOfTermination
+        ? new Date(dateOfTermination)
+        : null;
+    if (dateOfAbscond !== undefined)
+      updateData.dateOfAbscond = dateOfAbscond ? new Date(dateOfAbscond) : null;
+
+    if (salaryStructure !== undefined) {
+      if (salaryStructure.basicPay != null)
+        updateData.salaryBasicPay = salaryStructure.basicPay;
+      if (salaryStructure.hra != null)
+        updateData.salaryHra = salaryStructure.hra;
+      if (salaryStructure.conveyance != null)
+        updateData.salaryConveyance = salaryStructure.conveyance;
+      if (salaryStructure.pf != null) updateData.salaryPf = salaryStructure.pf;
+      if (salaryStructure.esi != null)
+        updateData.salaryEsi = salaryStructure.esi;
+      if (salaryStructure.pt != null) updateData.salaryPt = salaryStructure.pt;
+    }
+
+    await prisma.user.update({
+      where: { id: targetUser.id },
+      data: updateData,
     });
+
+    await Promise.all([
+      cacheManager.invalidatePattern("employees:*"),
+      cacheManager.delete(`employee:${targetUser.id}`),
+      cacheManager.delete(`employee-details:${username}`),
+    ]);
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employee details updated successfully",
+    });
+  } catch (error: unknown) {
+    logger.error("PUT /edit-employee-details error:", { error });
+    return handleError(res, error);
   }
 }
 
 export async function getEmployeeDetails(req: Request, res: Response) {
   try {
-    const response = await grpcCall(employeeClient, "getEmployee", {
-      username: req.params.username,
+    const username = req.params.username as string;
+    const cacheKey = `employee-details:${username}`;
+
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Employee details fetched",
+        data: cached,
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        assets: true,
+        employeeStatus: true,
+        wfh: true,
+        pf_no: true,
+        uan_no: true,
+        esic_no: true,
+        salary: true,
+        salaryBasicPay: true,
+        salaryHra: true,
+        salaryConveyance: true,
+        salaryPf: true,
+        salaryEsi: true,
+        salaryPt: true,
+        reasonForTermination: true,
+        dateOfTermination: true,
+        dateOfAbscond: true,
+        isSuperUser: true,
+      },
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+
+    if (!user) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Employee not found",
+      });
+    }
+
+    const data = {
+      ...user,
+      pf_no: safeDecrypt(user.pf_no),
+      uan_no: safeDecrypt(user.uan_no),
+      esic_no: safeDecrypt(user.esic_no),
+      salaryStructure: {
+        basicPay: user.salaryBasicPay,
+        hra: user.salaryHra,
+        conveyance: user.salaryConveyance,
+        pf: user.salaryPf,
+        esi: user.salaryEsi,
+        pt: user.salaryPt,
+      },
+    };
+
+    await cacheManager.set(cacheKey, data, "employee");
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employee details fetched",
+      data,
+    });
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("GET /get-employee-details/:username error:", { error });
+    return handleError(res, error);
   }
 }
 

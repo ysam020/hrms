@@ -75,26 +75,13 @@ export const employeeManagementSchema = z
         pt: "Professional Tax",
       };
       for (const [key, value] of Object.entries(salaryStructure)) {
-        if (value && Number(value) > salary) {
+        if (value != null && Number(value) > salary) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: `${fieldLabels[key] ?? key} cannot be greater than gross salary (₹${salary})`,
             path: ["salaryStructure", key],
           });
         }
-      }
-      const earnings = ["basicPay", "hra", "conveyance"] as const;
-      const totalEarnings = earnings.reduce(
-        (sum, k) => sum + (salaryStructure[k] ? Number(salaryStructure[k]) : 0),
-        0,
-      );
-      const hasEarningComponents = earnings.some((k) => salaryStructure[k]);
-      if (hasEarningComponents && Math.abs(totalEarnings - salary) > 0.01) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Total earnings (₹${totalEarnings}) should equal gross salary (₹${salary})`,
-          path: ["salaryStructure"],
-        });
       }
     }
   });

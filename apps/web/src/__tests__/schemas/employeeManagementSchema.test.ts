@@ -95,7 +95,7 @@ describe("employeeManagementSchema", () => {
   });
 
   describe("salaryStructure validation", () => {
-    it("accepts salary structure where total earnings equal gross salary", () => {
+    it("accepts salary structure components that sum to less than gross salary", () => {
       const result = employeeManagementSchema.safeParse({
         salary: 50000,
         employeeStatus: "Active",
@@ -123,27 +123,6 @@ describe("employeeManagementSchema", () => {
       expect(JSON.stringify(result.error?.issues)).toContain(
         "cannot be greater than gross salary",
       );
-    });
-
-    it("rejects when total earnings do not match gross salary", () => {
-      const result = employeeManagementSchema.safeParse({
-        salary: 50000,
-        employeeStatus: "Active",
-        salaryStructure: {
-          basicPay: 20000,
-          hra: 10000,
-          conveyance: 5000,
-        },
-      });
-      expect(result.success).toBe(false);
-      const issues = result.error?.issues ?? [];
-      expect(
-        issues.some(
-          (i) =>
-            i.path.includes("salaryStructure") &&
-            i.message.includes("should equal gross salary"),
-        ),
-      ).toBe(true);
     });
 
     it("skips earnings total check when no earning components provided", () => {

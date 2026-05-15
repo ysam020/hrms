@@ -1,4 +1,10 @@
-import React, { useContext, useState, useMemo, useCallback } from "react";
+import React, {
+  useContext,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import dayjs from "dayjs";
 import {
   MaterialReactTable,
@@ -35,6 +41,9 @@ import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 function ViewLeaveApplications() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [showFutureOnly, setShowFutureOnly] = useState(true);
+  const [globalFilter, setGlobalFilter] = useState("");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
@@ -84,12 +93,14 @@ function ViewLeaveApplications() {
   const fetchLeaveApplications = useCallback(
     async ({ page, limit }) => {
       try {
+        const search = searchRef.current;
         const params = new URLSearchParams({
           page: page.toString(),
           limit: limit.toString(),
           status: statusFilter,
           futureOnly: showFutureOnly.toString(),
         });
+        if (search) params.set("search", search);
 
         const response = await apiClient(
           API_ENDPOINTS.GET_LEAVE_APPLICATIONS(params.toString()),
@@ -124,10 +135,23 @@ function ViewLeaveApplications() {
     handlePaginationChange,
     handlePageSizeChange,
     refresh,
+    resetPagination,
   } = useServerPagination(fetchLeaveApplications, {
     initialPageSize: 10,
     deps: [statusFilter, showFutureOnly],
   });
+
+  const handleGlobalFilterChange = useCallback(
+    (value) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        resetPagination();
+      }, 400);
+    },
+    [resetPagination],
+  );
 
   const handleLeaveActionClick = useCallback((_id, username, status) => {
     setActionDialog({ open: true, id: _id, username, status });
@@ -462,6 +486,12 @@ function ViewLeaveApplications() {
 
   const table = useMaterialReactTable({
     ...tableConfig.table,
+    manualFiltering: true,
+    state: {
+      ...tableConfig.table.state,
+      globalFilter,
+    },
+    onGlobalFilterChange: handleGlobalFilterChange,
     renderTopToolbarCustomActions: () => (
       <Box
         sx={{
