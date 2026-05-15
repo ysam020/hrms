@@ -50,37 +50,44 @@ const makeReq = (overrides: Record<string, any> = {}) =>
     ...overrides,
   }) as any;
 
+const makeSalaryBody = (overrides = {}) => ({
+  userId: "emp-1",
+  year: "2024",
+  month: "04",
+  salaryStructure: {
+    basicPay: 50000,
+    hra: 25000,
+    conveyance: 18050,
+    incentive: 0,
+    pf: 6000,
+    esi: 750,
+    pt: 200,
+    deductions: 0,
+  },
+  ...overrides,
+});
+
 describe("updateSalary", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGrpcCall.mockResolvedValue({ message: "Salary updated" });
   });
 
-  it("calls updateSalaryStructure with correct fields", async () => {
+  it("calls createSalaryStructure when no existing record found", async () => {
+    mockGrpcCall
+      .mockResolvedValueOnce({ data: null }) // getSalaryStructure
+      .mockResolvedValueOnce({ message: "Created" }); // createSalaryStructure
     const res = makeRes();
-    await updateSalary(
-      makeReq({
-        body: {
-          userId: "emp-1",
-          basicSalary: 50000,
-          components: [{ name: "HRA", value: 5000 }],
-          effectiveDate: "2024-04-01",
-          createdBy: "admin",
-        },
-      }),
-      res,
-    );
+    await updateSalary(makeReq({ body: makeSalaryBody() }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
-      "updateSalaryStructure",
-      expect.objectContaining({
-        userId: "emp-1",
-        basicSalary: 50000,
-        components: [{ name: "HRA", value: 5000 }],
-        effectiveDate: "2024-04-01",
-        createdBy: "admin",
-      }),
+      "getSalaryStructure",
+      expect.objectContaining({ userId: "emp-1", year: 2024, month: 4 }),
+    );
+    expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
+      "createSalaryStructure",
+      expect.objectContaining({ userId: "emp-1", basicPay: 50000 }),
     );
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
@@ -89,35 +96,29 @@ describe("updateSalary", () => {
     );
   });
 
-  it("defaults missing fields to empty/zero values", async () => {
+  it("calls updateSalaryStructure when existing record found", async () => {
+    mockGrpcCall
+      .mockResolvedValueOnce({ data: { id: "struct-1" } }) // getSalaryStructure
+      .mockResolvedValueOnce({ message: "Updated" }); // updateSalaryStructure
     const res = makeRes();
-    await updateSalary(makeReq({ body: {} }), res);
+    await updateSalary(makeReq({ body: makeSalaryBody() }), res);
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "updateSalaryStructure",
-      expect.objectContaining({
-        userId: "",
-        basicSalary: 0,
-        components: [],
-        effectiveDate: "",
-        createdBy: "",
-      }),
+      expect.objectContaining({ id: "struct-1", basicPay: 50000 }),
     );
-  });
-
-  it("defaults non-array components to empty array", async () => {
-    const res = makeRes();
-    await updateSalary(makeReq({ body: { components: "not-an-array" } }), res);
-
-    const call = mockGrpcCall.mock.calls[0][2];
-    expect(call.components).toEqual([]);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.any(Object),
+    );
   });
 
   it("returns INTERNAL_SERVER_ERROR when grpcCall throws", async () => {
     mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
     const res = makeRes();
-    await updateSalary(makeReq({ body: {} }), res);
+    await updateSalary(makeReq({ body: makeSalaryBody() }), res);
 
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
@@ -133,8 +134,9 @@ describe("getUserSalary", () => {
     mockGrpcCall.mockResolvedValue({ data: {} });
   });
 
-  it("allows superuser to access any employee payslip", async () => {
+  it("allows superuser to access any employee salary", async () => {
     mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
+    mockGrpcCall.mockResolvedValue({ data: {} });
 
     const res = makeRes();
     await getUserSalary(
@@ -144,7 +146,7 @@ describe("getUserSalary", () => {
 
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
-      "getPayslip",
+      "getSalaryStructure",
       expect.objectContaining({ userId: "emp-1", year: 2024, month: 3 }),
     );
     expect(mockApiResponse).toHaveBeenCalledWith(

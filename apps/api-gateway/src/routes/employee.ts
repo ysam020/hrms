@@ -13,6 +13,7 @@ export const employeeRouter: Router = Router();
 employeeRouter.put(
   "/edit-employee-details",
   authenticate,
+  requireSuperUser,
   validate(editEmployeeDetailsSchema),
   h.editEmployeeDetails,
 );

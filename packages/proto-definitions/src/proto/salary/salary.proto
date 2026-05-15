@@ -1,44 +1,87 @@
 syntax = "proto3";
 package salary;
 
-message SalaryComponent {
-  string name = 1;
-  double amount = 2;
-  string type = 3;  // EARNING or DEDUCTION
-}
-
-message SalaryStructure {
-  string id = 1;
-  string userId = 2;
-  double basicSalary = 3;
-  repeated SalaryComponent components = 4;
-  double grossSalary = 5;
-  double netSalary = 6;
-  string effectiveDate = 7;
-}
+// ── Requests ──────────────────────────────────────────────────────────────────
 
 message GetSalaryRequest {
   string userId = 1;
-}
-
-message SalaryResponse {
-  string message = 1;
-  int32 status = 2;
-  SalaryStructure data = 3;
+  int32 year = 2;
+  int32 month = 3;
 }
 
 message CreateSalaryRequest {
   string userId = 1;
-  double basicSalary = 2;
-  repeated SalaryComponent components = 3;
-  string effectiveDate = 4;
-  string createdBy = 5;
+  double basicPay = 2;
+  double hra = 3;
+  double conveyance = 4;
+  double incentive = 5;
+  double pf = 6;
+  double esi = 7;
+  double pt = 8;
+  double deductions = 9;
+  int32 month = 10;
+  int32 year = 11;
+}
+
+message UpdateSalaryRequest {
+  string id = 1;
+  double basicPay = 2;
+  double hra = 3;
+  double conveyance = 4;
+  double incentive = 5;
+  double pf = 6;
+  double esi = 7;
+  double pt = 8;
+  double deductions = 9;
 }
 
 message ProcessPayrollRequest {
   string month = 1;
   string year = 2;
   repeated string userIds = 3;
+}
+
+// ── Data models ───────────────────────────────────────────────────────────────
+
+message SalaryStructure {
+  string id = 1;
+  string userId = 2;
+  int32 year = 3;
+  int32 month = 4;
+  double basicPay = 5;
+  double hra = 6;
+  double conveyance = 7;
+  double incentive = 8;
+  double pf = 9;
+  double esi = 10;
+  double pt = 11;
+  double deductions = 12;
+  double grossEarnings = 13;
+  double grossSalary = 14;
+  double netPayable = 15;
+}
+
+message Employee {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string first_name = 4;
+  string last_name = 5;
+  string department = 6;
+  string designation = 7;
+}
+
+message AttendanceSummary {
+  int32 month = 1;
+  int32 year = 2;
+  int32 presentDays = 3;
+  int32 absentDays = 4;
+}
+
+message PayslipData {
+  Employee employee = 1;
+  SalaryStructure salaryStructure = 2;
+  AttendanceSummary attendanceSummary = 3;
 }
 
 message PayrollRecord {
@@ -48,6 +91,20 @@ message PayrollRecord {
   double netSalary = 4;
   double deductions = 5;
   string status = 6;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message SalaryResponse {
+  string message = 1;
+  int32 status = 2;
+  SalaryStructure data = 3;
+}
+
+message PayslipResponse {
+  string message = 1;
+  int32 status = 2;
+  PayslipData data = 3;
 }
 
 message ProcessPayrollResponse {
@@ -61,15 +118,12 @@ message BasicResponse {
   int32 status = 2;
 }
 
+// ── Service ───────────────────────────────────────────────────────────────────
+
 service SalaryService {
-  // Returns the salary structure for an employee.
   rpc GetSalaryStructure (GetSalaryRequest) returns (SalaryResponse);
-  // Creates a new salary structure for an employee.
   rpc CreateSalaryStructure (CreateSalaryRequest) returns (SalaryResponse);
-  // Updates an existing salary structure for an employee.
-  rpc UpdateSalaryStructure (CreateSalaryRequest) returns (SalaryResponse);
-  // Runs payroll processing for a given period.
+  rpc UpdateSalaryStructure (UpdateSalaryRequest) returns (SalaryResponse);
   rpc ProcessPayroll (ProcessPayrollRequest) returns (ProcessPayrollResponse);
-  // Returns a generated payslip for an employee.
-  rpc GetPayslip (GetSalaryRequest) returns (SalaryResponse);
+  rpc GetPayslip (GetSalaryRequest) returns (PayslipResponse);
 }

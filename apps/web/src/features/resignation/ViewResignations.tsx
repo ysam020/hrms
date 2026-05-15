@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useContext, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useContext,
+  useCallback,
+  useRef,
+} from "react";
 import dayjs from "dayjs";
 import {
   MaterialReactTable,
@@ -33,6 +39,9 @@ function ViewResignations() {
   const [resignationData, setResignationData] = useState(null);
   const [openModal, setOpenModal] = useState(false);
   const [statusFilter] = useState("All");
+  const [globalFilter, setGlobalFilter] = useState("");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleOpenModal = useCallback((data) => {
     setResignationData(data);
@@ -43,10 +52,12 @@ function ViewResignations() {
   const fetchResignations = useCallback(
     async ({ page, limit }) => {
       try {
+        const search = searchRef.current;
         let url = API_ENDPOINTS.VIEW_RESIGNATIONS(page, limit);
         if (statusFilter && statusFilter !== "All") {
           url += `&status=${encodeURIComponent(statusFilter)}`;
         }
+        if (search) url += `&search=${encodeURIComponent(search)}`;
 
         const response = await apiClient(url);
 
@@ -76,10 +87,23 @@ function ViewResignations() {
     handlePaginationChange,
     handlePageSizeChange,
     refresh,
+    resetPagination,
   } = useServerPagination(fetchResignations, {
     initialPageSize: 10,
     deps: [statusFilter],
   });
+
+  const handleGlobalFilterChange = useCallback(
+    (value) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        resetPagination();
+      }, 400);
+    },
+    [resetPagination],
+  );
 
   const handleResignationAction = useCallback(
     async ({ id, action, successMessage }) => {
@@ -499,10 +523,13 @@ function ViewResignations() {
 
   const table = useMaterialReactTable({
     ...tableConfig.table,
+    manualFiltering: true,
     state: {
       ...tableConfig.table.state,
       isLoading: loading,
+      globalFilter,
     },
+    onGlobalFilterChange: handleGlobalFilterChange,
   });
 
   return (

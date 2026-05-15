@@ -127,34 +127,27 @@ export const startConversationSchema = z.object({
 // ── Employee ──────────────────────────────────────────────────────────────────
 
 export const editEmployeeDetailsSchema = z.object({
-  firstName: z.string().max(64).optional(),
-  lastName: z.string().max(64).optional(),
-  middleName: z.string().max(64).optional(),
-  dob: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
+  username: z.string().min(1).max(64),
+  assets: z.array(z.string()).optional(),
+  employeeStatus: z.enum(["Active", "Terminated", "Absconded"]).optional(),
+  pf_no: z.string().max(64).optional(),
+  uan_no: z.string().max(64).optional(),
+  esic_no: z.string().max(64).optional(),
+  salary: z.number().min(0).optional(),
+  salaryStructure: z
+    .object({
+      basicPay: z.number().min(0).nullable().optional(),
+      hra: z.number().min(0).nullable().optional(),
+      conveyance: z.number().min(0).nullable().optional(),
+      pf: z.number().min(0).nullable().optional(),
+      esi: z.number().min(0).nullable().optional(),
+      pt: z.number().min(0).nullable().optional(),
+    })
     .optional(),
-  blood_group: z.string().max(8).optional(),
-  mobile: z.string().max(20).optional(),
-  official_email: z.string().email().max(256).optional(),
-  designation: z.string().max(128).optional(),
-  department: z.string().max(128).optional(),
-  communication_address_line_1: z.string().max(256).optional(),
-  communication_address_line_2: z.string().max(256).optional(),
-  communication_address_city: z.string().max(64).optional(),
-  communication_address_state: z.string().max(64).optional(),
-  communication_address_pincode: z.string().max(16).optional(),
-  permanent_address_line_1: z.string().max(256).optional(),
-  permanent_address_line_2: z.string().max(256).optional(),
-  permanent_address_city: z.string().max(64).optional(),
-  permanent_address_state: z.string().max(64).optional(),
-  permanent_address_pincode: z.string().max(16).optional(),
+  reasonForTermination: z.string().max(512).optional(),
+  dateOfTermination: z.string().optional(),
+  dateOfAbscond: z.string().optional(),
   wfh: z.boolean().optional(),
-  joiningDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
-    .optional(),
-  employee_photo: z.string().max(4096).optional(),
 });
 
 export const completeKycSchema = z.object({
@@ -198,10 +191,20 @@ export const kycApprovalSchema = z.object({
 
 export const updateSalarySchema = z.object({
   userId: z.string().min(1).max(64),
-  basicSalary: z.number().nonnegative(),
-  components: z.array(z.record(z.unknown())).optional(),
-  effectiveDate: z.string().max(32).optional(),
-  createdBy: z.string().max(64).optional(),
+  year: z.string().regex(/^\d{4}$/),
+  month: z.string().regex(/^(0?[1-9]|1[0-2])$/),
+  salaryStructure: z.object({
+    basicPay: z.number().nonnegative(),
+    hra: z.number().nonnegative(),
+    conveyance: z.number().nonnegative(),
+    incentive: z.number().nonnegative(),
+    pf: z.number().nonnegative(),
+    esi: z.number().nonnegative(),
+    pt: z.number().nonnegative(),
+    deductions: z.number().nonnegative(),
+    grossEarnings: z.number().optional(),
+    netPayable: z.number().optional(),
+  }),
 });
 
 // ── User ──────────────────────────────────────────────────────────────────────

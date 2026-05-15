@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useContext } from "react";
+import React, {
+  useState,
+  useMemo,
+  useContext,
+  useCallback,
+  useRef,
+} from "react";
 import {
   MaterialReactTable,
   useMaterialReactTable,
@@ -36,6 +42,9 @@ function ViewHrActivities({ refreshKey = 0 }) {
   const [activityData, setActivityData] = useState<any>(null);
   const [openModal, setOpenModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState("Active");
+  const [globalFilter, setGlobalFilter] = useState("");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
   const [deleteDialog, setDeleteDialog] = useState<{
@@ -72,12 +81,19 @@ function ViewHrActivities({ refreshKey = 0 }) {
 
   const isDetailsPopoverOpen = Boolean(detailsAnchorEl);
 
-  const fetchHrActivities = React.useCallback(
+  const fetchHrActivities = useCallback(
     async ({ page, limit }) => {
       try {
-        const response = await apiClient(
-          API_ENDPOINTS.GET_HR_ACTIVITIES(page, limit, statusFilter),
+        const search = searchRef.current;
+        const baseUrl = API_ENDPOINTS.GET_HR_ACTIVITIES(
+          page,
+          limit,
+          statusFilter,
         );
+        const url = search
+          ? `${baseUrl}&search=${encodeURIComponent(search)}`
+          : baseUrl;
+        const response = await apiClient(url);
 
         return {
           data: response.data.data.activities || [],
@@ -105,10 +121,23 @@ function ViewHrActivities({ refreshKey = 0 }) {
     handlePaginationChange,
     handlePageSizeChange,
     refresh,
+    resetPagination,
   } = useServerPagination(fetchHrActivities, {
     initialPageSize: 10,
     deps: [statusFilter, refreshKey],
   });
+
+  const handleGlobalFilterChange = useCallback(
+    (value) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        resetPagination();
+      }, 400);
+    },
+    [resetPagination],
+  );
 
   const memoizedData = useMemo(() => data || [], [data]);
 
@@ -408,10 +437,13 @@ function ViewHrActivities({ refreshKey = 0 }) {
 
   const table = useMaterialReactTable({
     ...tableConfig.table,
+    manualFiltering: true,
     state: {
       ...tableConfig.table.state,
       isLoading: loading,
+      globalFilter,
     },
+    onGlobalFilterChange: handleGlobalFilterChange,
     renderTopToolbarCustomActions: () => (
       <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

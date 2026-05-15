@@ -14,9 +14,10 @@ export async function getHrActivities(req: Request, res: Response) {
   try {
     const { page, limit } = parsePagination(req.query, 10);
     const statusFilter = (req.query.status as string) || "Active";
+    const search = String(req.query.search || "").trim();
     const skip = (page - 1) * limit;
 
-    const cacheKey = `hrm:activities:v2:${page}:${limit}:${statusFilter}`;
+    const cacheKey = `hrm:activities:v2:${page}:${limit}:${statusFilter}:${search}`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -29,6 +30,12 @@ export async function getHrActivities(req: Request, res: Response) {
     const where: any = { status: { not: "deleted" } };
     if (statusFilter && statusFilter.toLowerCase() !== "all") {
       where.status = statusFilter;
+    }
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+      ];
     }
 
     const [activities, totalCount] = await Promise.all([

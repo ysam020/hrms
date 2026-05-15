@@ -15,9 +15,9 @@ jest.mock("../grpc/clients", () => ({
 
 jest.mock("@hrms/db", () => ({
   prisma: {
-    user: { findUnique: jest.fn(), findMany: jest.fn() },
+    user: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
-    leaveBalance: { findUnique: jest.fn() },
+    leaveBalance: { findUnique: jest.fn(), findMany: jest.fn() },
   },
 }));
 
@@ -164,20 +164,32 @@ describe("getAttendances", () => {
 describe("getAllAttendances", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGrpcCall.mockResolvedValue({ data: [] });
+    (prisma.user.count as jest.Mock).mockResolvedValue(0);
+    mockUserFindMany.mockResolvedValue([]);
+    mockRecordFindMany.mockResolvedValue([]);
+    (prisma.leaveBalance.findMany as jest.Mock).mockResolvedValue([]);
   });
 
-  it("passes empty userId to fetch all employees", async () => {
+  it("returns paginated attendance records for all employees", async () => {
+    (prisma.user.count as jest.Mock).mockResolvedValue(2);
+    mockUserFindMany.mockResolvedValue([
+      { id: "u1", username: "alice" },
+      { id: "u2", username: "bob" },
+    ]);
     const res = makeRes();
     await getAllAttendances(
       makeReq({ params: { month: "3", year: "2024" }, query: {} }),
       res,
     );
 
-    expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
-      "getAttendance",
-      expect.objectContaining({ userId: "" }),
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          pagination: expect.objectContaining({ totalCount: 2 }),
+        }),
+      }),
     );
   });
 
@@ -191,8 +203,9 @@ describe("getAllAttendances", () => {
       res,
     );
 
-    const call = mockGrpcCall.mock.calls[0][2];
-    expect(call.limit).toBe(200);
+    expect(mockUserFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 200 }),
+    );
   });
 
   it("defaults limit to 50 when not provided", async () => {
@@ -202,8 +215,9 @@ describe("getAllAttendances", () => {
       res,
     );
 
-    const call = mockGrpcCall.mock.calls[0][2];
-    expect(call.limit).toBe(50);
+    expect(mockUserFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 50 }),
+    );
   });
 });
 

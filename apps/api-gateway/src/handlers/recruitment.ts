@@ -262,6 +262,7 @@ export async function viewResignations(req: Request, res: Response) {
       ...parsePagination(req.query, 10),
       userId,
       status: String(req.query.status || ""),
+      username: String(req.query.search || ""),
     })) as any;
 
     const records: any[] = response?.data ?? [];

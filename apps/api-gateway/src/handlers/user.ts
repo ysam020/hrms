@@ -8,7 +8,11 @@ import { parsePagination, PAGINATION } from "../utils/pagination";
 export async function getAllUsers(req: Request, res: Response) {
   try {
     const response = await grpcCall(userClient, "listUsers", {
-      ...parsePagination(req.query, PAGINATION.DEFAULT_LIMIT_LARGE, PAGINATION.MAX_LIMIT_LARGE),
+      ...parsePagination(
+        req.query,
+        PAGINATION.DEFAULT_LIMIT_LARGE,
+        PAGINATION.MAX_LIMIT_LARGE,
+      ),
       search: req.query.search || "",
       role: req.query.role || "",
       department: req.query.department || "",
@@ -38,6 +42,32 @@ export async function getUserData(req: Request, res: Response) {
     snake.dateOfTermination = u.dateOfTermination;
     snake.reasonForTermination = u.reasonForTermination;
     snake.dateOfAbscond = u.dateOfAbscond;
+
+    // Append salary fields (not in the user service proto)
+    const salaryData = await prisma.user.findUnique({
+      where: { id: u.id },
+      select: {
+        salary: true,
+        salaryBasicPay: true,
+        salaryHra: true,
+        salaryConveyance: true,
+        salaryPf: true,
+        salaryEsi: true,
+        salaryPt: true,
+      },
+    });
+    if (salaryData) {
+      snake.salary = salaryData.salary;
+      snake.salaryStructure = {
+        basicPay: salaryData.salaryBasicPay,
+        hra: salaryData.salaryHra,
+        conveyance: salaryData.salaryConveyance,
+        pf: salaryData.salaryPf,
+        esi: salaryData.salaryEsi,
+        pt: salaryData.salaryPt,
+      };
+    }
+
     // Strip PII that only the owner or a superuser may see
     const callerIsOwner = user?.userId === req.params.username;
     if (!callerIsOwner) {

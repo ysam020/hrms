@@ -276,14 +276,14 @@ function ViewEditSalaryStructure() {
     if (salaryData) {
       formik.setValues({
         salaryStructure: {
-          basicPay: salaryData.basicPay || "",
-          hra: salaryData.hra || "",
-          conveyance: salaryData.conveyance || "",
-          incentive: salaryData.incentive || "",
-          pf: salaryData.pf || "",
-          esi: salaryData.esi || "",
-          pt: salaryData.pt || "",
-          deductions: salaryData.deductions || "",
+          basicPay: salaryData.basicPay ?? 0,
+          hra: salaryData.hra ?? 0,
+          conveyance: salaryData.conveyance ?? 0,
+          incentive: salaryData.incentive ?? 0,
+          pf: salaryData.pf ?? 0,
+          esi: salaryData.esi ?? 0,
+          pt: salaryData.pt ?? 0,
+          deductions: salaryData.deductions ?? 0,
         },
       });
     }
@@ -297,7 +297,7 @@ function ViewEditSalaryStructure() {
   };
 
   const handleAmountChange = (componentKey, value) => {
-    formik.setFieldValue(`salaryStructure.${componentKey}`, value || "");
+    formik.setFieldValue(`salaryStructure.${componentKey}`, value ?? 0);
   };
 
   // Load salary data when date or grossSalary changes

@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useContext, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useContext,
+  useCallback,
+  useRef,
+} from "react";
 import {
   MaterialReactTable,
   useMaterialReactTable,
@@ -145,23 +151,28 @@ function ViewAttendances() {
     )}`,
   );
   const [isDownloading, setIsDownloading] = useState(false);
+  const [globalFilter, setGlobalFilter] = useState("");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setAlert } = useContext(AlertContext);
 
   // API function for fetching attendance data with pagination
   const fetchAttendanceData = useCallback(
     async ({ page, limit }) => {
       try {
-        // Parse year and month from date
         const [year, month] = date.split("-");
-
-        const response = await apiClient(
-          API_ENDPOINTS.GET_ALL_ATTENDANCES(
-            Number(year),
-            Number(month),
-            page,
-            limit,
-          ),
+        const search = searchRef.current;
+        const baseUrl = API_ENDPOINTS.GET_ALL_ATTENDANCES(
+          Number(year),
+          Number(month),
+          page,
+          limit,
         );
+        const url = search
+          ? `${baseUrl}&search=${encodeURIComponent(search)}`
+          : baseUrl;
+
+        const response = await apiClient(url);
 
         return {
           data: response.data.data.records,
@@ -193,10 +204,23 @@ function ViewAttendances() {
     handlePaginationChange,
     handlePageSizeChange,
     refresh,
+    resetPagination,
   } = useServerPagination(fetchAttendanceData, {
     initialPageSize: 10,
-    deps: [date], // Refetch when date changes
+    deps: [date],
   });
+
+  const handleGlobalFilterChange = useCallback(
+    (value) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        resetPagination();
+      }, 400);
+    },
+    [resetPagination],
+  );
 
   // Download function
   const handleDownloadExcel = useCallback(async () => {
@@ -303,6 +327,12 @@ function ViewAttendances() {
 
   const table = useMaterialReactTable({
     ...tableConfig,
+    manualFiltering: true,
+    state: {
+      ...tableConfig.state,
+      globalFilter,
+    },
+    onGlobalFilterChange: handleGlobalFilterChange,
     renderTopToolbarCustomActions: () => (
       <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
         {dateToolbar.renderTopToolbarCustomActions &&

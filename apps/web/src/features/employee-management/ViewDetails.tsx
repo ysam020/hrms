@@ -56,7 +56,7 @@ function ViewDetails() {
   const [salaryComponents, setSalaryComponents] = useState<any[]>([]);
 
   // Fetch employee data using custom hook
-  const { data, loading, error } = useFetchData(
+  const { data, loading, error, refetch } = useFetchData(
     `get-employee-details/${username}`,
     "get",
     [username],
@@ -77,14 +77,14 @@ function ViewDetails() {
       pf_no: "",
       uan_no: "",
       esic_no: "",
-      salary: "",
+      salary: 0,
       salaryStructure: {
-        basicPay: "",
-        hra: "",
-        conveyance: "",
-        pf: "",
-        esi: "",
-        pt: "",
+        basicPay: 0,
+        hra: 0,
+        conveyance: 0,
+        pf: 0,
+        esi: 0,
+        pt: 0,
       },
       reasonForTermination: "",
       dateOfTermination: "",
@@ -94,7 +94,7 @@ function ViewDetails() {
     validationSchema,
     onSubmit: async (values) => {
       try {
-        const res = await apiClient.post(API_ENDPOINTS.EDIT_EMPLOYEE_DETAILS, {
+        const res = await apiClient.put(API_ENDPOINTS.EDIT_EMPLOYEE_DETAILS, {
           ...values,
           username,
         });
@@ -105,8 +105,8 @@ function ViewDetails() {
           severity: "success",
         });
 
-        // Exit edit mode
         setIsEditing(false);
+        refetch();
       } catch (err) {
         setAlert({
           open: true,
@@ -119,9 +119,8 @@ function ViewDetails() {
       }
     },
   });
-
   const handleGrossSalaryChange = (value) => {
-    formik.setFieldValue("salary", value || "");
+    formik.setFieldValue("salary", value ?? 0);
 
     if (value && formik.values.salaryStructure.basicPay) {
       const esiAmount = Math.round(value * 0.0075);
@@ -130,7 +129,7 @@ function ViewDetails() {
   };
 
   const handleAmountChange = (componentKey, value) => {
-    formik.setFieldValue(`salaryStructure.${componentKey}`, value || "");
+    formik.setFieldValue(`salaryStructure.${componentKey}`, value ?? null);
 
     if (componentKey === "basicPay" && value) {
       const pfAmount = Math.round(value * 0.12);
@@ -149,13 +148,40 @@ function ViewDetails() {
     // Populate formik with current data when entering edit mode
     formik.setValues({
       assets: data?.assets || [],
-      employeeStatus: data?.employeeStatus || "",
+      employeeStatus:
+        data?.employeeStatus === "Terminated" ||
+        data?.employeeStatus === "Absconded"
+          ? data.employeeStatus
+          : "Active",
       pf_no: data?.pf_no || "",
       uan_no: data?.uan_no || "",
       esic_no: data?.esic_no || "",
-      salary: data?.salary || "",
+      salary: data?.salary != null ? Number(data.salary) : 0,
       salaryStructure: {
-        ...data?.salaryStructure,
+        basicPay:
+          data?.salaryStructure?.basicPay != null
+            ? Number(data.salaryStructure.basicPay)
+            : 0,
+        hra:
+          data?.salaryStructure?.hra != null
+            ? Number(data.salaryStructure.hra)
+            : 0,
+        conveyance:
+          data?.salaryStructure?.conveyance != null
+            ? Number(data.salaryStructure.conveyance)
+            : 0,
+        pf:
+          data?.salaryStructure?.pf != null
+            ? Number(data.salaryStructure.pf)
+            : 0,
+        esi:
+          data?.salaryStructure?.esi != null
+            ? Number(data.salaryStructure.esi)
+            : 0,
+        pt:
+          data?.salaryStructure?.pt != null
+            ? Number(data.salaryStructure.pt)
+            : 0,
       },
       reasonForTermination: data?.reasonForTermination || "",
       dateOfTermination: data?.dateOfTermination || "",
@@ -180,7 +206,9 @@ function ViewDetails() {
       touched = touched?.[part];
     }
 
-    return touched && typeof error === "string" ? error : null;
+    return (touched || formik.submitCount > 0) && typeof error === "string"
+      ? error
+      : null;
   };
 
   // Load salary components

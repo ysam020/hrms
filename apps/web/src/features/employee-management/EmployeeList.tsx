@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useContext } from "react";
+import React, {
+  useCallback,
+  useMemo,
+  useContext,
+  useRef,
+  useState,
+} from "react";
 import {
   MaterialReactTable,
   useMaterialReactTable,
@@ -11,26 +17,28 @@ import { getTableColumns } from "@web/shared/utils/table/getTableColumns";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { ThemeContext } from "@web/app/providers/ThemeContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import Person from "@mui/icons-material/Person";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function EmployeeList() {
   const { setAlert } = useContext(AlertContext);
-  const { theme } = useContext(ThemeContext);
   const navigate = useNavigate();
+
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [globalFilter, setGlobalFilter] = useState("");
 
   const fetchEmployeeData = useCallback(
     async ({ page, limit }) => {
       try {
-        const response = await apiClient(
-          API_ENDPOINTS.VIEW_ALL_KYCS(page, limit),
-        );
+        const search = searchRef.current;
+        const baseUrl = API_ENDPOINTS.VIEW_ALL_KYCS(page, limit);
+        const url = search
+          ? `${baseUrl}&search=${encodeURIComponent(search)}`
+          : baseUrl;
+        const response = await apiClient(url);
 
         return {
           data: response.data.data?.kycs,
@@ -60,14 +68,25 @@ function EmployeeList() {
     pagination,
     handlePaginationChange,
     handlePageSizeChange,
+    resetPagination,
   } = useServerPagination(fetchEmployeeData, {
     initialPageSize: 10,
   });
 
-  // Memoize data
+  const handleGlobalFilterChange = useCallback(
+    (value) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        resetPagination();
+      }, 400);
+    },
+    [resetPagination],
+  );
+
   const memoizedData = useMemo(() => data, [data]);
 
-  // Memoize columns
   const baseColumns = useMemo(
     () => [
       {
@@ -125,43 +144,8 @@ function EmployeeList() {
           </Typography>
         ),
       },
-      {
-        accessorKey: "actions",
-        header: "Actions",
-        size: 100,
-        Cell: ({ cell }) => {
-          return (
-            <Tooltip title="View Details">
-              <IconButton
-                size="small"
-                onClick={() =>
-                  navigate(`/employee-management/${cell.row.original.username}`)
-                }
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "6px",
-                  color: theme === "light" ? "#6366f1" : "#818cf8",
-                  backgroundColor:
-                    theme === "light"
-                      ? "rgba(99, 102, 241, 0.12)"
-                      : "rgba(129, 140, 248, 0.15)",
-                  "&:hover": {
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(99, 102, 241, 0.2)"
-                        : "rgba(129, 140, 248, 0.25)",
-                  },
-                }}
-              >
-                <VisibilityIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          );
-        },
-      },
     ],
-    [navigate, theme],
+    [],
   );
 
   const columns = useMemo(() => getTableColumns(baseColumns), [baseColumns]);
@@ -179,11 +163,22 @@ function EmployeeList() {
     useMemo(
       () => ({
         ...tableConfig.table,
+        manualFiltering: true,
+        state: {
+          ...tableConfig.table.state,
+          globalFilter,
+        },
+        onGlobalFilterChange: handleGlobalFilterChange,
         muiTableContainerProps: {
           sx: { maxHeight: "580px", overflowY: "auto" },
         },
+        muiTableBodyRowProps: ({ row }) => ({
+          onClick: () =>
+            navigate(`/employee-management/${row.original.username}`),
+          style: { cursor: "pointer" },
+        }),
       }),
-      [tableConfig.table],
+      [tableConfig.table, navigate, globalFilter, handleGlobalFilterChange],
     ),
   );
 
