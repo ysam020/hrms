@@ -74,7 +74,7 @@ describe("createSalaryStructure", () => {
     );
   });
 
-  it("calculates total deductions as sum of pf, esi, pt, deductions", async () => {
+  it("stores only the other-deductions amount, not the running total", async () => {
     mockCreate.mockResolvedValue({ id: "sal-1" });
 
     await createSalaryStructure(
@@ -94,7 +94,8 @@ describe("createSalaryStructure", () => {
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          deductions: 3250, // 1800 + 750 + 200 + 500
+          deductions: 500, // raw "other deductions" input, not pf+esi+pt+deductions
+          netPayable: 46750, // 50000 - (1800 + 750 + 200 + 500)
         }),
       }),
     );
