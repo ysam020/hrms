@@ -12,27 +12,46 @@ export const submitKyc = async (
   try {
     const {
       userId,
+      username,
+      employeePhoto,
+      dob,
+      bloodGroup,
+      qualification,
+      mobile,
+      email,
+      officialEmail,
+      permanentAddressLine1,
+      permanentAddressLine2,
+      permanentAddressCity,
+      permanentAddressState,
+      permanentAddressPincode,
+      communicationAddressLine1,
+      communicationAddressLine2,
+      communicationAddressCity,
+      communicationAddressState,
+      communicationAddressPincode,
       aadharNo,
       aadharPhotoFront,
       aadharPhotoBack,
       panNo,
       panPhoto,
+      educationCertificates,
+      experienceCertificate,
+      electricityBill,
       bankAccountNo,
       bankName,
       ifscCode,
-      pfNo,
-      uanNo,
-      esicNo,
     } = call.request;
 
-    if (!userId) {
+    if (!userId && !username) {
       return callback(null, {
         message: MESSAGES.EMPLOYEE_ID_REQUIRED,
         status: status.INVALID_ARGUMENT,
       });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const where = userId ? { id: userId } : { username };
+    const user = await prisma.user.findUnique({ where });
     if (!user) {
       return callback(null, {
         message: MESSAGES.EMPLOYEE_NOT_FOUND,
@@ -41,20 +60,61 @@ export const submitKyc = async (
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id: userId },
+      where: { id: user.id },
       data: {
-        aadhar_no: aadharNo || null,
-        aadhar_photo_front: aadharPhotoFront || null,
-        aadhar_photo_back: aadharPhotoBack || null,
-        pan_no: panNo || null,
-        pan_photo: panPhoto || null,
-        bank_account_no: bankAccountNo || null,
-        bank_name: bankName || null,
-        ifsc_code: ifscCode || null,
-        pf_no: pfNo || null,
-        uan_no: uanNo || null,
-        esic_no: esicNo || null,
-        kyc_date: new Date().toISOString(),
+        ...(employeePhoto && { employee_photo: employeePhoto }),
+        ...(dob && { dob: new Date(dob) }),
+        ...(bloodGroup && { blood_group: bloodGroup }),
+        ...(qualification && { qualification }),
+        ...(mobile && { mobile }),
+        ...(email && { email }),
+        ...(officialEmail && { official_email: officialEmail }),
+        ...(permanentAddressLine1 && {
+          permanent_address_line_1: permanentAddressLine1,
+        }),
+        ...(permanentAddressLine2 && {
+          permanent_address_line_2: permanentAddressLine2,
+        }),
+        ...(permanentAddressCity && {
+          permanent_address_city: permanentAddressCity,
+        }),
+        ...(permanentAddressState && {
+          permanent_address_state: permanentAddressState,
+        }),
+        ...(permanentAddressPincode && {
+          permanent_address_pincode: permanentAddressPincode,
+        }),
+        ...(communicationAddressLine1 && {
+          communication_address_line_1: communicationAddressLine1,
+        }),
+        ...(communicationAddressLine2 && {
+          communication_address_line_2: communicationAddressLine2,
+        }),
+        ...(communicationAddressCity && {
+          communication_address_city: communicationAddressCity,
+        }),
+        ...(communicationAddressState && {
+          communication_address_state: communicationAddressState,
+        }),
+        ...(communicationAddressPincode && {
+          communication_address_pincode: communicationAddressPincode,
+        }),
+        ...(aadharNo && { aadhar_no: aadharNo }),
+        ...(aadharPhotoFront && { aadhar_photo_front: aadharPhotoFront }),
+        ...(aadharPhotoBack && { aadhar_photo_back: aadharPhotoBack }),
+        ...(panNo && { pan_no: panNo }),
+        ...(panPhoto && { pan_photo: panPhoto }),
+        ...(educationCertificates?.length && {
+          education_certificates: educationCertificates,
+        }),
+        ...(experienceCertificate && {
+          experience_certificate: experienceCertificate,
+        }),
+        ...(electricityBill && { electricity_bill: electricityBill }),
+        ...(bankAccountNo && { bank_account_no: bankAccountNo }),
+        ...(bankName && { bank_name: bankName }),
+        ...(ifscCode && { ifsc_code: ifscCode }),
+        kyc_date: new Date(),
         kyc_approval: "Pending",
       },
     });

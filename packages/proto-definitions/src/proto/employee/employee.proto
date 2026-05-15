@@ -79,9 +79,35 @@ message BasicResponse {
 
 message KycRequest {
   string userId = 1;
-  string documentType = 2;
-  string documentNumber = 3;
-  string documentUrl = 4;
+  string username = 2;
+  string employeePhoto = 3;
+  string dob = 4;
+  string bloodGroup = 5;
+  string qualification = 6;
+  string mobile = 7;
+  string email = 8;
+  string officialEmail = 9;
+  string permanentAddressLine1 = 10;
+  string permanentAddressLine2 = 11;
+  string permanentAddressCity = 12;
+  string permanentAddressState = 13;
+  string permanentAddressPincode = 14;
+  string communicationAddressLine1 = 15;
+  string communicationAddressLine2 = 16;
+  string communicationAddressCity = 17;
+  string communicationAddressState = 18;
+  string communicationAddressPincode = 19;
+  string aadharNo = 20;
+  string aadharPhotoFront = 21;
+  string aadharPhotoBack = 22;
+  string panNo = 23;
+  string panPhoto = 24;
+  repeated string educationCertificates = 25;
+  string experienceCertificate = 26;
+  string electricityBill = 27;
+  string bankAccountNo = 28;
+  string bankName = 29;
+  string ifscCode = 30;
 }
 
 message KycResponse {

@@ -86,7 +86,7 @@ function HomePage(props) {
       overflow: "scroll",
       padding: "0px",
       paddingTop: "10px",
-      paddingBottom: { xs: "80px", md: 0 },
+      paddingBottom: "80px",
     }),
     [theme],
   );

@@ -78,10 +78,10 @@ describe("kycSchema", () => {
   });
 
   it("rejects missing required fields", () => {
-    const result = kycSchema.safeParse({ ...validKyc, designation: "" });
+    const result = kycSchema.safeParse({ ...validKyc, employee_photo: "" });
     expect(result.success).toBe(false);
     expect(JSON.stringify(result.error?.issues)).toContain(
-      "Designation is required",
+      "Employee photo is required",
     );
   });
 
