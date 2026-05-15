@@ -8,8 +8,10 @@ import Toolbar from "@mui/material/Toolbar";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import Typography from "@mui/material/Typography";
 import Badge from "@mui/material/Badge";
 import Divider from "@mui/material/Divider";
 import Box from "@mui/material/Box";
@@ -96,9 +98,9 @@ function AppbarComponent({
       <AppBar
         sx={{
           width: {
-            lg: showSidebar ? `calc(100% - ${drawerWidth}px)` : "100%",
+            md: showSidebar ? `calc(100% - ${drawerWidth}px)` : "100%",
           },
-          ml: { lg: `${drawerWidth}px` },
+          ml: { md: `${drawerWidth}px` },
           backgroundColor:
             theme === "light" ? "#f9fafb !important" : "#111b21 !important",
           boxShadow: "none !important",
@@ -112,7 +114,7 @@ function AppbarComponent({
             onClick={() => setMobileOpen(!mobileOpen)}
             sx={{
               mr: 2,
-              display: { lg: "none" },
+              display: { xs: "flex", md: "none" },
               color: theme === "light" ? "#1f2937" : "#f9fafb",
               "&:hover": {
                 background:
@@ -388,7 +390,7 @@ function AppbarComponent({
         </Toolbar>
       </AppBar>
 
-      {/* Mobile menu drawer */}
+      {/* Mobile actions drawer (right side) */}
       <Drawer
         anchor="right"
         open={mobileMenuOpen}
@@ -396,78 +398,197 @@ function AppbarComponent({
         sx={{
           display: { xs: "block", md: "none" },
           "& .MuiDrawer-paper": {
-            width: 280,
-            backgroundColor: theme === "light" ? "#ffffff" : "#1f2937",
-            color: theme === "light" ? "#1f2937" : "#f9fafb",
+            width: 260,
+            backgroundColor: theme === "light" ? "#f9fafb" : "#111b21",
+            display: "flex",
+            flexDirection: "column",
           },
         }}
-        aria-label="Mobile navigation menu"
+        aria-label="Mobile actions menu"
       >
-        <Divider
-          sx={{ backgroundColor: theme === "light" ? "#e5e7eb" : "#374151" }}
-        />
-        <List>
-          {actionItems.map((item, idx) => (
-            <ListItem
-              key={idx}
-              component="button"
-              onClick={() => handleMobileMenuItemClick(item)}
-              sx={{
-                "&:hover": {
-                  backgroundColor:
-                    theme === "light"
-                      ? item.danger
-                        ? "rgba(239, 68, 68, 0.1)"
-                        : "rgba(0, 0, 0, 0.04)"
-                      : item.danger
-                        ? "rgba(239, 68, 68, 0.15)"
-                        : "rgba(255, 255, 255, 0.08)",
-                },
-              }}
-            >
-              <ListItemIcon>
-                {item.badge && (item.badgeCount ?? 0) > 0 ? (
-                  <Badge badgeContent={item.badgeCount} color="error">
+        {/* Header */}
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: `1px solid ${theme === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.07)"}`,
+            bgcolor: theme === "light" ? "#fff" : "#1c262a",
+            flexShrink: 0,
+          }}
+        >
+          <Typography
+            variant="subtitle1"
+            fontWeight={700}
+            sx={{
+              color: theme === "light" ? "#111827" : "#f1f5f9",
+              fontSize: "0.95rem",
+            }}
+          >
+            Quick Actions
+          </Typography>
+          <Box
+            component="button"
+            onClick={() => setMobileMenuOpen(false)}
+            sx={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              p: 0.5,
+              borderRadius: 1,
+              display: "flex",
+              alignItems: "center",
+              color: theme === "light" ? "#6b7280" : "#9ca3af",
+              "&:hover": {
+                bgcolor:
+                  theme === "light"
+                    ? "rgba(0,0,0,0.05)"
+                    : "rgba(255,255,255,0.07)",
+              },
+            }}
+          >
+            <i className="pi pi-times" style={{ fontSize: 14 }} />
+          </Box>
+        </Box>
+
+        {/* Main actions */}
+        <Box sx={{ flex: 1, overflowY: "auto", py: 1 }}>
+          <List disablePadding sx={{ px: 1 }}>
+            {actionItems
+              .filter((item) => !item.danger)
+              .map((item, idx) => (
+                <ListItemButton
+                  key={idx}
+                  onClick={() => handleMobileMenuItemClick(item)}
+                  sx={{
+                    borderRadius: 2,
+                    mb: 0.25,
+                    px: 1.5,
+                    py: 1,
+                    "&:hover": {
+                      bgcolor:
+                        theme === "light"
+                          ? "rgba(0,0,0,0.04)"
+                          : "rgba(255,255,255,0.06)",
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 2,
+                      bgcolor:
+                        theme === "light"
+                          ? "rgba(0,0,0,0.05)"
+                          : "rgba(255,255,255,0.07)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      mr: 1.5,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {item.badge && (item.badgeCount ?? 0) > 0 ? (
+                      <Badge
+                        badgeContent={item.badgeCount}
+                        color="error"
+                        max={99}
+                      >
+                        <i
+                          className={`pi ${item.iconClass}`}
+                          aria-hidden="true"
+                          style={{
+                            fontSize: 16,
+                            color: theme === "light" ? "#374151" : "#d1d5db",
+                          }}
+                        />
+                      </Badge>
+                    ) : (
+                      <i
+                        className={`pi ${item.iconClass}`}
+                        aria-hidden="true"
+                        style={{
+                          fontSize: 16,
+                          color: theme === "light" ? "#374151" : "#d1d5db",
+                        }}
+                      />
+                    )}
+                  </Box>
+                  <ListItemText
+                    primary={item.title}
+                    sx={{
+                      "& .MuiTypography-root": {
+                        fontSize: "0.875rem",
+                        fontWeight: 500,
+                        color: theme === "light" ? "#111827" : "#e5e7eb",
+                      },
+                    }}
+                  />
+                </ListItemButton>
+              ))}
+          </List>
+
+          {/* Danger zone */}
+          <Divider
+            sx={{
+              mx: 2,
+              my: 0.75,
+              borderColor:
+                theme === "light"
+                  ? "rgba(0,0,0,0.08)"
+                  : "rgba(255,255,255,0.07)",
+            }}
+          />
+          <List disablePadding sx={{ px: 1 }}>
+            {actionItems
+              .filter((item) => item.danger)
+              .map((item, idx) => (
+                <ListItemButton
+                  key={idx}
+                  onClick={() => handleMobileMenuItemClick(item)}
+                  sx={{
+                    borderRadius: 2,
+                    px: 1.5,
+                    py: 1,
+                    "&:hover": { bgcolor: "rgba(239,68,68,0.08)" },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 2,
+                      bgcolor: "rgba(239,68,68,0.08)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      mr: 1.5,
+                      flexShrink: 0,
+                    }}
+                  >
                     <i
                       className={`pi ${item.iconClass}`}
                       aria-hidden="true"
-                      style={{
-                        fontSize: "20px",
-                        color: theme === "light" ? "#1f2937" : "#f3f4f6",
-                      }}
+                      style={{ fontSize: 16, color: "#ef4444" }}
                     />
-                  </Badge>
-                ) : (
-                  <i
-                    className={`pi ${item.iconClass}`}
-                    aria-hidden="true"
-                    style={{
-                      fontSize: "20px",
-                      color: item.danger
-                        ? "#ef4444"
-                        : theme === "light"
-                          ? "#1f2937"
-                          : "#f3f4f6",
+                  </Box>
+                  <ListItemText
+                    primary={item.title}
+                    sx={{
+                      "& .MuiTypography-root": {
+                        fontSize: "0.875rem",
+                        fontWeight: 600,
+                        color: "#ef4444",
+                      },
                     }}
                   />
-                )}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.title}
-                sx={{
-                  "& .MuiTypography-root": {
-                    color: item.danger
-                      ? "#ef4444"
-                      : theme === "light"
-                        ? "#1f2937"
-                        : "#f9fafb",
-                    fontWeight: item.danger ? 600 : 400,
-                  },
-                }}
-              />
-            </ListItem>
-          ))}
-        </List>
+                </ListItemButton>
+              ))}
+          </List>
+        </Box>
       </Drawer>
     </>
   );

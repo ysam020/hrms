@@ -3,7 +3,7 @@ import { attendanceClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import dayjs from "dayjs";
@@ -114,14 +114,14 @@ export async function attendanceCorrection(req: Request, res: Response) {
         message: "Forbidden",
       });
 
-    const response = await grpcCall(attendanceClient, "correctAttendance", {
+    const response = (await grpcCall(attendanceClient, "correctAttendance", {
       userId: targetUserId,
       date: date || "",
       timeIn: timeIn || "",
       timeOut: timeOut || "",
       correctedBy: user!.userId,
-    });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    })) as any;
+    return apiResponse(res, grpcToHttpStatus(response.status), response);
   } catch (error: unknown) {
     logger.error("PUT /attendance-correction error:", { error });
     return handleError(res, error);

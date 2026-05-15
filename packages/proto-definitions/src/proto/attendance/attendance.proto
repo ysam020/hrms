@@ -60,11 +60,11 @@ message AttendanceSummaryResponse {
 }
 
 message CorrectAttendanceRequest {
-  string username = 1;
+  string userId = 1;
   string date = 2;
-  string time_in = 3;
-  string time_out = 4;
-  string corrected_by = 5;
+  string timeIn = 3;
+  string timeOut = 4;
+  string correctedBy = 5;
 }
 
 service AttendanceService {

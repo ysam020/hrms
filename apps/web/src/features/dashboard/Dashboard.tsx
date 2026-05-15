@@ -8,6 +8,7 @@ import React, {
   useRef,
 } from "react";
 import Box from "@mui/material/Box";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
@@ -44,7 +45,7 @@ const DepartmentBreakdown = React.lazy(() => import("./DepartmentBreakdown"));
 const WorkforceStatus = React.lazy(() => import("./WorkforceStatus"));
 
 // Constants
-const STORAGE_KEY_LAYOUT = "db_layout_v12";
+const STORAGE_KEY_LAYOUT = "db_layout_v13";
 const STORAGE_KEY_VISIBILITY = "db_visibility_v12";
 const RIGHT_PANEL_WIDTH = 270;
 
@@ -82,6 +83,39 @@ const DEFAULT_LAYOUTS = {
     { i: "jobOpeningsList", x: 0, y: 7, w: 3, h: 5, minW: 3, minH: 2 },
     { i: "birthdayAnniversary", x: 3, y: 7, w: 4, h: 5, minW: 3, minH: 2 },
     { i: "departmentBreakdown", x: 7, y: 7, w: 3, h: 5, minW: 2, minH: 2 },
+  ],
+  sm: [
+    { i: "quickStats", x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 2 },
+    { i: "workforceStatus", x: 0, y: 2, w: 6, h: 2, minW: 2, minH: 2 },
+    { i: "attendanceCalendar", x: 0, y: 4, w: 6, h: 2, minW: 2, minH: 2 },
+    { i: "hrActivities", x: 0, y: 6, w: 6, h: 3, minW: 2, minH: 2 },
+    { i: "pendingApprovals", x: 0, y: 9, w: 3, h: 3, minW: 2, minH: 2 },
+    { i: "kycStatus", x: 3, y: 9, w: 3, h: 3, minW: 2, minH: 2 },
+    { i: "jobOpeningsList", x: 0, y: 12, w: 6, h: 5, minW: 2, minH: 2 },
+    { i: "birthdayAnniversary", x: 0, y: 17, w: 6, h: 5, minW: 2, minH: 2 },
+    { i: "departmentBreakdown", x: 0, y: 22, w: 6, h: 5, minW: 2, minH: 2 },
+  ],
+  xs: [
+    { i: "quickStats", x: 0, y: 0, w: 4, h: 2, minW: 1, minH: 2 },
+    { i: "workforceStatus", x: 0, y: 2, w: 4, h: 2, minW: 1, minH: 2 },
+    { i: "attendanceCalendar", x: 0, y: 4, w: 4, h: 2, minW: 1, minH: 2 },
+    { i: "hrActivities", x: 0, y: 6, w: 4, h: 3, minW: 1, minH: 2 },
+    { i: "pendingApprovals", x: 0, y: 9, w: 4, h: 3, minW: 1, minH: 2 },
+    { i: "kycStatus", x: 0, y: 12, w: 4, h: 3, minW: 1, minH: 2 },
+    { i: "jobOpeningsList", x: 0, y: 15, w: 4, h: 5, minW: 1, minH: 2 },
+    { i: "birthdayAnniversary", x: 0, y: 20, w: 4, h: 5, minW: 1, minH: 2 },
+    { i: "departmentBreakdown", x: 0, y: 25, w: 4, h: 5, minW: 1, minH: 2 },
+  ],
+  xxs: [
+    { i: "quickStats", x: 0, y: 0, w: 2, h: 2, minW: 1, minH: 2 },
+    { i: "workforceStatus", x: 0, y: 2, w: 2, h: 2, minW: 1, minH: 2 },
+    { i: "attendanceCalendar", x: 0, y: 4, w: 2, h: 2, minW: 1, minH: 2 },
+    { i: "hrActivities", x: 0, y: 6, w: 2, h: 3, minW: 1, minH: 2 },
+    { i: "pendingApprovals", x: 0, y: 9, w: 2, h: 3, minW: 1, minH: 2 },
+    { i: "kycStatus", x: 0, y: 12, w: 2, h: 3, minW: 1, minH: 2 },
+    { i: "jobOpeningsList", x: 0, y: 15, w: 2, h: 5, minW: 1, minH: 2 },
+    { i: "birthdayAnniversary", x: 0, y: 20, w: 2, h: 5, minW: 1, minH: 2 },
+    { i: "departmentBreakdown", x: 0, y: 25, w: 2, h: 5, minW: 1, minH: 2 },
   ],
 };
 
@@ -211,29 +245,32 @@ const WidgetCard = React.memo(
   ),
 );
 
-const RightPanel = React.memo(({ isDark }: { isDark: boolean }) => (
-  <Box
-    sx={{
-      width: RIGHT_PANEL_WIDTH,
-      maxHeight: "100%",
-      display: "flex",
-      flexDirection: "column",
-      borderRadius: 2,
-      border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
-      bgcolor: isDark ? "#1c262a" : "#fff",
-      overflowY: "auto",
-      boxShadow: isDark
-        ? "0 1px 3px rgba(0,0,0,0.35)"
-        : "0 1px 4px rgba(0,0,0,0.08)",
-    }}
-  >
-    <ErrorBoundary fallback={<ErrorFallback />}>
-      <Suspense fallback={<WidgetSkeleton />}>
-        <MyWorkspace isDark={isDark} />
-      </Suspense>
-    </ErrorBoundary>
-  </Box>
-));
+const RightPanel = React.memo(({ isDark }: { isDark: boolean }) => {
+  const isMobile = useMediaQuery("(max-width:767px)");
+  return (
+    <Box
+      sx={{
+        width: isMobile ? "100%" : RIGHT_PANEL_WIDTH,
+        maxHeight: isMobile ? "none" : "100%",
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 2,
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
+        bgcolor: isDark ? "#1c262a" : "#fff",
+        overflowY: isMobile ? "visible" : "auto",
+        boxShadow: isDark
+          ? "0 1px 3px rgba(0,0,0,0.35)"
+          : "0 1px 4px rgba(0,0,0,0.08)",
+      }}
+    >
+      <ErrorBoundary fallback={<ErrorFallback />}>
+        <Suspense fallback={<WidgetSkeleton />}>
+          <MyWorkspace isDark={isDark} />
+        </Suspense>
+      </ErrorBoundary>
+    </Box>
+  );
+});
 
 // 10px mainBox paddingTop + 64px MUI Toolbar (AppBar default height on desktop)
 const APPBAR_OFFSET = 74;
@@ -243,6 +280,7 @@ function DashboardInner() {
   const { theme } = useContext(ThemeContext);
   const isDark = theme === "dark";
   const { dockVisible } = useBottomDrawer();
+  const isMobile = useMediaQuery("(max-width:767px)");
 
   const { editMode, registerReset } = useDashboardEdit();
 
@@ -315,11 +353,21 @@ function DashboardInner() {
       data-dark={isDark ? "true" : undefined}
       sx={{
         display: "flex",
-        height: `calc(100vh - ${APPBAR_OFFSET + (dockVisible ? DOCK_HEIGHT : 0)}px)`,
-        overflow: "hidden",
+        flexDirection: isMobile ? "column" : "row",
+        height: isMobile
+          ? "auto"
+          : `calc(100vh - ${APPBAR_OFFSET + (dockVisible ? DOCK_HEIGHT : 0)}px)`,
+        overflow: isMobile ? "visible" : "hidden",
         bgcolor: isDark ? "#111B21" : "#F9FAFB",
       }}
     >
+      {/* On mobile: workspace panel stacks above the grid */}
+      {isMobile && (
+        <Box sx={{ p: 1, pb: 0 }}>
+          <RightPanel isDark={isDark} />
+        </Box>
+      )}
+
       {/* main grid area */}
       <Box
         sx={{
@@ -327,7 +375,7 @@ function DashboardInner() {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
+          overflow: isMobile ? "visible" : "hidden",
           minWidth: 0,
         }}
       >
@@ -396,12 +444,18 @@ function DashboardInner() {
         )}
 
         {/* Scrollable grid */}
-        <Box sx={{ flex: 1, overflow: "auto", p: 1 }}>
+        <Box
+          sx={{
+            flex: isMobile ? "none" : 1,
+            overflow: isMobile ? "visible" : "auto",
+            p: 1,
+          }}
+        >
           <ResponsiveGridLayout
             className="dashboard-grid"
             layouts={layouts}
-            breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-            cols={{ lg: 12, md: 10, sm: 6 }}
+            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
             rowHeight={50}
             margin={[8, 8]}
             containerPadding={[0, 0]}
@@ -431,19 +485,21 @@ function DashboardInner() {
         </Box>
       </Box>
 
-      {/* sidebar */}
-      <Box
-        sx={{
-          p: 1,
-          pl: 0,
-          flexShrink: 0,
-          display: "flex",
-          alignSelf: "flex-start",
-          maxHeight: "100%",
-        }}
-      >
-        <RightPanel isDark={isDark} />
-      </Box>
+      {/* sidebar — desktop only; on mobile it renders above the grid */}
+      {!isMobile && (
+        <Box
+          sx={{
+            p: 1,
+            pl: 0,
+            flexShrink: 0,
+            display: "flex",
+            alignSelf: "flex-start",
+            maxHeight: "100%",
+          }}
+        >
+          <RightPanel isDark={isDark} />
+        </Box>
+      )}
     </Box>
   );
 }

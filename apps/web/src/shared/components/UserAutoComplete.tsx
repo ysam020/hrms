@@ -7,14 +7,15 @@ function UserAutoComplete(props: {
   customUserList?: string[];
   placeholder?: string;
   inputProps?: any;
+  fieldName?: string;
   [key: string]: any;
 }) {
   const userList: string[] = props.userList || props.customUserList || [];
   const [filteredUsers, setFilteredUsers] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const { formik } = props;
+  const { formik, fieldName = "username" } = props;
 
-  const hasError = formik.touched.username && formik.errors.username;
+  const hasError = formik.touched[fieldName] && formik.errors[fieldName];
 
   const searchUser = (event: any) => {
     const query = event.query.toLowerCase();
@@ -38,14 +39,16 @@ function UserAutoComplete(props: {
         completeMethod={searchUser}
         onChange={(e) => setInputValue(e.value)}
         onSelect={handleSelect}
-        onBlur={() => formik.setFieldTouched("username", true)}
+        onBlur={() => formik.setFieldTouched(fieldName, true)}
         placeholder={props.placeholder || "Select User"}
         className={`login-input ${hasError ? "p-invalid" : ""}`}
         dropdown
         {...props.inputProps}
         appendTo={"self"}
       />
-      {hasError && <small className="p-error">{formik.errors.username}</small>}
+      {hasError && (
+        <small className="p-error">{formik.errors[fieldName]}</small>
+      )}
     </div>
   );
 }

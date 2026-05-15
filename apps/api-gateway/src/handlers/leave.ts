@@ -3,7 +3,7 @@ import { leaveClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
 
@@ -104,8 +104,8 @@ export async function updateLeaveStatus(req: Request, res: Response) {
       });
     }
 
-    const response = await grpcCall(leaveClient, method, payload);
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    const response = (await grpcCall(leaveClient, method, payload)) as any;
+    return apiResponse(res, grpcToHttpStatus(response.status), response);
   } catch (error: unknown) {
     logger.error("PUT /update-leave-status error:", { error });
     return handleError(res, error);

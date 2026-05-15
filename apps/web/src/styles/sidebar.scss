@@ -219,18 +219,10 @@
   }
 }
 
-// Mobile responsive
-@media (max-width: 1024px) {
+// Hide on mobile only; md+ (≥900px) uses the permanent drawer
+@media (max-width: 899px) {
   .sidebar {
-    display: none; // Hide on mobile, use drawer instead
-  }
-}
-
-// Tablet
-@media (min-width: 768px) and (max-width: 1024px) {
-  .sidebar {
-    width: 60px;
-    padding: 20px 0;
+    display: none;
   }
 }
 

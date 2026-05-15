@@ -137,10 +137,18 @@ function ViewLeaveApplications() {
     const { id: _id, status } = actionDialog;
     setActionLoading(true);
     try {
-      await apiClient.put(API_ENDPOINTS.UPDATE_LEAVE_STATUS, {
+      const response = await apiClient.put(API_ENDPOINTS.UPDATE_LEAVE_STATUS, {
         leaveId: _id,
         action: status!.toLowerCase(),
       });
+      if (!response.data.success) {
+        setAlert({
+          open: true,
+          message: response.data.message || "An error occurred",
+          severity: "error",
+        });
+        return;
+      }
       setActionDialog({ open: false, id: null, username: null, status: null });
       refresh();
       setAlert({

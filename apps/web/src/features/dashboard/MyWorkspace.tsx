@@ -1,4 +1,5 @@
 import React, { Suspense, useContext, useMemo } from "react";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Skeleton from "@mui/material/Skeleton";
@@ -127,6 +128,7 @@ function MyWorkspace({ isDark }) {
   const navigate = useNavigate();
   const { user } = useContext(UserContext);
   const { data, loading } = useDashboard();
+  const isMobile = useMediaQuery("(max-width:767px)");
 
   const borderColor = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
 
@@ -235,10 +237,10 @@ function MyWorkspace({ isDark }) {
   return (
     <Box
       sx={{
-        height: "100%",
+        height: isMobile ? "auto" : "100%",
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
+        overflow: isMobile ? "visible" : "hidden",
       }}
     >
       {/* greeting */}
@@ -274,7 +276,12 @@ function MyWorkspace({ isDark }) {
       </Box>
 
       {/* scrollable content */}
-      <Box sx={{ flex: 1, overflow: "auto" }}>
+      <Box
+        sx={{
+          flex: isMobile ? "none" : 1,
+          overflow: isMobile ? "visible" : "auto",
+        }}
+      >
         {/* attendance today */}
         <Box
           sx={{

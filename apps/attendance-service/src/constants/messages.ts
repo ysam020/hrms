@@ -1,5 +1,5 @@
 export const MESSAGES = {
-  USERNAME_REQUIRED: "username is required",
+  USERNAME_REQUIRED: "userId is required",
   USERNAME_TYPE_REQUIRED: "username and type (CHECK_IN/CHECK_OUT) are required",
   USER_ID_MONTH_YEAR_REQUIRED: "userId, month and year are required",
   ALREADY_CHECKED_IN: "Already checked in for today",
