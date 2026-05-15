@@ -11,15 +11,8 @@ export const createHrActivity = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const {
-      title,
-      description,
-      date,
-      time,
-      activityType,
-      location,
-      createdBy,
-    } = call.request;
+    const { title, description, date, time, activityType, createdBy } =
+      call.request;
 
     if (!title || !date) {
       return callback(null, {
@@ -37,7 +30,7 @@ export const createHrActivity = async (
         title,
         description: description || "",
         scheduledAt,
-        status: activityType || "active",
+        status: activityType || "Active",
         createdBy: createdBy || "",
         createdOn: new Date(),
       },
