@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 
@@ -227,14 +228,24 @@ export async function rejectApplication(req: Request, res: Response) {
 export async function addResignation(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const { reason, lastDate, resignationDate } = req.body;
-    const response = await grpcCall(recruitmentClient, "submitResignation", {
+    const {
+      reason,
+      lastDate,
+      resignationDate,
+      overallJobSatisfaction,
+      suggestions,
+    } = req.body;
+    const response = (await grpcCall(recruitmentClient, "submitResignation", {
       userId: user!.userId,
       reason: reason || "",
       lastDate: lastDate || "",
-      resignationDate: resignationDate || "",
-    });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+      resignationDate: resignationDate || new Date().toISOString(),
+      overallJobSatisfaction: overallJobSatisfaction
+        ? parseFloat(overallJobSatisfaction)
+        : 0,
+      suggestions: suggestions || "",
+    })) as any;
+    return apiResponse(res, grpcToHttpStatus(response.status), response);
   } catch (error: unknown) {
     return handleError(res, error);
   }
@@ -760,6 +771,7 @@ export async function updateResignation(req: Request, res: Response) {
       where: { id: String(req.params._id) },
       data: updateData,
     });
+    await cacheManager.invalidatePattern("resignations:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Resignation updated successfully",
       data: updated,
@@ -810,6 +822,7 @@ export async function addExitFeedback(req: Request, res: Response) {
         lastUpdatedOn: new Date(),
       },
     });
+    await cacheManager.invalidatePattern("resignations:*");
     return apiResponse(res, RESPONSE_STATUS.CREATED, {
       message: "Exit feedback submitted successfully",
       data: updated,

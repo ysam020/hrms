@@ -143,7 +143,7 @@ message UpdateStatusRequest {
 }
 
 message SubmitResignationRequest {
-  string username = 1;
+  string userId = 1;
   string reason = 2;
   string lastDate = 3;
   string resignationDate = 4;
