@@ -32,7 +32,7 @@ function RejectModal(props) {
         name,
         aadharNo,
         jobTitle: props.jobTitle,
-        _id: props.applicantData._id,
+        id: props.applicantData.id,
         jobId: props._id,
       };
 

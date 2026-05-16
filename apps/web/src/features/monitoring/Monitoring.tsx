@@ -114,30 +114,7 @@ function Monitoring() {
         <Typography variant="h6" fontWeight={600}>
           Monitoring
         </Typography>
-        <Box
-          sx={{
-            display: "flex",
-            gap: 1.5,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          {/* Service selector */}
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Service</InputLabel>
-            <Select
-              value={service}
-              label="Service"
-              onChange={(e) => setService(e.target.value)}
-            >
-              {SERVICES.map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s === "all" ? "All services" : s}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
+        <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
           {/* Time range */}
           <ToggleButtonGroup
             value={range}
@@ -155,6 +132,22 @@ function Monitoring() {
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
+
+          {/* Service selector */}
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel>Service</InputLabel>
+            <Select
+              value={service}
+              label="Service"
+              onChange={(e) => setService(e.target.value)}
+            >
+              {SERVICES.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {s === "all" ? "All services" : s}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           <Tooltip title="Grafana dashboard">
             <Typography

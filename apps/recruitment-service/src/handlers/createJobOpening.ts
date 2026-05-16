@@ -41,7 +41,7 @@ export const createJobOpening = async (
         numberOfVacancies: numberOfVacancies
           ? parseInt(String(numberOfVacancies))
           : null,
-        status: jobStatus || "Open",
+        status: jobStatus || "Active",
         createdBy: createdBy || "",
       },
     });

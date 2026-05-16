@@ -1,5 +1,12 @@
 import { useCallback, useMemo } from "react";
 
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+
 export const useAttendanceData = (attendances, loading) => {
   const todayAttendance = useMemo(() => {
     const currentDate = new Date().setHours(0, 0, 0, 0);
@@ -9,8 +16,12 @@ export const useAttendanceData = (attendances, loading) => {
     });
   }, [attendances]);
 
-  const todayTimeIn = todayAttendance?.timeIn || "";
-  const todayTimeOut = todayAttendance?.timeOut || "";
+  const todayTimeIn = todayAttendance?.checkIn
+    ? formatTime(todayAttendance.checkIn)
+    : "";
+  const todayTimeOut = todayAttendance?.checkOut
+    ? formatTime(todayAttendance.checkOut)
+    : "";
 
   const disableFields = useMemo(
     () => ({

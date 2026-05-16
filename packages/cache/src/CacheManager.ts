@@ -124,6 +124,18 @@ export class CacheManager {
    * Uses SCAN to avoid blocking Redis on large keyspaces.
    */
   async invalidatePattern(pattern: string): Promise<void> {
+    // Always evict memory entries first — independent of Redis availability.
+    const prefix = pattern.endsWith(":*")
+      ? pattern.slice(0, -1)
+      : pattern.replace(/\*/g, "");
+    for (const key of this.memoryCache.keys()) {
+      if (key.startsWith(prefix) || this.matchesGlob(key, pattern)) {
+        this.memoryCache.delete(key);
+        this.memoryTTL.delete(key);
+      }
+    }
+
+    // Best-effort Redis eviction (SCAN avoids blocking on large keyspaces).
     try {
       const redis = getRedisClient();
       let cursor = "0";
@@ -140,16 +152,6 @@ export class CacheManager {
           await redis.del(...keys);
         }
       } while (cursor !== "0");
-
-      const prefix = pattern.endsWith(":*")
-        ? pattern.slice(0, -1)
-        : pattern.replace(/\*/g, "");
-      for (const key of this.memoryCache.keys()) {
-        if (key.startsWith(prefix) || this.matchesGlob(key, pattern)) {
-          this.memoryCache.delete(key);
-          this.memoryTTL.delete(key);
-        }
-      }
     } catch (err) {
       logger.error("CacheManager.invalidatePattern error:", { pattern, err });
     }

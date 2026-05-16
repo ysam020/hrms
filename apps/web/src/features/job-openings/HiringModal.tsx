@@ -43,7 +43,7 @@ function HiringModal(props) {
         jobTitle: props.jobTitle,
         email,
         name,
-        _id: props.applicantData._id,
+        id: props.applicantData.id,
       };
 
       try {

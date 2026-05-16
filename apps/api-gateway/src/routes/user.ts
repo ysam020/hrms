@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
-import { saveFcmTokenSchema } from "../schemas";
+import { saveFcmTokenSchema, saveFaceDescriptorSchema } from "../schemas";
 import * as h from "../handlers/user";
 
 export const userRouter: Router = Router();
@@ -18,4 +18,11 @@ userRouter.delete(
   "/disable-push-notifications",
   authenticate,
   h.disablePushNotifications,
+);
+userRouter.get("/check-face-descriptor", authenticate, h.checkFaceDescriptor);
+userRouter.post(
+  "/save-face-descriptor",
+  authenticate,
+  validate(saveFaceDescriptorSchema),
+  h.saveFaceDescriptor,
 );

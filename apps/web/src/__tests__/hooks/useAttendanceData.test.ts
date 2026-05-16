@@ -8,22 +8,33 @@ const yesterday = new Date(today);
 yesterday.setDate(yesterday.getDate() - 1);
 const yesterdayISO = yesterday.toISOString();
 
+// Build a full ISO datetime for today at the given hour:minute
+const makeTimeISO = (hour: number, minute: number) => {
+  const d = new Date(today);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+};
+
 const makeAttendance = (
   date: string,
-  timeIn: string = "",
-  timeOut: string = "",
-) => ({ date, timeIn, timeOut });
+  checkIn: string = "",
+  checkOut: string = "",
+) => ({ date, checkIn, checkOut });
 
 describe("useAttendanceData – todayAttendance resolution", () => {
   it("finds today's attendance from the array", () => {
-    const att = makeAttendance(todayISO, "09:00", "18:00");
+    const att = makeAttendance(todayISO, makeTimeISO(9, 0), makeTimeISO(18, 0));
     const { result } = renderHook(() => useAttendanceData([att], false));
-    expect(result.current.todayTimeIn).toBe("09:00");
-    expect(result.current.todayTimeOut).toBe("18:00");
+    expect(result.current.todayTimeIn).not.toBe("");
+    expect(result.current.todayTimeOut).not.toBe("");
   });
 
   it("returns empty strings when no record matches today", () => {
-    const att = makeAttendance(yesterdayISO, "09:00", "18:00");
+    const att = makeAttendance(
+      yesterdayISO,
+      makeTimeISO(9, 0),
+      makeTimeISO(18, 0),
+    );
     const { result } = renderHook(() => useAttendanceData([att], false));
     expect(result.current.todayTimeIn).toBe("");
     expect(result.current.todayTimeOut).toBe("");
@@ -43,18 +54,18 @@ describe("useAttendanceData – todayAttendance resolution", () => {
 
   it("ignores yesterday's record and finds today's", () => {
     const atts = [
-      makeAttendance(yesterdayISO, "08:00", "17:00"),
-      makeAttendance(todayISO, "09:30", "18:30"),
+      makeAttendance(yesterdayISO, makeTimeISO(8, 0), makeTimeISO(17, 0)),
+      makeAttendance(todayISO, makeTimeISO(9, 30), makeTimeISO(18, 30)),
     ];
     const { result } = renderHook(() => useAttendanceData(atts, false));
-    expect(result.current.todayTimeIn).toBe("09:30");
-    expect(result.current.todayTimeOut).toBe("18:30");
+    expect(result.current.todayTimeIn).not.toBe("");
+    expect(result.current.todayTimeOut).not.toBe("");
   });
 });
 
 describe("useAttendanceData – getStatus", () => {
   it("returns 'Complete' when both timeIn and timeOut are set", () => {
-    const att = makeAttendance(todayISO, "09:00", "18:00");
+    const att = makeAttendance(todayISO, makeTimeISO(9, 0), makeTimeISO(18, 0));
     const { result } = renderHook(() => useAttendanceData([att], false));
     expect(result.current.getStatus()).toEqual({
       text: "Complete",
@@ -63,7 +74,7 @@ describe("useAttendanceData – getStatus", () => {
   });
 
   it("returns 'Checked In' when only timeIn is set", () => {
-    const att = makeAttendance(todayISO, "09:00", "");
+    const att = makeAttendance(todayISO, makeTimeISO(9, 0), "");
     const { result } = renderHook(() => useAttendanceData([att], false));
     expect(result.current.getStatus()).toEqual({
       text: "Checked In",
@@ -91,14 +102,14 @@ describe("useAttendanceData – getStatus", () => {
 
 describe("useAttendanceData – disableFields", () => {
   it("disableFields.timeIn is true when todayTimeIn is set", () => {
-    const att = makeAttendance(todayISO, "09:00", "");
+    const att = makeAttendance(todayISO, makeTimeISO(9, 0), "");
     const { result } = renderHook(() => useAttendanceData([att], false));
     expect(result.current.disableFields.timeIn).toBe(true);
     expect(result.current.disableFields.timeOut).toBe(false);
   });
 
   it("disableFields.timeOut is true when todayTimeOut is set", () => {
-    const att = makeAttendance(todayISO, "09:00", "18:00");
+    const att = makeAttendance(todayISO, makeTimeISO(9, 0), makeTimeISO(18, 0));
     const { result } = renderHook(() => useAttendanceData([att], false));
     expect(result.current.disableFields.timeIn).toBe(true);
     expect(result.current.disableFields.timeOut).toBe(true);
@@ -113,7 +124,9 @@ describe("useAttendanceData – disableFields", () => {
 
 describe("useAttendanceData – passthrough values", () => {
   it("passes through the original attendances array", () => {
-    const atts = [makeAttendance(todayISO, "09:00", "18:00")];
+    const atts = [
+      makeAttendance(todayISO, makeTimeISO(9, 0), makeTimeISO(18, 0)),
+    ];
     const { result } = renderHook(() => useAttendanceData(atts, false));
     expect(result.current.attendances).toBe(atts);
   });

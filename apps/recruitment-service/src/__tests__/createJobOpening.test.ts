@@ -67,7 +67,7 @@ describe("createJobOpening", () => {
       department: "",
       hiringManager: "manager1",
       candidatesHired: 0,
-      status: "Open",
+      status: "Active",
       createdBy: "admin",
       createdOn: new Date("2024-03-01"),
     };
@@ -95,7 +95,7 @@ describe("createJobOpening", () => {
           experience: 3,
           numberOfVacancies: 2,
           applicationDeadline: expect.any(Date),
-          status: "Open",
+          status: "Active",
         }),
       }),
     );
@@ -109,7 +109,7 @@ describe("createJobOpening", () => {
     });
   });
 
-  it("defaults status to 'Open' when jobStatus not provided", async () => {
+  it("defaults status to 'Active' when jobStatus not provided", async () => {
     const created = {
       id: "job-1",
       jobTitle: "Engineer",
@@ -123,7 +123,7 @@ describe("createJobOpening", () => {
       department: "",
       hiringManager: "",
       candidatesHired: 0,
-      status: "Open",
+      status: "Active",
       createdBy: "",
       createdOn: null,
     };
@@ -133,7 +133,7 @@ describe("createJobOpening", () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: "Open" }),
+        data: expect.objectContaining({ status: "Active" }),
       }),
     );
   });

@@ -23,7 +23,7 @@ export const applyForJob = async (
     const jobOpening = await prisma.jobOpening.findUnique({
       where: { id: jobTitleId },
     });
-    if (!jobOpening || jobOpening.status !== "Open") {
+    if (!jobOpening || !["Open", "Active"].includes(jobOpening.status)) {
       return callback(null, {
         message: MESSAGES.JOB_NOT_FOUND_OR_CLOSED,
         status: status.NOT_FOUND,

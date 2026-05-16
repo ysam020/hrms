@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { camelToSnake, apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { parsePagination, PAGINATION } from "../utils/pagination";
+import { handleError } from "../utils/handleError";
 
 export async function getAllUsers(req: Request, res: Response) {
   try {
@@ -128,5 +129,43 @@ export async function disablePushNotifications(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
       message: "Internal Server Error",
     });
+  }
+}
+
+export async function checkFaceDescriptor(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const row = await prisma.user.findUnique({
+      where: { id: user!.userId },
+      select: { face_descriptor: true },
+    });
+    const descriptor = (row?.face_descriptor as number[] | null) ?? [];
+    const hasDescriptor =
+      Array.isArray(descriptor) && descriptor.length === 128;
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Face descriptor status fetched",
+      data: {
+        hasDescriptor,
+        descriptor: hasDescriptor ? descriptor : null,
+      },
+    });
+  } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
+export async function saveFaceDescriptor(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { descriptor } = req.body;
+    await prisma.user.update({
+      where: { id: user!.userId },
+      data: { face_descriptor: descriptor },
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Face descriptor saved successfully",
+    });
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }

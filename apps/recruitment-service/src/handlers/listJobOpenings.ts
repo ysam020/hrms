@@ -19,8 +19,15 @@ export const listJobOpenings = async (
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
-    const where: Record<string, any> = { status: { not: "deleted" } };
-    if (jobStatus && jobStatus !== "all") where.status = jobStatus;
+    const where: Record<string, any> = {};
+    const normalizedStatus = (jobStatus || "").toLowerCase();
+    if (!normalizedStatus || normalizedStatus === "all") {
+      where.status = { notIn: ["deleted", "Deleted"] };
+    } else if (normalizedStatus === "deleted") {
+      where.status = { in: ["deleted", "Deleted"] };
+    } else {
+      where.status = jobStatus;
+    }
     if (search) {
       where.OR = [
         { jobTitle: { contains: search, mode: "insensitive" } },

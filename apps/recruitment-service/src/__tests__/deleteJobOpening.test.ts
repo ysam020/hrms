@@ -28,7 +28,7 @@ const jobRow = { id: "j-1", jobTitle: "SWE", status: "open" };
 describe("deleteJobOpening", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUpdate.mockResolvedValue({ ...jobRow, status: "deleted" });
+    mockUpdate.mockResolvedValue({ ...jobRow, status: "Deleted" });
     mockInvalidate.mockResolvedValue(undefined);
   });
 
@@ -54,7 +54,7 @@ describe("deleteJobOpening", () => {
   });
 
   it("returns ALREADY_EXISTS when job opening already deleted", async () => {
-    mockFindUnique.mockResolvedValue({ ...jobRow, status: "deleted" });
+    mockFindUnique.mockResolvedValue({ ...jobRow, status: "Deleted" });
     const cb = makeCallback();
     await deleteJobOpening(makeCall({ id: "j-1" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -70,7 +70,7 @@ describe("deleteJobOpening", () => {
     await deleteJobOpening(makeCall({ id: "j-1", deletedBy: "admin" }), cb);
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "j-1" },
-      data: expect.objectContaining({ status: "deleted", deletedBy: "admin" }),
+      data: expect.objectContaining({ status: "Deleted", deletedBy: "admin" }),
     });
     expect(mockInvalidate).toHaveBeenCalledWith("jobOpenings:*");
     expect(cb).toHaveBeenCalledWith(

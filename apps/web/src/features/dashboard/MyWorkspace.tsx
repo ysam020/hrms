@@ -148,9 +148,9 @@ function MyWorkspace({ isDark }) {
 
   // Working hours today
   const workingHoursToday = useMemo(() => {
-    if (!todayRecord?.timeIn || !todayRecord?.timeOut) return null;
-    const mins = dayjs(todayRecord.timeOut).diff(
-      dayjs(todayRecord.timeIn),
+    if (!todayRecord?.checkIn || !todayRecord?.checkOut) return null;
+    const mins = dayjs(todayRecord.checkOut).diff(
+      dayjs(todayRecord.checkIn),
       "minute",
     );
     if (mins <= 0) return null;
@@ -323,20 +323,20 @@ function MyWorkspace({ isDark }) {
                   px: 1.25,
                   py: 0.75,
                   borderRadius: 1.5,
-                  bgcolor: todayRecord?.timeIn
+                  bgcolor: todayRecord?.checkIn
                     ? isDark
                       ? "rgba(16,185,129,0.12)"
                       : "rgba(16,185,129,0.07)"
                     : isDark
                       ? "rgba(255,255,255,0.04)"
                       : "rgba(0,0,0,0.03)",
-                  border: `1px solid ${todayRecord?.timeIn ? "rgba(16,185,129,0.3)" : borderColor}`,
+                  border: `1px solid ${todayRecord?.checkIn ? "rgba(16,185,129,0.3)" : borderColor}`,
                 }}
               >
                 <LoginIcon
                   sx={{
                     fontSize: 14,
-                    color: todayRecord?.timeIn ? "#10b981" : "text.disabled",
+                    color: todayRecord?.checkIn ? "#10b981" : "text.disabled",
                   }}
                 />
                 <Box>
@@ -356,11 +356,11 @@ function MyWorkspace({ isDark }) {
                     fontWeight={700}
                     sx={{
                       fontSize: "0.82rem",
-                      color: todayRecord?.timeIn ? "#10b981" : "text.disabled",
+                      color: todayRecord?.checkIn ? "#10b981" : "text.disabled",
                     }}
                   >
-                    {todayRecord?.timeIn
-                      ? dayjs(todayRecord.timeIn).format("hh:mm A")
+                    {todayRecord?.checkIn
+                      ? dayjs(todayRecord.checkIn).format("hh:mm A")
                       : "—"}
                   </Typography>
                 </Box>
@@ -376,20 +376,20 @@ function MyWorkspace({ isDark }) {
                   px: 1.25,
                   py: 0.75,
                   borderRadius: 1.5,
-                  bgcolor: todayRecord?.timeOut
+                  bgcolor: todayRecord?.checkOut
                     ? isDark
                       ? "rgba(239,68,68,0.12)"
                       : "rgba(239,68,68,0.07)"
                     : isDark
                       ? "rgba(255,255,255,0.04)"
                       : "rgba(0,0,0,0.03)",
-                  border: `1px solid ${todayRecord?.timeOut ? "rgba(239,68,68,0.3)" : borderColor}`,
+                  border: `1px solid ${todayRecord?.checkOut ? "rgba(239,68,68,0.3)" : borderColor}`,
                 }}
               >
                 <LogoutIcon
                   sx={{
                     fontSize: 14,
-                    color: todayRecord?.timeOut ? "#ef4444" : "text.disabled",
+                    color: todayRecord?.checkOut ? "#ef4444" : "text.disabled",
                   }}
                 />
                 <Box>
@@ -409,11 +409,13 @@ function MyWorkspace({ isDark }) {
                     fontWeight={700}
                     sx={{
                       fontSize: "0.82rem",
-                      color: todayRecord?.timeOut ? "#ef4444" : "text.disabled",
+                      color: todayRecord?.checkOut
+                        ? "#ef4444"
+                        : "text.disabled",
                     }}
                   >
-                    {todayRecord?.timeOut
-                      ? dayjs(todayRecord.timeOut).format("hh:mm A")
+                    {todayRecord?.checkOut
+                      ? dayjs(todayRecord.checkOut).format("hh:mm A")
                       : "—"}
                   </Typography>
                 </Box>

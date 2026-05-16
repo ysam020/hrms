@@ -81,6 +81,12 @@ export const updatePolicySchema = z.object({
   content: z.string().optional(),
 });
 
+// ── Face Descriptor ───────────────────────────────────────────────────────────
+
+export const saveFaceDescriptorSchema = z.object({
+  descriptor: z.array(z.number()).length(128),
+});
+
 // ── Attendance ────────────────────────────────────────────────────────────────
 
 export const addAttendanceSchema = z.object({

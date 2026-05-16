@@ -115,7 +115,7 @@ const JobApplications = (props) => {
         const base64PDF = cell.row.original.resume;
         const handleDownload = () => {
           const link = document.createElement("a");
-          link.href = `data:application/pdf;base64,${base64PDF}`;
+          link.href = base64PDF;
           link.download = `${cell.row.original.name}_Resume.pdf`;
           link.click();
         };

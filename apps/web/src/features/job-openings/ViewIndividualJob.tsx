@@ -27,13 +27,11 @@ function ViewIndividualJob() {
   const [openInfoModal, setOpenInfoModal] = useState(false);
 
   // Fetch job opening details using custom hook
-  const { data, loading: loadingJob } = useFetchData(
-    `/view-job-opening/${_id}`,
-    "get",
-    [_id],
-    null,
-    null,
-  );
+  const {
+    data,
+    loading: loadingJob,
+    refetch: refetchJob,
+  } = useFetchData(`/view-job-opening/${_id}`, "get", [_id], null, null);
 
   const applicationsUrl = `/view-applications/${_id}${
     statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ""
@@ -72,9 +70,9 @@ function ViewIndividualJob() {
   };
   const handleCloseInfoModal = () => setOpenInfoModal(false);
 
-  // Use the refetch function instead of getJobApplications
   const getJobApplications = () => {
     refetchApplications();
+    refetchJob();
   };
 
   if (loadingJob) {
@@ -191,6 +189,7 @@ function ViewIndividualJob() {
         applicantData={applicantData}
         _id={_id}
         jobTitle={data?.jobTitle}
+        getJobApplications={getJobApplications}
       />
       <RejectModal
         open={openRejectModal}
@@ -198,6 +197,7 @@ function ViewIndividualJob() {
         _id={_id}
         applicantData={applicantData}
         jobTitle={data?.jobTitle}
+        getJobApplications={getJobApplications}
       />
       <InfoModal
         open={openInfoModal}

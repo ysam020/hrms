@@ -103,11 +103,12 @@ describe("UserAutoComplete", () => {
     expect(formik.setFieldTouched).toHaveBeenCalledWith("username", true);
   });
 
-  it("updates input value on change", () => {
-    render(<UserAutoComplete formik={makeFormik()} userList={userList} />);
+  it("calls setFieldValue with the typed value on change", () => {
+    const formik = makeFormik();
+    render(<UserAutoComplete formik={formik} userList={userList} />);
     fireEvent.change(screen.getByTestId("autocomplete"), {
       target: { value: "john" },
     });
-    expect(screen.getByTestId("autocomplete")).toHaveValue("john");
+    expect(formik.setFieldValue).toHaveBeenCalledWith("username", "john");
   });
 });

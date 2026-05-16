@@ -26,7 +26,7 @@ export const listApplications = async (
 
     const where: Record<string, any> = {};
     if (jobTitleId) where.jobTitleId = jobTitleId;
-    if (applicationStatus && applicationStatus !== "all")
+    if (applicationStatus && applicationStatus.toLowerCase() !== "all")
       where.status = applicationStatus;
 
     const [applications, total] = await Promise.all([
@@ -34,10 +34,27 @@ export const listApplications = async (
       prisma.jobApplication.count({ where }),
     ]);
 
+    const data = applications.map((a) => ({
+      id: a.id,
+      jobTitleId: a.jobTitleId || "",
+      name: a.name || "",
+      email: a.email || "",
+      mobile: a.mobile || "",
+      resume: a.resume || "",
+      status: a.status || "",
+      appliedAt: "",
+      resumeScore: a.resumeScore ?? 0,
+      aiNotes: a.aiNotes || "",
+      // Extra fields used by the frontend (not in proto, passed through as-is)
+      aadharNo: a.aadharNo || "",
+      interviews: a.interviews ?? [],
+      reason: a.reason || "",
+    }));
+
     const response = {
       message: MESSAGES.APPLICATIONS_LISTED,
       status: status.OK,
-      data: applications,
+      data,
       total,
       page: pageNum,
       limit: limitNum,

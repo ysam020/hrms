@@ -27,7 +27,7 @@ export const deleteJobOpening = async (
       });
     }
 
-    if (existing.status === "deleted") {
+    if (existing.status === "Deleted" || existing.status === "deleted") {
       return callback(null, {
         message: MESSAGES.JOB_OPENING_ALREADY_DELETED,
         status: status.ALREADY_EXISTS,
@@ -37,7 +37,7 @@ export const deleteJobOpening = async (
     const deleted = await prisma.jobOpening.update({
       where: { id },
       data: {
-        status: "deleted",
+        status: "Deleted",
         deletedBy: deletedBy || "",
         deletedOn: new Date(),
         lastUpdatedOn: new Date(),
