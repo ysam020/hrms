@@ -262,6 +262,35 @@ export const useFaceRecognition = () => {
     [],
   );
 
+  /**
+   * Face enrollment
+   *
+   * Extracts a 128-D face descriptor from the video and returns it as a plain
+   * number array suitable for JSON serialisation and DB storage.
+   */
+  const performFaceEnrollment = useCallback(async (video) => {
+    const faceapi = await import("face-api.js");
+
+    const detection = await faceapi
+      .detectSingleFace(
+        video,
+        new faceapi.TinyFaceDetectorOptions({
+          inputSize: 512,
+          scoreThreshold: 0.5,
+        }),
+      )
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!detection || !detection.descriptor) {
+      throw new Error(
+        "Face not detected during enrollment. Please ensure your face is clearly visible and try again.",
+      );
+    }
+
+    return Array.from(detection.descriptor);
+  }, []);
+
   const setupCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -325,6 +354,7 @@ export const useFaceRecognition = () => {
     updateFaceRecognitionState,
     performLivenessDetection,
     performFaceVerification,
+    performFaceEnrollment,
     setupCamera,
     cleanupCamera,
     resetState,

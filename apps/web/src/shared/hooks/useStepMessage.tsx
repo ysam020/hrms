@@ -17,6 +17,14 @@ export const useStepMessage = () => {
         return "Analyzing facial features...";
       case "face_matching":
         return "Matching with stored face data...";
+      case "enrollment_instruction":
+        return "First-time setup: position your face clearly in the frame";
+      case "enrollment_liveness":
+        return "Slowly turn your head left and right to confirm you're present";
+      case "enrollment_capture":
+        return "Capturing your face...";
+      case "enrollment_saving":
+        return "Saving your face data for future attendance...";
       case "location_access":
         return "Getting location...";
       case "recording_attendance":

@@ -161,6 +161,14 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   }, [getData]);
 
   const getStatusChip = (status) => {
+    const deletedStyle = {
+      color: theme === "light" ? "#dc2626" : "#f87171",
+      bg:
+        theme === "light"
+          ? "rgba(239, 68, 68, 0.15)"
+          : "rgba(248, 113, 113, 0.2)",
+      label: "Deleted",
+    };
     const statusMap = {
       Active: {
         color: theme === "light" ? "#059669" : "#34d399",
@@ -178,14 +186,8 @@ function ViewJobOpenings({ refreshKey = 0 }) {
             : "rgba(251, 191, 36, 0.2)",
         label: "Expired",
       },
-      Deleted: {
-        color: theme === "light" ? "#dc2626" : "#f87171",
-        bg:
-          theme === "light"
-            ? "rgba(239, 68, 68, 0.15)"
-            : "rgba(248, 113, 113, 0.2)",
-        label: "Deleted",
-      },
+      Deleted: deletedStyle,
+      deleted: deletedStyle,
     };
 
     const config = statusMap[status] || statusMap.Active;
@@ -296,7 +298,9 @@ function ViewJobOpenings({ refreshKey = 0 }) {
         header: "Actions",
         size: 120,
         Cell: ({ cell }) => {
-          const isDeleted = cell.row.original.status === "Deleted";
+          const isDeleted =
+            cell.row.original.status === "Deleted" ||
+            cell.row.original.status === "deleted";
 
           if (isDeleted) {
             return (

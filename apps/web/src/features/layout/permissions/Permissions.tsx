@@ -50,8 +50,8 @@ function Permissions() {
           borderBottom: 1,
           borderColor: "divider",
           position: "sticky",
-          top: 50,
-          zIndex: 1,
+          top: 0,
+          zIndex: 3,
           backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
           elevation: 3,
         }}

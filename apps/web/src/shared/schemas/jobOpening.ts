@@ -6,7 +6,7 @@ export const jobOpeningSchema = z
       .string()
       .trim()
       .min(2, "Job title must be at least 2 characters"),
-    numberOfVacancies: z
+    numberOfVacancies: z.coerce
       .number({ invalid_type_error: "Number of vacancies must be a number" })
       .int("Must be an integer")
       .positive("Must be greater than 0"),

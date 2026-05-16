@@ -22,7 +22,6 @@ import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import UserAutoComplete from "@web/shared/components/UserAutoComplete";
 import { Calendar } from "primereact/calendar";
-import useUserList from "@web/shared/hooks/useUserList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function ScheduleInterviewModal({
@@ -34,9 +33,11 @@ function ScheduleInterviewModal({
 }) {
   const { setAlert } = useContext(AlertContext);
   const [mode, setMode] = useState("schedule");
-  const { name, email, round } = applicantData || {};
-  const userListRaw = useUserList();
-  const userList = userListRaw.map((u) => u.label);
+  const { name, email, round, status } = applicantData || {};
+
+  // Round N (N>1) can only be scheduled after round N-1 is cleared
+  const prevRoundCleared =
+    !round || round <= 1 || status === `Round ${round - 1} Cleared`;
 
   const validationSchema = toFormikValidationSchema(
     z.object({
@@ -70,7 +71,7 @@ function ScheduleInterviewModal({
             interviewStartTime: formatDate(startDate),
             interviewEndTime: formatDate(endDate),
             roundNumber: round,
-            _id: applicantData._id,
+            _id: applicantData.id,
           });
         } else if (mode === "reschedule") {
           res = await apiClient.put(API_ENDPOINTS.RESCHEDULE_INTERVIEW, {
@@ -80,7 +81,7 @@ function ScheduleInterviewModal({
             interviewDateTime: startDate,
             interviewStartTime: formatDate(startDate),
             interviewEndTime: formatDate(endDate),
-            _id: applicantData._id,
+            _id: applicantData.id,
           });
         } else {
           throw new Error("Invalid mode");
@@ -178,151 +179,168 @@ function ScheduleInterviewModal({
         </Stack>
       </Box>
 
-      {/* Mode Toggle */}
-      <Box sx={{ p: 1.5, pb: 0 }}>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={mode === "reschedule"}
-              onChange={(e) => {
-                const newMode = e.target.checked ? "reschedule" : "schedule";
-                setMode(newMode);
-              }}
-              sx={{
-                color: "primary.main",
-                "&.Mui-checked": {
-                  color: "warning.main",
-                },
-              }}
-            />
-          }
-          label={
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography variant="body2" fontWeight={500}>
-                Reschedule existing interview
-              </Typography>
-              {mode === "reschedule" && (
-                <Chip
-                  label="Reschedule Mode"
-                  size="small"
-                  color="warning"
-                  variant="outlined"
-                />
-              )}
-            </Box>
-          }
-        />
-
-        {mode === "reschedule" && (
-          <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
+      {/* Block scheduling if previous round not cleared */}
+      {!prevRoundCleared ? (
+        <Box sx={{ p: 2 }}>
+          <Alert severity="warning" sx={{ borderRadius: 2 }}>
             <Typography variant="body2">
-              You are rescheduling an existing interview. The candidate will be
-              notified of the change.
+              Round {(round || 1) - 1} must be <strong>Cleared</strong> before
+              scheduling Round {round}. Current status:{" "}
+              <strong>{status || "—"}</strong>
             </Typography>
           </Alert>
-        )}
-      </Box>
-
-      {/* Form */}
-      <Box sx={{ p: 1.5 }}>
-        <form onSubmit={formik.handleSubmit}>
-          <Stack spacing={1}>
-            {/* Interviewer Selection */}
-            <Box>
-              <Typography
-                variant="h6"
-                color="text.secondary"
-                gutterBottom
-                sx={{ mb: 1 }}
-              >
-                <PersonIcon
-                  sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+        </Box>
+      ) : (
+        <>
+          {/* Mode Toggle */}
+          <Box sx={{ p: 1.5, pb: 0 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={mode === "reschedule"}
+                  onChange={(e) => {
+                    const newMode = e.target.checked
+                      ? "reschedule"
+                      : "schedule";
+                    setMode(newMode);
+                  }}
+                  sx={{
+                    color: "primary.main",
+                    "&.Mui-checked": {
+                      color: "warning.main",
+                    },
+                  }}
                 />
-                Select Interviewer
-              </Typography>
-              <UserAutoComplete
-                formik={formik}
-                placeholder="Choose interviewer from the list"
-                customUserList={userList}
-              />
-              {formik.touched.username && formik.errors.username && (
-                <Typography
-                  variant="caption"
-                  color="error"
-                  sx={{ mt: 0.5, display: "block" }}
-                >
-                  {formik.errors.username}
-                </Typography>
-              )}
-            </Box>
+              }
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2" fontWeight={500}>
+                    Reschedule existing interview
+                  </Typography>
+                  {mode === "reschedule" && (
+                    <Chip
+                      label="Reschedule Mode"
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                    />
+                  )}
+                </Box>
+              }
+            />
 
-            {/* Date and Time Selection */}
-            <Box>
-              <Typography
-                variant="h6"
-                color="text.secondary"
-                gutterBottom
-                sx={{ mb: 1 }}
-              >
-                <CalendarTodayIcon
-                  sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                />
-                Interview Date & Time
-              </Typography>
-              <Calendar
-                value={formik.values.dateTime}
-                onChange={(e) => formik.setFieldValue("dateTime", e.value)}
-                showTime
-                hourFormat="24"
-                dateFormat="dd/mm/yy"
-                appendTo="self"
-                minDate={new Date()}
-                disabledDays={[0]} // Disable Sundays
-                timeOnly={false}
-                showButtonBar
-                stepMinute={15}
-                style={{ width: "100%" }}
-                placeholder="Select interview date and time"
-              />
-              {formik.touched.dateTime && formik.errors.dateTime && (
-                <Typography
-                  variant="caption"
-                  color="error"
-                  sx={{ mt: 0.5, display: "block" }}
-                >
-                  {formik.errors.dateTime}
+            {mode === "reschedule" && (
+              <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
+                <Typography variant="body2">
+                  You are rescheduling an existing interview. The candidate will
+                  be notified of the change.
                 </Typography>
-              )}
+              </Alert>
+            )}
+          </Box>
 
-              {/* Time Info */}
-              <Box
-                sx={{
-                  mt: 1.5,
-                  p: 1.5,
-                  bgcolor: "action.hover",
-                  borderRadius: 1,
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-                >
-                  <AccessTimeIcon sx={{ fontSize: 14 }} />
-                  Interview duration: 1 hour • Sundays are disabled • 15-minute
-                  intervals
-                </Typography>
-              </Box>
-            </Box>
+          {/* Form */}
+          <Box sx={{ p: 1.5 }}>
+            <form onSubmit={formik.handleSubmit}>
+              <Stack spacing={1}>
+                {/* Interviewer Selection */}
+                <Box>
+                  <Typography
+                    variant="h6"
+                    color="text.secondary"
+                    gutterBottom
+                    sx={{ mb: 1 }}
+                  >
+                    <PersonIcon
+                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                    />
+                    Select Interviewer
+                  </Typography>
+                  <UserAutoComplete
+                    formik={formik}
+                    placeholder="Choose interviewer from the list"
+                  />
+                  {formik.touched.username && formik.errors.username && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.5, display: "block" }}
+                    >
+                      {formik.errors.username}
+                    </Typography>
+                  )}
+                </Box>
 
-            <Box sx={{ mt: 0 }}>
-              <Button type="submit" disabled={formik.isSubmitting}>
-                {mode === "reschedule" ? "Reschedule" : "Schedule"} Interview
-              </Button>
-            </Box>
-          </Stack>
-        </form>
-      </Box>
+                {/* Date and Time Selection */}
+                <Box>
+                  <Typography
+                    variant="h6"
+                    color="text.secondary"
+                    gutterBottom
+                    sx={{ mb: 1 }}
+                  >
+                    <CalendarTodayIcon
+                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                    />
+                    Interview Date & Time
+                  </Typography>
+                  <Calendar
+                    value={formik.values.dateTime}
+                    onChange={(e) => formik.setFieldValue("dateTime", e.value)}
+                    showTime
+                    hourFormat="24"
+                    dateFormat="dd/mm/yy"
+                    appendTo="self"
+                    minDate={new Date()}
+                    disabledDays={[0]} // Disable Sundays
+                    timeOnly={false}
+                    showButtonBar
+                    stepMinute={15}
+                    style={{ width: "100%" }}
+                    placeholder="Select interview date and time"
+                  />
+                  {formik.touched.dateTime && formik.errors.dateTime && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.5, display: "block" }}
+                    >
+                      {formik.errors.dateTime}
+                    </Typography>
+                  )}
+
+                  {/* Time Info */}
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1.5,
+                      bgcolor: "action.hover",
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                    >
+                      <AccessTimeIcon sx={{ fontSize: 14 }} />
+                      Interview duration: 1 hour • Sundays are disabled •
+                      15-minute intervals
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ mt: 0 }}>
+                  <Button type="submit" disabled={formik.isSubmitting}>
+                    {mode === "reschedule" ? "Reschedule" : "Schedule"}{" "}
+                    Interview
+                  </Button>
+                </Box>
+              </Stack>
+            </form>
+          </Box>
+        </>
+      )}
     </CustomModal>
   );
 }

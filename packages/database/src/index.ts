@@ -8,7 +8,7 @@ declare global {
 export const prisma =
   global.prisma ||
   new PrismaClient({
-    // datasourceUrl: process.env.DEV_MONGODB_URI,
+    datasourceUrl: process.env.DEV_MONGODB_URI,
     log: [
       { emit: "stdout", level: "error" },
       { emit: "stdout", level: "warn" },

@@ -53,13 +53,14 @@ export const updateJobOpening = async (
     ];
 
     for (const field of allowedFields) {
-      if (updateData[field] !== undefined && updateData[field] !== null) {
-        if (field === "applicationDeadline" && updateData[field]) {
-          cleanedData[field] = new Date(updateData[field]);
+      const val = updateData[field];
+      if (val !== undefined && val !== null && val !== "") {
+        if (field === "applicationDeadline") {
+          cleanedData[field] = new Date(val);
         } else if (field === "jobStatus") {
-          cleanedData["status"] = updateData[field];
+          cleanedData["status"] = val;
         } else {
-          cleanedData[field] = updateData[field];
+          cleanedData[field] = val;
         }
       }
     }

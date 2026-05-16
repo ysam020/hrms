@@ -191,7 +191,10 @@ function EditJobOpeningModal(props) {
         applicationDeadline: applicationDeadline?.split("T")[0] || "",
         jobDescription: props.jobData?.jobDescription || "",
         requiredSkills: props.jobData?.requiredSkills || "",
-        experience: props.jobData?.experience || "",
+        experience:
+          props.jobData?.experience != null
+            ? String(props.jobData.experience)
+            : "",
         budget: Array.isArray(budget) ? budget : [2, 10],
         hiringManager: props.jobData?.hiringManager || "",
       });

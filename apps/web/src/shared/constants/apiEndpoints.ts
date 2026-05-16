@@ -118,6 +118,9 @@ const USER = {
   LOGOUT: "/logout",
   // Profile
   GET_PROFILE: "/profile",
+  // Face
+  CHECK_FACE_DESCRIPTOR: "/check-face-descriptor",
+  SAVE_FACE_DESCRIPTOR: "/save-face-descriptor",
   // WebAuthn
   WEBAUTHN_CREDENTIALS: "/webauthn-credentials",
   WEBAUTHN_LOGIN_OPTIONS: "/webauthn-login-options",

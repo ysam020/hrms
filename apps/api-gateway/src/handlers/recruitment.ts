@@ -62,7 +62,7 @@ export async function addJobOpening(req: Request, res: Response) {
       applicationDeadline: applicationDeadline || "",
       budget: Array.isArray(budget) ? budget.map(Number) : [],
       numberOfVacancies: parseInt(String(numberOfVacancies || "0")) || 0,
-      jobStatus: jobStatus || "Open",
+      jobStatus: jobStatus || "Active",
       createdBy: createdBy || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
@@ -84,7 +84,7 @@ export async function editJobOpening(req: Request, res: Response) {
       numberOfVacancies,
       jobStatus,
     } = req.body;
-    const response = await grpcCall(recruitmentClient, "updateJobOpening", {
+    const grpcPayload: Record<string, any> = {
       id: req.params._id,
       jobTitle: jobTitle || "",
       jobDescription: jobDescription || "",
@@ -94,8 +94,13 @@ export async function editJobOpening(req: Request, res: Response) {
       applicationDeadline: applicationDeadline || "",
       budget: Array.isArray(budget) ? budget.map(Number) : [],
       numberOfVacancies: parseInt(String(numberOfVacancies || "0")) || 0,
-      jobStatus: jobStatus || "Open",
-    });
+    };
+    if (jobStatus) grpcPayload.jobStatus = jobStatus;
+    const response = await grpcCall(
+      recruitmentClient,
+      "updateJobOpening",
+      grpcPayload,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     return handleError(res, error);
@@ -160,11 +165,35 @@ export async function applyForJob(req: Request, res: Response) {
 
 export async function viewApplications(req: Request, res: Response) {
   try {
-    const response = await grpcCall(recruitmentClient, "listApplications", {
+    const response = (await grpcCall(recruitmentClient, "listApplications", {
       jobTitleId: req.params.id,
       applicationStatus: req.query.status || "",
       ...parsePagination(req.query),
-    });
+    })) as { data?: any[] };
+
+    // Proto strips interviews/aadharNo/reason — fetch them directly and merge
+    const ids: string[] = (response.data ?? [])
+      .map((a: any) => a.id)
+      .filter(Boolean);
+    if (ids.length > 0) {
+      const extras = await prisma.jobApplication.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, interviews: true, aadharNo: true, reason: true },
+      });
+      const extrasMap = new Map(extras.map((e) => [e.id, e]));
+      response.data = response.data!.map((a: any) => {
+        const extra = extrasMap.get(a.id);
+        return extra
+          ? {
+              ...a,
+              interviews: (extra.interviews as any[]) ?? [],
+              aadharNo: extra.aadharNo ?? "",
+              reason: extra.reason ?? "",
+            }
+          : a;
+      });
+    }
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     return handleError(res, error);
@@ -646,6 +675,7 @@ export async function scheduleInterview(req: Request, res: Response) {
       where: { id: _id },
       data: { interviews, status: `Round ${roundNumber} Scheduled` },
     });
+    await cacheManager.invalidatePattern("applications:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview scheduled successfully",
     });
@@ -687,6 +717,7 @@ export async function rescheduleInterview(req: Request, res: Response) {
       where: { id: _id },
       data: { interviews, status: `Round ${roundNumber} Rescheduled` },
     });
+    await cacheManager.invalidatePattern("applications:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview rescheduled successfully",
     });
@@ -719,6 +750,7 @@ export async function reassignInterviewer(req: Request, res: Response) {
       where: { id: _id },
       data: { interviews },
     });
+    await cacheManager.invalidatePattern("applications:*");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interviewer reassigned successfully",
     });

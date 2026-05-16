@@ -3,8 +3,7 @@
 // Chat root layout
 .chat-root {
   display: flex;
-  // 64px app bar + 72px global dock clearance
-  height: calc(100vh - 64px - 72px);
+  height: calc(var(--page-content-height) - 20px); // subtract top+bottom margin
   overflow: hidden;
   font-family: inherit;
   border-radius: 12px;

@@ -29,7 +29,7 @@ function CameraConsentDrawer({
   }) => void;
 }) {
   const { theme } = useContext(ThemeContext);
-  const { setDrawerOpen } = useBottomDrawer();
+  const { setDrawerOpen, dockVisible } = useBottomDrawer();
   const [permissionBlocked, setPermissionBlocked] = useState(false);
 
   useEffect(() => {
@@ -123,6 +123,7 @@ function CameraConsentDrawer({
           borderTopRightRadius: 16,
           backgroundColor: theme === "light" ? "#fff" : "#212e35",
           margin: "0 auto",
+          paddingBottom: dockVisible ? "72px" : 0,
         },
       }}
     >

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { AutoComplete } from "primereact/autocomplete";
+import apiClient from "@web/core/http/axiosConfig";
 
 function UserAutoComplete(props: {
   formik: any;
@@ -10,35 +11,43 @@ function UserAutoComplete(props: {
   fieldName?: string;
   [key: string]: any;
 }) {
-  const userList: string[] = props.userList || props.customUserList || [];
+  const localList: string[] = props.userList || props.customUserList || [];
   const [filteredUsers, setFilteredUsers] = useState<string[]>([]);
-  const [inputValue, setInputValue] = useState("");
   const { formik, fieldName = "username" } = props;
 
   const hasError = formik.touched[fieldName] && formik.errors[fieldName];
 
-  const searchUser = (event: any) => {
-    const query = event.query.toLowerCase();
-    const results = userList.filter((user) =>
-      user.toLowerCase().includes(query),
-    );
-    setFilteredUsers(results);
-    setInputValue(event.query);
-  };
+  const searchUser = async (event: any) => {
+    const query = event.query;
 
-  const handleSelect = (e: any) => {
-    formik.setFieldValue("username", e.value);
-    setInputValue(e.value);
+    if (localList.length > 0) {
+      // Client-side filter when a pre-fetched list is provided
+      const q = query.toLowerCase();
+      setFilteredUsers(
+        localList.filter((user) => user && user.toLowerCase().includes(q)),
+      );
+    } else {
+      // Server-side search — no pagination issue regardless of user count
+      try {
+        const res = await apiClient.get(
+          `/get-all-users?search=${encodeURIComponent(query)}&limit=50`,
+        );
+        const users: any[] = res.data?.data ?? res.data ?? [];
+        setFilteredUsers(users.map((u) => u.username).filter(Boolean));
+      } catch {
+        setFilteredUsers([]);
+      }
+    }
   };
 
   return (
     <div className="form-field-container">
       <AutoComplete
-        value={inputValue}
+        value={formik.values[fieldName]}
         suggestions={filteredUsers}
         completeMethod={searchUser}
-        onChange={(e) => setInputValue(e.value)}
-        onSelect={handleSelect}
+        onChange={(e) => formik.setFieldValue(fieldName, e.value)}
+        onSelect={(e) => formik.setFieldValue(fieldName, e.value)}
         onBlur={() => formik.setFieldTouched(fieldName, true)}
         placeholder={props.placeholder || "Select User"}
         className={`login-input ${hasError ? "p-invalid" : ""}`}

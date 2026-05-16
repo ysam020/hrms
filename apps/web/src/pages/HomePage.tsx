@@ -83,10 +83,8 @@ function HomePage(props) {
       width: { md: `calc(100% - ${drawerWidth}px)` },
       backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
       height: "100vh",
-      overflow: "scroll",
-      padding: "0px",
-      paddingTop: "10px",
-      paddingBottom: "80px",
+      overflow: "hidden",
+      padding: 0,
     }),
     [theme],
   );
@@ -167,37 +165,49 @@ function HomePage(props) {
               <Box component="main" sx={mainBoxStyles}>
                 <Toolbar />
 
-                <Routes>
-                  {filteredRoutes
-                    .filter((r) => !r.spotlightOnly)
-                    .map(({ path, element, allowedModules }, index) => (
-                      <Route
-                        key={index}
-                        path={path}
-                        element={
-                          allowedModules.length === 0 ? (
-                            element
-                          ) : (
-                            <Suspense fallback={<LoadingState size="small" />}>
-                              <ErrorBoundary fallback={<ErrorFallback />}>
-                                {element}
-                              </ErrorBoundary>
-                            </Suspense>
-                          )
-                        }
-                      />
-                    ))}
-                  <Route
-                    path="*"
-                    element={
-                      <Suspense fallback={<LoadingState size="small" />}>
-                        <ErrorBoundary fallback={<ErrorFallback />}>
-                          <UnAuthorisedRoute />
-                        </ErrorBoundary>
-                      </Suspense>
-                    }
-                  />
-                </Routes>
+                {/* Fixed-height scrollable viewport: 100vh - AppBar(64px) - Dock(72px) */}
+                <Box
+                  sx={{
+                    height: "calc(100vh - 64px - 72px)",
+                    overflowY: "auto",
+                    overflowX: "hidden",
+                    paddingTop: "10px",
+                  }}
+                >
+                  <Routes>
+                    {filteredRoutes
+                      .filter((r) => !r.spotlightOnly)
+                      .map(({ path, element, allowedModules }, index) => (
+                        <Route
+                          key={index}
+                          path={path}
+                          element={
+                            allowedModules.length === 0 ? (
+                              element
+                            ) : (
+                              <Suspense
+                                fallback={<LoadingState size="small" />}
+                              >
+                                <ErrorBoundary fallback={<ErrorFallback />}>
+                                  {element}
+                                </ErrorBoundary>
+                              </Suspense>
+                            )
+                          }
+                        />
+                      ))}
+                    <Route
+                      path="*"
+                      element={
+                        <Suspense fallback={<LoadingState size="small" />}>
+                          <ErrorBoundary fallback={<ErrorFallback />}>
+                            <UnAuthorisedRoute />
+                          </ErrorBoundary>
+                        </Suspense>
+                      }
+                    />
+                  </Routes>
+                </Box>
 
                 <Suspense fallback={null}>
                   <ErrorBoundary fallback={<ErrorFallback />}>

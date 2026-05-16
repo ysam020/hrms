@@ -23,9 +23,13 @@ const FaceRecognitionContent = React.memo(
   }) => {
     const muiTheme = useTheme();
 
+    const isEnrollmentMode =
+      faceRecognitionState.step?.startsWith("enrollment");
+
     const isLivenessStep = [
       "liveness_instruction",
       "liveness_head_movement",
+      "enrollment_liveness",
     ].includes(faceRecognitionState.step);
 
     return (
@@ -40,19 +44,33 @@ const FaceRecognitionContent = React.memo(
               width: 56,
               height: 56,
               borderRadius: "50%",
-              backgroundColor: theme === "light" ? "#e3f2fd" : "#1565c0",
+              backgroundColor: isEnrollmentMode
+                ? theme === "light"
+                  ? "#e8f5e9"
+                  : "#1b5e20"
+                : theme === "light"
+                  ? "#e3f2fd"
+                  : "#1565c0",
               mb: 2,
             }}
           >
             <Face
               sx={{
                 fontSize: 28,
-                color: theme === "light" ? "#1976d2" : "#90caf9",
+                color: isEnrollmentMode
+                  ? theme === "light"
+                    ? "#2e7d32"
+                    : "#a5d6a7"
+                  : theme === "light"
+                    ? "#1976d2"
+                    : "#90caf9",
               }}
             />
           </Box>
           <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
-            Face Recognition Verification
+            {isEnrollmentMode
+              ? "Face Enrollment"
+              : "Face Recognition Verification"}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {getStepMessage(faceRecognitionState)}
@@ -65,6 +83,7 @@ const FaceRecognitionContent = React.memo(
             faceRecognitionState={faceRecognitionState}
             videoCallbackRef={videoCallbackRef}
             isLivenessStep={isLivenessStep}
+            isEnrollmentMode={isEnrollmentMode}
             muiTheme={muiTheme}
           />
         )}
@@ -73,7 +92,7 @@ const FaceRecognitionContent = React.memo(
         {!faceRecognitionState.showVideo && <LoadingSection theme={theme} />}
 
         {/* Security Notice */}
-        <SecurityNotice theme={theme} />
+        <SecurityNotice theme={theme} isEnrollmentMode={isEnrollmentMode} />
       </Box>
     );
   },
@@ -84,11 +103,13 @@ const VideoSection = React.memo(
     faceRecognitionState,
     videoCallbackRef,
     isLivenessStep,
+    isEnrollmentMode,
     muiTheme,
   }: {
     faceRecognitionState: any;
     videoCallbackRef: any;
     isLivenessStep: boolean;
+    isEnrollmentMode: boolean;
     muiTheme: any;
   }) => (
     <Box sx={{ mb: 3 }}>
@@ -126,7 +147,10 @@ const VideoSection = React.memo(
           <ProgressOverlay faceRecognitionState={faceRecognitionState} />
         )}
 
-        <InstructionOverlay isLivenessStep={isLivenessStep} />
+        <InstructionOverlay
+          isLivenessStep={isLivenessStep}
+          isEnrollmentMode={isEnrollmentMode}
+        />
       </Paper>
     </Box>
   ),
@@ -227,7 +251,13 @@ const ProgressOverlay = React.memo(
 );
 
 const InstructionOverlay = React.memo(
-  ({ isLivenessStep }: { isLivenessStep: boolean }) => (
+  ({
+    isLivenessStep,
+    isEnrollmentMode,
+  }: {
+    isLivenessStep: boolean;
+    isEnrollmentMode: boolean;
+  }) => (
     <Box
       sx={{
         position: "absolute",
@@ -251,7 +281,9 @@ const InstructionOverlay = React.memo(
       >
         {isLivenessStep
           ? "🔄 Slowly turn your head left and right"
-          : "👤 Position your face in the circle"}
+          : isEnrollmentMode
+            ? "📸 Position your face clearly in the circle"
+            : "👤 Position your face in the circle"}
       </Typography>
     </Box>
   ),
@@ -279,37 +311,50 @@ const LoadingSection = React.memo(({ theme }: { theme: any }) => (
   </Box>
 ));
 
-const SecurityNotice = React.memo(({ theme }: { theme: any }) => (
-  <Box
-    sx={{
-      p: 2,
-      backgroundColor:
-        theme === "light"
-          ? "rgba(33, 150, 243, 0.1)"
-          : "rgba(33, 150, 243, 0.15)",
-      borderRadius: 2,
-      border: `1px solid ${
-        theme === "light"
-          ? "rgba(33, 150, 243, 0.2)"
-          : "rgba(33, 150, 243, 0.3)"
-      }`,
-    }}
-  >
-    <Typography
-      variant="body2"
+const SecurityNotice = React.memo(
+  ({ theme, isEnrollmentMode }: { theme: any; isEnrollmentMode: boolean }) => (
+    <Box
       sx={{
-        fontSize: "0.8rem",
-        color: "text.secondary",
-        lineHeight: 1.4,
-        textAlign: "center",
+        p: 2,
+        backgroundColor:
+          theme === "light"
+            ? "rgba(33, 150, 243, 0.1)"
+            : "rgba(33, 150, 243, 0.15)",
+        borderRadius: 2,
+        border: `1px solid ${
+          theme === "light"
+            ? "rgba(33, 150, 243, 0.2)"
+            : "rgba(33, 150, 243, 0.3)"
+        }`,
       }}
     >
-      🔒 <strong>Secure Verification:</strong> Your face data is processed
-      locally and used only for attendance verification. The camera will
-      automatically stop after verification is complete.
-    </Typography>
-  </Box>
-));
+      <Typography
+        variant="body2"
+        sx={{
+          fontSize: "0.8rem",
+          color: "text.secondary",
+          lineHeight: 1.4,
+          textAlign: "center",
+        }}
+      >
+        🔒{" "}
+        {isEnrollmentMode ? (
+          <>
+            <strong>One-time Setup:</strong> Your face will be securely stored
+            and used for future attendance check-ins. The camera stops
+            automatically once enrollment is complete.
+          </>
+        ) : (
+          <>
+            <strong>Secure Verification:</strong> Your face data is processed
+            locally and used only for attendance verification. The camera will
+            automatically stop after verification is complete.
+          </>
+        )}
+      </Typography>
+    </Box>
+  ),
+);
 
 const FaceRecognitionDialog = React.memo(
   ({

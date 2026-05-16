@@ -70,6 +70,7 @@ async function fetchFullProfile(userId: string) {
           esic_no: 1,
           fcmTokens: 1,
           events: 1,
+          face_descriptor: 1,
         },
       },
     ],
@@ -126,6 +127,10 @@ async function fetchFullProfile(userId: string) {
     esic_no: safeDecrypt(u.esic_no),
     fcmTokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [],
     events: Array.isArray(u.events) ? u.events : [],
+    face_descriptor:
+      Array.isArray(u.face_descriptor) && u.face_descriptor.length === 128
+        ? u.face_descriptor
+        : null,
   };
 }
 

@@ -27,7 +27,6 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { DashboardProvider } from "@web/app/providers/DashboardContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { useDashboardEdit } from "@web/app/providers/DashboardEditContext";
-import { useBottomDrawer } from "@web/app/providers/BottomDrawerContext";
 import "../../styles/dashboard.scss";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -279,7 +278,6 @@ const DOCK_HEIGHT = 72;
 function DashboardInner() {
   const { theme } = useContext(ThemeContext);
   const isDark = theme === "dark";
-  const { dockVisible } = useBottomDrawer();
   const isMobile = useMediaQuery("(max-width:767px)");
 
   const { editMode, registerReset } = useDashboardEdit();
@@ -356,7 +354,7 @@ function DashboardInner() {
         flexDirection: isMobile ? "column" : "row",
         height: isMobile
           ? "auto"
-          : `calc(100vh - ${APPBAR_OFFSET + (dockVisible ? DOCK_HEIGHT : 0)}px)`,
+          : `calc(100vh - ${APPBAR_OFFSET + DOCK_HEIGHT}px)`,
         overflow: isMobile ? "visible" : "hidden",
         bgcolor: isDark ? "#111B21" : "#F9FAFB",
       }}

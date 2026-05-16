@@ -3,6 +3,8 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { getGeolocation } from "@web/core/auth";
 import { addAttendance } from "@web/shared/utils/addAttendance";
+import apiClient from "@web/core/http/axiosConfig";
+import { API_ENDPOINTS } from "@web/shared/constants";
 
 export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -10,12 +12,13 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
   const [showConsentDrawer, setShowConsentDrawer] = useState(false);
 
   const { setAlert } = useContext(AlertContext);
-  const { user } = useContext(UserContext);
+  const { setUser } = useContext(UserContext);
 
   const {
     updateFaceRecognitionState,
     performLivenessDetection,
     performFaceVerification,
+    performFaceEnrollment,
     setupCamera,
     cleanupCamera,
   } = faceRecognition;
@@ -37,16 +40,12 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
           headMovementDetected: false,
         });
 
-        if (!user?.face_descriptor) {
-          throw new Error("Face data not available for user.");
-        }
-
-        let descriptorArray = user.face_descriptor;
-        if (typeof descriptorArray === "string") {
-          descriptorArray = JSON.parse(descriptorArray);
-        }
-
-        const storedDescriptor = new Float32Array(descriptorArray);
+        const { data: descriptorStatus } = await apiClient.get(
+          API_ENDPOINTS.CHECK_FACE_DESCRIPTOR,
+        );
+        const hasDescriptor = descriptorStatus?.data?.hasDescriptor === true;
+        const storedDescriptorData: number[] | null =
+          descriptorStatus?.data?.descriptor ?? null;
 
         updateFaceRecognitionState({ step: "camera_setup" });
 
@@ -60,18 +59,39 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
           videoStream: stream,
         });
 
-        updateFaceRecognitionState({ step: "liveness_instruction" });
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!hasDescriptor) {
+          // ── Enrollment mode ─────────────────────────────────────────────────
+          updateFaceRecognitionState({ step: "enrollment_instruction" });
+          await new Promise((resolve) => setTimeout(resolve, 2500));
 
-        updateFaceRecognitionState({ step: "liveness_head_movement" });
+          updateFaceRecognitionState({ step: "enrollment_liveness" });
+          await performLivenessDetection(video);
 
-        await performLivenessDetection(video);
+          updateFaceRecognitionState({ step: "enrollment_capture" });
+          const descriptor = await performFaceEnrollment(video);
 
-        updateFaceRecognitionState({ step: "face_analysis" });
+          updateFaceRecognitionState({ step: "enrollment_saving" });
+          await apiClient.post(API_ENDPOINTS.SAVE_FACE_DESCRIPTOR, {
+            descriptor,
+          });
 
-        await performFaceVerification(video, storedDescriptor);
+          // Persist in user context so subsequent punch-outs use verification
+          setUser((prev: any) => ({ ...prev, face_descriptor: descriptor }));
+        } else {
+          // ── Verification mode ───────────────────────────────────────────────
+          const storedDescriptor = new Float32Array(storedDescriptorData!);
 
-        updateFaceRecognitionState({ step: "face_matching" });
+          updateFaceRecognitionState({ step: "liveness_instruction" });
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
+          updateFaceRecognitionState({ step: "liveness_head_movement" });
+          await performLivenessDetection(video);
+
+          updateFaceRecognitionState({ step: "face_analysis" });
+          await performFaceVerification(video, storedDescriptor);
+
+          updateFaceRecognitionState({ step: "face_matching" });
+        }
 
         setDialogOpen(false);
 
@@ -103,12 +123,13 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
       }
     },
     [
-      user,
+      setUser,
       setAlert,
       updateFaceRecognitionState,
       setupCamera,
       performLivenessDetection,
       performFaceVerification,
+      performFaceEnrollment,
       cleanupCamera,
       refreshAttendances,
     ],
