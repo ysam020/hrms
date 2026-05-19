@@ -33,7 +33,12 @@ export async function loadSecrets(secretName: string): Promise<void> {
     throw new Error(`Secret "${resolvedName}" has no string value`);
   }
 
-  const secrets = JSON.parse(response.SecretString) as Record<string, unknown>;
+  let secrets: Record<string, unknown>;
+  try {
+    secrets = JSON.parse(response.SecretString) as Record<string, unknown>;
+  } catch {
+    throw new Error(`Secret "${resolvedName}" contains invalid JSON`);
+  }
 
   for (const [key, value] of Object.entries(secrets)) {
     // Don't override values already set in the environment
