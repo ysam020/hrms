@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -17,9 +17,11 @@ export const updateLeaveBalance = async (
       });
     }
 
+    const tenantId = getTenantId()!;
     const balance = await prisma.leaveBalance.upsert({
-      where: { userId },
+      where: { tenantId_userId: { tenantId, userId } },
       create: {
+        tenantId,
         userId,
         balances: balances ?? {},
         accumulatedPLBeforeCurrentMonth: accumulatedPLBeforeCurrentMonth ?? 0,

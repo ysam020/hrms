@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { userClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import { camelToSnake, apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
@@ -45,7 +45,7 @@ export async function getUserData(req: Request, res: Response) {
     snake.dateOfAbscond = u.dateOfAbscond;
 
     // Append salary fields (not in the user service proto)
-    const salaryData = await prisma.user.findUnique({
+    const salaryData = await prisma.user.findFirst({
       where: { id: u.id },
       select: {
         salary: true,

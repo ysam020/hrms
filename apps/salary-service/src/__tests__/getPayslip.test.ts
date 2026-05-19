@@ -1,13 +1,18 @@
 import { prisma } from "@hrms/db";
 import { getPayslip } from "../handlers/getPayslip";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     salaryStructure: { findFirst: jest.fn() },
     user: { findUnique: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },

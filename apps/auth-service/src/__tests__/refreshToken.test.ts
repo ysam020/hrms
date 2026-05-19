@@ -90,11 +90,15 @@ describe("refreshToken", () => {
     await refreshToken(makeCall({ refreshToken: "valid-token" }), cb);
 
     expect(mockRevokeRefreshToken).toHaveBeenCalledWith("user-1");
-    expect(mockSignAccessToken).toHaveBeenCalledWith("user-1");
+    expect(mockSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1" }),
+    );
     expect(mockSignRefreshToken).toHaveBeenCalledWith("user-1");
     expect(mockStoreRefreshToken).toHaveBeenCalledWith(
       "user-1",
       "new-refresh-token",
+      undefined,
+      undefined,
       "valid-token",
     );
     expect(cb).toHaveBeenCalledWith(null, {

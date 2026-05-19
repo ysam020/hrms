@@ -52,8 +52,8 @@ jest.mock("../grpc/clients", () => ({
   grpcCall: jest.fn(),
 }));
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     hrActivity: {
       findMany: jest.fn(),
       count: jest.fn(),
@@ -75,8 +75,13 @@ jest.mock("@hrms/db", () => ({
       create: jest.fn(),
       update: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, status: number, data: any) =>
@@ -281,7 +286,11 @@ describe("hrmHandlers", () => {
     });
 
     it("soft-deletes activity by setting status to deleted", async () => {
-      mockActivityFindUnique.mockResolvedValue({ id: "a1", title: "Workshop", createdBy: "user-1" });
+      mockActivityFindUnique.mockResolvedValue({
+        id: "a1",
+        title: "Workshop",
+        createdBy: "user-1",
+      });
       mockActivityUpdate.mockResolvedValue({});
       const res = makeRes();
       await deleteHrActivity(makeReq({ params: { _id: "a1" } }), res);

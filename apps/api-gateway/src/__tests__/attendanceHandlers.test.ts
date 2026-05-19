@@ -13,13 +13,18 @@ jest.mock("../grpc/clients", () => ({
   grpcCall: jest.fn(),
 }));
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
-    leaveBalance: { findUnique: jest.fn(), findMany: jest.fn() },
-  },
-}));
+    leaveBalance: { findFirst: jest.fn(), findMany: jest.fn() },
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, statusCode: number, data: any) =>
@@ -47,8 +52,8 @@ const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockRecordFindMany = (prisma as any).attendanceRecord
   .findMany as jest.Mock;
-const mockLeaveBalanceFindUnique = (prisma as any).leaveBalance
-  .findUnique as jest.Mock;
+const mockLeaveBalanceFindFirst = (prisma as any).leaveBalance
+  .findFirst as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: Record<string, any> = {}) =>
@@ -277,7 +282,7 @@ describe("attendanceCorrection", () => {
 describe("getAttendanceSummary", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockLeaveBalanceFindUnique.mockResolvedValue(null);
+    mockLeaveBalanceFindFirst.mockResolvedValue(null);
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2024, 2, 15)); // March 15 — mid-month
   });
@@ -336,7 +341,7 @@ describe("getAttendanceSummary", () => {
 
   it("reads usedPL and usedLWP from leave balance for the requested month", async () => {
     mockRecordFindMany.mockResolvedValue([]);
-    mockLeaveBalanceFindUnique.mockResolvedValue({
+    mockLeaveBalanceFindFirst.mockResolvedValue({
       balances: [{ year: 2024, month: 3, usedPL: 2, usedLWP: 1 }],
     });
 

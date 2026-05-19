@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
@@ -102,7 +102,8 @@ export async function getHolidays(req: Request, res: Response) {
       });
     }
 
-    const cacheKey = `holiday:${year}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:holiday:${year}`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -143,7 +144,8 @@ export async function getCalendarEvents(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const userId = user!.userId;
-    const cacheKey = `calendar:events:${userId}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:calendar:events:${userId}`;
 
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached) {
@@ -208,7 +210,8 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
       });
     }
 
-    const cacheKey = `dashboard:birthdays:${monthNum}:${yearNum}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:dashboard:birthdays:${monthNum}:${yearNum}`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -376,6 +379,7 @@ export async function addHoliday(req: Request, res: Response) {
     } else {
       await prisma.holiday.create({
         data: {
+          tenantId: user!.tenantId!,
           year,
           month,
           holidays: [

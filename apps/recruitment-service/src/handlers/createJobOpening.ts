@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -31,6 +31,7 @@ export const createJobOpening = async (
 
     const jobOpening = await prisma.jobOpening.create({
       data: {
+        tenantId: getTenantId()!,
         jobTitle,
         jobDescription: jobDescription || "",
         requiredSkills: requiredSkills || "",

@@ -2,11 +2,16 @@ import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { getRecruitmentAnalytics } from "../handlers/getRecruitmentAnalytics";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     jobApplication: { findMany: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { get: jest.fn(), set: jest.fn() },
@@ -60,7 +65,7 @@ describe("getRecruitmentAnalytics", () => {
     const cb = makeCallback();
     await getRecruitmentAnalytics(makeCall({}), cb);
     expect(mockCacheSet).toHaveBeenCalledWith(
-      "analytics:recruitment",
+      "t:t1:analytics:recruitment",
       expect.any(Object),
       "analytics",
     );

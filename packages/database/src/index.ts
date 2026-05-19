@@ -21,3 +21,11 @@ if (process.env.NODE_ENV !== "production") {
 
 export { PrismaClient } from "@prisma/client";
 export * from "@prisma/client";
+export {
+  tenantStorage,
+  getTenantId,
+  getTenantClient,
+  runWithTenant,
+} from "./tenantContext";
+export { prismaWithTenant } from "./prismaWithTenant";
+export { getClientForDb, closeAllTenantClients } from "./tenantClientPool";

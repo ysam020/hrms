@@ -3,11 +3,16 @@ import { prisma } from "@hrms/db";
 import { getLeaveBalance } from "../handlers/getLeaveBalance";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
-    leaveBalance: { findUnique: jest.fn() },
-  },
-}));
+jest.mock("@hrms/db", () => {
+  const _db = {
+    leaveBalance: { findFirst: jest.fn() },
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -16,7 +21,7 @@ jest.mock("@hrms/logger", () => ({
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
-const mockFindUnique = (prisma as any).leaveBalance.findUnique as jest.Mock;
+const mockFindFirst = (prisma as any).leaveBalance.findFirst as jest.Mock;
 
 describe("getLeaveBalance", () => {
   beforeEach(() => {
@@ -33,7 +38,7 @@ describe("getLeaveBalance", () => {
   });
 
   it("returns NO_LEAVE_BALANCE message when no balance record exists", async () => {
-    mockFindUnique.mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
     await getLeaveBalance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
@@ -51,7 +56,7 @@ describe("getLeaveBalance", () => {
       accumulatedPLBeforeCurrentMonth: 5,
       balances: { casual: 10, sick: 7 },
     };
-    mockFindUnique.mockResolvedValue(balance);
+    mockFindFirst.mockResolvedValue(balance);
 
     const cb = makeCallback();
     await getLeaveBalance(makeCall({ userId: "john" }), cb);
@@ -70,7 +75,7 @@ describe("getLeaveBalance", () => {
   });
 
   it("defaults accumulatedPLBeforeCurrentMonth to 0 when null", async () => {
-    mockFindUnique.mockResolvedValue({
+    mockFindFirst.mockResolvedValue({
       id: "bal-1",
       userId: "jane",
       accumulatedPLBeforeCurrentMonth: null,
@@ -86,7 +91,7 @@ describe("getLeaveBalance", () => {
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockFindUnique.mockRejectedValue(new Error("DB error"));
+    mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await getLeaveBalance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {

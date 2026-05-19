@@ -47,11 +47,16 @@ jest.mock("@hrms/logger", () => ({
 }));
 
 // auth.ts imports these — provide minimal stubs so the module can load
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/crypto", () => ({
   aesEncrypt: jest.fn((v: string) => `enc:${v}`),
@@ -216,7 +221,7 @@ describe("gRPC unavailability – leave domain (getLeaveApplications)", () => {
     // resolveUsername / isSuperUser lookups both go through findUnique
     mockUserFindUnique
       .mockResolvedValueOnce({ isSuperUser: false }) // isSuperUser check
-      .mockResolvedValueOnce({ username: "john" });  // resolveUsername
+      .mockResolvedValueOnce({ username: "john" }); // resolveUsername
   });
 
   it("UNAVAILABLE → HTTP 500", async () => {

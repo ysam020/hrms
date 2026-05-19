@@ -38,19 +38,33 @@ import { SocketProvider } from "@web/app/providers/SocketContext";
 import { ChatUnreadProvider } from "@web/app/providers/ChatUnreadContext";
 const HomePage = React.lazy(() => import("@web/pages/HomePage"));
 const LoginPage = React.lazy(() => import("@web/features/auth/LoginPage"));
+const OrgSetupPage = React.lazy(
+  () => import("@web/features/auth/OrgSetupPage"),
+);
 const CareersPage = React.lazy(() => import("@web/pages/CareersPage"));
 const JobApplicationPage = React.lazy(
   () => import("@web/pages/JobApplicationPage"),
 );
+const InvitePage = React.lazy(() => import("@web/pages/InvitePage"));
 const BroadcastModal = React.lazy(
   () => import("@web/features/layout/modals/BroadcastModal"),
 );
+
+function decodeTokenPayload(token: string | null): Record<string, any> | null {
+  if (!token) return null;
+  try {
+    return JSON.parse(atob(token.split(".")[1]));
+  } catch {
+    return null;
+  }
+}
 
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
+  const [pendingSetup, setPendingSetup] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const muiTheme = useMuiTheme(theme);
   usePrimeReactTheme(theme);
@@ -73,6 +87,7 @@ function App() {
       localStorage.clear();
       if (theme) localStorage.setItem("theme", theme);
       setUser(null);
+      setPendingSetup(false);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -119,27 +134,42 @@ function App() {
       window.history.replaceState({}, "", window.location.pathname);
     }
 
-    // If a stored token exists, go straight to /profile — the 401 interceptor
-    // will silently refresh it if it has expired. Only call performRefresh()
-    // first when there is no token (first visit, post-logout, OAuth callback).
-    (getAccessToken()
-      ? apiClient.get("/profile")
-      : performRefresh().then(() => apiClient.get("/profile"))
-    )
-      .then((res) => {
+    // Boot sequence: ensure we have a valid access token, then check its
+    // payload. If pendingSetup === true the user has no tenant yet — send them
+    // to /org-setup (which fetches their available tenants itself). Otherwise
+    // fetch the profile and drop them into the app.
+    const boot = async () => {
+      try {
+        let token = getAccessToken();
+        if (!token) {
+          token = await performRefresh();
+        }
+
         if (cancelled) return;
-        // setUser and setBooting in the same callback so React batches them
-        // into a single render — prevents a flash of the login page.
+
+        const payload = decodeTokenPayload(token);
+        if (payload?.pendingSetup) {
+          // Mark pendingSetup before revealing routes so the /* catch-all
+          // never fires a /login redirect during the navigation to /org-setup.
+          setPendingSetup(true);
+          if (window.location.pathname !== "/org-setup") {
+            navigate("/org-setup", { replace: true });
+          }
+          setBooting(false);
+          return;
+        }
+
+        const res = await apiClient.get("/profile");
+        if (cancelled) return;
         if (res.data?.success) setUser(res.data.data.user);
         setBooting(false);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setBooting(false);
-      });
+      }
+    };
 
-    // Cleanup prevents stale state updates when React StrictMode double-fires
-    // the effect; the cancellation flag stops the first (aborted) request from
-    // setting booting=false while user is still null.
+    boot();
+
     return () => {
       cancelled = true;
     };
@@ -245,6 +275,30 @@ function App() {
                     }
                   />
                   <Route
+                    path="/org-setup"
+                    element={
+                      user ? (
+                        <Navigate to="/" replace />
+                      ) : (
+                        <ErrorBoundary FallbackComponent={ErrorFallback}>
+                          <Suspense fallback={<Loading />}>
+                            <OrgSetupPage />
+                          </Suspense>
+                        </ErrorBoundary>
+                      )
+                    }
+                  />
+                  <Route
+                    path="/invite"
+                    element={
+                      <ErrorBoundary FallbackComponent={ErrorFallback}>
+                        <Suspense fallback={<Loading />}>
+                          <InvitePage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
                     path="/careers"
                     element={
                       <ErrorBoundary FallbackComponent={ErrorFallback}>
@@ -280,6 +334,8 @@ function App() {
                             </ErrorBoundary>
                           </ChatUnreadProvider>
                         </SocketProvider>
+                      ) : pendingSetup ? (
+                        <Navigate to="/org-setup" replace />
                       ) : (
                         <Navigate
                           to="/login"

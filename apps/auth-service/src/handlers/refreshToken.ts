@@ -39,11 +39,16 @@ export const refreshToken = async (
       });
     }
 
-    const newAccessToken = signAccessToken(payload.userId);
+    const newAccessToken = signAccessToken({
+      userId: payload.userId,
+      tenantId: validation.tenantId,
+      tenantRole: validation.tenantRole,
+      pendingSetup: !validation.tenantId,
+      dbName: validation.dbName,
+    });
 
     if (validation.currentToken !== token) {
-      // Grace-period retry: the token was already rotated. Re-serve the current
-      // refresh token without rotating again so the client recovers seamlessly.
+      // Grace-period retry: re-serve without rotating again.
       return callback(null, {
         message: MESSAGES.TOKEN_REFRESHED,
         status: status.OK,
@@ -55,7 +60,13 @@ export const refreshToken = async (
     // Normal path: rotate — revoke old token, issue new pair
     const newRefreshToken = signRefreshToken(payload.userId);
     await revokeRefreshToken(payload.userId);
-    await storeRefreshToken(payload.userId, newRefreshToken, token);
+    await storeRefreshToken(
+      payload.userId,
+      newRefreshToken,
+      validation.tenantId,
+      validation.tenantRole,
+      token,
+    );
 
     return callback(null, {
       message: MESSAGES.TOKEN_REFRESHED,

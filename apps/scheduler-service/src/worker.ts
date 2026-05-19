@@ -9,6 +9,7 @@ import { reconcileAttendance } from "./jobs/reconcileAttendance";
 import { updateLeaveBalance } from "./jobs/updateLeaveBalance";
 import { sendKycReminders } from "./jobs/sendKycReminders";
 import { cleanupFcmTokens } from "./jobs/cleanupFcmTokens";
+import { checkSubscriptionExpiry } from "./jobs/checkSubscriptionExpiry";
 
 const jobHandlers: Record<SchedulerJobName, () => Promise<void>> = {
   updateExpiredHrActivities,
@@ -18,6 +19,7 @@ const jobHandlers: Record<SchedulerJobName, () => Promise<void>> = {
   updateLeaveBalance,
   sendKycReminders,
   cleanupFcmTokens,
+  checkSubscriptionExpiry,
 };
 
 export function startSchedulerWorker(): Worker {

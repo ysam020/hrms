@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authRouter } from "./auth";
+import { tenantRouter } from "./tenant";
 import { userRouter } from "./user";
 import { employeeRouter } from "./employee";
 import { attendanceRouter } from "./attendance";
@@ -15,23 +16,39 @@ import { permissionsRouter } from "./permissions";
 import { chatRouter } from "./chat";
 import { chatbotRouter } from "./chatbot";
 import { aiInsightsRouter } from "./ai-insights";
+import { paymentRouter } from "./payment";
 import { authLimiter, defaultLimiter } from "../middleware/rateLimiter";
+import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
+import { authenticate, requireTenant } from "../middleware/authenticate";
 
 export const rootRouter: Router = Router();
 
 rootRouter.use(authLimiter, authRouter);
-rootRouter.use(defaultLimiter, userRouter);
-rootRouter.use(defaultLimiter, employeeRouter);
-rootRouter.use(defaultLimiter, attendanceRouter);
-rootRouter.use(defaultLimiter, leaveRouter);
-rootRouter.use(defaultLimiter, recruitmentRouter);
-rootRouter.use(defaultLimiter, hrmRouter);
-rootRouter.use(defaultLimiter, salaryRouter);
-rootRouter.use(defaultLimiter, notificationRouter);
-rootRouter.use(defaultLimiter, generalRouter);
-rootRouter.use(defaultLimiter, analyticsRoutesRouter);
-rootRouter.use("/analytics", defaultLimiter, analyticsRouter);
-rootRouter.use(defaultLimiter, permissionsRouter);
-rootRouter.use(defaultLimiter, chatRouter);
-rootRouter.use(defaultLimiter, chatbotRouter);
-rootRouter.use(defaultLimiter, aiInsightsRouter);
+rootRouter.use(defaultLimiter, tenantRouter);
+rootRouter.use(defaultLimiter, paymentRouter);
+
+// All business routes require an active subscription.
+// authenticate + requireTenant run again here (idempotent) so this guard
+// has the tenant context it needs, then the router's own middleware runs.
+const subscriptionGuard = [
+  defaultLimiter,
+  authenticate,
+  requireTenant,
+  requireActiveSubscription,
+];
+
+rootRouter.use(...subscriptionGuard, userRouter);
+rootRouter.use(...subscriptionGuard, employeeRouter);
+rootRouter.use(...subscriptionGuard, attendanceRouter);
+rootRouter.use(...subscriptionGuard, leaveRouter);
+rootRouter.use(...subscriptionGuard, recruitmentRouter);
+rootRouter.use(...subscriptionGuard, hrmRouter);
+rootRouter.use(...subscriptionGuard, salaryRouter);
+rootRouter.use(...subscriptionGuard, notificationRouter);
+rootRouter.use(...subscriptionGuard, generalRouter);
+rootRouter.use(...subscriptionGuard, analyticsRoutesRouter);
+rootRouter.use("/analytics", ...subscriptionGuard, analyticsRouter);
+rootRouter.use(...subscriptionGuard, permissionsRouter);
+rootRouter.use(...subscriptionGuard, chatRouter);
+rootRouter.use(...subscriptionGuard, chatbotRouter);
+rootRouter.use(...subscriptionGuard, aiInsightsRouter);

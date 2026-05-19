@@ -74,6 +74,11 @@ const Policy = lazy(() => import("@web/features/policy/Policy"));
 // Monitoring
 const Monitoring = lazy(() => import("@web/features/monitoring/Monitoring"));
 
+// Subscription
+const Subscription = lazy(
+  () => import("@web/features/subscription/Subscription"),
+);
+
 const routesConfig = () => {
   return [
     {
@@ -144,6 +149,13 @@ const routesConfig = () => {
       element: <Monitoring />,
       allowedModules: [],
       name: "Monitoring",
+      category: null,
+    },
+    {
+      path: "/subscription",
+      element: <Subscription />,
+      allowedModules: [],
+      name: "Subscription",
       category: null,
     },
     {

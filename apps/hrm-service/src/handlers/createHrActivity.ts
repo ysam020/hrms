@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
@@ -27,6 +27,7 @@ export const createHrActivity = async (
 
     const activity = await prisma.hrActivity.create({
       data: {
+        tenantId: getTenantId()!,
         title,
         description: description || "",
         scheduledAt,

@@ -171,7 +171,6 @@ function HomePage(props) {
                     height: "calc(100vh - 64px - 72px)",
                     overflowY: "auto",
                     overflowX: "hidden",
-                    paddingTop: "10px",
                   }}
                 >
                   <Routes>

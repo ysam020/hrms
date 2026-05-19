@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -17,8 +17,8 @@ export const getLeaveBalance = async (
       });
     }
 
-    const balance = await prisma.leaveBalance.findUnique({
-      where: { userId },
+    const balance = await prisma.leaveBalance.findFirst({
+      where: { tenantId: getTenantId(), userId },
     });
 
     const data = balance

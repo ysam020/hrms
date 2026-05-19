@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import dayjs from "dayjs";
@@ -349,9 +349,15 @@ async function fetchEmployeeData() {
 }
 
 async function fetchKycData() {
+  const tenantId = getTenantId();
+  const tenantMatch = tenantId
+    ? { $match: { tenantId: { $oid: tenantId } } }
+    : null;
+
   const [rows, deptRows] = await Promise.all([
     prisma.user.aggregateRaw({
       pipeline: [
+        ...(tenantMatch ? [tenantMatch] : []),
         {
           $group: {
             _id: null,
@@ -371,6 +377,7 @@ async function fetchKycData() {
     }) as unknown as Promise<any[]>,
     prisma.user.aggregateRaw({
       pipeline: [
+        ...(tenantMatch ? [tenantMatch] : []),
         {
           $group: {
             _id: { dept: "$department", status: "$kyc_approval" },

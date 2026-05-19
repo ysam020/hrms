@@ -30,6 +30,7 @@
     "http2-express-bridge": "^1.0.7",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^4.2.1",
+    "razorpay": "^2.9.6",
     "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",

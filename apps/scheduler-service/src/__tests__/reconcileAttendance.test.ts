@@ -2,19 +2,29 @@ import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { reconcileAttendance } from "../jobs/reconcileAttendance";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findMany: jest.fn(), findUnique: jest.fn() },
     attendanceRecord: { findMany: jest.fn(), createMany: jest.fn() },
     leaveApplication: { createMany: jest.fn() },
     leaveBalance: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       upsert: jest.fn(),
       create: jest.fn(),
     },
     holiday: { findMany: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+    runWithTenant: jest
+      .fn()
+      .mockImplementation((_tenantId: string, _prisma: any, fn: () => any) =>
+        fn(),
+      ),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },
@@ -31,7 +41,7 @@ const mockAttendanceCreateMany = (prisma as any).attendanceRecord
   .createMany as jest.Mock;
 const mockLeaveCreateMany = (prisma as any).leaveApplication
   .createMany as jest.Mock;
-const mockLbFindUnique = (prisma as any).leaveBalance.findUnique as jest.Mock;
+const mockLbFindFirst = (prisma as any).leaveBalance.findFirst as jest.Mock;
 const mockLbUpsert = (prisma as any).leaveBalance.upsert as jest.Mock;
 const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
@@ -43,7 +53,7 @@ describe("reconcileAttendance", () => {
     mockAttendanceFindMany.mockResolvedValue([]);
     mockAttendanceCreateMany.mockResolvedValue({ count: 0 });
     mockLeaveCreateMany.mockResolvedValue({ count: 0 });
-    mockLbFindUnique.mockResolvedValue({
+    mockLbFindFirst.mockResolvedValue({
       username: "john",
       accumulatedPLBeforeCurrentMonth: 0,
       balances: [],
@@ -77,7 +87,7 @@ describe("reconcileAttendance", () => {
   it("processes previous month when today is 1st", async () => {
     // April 1st - should process March
     jest.setSystemTime(new Date(2024, 3, 1, 12, 0, 0));
-    mockUserFindMany.mockResolvedValue([{ username: "john" }]);
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
     // All attendance already exists to avoid complex DB calls
     mockAttendanceFindMany.mockImplementation(() => {
       // Return all dates for March 2024 (1-31)
@@ -97,7 +107,7 @@ describe("reconcileAttendance", () => {
   it("processes current month from 1st to yesterday on non-1st", async () => {
     // March 15th - should process March 1-14
     jest.setSystemTime(new Date(2024, 2, 15, 12, 0, 0));
-    mockUserFindMany.mockResolvedValue([{ username: "john" }]);
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
     // All attendance already exists
     mockAttendanceFindMany.mockImplementation(() => {
       const dates = [];
@@ -114,7 +124,7 @@ describe("reconcileAttendance", () => {
 
   it("invalidates cache patterns after processing employees", async () => {
     jest.setSystemTime(new Date(2024, 2, 15, 12, 0, 0));
-    mockUserFindMany.mockResolvedValue([{ username: "john" }]);
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
     mockAttendanceFindMany.mockImplementation(() => {
       // Return all dates so no missing dates = no DB operations needed
       const dates = [];
@@ -130,14 +140,14 @@ describe("reconcileAttendance", () => {
 
   it("marks holidays correctly", async () => {
     jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0)); // March 5 - process March 1-4
-    mockUserFindMany.mockResolvedValue([{ username: "john" }]);
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
     // No existing attendance
     mockAttendanceFindMany.mockResolvedValue([]);
     // March 1 is a holiday
     mockHolidayFindMany.mockResolvedValue([
       { holidays: [{ date: "2024-03-01" }, { date: "2024-03-02" }] },
     ]);
-    mockLbFindUnique.mockResolvedValue({
+    mockLbFindFirst.mockResolvedValue({
       username: "john",
       accumulatedPLBeforeCurrentMonth: 0,
       balances: [

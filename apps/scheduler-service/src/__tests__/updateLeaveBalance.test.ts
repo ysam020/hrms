@@ -1,14 +1,19 @@
 import { prisma } from "@hrms/db";
 import { updateLeaveBalance } from "../jobs/updateLeaveBalance";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     leaveBalance: {
       findMany: jest.fn(),
       update: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },

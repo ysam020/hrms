@@ -34,6 +34,7 @@ function useChat() {
   const typingTimeoutsRef = useRef({}); // roomId:username -> timeout
   const dbLoadedRoomsRef = useRef(new Set());
   const prevConnectedRef = useRef(false);
+  const hasEverConnectedRef = useRef(false);
   const api = useApiClient();
 
   // IndexedDB helpers
@@ -57,11 +58,16 @@ function useChat() {
   const fetchConversations = useCallback(async () => {
     setLoadingConversations(true);
     try {
-      // Show cached conversations immediately
+      // Show cached conversations immediately, filtered to current user to avoid
+      // flashing stale data from a previous session or different tenant
       const cached = (await getConversations()) as any[];
-      if (cached.length > 0) {
+      const userCached = cached.filter(
+        (c) =>
+          Array.isArray(c.participants) && c.participants.includes(user?.id),
+      );
+      if (userCached.length > 0) {
         setConversations(
-          cached.sort(
+          userCached.sort(
             (a, b) =>
               new Date(b.lastActivity).getTime() -
               new Date(a.lastActivity).getTime(),
@@ -404,12 +410,16 @@ function useChat() {
     prevConnectedRef.current = connected;
 
     if (connected && !wasConnected) {
-      fetchConversations();
-      fetchUnreadCounts();
-      if (activeRoomId) {
-        dbLoadedRoomsRef.current.delete(activeRoomId);
-        fetchMessages(activeRoomId);
+      if (hasEverConnectedRef.current) {
+        // Genuine reconnect — fetch fresh data to catch missed updates
+        fetchConversations();
+        fetchUnreadCounts();
+        if (activeRoomId) {
+          dbLoadedRoomsRef.current.delete(activeRoomId);
+          fetchMessages(activeRoomId);
+        }
       }
+      hasEverConnectedRef.current = true;
       // Deliver any messages that were queued while offline
       flushOutbox();
     }

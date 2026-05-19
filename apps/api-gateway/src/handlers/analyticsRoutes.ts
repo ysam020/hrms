@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 
 export async function getEmploymentTypeBreakdown(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:employment-type";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:employment-type`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -36,7 +37,8 @@ export async function getEmployeeStatusDistribution(
   res: Response,
 ) {
   try {
-    const cacheKey = "analytics:employee-status";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:employee-status`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -63,7 +65,8 @@ export async function getEmployeeStatusDistribution(
 
 export async function getEmployeeDepartments(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:employee-departments";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:employee-departments`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -89,7 +92,8 @@ export async function getEmployeeDepartments(_req: Request, res: Response) {
 
 export async function getEmployeeDesignations(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:employee-designations";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:employee-designations`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -115,14 +119,17 @@ export async function getEmployeeDesignations(_req: Request, res: Response) {
 
 export async function getAgeDistribution(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:age-distribution";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:age-distribution`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const bucketResult = await (prisma.user as any).aggregateRaw({
       pipeline: [
-        { $match: { dob: { $ne: null } } },
+        { $match: { ...tenantIdMatch, dob: { $ne: null } } },
         {
           $addFields: {
             joiningDateParsed: {
@@ -175,14 +182,17 @@ export async function getAgeDistribution(_req: Request, res: Response) {
 
 export async function getJoiningData(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:joining-data";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:joining-data`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const result = await (prisma.user as any).aggregateRaw({
       pipeline: [
-        { $match: { joining_date: { $ne: null } } },
+        { $match: { ...tenantIdMatch, joining_date: { $ne: null } } },
         {
           $group: {
             _id: { $substr: ["$joining_date", 0, 7] },
@@ -209,15 +219,24 @@ export async function getJoiningData(_req: Request, res: Response) {
 
 export async function getTenureDistribution(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:tenure-distribution";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:tenure-distribution`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
     const YEAR_MS = 365.25 * 24 * 3600 * 1000;
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const bucketResult = await (prisma.user as any).aggregateRaw({
       pipeline: [
-        { $match: { employeeStatus: "Active", joining_date: { $ne: null } } },
+        {
+          $match: {
+            ...tenantIdMatch,
+            employeeStatus: "Active",
+            joining_date: { $ne: null },
+          },
+        },
         {
           $addFields: {
             joiningDateParsed: {
@@ -275,7 +294,8 @@ export async function getTenureDistribution(_req: Request, res: Response) {
 
 export async function getHeadcountGrowth(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:headcount-growth";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:headcount-growth`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -284,9 +304,16 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const cutoff = `${twelveMonthsAgo.getFullYear()}-${String(twelveMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
 
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const result = await (prisma.user as any).aggregateRaw({
       pipeline: [
-        { $match: { joining_date: { $ne: null, $gte: cutoff } } },
+        {
+          $match: {
+            ...tenantIdMatch,
+            joining_date: { $ne: null, $gte: cutoff },
+          },
+        },
         {
           $group: {
             _id: { $substr: ["$joining_date", 0, 7] },
@@ -339,7 +366,8 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
 
 export async function getLeaveApprovalRate(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:leave-approval-rate";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:leave-approval-rate`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -364,7 +392,8 @@ export async function getLeaveApprovalRate(_req: Request, res: Response) {
 
 export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:leave-type-breakdown";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:leave-type-breakdown`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -391,7 +420,8 @@ export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
 
 export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:monthly-leave-patterns";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:monthly-leave-patterns`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -400,9 +430,17 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
     const twelveMonthsAgoStr = twelveMonthsAgo.toISOString().split("T")[0];
 
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const result = await (prisma.leaveApplication as any).aggregateRaw({
       pipeline: [
-        { $match: { status: "Approved", from: { $gte: twelveMonthsAgoStr } } },
+        {
+          $match: {
+            ...tenantIdMatch,
+            status: "Approved",
+            from: { $gte: twelveMonthsAgoStr },
+          },
+        },
         {
           $group: {
             _id: { $substr: ["$from", 0, 7] },
@@ -428,7 +466,8 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
 
 export async function getAttendanceTrends(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:attendance-trends";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:attendance-trends`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -436,10 +475,15 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
 
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const result = await (prisma.attendanceRecord as any).aggregateRaw({
       pipeline: [
         {
-          $match: { date: { $gte: { $date: twelveMonthsAgo.toISOString() } } },
+          $match: {
+            ...tenantIdMatch,
+            date: { $gte: { $date: twelveMonthsAgo.toISOString() } },
+          },
         },
         {
           $group: {
@@ -488,7 +532,8 @@ export async function getWorkingHoursDistribution(
   res: Response,
 ) {
   try {
-    const cacheKey = "analytics:working-hours-distribution";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:working-hours-distribution`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -496,10 +541,13 @@ export async function getWorkingHoursDistribution(
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
 
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const bucketResult = await (prisma.attendanceRecord as any).aggregateRaw({
       pipeline: [
         {
           $match: {
+            ...tenantIdMatch,
             date: { $gte: { $date: twelveMonthsAgo.toISOString() } },
             workingHours: { $ne: null },
           },
@@ -541,7 +589,8 @@ export async function getWorkingHoursDistribution(
 
 export async function getJobOpeningsByStatus(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:job-openings-by-status";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:job-openings-by-status`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -566,7 +615,8 @@ export async function getJobOpeningsByStatus(_req: Request, res: Response) {
 
 export async function getApplicationsByJobRole(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:applications-by-job-role";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:applications-by-job-role`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -615,7 +665,8 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
 
 export async function getHiringFunnel(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:hiring-funnel";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:hiring-funnel`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -664,14 +715,14 @@ export async function getHiringManagerPerformance(
   res: Response,
 ) {
   try {
-    const cacheKey = "analytics:hiring-manager-performance";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:hiring-manager-performance`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
     const groups: any[] = await (prisma.jobOpening.groupBy as any)({
       by: ["hiringManager", "status"],
-      where: { hiringManager: { not: null } },
       _count: { _all: true },
     });
     const byManager: Record<
@@ -717,7 +768,8 @@ export async function getSalaryDistributionByDepartment(
   res: Response,
 ) {
   try {
-    const cacheKey = "analytics:salary-distribution-by-dept";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:salary-distribution-by-dept`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -751,7 +803,8 @@ export async function getSalaryDistributionByDepartment(
 
 export async function getCompensationBreakdown(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:compensation-breakdown";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:compensation-breakdown`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -792,7 +845,8 @@ export async function getAverageSalaryByDesignation(
   res: Response,
 ) {
   try {
-    const cacheKey = "analytics:avg-salary-by-designation";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:avg-salary-by-designation`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
@@ -827,14 +881,17 @@ export async function getAverageSalaryByDesignation(
 
 export async function getSalaryBands(_req: Request, res: Response) {
   try {
-    const cacheKey = "analytics:salary-bands";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:analytics:salary-bands`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
 
+    const tenantIdMatch =
+      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
     const bucketResult = await (prisma.user as any).aggregateRaw({
       pipeline: [
-        { $match: { salary: { $ne: null } } },
+        { $match: { ...tenantIdMatch, salary: { $ne: null } } },
         {
           $bucket: {
             groupBy: "$salary",

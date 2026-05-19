@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -30,7 +30,8 @@ export const getAttendance = async (
     const limitNum = parseInt(String(limit)) || 31;
     const skip = (pageNum - 1) * limitNum;
 
-    const cacheKey = `attendance:${userId || ""}:${startDate || ""}:${endDate || ""}:p${pageNum}:l${limitNum}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:attendance:${userId || ""}:${startDate || ""}:${endDate || ""}:p${pageNum}:l${limitNum}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 

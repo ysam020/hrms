@@ -1,11 +1,16 @@
 import { prisma } from "@hrms/db";
 import { updateLeaveBalance } from "../handlers/updateLeaveBalance";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     leaveBalance: { upsert: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -48,7 +53,7 @@ describe("updateLeaveBalance", () => {
     );
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: "john" },
+        where: { tenantId_userId: { tenantId: "t1", userId: "john" } },
         create: expect.objectContaining({
           userId: "john",
           accumulatedPLBeforeCurrentMonth: 5,

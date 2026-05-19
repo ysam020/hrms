@@ -2,13 +2,18 @@ import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { getAttendanceSummary } from "../handlers/getAttendanceSummary";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     attendanceRecord: { findMany: jest.fn() },
-    leaveBalance: { findUnique: jest.fn() },
+    leaveBalance: { findFirst: jest.fn() },
     user: { findUnique: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { get: jest.fn(), set: jest.fn() },
@@ -20,8 +25,8 @@ jest.mock("@hrms/logger", () => ({
 
 const mockRecordFindMany = (prisma as any).attendanceRecord
   .findMany as jest.Mock;
-const mockLeaveBalanceFindUnique = (prisma as any).leaveBalance
-  .findUnique as jest.Mock;
+const mockLeaveBalanceFindFirst = (prisma as any).leaveBalance
+  .findFirst as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockCacheGet = cacheManager.get as jest.Mock;
 const mockCacheSet = cacheManager.set as jest.Mock;
@@ -34,7 +39,7 @@ describe("getAttendanceSummary", () => {
     jest.clearAllMocks();
     mockCacheGet.mockResolvedValue(null);
     mockCacheSet.mockResolvedValue(undefined);
-    mockLeaveBalanceFindUnique.mockResolvedValue(null);
+    mockLeaveBalanceFindFirst.mockResolvedValue(null);
     mockUserFindUnique.mockResolvedValue({ username: "john" });
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2024, 2, 15, 12, 0, 0)); // March 15 noon
@@ -98,7 +103,7 @@ describe("getAttendanceSummary", () => {
 
   it("reads usedPL and usedLWP from leave balance", async () => {
     mockRecordFindMany.mockResolvedValue([]);
-    mockLeaveBalanceFindUnique.mockResolvedValue({
+    mockLeaveBalanceFindFirst.mockResolvedValue({
       balances: [{ year: 2024, month: 3, usedPL: 2, usedLWP: 1 }],
     });
     const cb = makeCallback();

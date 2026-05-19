@@ -111,9 +111,32 @@ export const webAuthnAuthenticationVerify = async (
       data: { webAuthnCredentials: updatedCreds },
     });
 
-    const accessToken = signAccessToken(user.id);
+    // Resolve tenant membership for token
+    const membership = await prisma.tenantMembership.findFirst({
+      where: { userId: user.id },
+    });
+    const tenantRecord = membership
+      ? await prisma.tenant.findUnique({
+          where: { id: membership.tenantId },
+          select: { dbName: true },
+        })
+      : null;
+    const accessToken = signAccessToken({
+      userId: user.id,
+      tenantId: membership?.tenantId ?? null,
+      tenantRole: membership?.role ?? null,
+      pendingSetup: !membership,
+      dbName: tenantRecord?.dbName ?? null,
+    });
     const refreshToken = signRefreshToken(user.id);
-    await storeRefreshToken(user.id, refreshToken);
+    await storeRefreshToken(
+      user.id,
+      refreshToken,
+      membership?.tenantId ?? null,
+      membership?.role ?? null,
+      undefined,
+      tenantRecord?.dbName ?? null,
+    );
     await redis.del(`webauthn:auth:challenge:${user.email}`);
 
     return callback(null, {

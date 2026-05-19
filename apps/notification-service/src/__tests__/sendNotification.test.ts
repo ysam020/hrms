@@ -3,11 +3,16 @@ import { prisma } from "@hrms/db";
 import { sendNotification } from "../handlers/sendNotification";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     notification: { create: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 // Dynamic import of @hrms/firebase is inside the handler — mock the module
 jest.mock("@hrms/firebase", () => ({
@@ -63,11 +68,12 @@ describe("sendNotification", () => {
 
     expect(mockCreate).toHaveBeenCalledWith({
       data: {
+        tenantId: "t1",
         title: "Test",
         message: "Test message",
         eventType: "leave_notification",
         priority: "high",
-        recipients: { create: { userId: "user-1" } },
+        recipients: { create: { tenantId: "t1", userId: "user-1" } },
       },
       include: { recipients: true },
     });

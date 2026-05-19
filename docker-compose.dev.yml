@@ -2,13 +2,14 @@
 #   • AWS credentials (read-only) so bootstrap.js can call Secrets Manager
 #   • TLS certificates (read-only) generated on the host by `pnpm certs:generate`
 #
+# All environment variables are loaded from AWS Secrets Manager at startup
+# by each service's bootstrap.ts (secret name: hrms/config).
+#
 # ${USERPROFILE:-${HOME}} resolves to the correct home directory on every OS:
 #   Windows  → %USERPROFILE%  (e.g. C:\Users\sam)
 #   macOS    → $HOME          (e.g. /Users/sam)
 #   Linux    → $HOME          (e.g. /home/sam)
 x-backend-service: &backend-service
-  env_file:
-    - ./docker/backend.env
   volumes:
     - ${USERPROFILE:-${HOME}}/.aws:/app/.aws:ro
     - ./packages/certificates:/app/packages/certificates:ro
@@ -26,6 +27,7 @@ services:
         - PROJECT=api-gateway-service
         - PORT=9002
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - AUTH_SERVICE_HOST=auth-service
       - USER_SERVICE_HOST=user-service
       - EMPLOYEE_SERVICE_HOST=employee-service
@@ -61,6 +63,7 @@ services:
         - PROJECT=auth-service
         - PORT=50051
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9101
       - LOKI_URL=http://loki:3100
     ports:
@@ -84,6 +87,7 @@ services:
         - PROJECT=user-service
         - PORT=50052
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9102
       - LOKI_URL=http://loki:3100
     ports:
@@ -107,6 +111,7 @@ services:
         - PROJECT=employee-service
         - PORT=50053
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9103
       - LOKI_URL=http://loki:3100
     ports:
@@ -130,6 +135,7 @@ services:
         - PROJECT=attendance-service
         - PORT=50054
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9104
       - LOKI_URL=http://loki:3100
     ports:
@@ -153,6 +159,7 @@ services:
         - PROJECT=leave-service
         - PORT=50055
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9105
       - LOKI_URL=http://loki:3100
     ports:
@@ -176,6 +183,7 @@ services:
         - PROJECT=recruitment-service
         - PORT=50056
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9106
       - LOKI_URL=http://loki:3100
       - OLLAMA_URL=http://host.docker.internal:11434
@@ -200,6 +208,7 @@ services:
         - PROJECT=hrm-service
         - PORT=50057
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9107
       - LOKI_URL=http://loki:3100
     ports:
@@ -223,6 +232,7 @@ services:
         - PROJECT=salary-service
         - PORT=50058
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9108
       - LOKI_URL=http://loki:3100
     ports:
@@ -246,6 +256,7 @@ services:
         - PROJECT=analytics-service
         - PORT=50059
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9109
       - LOKI_URL=http://loki:3100
     ports:
@@ -269,6 +280,7 @@ services:
         - PROJECT=notification-service
         - PORT=50060
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9110
       - LOKI_URL=http://loki:3100
     ports:
@@ -291,6 +303,7 @@ services:
         - APP_DIR=scheduler-service
         - PROJECT=scheduler-service
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - METRICS_PORT=9111
       - LOKI_URL=http://loki:3100
     ports:
@@ -383,6 +396,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - AWS_SECRET_NAME=hrms/config/docker
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false

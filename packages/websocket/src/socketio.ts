@@ -3,14 +3,24 @@ import type { Server as HttpsServer } from "https";
 import { Server, type Socket } from "socket.io";
 import { RedisWebSocketAdapter } from "./RedisWebSocketAdapter";
 
-type AuthenticatedSocket = Socket & { userId: string };
+type AuthenticatedSocket = Socket & {
+  userId: string;
+  tenantId: string | null;
+  dbName: string | null;
+};
+
+export type SocketAuthPayload = {
+  userId: string;
+  tenantId: string | null;
+  dbName: string | null;
+};
 
 /**
  * Async callback provided by the caller to verify a JWT access token and
- * resolve it to the authenticated user's userId.  Returns null when the
- * token is invalid or the user cannot be found.
+ * resolve it to the authenticated user's userId + tenantId + dbName.
+ * Returns null when the token is invalid or the user cannot be found.
  */
-type TokenVerifier = (token: string) => Promise<string | null>;
+type TokenVerifier = (token: string) => Promise<SocketAuthPayload | null>;
 
 export function configureSocketIO(
   server: HttpServer | HttpsServer,
@@ -41,11 +51,13 @@ export function configureSocketIO(
         if (!token) {
           return next(new Error("Authentication failed: token required"));
         }
-        const userId = await verifyToken(token);
-        if (!userId) {
+        const payload = await verifyToken(token);
+        if (!payload) {
           return next(new Error("Authentication failed: invalid token"));
         }
-        (socket as AuthenticatedSocket).userId = userId;
+        (socket as AuthenticatedSocket).userId = payload.userId;
+        (socket as AuthenticatedSocket).tenantId = payload.tenantId;
+        (socket as AuthenticatedSocket).dbName = payload.dbName ?? null;
       } else {
         // Fallback for local development when no verifier is provided
         const userId = socket.handshake.auth?.userId as string | undefined;
@@ -53,6 +65,7 @@ export function configureSocketIO(
           return next(new Error("Authentication failed: userId is required"));
         }
         (socket as AuthenticatedSocket).userId = userId;
+        (socket as AuthenticatedSocket).dbName = null;
       }
       next();
     } catch {

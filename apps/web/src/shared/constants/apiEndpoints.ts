@@ -63,6 +63,7 @@ const KYC = {
 const EMPLOYEE = {
   EMPLOYEE_INSIGHTS: "/employee-insights",
   EDIT_EMPLOYEE_DETAILS: `/edit-employee-details`,
+  GET_ALL_USERS: (limit = 500) => `/get-all-users?limit=${limit}`,
 };
 
 const HOLIDAYS = {

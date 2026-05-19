@@ -42,7 +42,7 @@ export function startNotificationWorker(): Worker {
       }
 
       // Persist notification to DB
-      const notification = await prisma.notification.create({
+      const notification = await (prisma.notification.create as any)({
         data: {
           title,
           message,

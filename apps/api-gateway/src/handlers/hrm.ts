@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { hrmClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import dayjs from "dayjs";
 import { logger } from "@hrms/logger";
 import { jsPDF } from "jspdf";
@@ -17,7 +17,8 @@ export async function getHrActivities(req: Request, res: Response) {
     const search = String(req.query.search || "").trim();
     const skip = (page - 1) * limit;
 
-    const cacheKey = `hrm:activities:v2:${page}:${limit}:${statusFilter}:${search}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:hrm:activities:v2:${page}:${limit}:${statusFilter}:${search}`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -200,7 +201,8 @@ export async function getRules(req: Request, res: Response) {
     );
     const skip = (pageNum - 1) * limitNum;
 
-    const cacheKey = `hrm:rules:${pageNum}:${limitNum}:${category || "all"}:${ruleStatus || "all"}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:hrm:rules:${pageNum}:${limitNum}:${category || "all"}:${ruleStatus || "all"}`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -261,6 +263,7 @@ export async function createRule(req: Request, res: Response) {
     } = req.body;
     const rule = await prisma.rule.create({
       data: {
+        tenantId: user!.tenantId!,
         name,
         category,
         description,
@@ -448,7 +451,8 @@ export async function getPolicies(req: Request, res: Response) {
     const { page, limit } = parsePagination(req.query, 10);
     const skip = (page - 1) * limit;
 
-    const cacheKey = `hrm:policies:${page}:${limit}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:hrm:policies:${page}:${limit}`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -528,6 +532,7 @@ export async function createOrUpdatePolicy(req: Request, res: Response) {
 
     const policy = await prisma.policy.create({
       data: {
+        tenantId: user!.tenantId!,
         policyType,
         policyName: policyName || policyType,
         content,

@@ -104,21 +104,40 @@ export const notificationClient = new notification.NotificationServiceClient(
   creds,
 );
 
+import { Metadata } from "@grpc/grpc-js";
+import { gatewayTenantStorage } from "../middleware/tenantContext";
+
 // Promisify a unary gRPC call; annotates rejected errors with httpStatus so
 // handlers can return the correct HTTP code without inspecting gRPC internals.
+// Automatically forwards the request-scoped tenantId as gRPC metadata so every
+// handler gets tenant isolation for free without any per-call changes.
 export const grpcCall = <Req, Res>(
   client: any,
   method: string,
   request: Req,
-): Promise<Res> =>
-  new Promise((resolve, reject) => {
-    client[method](request, (error: ServiceError | null, response: Res) => {
-      if (error) {
-        (error as ServiceError & { httpStatus: number }).httpStatus =
-          grpcToHttpStatus(error.code ?? GrpcStatus.UNKNOWN);
-        reject(error);
-      } else {
-        resolve(response);
-      }
-    });
+  // Explicit override — only needed in the auth flow (before tenant is known)
+  tenantIdOverride?: string | null,
+): Promise<Res> => {
+  const meta = new Metadata();
+  const store = gatewayTenantStorage.getStore();
+  const tenantId = tenantIdOverride ?? store?.tenantId;
+  const dbName = store?.dbName;
+  if (tenantId) meta.add("x-tenant-id", tenantId);
+  if (dbName) meta.add("x-tenant-db-name", dbName);
+
+  return new Promise((resolve, reject) => {
+    client[method](
+      request,
+      meta,
+      (error: ServiceError | null, response: Res) => {
+        if (error) {
+          (error as ServiceError & { httpStatus: number }).httpStatus =
+            grpcToHttpStatus(error.code ?? GrpcStatus.UNKNOWN);
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      },
+    );
   });
+};

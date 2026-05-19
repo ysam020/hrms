@@ -15,6 +15,7 @@ const JOB_SCHEDULES: JobSchedule[] = [
   { name: "updateLeaveBalance", pattern: "30 0 1 * *" }, // 1st of month 12:30 AM
   { name: "sendKycReminders", pattern: "0 9 * * *" }, // 9:00 AM daily
   { name: "cleanupFcmTokens", pattern: "0 2 * * *" }, // 2:00 AM daily
+  { name: "checkSubscriptionExpiry", pattern: "0 3 * * *" }, // 3:00 AM daily
 ];
 
 export async function registerScheduledJobs(): Promise<void> {
