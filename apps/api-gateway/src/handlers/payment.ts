@@ -70,7 +70,7 @@ export async function fetchPaymentMethod(
   }
 }
 
-function getRazorpay() {
+export function getRazorpay() {
   return new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID!,
     key_secret: process.env.RAZORPAY_KEY_SECRET!,
@@ -103,6 +103,7 @@ async function getOrCreatePlanId(
 
 // POST /payment/create-subscription
 export async function createSubscription(req: AuthRequest, res: Response) {
+  const { userId } = req.user!;
   try {
     const { billing } = req.body as { billing?: "monthly" | "annual" };
     const period = billing === "annual" ? "annual" : "monthly";
@@ -118,6 +119,12 @@ export async function createSubscription(req: AuthRequest, res: Response) {
       quantity: 1,
     });
 
+    // Record pending subscription so the backend can recover without
+    // client-side credentials if the tab closes mid-request.
+    const { storePendingSubscription } =
+      await import("../services/tenantTokenStore");
+    await storePendingSubscription(userId, subscription.id, period);
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: {
         subscriptionId: subscription.id,
@@ -127,6 +134,41 @@ export async function createSubscription(req: AuthRequest, res: Response) {
     });
   } catch (err) {
     logger.error("createSubscription error:", { err });
+    return handleError(res, err);
+  }
+}
+
+// GET /payment/pending-setup
+export async function getPendingSetup(req: AuthRequest, res: Response) {
+  const { userId } = req.user!;
+  try {
+    const { getPendingSubscription, clearPendingSubscription } =
+      await import("../services/tenantTokenStore");
+    const pending = await getPendingSubscription(userId);
+    if (!pending) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        data: { hasPending: false },
+      });
+    }
+
+    const rzp = getRazorpay();
+    const subscription = await (rzp.subscriptions.fetch as any)(
+      pending.subscriptionId,
+    );
+    const isPaid = ["authenticated", "active"].includes(subscription.status);
+
+    if (!isPaid) {
+      await clearPendingSubscription(userId);
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        data: { hasPending: false },
+      });
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { hasPending: true, billing: pending.billing },
+    });
+  } catch (err) {
+    logger.error("getPendingSetup error:", { err });
     return handleError(res, err);
   }
 }

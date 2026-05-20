@@ -49,12 +49,10 @@ interface Tenant {
   role: string;
 }
 
-const PENDING_SETUP_KEY = "hrms_pending_org_setup";
+// Only non-sensitive form fields — no payment credentials.
+const PENDING_FORM_KEY = "hrms_pending_org_form";
 
-interface PendingOrgSetup {
-  razorpayPaymentId: string;
-  razorpaySubscriptionId: string;
-  razorpaySignature: string;
+interface PendingOrgForm {
   orgName: string;
   industry: string;
   companySize: string;
@@ -191,75 +189,62 @@ export default function OrgSetupPage() {
     billingRef.current = billing;
   }, [billing]);
 
-  const resumeFromPending = useCallback(
-    async (data: PendingOrgSetup) => {
-      setResuming(true);
-      try {
-        const createRes = await apiClient.post("/tenants", {
-          name: data.orgName,
-          ...(data.industry && { industry: data.industry }),
-          ...(data.companySize && { companySize: data.companySize }),
-          billing: data.billing,
-          razorpayPaymentId: data.razorpayPaymentId,
-          razorpaySubscriptionId: data.razorpaySubscriptionId,
-          razorpaySignature: data.razorpaySignature,
-        });
-        if (createRes.data?.success) {
-          setAccessToken(createRes.data.data.accessToken);
-          localStorage.removeItem(PENDING_SETUP_KEY);
-          setStep(2);
-        } else {
-          setAlert({
-            open: true,
-            message:
-              createRes.data?.message || "Failed to resume organisation setup.",
-            severity: "error",
-          });
-          localStorage.removeItem(PENDING_SETUP_KEY);
-        }
-      } catch (err: any) {
-        setAlert({
-          open: true,
-          message:
-            err.response?.data?.message ||
-            "Failed to resume organisation setup.",
-          severity: "error",
-        });
-        localStorage.removeItem(PENDING_SETUP_KEY);
-      } finally {
-        setResuming(false);
-      }
-    },
-    [setAlert],
-  );
-
   useEffect(() => {
     apiClient
       .get("/tenants/available")
-      .then((res) => {
-        if (res.data?.success) {
-          const tenantList: Tenant[] = res.data.data.tenants ?? [];
-          setTenants(tenantList);
-          // If no tenants yet, check whether a payment completed but the tab
-          // was closed before POST /tenants finished.
-          if (tenantList.length === 0) {
-            const raw = localStorage.getItem(PENDING_SETUP_KEY);
-            if (raw) {
-              try {
-                const pending = JSON.parse(raw) as PendingOrgSetup;
-                setResuming(true);
-                // Defer so fetching state is cleared first
-                Promise.resolve().then(() => resumeFromPending(pending));
-              } catch {
-                localStorage.removeItem(PENDING_SETUP_KEY);
-              }
-            }
+      .then(async (res) => {
+        if (!res.data?.success) return;
+        const tenantList: Tenant[] = res.data.data.tenants ?? [];
+        setTenants(tenantList);
+
+        if (tenantList.length > 0) return;
+
+        // No tenants yet — check if a payment completed but the tab was closed
+        // before POST /tenants finished. Only proceed if we have form data saved
+        // (which means the Razorpay handler fired on a previous visit).
+        const raw = localStorage.getItem(PENDING_FORM_KEY);
+        if (!raw) return;
+
+        try {
+          const form = JSON.parse(raw) as PendingOrgForm;
+          const setupRes = await apiClient.get("/payment/pending-setup");
+          if (!setupRes.data?.data?.hasPending) {
+            localStorage.removeItem(PENDING_FORM_KEY);
+            return;
           }
+
+          setResuming(true);
+          const createRes = await apiClient.post(
+            "/tenants/complete-pending-setup",
+            {
+              name: form.orgName,
+              ...(form.industry && { industry: form.industry }),
+              ...(form.companySize && { companySize: form.companySize }),
+            },
+          );
+          if (createRes.data?.success) {
+            setAccessToken(createRes.data.data.accessToken);
+            localStorage.removeItem(PENDING_FORM_KEY);
+            setStep(2);
+          } else {
+            localStorage.removeItem(PENDING_FORM_KEY);
+            setAlert({
+              open: true,
+              message:
+                createRes.data?.message ||
+                "Failed to resume organisation setup.",
+              severity: "error",
+            });
+          }
+        } catch {
+          localStorage.removeItem(PENDING_FORM_KEY);
+        } finally {
+          setResuming(false);
         }
       })
       .catch(() => {})
       .finally(() => setFetching(false));
-  }, [resumeFromPending]);
+  }, [setAlert]);
 
   const finishSetup = useCallback(async () => {
     const res = await apiClient.get("/profile");
@@ -331,19 +316,16 @@ export default function OrgSetupPage() {
           const size = companySizeRef.current;
           const bill = billingRef.current;
 
-          // Persist payment details before the network call so a tab-close
-          // or refresh mid-request can be recovered on next visit.
+          // Store non-sensitive form data so we can recover if the tab closes
+          // before the API call completes. No payment credentials are stored.
           localStorage.setItem(
-            PENDING_SETUP_KEY,
+            PENDING_FORM_KEY,
             JSON.stringify({
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySubscriptionId: response.razorpay_subscription_id,
-              razorpaySignature: response.razorpay_signature,
               orgName: name,
               industry: ind,
               companySize: size,
               billing: bill,
-            } satisfies PendingOrgSetup),
+            } satisfies PendingOrgForm),
           );
 
           apiClient
@@ -359,7 +341,7 @@ export default function OrgSetupPage() {
             .then(async (createRes) => {
               if (createRes.data?.success) {
                 setAccessToken(createRes.data.data.accessToken);
-                localStorage.removeItem(PENDING_SETUP_KEY);
+                localStorage.removeItem(PENDING_FORM_KEY);
                 setLoading(false);
                 setStep(2);
               } else {

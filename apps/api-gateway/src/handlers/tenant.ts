@@ -7,7 +7,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { aesEncrypt } from "@hrms/crypto";
-import { fetchPaymentMethod } from "./payment";
+import { fetchPaymentMethod, getRazorpay } from "./payment";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -66,7 +66,165 @@ function verifySubscriptionSignature(
   return expected === signature;
 }
 
-// POST /api/v1/tenants — create a new organisation
+// Shared tenant provisioning — called after payment is verified (either via
+// client-side signature in createTenant or Razorpay API in completePendingSetup).
+async function buildTenant(
+  userId: string,
+  params: {
+    name: string;
+    industry?: string;
+    companySize?: string;
+    billing?: string;
+    razorpaySubscriptionId: string;
+    razorpayPaymentId?: string;
+  },
+  res: Response,
+) {
+  const {
+    name,
+    industry,
+    companySize,
+    billing,
+    razorpaySubscriptionId,
+    razorpayPaymentId,
+  } = params;
+
+  // Idempotency: if a tenant was already created for this subscription (e.g.
+  // the client retries after a tab-close mid-request), re-issue tokens.
+  const existingTenant = await prisma.tenant.findFirst({
+    where: { razorpaySubscriptionId },
+  });
+  if (existingTenant) {
+    const existingMembership = await prisma.tenantMembership.findFirst({
+      where: { tenantId: existingTenant.id, userId },
+    });
+    if (existingMembership) {
+      const { accessToken, refreshToken } = issueTokenPair(
+        userId,
+        existingTenant.id,
+        existingMembership.role,
+        existingTenant.dbName ?? null,
+        false,
+      );
+      const { storeRefreshToken } =
+        await import("../services/tenantTokenStore");
+      await storeRefreshToken(
+        userId,
+        refreshToken,
+        existingTenant.id,
+        existingMembership.role,
+        existingTenant.dbName ?? null,
+        false,
+      );
+      res.cookie(
+        "refresh_token",
+        aesEncrypt(refreshToken),
+        REFRESH_COOKIE_OPTIONS,
+      );
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        data: {
+          accessToken,
+          tenant: {
+            id: existingTenant.id,
+            name: existingTenant.name,
+            slug: existingTenant.slug,
+          },
+        },
+        message: "Organisation setup resumed.",
+      });
+    }
+  }
+
+  let slug = slugify(name);
+  const existing = await prisma.tenant.findUnique({ where: { slug } });
+  if (existing) slug = `${slug}-${randomBytes(3).toString("hex")}`;
+  const dbName = `hrms-${slug}`;
+
+  const now = new Date();
+  const planExpiresAt = new Date(now);
+  if (billing === "annual") {
+    planExpiresAt.setFullYear(planExpiresAt.getFullYear() + 1);
+  } else {
+    planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+  }
+
+  const pmInfo = razorpayPaymentId
+    ? await fetchPaymentMethod(razorpayPaymentId)
+    : null;
+
+  const [tenant] = await Promise.all([
+    prisma.tenant.create({
+      data: {
+        name: name.trim(),
+        slug,
+        dbName,
+        plan: "pro",
+        ...(billing && { billing }),
+        ...(industry && { industry }),
+        ...(companySize && { companySize }),
+        razorpaySubscriptionId,
+        subscriptionStatus: "active",
+        planActivatedAt: now,
+        planExpiresAt,
+        ...(pmInfo && {
+          paymentMethod: pmInfo.method,
+          paymentMethodSummary: pmInfo.summary,
+        }),
+      },
+    }),
+  ]);
+
+  // Fire-and-forget: force Atlas to materialise the tenant database.
+  const tenantClient = getClientForDb(dbName);
+  (tenantClient.$runCommandRaw as any)({
+    insert: "_init",
+    documents: [
+      {
+        _id: { $oid: tenant.id },
+        tenantId: tenant.id,
+        initializedAt: new Date(),
+      },
+    ],
+  }).catch(() => {});
+
+  await Promise.all([
+    prisma.user.update({
+      where: { id: userId },
+      data: { tenantId: tenant.id, isSuperUser: true },
+    }),
+    prisma.tenantMembership.create({
+      data: { tenantId: tenant.id, userId, role: "owner" },
+    }),
+  ]);
+
+  const { accessToken, refreshToken } = issueTokenPair(
+    userId,
+    tenant.id,
+    "owner",
+    tenant.dbName ?? null,
+    false,
+  );
+  const { storeRefreshToken } = await import("../services/tenantTokenStore");
+  await storeRefreshToken(
+    userId,
+    refreshToken,
+    tenant.id,
+    "owner",
+    tenant.dbName ?? null,
+    false,
+  );
+  res.cookie("refresh_token", aesEncrypt(refreshToken), REFRESH_COOKIE_OPTIONS);
+
+  return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+    data: {
+      accessToken,
+      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+    },
+    message: "Organisation created successfully.",
+  });
+}
+
+// POST /api/v1/tenants — create a new organisation (client-side signature verification)
 export async function createTenant(req: AuthRequest, res: Response) {
   const { userId } = req.user!;
   try {
@@ -93,13 +251,11 @@ export async function createTenant(req: AuthRequest, res: Response) {
         message: "Organisation name is required.",
       });
     }
-
     if (!razorpayPaymentId || !razorpaySubscriptionId || !razorpaySignature) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Payment details are required.",
       });
     }
-
     if (
       !verifySubscriptionSignature(
         razorpayPaymentId,
@@ -112,152 +268,88 @@ export async function createTenant(req: AuthRequest, res: Response) {
       });
     }
 
-    // Idempotency: if a tenant was already created for this subscription (e.g.
-    // the client retries after a tab-close mid-request), re-issue tokens for
-    // the existing tenant instead of creating a duplicate.
-    const existingTenant = await prisma.tenant.findFirst({
-      where: { razorpaySubscriptionId },
-    });
-    if (existingTenant) {
-      const existingMembership = await prisma.tenantMembership.findFirst({
-        where: { tenantId: existingTenant.id, userId },
-      });
-      if (existingMembership) {
-        const { accessToken, refreshToken } = issueTokenPair(
-          userId,
-          existingTenant.id,
-          existingMembership.role,
-          existingTenant.dbName ?? null,
-          false,
-        );
-        const { storeRefreshToken } =
-          await import("../services/tenantTokenStore");
-        await storeRefreshToken(
-          userId,
-          refreshToken,
-          existingTenant.id,
-          existingMembership.role,
-          existingTenant.dbName ?? null,
-          false,
-        );
-        res.cookie(
-          "refresh_token",
-          aesEncrypt(refreshToken),
-          REFRESH_COOKIE_OPTIONS,
-        );
-        return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-          data: {
-            accessToken,
-            tenant: {
-              id: existingTenant.id,
-              name: existingTenant.name,
-              slug: existingTenant.slug,
-            },
-          },
-          message: "Organisation setup resumed.",
-        });
-      }
-    }
-
-    let slug = slugify(name);
-    // Make slug unique by appending a suffix if needed
-    const existing = await prisma.tenant.findUnique({ where: { slug } });
-    if (existing) {
-      slug = `${slug}-${randomBytes(3).toString("hex")}`;
-    }
-    const dbName = `hrms-${slug}`;
-
-    const now = new Date();
-    const planExpiresAt = new Date(now);
-    if (billing === "annual") {
-      planExpiresAt.setFullYear(planExpiresAt.getFullYear() + 1);
-    } else {
-      planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
-    }
-
-    const pmInfo = await fetchPaymentMethod(razorpayPaymentId);
-
-    const [tenant] = await Promise.all([
-      prisma.tenant.create({
-        data: {
-          name: name.trim(),
-          slug,
-          dbName,
-          plan: "pro",
-          ...(billing && { billing }),
-          ...(industry && { industry }),
-          ...(companySize && { companySize }),
-          razorpaySubscriptionId,
-          subscriptionStatus: "active",
-          planActivatedAt: now,
-          planExpiresAt,
-          ...(pmInfo && {
-            paymentMethod: pmInfo.method,
-            paymentMethodSummary: pmInfo.summary,
-          }),
-        },
-      }),
-    ]);
-
-    // Fire-and-forget: force Atlas to materialise the tenant database.
-    // We don't await — a slow Atlas cold-start must not block the response.
-    const tenantClient = getClientForDb(dbName);
-    (tenantClient.$runCommandRaw as any)({
-      insert: "_init",
-      documents: [
-        {
-          _id: { $oid: tenant.id },
-          tenantId: tenant.id,
-          initializedAt: new Date(),
-        },
-      ],
-    }).catch(() => {});
-
-    // Stamp tenantId on user, mark as superuser, create membership
-    await Promise.all([
-      prisma.user.update({
-        where: { id: userId },
-        data: { tenantId: tenant.id, isSuperUser: true },
-      }),
-      prisma.tenantMembership.create({
-        data: { tenantId: tenant.id, userId, role: "owner" },
-      }),
-    ]);
-
-    const { accessToken, refreshToken } = issueTokenPair(
+    return buildTenant(
       userId,
-      tenant.id,
-      "owner",
-      tenant.dbName ?? null,
-      false,
-    );
-
-    // Store refresh token in Redis and DB (fire and forget — same pattern as auth service)
-    const { storeRefreshToken } = await import("../services/tenantTokenStore");
-    await storeRefreshToken(
-      userId,
-      refreshToken,
-      tenant.id,
-      "owner",
-      tenant.dbName ?? null,
-      false,
-    );
-
-    res.cookie(
-      "refresh_token",
-      aesEncrypt(refreshToken),
-      REFRESH_COOKIE_OPTIONS,
-    );
-
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: {
-        accessToken,
-        tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+      {
+        name,
+        industry,
+        companySize,
+        billing,
+        razorpaySubscriptionId,
+        razorpayPaymentId,
       },
-      message: "Organisation created successfully.",
-    });
+      res,
+    );
   } catch (err) {
     logger.error("createTenant error:", { err });
+    return handleError(res, err);
+  }
+}
+
+// POST /api/v1/tenants/complete-pending-setup — server-side recovery path
+// Verifies payment directly with Razorpay API (no client-side signature needed).
+export async function completePendingSetup(req: AuthRequest, res: Response) {
+  const { userId } = req.user!;
+  try {
+    const { name, industry, companySize } = req.body as {
+      name?: string;
+      industry?: string;
+      companySize?: string;
+    };
+    if (!name?.trim()) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Organisation name is required.",
+      });
+    }
+
+    const { getPendingSubscription, clearPendingSubscription } =
+      await import("../services/tenantTokenStore");
+    const pending = await getPendingSubscription(userId);
+    if (!pending) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "No pending payment found.",
+      });
+    }
+
+    const rzp = getRazorpay();
+    const subscription = await (rzp.subscriptions.fetch as any)(
+      pending.subscriptionId,
+    );
+    if (!["authenticated", "active"].includes(subscription.status)) {
+      await clearPendingSubscription(userId);
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Payment not completed.",
+      });
+    }
+
+    // Fetch the payment ID for payment-method info (best-effort).
+    const paymentsRes = await (rzp.payments as any).all({
+      subscription_id: pending.subscriptionId,
+      count: 10,
+    });
+    const verifiedPayment = paymentsRes.items?.find(
+      (p: any) => p.status === "captured" || p.status === "authorized",
+    );
+
+    await buildTenant(
+      userId,
+      {
+        name,
+        industry,
+        companySize,
+        billing: pending.billing,
+        razorpaySubscriptionId: pending.subscriptionId,
+        razorpayPaymentId: verifiedPayment?.id,
+      },
+      res,
+    );
+
+    // Fire-and-forget cleanup — response already sent by buildTenant.
+    clearPendingSubscription(userId).catch((e) =>
+      logger.warn("clearPendingSubscription failed:", { e }),
+    );
+  } catch (err) {
+    logger.error("completePendingSetup error:", { err });
     return handleError(res, err);
   }
 }

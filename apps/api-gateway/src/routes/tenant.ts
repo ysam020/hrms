@@ -3,6 +3,7 @@ import { authenticate, requireTenant } from "../middleware/authenticate";
 import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
 import {
   createTenant,
+  completePendingSetup,
   selectTenant,
   inviteUser,
   resolveInvite,
@@ -23,6 +24,11 @@ tenantRouter.get("/tenants/invite/:token", resolveInvite);
 // Requires auth but NOT a fully resolved tenant (pendingSetup users can access)
 tenantRouter.get("/tenants/available", authenticate, listAvailableTenants);
 tenantRouter.post("/tenants", authenticate, createTenant);
+tenantRouter.post(
+  "/tenants/complete-pending-setup",
+  authenticate,
+  completePendingSetup,
+);
 tenantRouter.post("/tenants/select", authenticate, selectTenant);
 
 // Requires tenant context but NOT subscription check — subscription page must load even when expired

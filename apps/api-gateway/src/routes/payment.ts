@@ -5,6 +5,7 @@ import {
   cancelSubscription,
   reactivateSubscription,
   handleWebhook,
+  getPendingSetup,
 } from "../handlers/payment";
 
 export const paymentRouter: Router = Router();
@@ -14,6 +15,7 @@ paymentRouter.post(
   authenticate,
   createSubscription,
 );
+paymentRouter.get("/payment/pending-setup", authenticate, getPendingSetup);
 paymentRouter.post(
   "/payment/cancel-subscription",
   authenticate,
