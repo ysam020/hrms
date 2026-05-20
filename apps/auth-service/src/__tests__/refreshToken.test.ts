@@ -100,6 +100,8 @@ describe("refreshToken", () => {
       undefined,
       undefined,
       "valid-token",
+      undefined,
+      true,
     );
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.TOKEN_REFRESHED,

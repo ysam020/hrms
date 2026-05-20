@@ -17,6 +17,8 @@ import { ErrorBoundary } from "react-error-boundary";
 import EditHrActivityModal from "./EditHrActivityModal";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { UserContext } from "@web/app/providers/UserContext";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import Skeleton from "@mui/material/Skeleton";
 import Chip from "@mui/material/Chip";
 import { Dropdown } from "primereact/dropdown";
@@ -47,6 +49,21 @@ function ViewHrActivities({ refreshKey = 0 }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
+  const { user } = useContext(UserContext);
+  const canEdit = hasPermission(
+    "HRActivities",
+    "edit",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canDelete = hasPermission(
+    "HRActivities",
+    "delete",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     id: string | null;
@@ -330,60 +347,64 @@ function ViewHrActivities({ refreshKey = 0 }) {
 
           return (
             <Box sx={{ display: "flex", gap: 0.5 }}>
-              <Tooltip title="Edit">
-                <IconButton
-                  size="small"
-                  onClick={() => handleOpenModal(cell.row.original)}
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: theme === "light" ? "#6366f1" : "#818cf8",
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(99, 102, 241, 0.12)"
-                        : "rgba(129, 140, 248, 0.15)",
-                    "&:hover": {
+              {canEdit && (
+                <Tooltip title="Edit">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleOpenModal(cell.row.original)}
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: "6px",
+                      color: theme === "light" ? "#6366f1" : "#818cf8",
                       backgroundColor:
                         theme === "light"
-                          ? "rgba(99, 102, 241, 0.2)"
-                          : "rgba(129, 140, 248, 0.25)",
-                    },
-                  }}
-                >
-                  <EditIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
+                          ? "rgba(99, 102, 241, 0.12)"
+                          : "rgba(129, 140, 248, 0.15)",
+                      "&:hover": {
+                        backgroundColor:
+                          theme === "light"
+                            ? "rgba(99, 102, 241, 0.2)"
+                            : "rgba(129, 140, 248, 0.25)",
+                      },
+                    }}
+                  >
+                    <EditIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
 
-              <Tooltip title="Delete">
-                <IconButton
-                  size="small"
-                  onClick={() =>
-                    handleDeleteClick(
-                      cell.row.original.id,
-                      cell.row.original.title,
-                    )
-                  }
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: theme === "light" ? "#dc2626" : "#f87171",
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(239, 68, 68, 0.12)"
-                        : "rgba(248, 113, 113, 0.15)",
-                    "&:hover": {
+              {canDelete && (
+                <Tooltip title="Delete">
+                  <IconButton
+                    size="small"
+                    onClick={() =>
+                      handleDeleteClick(
+                        cell.row.original.id,
+                        cell.row.original.title,
+                      )
+                    }
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: "6px",
+                      color: theme === "light" ? "#dc2626" : "#f87171",
                       backgroundColor:
                         theme === "light"
-                          ? "rgba(239, 68, 68, 0.2)"
-                          : "rgba(248, 113, 113, 0.25)",
-                    },
-                  }}
-                >
-                  <DeleteIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
+                          ? "rgba(239, 68, 68, 0.12)"
+                          : "rgba(248, 113, 113, 0.15)",
+                      "&:hover": {
+                        backgroundColor:
+                          theme === "light"
+                            ? "rgba(239, 68, 68, 0.2)"
+                            : "rgba(248, 113, 113, 0.25)",
+                      },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           );
         },
@@ -423,7 +444,14 @@ function ViewHrActivities({ refreshKey = 0 }) {
       },
     ],
 
-    [handleOpenModal, handleDeleteClick, handleDetailsClick, theme],
+    [
+      handleOpenModal,
+      handleDeleteClick,
+      handleDetailsClick,
+      theme,
+      canEdit,
+      canDelete,
+    ],
   );
 
   const tableConfig = useTableConfig(memoizedData, columns, loading, {

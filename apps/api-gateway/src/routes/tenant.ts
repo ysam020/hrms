@@ -10,6 +10,9 @@ import {
   listTenantMembers,
   revokeInvite,
   listAvailableTenants,
+  getOrgProfile,
+  updateOrgProfile,
+  completeOrgSetup,
 } from "../handlers/tenant";
 
 export const tenantRouter: Router = Router();
@@ -24,9 +27,18 @@ tenantRouter.post("/tenants/select", authenticate, selectTenant);
 
 // Requires tenant context but NOT subscription check — subscription page must load even when expired
 tenantRouter.get("/tenants/me", authenticate, requireTenant, getMyTenant);
+// Marks org profile step complete; no subscription guard since user is still in setup flow
+tenantRouter.post(
+  "/tenants/complete-org-setup",
+  authenticate,
+  requireTenant,
+  completeOrgSetup,
+);
 
 // Requires a resolved tenant + active subscription
 const guard = [authenticate, requireTenant, requireActiveSubscription];
 tenantRouter.get("/tenants/members", ...guard, listTenantMembers);
 tenantRouter.post("/tenants/invite", ...guard, inviteUser);
 tenantRouter.delete("/tenants/invite/:id", ...guard, revokeInvite);
+tenantRouter.get("/tenants/org-profile", ...guard, getOrgProfile);
+tenantRouter.put("/tenants/org-profile", ...guard, updateOrgProfile);

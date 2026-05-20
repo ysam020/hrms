@@ -16,6 +16,8 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { UserContext } from "@web/app/providers/UserContext";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import EditJobOpeningModal from "./EditJobOpeningModal";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import Skeleton from "@mui/material/Skeleton";
@@ -43,6 +45,21 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   const [openModal, setOpenModal] = useState(false);
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
+  const { user } = useContext(UserContext);
+  const canEdit = hasPermission(
+    "JobOpenings",
+    "edit_job_opening",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canDelete = hasPermission(
+    "JobOpenings",
+    "delete_job_opening",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const [jobData, setJobData] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("Active");
   const [loading, setLoading] = useState(false);
@@ -316,55 +333,59 @@ function ViewJobOpenings({ refreshKey = 0 }) {
 
           return (
             <Box sx={{ display: "flex", gap: 0.5 }}>
-              <Tooltip title="Edit">
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleOpenModal(e, cell.row.original)}
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: theme === "light" ? "#6366f1" : "#818cf8",
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(99, 102, 241, 0.12)"
-                        : "rgba(129, 140, 248, 0.15)",
-                    "&:hover": {
+              {canEdit && (
+                <Tooltip title="Edit">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleOpenModal(e, cell.row.original)}
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: "6px",
+                      color: theme === "light" ? "#6366f1" : "#818cf8",
                       backgroundColor:
                         theme === "light"
-                          ? "rgba(99, 102, 241, 0.2)"
-                          : "rgba(129, 140, 248, 0.25)",
-                    },
-                  }}
-                >
-                  <EditIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
+                          ? "rgba(99, 102, 241, 0.12)"
+                          : "rgba(129, 140, 248, 0.15)",
+                      "&:hover": {
+                        backgroundColor:
+                          theme === "light"
+                            ? "rgba(99, 102, 241, 0.2)"
+                            : "rgba(129, 140, 248, 0.25)",
+                      },
+                    }}
+                  >
+                    <EditIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
 
-              <Tooltip title="Delete">
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleDeleteClick(e, cell.row.original.id)}
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: theme === "light" ? "#dc2626" : "#f87171",
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(239, 68, 68, 0.12)"
-                        : "rgba(248, 113, 113, 0.15)",
-                    "&:hover": {
+              {canDelete && (
+                <Tooltip title="Delete">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleDeleteClick(e, cell.row.original.id)}
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: "6px",
+                      color: theme === "light" ? "#dc2626" : "#f87171",
                       backgroundColor:
                         theme === "light"
-                          ? "rgba(239, 68, 68, 0.2)"
-                          : "rgba(248, 113, 113, 0.25)",
-                    },
-                  }}
-                >
-                  <DeleteIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
+                          ? "rgba(239, 68, 68, 0.12)"
+                          : "rgba(248, 113, 113, 0.15)",
+                      "&:hover": {
+                        backgroundColor:
+                          theme === "light"
+                            ? "rgba(239, 68, 68, 0.2)"
+                            : "rgba(248, 113, 113, 0.25)",
+                      },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           );
         },
@@ -404,7 +425,14 @@ function ViewJobOpenings({ refreshKey = 0 }) {
       },
     ],
 
-    [handleOpenModal, handleDeleteClick, handleDetailsClick, theme],
+    [
+      handleOpenModal,
+      handleDeleteClick,
+      handleDetailsClick,
+      theme,
+      canEdit,
+      canDelete,
+    ],
   );
 
   const { table: baseConfig } = useTableConfig(memoizedData, columns, loading);

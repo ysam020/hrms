@@ -33,7 +33,7 @@ import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import WorkIcon from "@mui/icons-material/Work";
 import { alpha } from "@mui/material/styles";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import apiClient, { setAccessToken } from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -47,6 +47,18 @@ interface Tenant {
   name: string;
   slug: string;
   role: string;
+}
+
+const PENDING_SETUP_KEY = "hrms_pending_org_setup";
+
+interface PendingOrgSetup {
+  razorpayPaymentId: string;
+  razorpaySubscriptionId: string;
+  razorpaySignature: string;
+  orgName: string;
+  industry: string;
+  companySize: string;
+  billing: string;
 }
 
 type Billing = "monthly" | "annual";
@@ -141,16 +153,24 @@ function loadRazorpayScript(): Promise<boolean> {
 
 export default function OrgSetupPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setAlert } = useContext(AlertContext);
   const { setUser, user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<number>(
+    (location.state as any)?.startAtStep ?? 0,
+  );
   const [orgName, setOrgName] = useState("");
   const [industry, setIndustry] = useState("");
   const [companySize, setCompanySize] = useState("");
   const [billing, setBilling] = useState<Billing>("monthly");
   const [loading, setLoading] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [helpPhone, setHelpPhone] = useState("");
+  const [helpEmail, setHelpEmail] = useState("");
+  const [officeAddress, setOfficeAddress] = useState("");
+  const [website, setWebsite] = useState("");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [fetching, setFetching] = useState(true);
 
@@ -171,15 +191,75 @@ export default function OrgSetupPage() {
     billingRef.current = billing;
   }, [billing]);
 
+  const resumeFromPending = useCallback(
+    async (data: PendingOrgSetup) => {
+      setResuming(true);
+      try {
+        const createRes = await apiClient.post("/tenants", {
+          name: data.orgName,
+          ...(data.industry && { industry: data.industry }),
+          ...(data.companySize && { companySize: data.companySize }),
+          billing: data.billing,
+          razorpayPaymentId: data.razorpayPaymentId,
+          razorpaySubscriptionId: data.razorpaySubscriptionId,
+          razorpaySignature: data.razorpaySignature,
+        });
+        if (createRes.data?.success) {
+          setAccessToken(createRes.data.data.accessToken);
+          localStorage.removeItem(PENDING_SETUP_KEY);
+          setStep(2);
+        } else {
+          setAlert({
+            open: true,
+            message:
+              createRes.data?.message || "Failed to resume organisation setup.",
+            severity: "error",
+          });
+          localStorage.removeItem(PENDING_SETUP_KEY);
+        }
+      } catch (err: any) {
+        setAlert({
+          open: true,
+          message:
+            err.response?.data?.message ||
+            "Failed to resume organisation setup.",
+          severity: "error",
+        });
+        localStorage.removeItem(PENDING_SETUP_KEY);
+      } finally {
+        setResuming(false);
+      }
+    },
+    [setAlert],
+  );
+
   useEffect(() => {
     apiClient
       .get("/tenants/available")
       .then((res) => {
-        if (res.data?.success) setTenants(res.data.data.tenants ?? []);
+        if (res.data?.success) {
+          const tenantList: Tenant[] = res.data.data.tenants ?? [];
+          setTenants(tenantList);
+          // If no tenants yet, check whether a payment completed but the tab
+          // was closed before POST /tenants finished.
+          if (tenantList.length === 0) {
+            const raw = localStorage.getItem(PENDING_SETUP_KEY);
+            if (raw) {
+              try {
+                const pending = JSON.parse(raw) as PendingOrgSetup;
+                setResuming(true);
+                // Defer so fetching state is cleared first
+                Promise.resolve().then(() => resumeFromPending(pending));
+              } catch {
+                localStorage.removeItem(PENDING_SETUP_KEY);
+              }
+            }
+          }
+        }
       })
       .catch(() => {})
       .finally(() => setFetching(false));
-  }, []);
+  }, [resumeFromPending]);
 
   const finishSetup = useCallback(async () => {
     const res = await apiClient.get("/profile");
@@ -188,6 +268,17 @@ export default function OrgSetupPage() {
       navigate("/", { replace: true });
     }
   }, [setUser, navigate]);
+
+  const handleCompleteOrgSetup = useCallback(async () => {
+    try {
+      const res = await apiClient.post("/tenants/complete-org-setup");
+      if (res.data?.success && res.data.data?.accessToken) {
+        setAccessToken(res.data.data.accessToken);
+      }
+    } catch {
+      // non-fatal — token will be corrected on next refresh
+    }
+  }, []);
 
   const handlePayAndCreate = async () => {
     setLoading(true);
@@ -240,6 +331,21 @@ export default function OrgSetupPage() {
           const size = companySizeRef.current;
           const bill = billingRef.current;
 
+          // Persist payment details before the network call so a tab-close
+          // or refresh mid-request can be recovered on next visit.
+          localStorage.setItem(
+            PENDING_SETUP_KEY,
+            JSON.stringify({
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySubscriptionId: response.razorpay_subscription_id,
+              razorpaySignature: response.razorpay_signature,
+              orgName: name,
+              industry: ind,
+              companySize: size,
+              billing: bill,
+            } satisfies PendingOrgSetup),
+          );
+
           apiClient
             .post("/tenants", {
               name,
@@ -253,12 +359,9 @@ export default function OrgSetupPage() {
             .then(async (createRes) => {
               if (createRes.data?.success) {
                 setAccessToken(createRes.data.data.accessToken);
-                await finishSetup();
-                setAlert({
-                  open: true,
-                  message: "Organisation created!",
-                  severity: "success",
-                });
+                localStorage.removeItem(PENDING_SETUP_KEY);
+                setLoading(false);
+                setStep(2);
               } else {
                 setAlert({
                   open: true,
@@ -339,14 +442,18 @@ export default function OrgSetupPage() {
       ? "Select your organisation"
       : step === 0
         ? "Set up your organisation"
-        : "Choose your plan";
+        : step === 1
+          ? "Choose your plan"
+          : "Organisation profile";
 
   const rightSubtitle = !fetching
     ? tenants.length > 0
       ? "Choose the organisation you want to log into."
       : step === 0
         ? "Tell us a bit about your company to get started."
-        : "All features included. Cancel anytime."
+        : step === 1
+          ? "All features included. Cancel anytime."
+          : "Help your employees find the right contacts. You can update these anytime."
     : null;
 
   return (
@@ -434,13 +541,33 @@ export default function OrgSetupPage() {
               <Step>
                 <StepLabel>Subscription plan</StepLabel>
               </Step>
+              <Step>
+                <StepLabel>Contact info</StepLabel>
+              </Step>
             </Stepper>
           )}
 
           {/* ── Body ── */}
-          {fetching ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          {fetching || resuming ? (
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 2,
+                py: 4,
+              }}
+            >
               <CircularProgress />
+              {resuming && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  textAlign="center"
+                >
+                  Completing your organisation setup…
+                </Typography>
+              )}
             </Box>
           ) : tenants.length > 0 ? (
             /* Existing tenant picker */
@@ -576,7 +703,7 @@ export default function OrgSetupPage() {
                 you'll be added automatically.
               </Typography>
             </>
-          ) : (
+          ) : step === 1 ? (
             /* Step 2: Plan + payment */
             <>
               {/* Test mode notice */}
@@ -737,6 +864,121 @@ export default function OrgSetupPage() {
                     <CircularProgress size={22} color="inherit" />
                   ) : (
                     `Pay ${price.display} & Continue`
+                  )}
+                </Button>
+              </Box>
+            </>
+          ) : (
+            /* Step 3: Contact info */
+            <>
+              <TextField
+                label="Help phone number"
+                fullWidth
+                value={helpPhone}
+                onChange={(e) => setHelpPhone(e.target.value)}
+                placeholder="+91 98765 43210"
+                sx={{
+                  mb: 2,
+                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
+                }}
+              />
+              <TextField
+                label="Help email address"
+                fullWidth
+                type="email"
+                value={helpEmail}
+                onChange={(e) => setHelpEmail(e.target.value)}
+                placeholder="hr@yourcompany.com"
+                sx={{
+                  mb: 2,
+                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
+                }}
+              />
+              <TextField
+                label="Office address"
+                fullWidth
+                multiline
+                rows={2}
+                value={officeAddress}
+                onChange={(e) => setOfficeAddress(e.target.value)}
+                placeholder="123 Main Street, Mumbai, Maharashtra 400001"
+                sx={{
+                  mb: 2,
+                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
+                }}
+              />
+              <TextField
+                label="Website"
+                fullWidth
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://yourcompany.com"
+                sx={{
+                  mb: 3,
+                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
+                }}
+              />
+              <Box sx={{ display: "flex", gap: 1.5 }}>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  disabled={loading}
+                  onClick={async () => {
+                    await handleCompleteOrgSetup();
+                    await finishSetup();
+                    setAlert({
+                      open: true,
+                      message: "Organisation created!",
+                      severity: "success",
+                    });
+                  }}
+                  sx={{
+                    borderRadius: "8px",
+                    borderColor: "var(--text-input-border)",
+                    color: "var(--text-color)",
+                    textTransform: "none",
+                    fontWeight: 500,
+                  }}
+                >
+                  Skip
+                </Button>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  size="large"
+                  disabled={loading}
+                  onClick={async () => {
+                    setLoading(true);
+                    try {
+                      await apiClient.put("/tenants/org-profile", {
+                        ...(helpPhone && { helpPhone }),
+                        ...(helpEmail && { helpEmail }),
+                        ...(officeAddress && { officeAddress }),
+                        ...(website && { website }),
+                      });
+                    } catch {
+                      // non-fatal — continue to app even if save fails
+                    }
+                    await handleCompleteOrgSetup();
+                    await finishSetup();
+                    setAlert({
+                      open: true,
+                      message: "Organisation created!",
+                      severity: "success",
+                    });
+                  }}
+                  sx={{
+                    borderRadius: "8px",
+                    py: 1.4,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: 14,
+                  }}
+                >
+                  {loading ? (
+                    <CircularProgress size={22} color="inherit" />
+                  ) : (
+                    "Save & Continue"
                   )}
                 </Button>
               </Box>

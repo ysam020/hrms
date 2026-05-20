@@ -8,6 +8,7 @@ export interface AuthUser {
   tenantId: string | null;
   tenantRole: string | null;
   pendingSetup: boolean;
+  orgSetupComplete?: boolean;
   dbName: string | null;
   // legacy fields still present in token for compatibility
   role?: string;

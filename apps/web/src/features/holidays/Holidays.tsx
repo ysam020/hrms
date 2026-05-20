@@ -22,6 +22,8 @@ import useTableConfig from "@web/shared/hooks/useTableConfig";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { UserContext } from "@web/app/providers/UserContext";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { Calendar } from "primereact/calendar";
@@ -50,6 +52,21 @@ const validationSchema = toFormikValidationSchema(
 function ViewAddHolidays() {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
+  const { user } = useContext(UserContext);
+  const canAdd = hasPermission(
+    "Holidays",
+    "add",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canDelete = hasPermission(
+    "Holidays",
+    "delete",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const [isAdding, setIsAdding] = useState(false);
   const [data, setData] = useState<any[]>([]);
   const [date, setDate] = useState(() => {
@@ -316,6 +333,8 @@ function ViewAddHolidays() {
             );
           }
 
+          if (!canDelete) return null;
+
           return (
             <Tooltip title="Delete Holiday">
               <IconButton
@@ -379,7 +398,15 @@ function ViewAddHolidays() {
       },
     ],
 
-    [formik, isAdding, handleDeleteClick, handleDetailsClick, theme],
+    [
+      formik,
+      isAdding,
+      handleDeleteClick,
+      handleDetailsClick,
+      theme,
+      canAdd,
+      canDelete,
+    ],
   );
 
   const tableData = useMemo(() => {
@@ -413,18 +440,20 @@ function ViewAddHolidays() {
           style={{ maxWidth: 300 }}
         />
         <div style={{ flex: 1 }}></div>
-        <Tooltip title="Add Holiday">
-          <span>
-            <IconButton
-              onClick={handleAddClick}
-              disabled={isAdding}
-              color="primary"
-              size="small"
-            >
-              <Add sx={{ fontSize: 20 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {canAdd && (
+          <Tooltip title="Add Holiday">
+            <span>
+              <IconButton
+                onClick={handleAddClick}
+                disabled={isAdding}
+                color="primary"
+                size="small"
+              >
+                <Add sx={{ fontSize: 20 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
       </div>
     ),
     state: {

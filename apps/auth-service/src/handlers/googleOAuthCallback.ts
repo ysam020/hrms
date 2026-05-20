@@ -241,6 +241,7 @@ export const googleOAuthCallback = async (
           tenantId: null,
           tenantRole: null,
           pendingSetup: true,
+          orgSetupComplete: true,
           dbName: null,
         });
         const refreshToken = signRefreshToken(user.id);
@@ -285,6 +286,7 @@ export const googleOAuthCallback = async (
           tenantId: null,
           tenantRole: null,
           pendingSetup: true,
+          orgSetupComplete: true,
           dbName: null,
         });
         const refreshToken = signRefreshToken(user.id);
@@ -347,6 +349,7 @@ export const googleOAuthCallback = async (
       tenantId: resolvedTenantId,
       tenantRole: resolvedTenantRole,
       pendingSetup: false,
+      orgSetupComplete: true,
       dbName: resolvedDbName,
     });
     const refreshToken = signRefreshToken(user.id);

@@ -21,6 +21,7 @@ export interface RefreshTokenMeta {
   tenantId: string | null;
   tenantRole: string | null;
   dbName: string | null;
+  orgSetupComplete?: boolean;
 }
 
 export type TokenValidation =
@@ -31,6 +32,7 @@ export type TokenValidation =
       tenantId: string | null;
       tenantRole: string | null;
       dbName: string | null;
+      orgSetupComplete: boolean;
     };
 
 export const storeRefreshToken = async (
@@ -40,9 +42,16 @@ export const storeRefreshToken = async (
   tenantRole: string | null,
   previousToken?: string,
   dbName: string | null = null,
+  orgSetupComplete: boolean = true,
 ): Promise<void> => {
   const client = getRedisClient();
-  const meta: RefreshTokenMeta = { token, tenantId, tenantRole, dbName };
+  const meta: RefreshTokenMeta = {
+    token,
+    tenantId,
+    tenantRole,
+    dbName,
+    orgSetupComplete,
+  };
   const ops: Promise<any>[] = [
     client.setex(`refresh:${userId}`, REFRESH_TTL, JSON.stringify(meta)),
     prisma.user.update({
@@ -79,6 +88,7 @@ export const validateRefreshToken = async (
       const parsed = JSON.parse(raw);
       meta = parsed as RefreshTokenMeta;
       meta.dbName ??= null;
+      meta.orgSetupComplete ??= true;
     } catch {
       // Legacy: raw value is the token string itself (no tenant info yet).
       meta = { token: raw, tenantId: null, tenantRole: null, dbName: null };
@@ -113,6 +123,7 @@ export const validateRefreshToken = async (
       tenantId: meta.tenantId,
       tenantRole: meta.tenantRole,
       dbName: meta.dbName,
+      orgSetupComplete: meta.orgSetupComplete ?? true,
     };
   }
 
@@ -126,6 +137,7 @@ export const validateRefreshToken = async (
         tenantId: meta.tenantId,
         tenantRole: meta.tenantRole,
         dbName: meta.dbName,
+        orgSetupComplete: meta.orgSetupComplete ?? true,
       };
     }
   }

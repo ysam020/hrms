@@ -22,7 +22,10 @@ import Alert from "@mui/material/Alert";
 import Loading from "@web/shared/components/Loading";
 import useLogout from "@web/shared/hooks/useLogout";
 import { useSwUpdate } from "@web/shared/hooks/useSwUpdate";
-import { setUnauthorizedHandler } from "@web/core/http/axiosConfig";
+import {
+  setUnauthorizedHandler,
+  setPaymentRequiredHandler,
+} from "@web/core/http/axiosConfig";
 import useNavigateWithKeyboard from "@web/shared/hooks/useNavigateWithKeyboard";
 import useFullScreen from "@web/shared/hooks/useFullScreen";
 import useProfiler from "@web/shared/hooks/useProfiler";
@@ -65,6 +68,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
   const [pendingSetup, setPendingSetup] = useState(false);
+  const [orgSetupPending, setOrgSetupPending] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const muiTheme = useMuiTheme(theme);
   usePrimeReactTheme(theme);
@@ -88,6 +92,10 @@ function App() {
       if (theme) localStorage.setItem("theme", theme);
       setUser(null);
       setPendingSetup(false);
+      setOrgSetupPending(false);
+    });
+    setPaymentRequiredHandler(() => {
+      navigate("/subscription");
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -154,6 +162,18 @@ function App() {
           setPendingSetup(true);
           if (window.location.pathname !== "/org-setup") {
             navigate("/org-setup", { replace: true });
+          }
+          setBooting(false);
+          return;
+        }
+
+        if (payload?.tenantId && payload?.orgSetupComplete === false) {
+          setOrgSetupPending(true);
+          if (window.location.pathname !== "/org-setup") {
+            navigate("/org-setup", {
+              replace: true,
+              state: { startAtStep: 2 },
+            });
           }
           setBooting(false);
           return;
@@ -336,6 +356,12 @@ function App() {
                         </SocketProvider>
                       ) : pendingSetup ? (
                         <Navigate to="/org-setup" replace />
+                      ) : orgSetupPending ? (
+                        <Navigate
+                          to="/org-setup"
+                          state={{ startAtStep: 2 }}
+                          replace
+                        />
                       ) : (
                         <Navigate
                           to="/login"

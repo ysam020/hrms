@@ -126,6 +126,7 @@ export const webAuthnAuthenticationVerify = async (
       tenantId: membership?.tenantId ?? null,
       tenantRole: membership?.role ?? null,
       pendingSetup: !membership,
+      orgSetupComplete: true,
       dbName: tenantRecord?.dbName ?? null,
     });
     const refreshToken = signRefreshToken(user.id);

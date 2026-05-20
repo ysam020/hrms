@@ -30,9 +30,17 @@ function issueTokenPair(
   tenantId: string,
   tenantRole: string,
   dbName: string | null,
+  orgSetupComplete: boolean = true,
 ) {
   const accessToken = jwt.sign(
-    { userId, tenantId, tenantRole, pendingSetup: false, dbName },
+    {
+      userId,
+      tenantId,
+      tenantRole,
+      pendingSetup: false,
+      orgSetupComplete,
+      dbName,
+    },
     process.env.ACCESS_JWT_TOKEN!,
     {
       algorithm: "HS256",
@@ -102,6 +110,53 @@ export async function createTenant(req: AuthRequest, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Payment verification failed.",
       });
+    }
+
+    // Idempotency: if a tenant was already created for this subscription (e.g.
+    // the client retries after a tab-close mid-request), re-issue tokens for
+    // the existing tenant instead of creating a duplicate.
+    const existingTenant = await prisma.tenant.findFirst({
+      where: { razorpaySubscriptionId },
+    });
+    if (existingTenant) {
+      const existingMembership = await prisma.tenantMembership.findFirst({
+        where: { tenantId: existingTenant.id, userId },
+      });
+      if (existingMembership) {
+        const { accessToken, refreshToken } = issueTokenPair(
+          userId,
+          existingTenant.id,
+          existingMembership.role,
+          existingTenant.dbName ?? null,
+          false,
+        );
+        const { storeRefreshToken } =
+          await import("../services/tenantTokenStore");
+        await storeRefreshToken(
+          userId,
+          refreshToken,
+          existingTenant.id,
+          existingMembership.role,
+          existingTenant.dbName ?? null,
+          false,
+        );
+        res.cookie(
+          "refresh_token",
+          aesEncrypt(refreshToken),
+          REFRESH_COOKIE_OPTIONS,
+        );
+        return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+          data: {
+            accessToken,
+            tenant: {
+              id: existingTenant.id,
+              name: existingTenant.name,
+              slug: existingTenant.slug,
+            },
+          },
+          message: "Organisation setup resumed.",
+        });
+      }
     }
 
     let slug = slugify(name);
@@ -174,11 +229,19 @@ export async function createTenant(req: AuthRequest, res: Response) {
       tenant.id,
       "owner",
       tenant.dbName ?? null,
+      false,
     );
 
     // Store refresh token in Redis and DB (fire and forget — same pattern as auth service)
     const { storeRefreshToken } = await import("../services/tenantTokenStore");
-    await storeRefreshToken(userId, refreshToken, tenant.id, "owner");
+    await storeRefreshToken(
+      userId,
+      refreshToken,
+      tenant.id,
+      "owner",
+      tenant.dbName ?? null,
+      false,
+    );
 
     res.cookie(
       "refresh_token",
@@ -243,7 +306,14 @@ export async function selectTenant(req: AuthRequest, res: Response) {
     );
 
     const { storeRefreshToken } = await import("../services/tenantTokenStore");
-    await storeRefreshToken(userId, refreshToken, tenantId, membership.role);
+    await storeRefreshToken(
+      userId,
+      refreshToken,
+      tenantId,
+      membership.role,
+      tenant.dbName ?? null,
+      true,
+    );
 
     res.cookie(
       "refresh_token",
@@ -481,6 +551,125 @@ export async function listTenantMembers(req: AuthRequest, res: Response) {
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: { members } });
   } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+// GET /api/v1/tenants/org-profile — all authenticated members can view
+export async function getOrgProfile(req: AuthRequest, res: Response) {
+  const { tenantId } = req.user!;
+  if (!tenantId) {
+    return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+      message: "No active tenant.",
+    });
+  }
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        helpPhone: true,
+        helpEmail: true,
+        officeAddress: true,
+        website: true,
+      },
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { orgProfile: tenant },
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+// PUT /api/v1/tenants/org-profile — superuser or "Company Info:" permission only
+export async function updateOrgProfile(req: AuthRequest, res: Response) {
+  const { userId, tenantId } = req.user!;
+  if (!tenantId) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "No active tenant.",
+    });
+  }
+  const actor = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isSuperUser: true, permissions: true },
+  });
+  const canEdit =
+    actor?.isSuperUser ||
+    (actor?.permissions ?? []).some((p: string) =>
+      p.startsWith("CompanyInfo:"),
+    );
+  if (!canEdit) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "You don't have permission to update the organisation profile.",
+    });
+  }
+  try {
+    const { helpPhone, helpEmail, officeAddress, website } = req.body as {
+      helpPhone?: string;
+      helpEmail?: string;
+      officeAddress?: string;
+      website?: string;
+    };
+    const tenant = await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        ...(helpPhone !== undefined && { helpPhone: helpPhone || null }),
+        ...(helpEmail !== undefined && { helpEmail: helpEmail || null }),
+        ...(officeAddress !== undefined && {
+          officeAddress: officeAddress || null,
+        }),
+        ...(website !== undefined && { website: website || null }),
+      },
+      select: {
+        name: true,
+        helpPhone: true,
+        helpEmail: true,
+        officeAddress: true,
+        website: true,
+      },
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { orgProfile: tenant },
+      message: "Organisation profile updated.",
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+// POST /api/v1/tenants/complete-org-setup — mark org profile step done, get new token
+export async function completeOrgSetup(req: AuthRequest, res: Response) {
+  const { userId, tenantId, tenantRole, dbName } = req.user!;
+  if (!tenantId) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "No active tenant.",
+    });
+  }
+  try {
+    const { markOrgSetupComplete } =
+      await import("../services/tenantTokenStore");
+    await markOrgSetupComplete(userId);
+
+    const accessToken = jwt.sign(
+      {
+        userId,
+        tenantId,
+        tenantRole,
+        pendingSetup: false,
+        orgSetupComplete: true,
+        dbName,
+      },
+      process.env.ACCESS_JWT_TOKEN!,
+      {
+        algorithm: "HS256",
+        expiresIn: (process.env.ACCESS_JWT_EXPIRE || "1h") as any,
+      },
+    );
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: { accessToken } });
+  } catch (err) {
+    logger.error("completeOrgSetup error:", { err });
     return handleError(res, err);
   }
 }
