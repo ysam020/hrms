@@ -56,7 +56,6 @@ interface PendingOrgForm {
   orgName: string;
   industry: string;
   companySize: string;
-  billing: string;
 }
 
 type Billing = "monthly" | "annual";
@@ -324,7 +323,6 @@ export default function OrgSetupPage() {
               orgName: name,
               industry: ind,
               companySize: size,
-              billing: bill,
             } satisfies PendingOrgForm),
           );
 
