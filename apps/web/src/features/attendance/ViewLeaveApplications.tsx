@@ -37,6 +37,7 @@ import Person from "@mui/icons-material/Person";
 import { Dropdown } from "primereact/dropdown";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 
 function ViewLeaveApplications() {
   const [statusFilter, setStatusFilter] = useState("All");
@@ -47,6 +48,35 @@ function ViewLeaveApplications() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
+  const canManageLeave =
+    hasPermission(
+      "Leave",
+      "approve",
+      "all",
+      user?.isSuperUser,
+      user?.permissions || [],
+    ) ||
+    hasPermission(
+      "Leave",
+      "approve",
+      "team",
+      user?.isSuperUser,
+      user?.permissions || [],
+    ) ||
+    hasPermission(
+      "Leave",
+      "reject",
+      "all",
+      user?.isSuperUser,
+      user?.permissions || [],
+    ) ||
+    hasPermission(
+      "Leave",
+      "reject",
+      "team",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
   const [actionDialog, setActionDialog] = useState<{
     open: boolean;
     id: string | null;
@@ -387,7 +417,8 @@ function ViewLeaveApplications() {
         size: 120,
         Cell: ({ cell }) => {
           const canTakeAction =
-            user?.isSuperUser || cell.row.original.userId !== user?.id;
+            canManageLeave &&
+            (user?.isSuperUser || cell.row.original.userId !== user?.id);
 
           if (!canTakeAction) {
             return (
@@ -470,7 +501,7 @@ function ViewLeaveApplications() {
       },
     ],
 
-    [user, handleLeaveActionClick, theme],
+    [user, handleLeaveActionClick, theme, canManageLeave],
   );
 
   const memoizedData = useMemo(() => data, [data]);

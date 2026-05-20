@@ -25,6 +25,10 @@ model Tenant {
   planExpiresAt          DateTime?
   paymentMethod          String?   // card | upi | netbanking | emandate | wallet
   paymentMethodSummary   String?   // e.g. "Visa •••• 1111" | "john@upi" | "HDFC Bank"
+  helpPhone              String?
+  helpEmail              String?
+  officeAddress          String?
+  website                String?
   isActive               Boolean   @default(true)
   createdAt              DateTime  @default(now())
 

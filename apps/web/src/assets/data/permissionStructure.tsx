@@ -113,4 +113,9 @@ export const permissionStructure = {
       manage: ["-"],
     },
   },
+  CompanyInfo: {
+    actions: {
+      edit: ["-"],
+    },
+  },
 };

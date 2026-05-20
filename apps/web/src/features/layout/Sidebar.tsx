@@ -32,12 +32,10 @@ const AccountTreeIcon = React.lazy(
 const ChecklistIcon = React.lazy(() => import("@mui/icons-material/Checklist"));
 const ForumIcon = React.lazy(() => import("@mui/icons-material/Forum"));
 const PolicyIcon = React.lazy(() => import("@mui/icons-material/Policy"));
-const MonitorHeartIcon = React.lazy(
-  () => import("@mui/icons-material/MonitorHeart"),
-);
 const CreditCardIcon = React.lazy(
   () => import("@mui/icons-material/CreditCard"),
 );
+const ApartmentIcon = React.lazy(() => import("@mui/icons-material/Apartment"));
 function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -69,7 +67,6 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
       { title: "Rules", icon: <ChecklistIcon />, path: "/rules" },
       { title: "Analytics", icon: <EqualizerIcon />, path: "/analytics" },
       { title: "Policy", icon: <PolicyIcon />, path: "/policy" },
-      { title: "Monitoring", icon: <MonitorHeartIcon />, path: "/monitoring" },
       ...(hasSubscriptionAccess
         ? [
             {
@@ -79,6 +76,7 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
             },
           ]
         : []),
+      { title: "Company Info", icon: <ApartmentIcon />, path: "/company-info" },
       { title: "Help", icon: <LiveHelpIcon />, path: "/help" },
     ];
   }, [hasSubscriptionAccess]);

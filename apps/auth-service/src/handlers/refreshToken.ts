@@ -44,6 +44,7 @@ export const refreshToken = async (
       tenantId: validation.tenantId,
       tenantRole: validation.tenantRole,
       pendingSetup: !validation.tenantId,
+      orgSetupComplete: validation.orgSetupComplete ?? true,
       dbName: validation.dbName,
     });
 
@@ -66,6 +67,8 @@ export const refreshToken = async (
       validation.tenantId,
       validation.tenantRole,
       token,
+      validation.dbName,
+      validation.orgSetupComplete ?? true,
     );
 
     return callback(null, {

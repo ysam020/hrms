@@ -7,6 +7,7 @@ import Stack from "@mui/material/Stack";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Container from "@mui/material/Container";
+import Divider from "@mui/material/Divider";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -14,12 +15,13 @@ import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import EmailIcon from "@mui/icons-material/Email";
+import HeadsetMicIcon from "@mui/icons-material/HeadsetMic";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function Help() {
   const [isMac, setIsMac] = useState(false);
   const { theme } = useContext(ThemeContext);
-
   useEffect(() => {
     const userAgent = navigator.userAgent.toLowerCase();
     setIsMac(userAgent.includes("mac"));
@@ -150,6 +152,101 @@ function Help() {
         px: { xs: 1.5, sm: 2, md: 3 },
       }}
     >
+      {/* App support */}
+      <Paper
+        elevation={2}
+        sx={{ borderRadius: { xs: 2, sm: 3 }, mb: 3, overflow: "hidden" }}
+      >
+        <Box
+          sx={{
+            p: { xs: 2, sm: 2 },
+            bgcolor: theme === "light" ? "" : "#212e35",
+          }}
+        >
+          <Typography
+            variant="h5"
+            fontWeight={600}
+            gutterBottom
+            sx={{
+              color: theme === "light" ? "" : "#A5A9AB",
+              fontSize: { xs: "1.25rem", sm: "1.5rem" },
+            }}
+          >
+            App Support
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              color: theme === "light" ? "" : "#A5A9AB",
+              fontSize: { xs: "0.85rem", sm: "0.875rem" },
+            }}
+          >
+            For questions or issues with the HRMS application itself, contact
+            our support team.
+          </Typography>
+        </Box>
+        <Divider />
+        <Box
+          sx={{
+            p: { xs: 1.5, sm: 2 },
+            display: "flex",
+            flexDirection: "column",
+            gap: 1.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <HeadsetMicIcon color="primary" fontSize="small" />
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+              >
+                Support Email
+              </Typography>
+              <Typography
+                component="a"
+                href="mailto:support@hrms.app"
+                variant="body2"
+                fontWeight={500}
+                sx={{
+                  color: "primary.main",
+                  textDecoration: "none",
+                  "&:hover": { textDecoration: "underline" },
+                }}
+              >
+                support@hrms.app
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <EmailIcon color="primary" fontSize="small" />
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+              >
+                Business Enquiries
+              </Typography>
+              <Typography
+                component="a"
+                href="mailto:hello@hrms.app"
+                variant="body2"
+                fontWeight={500}
+                sx={{
+                  color: "primary.main",
+                  textDecoration: "none",
+                  "&:hover": { textDecoration: "underline" },
+                }}
+              >
+                hello@hrms.app
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Paper>
+
       <Paper
         elevation={2}
         sx={{

@@ -7,12 +7,34 @@ import useFetchData from "@web/shared/hooks/useFetchData";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { UserContext } from "@web/app/providers/UserContext";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function ViewIndividualKyc() {
   const { username } = useParams();
   const { user } = useContext(UserContext);
+  const canApproveKyc = hasPermission(
+    "BasicKYCDetails",
+    "approve_kyc",
+    "all",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canRejectKyc = hasPermission(
+    "BasicKYCDetails",
+    "reject_kyc",
+    "all",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canEditKyc = hasPermission(
+    "BasicKYCDetails",
+    "edit_kyc",
+    "all",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const navigate = useNavigate();
   const { setAlert } = useContext(AlertContext);
 
@@ -63,26 +85,31 @@ function ViewIndividualKyc() {
                 <div className="flex-div">
                   {(user?.isSuperUser || user.username !== username) && (
                     <>
-                      <Button onClick={() => handleKycApproval(true)}>
-                        Approve
-                      </Button>
-                      <Button
-                        style={{ marginLeft: "10px" }}
-                        onClick={() => handleKycApproval(false)}
-                      >
-                        Reject
-                      </Button>
+                      {canApproveKyc && (
+                        <Button onClick={() => handleKycApproval(true)}>
+                          Approve
+                        </Button>
+                      )}
+                      {canRejectKyc && (
+                        <Button
+                          style={{ marginLeft: "10px" }}
+                          onClick={() => handleKycApproval(false)}
+                        >
+                          Reject
+                        </Button>
+                      )}
                     </>
                   )}
 
-                  {(user.username !== username || user.isSuperUser) && (
-                    <Button
-                      style={{ marginLeft: "10px" }}
-                      onClick={() => navigate(`/edit-kyc/${data.username}`)}
-                    >
-                      Edit
-                    </Button>
-                  )}
+                  {canEditKyc &&
+                    (user.username !== username || user.isSuperUser) && (
+                      <Button
+                        style={{ marginLeft: "10px" }}
+                        onClick={() => navigate(`/edit-kyc/${data.username}`)}
+                      >
+                        Edit
+                      </Button>
+                    )}
                 </div>
               </>
             )}

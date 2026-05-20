@@ -6,6 +6,8 @@ export interface AccessTokenPayload {
   tenantRole: string | null;
   // true when the user has authenticated but hasn't joined/created an org yet
   pendingSetup: boolean;
+  // false when the user paid but hasn't completed the org profile setup step yet
+  orgSetupComplete: boolean;
   // MongoDB database name for the tenant's isolated database (e.g. "hrms-acme-corp")
   dbName: string | null;
 }

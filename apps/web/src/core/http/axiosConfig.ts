@@ -11,9 +11,14 @@ declare module "axios" {
 }
 
 let _onUnauthorized: (() => void) | null = null;
+let _onPaymentRequired: (() => void) | null = null;
 
 export const setUnauthorizedHandler = (fn: () => void) => {
   _onUnauthorized = fn;
+};
+
+export const setPaymentRequiredHandler = (fn: () => void) => {
+  _onPaymentRequired = fn;
 };
 
 // Access token lives in memory only; the HttpOnly refresh-token cookie is used
@@ -318,6 +323,11 @@ apiClient.interceptors.response.use(
       originalRequest.headers = originalRequest.headers || {};
       originalRequest.headers["x-csrf-token"] = await fetchCsrfToken();
       return apiClient(originalRequest);
+    }
+
+    if (error.response?.status === 402) {
+      _onPaymentRequired?.();
+      return Promise.reject(error);
     }
 
     if (error.response?.status === 401) {

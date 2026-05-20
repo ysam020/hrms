@@ -37,6 +37,7 @@ vi.mock("@web/core/http/axiosConfig", () => ({
   getAccessToken: () => mockGetAccessToken(),
   performRefresh: () => mockPerformRefresh(),
   setUnauthorizedHandler: (...a: any[]) => mockSetUnauthorizedHandler(...a),
+  setPaymentRequiredHandler: vi.fn(),
   cancelAllPendingRequests: vi.fn(),
   invalidateCsrfToken: vi.fn(),
 }));
