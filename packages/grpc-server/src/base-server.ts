@@ -4,6 +4,25 @@ import path from "path";
 import { logger, grpcApiRequestLogger } from "@hrms/logger";
 import { errorHandler } from "./error-handling";
 import { validationMiddleware } from "./middleware/validation";
+import { runWithTenant, getClientForDb } from "@hrms/db";
+
+// Middleware that reads x-tenant-id and x-tenant-db-name gRPC metadata headers
+// (set by the API gateway) and stores them in AsyncLocalStorage so that
+// prismaWithTenant automatically routes queries to the correct tenant database.
+const tenantContextMiddleware = async (
+  call: any,
+  next: () => Promise<any>,
+): Promise<any> => {
+  const tenantId: string | undefined = (call.metadata?.get("x-tenant-id") ??
+    [])[0];
+  const dbName: string | undefined = (call.metadata?.get("x-tenant-db-name") ??
+    [])[0];
+  if (tenantId) {
+    const tenantClient = dbName ? getClientForDb(dbName) : null;
+    return runWithTenant(tenantId, tenantClient, () => next());
+  }
+  return next();
+};
 
 export class BaseGrpcServer {
   private server: grpc.Server;
@@ -18,6 +37,7 @@ export class BaseGrpcServer {
     });
     this.middlewares = [];
     this.addMiddleware(grpcApiRequestLogger);
+    this.addMiddleware(tenantContextMiddleware);
   }
 
   protected addMiddleware(

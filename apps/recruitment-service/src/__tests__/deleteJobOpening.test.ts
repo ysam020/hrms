@@ -2,11 +2,16 @@ import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { deleteJobOpening } from "../handlers/deleteJobOpening";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     jobOpening: { findUnique: jest.fn(), update: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },

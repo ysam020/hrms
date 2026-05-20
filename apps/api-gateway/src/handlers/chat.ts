@@ -1,7 +1,11 @@
 import { Request, Response } from "express";
 import dns from "dns";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prismaWithTenant,
+  prisma as masterPrisma,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { parsePagination } from "../utils/pagination";
@@ -88,7 +92,9 @@ export async function getConversations(req: Request, res: Response) {
             },
           })
         : Promise.resolve([]),
-      prisma.user.findMany({
+      // Use base masterPrisma (no tenantId filter) so participants from any
+      // tenant context can be resolved to their display name.
+      masterPrisma.user.findMany({
         where: { id: { in: allParticipantIds } },
         select: {
           id: true,
@@ -183,8 +189,9 @@ export async function startConversation(req: Request, res: Response) {
       });
     }
 
-    const room = await prisma.chatRoom.create({
+    const room = await prismaWithTenant.chatRoom.create({
       data: {
+        tenantId: (req as AuthRequest).user!.tenantId!,
         participants: [userId, recipientUserId],
         type: "direct",
         lastActivity: new Date(),

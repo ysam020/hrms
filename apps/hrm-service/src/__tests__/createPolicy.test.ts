@@ -3,15 +3,20 @@ import { prisma } from "@hrms/db";
 import { createPolicy } from "../handlers/createPolicy";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     policy: {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },

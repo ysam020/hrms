@@ -3,11 +3,16 @@ import { prisma } from "@hrms/db";
 import { getProfile } from "../handlers/getProfile";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },

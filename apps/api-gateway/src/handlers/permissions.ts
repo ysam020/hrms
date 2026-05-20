@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, prismaWithTenant } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { AuthRequest } from "../middleware/authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
@@ -23,6 +23,7 @@ export async function getRoles(_req: Request, res: Response) {
 }
 
 export async function createRole(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
     const { name } = req.body;
     if (!name)
@@ -34,8 +35,13 @@ export async function createRole(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Role with this name already exists",
       });
-    const role = await prisma.role.create({
-      data: { name, permissions: [], assignedTo: [] },
+    const role = await prismaWithTenant.role.create({
+      data: {
+        tenantId: user!.tenantId!,
+        name,
+        permissions: [],
+        assignedTo: [],
+      },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Role created successfully",
@@ -337,6 +343,7 @@ export async function getTeams(_req: Request, res: Response) {
 }
 
 export async function createTeam(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
     const {
       team_name,
@@ -356,8 +363,13 @@ export async function createTeam(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Team with this name already exists",
       });
-    const team = await prisma.team.create({
-      data: { teamName: name, teamLeaderId: leaderId, members },
+    const team = await prismaWithTenant.team.create({
+      data: {
+        tenantId: user!.tenantId!,
+        teamName: name,
+        teamLeaderId: leaderId,
+        members,
+      },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Team created successfully",

@@ -1,10 +1,18 @@
 import type { Server as SocketServer, Socket } from "socket.io";
-import { prisma } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  runWithTenant,
+  getClientForDb,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { sendPushNotifications } from "@hrms/firebase";
 import type { RedisWebSocketAdapter } from "@hrms/websocket";
 
-type AuthenticatedSocket = Socket & { userId: string };
+type AuthenticatedSocket = Socket & {
+  userId: string;
+  tenantId: string | null;
+  dbName: string | null;
+};
 
 export function setupChatSocket(
   io: SocketServer,
@@ -12,6 +20,8 @@ export function setupChatSocket(
 ): void {
   io.on("connection", (socket) => {
     const userId = (socket as AuthenticatedSocket).userId;
+    const tenantId = (socket as AuthenticatedSocket).tenantId;
+    const dbName = (socket as AuthenticatedSocket).dbName ?? null;
 
     // Per-connection cache of roomId → participants[] to avoid repeated DB hits
     const roomParticipantsCache = new Map<string, string[]>();
@@ -77,21 +87,28 @@ export function setupChatSocket(
             return;
           }
 
-          const message = await prisma.message.create({
-            data: {
-              chatRoomId: roomId,
-              senderId: userId,
-              content: content ?? null,
-              type: type ?? "text",
-              fileUrl: fileUrl ?? null,
-              fileName: fileName ?? null,
-              fileMimeType: fileMimeType ?? null,
-              fileSize: fileSize ?? null,
-              replyToId: replyTo ?? null,
-              readBy: [],
-              isDeleted: false,
-            },
-          });
+          const createMessage = () =>
+            prisma.message.create({
+              data: {
+                tenantId: tenantId!,
+                chatRoomId: roomId,
+                senderId: userId,
+                content: content ?? null,
+                type: type ?? "text",
+                fileUrl: fileUrl ?? null,
+                fileName: fileName ?? null,
+                fileMimeType: fileMimeType ?? null,
+                fileSize: fileSize ?? null,
+                replyToId: replyTo ?? null,
+                readBy: [],
+                isDeleted: false,
+              },
+            });
+          const tenantClient =
+            tenantId && dbName ? getClientForDb(dbName) : null;
+          const message = tenantId
+            ? await runWithTenant(tenantId, tenantClient, createMessage)
+            : await createMessage();
 
           // Update room's lastMessage pointer and lastActivity timestamp
           await prisma.chatRoom.update({

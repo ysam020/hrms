@@ -14,8 +14,8 @@ import {
   getSalaryDistributionByDepartment,
 } from "../handlers/analyticsRoutes";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: {
       count: jest.fn(),
       groupBy: jest.fn(),
@@ -35,8 +35,13 @@ jest.mock("@hrms/db", () => ({
       count: jest.fn(),
       groupBy: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: {
@@ -114,9 +119,13 @@ describe("getEmploymentTypeBreakdown", () => {
     mockUserCount.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getEmploymentTypeBreakdown(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -150,9 +159,13 @@ describe("getEmployeeStatusDistribution", () => {
     mockUserGroupBy.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getEmployeeStatusDistribution(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -162,17 +175,15 @@ describe("getAgeDistribution", () => {
   it("buckets users into the correct age ranges", async () => {
     // aggregateRaw returns MongoDB $bucket output: _id is the bucket boundary
     (prisma.user as any).aggregateRaw = jest.fn().mockResolvedValue([
-      { _id: 0,    count: 1 }, // <25
-      { _id: 25,   count: 2 }, // 25-34
-      { _id: 35,   count: 1 }, // 35-44
+      { _id: 0, count: 1 }, // <25
+      { _id: 25, count: 2 }, // 25-34
+      { _id: 35, count: 1 }, // 35-44
       { _id: "55+", count: 1 }, // 55+ (default bucket)
     ]);
     const res = makeRes();
     await getAgeDistribution(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
-    const byBucket = Object.fromEntries(
-      data.map((d: any) => [d._id, d.count]),
-    );
+    const byBucket = Object.fromEntries(data.map((d: any) => [d._id, d.count]));
     expect(byBucket["<25"]).toBe(1);
     expect(byBucket["25-34"]).toBe(2);
     expect(byBucket["35-44"]).toBe(1);
@@ -190,12 +201,18 @@ describe("getAgeDistribution", () => {
   });
 
   it("returns 500 on DB error", async () => {
-    (prisma.user as any).aggregateRaw = jest.fn().mockRejectedValue(new Error("DB error"));
+    (prisma.user as any).aggregateRaw = jest
+      .fn()
+      .mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getAgeDistribution(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -203,17 +220,23 @@ describe("getAgeDistribution", () => {
 
 describe("getAttendanceTrends", () => {
   it("returns cached data without querying DB", async () => {
-    mockGet.mockResolvedValue([{ _id: { year: 2025, month: 1 }, attendanceRate: 90 }]);
+    mockGet.mockResolvedValue([
+      { _id: { year: 2025, month: 1 }, attendanceRate: 90 },
+    ]);
     const res = makeRes();
     await getAttendanceTrends(makeReq(), res);
-    expect((prisma.attendanceRecord as any).aggregateRaw).not.toHaveBeenCalled();
+    expect(
+      (prisma.attendanceRecord as any).aggregateRaw,
+    ).not.toHaveBeenCalled();
   });
 
   it("calculates attendanceRate correctly from aggregateRaw result", async () => {
     // aggregateRaw returns MongoDB $group output: total, present, hours per month
-    (prisma.attendanceRecord as any).aggregateRaw = jest.fn().mockResolvedValue([
-      { _id: { year: 2025, month: 1 }, total: 3, present: 2, hours: 15 },
-    ]);
+    (prisma.attendanceRecord as any).aggregateRaw = jest
+      .fn()
+      .mockResolvedValue([
+        { _id: { year: 2025, month: 1 }, total: 3, present: 2, hours: 15 },
+      ]);
     const res = makeRes();
     await getAttendanceTrends(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
@@ -225,12 +248,18 @@ describe("getAttendanceTrends", () => {
   });
 
   it("returns 500 on DB error", async () => {
-    (prisma.attendanceRecord as any).aggregateRaw = jest.fn().mockRejectedValue(new Error("DB error"));
+    (prisma.attendanceRecord as any).aggregateRaw = jest
+      .fn()
+      .mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getAttendanceTrends(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -239,9 +268,9 @@ describe("getAttendanceTrends", () => {
 describe("getLeaveApprovalRate", () => {
   it("computes approvalRate as percentage of approved/total", async () => {
     mockLeaveCount
-      .mockResolvedValueOnce(80)  // approved
-      .mockResolvedValueOnce(10)  // pending
-      .mockResolvedValueOnce(10)  // rejected
+      .mockResolvedValueOnce(80) // approved
+      .mockResolvedValueOnce(10) // pending
+      .mockResolvedValueOnce(10) // rejected
       .mockResolvedValueOnce(100); // total
     const res = makeRes();
     await getLeaveApprovalRate(makeReq(), res);
@@ -262,9 +291,13 @@ describe("getLeaveApprovalRate", () => {
     mockLeaveCount.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getLeaveApprovalRate(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -288,9 +321,13 @@ describe("getLeaveTypeBreakdown", () => {
     mockLeaveGroupBy.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getLeaveTypeBreakdown(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -318,9 +355,13 @@ describe("getApplicationsByJobRole", () => {
     mockJobGroupBy.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getApplicationsByJobRole(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -330,10 +371,10 @@ describe("getHiringFunnel", () => {
   it("computes funnel rates correctly", async () => {
     mockJobCount
       .mockResolvedValueOnce(100) // applied
-      .mockResolvedValueOnce(50)  // shortlisted
-      .mockResolvedValueOnce(25)  // interviewed
-      .mockResolvedValueOnce(10)  // offered
-      .mockResolvedValueOnce(8);  // hired
+      .mockResolvedValueOnce(50) // shortlisted
+      .mockResolvedValueOnce(25) // interviewed
+      .mockResolvedValueOnce(10) // offered
+      .mockResolvedValueOnce(8); // hired
     const res = makeRes();
     await getHiringFunnel(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
@@ -348,9 +389,13 @@ describe("getHiringFunnel", () => {
     mockJobCount.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getHiringFunnel(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -385,9 +430,13 @@ describe("getHiringManagerPerformance", () => {
     mockJobGroupBy.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getHiringManagerPerformance(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -395,13 +444,11 @@ describe("getHiringManagerPerformance", () => {
 
 describe("getSalaryBands", () => {
   it("maps aggregateRaw result with label lookup", async () => {
-    const aggregateRawMock = jest
-      .fn()
-      .mockResolvedValue([
-        { _id: 0, count: 10, avgSalary: 15000 },
-        { _id: 20000, count: 20, avgSalary: 30000 },
-        { _id: "100K+", count: 5, avgSalary: 150000 },
-      ]);
+    const aggregateRawMock = jest.fn().mockResolvedValue([
+      { _id: 0, count: 10, avgSalary: 15000 },
+      { _id: 20000, count: 20, avgSalary: 30000 },
+      { _id: "100K+", count: 5, avgSalary: 150000 },
+    ]);
     (prisma.user as any).aggregateRaw = aggregateRawMock;
 
     const res = makeRes();
@@ -421,9 +468,13 @@ describe("getSalaryBands", () => {
       .mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getSalaryBands(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -454,9 +505,13 @@ describe("getCompensationBreakdown", () => {
     mockUserAggregate.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getCompensationBreakdown(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });
 
@@ -501,8 +556,12 @@ describe("getSalaryDistributionByDepartment", () => {
     mockUserGroupBy.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getSalaryDistributionByDepartment(makeReq(), res);
-    expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      {
+        message: "Internal Server Error",
+      },
+    );
   });
 });

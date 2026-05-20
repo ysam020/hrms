@@ -35,6 +35,9 @@ const PolicyIcon = React.lazy(() => import("@mui/icons-material/Policy"));
 const MonitorHeartIcon = React.lazy(
   () => import("@mui/icons-material/MonitorHeart"),
 );
+const CreditCardIcon = React.lazy(
+  () => import("@mui/icons-material/CreditCard"),
+);
 function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,6 +49,10 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const handleNavigation = (path) => {
     navigate(path);
   };
+
+  const hasSubscriptionAccess =
+    user?.isSuperUser ||
+    user?.permissions?.some((p) => p.startsWith("Subscription:"));
 
   // Memoized navItems array
   const navItems = useMemo(() => {
@@ -63,9 +70,18 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
       { title: "Analytics", icon: <EqualizerIcon />, path: "/analytics" },
       { title: "Policy", icon: <PolicyIcon />, path: "/policy" },
       { title: "Monitoring", icon: <MonitorHeartIcon />, path: "/monitoring" },
+      ...(hasSubscriptionAccess
+        ? [
+            {
+              title: "Subscription",
+              icon: <CreditCardIcon />,
+              path: "/subscription",
+            },
+          ]
+        : []),
       { title: "Help", icon: <LiveHelpIcon />, path: "/help" },
     ];
-  }, []);
+  }, [hasSubscriptionAccess]);
 
   const isActive = (path) => {
     if (path === "/") {

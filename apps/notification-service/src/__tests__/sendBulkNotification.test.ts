@@ -1,11 +1,16 @@
 import { prisma } from "@hrms/db";
 import { sendBulkNotification } from "../handlers/sendBulkNotification";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     notification: { create: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -54,7 +59,10 @@ describe("sendBulkNotification", () => {
           eventType: "general",
           priority: "high",
           recipients: {
-            create: [{ userId: "u1" }, { userId: "u2" }],
+            create: [
+              { tenantId: "t1", userId: "u1" },
+              { tenantId: "t1", userId: "u2" },
+            ],
           },
         }),
       }),

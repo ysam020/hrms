@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { attendanceClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
@@ -244,7 +244,7 @@ export async function getAttendanceSummary(req: Request, res: Response) {
         where: { userId, date: { gte: startDate, lte: endDate } },
         select: { date: true, status: true, isCorrected: true },
       }),
-      prisma.leaveBalance.findUnique({
+      prisma.leaveBalance.findFirst({
         where: { userId },
         select: { balances: true },
       }),

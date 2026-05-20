@@ -1,11 +1,16 @@
 import { prisma } from "@hrms/db";
 import { sendKycReminders } from "../jobs/sendKycReminders";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findMany: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/common", () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),

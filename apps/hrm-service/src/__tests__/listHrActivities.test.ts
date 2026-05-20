@@ -2,11 +2,16 @@ import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { listHrActivities } from "../handlers/listHrActivities";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     hrActivity: { findMany: jest.fn(), count: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { get: jest.fn(), set: jest.fn() },

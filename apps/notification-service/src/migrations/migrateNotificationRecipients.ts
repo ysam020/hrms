@@ -61,7 +61,7 @@ export async function migrateNotificationRecipients(): Promise<void> {
           continue;
         }
 
-        await prisma.notificationRecipient.create({
+        await (prisma.notificationRecipient.create as any)({
           data: { notificationId, userId, isCleared: r.isCleared ?? false },
         });
         created++;

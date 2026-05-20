@@ -4,16 +4,21 @@ import { cacheManager } from "@hrms/cache";
 import { submitResignation } from "../handlers/submitResignation";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     resignation: {
       findFirst: jest.fn(),
       create: jest.fn(),
     },
     user: { findMany: jest.fn(), findUnique: jest.fn() },
     team: { findMany: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },

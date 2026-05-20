@@ -1,14 +1,19 @@
 import { prisma } from "@hrms/db";
 import { cleanupFcmTokens } from "../jobs/cleanupFcmTokens";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: {
       findMany: jest.fn(),
       update: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 // Mock firebase-admin dynamic import
 const mockSend = jest.fn();

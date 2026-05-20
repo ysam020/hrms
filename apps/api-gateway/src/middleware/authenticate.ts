@@ -1,9 +1,38 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { prisma } from "@hrms/db";
+import { prisma, runWithTenant, getClientForDb } from "@hrms/db";
+import { gatewayTenantStorage } from "./tenantContext";
+
+export interface AuthUser {
+  userId: string;
+  tenantId: string | null;
+  tenantRole: string | null;
+  pendingSetup: boolean;
+  dbName: string | null;
+  // legacy fields still present in token for compatibility
+  role?: string;
+  email?: string;
+}
 
 export interface AuthRequest extends Request {
-  user?: { userId: string; role: string; email: string };
+  user?: AuthUser;
+}
+
+// In-memory cache: tenantId → dbName (avoids a DB lookup on every request for old tokens)
+const dbNameCache = new Map<string, string>();
+
+async function resolveDbName(
+  tenantId: string,
+  fromToken: string | null,
+): Promise<string | null> {
+  if (fromToken) return fromToken;
+  if (dbNameCache.has(tenantId)) return dbNameCache.get(tenantId)!;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { dbName: true },
+  });
+  if (tenant?.dbName) dbNameCache.set(tenantId, tenant.dbName);
+  return tenant?.dbName ?? null;
 }
 
 export const authenticate = (
@@ -20,23 +49,58 @@ export const authenticate = (
       algorithms: ["HS256"],
     }) as any;
     req.user = payload;
-    next();
+
+    const tid = payload.tenantId ?? null;
+    const dbNameFromToken: string | null = payload.dbName ?? null;
+
+    if (tid) {
+      // Resolve dbName (from JWT if present, else fall back to a DB lookup for old tokens)
+      resolveDbName(tid, dbNameFromToken)
+        .then((dbName) => {
+          const tenantClient = dbName ? getClientForDb(dbName) : null;
+          // Run the handler chain inside BOTH storage contexts:
+          // - gatewayTenantStorage → read by grpcCall to forward metadata to gRPC services
+          // - runWithTenant (DB package) → read by prismaWithTenant for direct DB calls
+          gatewayTenantStorage.run({ tenantId: tid, dbName }, () => {
+            runWithTenant(tid, tenantClient, next);
+          });
+        })
+        .catch(() => {
+          res.status(500).json({ message: "Internal Server Error" });
+        });
+    } else {
+      gatewayTenantStorage.run({ tenantId: null, dbName: null }, () => next());
+    }
   } catch {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 };
 
+// Requires a fully resolved tenant context. Rejects pendingSetup tokens.
+export const requireTenant = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+  if (req.user.pendingSetup || !req.user.tenantId) {
+    return res.status(403).json({
+      message: "Please create or join an organisation first.",
+      code: "PENDING_TENANT_SETUP",
+    });
+  }
+  next();
+};
+
 export const authorize = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user || !roles.includes(req.user.tenantRole ?? "")) {
       return res.status(403).json({ message: "Forbidden" });
     }
     next();
   };
 };
 
-// Middleware that requires the authenticated user to have isSuperUser=true.
-// Uses a DB lookup so role changes take effect immediately without re-login.
 export const requireSuperUser = async (
   req: AuthRequest,
   res: Response,
@@ -44,6 +108,11 @@ export const requireSuperUser = async (
 ): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  // Tenant owners have full privileges within their organisation
+  if (req.user.tenantRole === "owner") {
+    next();
     return;
   }
   try {

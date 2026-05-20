@@ -27,7 +27,8 @@ export type SchedulerJobName =
   | "reconcileAttendance"
   | "updateLeaveBalance"
   | "sendKycReminders"
-  | "cleanupFcmTokens";
+  | "cleanupFcmTokens"
+  | "checkSubscriptionExpiry";
 
 export interface SchedulerJobData {
   jobName: SchedulerJobName;

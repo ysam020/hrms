@@ -1,11 +1,16 @@
 import { prisma } from "@hrms/db";
 import { webAuthnRegistrationOptions } from "../handlers/webAuthnRegistrationOptions";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@simplewebauthn/server", () => ({
   generateRegistrationOptions: jest.fn().mockResolvedValue({

@@ -71,14 +71,13 @@ function getOtherParticipant(room, myUserId) {
   const detail = room.participantDetails?.find(
     (p) => p.id === otherId || p._id === otherId,
   );
-  if (detail) {
+  if (detail && (detail.first_name || detail.last_name || detail.username)) {
     return (
       `${detail.first_name || ""} ${detail.last_name || ""}`.trim() ||
-      detail.username ||
-      otherId
+      detail.username
     );
   }
-  return otherId;
+  return "Unknown User";
 }
 
 function formatTime(dateStr) {

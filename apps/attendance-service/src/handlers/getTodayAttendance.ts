@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -24,12 +24,13 @@ export const getTodayAttendance = async (
 
     const todayStart = dayjs().utc().startOf("day").toDate();
 
-    const cacheKey = `todayAttendance:${userId}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:todayAttendance:${userId}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
-    const record = await prisma.attendanceRecord.findUnique({
-      where: { userId_date: { userId, date: todayStart } },
+    const record = await prisma.attendanceRecord.findFirst({
+      where: { tenantId: getTenantId(), userId, date: todayStart },
     });
 
     if (!record) {

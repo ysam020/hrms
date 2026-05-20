@@ -2,15 +2,20 @@ import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { correctAttendance } from "../handlers/correctAttendance";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     attendanceRecord: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       create: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: {
@@ -25,8 +30,8 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-const mockRecordFindUnique = (prisma as any).attendanceRecord
-  .findUnique as jest.Mock;
+const mockRecordFindFirst = (prisma as any).attendanceRecord
+  .findFirst as jest.Mock;
 const mockRecordUpdate = (prisma as any).attendanceRecord.update as jest.Mock;
 const mockRecordCreate = (prisma as any).attendanceRecord.create as jest.Mock;
 const mockInvalidate = (cacheManager as any).invalidatePattern as jest.Mock;
@@ -64,7 +69,7 @@ describe("correctAttendance", () => {
   });
 
   it("updates existing record with new timeIn/timeOut and recalculates status", async () => {
-    mockRecordFindUnique.mockResolvedValue(baseRecord);
+    mockRecordFindFirst.mockResolvedValue(baseRecord);
     mockRecordUpdate.mockResolvedValue({
       ...baseRecord,
       timeIn: new Date("2024-03-04T09:00:00.000Z"),
@@ -96,7 +101,7 @@ describe("correctAttendance", () => {
   });
 
   it("sets status to 'Half Day' when working hours < 4", async () => {
-    mockRecordFindUnique.mockResolvedValue({
+    mockRecordFindFirst.mockResolvedValue({
       ...baseRecord,
       timeIn: null,
       timeOut: null,
@@ -124,7 +129,7 @@ describe("correctAttendance", () => {
   });
 
   it("sets status to 'Present' when working hours >= 4", async () => {
-    mockRecordFindUnique.mockResolvedValue(baseRecord);
+    mockRecordFindFirst.mockResolvedValue(baseRecord);
     mockRecordUpdate.mockResolvedValue({
       ...baseRecord,
       status: "Present",
@@ -145,7 +150,7 @@ describe("correctAttendance", () => {
   });
 
   it("creates new record when no existing record found", async () => {
-    mockRecordFindUnique.mockResolvedValue(null);
+    mockRecordFindFirst.mockResolvedValue(null);
     mockRecordCreate.mockResolvedValue({ ...baseRecord, id: "new-rec" });
     const cb = makeCallback();
     await correctAttendance(
@@ -166,7 +171,7 @@ describe("correctAttendance", () => {
   });
 
   it("invalidates cache after correction", async () => {
-    mockRecordFindUnique.mockResolvedValue(baseRecord);
+    mockRecordFindFirst.mockResolvedValue(baseRecord);
     mockRecordUpdate.mockResolvedValue(baseRecord);
     const cb = makeCallback();
     await correctAttendance(
@@ -183,7 +188,7 @@ describe("correctAttendance", () => {
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockRecordFindUnique.mockRejectedValue(new Error("DB error"));
+    mockRecordFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await correctAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(

@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
@@ -39,6 +39,7 @@ export const submitResignation = async (
 
     const resignation = await prisma.resignation.create({
       data: {
+        tenantId: getTenantId()!,
         userId,
         resignationDate: dayjs(resignationDate).toDate(),
         lastWorkingDay: lastDate ? dayjs(lastDate).toDate() : null,

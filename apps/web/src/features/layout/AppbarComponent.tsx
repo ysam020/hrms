@@ -36,7 +36,7 @@ function AppbarComponent({
 }) {
   const { notifications } = useContext(NotificationContext);
   const { theme, toggleTheme } = useContext(ThemeContext);
-  const { handleLogout } = useContext(UserContext);
+  const { handleLogout, user } = useContext(UserContext);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { editMode, toggleEditMode, resetFn } = useDashboardEdit();
@@ -136,7 +136,9 @@ function AppbarComponent({
               justifyContent: "center",
             }}
           >
-            <Box sx={{ flex: 1 }}>
+            <Box
+              sx={{ flex: 1, display: "flex", alignItems: "center", gap: 1.5 }}
+            >
               <Box
                 sx={{ width: 200, height: 60 }}
                 role="img"
@@ -164,6 +166,38 @@ function AppbarComponent({
                   />
                 )}
               </Box>
+              {user?.tenantName && (
+                <Box
+                  sx={{
+                    display: { xs: "none", sm: "flex" },
+                    alignItems: "center",
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: "20px",
+                    bgcolor:
+                      theme === "light"
+                        ? "rgba(0,0,0,0.06)"
+                        : "rgba(255,255,255,0.1)",
+                    border: `1px solid ${
+                      theme === "light"
+                        ? "rgba(0,0,0,0.1)"
+                        : "rgba(255,255,255,0.12)"
+                    }`,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "0.75rem",
+                      color: theme === "light" ? "#374151" : "#d1d5db",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {user.tenantName}
+                  </Typography>
+                </Box>
+              )}
             </Box>
 
             {/* Desktop action items - hidden on small screens */}

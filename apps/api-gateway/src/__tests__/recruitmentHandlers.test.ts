@@ -32,8 +32,8 @@ jest.mock("../grpc/clients", () => ({
   grpcCall: jest.fn(),
 }));
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn(), findMany: jest.fn() },
     jobOpening: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
     jobApplication: {
@@ -48,8 +48,13 @@ jest.mock("@hrms/db", () => ({
       count: jest.fn(),
       findFirst: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, status: number, data: any) =>

@@ -1,11 +1,28 @@
 import { prisma } from "@hrms/db";
 import { googleOAuthCallback } from "../handlers/googleOAuthCallback";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
-    user: { findFirst: jest.fn(), create: jest.fn(), count: jest.fn() },
-  },
-}));
+jest.mock("@hrms/db", () => {
+  const _db = {
+    user: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      count: jest.fn(),
+    },
+    tenantMembership: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+    },
+    tenantInvite: { findFirst: jest.fn(), updateMany: jest.fn() },
+    tenant: { findMany: jest.fn(), findUnique: jest.fn() },
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("../services/jwt", () => ({
   signAccessToken: jest.fn().mockReturnValue("access-token"),
@@ -22,7 +39,11 @@ jest.mock("@hrms/logger", () => ({
 
 const mockFindFirst = (prisma as any).user.findFirst as jest.Mock;
 const mockCreate = (prisma as any).user.create as jest.Mock;
+const mockUserUpdate = (prisma as any).user.update as jest.Mock;
 const mockCount = (prisma as any).user.count as jest.Mock;
+const mockMembershipFindMany = (prisma as any).tenantMembership
+  .findMany as jest.Mock;
+const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
@@ -63,6 +84,9 @@ describe("googleOAuthCallback", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCount.mockResolvedValue(1); // not first user
+    mockMembershipFindMany.mockResolvedValue([{ tenantId: "t1", role: "HR" }]);
+    mockUserUpdate.mockResolvedValue({ ...activeUser, tenantId: "t1" });
+    mockTenantFindUnique.mockResolvedValue({ dbName: "db-t1" });
   });
 
   it("returns INVALID_ARGUMENT when code is missing", async () => {
@@ -136,6 +160,7 @@ describe("googleOAuthCallback", () => {
     // First call for finding existing user: null. Second call for checking unique username: null.
     mockFindFirst.mockResolvedValueOnce(null).mockResolvedValue(null);
     mockCreate.mockResolvedValue(activeUser);
+    mockMembershipFindMany.mockResolvedValue([]); // new user has no memberships yet
     const cb = makeCallback();
     await googleOAuthCallback(makeCall({ code: "auth-code" }), cb);
     expect(mockCreate).toHaveBeenCalled();

@@ -1,16 +1,21 @@
 import { prisma } from "@hrms/db";
 import { chatbotMessage } from "../handlers/chatbot";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn() },
     leaveBalance: { findUnique: jest.fn() },
     leaveApplication: { findMany: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
     salaryStructure: { findFirst: jest.fn() },
     hrPolicy: { findMany: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, status: number, data: any) =>

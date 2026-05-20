@@ -1,11 +1,18 @@
 import { prisma } from "@hrms/db";
 import { webAuthnAuthenticationVerify } from "../handlers/webAuthnAuthenticationVerify";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-  },
-}));
+    tenantMembership: { findFirst: jest.fn() },
+    tenant: { findUnique: jest.fn() },
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@simplewebauthn/server", () => ({
   verifyAuthenticationResponse: jest.fn(),
@@ -36,6 +43,9 @@ const mockRedisGet = jest.fn();
 const mockFindFirst = (prisma as any).user.findFirst as jest.Mock;
 const mockFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUpdate = prisma.user.update as jest.Mock;
+const mockMembershipFindFirst = (prisma as any).tenantMembership
+  .findFirst as jest.Mock;
+const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
@@ -73,6 +83,8 @@ describe("webAuthnAuthenticationVerify", () => {
       del: jest.fn(),
     });
     mockUpdate.mockResolvedValue(user);
+    mockMembershipFindFirst.mockResolvedValue({ tenantId: "t1", role: "HR" });
+    mockTenantFindUnique.mockResolvedValue({ dbName: "db-t1" });
   });
 
   it("returns NOT_FOUND when user does not exist", async () => {

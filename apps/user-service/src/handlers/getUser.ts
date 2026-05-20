@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { safeDecrypt } from "@hrms/crypto";
 import { cacheManager } from "@hrms/cache";
@@ -55,12 +55,13 @@ export const getUser = async (
   try {
     const { userId } = call.request;
 
-    const cacheKey = `user:${userId}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:user:${userId}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
     const isObjectId = /^[a-f\d]{24}$/i.test(userId);
-    const user = await prisma.user.findFirst({
+    const user = await prismaWithTenant.user.findFirst({
       where: {
         OR: [{ username: userId }, ...(isObjectId ? [{ id: userId }] : [])],
       },

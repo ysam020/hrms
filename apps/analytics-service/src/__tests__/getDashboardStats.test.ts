@@ -4,14 +4,19 @@ import { cacheManager } from "@hrms/cache";
 import { getDashboardStats } from "../handlers/getDashboardStats";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { count: jest.fn() },
     attendanceRecord: { count: jest.fn() },
     leaveApplication: { count: jest.fn() },
     jobOpening: { count: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: {
@@ -169,7 +174,7 @@ describe("getDashboardStats", () => {
     await getDashboardStats(makeCall({}), makeCallback());
 
     expect(mockCacheSet).toHaveBeenCalledWith(
-      "analytics:dashboard",
+      "t:t1:analytics:dashboard",
       expect.objectContaining({ status: status.OK }),
       "dashboard",
     );

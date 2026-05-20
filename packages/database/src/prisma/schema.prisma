@@ -8,13 +8,67 @@ datasource db {
   url      = env("DEV_MONGODB_URI")
 }
 
+// ─── Tenant ───────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id                     String    @id @default(auto()) @map("_id") @db.ObjectId
+  name                   String
+  slug                   String    @unique
+  dbName                 String?   @unique
+  plan                   String    @default("pro")
+  billing                String?
+  industry               String?
+  companySize            String?
+  razorpaySubscriptionId String?
+  subscriptionStatus     String    @default("active") // active | grace_period | expired
+  planActivatedAt        DateTime?
+  planExpiresAt          DateTime?
+  paymentMethod          String?   // card | upi | netbanking | emandate | wallet
+  paymentMethodSummary   String?   // e.g. "Visa •••• 1111" | "john@upi" | "HDFC Bank"
+  isActive               Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+
+  @@map("tenants")
+}
+
+model TenantMembership {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  userId    String   @db.ObjectId
+  // "owner" | "admin" | "hr" | "manager" | "employee"
+  role      String
+  invitedBy String?  @db.ObjectId
+  joinedAt  DateTime @default(now())
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@map("tenant_memberships")
+}
+
+model TenantInvite {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  email     String
+  role      String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  invitedBy String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("tenant_invites")
+}
+
 // ─── User ────────────────────────────────────────────────────────────────────
 
 model User {
   id                          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                    String?   @db.ObjectId
   username                    String    @unique
   password                    String?
-  email                       String?
+  email                       String?   @unique
   official_email              String?
   first_name                  String?
   middle_name                 String?
@@ -85,7 +139,6 @@ model User {
 
   attendanceRecords           AttendanceRecord[]
   leaveApplications           LeaveApplication[]
-  leaveBalance                LeaveBalance?
   notifications               NotificationRecipient[]
   salaryStructures            SalaryStructure[]
   loginEvents                 LoginEvent[]
@@ -100,6 +153,7 @@ model User {
 
 model AttendanceRecord {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String?  @db.ObjectId
   userId       String   @db.ObjectId
   date         DateTime
   timeIn       DateTime?
@@ -111,8 +165,8 @@ model AttendanceRecord {
 
   user         User?    @relation(fields: [userId], references: [id])
 
-  @@unique([userId, date])
-  @@index([date])
+  @@unique([tenantId, userId, date])
+  @@index([tenantId, date])
   @@map("attendance_records")
 }
 
@@ -120,6 +174,7 @@ model AttendanceRecord {
 
 model LeaveApplication {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId          String?  @db.ObjectId
   userId            String   @db.ObjectId
   from              DateTime
   to                DateTime
@@ -135,21 +190,21 @@ model LeaveApplication {
 
   user              User?    @relation(fields: [userId], references: [id])
 
-  @@index([userId])
-  @@index([status])
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
   @@map("leaves")
 }
 
 model LeaveBalance {
   id                              String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId                          String   @unique @db.ObjectId
+  tenantId                        String?  @db.ObjectId
+  userId                          String   @db.ObjectId
   accumulatedPLBeforeCurrentMonth Float    @default(0)
   balances                        Json?
   createdAt                       DateTime? @default(now())
   updatedAt                       DateTime? @updatedAt
 
-  user                            User?    @relation(fields: [userId], references: [id])
-
+  @@unique([tenantId, userId])
   @@map("leavebalances")
 }
 
@@ -157,6 +212,7 @@ model LeaveBalance {
 
 model JobOpening {
   id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId           String?   @db.ObjectId
   jobTitle           String
   numberOfVacancies  Int?
   jobPostingDate     DateTime? @default(now())
@@ -183,6 +239,7 @@ model JobOpening {
 
 model JobApplication {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String?  @db.ObjectId
   name         String?
   mobile       String?
   email        String?
@@ -206,6 +263,7 @@ model JobApplication {
 
 model Resignation {
   id                          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                    String?   @db.ObjectId
   userId                      String?   @db.ObjectId
   resignationDate             DateTime?
   lastWorkingDay              DateTime?
@@ -229,8 +287,8 @@ model Resignation {
   feedbackSubmittedOn         DateTime?
   lastUpdatedOn               DateTime?
 
-  @@index([userId])
-  @@index([status])
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
   @@map("resignations")
 }
 
@@ -238,6 +296,7 @@ model Resignation {
 
 model SalaryStructure {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String?  @db.ObjectId
   userId          String   @db.ObjectId
   grossSalary     Float
   month           Int
@@ -257,7 +316,7 @@ model SalaryStructure {
 
   user            User?    @relation(fields: [userId], references: [id])
 
-  @@index([userId, year, month])
+  @@index([tenantId, userId, year, month])
   @@map("salarystructures")
 }
 
@@ -265,6 +324,7 @@ model SalaryStructure {
 
 model Notification {
   id         String                  @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String?                 @db.ObjectId
   title      String?
   message    String?
   timeStamp  DateTime? @default(now())
@@ -279,6 +339,7 @@ model Notification {
 
 model NotificationRecipient {
   id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String?      @db.ObjectId
   notificationId String       @db.ObjectId
   userId         String       @db.ObjectId
   isCleared      Boolean      @default(false)
@@ -286,7 +347,7 @@ model NotificationRecipient {
   notification   Notification @relation(fields: [notificationId], references: [id])
   user           User         @relation(fields: [userId], references: [id])
 
-  @@index([userId, isCleared])
+  @@index([tenantId, userId, isCleared])
   @@map("notification_recipients")
 }
 
@@ -294,10 +355,12 @@ model NotificationRecipient {
 
 model Role {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?  @db.ObjectId
   name        String?
   permissions String[]
   assignedTo  Json?
 
+  @@index([tenantId])
   @@map("roles")
 }
 
@@ -305,6 +368,7 @@ model Role {
 
 model HrActivity {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
   title         String
   description   String
   scheduledAt   DateTime
@@ -323,6 +387,7 @@ model HrActivity {
 
 model ChatRoom {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
   participants  String[]  @db.ObjectId
   type          String    @default("direct")
   name          String?
@@ -334,12 +399,13 @@ model ChatRoom {
 
   messages      Message[]
 
-  @@index([participants])
+  @@index([tenantId, participants])
   @@map("chatrooms")
 }
 
 model Message {
   id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String?   @db.ObjectId
   chatRoomId   String    @db.ObjectId
   senderId     String    @db.ObjectId
   content      String?
@@ -365,6 +431,7 @@ model Message {
 
 model AuditLog {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?  @db.ObjectId
   userId      String?  @db.ObjectId
   action      String
   entityType  String
@@ -375,9 +442,9 @@ model AuditLog {
   userAgent   String?
   timestamp   DateTime? @default(now())
 
-  @@index([timestamp])
-  @@index([userId, timestamp])
-  @@index([entityType, timestamp])
+  @@index([tenantId, timestamp])
+  @@index([tenantId, userId, timestamp])
+  @@index([tenantId, entityType, timestamp])
   @@map("auditlogs")
 }
 
@@ -385,10 +452,12 @@ model AuditLog {
 
 model Holiday {
   id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId String?  @db.ObjectId
   year     Int
   month    Int
   holidays Json?
 
+  @@unique([tenantId, year, month])
   @@map("holidays")
 }
 
@@ -396,6 +465,7 @@ model Holiday {
 
 model Policy {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
   policyType    String
   policyName    String?
   content       String
@@ -414,6 +484,7 @@ model Policy {
 
 model Rule {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String?   @db.ObjectId
   name           String
   category       String
   description    String?
@@ -432,8 +503,8 @@ model Rule {
   createdAt      DateTime? @default(now())
   updatedAt      DateTime? @updatedAt
 
-  @@index([status])
-  @@index([category, status])
+  @@index([tenantId, status])
+  @@index([tenantId, category, status])
   @@map("rules")
 }
 
@@ -441,10 +512,12 @@ model Rule {
 
 model Team {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String?  @db.ObjectId
   teamName     String
   teamLeaderId String   @db.ObjectId
   members      String[] @db.ObjectId
 
+  @@index([tenantId])
   @@map("teams")
 }
 
@@ -452,6 +525,7 @@ model Team {
 
 model LoginEvent {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId          String?  @db.ObjectId
   userId            String   @db.ObjectId
   timestamp         DateTime @default(now())
   ip                String
@@ -470,6 +544,6 @@ model LoginEvent {
 
   user              User     @relation(fields: [userId], references: [id])
 
-  @@index([userId, timestamp])
+  @@index([tenantId, userId, timestamp])
   @@map("login_events")
 }

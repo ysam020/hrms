@@ -9,10 +9,9 @@ const cwd = join(__dirname, "..");
 
 try {
   await loadSecrets("hrms/config");
-} catch (err) {
+} catch {
   console.warn(
-    "[load-build-secrets] AWS Secrets Manager unreachable, continuing with environment variables:",
-    err.message,
+    "[load-build-secrets] AWS Secrets Manager unreachable, continuing with environment variables.",
   );
 }
 

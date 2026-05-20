@@ -39,6 +39,6 @@ bootstrap().catch((err) => {
   console.error(
     "Failed to start: could not load secrets from AWS Secrets Manager",
   );
-  console.error(err);
+  console.error(err instanceof Error ? err.name : "unknown error");
   process.exit(1);
 });

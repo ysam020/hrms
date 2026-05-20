@@ -1,4 +1,4 @@
-import { prisma } from "@hrms/db";
+import { prisma, runWithTenant, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getLeaveConfig } from "../config";
@@ -65,7 +65,9 @@ async function processEmployee(
   const endYear = end.year();
   const holidays = await getHolidaysInRange(startYear, endYear);
 
-  let lb = await prisma.leaveBalance.findUnique({ where: { userId } });
+  let lb = await prisma.leaveBalance.findFirst({
+    where: { tenantId: getTenantId(), userId },
+  });
   const balances: BalanceEntry[] =
     (lb?.balances as unknown as BalanceEntry[]) ?? [];
   const accumulated = lb?.accumulatedPLBeforeCurrentMonth ?? 0;
@@ -77,6 +79,7 @@ async function processEmployee(
     if (!lb) {
       lb = await prisma.leaveBalance.create({
         data: {
+          tenantId: getTenantId()!,
           userId,
           accumulatedPLBeforeCurrentMonth: accumulated,
           balances: [],
@@ -221,7 +224,10 @@ async function processEmployee(
   }
 
   if (leaveApplications.length > 0) {
-    await prisma.leaveApplication.createMany({ data: leaveApplications });
+    const tenantId = getTenantId()!;
+    await prisma.leaveApplication.createMany({
+      data: leaveApplications.map((la) => ({ ...la, tenantId })),
+    });
   }
 
   const newAccumulated = Math.max(
@@ -232,13 +238,15 @@ async function processEmployee(
         : 0),
   );
 
+  const tenantId = getTenantId()!;
   await prisma.leaveBalance.upsert({
-    where: { userId },
+    where: { tenantId_userId: { tenantId, userId } },
     update: {
       accumulatedPLBeforeCurrentMonth: newAccumulated,
       balances: balances as any,
     },
     create: {
+      tenantId,
       userId,
       accumulatedPLBeforeCurrentMonth: newAccumulated,
       balances: balances as any,
@@ -276,19 +284,16 @@ export async function reconcileAttendance(): Promise<void> {
 
     const employees = await prisma.user.findMany({
       where: { employeeStatus: "Active" },
-      select: { id: true },
+      select: { id: true, tenantId: true },
     });
 
     let processed = 0;
     let errors = 0;
     for (const emp of employees) {
+      if (!emp.tenantId) continue;
       try {
-        await processEmployee(
-          emp.id,
-          startDate,
-          endDate,
-          targetMonth,
-          targetYear,
+        await runWithTenant(emp.tenantId, null, () =>
+          processEmployee(emp.id, startDate, endDate, targetMonth, targetYear),
         );
         processed++;
       } catch (err) {

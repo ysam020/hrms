@@ -2,11 +2,16 @@ import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { getTodayAttendance } from "../handlers/getTodayAttendance";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
-    attendanceRecord: { findUnique: jest.fn() },
-  },
-}));
+jest.mock("@hrms/db", () => {
+  const _db = {
+    attendanceRecord: { findFirst: jest.fn() },
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { get: jest.fn(), set: jest.fn() },
@@ -16,7 +21,7 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-const mockFindUnique = (prisma as any).attendanceRecord.findUnique as jest.Mock;
+const mockFindFirst = (prisma as any).attendanceRecord.findFirst as jest.Mock;
 const mockCacheGet = cacheManager.get as jest.Mock;
 const mockCacheSet = cacheManager.set as jest.Mock;
 
@@ -37,7 +42,7 @@ describe("getTodayAttendance", () => {
       null,
       expect.objectContaining({ status: 3 }),
     );
-    expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(mockFindFirst).not.toHaveBeenCalled();
   });
 
   it("returns cached value when cache hit", async () => {
@@ -45,12 +50,12 @@ describe("getTodayAttendance", () => {
     mockCacheGet.mockResolvedValue(cached);
     const cb = makeCallback();
     await getTodayAttendance(makeCall({ userId: "john" }), cb);
-    expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(mockFindFirst).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, cached);
   });
 
   it("returns NOT_FOUND when no record exists for today", async () => {
-    mockFindUnique.mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
     await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -62,7 +67,7 @@ describe("getTodayAttendance", () => {
 
   it("returns today's attendance record and caches it", async () => {
     const record = { id: "rec-1", username: "john", status: "Present" };
-    mockFindUnique.mockResolvedValue(record);
+    mockFindFirst.mockResolvedValue(record);
     const cb = makeCallback();
     await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -70,14 +75,14 @@ describe("getTodayAttendance", () => {
       expect.objectContaining({ status: 0, data: record }),
     );
     expect(mockCacheSet).toHaveBeenCalledWith(
-      "todayAttendance:john",
+      "t:t1:todayAttendance:john",
       expect.any(Object),
       "notification",
     );
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockFindUnique.mockRejectedValue(new Error("DB error"));
+    mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(

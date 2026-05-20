@@ -4,15 +4,20 @@ import { cacheManager } from "@hrms/cache";
 import { markAttendance } from "../handlers/markAttendance";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     attendanceRecord: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: {
@@ -28,7 +33,7 @@ jest.mock("@hrms/logger", () => ({
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
-const mockFindUnique = (prisma as any).attendanceRecord.findUnique as jest.Mock;
+const mockFindFirst = (prisma as any).attendanceRecord.findFirst as jest.Mock;
 const mockCreate = (prisma as any).attendanceRecord.create as jest.Mock;
 const mockUpdate = (prisma as any).attendanceRecord.update as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
@@ -61,7 +66,7 @@ describe("markAttendance", () => {
 
   describe("CHECK_IN", () => {
     it("returns ALREADY_EXISTS when user has already checked in today", async () => {
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: "rec-1",
         username: "john",
         timeIn: "2024-03-04T08:00:00.000Z",
@@ -75,7 +80,7 @@ describe("markAttendance", () => {
     });
 
     it("creates new record when no existing record", async () => {
-      mockFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
       const record = { id: "rec-1", userId: "john", status: "Present" };
       mockCreate.mockResolvedValue(record);
 
@@ -99,7 +104,7 @@ describe("markAttendance", () => {
 
     it("updates existing record when record exists without timeIn", async () => {
       const existing = { id: "rec-1", username: "john" };
-      mockFindUnique.mockResolvedValue(existing);
+      mockFindFirst.mockResolvedValue(existing);
       const updated = { id: "rec-1", status: "Present", timeIn: "..." };
       mockUpdate.mockResolvedValue(updated);
 
@@ -120,7 +125,7 @@ describe("markAttendance", () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date(2024, 2, 4, 10, 0, 0)); // local 10:00 AM
 
-      mockFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
       mockCreate.mockResolvedValue({ id: "rec-1", status: "Late" });
 
       const cb = makeCallback();
@@ -136,7 +141,7 @@ describe("markAttendance", () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date(2024, 2, 4, 8, 0, 0)); // local 8:00 AM
 
-      mockFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
       mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
 
       const cb = makeCallback();
@@ -149,7 +154,7 @@ describe("markAttendance", () => {
     });
 
     it("invalidates attendance caches after check-in", async () => {
-      mockFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
       mockCreate.mockResolvedValue({ id: "rec-1" });
 
       await markAttendance(
@@ -165,7 +170,7 @@ describe("markAttendance", () => {
 
   describe("CHECK_OUT", () => {
     it("returns NOT_FOUND when no check-in record exists", async () => {
-      mockFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
       const cb = makeCallback();
       await markAttendance(makeCall({ userId: "john", type: "CHECK_OUT" }), cb);
       expect(cb).toHaveBeenCalledWith(null, {
@@ -175,7 +180,7 @@ describe("markAttendance", () => {
     });
 
     it("returns NOT_FOUND when record has no timeIn", async () => {
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: "rec-1",
         timeIn: null,
         timeOut: null,
@@ -189,7 +194,7 @@ describe("markAttendance", () => {
     });
 
     it("returns ALREADY_EXISTS when user has already checked out", async () => {
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: "rec-1",
         timeIn: "2024-03-04T08:00:00.000Z",
         timeOut: "2024-03-04T17:00:00.000Z",
@@ -207,7 +212,7 @@ describe("markAttendance", () => {
       const checkOutTime = new Date(2024, 2, 4, 11, 0, 0); // local 11:00
       jest.setSystemTime(checkOutTime);
 
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: "rec-1",
         timeIn: new Date(2024, 2, 4, 8, 0, 0).toISOString(), // local 8:00 → 3 hrs → Half Day
         timeOut: null,
@@ -230,7 +235,7 @@ describe("markAttendance", () => {
       const checkOutTime = new Date(2024, 2, 4, 17, 0, 0); // local 17:00
       jest.setSystemTime(checkOutTime);
 
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: "rec-1",
         timeIn: new Date(2024, 2, 4, 8, 0, 0).toISOString(), // local 8:00 → 9 hours → full day
         timeOut: null,
@@ -250,7 +255,7 @@ describe("markAttendance", () => {
     });
 
     it("invalidates attendance caches after check-out", async () => {
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: "rec-1",
         timeIn: "2024-03-04T08:00:00.000Z",
         timeOut: null,
@@ -269,7 +274,7 @@ describe("markAttendance", () => {
   });
 
   it("returns INVALID_ARGUMENT for unknown attendance type", async () => {
-    mockFindUnique.mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
     await markAttendance(makeCall({ userId: "john", type: "UNKNOWN" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
@@ -279,7 +284,7 @@ describe("markAttendance", () => {
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockFindUnique.mockRejectedValue(new Error("DB error"));
+    mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {

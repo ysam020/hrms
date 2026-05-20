@@ -17,8 +17,8 @@ import {
   deleteUserFromTeam,
 } from "../handlers/permissions";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     role: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -40,8 +40,13 @@ jest.mock("@hrms/db", () => ({
       update: jest.fn(),
       delete: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, status: number, data: any) =>

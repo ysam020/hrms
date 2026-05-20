@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -18,7 +18,8 @@ export const listUsers = async (
     } = call.request;
     const skip = (page - 1) * limit;
 
-    const cacheKey = `users:${search}:${role}:${department}:p${page}:l${limit}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:users:${search}:${role}:${department}:p${page}:l${limit}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
@@ -34,7 +35,7 @@ export const listUsers = async (
     if (department) where.department = department;
 
     const [users, total] = await Promise.all([
-      prisma.user.findMany({
+      prismaWithTenant.user.findMany({
         where,
         skip,
         take: limit,
@@ -54,7 +55,7 @@ export const listUsers = async (
           createdAt: true,
         },
       }),
-      prisma.user.count({ where }),
+      prismaWithTenant.user.count({ where }),
     ]);
 
     const response = {
@@ -79,6 +80,8 @@ export const listUsers = async (
       totalPages: Math.ceil(total / limit),
     };
     await cacheManager.set(cacheKey, response, "user");
+    // Also register under a pattern so the whole tenant's user cache can be
+    // invalidated with cacheManager.invalidatePattern(`t:${tenantId}:users:*`)
     return callback(null, response);
   } catch (err) {
     logger.error("ListUsers error:", { err });

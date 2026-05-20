@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -18,7 +18,8 @@ export const getEmployee = async (
       });
     }
 
-    const cacheKey = `employee:${id}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:employee:${id}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 

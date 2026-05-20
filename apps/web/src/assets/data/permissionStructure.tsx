@@ -108,4 +108,9 @@ export const permissionStructure = {
       delete: ["-"],
     },
   },
+  Subscription: {
+    actions: {
+      manage: ["-"],
+    },
+  },
 };

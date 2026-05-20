@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 
@@ -156,7 +156,7 @@ async function executeToolCall(
       }
 
       case "get_leave_balance": {
-        const balance = await prisma.leaveBalance.findUnique({
+        const balance = await prisma.leaveBalance.findFirst({
           where: { userId },
         });
         return JSON.stringify(balance ?? { userId, balances: {} });

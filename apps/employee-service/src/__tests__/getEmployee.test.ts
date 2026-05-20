@@ -4,11 +4,16 @@ import { cacheManager } from "@hrms/cache";
 import { getEmployee } from "../handlers/getEmployee";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     user: { findUnique: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
+});
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: {
@@ -80,7 +85,7 @@ describe("getEmployee", () => {
 
     expect(mockFindUnique).toHaveBeenCalledWith({ where: { id: "emp-1" } });
     expect(mockCacheSet).toHaveBeenCalledWith(
-      "employee:emp-1",
+      "t:t1:employee:emp-1",
       expect.objectContaining({ status: status.OK, data: user }),
       "employee",
     );

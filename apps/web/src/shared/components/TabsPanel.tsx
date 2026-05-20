@@ -6,6 +6,7 @@ import ErrorFallback from "./ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { useNavigate, useLocation } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 type TabsPanelProps = {
   tabData: any[];
@@ -55,6 +56,7 @@ function a11yProps(index: number) {
 function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = React.useContext(ThemeContext);
 
   const slugs = React.useMemo(
     () =>
@@ -115,7 +117,16 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
 
   return (
     <Box sx={{ width: "100%" }}>
-      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+      <Box
+        sx={{
+          borderBottom: 1,
+          borderColor: "divider",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
+        }}
+      >
         <Tabs
           value={value}
           onChange={handleChange}
@@ -124,7 +135,14 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
           scrollButtons="auto"
         >
           {tabData.map((tab, index) => (
-            <Tab key={index} label={tab.label} {...a11yProps(index)} />
+            <Tab
+              key={index}
+              label={tab.label}
+              {...(tab.icon
+                ? { icon: tab.icon, iconPosition: tab.iconPosition ?? "start" }
+                : {})}
+              {...a11yProps(index)}
+            />
           ))}
         </Tabs>
       </Box>

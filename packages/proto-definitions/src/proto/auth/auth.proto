@@ -4,7 +4,15 @@ package auth;
 
 message GoogleOAuthCallbackRequest {
   string code = 1;
+  // base64-encoded JSON: { inviteToken?: string }
   string state = 2;
+}
+
+message TenantSummary {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string role = 4;
 }
 
 message AuthTokenResponse {
@@ -13,6 +21,10 @@ message AuthTokenResponse {
   int32 status = 3;
   UserPayload data = 4;
   string refresh_token = 5;
+  // true when the authenticated user has no tenant yet
+  bool needsTenantSetup = 6;
+  // populated when the user belongs to multiple tenants (picker flow)
+  repeated TenantSummary tenants = 7;
 }
 
 message UserPayload {
@@ -22,6 +34,8 @@ message UserPayload {
   string role = 4;
   string firstName = 5;
   string lastName = 6;
+  string tenantId = 7;
+  string tenantRole = 8;
 }
 
 message RefreshTokenRequest {

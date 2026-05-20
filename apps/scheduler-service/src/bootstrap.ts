@@ -14,6 +14,6 @@ async function bootstrap() {
 
 bootstrap().catch((err) => {
   console.error("Failed to start scheduler service");
-  console.error(err);
+  console.error(err instanceof Error ? err.name : "unknown error");
   process.exit(1);
 });

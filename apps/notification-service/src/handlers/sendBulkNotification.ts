@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -19,12 +19,16 @@ export const sendBulkNotification = async (
 
     const notification = await prisma.notification.create({
       data: {
+        tenantId: getTenantId()!,
         title: title || null,
         message: message || null,
         eventType: eventType || "general",
         priority: priority || "medium",
         recipients: {
-          create: (userIds as string[]).map((userId: string) => ({ userId })),
+          create: (userIds as string[]).map((userId: string) => ({
+            tenantId: getTenantId()!,
+            userId,
+          })),
         },
       },
       include: { recipients: true },

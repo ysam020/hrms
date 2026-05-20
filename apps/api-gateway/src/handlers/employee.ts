@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { employeeClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
@@ -92,7 +92,8 @@ export async function editEmployeeDetails(req: Request, res: Response) {
 export async function getEmployeeDetails(req: Request, res: Response) {
   try {
     const username = req.params.username as string;
-    const cacheKey = `employee-details:${username}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:employee-details:${username}`;
 
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached) {
@@ -162,7 +163,8 @@ export async function getEmployeeDetails(req: Request, res: Response) {
 
 export async function employeeInsights(_req: Request, res: Response) {
   try {
-    const cacheKey = "dashboard:employee-insights";
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:dashboard:employee-insights`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -323,7 +325,9 @@ export async function viewAllKycs(req: Request, res: Response) {
     const { page, limit } = parsePagination(req.query, 10);
     const skip = (page - 1) * limit;
 
+    const tenantId = getTenantId();
     const match: any = { employeeStatus: "Active" };
+    if (tenantId) match.tenantId = { $oid: tenantId };
     if (req.query.search) {
       // Escape special regex characters to prevent ReDoS
       const escaped = String(req.query.search).replace(
@@ -393,8 +397,12 @@ export async function viewAllKycs(req: Request, res: Response) {
 
 export async function getKycInsights(_req: Request, res: Response) {
   try {
+    const kycTenantId = getTenantId();
     const rows = (await prisma.user.aggregateRaw({
       pipeline: [
+        ...(kycTenantId
+          ? [{ $match: { tenantId: { $oid: kycTenantId } } }]
+          : []),
         {
           $group: {
             _id: null,

@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -35,7 +35,8 @@ export const getAttendanceSummary = async (
       });
     }
 
-    const cacheKey = `attendanceSummary:${userId}:${month}:${year}`;
+    const tenantId = getTenantId() ?? "global";
+    const cacheKey = `t:${tenantId}:attendanceSummary:${userId}:${month}:${year}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
@@ -86,8 +87,8 @@ export const getAttendanceSummary = async (
 
     let usedPL = 0,
       usedLWP = 0;
-    const leaveBalance = await prisma.leaveBalance.findUnique({
-      where: { userId },
+    const leaveBalance = await prisma.leaveBalance.findFirst({
+      where: { tenantId: getTenantId(), userId },
       select: { balances: true },
     });
     if (leaveBalance?.balances && Array.isArray(leaveBalance.balances)) {

@@ -1,5 +1,5 @@
 import { Response, NextFunction } from "express";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { AuthRequest } from "./authenticate";
 
@@ -51,22 +51,26 @@ export function auditLogMiddleware(
   // Only intercept mutation methods, or GET on auth paths
   if (!action && !isAuthPath) return next();
 
+  // Capture tenant before the response closes (AsyncLocalStorage is gone by then)
+  const tenantId = req.user?.tenantId || null;
+
   res.on("finish", () => {
     const isFailedAuth = isAuthPath && res.statusCode >= 400;
     const isSuccessfulMutation =
       action && res.statusCode >= 200 && res.statusCode < 300;
 
     if (!isSuccessfulMutation && !isFailedAuth) return;
+    if (!tenantId) return; // skip audit logs for unauthenticated/setup requests
 
     const userId = req.user?.userId || null;
     const entityType = deriveEntityType(req.path);
     const description = `${action || "GET"} ${sanitizePath(req.originalUrl)} → ${res.statusCode}`;
-    // Use req.ip which respects trust proxy setting, falling back to socket address
     const ipAddress = req.ip || req.socket.remoteAddress || "";
 
     prisma.auditLog
       .create({
         data: {
+          tenantId,
           userId,
           action: action || "AUTH",
           entityType,

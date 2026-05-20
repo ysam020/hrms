@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
@@ -14,6 +14,8 @@ import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import CircularProgress from "@mui/material/CircularProgress";
+import Alert from "@mui/material/Alert";
 import { useTheme } from "@mui/material";
 import { useMediaQuery } from "@mui/material";
 import { alpha } from "@mui/material";
@@ -26,221 +28,69 @@ import Group from "@mui/icons-material/Group";
 import TrendingUp from "@mui/icons-material/TrendingUp";
 import Close from "@mui/icons-material/Close";
 
+import apiClient from "@web/core/http/axiosConfig";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
+
+type Employee = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  username: string;
+  department: string;
+  designation: string;
+  employeeStatus: string;
+  employee_photo: string;
+  children?: Employee[];
+};
+
 const OrganisationTree = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [expandedNodes, setExpandedNodes] = useState(
-    new Set(["rajesh_agarwal"]),
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
+    null,
   );
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const employeeData = useMemo(
-    () => [
-      {
-        first_name: "Rajesh",
-        middle_name: "Kumar",
-        last_name: "Agarwal",
-        username: "rajesh_agarwal",
-        department: "EXECUTIVE",
-        designation: "CEO",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Priya",
-        middle_name: "",
-        last_name: "Sharma",
-        username: "priya_sharma",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "DEVELOPMENT MANAGER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Amit",
-        middle_name: "",
-        last_name: "Singh",
-        username: "amit_singh",
-        department: "QUALITY ASSURANCE",
-        designation: "QA MANAGER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Sunita",
-        middle_name: "Rani",
-        last_name: "Gupta",
-        username: "sunita_gupta",
-        department: "HUMAN RESOURCES",
-        designation: "HR MANAGER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Vikram",
-        middle_name: "",
-        last_name: "Patel",
-        username: "vikram_patel",
-        department: "DEVOPS",
-        designation: "DEVOPS MANAGER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Neha",
-        middle_name: "",
-        last_name: "Reddy",
-        username: "neha_reddy",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "TEAM LEAD",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Arjun",
-        middle_name: "",
-        last_name: "Menon",
-        username: "arjun_menon",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "TEAM LEAD",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Kavya",
-        middle_name: "",
-        last_name: "Iyer",
-        username: "kavya_iyer",
-        department: "QUALITY ASSURANCE",
-        designation: "QA TEAM LEAD",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Pooja",
-        middle_name: "",
-        last_name: "Nair",
-        username: "pooja_nair",
-        department: "DEVOPS",
-        designation: "DEVOPS TEAM LEAD",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Rahul",
-        middle_name: "",
-        last_name: "Verma",
-        username: "rahul_verma",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "SENIOR SOFTWARE ENGINEER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Shreya",
-        middle_name: "",
-        last_name: "Bansal",
-        username: "shreya_bansal",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "FRONTEND DEVELOPER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Karan",
-        middle_name: "Singh",
-        last_name: "Chauhan",
-        username: "karan_chauhan",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "BACKEND DEVELOPER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Divya",
-        middle_name: "",
-        last_name: "Mishra",
-        username: "divya_mishra",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "FULL STACK DEVELOPER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Aditya",
-        middle_name: "",
-        last_name: "Kapoor",
-        username: "aditya_kapoor",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "MOBILE APP DEVELOPER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Riya",
-        middle_name: "",
-        last_name: "Malhotra",
-        username: "riya_malhotra",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "SOFTWARE ENGINEER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Sanjay",
-        middle_name: "Kumar",
-        last_name: "Rajput",
-        username: "sanjay_rajput",
-        department: "SOFTWARE DEVELOPMENT",
-        designation: "JUNIOR DEVELOPER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Meera",
-        middle_name: "",
-        last_name: "Saxena",
-        username: "meera_saxena",
-        department: "QUALITY ASSURANCE",
-        designation: "SENIOR QA ENGINEER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Deepak",
-        middle_name: "",
-        last_name: "Sinha",
-        username: "deepak_sinha",
-        department: "QUALITY ASSURANCE",
-        designation: "QA ENGINEER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Ishita",
-        middle_name: "",
-        last_name: "Tiwari",
-        username: "ishita_tiwari",
-        department: "QUALITY ASSURANCE",
-        designation: "TEST AUTOMATION ENGINEER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Manish",
-        middle_name: "",
-        last_name: "Bhatt",
-        username: "manish_bhatt",
-        department: "HUMAN RESOURCES",
-        designation: "HR EXECUTIVE",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Sneha",
-        middle_name: "",
-        last_name: "Khanna",
-        username: "sneha_khanna",
-        department: "DEVOPS",
-        designation: "CLOUD ENGINEER",
-        employeeStatus: "Active",
-      },
-      {
-        first_name: "Tanvi",
-        middle_name: "",
-        last_name: "Kulkarni",
-        username: "tanvi_kulkarni",
-        department: "DEVOPS",
-        designation: "SYSTEM ADMINISTRATOR",
-        employeeStatus: "Active",
-      },
-    ],
-    [],
-  );
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoading(true);
+        const res = await apiClient.get(API_ENDPOINTS.GET_ALL_USERS());
+        const raw: any[] = res.data?.data ?? [];
+        const mapped: Employee[] = raw
+          .filter((u) => u.employeeStatus === "Active")
+          .map((u) => ({
+            id: u.id,
+            first_name: u.firstName || u.first_name || "",
+            last_name: u.lastName || u.last_name || "",
+            username: u.username || u.id,
+            department: u.department || "",
+            designation: u.designation || "",
+            employeeStatus: u.employeeStatus || "",
+            employee_photo: u.employeePhoto || u.employee_photo || "",
+          }));
+        setEmployees(mapped);
+        // Auto-expand the top node (CEO or first employee)
+        const root =
+          mapped.find((e) => e.designation?.toUpperCase() === "CEO") ??
+          mapped[0];
+        if (root) setExpandedNodes(new Set([root.username]));
+      } catch {
+        setError("Failed to load employees. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
-  const getRoleConfig = (designation) => {
-    if (designation === "CEO") {
+  const getRoleConfig = (designation: string) => {
+    const d = designation?.toUpperCase() ?? "";
+    if (d === "CEO") {
       return {
         color: theme.palette.secondary.main,
         icon: "👑",
@@ -248,7 +98,7 @@ const OrganisationTree = () => {
         borderColor: theme.palette.secondary.main,
       };
     }
-    if (designation.includes("MANAGER")) {
+    if (d.includes("MANAGER")) {
       return {
         color: theme.palette.error.main,
         icon: "🎯",
@@ -256,7 +106,7 @@ const OrganisationTree = () => {
         borderColor: theme.palette.error.main,
       };
     }
-    if (designation.includes("LEAD")) {
+    if (d.includes("LEAD")) {
       return {
         color: theme.palette.primary.main,
         icon: "⭐",
@@ -264,7 +114,7 @@ const OrganisationTree = () => {
         borderColor: theme.palette.primary.main,
       };
     }
-    if (designation.includes("SENIOR")) {
+    if (d.includes("SENIOR")) {
       return {
         color: theme.palette.success.main,
         icon: "🚀",
@@ -280,20 +130,26 @@ const OrganisationTree = () => {
     };
   };
 
-  const toggleNode = (username) => {
-    const newExpanded = new Set(expandedNodes);
-    if (newExpanded.has(username)) {
-      newExpanded.delete(username);
-    } else {
-      newExpanded.add(username);
-    }
-    setExpandedNodes(newExpanded);
+  const toggleNode = (username: string) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(username)) next.delete(username);
+      else next.add(username);
+      return next;
+    });
   };
 
-  const CompactEmployeeNode = ({ employee, level = 0 }) => {
+  const CompactEmployeeNode = ({
+    employee,
+    level = 0,
+  }: {
+    employee: Employee;
+    level?: number;
+  }) => {
     const config = getRoleConfig(employee.designation);
     const isExpanded = expandedNodes.has(employee.username);
-    const hasChildren = employee.children && employee.children.length > 0;
+    const hasChildren = !!employee.children?.length;
+    const initials = `${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}`;
 
     return (
       <Box sx={{ mb: 0.5 }}>
@@ -321,6 +177,7 @@ const OrganisationTree = () => {
             <Grid container alignItems="center" spacing={{ xs: 0.75, sm: 1 }}>
               <Grid item>
                 <Avatar
+                  src={employee.employee_photo || undefined}
                   sx={{
                     width: { xs: 32, sm: 28 },
                     height: { xs: 32, sm: 28 },
@@ -330,8 +187,7 @@ const OrganisationTree = () => {
                     fontWeight: 600,
                   }}
                 >
-                  {employee.first_name[0]}
-                  {employee.last_name[0]}
+                  {initials}
                 </Avatar>
               </Grid>
 
@@ -352,10 +208,7 @@ const OrganisationTree = () => {
                 <Box sx={{ display: "flex", alignItems: "center", mb: 0.25 }}>
                   <Typography
                     variant="caption"
-                    sx={{
-                      mr: 0.25,
-                      fontSize: { xs: "0.7rem", sm: "0.65rem" },
-                    }}
+                    sx={{ mr: 0.25, fontSize: { xs: "0.7rem", sm: "0.65rem" } }}
                   >
                     {config.icon}
                   </Typography>
@@ -385,9 +238,7 @@ const OrganisationTree = () => {
                     backgroundColor: alpha(config.color, 0.2),
                     color: config.color,
                     fontWeight: 500,
-                    "& .MuiChip-label": {
-                      px: { xs: 0.5, sm: 0.75 },
-                    },
+                    "& .MuiChip-label": { px: { xs: 0.5, sm: 0.75 } },
                   }}
                 />
               </Grid>
@@ -405,9 +256,7 @@ const OrganisationTree = () => {
                       backgroundColor: alpha(config.color, 0.1),
                       width: { xs: 28, sm: 24 },
                       height: { xs: 28, sm: 24 },
-                      "&:hover": {
-                        backgroundColor: alpha(config.color, 0.2),
-                      },
+                      "&:hover": { backgroundColor: alpha(config.color, 0.2) },
                     }}
                   >
                     {isExpanded ? (
@@ -436,7 +285,7 @@ const OrganisationTree = () => {
                 mt: 0.5,
               }}
             >
-              {employee.children.map((child) => (
+              {employee.children!.map((child) => (
                 <CompactEmployeeNode
                   key={child.username}
                   employee={child}
@@ -450,82 +299,92 @@ const OrganisationTree = () => {
     );
   };
 
-  // Transform data into compact hierarchical structure
-  const hierarchicalData = useMemo(() => {
-    const ceo = employeeData.find((emp) => emp.designation === "CEO");
-    const managers = employeeData.filter(
-      (emp) => emp.designation.includes("MANAGER") && emp.designation !== "CEO",
+  const hierarchicalData = useMemo((): Employee | null => {
+    if (!employees.length) return null;
+
+    const ceo = employees.find((e) => e.designation?.toUpperCase() === "CEO");
+    const managers = employees.filter(
+      (e) =>
+        e.designation?.toUpperCase().includes("MANAGER") &&
+        e.designation?.toUpperCase() !== "CEO",
     );
+    const root = ceo ?? managers[0] ?? employees[0];
 
-    const buildTeamStructure = (manager) => {
-      const departmentEmployees = employeeData.filter(
-        (emp) =>
-          emp.department === manager.department &&
-          emp.username !== manager.username,
+    const buildTeamStructure = (manager: Employee): Employee => {
+      const deptEmployees = employees.filter(
+        (e) =>
+          e.department === manager.department &&
+          e.username !== manager.username,
       );
-
-      const teamLeads = departmentEmployees.filter((emp) =>
-        emp.designation.includes("LEAD"),
+      const leads = deptEmployees.filter((e) =>
+        e.designation?.toUpperCase().includes("LEAD"),
       );
-
-      const individualContributors = departmentEmployees.filter(
-        (emp) => !emp.designation.includes("LEAD"),
+      const others = deptEmployees.filter(
+        (e) => !e.designation?.toUpperCase().includes("LEAD"),
       );
 
       return {
         ...manager,
         children: [
-          ...teamLeads.map((lead) => ({
+          ...leads.map((lead) => ({
             ...lead,
-            children: individualContributors.filter(
-              (emp) => emp.department === lead.department,
-            ),
+            children: others.filter((e) => e.department === lead.department),
           })),
-          ...individualContributors.filter(
-            (emp) =>
-              !teamLeads.some((lead) => lead.department === emp.department),
+          ...others.filter(
+            (e) => !leads.some((lead) => lead.department === e.department),
           ),
         ],
       };
     };
 
+    if (ceo) {
+      return {
+        ...ceo,
+        children: managers.map(buildTeamStructure),
+      };
+    }
+
+    // No CEO — group by department under a virtual root
     return {
-      ...ceo,
+      ...root,
       children: managers.map(buildTeamStructure),
     };
-  }, [employeeData]);
+  }, [employees]);
 
   const stats = useMemo(
     () => [
       {
         label: "Total Employees",
-        value: employeeData.length,
+        value: employees.length,
         icon: <Person />,
         color: theme.palette.primary.main,
       },
       {
         label: "Departments",
-        value: [...new Set(employeeData.map((e) => e.department))].length,
+        value: new Set(employees.map((e) => e.department).filter(Boolean)).size,
         icon: <Business />,
         color: theme.palette.secondary.main,
       },
       {
         label: "Managers",
-        value: employeeData.filter(
-          (e) => e.designation.includes("MANAGER") || e.designation === "CEO",
+        value: employees.filter(
+          (e) =>
+            e.designation?.toUpperCase().includes("MANAGER") ||
+            e.designation?.toUpperCase() === "CEO",
         ).length,
         icon: <Group />,
         color: theme.palette.error.main,
       },
       {
         label: "Team Leads",
-        value: employeeData.filter((e) => e.designation.includes("LEAD"))
-          .length,
+        value: employees.filter((e) =>
+          e.designation?.toUpperCase().includes("LEAD"),
+        ).length,
         icon: <TrendingUp />,
         color: theme.palette.warning.main,
       },
     ],
-    [employeeData, theme.palette],
+    [employees, theme.palette],
   );
 
   return (
@@ -536,7 +395,7 @@ const OrganisationTree = () => {
         minHeight: "100vh",
       }}
     >
-      {/* Compact Statistics Section */}
+      {/* Statistics */}
       <Grid
         container
         spacing={{ xs: 0.75, sm: 1 }}
@@ -575,7 +434,6 @@ const OrganisationTree = () => {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: { xs: "0.9rem", sm: "1rem" },
                       }}
                     >
                       {React.cloneElement(stat.icon, {
@@ -594,7 +452,7 @@ const OrganisationTree = () => {
                         fontSize: { xs: "1.1rem", sm: "1.25rem" },
                       }}
                     >
-                      {stat.value}
+                      {loading ? "—" : stat.value}
                     </Typography>
                     <Typography
                       variant="caption"
@@ -613,14 +471,13 @@ const OrganisationTree = () => {
         ))}
       </Grid>
 
-      {/* Compact Role Legend */}
+      {/* Role Legend */}
       <Paper
         elevation={1}
         sx={{
           p: { xs: 1.25, sm: 1.5 },
           mb: { xs: 0.75, sm: 1 },
           borderRadius: 1,
-          backgroundColor: theme.palette.background.paper,
         }}
       >
         <Typography
@@ -665,36 +522,52 @@ const OrganisationTree = () => {
         </Box>
       </Paper>
 
-      {/* Compact Organization Tree */}
-      <Paper
-        elevation={1}
-        sx={{
-          p: { xs: 1.5, sm: 2 },
-          borderRadius: 1,
-          backgroundColor: theme.palette.background.paper,
-        }}
-      >
+      {/* Org Tree */}
+      <Paper elevation={1} sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 1 }}>
         <Typography
           variant="subtitle1"
           sx={{
             fontWeight: 600,
             mb: { xs: 1.5, sm: 2 },
             textAlign: "center",
-            color: theme.palette.text.primary,
             fontSize: { xs: "1rem", sm: "1rem" },
           }}
         >
           Organizational Hierarchy
         </Typography>
 
-        <Box
-          sx={{
-            maxHeight: { xs: "calc(100vh - 320px)", sm: "70vh" },
-            overflow: "auto",
-          }}
-        >
-          <CompactEmployeeNode employee={hierarchicalData} />
-        </Box>
+        {loading && (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+            <CircularProgress size={32} />
+          </Box>
+        )}
+
+        {error && !loading && (
+          <Alert severity="error" sx={{ mx: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {!loading && !error && !hierarchicalData && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ textAlign: "center", py: 4 }}
+          >
+            No active employees found.
+          </Typography>
+        )}
+
+        {!loading && !error && hierarchicalData && (
+          <Box
+            sx={{
+              maxHeight: { xs: "calc(100vh - 320px)", sm: "70vh" },
+              overflow: "auto",
+            }}
+          >
+            <CompactEmployeeNode employee={hierarchicalData} />
+          </Box>
+        )}
       </Paper>
 
       {/* Employee Detail Dialog */}
@@ -705,11 +578,7 @@ const OrganisationTree = () => {
         fullWidth
         fullScreen={isMobile}
         PaperProps={{
-          sx: {
-            borderRadius: { xs: 0, sm: 2 },
-            backgroundColor: theme.palette.background.paper,
-            m: { xs: 0, sm: 2 },
-          },
+          sx: { borderRadius: { xs: 0, sm: 2 }, m: { xs: 0, sm: 2 } },
         }}
       >
         {selectedEmployee && (
@@ -726,19 +595,13 @@ const OrganisationTree = () => {
             >
               <Typography
                 variant="subtitle1"
-                sx={{
-                  fontWeight: 600,
-                  fontSize: { xs: "1rem", sm: "1rem" },
-                }}
+                sx={{ fontWeight: 600, fontSize: { xs: "1rem", sm: "1rem" } }}
               >
                 {selectedEmployee.first_name} {selectedEmployee.last_name}
               </Typography>
               <IconButton
                 onClick={() => setSelectedEmployee(null)}
-                sx={{
-                  color: theme.palette.primary.contrastText,
-                  p: 0.5,
-                }}
+                sx={{ color: theme.palette.primary.contrastText, p: 0.5 }}
                 size="small"
               >
                 <Close sx={{ fontSize: { xs: "1.3rem", sm: "1.2rem" } }} />
@@ -756,6 +619,7 @@ const OrganisationTree = () => {
                     }}
                   >
                     <Avatar
+                      src={selectedEmployee.employee_photo || undefined}
                       sx={{
                         width: { xs: 48, sm: 40 },
                         height: { xs: 48, sm: 40 },
@@ -767,8 +631,8 @@ const OrganisationTree = () => {
                         fontWeight: 600,
                       }}
                     >
-                      {selectedEmployee.first_name[0]}
-                      {selectedEmployee.last_name[0]}
+                      {selectedEmployee.first_name?.[0]}
+                      {selectedEmployee.last_name?.[0]}
                     </Avatar>
                     <Box>
                       <Typography
@@ -798,10 +662,7 @@ const OrganisationTree = () => {
                       p: { xs: 1.25, sm: 1.5 },
                       backgroundColor: alpha(theme.palette.primary.main, 0.05),
                       borderRadius: 1,
-                      border: `1px solid ${alpha(
-                        theme.palette.primary.main,
-                        0.2,
-                      )}`,
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
                     }}
                   >
                     <Grid container spacing={{ xs: 1.25, sm: 1.5 }}>
@@ -820,7 +681,7 @@ const OrganisationTree = () => {
                             fontSize: { xs: "0.85rem", sm: "0.875rem" },
                           }}
                         >
-                          {selectedEmployee.department}
+                          {selectedEmployee.department || "—"}
                         </Typography>
                       </Grid>
                       <Grid item xs={6}>

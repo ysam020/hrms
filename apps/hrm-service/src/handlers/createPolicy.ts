@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -49,6 +49,7 @@ export const createPolicy = async (
 
     const policy = await prisma.policy.create({
       data: {
+        tenantId: getTenantId()!,
         policyType,
         policyName: policyName || policyType,
         content,

@@ -53,9 +53,10 @@ export async function recordLoginEvent(input: LoginEventInput): Promise<void> {
   // Resolve email upfront — single DB read that also serves the notification.
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true },
+    select: { email: true, tenantId: true },
   });
   const userEmail = user?.email ?? null;
+  const tenantId = user?.tenantId ?? null;
 
   const geoIp = resolveGeoIp(ip);
   const geo = geoIp ? geoip.lookup(geoIp) : null;
@@ -98,23 +99,26 @@ export async function recordLoginEvent(input: LoginEventInput): Promise<void> {
     history,
   );
 
-  await prisma.loginEvent.create({
-    data: {
-      userId,
-      userEmail,
-      ip,
-      country,
-      city,
-      latitude,
-      longitude,
-      userAgent,
-      deviceFingerprint,
-      loginMethod,
-      riskScore: score,
-      riskReasons: reasons,
-      isAnomaly,
-    },
-  });
+  if (tenantId) {
+    await prisma.loginEvent.create({
+      data: {
+        tenantId,
+        userId,
+        userEmail,
+        ip,
+        country,
+        city,
+        latitude,
+        longitude,
+        userAgent,
+        deviceFingerprint,
+        loginMethod,
+        riskScore: score,
+        riskReasons: reasons,
+        isAnomaly,
+      },
+    });
+  }
 
   if (!userEmail || score < NOTIFY_THRESHOLD) return;
 

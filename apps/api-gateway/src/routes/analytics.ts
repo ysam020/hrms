@@ -18,48 +18,48 @@ analyticsRouter.use(analyticsLimiter);
 analyticsRouter.get(
   "/dashboard",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getDashboardStats,
 );
 analyticsRouter.get(
   "/headcount",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getHeadcount,
 );
 analyticsRouter.get(
   "/attendance",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getAttendanceAnalytics,
 );
 analyticsRouter.get(
   "/leave",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getLeaveAnalytics,
 );
 analyticsRouter.get(
   "/recruitment",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getRecruitmentAnalytics,
 );
 analyticsRouter.get(
   "/salary",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getSalaryAnalytics,
 );
 analyticsRouter.get(
   "/turnover",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getTurnoverAnalytics,
 );
 analyticsRouter.get(
   "/performance",
   authenticate,
-  authorize("admin", "hr"),
+  authorize("owner", "admin", "hr"),
   h.getPerformanceAnalytics,
 );

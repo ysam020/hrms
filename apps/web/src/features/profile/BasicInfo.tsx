@@ -37,6 +37,12 @@ type DataFieldProps = {
   color?: string;
 };
 
+function formatDate(value: any, fmt = "DD MMM YYYY"): string {
+  if (!value) return "";
+  const d = dayjs(value);
+  return d.isValid() ? d.format(fmt) : "";
+}
+
 function BasicInfo({ user }) {
   const { theme } = useContext(ThemeContext);
 
@@ -362,7 +368,7 @@ function BasicInfo({ user }) {
                 )}
               </Stack>
 
-              {user.joining_date ? (
+              {formatDate(user.joining_date) ? (
                 <Typography
                   variant="body1"
                   sx={{
@@ -370,10 +376,7 @@ function BasicInfo({ user }) {
                     fontSize: { xs: "0.875rem", sm: "1rem" },
                   }}
                 >
-                  📅 Joined{" "}
-                  {user.joining_date
-                    ? dayjs(user.joining_date).format("DD MMM YYYY")
-                    : "N/A"}
+                  📅 Joined {formatDate(user.joining_date)}
                 </Typography>
               ) : (
                 <Typography
@@ -418,7 +421,7 @@ function BasicInfo({ user }) {
               <DataField
                 icon={<Cake />}
                 label="Date of Birth"
-                value={user.dob ? dayjs(user.dob).format("DD MMM YYYY") : ""}
+                value={formatDate(user.dob)}
               />
               <DataField
                 icon={<BloodtypeOutlined />}
@@ -470,11 +473,7 @@ function BasicInfo({ user }) {
               <DataField
                 icon={<Badge />}
                 label="Joining Date"
-                value={
-                  user.joining_date
-                    ? dayjs(user.joining_date).format("DD MMM YYYY")
-                    : ""
-                }
+                value={formatDate(user.joining_date)}
                 color="warning.main"
               />
             </Section>

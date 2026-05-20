@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -41,8 +41,8 @@ export const markAttendance = async (
     const now = new Date();
     const todayStart = dayjs().utc().startOf("day").toDate();
 
-    const existingRecord = await prisma.attendanceRecord.findUnique({
-      where: { userId_date: { userId, date: todayStart } },
+    const existingRecord = await prisma.attendanceRecord.findFirst({
+      where: { tenantId: getTenantId(), userId, date: todayStart },
     });
 
     if (type === "CHECK_IN") {
@@ -62,6 +62,7 @@ export const markAttendance = async (
           })
         : await prisma.attendanceRecord.create({
             data: {
+              tenantId: getTenantId()!,
               userId,
               date: todayStart,
               timeIn: now,
