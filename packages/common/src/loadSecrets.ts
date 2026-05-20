@@ -30,14 +30,14 @@ export async function loadSecrets(secretName: string): Promise<void> {
   );
 
   if (!response.SecretString) {
-    throw new Error(`Secret "${resolvedName}" has no string value`);
+    throw new Error("Secret has no string value");
   }
 
   let secrets: Record<string, unknown>;
   try {
     secrets = JSON.parse(response.SecretString) as Record<string, unknown>;
   } catch {
-    throw new Error(`Secret "${resolvedName}" contains invalid JSON`);
+    throw new Error("Secret contains invalid JSON");
   }
 
   for (const [key, value] of Object.entries(secrets)) {
