@@ -39,6 +39,9 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 const UnAuthorisedRoute = lazy(
   () => import("@web/app/router/UnAuthorisedRoute"),
 );
+const LocationPicker = lazy(
+  () => import("@web/shared/components/LocationPicker"),
+);
 
 function ViewDetails() {
   const { username } = useParams();
@@ -90,6 +93,9 @@ function ViewDetails() {
       dateOfTermination: "",
       dateOfAbscond: "",
       wfh: false,
+      wfhHomeLatitude: null as number | null,
+      wfhHomeLongitude: null as number | null,
+      wfhHomeName: null as string | null,
     },
     validationSchema,
     onSubmit: async (values) => {
@@ -187,6 +193,9 @@ function ViewDetails() {
       dateOfTermination: data?.dateOfTermination || "",
       dateOfAbscond: data?.dateOfAbscond || "",
       wfh: data?.wfh || false,
+      wfhHomeLatitude: data?.wfhHomeLatitude ?? null,
+      wfhHomeLongitude: data?.wfhHomeLongitude ?? null,
+      wfhHomeName: data?.wfhHomeName ?? null,
     });
     setIsEditing(true);
   };
@@ -726,6 +735,12 @@ function ViewDetails() {
                             checked={formik.values.wfh}
                             onChange={(e) => {
                               formik.setFieldValue("wfh", e.target.checked);
+                              // Clear home location when WFH is disabled
+                              if (!e.target.checked) {
+                                formik.setFieldValue("wfhHomeLatitude", null);
+                                formik.setFieldValue("wfhHomeLongitude", null);
+                                formik.setFieldValue("wfhHomeName", null);
+                              }
                             }}
                           />
                         }
@@ -741,6 +756,58 @@ function ViewDetails() {
                         </Typography>
                       )}
                     </Grid>
+                    {/* Home location picker — shown when WFH is enabled */}
+                    {formik.values.wfh && (
+                      <Grid size={12}>
+                        <Box
+                          sx={{
+                            mt: 1,
+                            p: 1.5,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1,
+                            bgcolor: "background.paper",
+                          }}
+                        >
+                          <Typography
+                            variant="body2"
+                            fontWeight={500}
+                            sx={{ mb: 1 }}
+                          >
+                            Employee's home location (used for geofencing)
+                          </Typography>
+                          <Suspense
+                            fallback={
+                              <Box
+                                sx={{
+                                  height: 280,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  border: "1px solid",
+                                  borderColor: "divider",
+                                  borderRadius: 1,
+                                }}
+                              >
+                                <CircularProgress size={24} />
+                              </Box>
+                            }
+                          >
+                            <LocationPicker
+                              lat={formik.values.wfhHomeLatitude}
+                              lng={formik.values.wfhHomeLongitude}
+                              name={formik.values.wfhHomeName}
+                              height={280}
+                              onChange={(v) => {
+                                formik.setFieldValue("wfhHomeLatitude", v.lat);
+                                formik.setFieldValue("wfhHomeLongitude", v.lng);
+                                formik.setFieldValue("wfhHomeName", v.name);
+                              }}
+                            />
+                          </Suspense>
+                        </Box>
+                      </Grid>
+                    )}
                     {formik.values.employeeStatus === "Terminated" && (
                       <Grid size={12}>
                         <FormikInputWrapper
@@ -789,6 +856,30 @@ function ViewDetails() {
                         <strong>Work from Home:</strong>{" "}
                         {data?.wfh ? "Yes" : "No"}
                       </Typography>
+                      {data?.wfh && data?.wfhHomeName && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: "block", mt: 0.25 }}
+                        >
+                          📍{" "}
+                          {data.wfhHomeName.length > 60
+                            ? data.wfhHomeName.slice(0, 60) + "…"
+                            : data.wfhHomeName}
+                        </Typography>
+                      )}
+                      {data?.wfh &&
+                        !data?.wfhHomeName &&
+                        data?.wfhHomeLatitude && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: "block", mt: 0.25 }}
+                          >
+                            📍 {data.wfhHomeLatitude?.toFixed(5)},{" "}
+                            {data.wfhHomeLongitude?.toFixed(5)}
+                          </Typography>
+                        )}
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <Typography variant="body2">

@@ -189,6 +189,12 @@ const DEVELOPER = {
   DEVELOPER_LOGS_ALL: "/developer/logs/all",
 };
 
+const ORG_SETTINGS = {
+  GET_ORG_SETTINGS: "/tenant-settings",
+  UPDATE_ORG_SETTINGS: "/tenant-settings",
+  CANCEL_PENDING_ORG_SETTINGS: (id: string) => `/tenant-settings/pending/${id}`,
+};
+
 export const API_ENDPOINTS = {
   ...NOTIFICATIONS,
   ...CHAT,
@@ -210,4 +216,5 @@ export const API_ENDPOINTS = {
   ...CHATBOT,
   ...AI_INSIGHTS,
   ...DEVELOPER,
+  ...ORG_SETTINGS,
 };

@@ -4,7 +4,6 @@ import {
   createSubscription,
   cancelSubscription,
   reactivateSubscription,
-  handleWebhook,
   getPendingSetup,
 } from "../handlers/payment";
 
@@ -29,7 +28,6 @@ paymentRouter.post(
   reactivateSubscription,
 );
 
-// Webhook must receive the raw JSON body for signature verification.
-// Express's global json() middleware re-serialises req.body, which is fine
-// as long as we stringify it ourselves in the handler (which we do).
-paymentRouter.post("/payment/webhook", handleWebhook);
+// NOTE: /payment/webhook is mounted directly in server.ts before the CSRF
+// middleware and express.json() so Razorpay's raw bytes are preserved for
+// HMAC signature verification. Do not re-add it here.

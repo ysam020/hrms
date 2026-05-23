@@ -8,15 +8,97 @@ import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
 
-const LATE_THRESHOLD_HOUR = 9;
-const LATE_THRESHOLD_MINUTE = 30;
+// ─── Tenant-settings helpers ──────────────────────────────────────────────────
 
-function isLate(t: Date): boolean {
+const SETTINGS_CACHE_TTL = 900; // 15 min
+
+interface AttendanceSettings {
+  workStartHour: number;
+  workStartMinute: number;
+  lateGracePeriodMinutes: number;
+  halfDayMinHours: number;
+  // Geofencing
+  geofencingEnabled: boolean;
+  officeLatitude: number | null;
+  officeLongitude: number | null;
+  geofenceRadiusMeters: number;
+}
+
+/**
+ * Fetches the currently *active* attendance settings from the DB.
+ * Active = latest version where effectiveFrom ≤ now.
+ * Cached for SETTINGS_CACHE_TTL seconds to keep hot paths fast.
+ */
+async function getAttendanceSettings(
+  tenantId: string | null,
+): Promise<AttendanceSettings | null> {
+  if (!tenantId) return null;
+
+  const cacheKey = `tenantSettings:attendance:${tenantId}`;
+  const cached = await cacheManager.get(cacheKey);
+  if (cached) return cached as AttendanceSettings;
+
+  const settings = await (prisma as any).tenantSettings.findFirst({
+    where: { tenantId, effectiveFrom: { lte: new Date() } },
+    orderBy: { effectiveFrom: "desc" },
+    select: {
+      workStartHour: true,
+      workStartMinute: true,
+      lateGracePeriodMinutes: true,
+      halfDayMinHours: true,
+      geofencingEnabled: true,
+      officeLatitude: true,
+      officeLongitude: true,
+      geofenceRadiusMeters: true,
+    },
+  });
+
+  if (!settings) return null; // Tenant not yet configured — caller handles this.
+
+  const result: AttendanceSettings = {
+    workStartHour: settings.workStartHour,
+    workStartMinute: settings.workStartMinute,
+    lateGracePeriodMinutes: settings.lateGracePeriodMinutes,
+    halfDayMinHours: settings.halfDayMinHours,
+    geofencingEnabled: settings.geofencingEnabled ?? false,
+    officeLatitude: settings.officeLatitude ?? null,
+    officeLongitude: settings.officeLongitude ?? null,
+    geofenceRadiusMeters: settings.geofenceRadiusMeters ?? 200,
+  };
+
+  await cacheManager.set(cacheKey, result, "system", SETTINGS_CACHE_TTL);
+  return result;
+}
+
+// ─── Haversine distance ────────────────────────────────────────────────────────
+
+/**
+ * Returns the great-circle distance (in metres) between two GPS coordinates.
+ */
+function haversineMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6_371_000; // Earth radius in metres
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isLate(t: Date, cfg: AttendanceSettings): boolean {
   const d = dayjs(t);
-  return (
-    d.hour() > LATE_THRESHOLD_HOUR ||
-    (d.hour() === LATE_THRESHOLD_HOUR && d.minute() > LATE_THRESHOLD_MINUTE)
-  );
+  const lateMinute =
+    cfg.workStartHour * 60 + cfg.workStartMinute + cfg.lateGracePeriodMinutes;
+  const actualMinute = d.hour() * 60 + d.minute();
+  return actualMinute > lateMinute;
 }
 
 function calcWorkingHours(timeIn: Date, timeOut: Date): number {
@@ -40,9 +122,24 @@ export const markAttendance = async (
 
     const now = new Date();
     const todayStart = dayjs().utc().startOf("day").toDate();
+    const tenantId = getTenantId();
+    const cfg = await getAttendanceSettings(tenantId ?? null);
+
+    if (!cfg) {
+      logger.warn(
+        `[markAttendance] No active TenantSettings found for tenant ${tenantId}. ` +
+          "Ask an admin to configure Organisation Settings.",
+      );
+      return callback(null, {
+        message:
+          "Organisation attendance settings have not been configured yet. " +
+          "Please ask your admin to complete the Organisation Settings.",
+        status: status.FAILED_PRECONDITION,
+      });
+    }
 
     const existingRecord = await prisma.attendanceRecord.findFirst({
-      where: { tenantId: getTenantId(), userId, date: todayStart },
+      where: { tenantId, userId, date: todayStart },
     });
 
     if (type === "CHECK_IN") {
@@ -53,7 +150,68 @@ export const markAttendance = async (
         });
       }
 
-      const attendanceStatus = isLate(now) ? "Late" : "Present";
+      // ── Geofencing check ────────────────────────────────────────────────────
+      if (cfg.geofencingEnabled) {
+        const { latitude, longitude } = call.request;
+        const lat = parseFloat(latitude);
+        const lng = parseFloat(longitude);
+
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          return callback(null, {
+            message:
+              "Location is required for check-in. Please allow location access and try again.",
+            status: status.FAILED_PRECONDITION,
+          });
+        }
+
+        // Look up the employee's WFH status and home location
+        const employee = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            wfh: true,
+            wfhHomeLatitude: true,
+            wfhHomeLongitude: true,
+            wfhHomeName: true,
+          },
+        });
+
+        let fenceLat: number | null = null;
+        let fenceLng: number | null = null;
+        let fenceLabel = "office";
+
+        if (employee?.wfh) {
+          fenceLat = (employee as any).wfhHomeLatitude ?? null;
+          fenceLng = (employee as any).wfhHomeLongitude ?? null;
+          fenceLabel = (employee as any).wfhHomeName
+            ? `home (${(employee as any).wfhHomeName.split(",")[0]})`
+            : "home";
+        } else {
+          fenceLat = cfg.officeLatitude;
+          fenceLng = cfg.officeLongitude;
+        }
+
+        if (fenceLat == null || fenceLng == null) {
+          // Geofencing is on but no reference point saved yet — block and ask admin
+          const hint = employee?.wfh
+            ? "Ask your admin to set the employee's home location in Employee Management."
+            : "Ask your admin to set the office location in Organisation Settings → Attendance.";
+          return callback(null, {
+            message: `Geofencing is enabled but no ${fenceLabel} location is configured. ${hint}`,
+            status: status.FAILED_PRECONDITION,
+          });
+        }
+
+        const dist = haversineMeters(lat, lng, fenceLat, fenceLng);
+        if (dist > cfg.geofenceRadiusMeters) {
+          return callback(null, {
+            message: `You are ${Math.round(dist)} m from the ${fenceLabel} (allowed: ${cfg.geofenceRadiusMeters} m). Move closer and try again.`,
+            status: status.PERMISSION_DENIED,
+          });
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────────
+
+      const attendanceStatus = isLate(now, cfg) ? "Late" : "Present";
 
       const record = existingRecord
         ? await prisma.attendanceRecord.update({
@@ -97,7 +255,7 @@ export const markAttendance = async (
       }
 
       const workingHours = calcWorkingHours(existingRecord.timeIn, now);
-      const isHalfDay = workingHours < 4;
+      const isHalfDay = workingHours < cfg.halfDayMinHours;
 
       const record = await prisma.attendanceRecord.update({
         where: { id: existingRecord.id },

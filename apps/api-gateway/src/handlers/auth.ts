@@ -153,7 +153,13 @@ export async function getProfile(req: Request, res: Response) {
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { user: { ...profile, tenantName } },
+      data: {
+        user: {
+          ...profile,
+          tenantName,
+          tenantRole: user?.tenantRole ?? null,
+        },
+      },
       message: "Profile fetched",
     });
   } catch (error: unknown) {

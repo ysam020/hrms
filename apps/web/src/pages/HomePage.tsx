@@ -28,6 +28,9 @@ import GlobalDock from "@web/features/dashboard/GlobalDock";
 import { BottomDrawerProvider } from "@web/app/providers/BottomDrawerContext";
 
 const ChatbotFab = React.lazy(() => import("@web/features/chatbot/Chatbot"));
+const OnboardingModals = React.lazy(
+  () => import("@web/features/onboarding/OnboardingModals"),
+);
 
 const UnAuthorisedRoute = React.lazy(
   () => import("@web/app/router/UnAuthorisedRoute"),
@@ -239,6 +242,12 @@ function HomePage(props) {
             <Suspense fallback={null}>
               <ErrorBoundary fallback={null}>
                 <ChatbotFab />
+              </ErrorBoundary>
+            </Suspense>
+
+            <Suspense fallback={null}>
+              <ErrorBoundary fallback={null}>
+                <OnboardingModals />
               </ErrorBoundary>
             </Suspense>
           </TabValueContext.Provider>

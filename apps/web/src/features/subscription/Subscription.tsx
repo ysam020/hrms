@@ -303,13 +303,6 @@ export default function Subscription() {
 
   return (
     <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Typography variant="h5" fontWeight={700} gutterBottom>
-        Subscription
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Manage your HRMS Pro subscription and billing.
-      </Typography>
-
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />

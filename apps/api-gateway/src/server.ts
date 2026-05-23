@@ -18,6 +18,8 @@ import { registerGracefulShutdown } from "./config/gracefulShutdown";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
 import { googleAuthCallback } from "./handlers/auth";
+import { handleWebhook } from "./handlers/payment";
+import { startSubscriptionReconciler } from "./services/subscriptionReconciler";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -51,6 +53,19 @@ app.use(
 );
 app.use(cors({ credentials: true, origin: allowedOrigins }));
 app.use(cookieParser());
+
+// ─── Razorpay webhook ────────────────────────────────────────────────────────
+// Mounted BEFORE the CSRF middleware and express.json() so that:
+//   1. Razorpay's server-to-server requests aren't rejected by CSRF protection.
+//   2. req.body arrives as a raw Buffer, preserving the exact bytes Razorpay
+//      signed — JSON.stringify(parsedBody) can differ in key order / whitespace.
+app.post(
+  "/api/v1/payment/webhook",
+  express.raw({ type: "application/json" }),
+  handleWebhook,
+);
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.use(doubleCsrfProtection);
 app.use(apiRequestLogger);
 
@@ -101,6 +116,8 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     resolveSocketUserId,
   );
   setupChatSocket(io, redisAdapter);
+
+  startSubscriptionReconciler();
 
   server.listen(PORT, () => {
     const protocol = server instanceof http.Server ? "http" : "https";

@@ -12,6 +12,9 @@ jest.mock("@hrms/db", () => {
     },
     user: { findMany: jest.fn(), findUnique: jest.fn() },
     team: { findMany: jest.fn() },
+    tenantSettings: {
+      findFirst: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -23,6 +26,8 @@ jest.mock("@hrms/db", () => {
 jest.mock("@hrms/cache", () => ({
   cacheManager: {
     invalidatePattern: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
   },
 }));
 
@@ -44,6 +49,10 @@ const mockCreate = prisma.leaveApplication.create as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockTeamFindMany = (prisma as any).team.findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
+const mockCacheGet = (cacheManager as any).get as jest.Mock;
+const mockCacheSet = (cacheManager as any).set as jest.Mock;
+const mockSettingsFindFirst = (prisma as any).tenantSettings
+  .findFirst as jest.Mock;
 
 const validRequest = {
   userId: "john",
@@ -60,6 +69,11 @@ describe("applyLeave", () => {
     mockFindMany.mockResolvedValue([]);
     mockUserFindMany.mockResolvedValue([]);
     mockTeamFindMany.mockResolvedValue([]);
+    // Settings cache miss → falls through to DB; returning null skips all
+    // leave-policy enforcement so existing tests are unaffected.
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+    mockSettingsFindFirst.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when required fields are missing", async () => {

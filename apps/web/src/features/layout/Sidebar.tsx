@@ -32,10 +32,8 @@ const AccountTreeIcon = React.lazy(
 const ChecklistIcon = React.lazy(() => import("@mui/icons-material/Checklist"));
 const ForumIcon = React.lazy(() => import("@mui/icons-material/Forum"));
 const PolicyIcon = React.lazy(() => import("@mui/icons-material/Policy"));
-const CreditCardIcon = React.lazy(
-  () => import("@mui/icons-material/CreditCard"),
-);
-const ApartmentIcon = React.lazy(() => import("@mui/icons-material/Apartment"));
+const TuneIcon = React.lazy(() => import("@mui/icons-material/Tune"));
+
 function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,11 +46,7 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
     navigate(path);
   };
 
-  const hasSubscriptionAccess =
-    user?.isSuperUser ||
-    user?.permissions?.some((p) => p.startsWith("Subscription:"));
-
-  // Memoized navItems array
+  // Memoized navItems array — Subscription moved to Settings tabs
   const navItems = useMemo(() => {
     return [
       { title: "Dashboard", icon: <SpaceDashboardIcon />, path: "/" },
@@ -67,23 +61,23 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
       { title: "Rules", icon: <ChecklistIcon />, path: "/rules" },
       { title: "Analytics", icon: <EqualizerIcon />, path: "/analytics" },
       { title: "Policy", icon: <PolicyIcon />, path: "/policy" },
-      ...(hasSubscriptionAccess
-        ? [
-            {
-              title: "Subscription",
-              icon: <CreditCardIcon />,
-              path: "/subscription",
-            },
-          ]
-        : []),
-      { title: "Company Info", icon: <ApartmentIcon />, path: "/company-info" },
+      { title: "Settings", icon: <TuneIcon />, path: "/settings" },
       { title: "Help", icon: <LiveHelpIcon />, path: "/help" },
     ];
-  }, [hasSubscriptionAccess]);
+  }, []);
+
+  // Legacy routes that now live under /settings should keep the Settings icon active
+  const SETTINGS_ALIASES = ["/subscription", "/company-info", "/org-settings"];
 
   const isActive = (path) => {
     if (path === "/") {
       return location.pathname === "/";
+    }
+    if (path === "/settings") {
+      return (
+        location.pathname.startsWith("/settings") ||
+        SETTINGS_ALIASES.some((alias) => location.pathname.startsWith(alias))
+      );
     }
     return location.pathname.startsWith(path);
   };
