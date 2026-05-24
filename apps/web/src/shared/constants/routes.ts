@@ -24,4 +24,7 @@ export const ROUTES = {
   VIEW_JOB_OPENING: "/view-job-opening/:_id",
   ATTENDANCE: "/attendance/*",
   RESIGNATION: "/resignation-process/*",
+  SETTINGS: "/settings",
+  ORG_SETTINGS: "/org-settings",
+  COMPANY_INFO: "/company-info",
 } as const;

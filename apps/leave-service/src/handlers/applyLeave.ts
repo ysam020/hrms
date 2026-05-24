@@ -7,6 +7,39 @@ import { MESSAGES } from "../constants/messages";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
+// ─── Tenant-settings helpers ──────────────────────────────────────────────────
+
+const SETTINGS_CACHE_TTL = 900; // 15 min
+
+/**
+ * Returns the active leave-policy settings from the DB.
+ * Active = latest version where effectiveFrom ≤ now.
+ * Returns null when no settings record has been created yet.
+ */
+async function getLeaveSettings(tenantId: string) {
+  const cacheKey = `tenantSettings:leave:${tenantId}`;
+  const cached = await cacheManager.get(cacheKey);
+  if (cached) return cached as any;
+
+  const settings = await (prisma as any).tenantSettings.findFirst({
+    where: { tenantId, effectiveFrom: { lte: new Date() } },
+    orderBy: { effectiveFrom: "desc" },
+    select: {
+      medicalCertRequired: true,
+      customLeaveTypes: true,
+    },
+  });
+
+  if (!settings) return null;
+
+  const result = {
+    medicalCertRequired: settings.medicalCertRequired as boolean,
+    customLeaveTypes: (settings.customLeaveTypes as any[]) ?? [],
+  };
+  await cacheManager.set(cacheKey, result, "system", SETTINGS_CACHE_TTL);
+  return result;
+}
+
 dayjs.extend(utc);
 
 function isWeekend(d: dayjs.Dayjs): boolean {
@@ -55,6 +88,59 @@ export const applyLeave = async (
         status: status.INVALID_ARGUMENT,
       });
     }
+
+    // ── Tenant-settings enforcement ──────────────────────────────────────────
+    const tenantId = getTenantId();
+    if (tenantId) {
+      const leaveSettings = await getLeaveSettings(tenantId);
+
+      if (leaveSettings) {
+        // 1. If custom leave types are configured, validate the requested type.
+        if (leaveSettings.customLeaveTypes.length > 0) {
+          const validKeys = leaveSettings.customLeaveTypes.flatMap((lt: any) =>
+            [lt.key, lt.name].filter(Boolean),
+          );
+          // Always allow the three built-in types so tenants don't
+          // accidentally lock themselves out while still migrating.
+          validKeys.push(
+            "PL",
+            "SL",
+            "CL",
+            "Paid Leave",
+            "Sick Leave",
+            "Casual Leave",
+          );
+
+          if (
+            !validKeys.some(
+              (t: string) => t.toLowerCase() === leaveType.toLowerCase(),
+            )
+          ) {
+            return callback(null, {
+              message: `Invalid leave type "${leaveType}". Allowed: ${leaveSettings.customLeaveTypes
+                .map((lt: any) => lt.name ?? lt.key)
+                .join(", ")}`,
+              status: status.INVALID_ARGUMENT,
+            });
+          }
+        }
+
+        // 2. Medical certificate required for sick leave.
+        const { medicalCertificate } = call.request;
+        if (
+          sickLeave &&
+          leaveSettings.medicalCertRequired &&
+          !medicalCertificate
+        ) {
+          return callback(null, {
+            message:
+              "A medical certificate is required for sick leave in your organisation.",
+            status: status.INVALID_ARGUMENT,
+          });
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const existing = await prisma.leaveApplication.findMany({
       where: { userId, status: { in: ["Pending", "Approved"] } },

@@ -24,6 +24,9 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       dateOfTermination,
       dateOfAbscond,
       wfh,
+      wfhHomeLatitude,
+      wfhHomeLongitude,
+      wfhHomeName,
     } = req.body;
 
     const targetUser = await prisma.user.findUnique({
@@ -46,6 +49,11 @@ export async function editEmployeeDetails(req: Request, res: Response) {
     if (uan_no !== undefined) updateData.uan_no = uan_no;
     if (esic_no !== undefined) updateData.esic_no = esic_no;
     if (wfh !== undefined) updateData.wfh = wfh;
+    if (wfhHomeLatitude !== undefined)
+      updateData.wfhHomeLatitude = wfhHomeLatitude ?? null;
+    if (wfhHomeLongitude !== undefined)
+      updateData.wfhHomeLongitude = wfhHomeLongitude ?? null;
+    if (wfhHomeName !== undefined) updateData.wfhHomeName = wfhHomeName ?? null;
     if (salary !== undefined) updateData.salary = salary;
     if (reasonForTermination !== undefined)
       updateData.reasonForTermination = reasonForTermination;
@@ -111,6 +119,9 @@ export async function getEmployeeDetails(req: Request, res: Response) {
         assets: true,
         employeeStatus: true,
         wfh: true,
+        wfhHomeLatitude: true,
+        wfhHomeLongitude: true,
+        wfhHomeName: true,
         pf_no: true,
         uan_no: true,
         esic_no: true,

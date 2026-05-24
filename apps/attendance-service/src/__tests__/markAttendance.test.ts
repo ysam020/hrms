@@ -11,6 +11,12 @@ jest.mock("@hrms/db", () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    tenantSettings: {
+      findFirst: jest.fn(),
+    },
+    user: {
+      findUnique: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -23,6 +29,8 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: {
     invalidatePattern: jest.fn(),
     delete: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
   },
 }));
 
@@ -38,12 +46,33 @@ const mockCreate = (prisma as any).attendanceRecord.create as jest.Mock;
 const mockUpdate = (prisma as any).attendanceRecord.update as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockDelete = cacheManager.delete as jest.Mock;
+const mockCacheGet = (cacheManager as any).get as jest.Mock;
+const mockCacheSet = (cacheManager as any).set as jest.Mock;
+const mockSettingsFindFirst = (prisma as any).tenantSettings
+  .findFirst as jest.Mock;
+
+const DEFAULT_ATTENDANCE_SETTINGS = {
+  workStartHour: 9,
+  workStartMinute: 0,
+  lateGracePeriodMinutes: 30,
+  halfDayMinHours: 4,
+  geofencingEnabled: false,
+  officeLatitude: null,
+  officeLongitude: null,
+  geofenceRadiusMeters: 200,
+};
 
 describe("markAttendance", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockInvalidate.mockResolvedValue(undefined);
     mockDelete.mockResolvedValue(undefined);
+    // Settings cache miss → falls through to DB mock
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+    // Return valid attendance settings so the handler proceeds past the
+    // FAILED_PRECONDITION guard on every test that doesn't override this.
+    mockSettingsFindFirst.mockResolvedValue(DEFAULT_ATTENDANCE_SETTINGS);
   });
 
   it("returns INVALID_ARGUMENT when userId or type is missing", async () => {

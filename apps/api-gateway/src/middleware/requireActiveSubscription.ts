@@ -3,8 +3,8 @@ import { prisma } from "@hrms/db";
 import { AuthRequest } from "./authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 
-// Applied after requireTenant — blocks expired orgs, passes grace-period
-// orgs through with a warning header so the UI can show a renewal banner.
+// Applied after requireTenant — blocks expired orgs, passes grace-period and
+// cancelling orgs through with warning headers so the UI can show banners.
 export async function requireActiveSubscription(
   req: AuthRequest,
   res: Response,
@@ -33,6 +33,13 @@ export async function requireActiveSubscription(
       if (tenant.planExpiresAt) {
         res.setHeader("X-Plan-Expires-At", tenant.planExpiresAt.toISOString());
       }
+    }
+
+    if (tenant.subscriptionStatus === "cancelling") {
+      // Cancellation requested but not yet confirmed by Razorpay webhook.
+      // The tenant retains full access until the webhook sets status to
+      // "expired". Signal the UI to show a "cancellation pending" banner.
+      res.setHeader("X-Subscription-Cancelling", "true");
     }
 
     next();

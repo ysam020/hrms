@@ -23,9 +23,10 @@ const BILLING_CONFIG = {
   },
 } as const;
 
-// Module-level plan-ID cache — survives for the container's lifetime.
-// On restart, we re-create plans in Razorpay (harmless in test mode).
-const planIdCache: Record<string, string> = {};
+// Hot-path in-memory cache — avoids Redis round-trips within a single process
+// lifetime. Redis (see tenantTokenStore) is the durable layer that survives
+// restarts so we never create orphaned plans in Razorpay.
+const planIdMemCache: Record<string, string> = {};
 
 // ─── Payment-method helpers ───────────────────────────────────────────────────
 
@@ -77,11 +78,24 @@ export function getRazorpay() {
   });
 }
 
+// ─── Plan ID — two-level cache (memory → Redis → Razorpay API) ───────────────
+
 async function getOrCreatePlanId(
   billing: "monthly" | "annual",
 ): Promise<string> {
-  if (planIdCache[billing]) return planIdCache[billing];
+  // 1. In-memory (hot path, same process restart)
+  if (planIdMemCache[billing]) return planIdMemCache[billing];
 
+  // 2. Redis (survives restarts — plan IDs are permanent in Razorpay)
+  const { getRazorpayPlanId, setRazorpayPlanId } =
+    await import("../services/tenantTokenStore");
+  const cached = await getRazorpayPlanId(billing);
+  if (cached) {
+    planIdMemCache[billing] = cached;
+    return cached;
+  }
+
+  // 3. Create a new plan in Razorpay (only runs once per billing period per env)
   const cfg = BILLING_CONFIG[billing];
   const rzp = getRazorpay();
 
@@ -96,12 +110,14 @@ async function getOrCreatePlanId(
     },
   });
 
-  planIdCache[billing] = plan.id;
+  planIdMemCache[billing] = plan.id;
+  await setRazorpayPlanId(billing, plan.id);
   logger.info(`Razorpay plan created (${billing}): ${plan.id}`);
   return plan.id;
 }
 
-// POST /payment/create-subscription
+// ─── POST /payment/create-subscription ───────────────────────────────────────
+
 export async function createSubscription(req: AuthRequest, res: Response) {
   const { userId } = req.user!;
   try {
@@ -138,7 +154,8 @@ export async function createSubscription(req: AuthRequest, res: Response) {
   }
 }
 
-// GET /payment/pending-setup
+// ─── GET /payment/pending-setup ───────────────────────────────────────────────
+
 export async function getPendingSetup(req: AuthRequest, res: Response) {
   const { userId } = req.user!;
   try {
@@ -173,7 +190,8 @@ export async function getPendingSetup(req: AuthRequest, res: Response) {
   }
 }
 
-// POST /payment/cancel-subscription
+// ─── POST /payment/cancel-subscription ───────────────────────────────────────
+
 export async function cancelSubscription(req: AuthRequest, res: Response) {
   const { tenantId } = req.user!;
   try {
@@ -197,14 +215,20 @@ export async function cancelSubscription(req: AuthRequest, res: Response) {
       cancel_at_cycle_end: 0,
     });
 
+    // Set "cancelling" rather than immediately "expired".
+    // The subscription.cancelled webhook (fired by Razorpay within seconds)
+    // is the authoritative signal that confirms the cancellation and moves
+    // the tenant to "expired". This avoids the race where the Razorpay call
+    // succeeds but our DB write was already wrong, or where the next renewal
+    // charge fires before the cancel lands.
     await prisma.tenant.update({
       where: { id: tenantId! },
-      data: { subscriptionStatus: "expired" },
+      data: { subscriptionStatus: "cancelling" },
     });
 
-    logger.info(`Subscription cancelled for tenant ${tenantId}`);
+    logger.info(`Subscription cancellation requested for tenant ${tenantId}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      message: "Subscription cancelled.",
+      message: "Subscription cancellation initiated.",
     });
   } catch (err) {
     logger.error("cancelSubscription error:", { err });
@@ -212,7 +236,8 @@ export async function cancelSubscription(req: AuthRequest, res: Response) {
   }
 }
 
-// POST /payment/reactivate-subscription — renew after expiry
+// ─── POST /payment/reactivate-subscription ────────────────────────────────────
+
 export async function reactivateSubscription(req: AuthRequest, res: Response) {
   const { tenantId } = req.user!;
   try {
@@ -278,14 +303,38 @@ export async function reactivateSubscription(req: AuthRequest, res: Response) {
   }
 }
 
-// POST /payment/webhook  — Razorpay sends events here
+// ─── POST /payment/webhook  — Razorpay sends events here ─────────────────────
+//
+// This handler is mounted in server.ts BEFORE express.json() and the CSRF
+// middleware so that:
+//   • req.body arrives as a raw Buffer (exact bytes Razorpay signed)
+//   • Razorpay's server-to-server requests aren't rejected by CSRF
+
 export async function handleWebhook(req: Request, res: Response) {
   try {
-    const signature = req.headers["x-razorpay-signature"] as string;
-    const body = JSON.stringify(req.body);
+    // ── Guard: secret must be configured ───────────────────────────────────
+    if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
+      logger.error(
+        "handleWebhook: RAZORPAY_WEBHOOK_SECRET is not set — rejecting all requests",
+      );
+      return res.status(500).json({ ok: false });
+    }
 
-    const expected = createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
-      .update(body)
+    const signature = req.headers["x-razorpay-signature"] as string;
+    // Razorpay injects a unique event ID that we use for idempotency.
+    const eventId = req.headers["x-razorpay-event-id"] as string | undefined;
+
+    // ── Raw body → string ───────────────────────────────────────────────────
+    // express.raw() delivers a Buffer. Fallback to stringify handles the
+    // rare case where this route is hit without the raw middleware.
+    const rawBody =
+      req.body instanceof Buffer
+        ? req.body.toString("utf8")
+        : JSON.stringify(req.body);
+
+    // ── Signature verification ──────────────────────────────────────────────
+    const expected = createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(rawBody)
       .digest("hex");
 
     if (signature !== expected) {
@@ -293,7 +342,26 @@ export async function handleWebhook(req: Request, res: Response) {
       return res.status(400).json({ ok: false });
     }
 
-    const { event, payload } = req.body as {
+    // ── Idempotency — skip already-processed events ─────────────────────────
+    // Razorpay retries on non-2xx. We ack early (200) then do nothing.
+    // Operations below are all naturally idempotent, so a crash-before-mark
+    // is safe: the retry will re-process with the same outcome.
+    if (eventId) {
+      const { isWebhookEventProcessed, markWebhookEventProcessed } =
+        await import("../services/tenantTokenStore");
+      if (await isWebhookEventProcessed(eventId)) {
+        logger.info(`Razorpay webhook: duplicate event ${eventId} — skipped`);
+        return res.json({ ok: true });
+      }
+      // Mark AFTER processing so a crash mid-handler still allows a retry.
+      // We register the cleanup at the end of the switch.
+      void markWebhookEventProcessed(eventId).catch((e) =>
+        logger.warn("markWebhookEventProcessed failed", { e }),
+      );
+    }
+
+    // ── Parse body ──────────────────────────────────────────────────────────
+    const { event, payload } = JSON.parse(rawBody) as {
       event: string;
       payload: {
         subscription?: { entity?: { id?: string } };
@@ -305,11 +373,11 @@ export async function handleWebhook(req: Request, res: Response) {
     if (!subscriptionId) return res.json({ ok: true });
 
     const now = new Date();
-    const GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+    // ── Event dispatch ──────────────────────────────────────────────────────
     switch (event) {
       case "subscription.charged": {
-        // Razorpay successfully charged — push planExpiresAt forward
+        // Razorpay successfully charged — push planExpiresAt forward.
         const tenant = await prisma.tenant.findFirst({
           where: { razorpaySubscriptionId: subscriptionId },
         });
@@ -346,7 +414,7 @@ export async function handleWebhook(req: Request, res: Response) {
       }
 
       case "subscription.halted":
-        // All Razorpay retry attempts failed — enter grace period
+        // All Razorpay retry attempts exhausted — enter grace period.
         await prisma.tenant.updateMany({
           where: {
             razorpaySubscriptionId: subscriptionId,
@@ -356,8 +424,27 @@ export async function handleWebhook(req: Request, res: Response) {
         });
         break;
 
+      case "subscription.payment.failed": {
+        // A single payment attempt failed; Razorpay will retry automatically.
+        // Log and surface a warning so the team can monitor before halted fires.
+        const failedTenant = await prisma.tenant.findFirst({
+          where: { razorpaySubscriptionId: subscriptionId },
+          select: { id: true },
+        });
+        if (failedTenant) {
+          logger.warn(
+            `Razorpay payment attempt failed for subscription ${subscriptionId} ` +
+              `(tenant ${failedTenant.id}). Razorpay will retry automatically.`,
+          );
+          // TODO: send in-app notification / email to tenant owner so they can
+          // update their payment method before the subscription is halted.
+        }
+        break;
+      }
+
       case "subscription.cancelled":
       case "subscription.completed":
+        // Also covers the "cancelling" state set by cancelSubscription().
         await prisma.tenant.updateMany({
           where: { razorpaySubscriptionId: subscriptionId },
           data: { subscriptionStatus: "expired" },

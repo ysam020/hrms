@@ -174,7 +174,7 @@ async function buildTenant(
     }),
   ]);
 
-  // Fire-and-forget: force Atlas to materialise the tenant database.
+  // Force Atlas to materialise the tenant database, then seed default settings.
   const tenantClient = getClientForDb(dbName);
   (tenantClient.$runCommandRaw as any)({
     insert: "_init",
@@ -185,7 +185,21 @@ async function buildTenant(
         initializedAt: new Date(),
       },
     ],
-  }).catch(() => {});
+  })
+    .then(() =>
+      // Seed the initial TenantSettings version so services always have a DB record.
+      (tenantClient as any).tenantSettings.create({
+        data: {
+          tenantId: tenant.id,
+          effectiveFrom: now,
+          createdBy: userId,
+          note: "Initial defaults",
+        },
+      }),
+    )
+    .catch((e: unknown) =>
+      logger.warn("[buildTenant] Failed to seed TenantSettings:", { e }),
+    );
 
   await Promise.all([
     prisma.user.update({

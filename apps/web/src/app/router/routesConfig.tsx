@@ -81,6 +81,12 @@ const CompanyInfo = lazy(
   () => import("@web/features/company-info/CompanyInfo"),
 );
 
+// Organisation Settings
+const OrgSettings = lazy(() => import("@web/features/settings/OrgSettings"));
+
+// Unified Settings (Company Info + Organisation Settings tabs)
+const Settings = lazy(() => import("@web/features/settings/Settings"));
+
 const routesConfig = () => {
   return [
     {
@@ -154,10 +160,25 @@ const routesConfig = () => {
       category: null,
     },
     {
+      path: "/settings",
+      element: <Settings />,
+      allowedModules: [],
+      name: "Settings",
+      category: null,
+    },
+    // Legacy routes — kept for deep-link compatibility
+    {
       path: "/company-info",
       element: <CompanyInfo />,
       allowedModules: [],
       name: "Company Information",
+      category: null,
+    },
+    {
+      path: "/org-settings",
+      element: <OrgSettings />,
+      allowedModules: [],
+      name: "Organisation Settings",
       category: null,
     },
     {

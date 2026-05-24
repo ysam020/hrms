@@ -85,6 +85,10 @@ model User {
   permissions                 String[]
   isSuperUser                 Boolean   @default(false)
   wfh                         Boolean   @default(false)
+  // WFH home location (set by admin when enabling WFH for this employee)
+  wfhHomeLatitude             Float?
+  wfhHomeLongitude            Float?
+  wfhHomeName                 String?   // human-readable address label
   assets                      String[]
   note                        String?
   employeeStatus              String    @default("Active")
@@ -523,6 +527,62 @@ model Team {
 
   @@index([tenantId])
   @@map("teams")
+}
+
+// ─── Tenant Settings ──────────────────────────────────────────────────────────
+// Each row is an immutable versioned snapshot.
+// The *active* settings at any moment = the latest row where effectiveFrom ≤ now.
+// Future rows (effectiveFrom > now) are *pending* changes.
+
+model TenantSettings {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId               String   @db.ObjectId
+  // When this version becomes active. Defaults to now → immediate effect.
+  effectiveFrom          DateTime @default(now())
+
+  // ── Leave ──────────────────────────────────────────────────────────────────
+  paidLeavesPerYear      Int      @default(12)
+  sickLeavesPerYear      Int      @default(12)
+  casualLeavesPerYear    Int      @default(6)
+  // Require a medical certificate when sickLeave=true
+  medicalCertRequired    Boolean  @default(false)
+  // Extra leave types: [{ name, key, daysPerYear, requiresProof }]
+  customLeaveTypes       Json?
+
+  // ── Attendance ─────────────────────────────────────────────────────────────
+  // Work starts at workStartHour:workStartMinute (24-hour clock)
+  workStartHour          Int      @default(9)
+  workStartMinute        Int      @default(0)
+  // Minutes after work-start before check-in is flagged as "Late"
+  lateGracePeriodMinutes Int      @default(30)
+  // Minimum working hours to count as a full day
+  fullDayMinHours        Float    @default(8)
+  // Minimum working hours to count as a half day (anything below → Half Day)
+  halfDayMinHours        Float    @default(4)
+
+  // ── Geofencing ─────────────────────────────────────────────────────────────
+  // When true, CHECK_IN is blocked if employee is outside the allowed radius.
+  geofencingEnabled      Boolean  @default(false)
+  // Office GPS coordinates (set by admin via map picker)
+  officeLatitude         Float?
+  officeLongitude        Float?
+  // Human-readable label shown to employees
+  officeName             String?
+  // Allowed radius in metres (applies to both office and WFH home location)
+  geofenceRadiusMeters   Int      @default(200)
+
+  // ── HR ─────────────────────────────────────────────────────────────────────
+  probationPeriodDays    Int      @default(90)
+  noticePeriodDays       Int      @default(30)
+
+  // ── Audit ──────────────────────────────────────────────────────────────────
+  createdBy              String?  @db.ObjectId
+  note                   String?  // optional reason / changelog note
+
+  createdAt              DateTime @default(now())
+
+  @@unique([tenantId, effectiveFrom])
+  @@map("tenant_settings")
 }
 
 // ─── Login Events ─────────────────────────────────────────────────────────────
