@@ -146,3 +146,71 @@ paths:
                   success: { type: boolean, example: true }
         "401":
           description: Unauthorized
+
+  /api/v1/check-face-descriptor:
+    get:
+      summary: Check if a face descriptor is enrolled
+      description: >
+        Returns whether the authenticated user has enrolled a face descriptor
+        for biometric attendance check-in. The face recognition model runs in a
+        Web Worker (face-api.js) on the client; only the descriptor vector is
+        stored server-side.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Enrollment status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      hasDescriptor: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/v1/save-face-descriptor:
+    post:
+      summary: Enroll a face descriptor
+      description: >
+        Stores a face descriptor vector for the authenticated user, enabling
+        biometric attendance check-in via face recognition. The descriptor is
+        a 128-dimensional float array produced by face-api.js running in a
+        Web Worker on the client.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [descriptor]
+              properties:
+                descriptor:
+                  type: array
+                  items: { type: number }
+                  minItems: 128
+                  maxItems: 128
+                  description: 128-dimensional face descriptor vector from face-api.js
+                  example: [0.12, -0.34, 0.56, "..."]
+      responses:
+        "200":
+          description: Face descriptor saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Face descriptor enrolled" }
+        "400":
+          description: Invalid descriptor (not 128 dimensions)
+        "401":
+          description: Unauthorized

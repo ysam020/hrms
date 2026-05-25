@@ -9,17 +9,17 @@ HRMS uses **Socket.IO 4** for real-time communication. The Socket.IO server is a
 ```
 React client (Socket.IO client)
         │
-        │  WebSocket / long-poll
+        │  WebSocket / long-poll (HTTPS)
         ▼
-API Gateway  (Socket.IO server)
+API Gateway  (Socket.IO server — @hrms/websocket)
         │
-        │  Redis pub/sub (adapter)
+        │  @socket.io/redis-adapter (pub/sub)
         ▼
-   Redis   ──────────────────────────────────────────
-                          ▲         ▲
-                          │         │
-              Other gateway     Notification
-              instances         service
+   Redis ──────────────────────────────────────────
+                          ▲
+                          │
+              Other gateway instances
+              (horizontal scale, no sticky sessions)
 ```
 
 ---
@@ -29,9 +29,11 @@ API Gateway  (Socket.IO server)
 Every Socket.IO connection is authenticated before it is accepted:
 
 1. The client sends the JWT access token in `socket.handshake.auth.token`.
-2. The server middleware verifies the token and resolves the username.
+2. The server middleware (in `@hrms/websocket`) verifies the token.
 3. On success, the socket is joined to the user's personal room: `user:<username>`.
 4. On failure, the connection is rejected with `Error("Unauthorized")`.
+
+When the access token is refreshed (via the Axios interceptor), the Socket.IO client reconnects with the updated token to maintain a valid session.
 
 ---
 
@@ -39,9 +41,23 @@ Every Socket.IO connection is authenticated before it is accepted:
 
 **Namespace:** `chat`
 
-Chat rooms are persisted in MongoDB (`ChatRoom` and `Message` models). Socket.IO handles delivery; the database is the source of truth.
+Chat rooms (`ChatRoom`) and messages (`Message`) are persisted in MongoDB. Socket.IO handles real-time delivery; the database is the source of truth for message history.
 
-### Events (client → server)
+### REST endpoints (history + management)
+
+| Method | Endpoint                                   | Description                          |
+| ------ | ------------------------------------------ | ------------------------------------ |
+| GET    | `/api/chat/conversations`                  | List chat rooms for the current user |
+| POST   | `/api/chat/conversations/start`            | Start or find a direct conversation  |
+| GET    | `/api/chat/conversations/:roomId/messages` | Paginated message history            |
+| PUT    | `/api/chat/conversations/:roomId/read`     | Mark all messages as read            |
+| GET    | `/api/chat/unread-counts`                  | Unread count per room                |
+| POST   | `/api/chat/upload`                         | Upload a file attachment (SSRF-safe) |
+| DELETE | `/api/chat/messages/:messageId`            | Soft-delete a message                |
+| DELETE | `/api/chat/conversations/:roomId`          | Delete a conversation (for self)     |
+| GET    | `/api/og-preview?url=...`                  | Open Graph link preview              |
+
+### Socket events (client → server)
 
 | Event             | Payload                                 | Description                            |
 | ----------------- | --------------------------------------- | -------------------------------------- |
@@ -51,7 +67,7 @@ Chat rooms are persisted in MongoDB (`ChatRoom` and `Message` models). Socket.IO
 | `message_deleted` | `{ messageId, roomId }`                 | Request message deletion               |
 | `mark_read`       | `{ roomId }`                            | Mark all messages in the room as read  |
 
-### Events (server → client)
+### Socket events (server → client)
 
 | Event                 | Payload                 | Description                                    |
 | --------------------- | ----------------------- | ---------------------------------------------- |
@@ -63,11 +79,19 @@ Chat rooms are persisted in MongoDB (`ChatRoom` and `Message` models). Socket.IO
 
 ### File uploads
 
-File attachments are uploaded via `POST /api/file-upload` (REST, not Socket.IO). The returned S3 URL is then sent as a `file`-type message via the socket. The upload endpoint applies SSRF protection:
+File attachments are uploaded via `POST /api/chat/upload` (REST, not Socket.IO). The returned S3 URL is then sent as a `file`-type message via the socket. The upload endpoint applies SSRF protection:
 
-- Blocks private IP ranges (`127.x`, `10.x`, `192.168.x`, `172.16.x–31.x`)
-- Verifies DNS resolution doesn't point to a private IP
-- Only accepts HTTPS URLs from the whitelisted S3 domain
+- Blocks private IP ranges (`127.x`, `10.x`, `192.168.x`, `172.16–31.x`)
+- Verifies DNS resolution doesn't resolve to a private IP
+- Only accepts S3 HTTPS URLs from the whitelisted domain
+
+### Link preview
+
+`GET /api/og-preview?url=<encoded>` fetches Open Graph metadata (title, description, image) from a URL server-side. The same SSRF protection applies.
+
+### Offline queue
+
+Messages composed while the device is offline are persisted to the `message_outbox` IndexedDB store. A Workbox background sync registers a sync event; when connectivity returns, the queue is drained and messages are delivered via Socket.IO. See [Frontend Architecture](Frontend-Architecture) for the IndexedDB schema.
 
 ---
 
@@ -75,40 +99,64 @@ File attachments are uploaded via `POST /api/file-upload` (REST, not Socket.IO).
 
 **Namespace:** `notifications`
 
-In-app notifications are created by backend services (leave approvals, KYC updates, etc.) and published to a Redis channel. The gateway subscribes and broadcasts to the target user's Socket.IO room.
+In-app notifications are created by backend services (leave approvals, KYC updates, etc.) and broadcast to the target user's Socket.IO room. Notifications are also persisted in MongoDB (`Notification` + `NotificationRecipient` models) so they survive page reloads.
 
-### Events (server → client)
+### Socket events (server → client)
 
-| Event                  | Payload              | Description                                   |
-| ---------------------- | -------------------- | --------------------------------------------- |
-| `new_notification`     | Notification object  | A new in-app notification arrived             |
-| `notification_cleared` | `{ notificationId }` | A notification was dismissed from another tab |
+| Event                  | Payload              | Description                                          |
+| ---------------------- | -------------------- | ---------------------------------------------------- |
+| `new_notification`     | Notification object  | A new in-app notification arrived                    |
+| `notification_cleared` | `{ notificationId }` | A notification was dismissed from another tab/device |
 
 ### Push notifications (FCM)
 
-For out-of-app delivery (when the browser tab is closed), notifications are dispatched via **Firebase Cloud Messaging** through the notification-service. FCM tokens are registered by the client on login (`POST /api/fcm-token`) and cleaned up nightly by the scheduler.
+For out-of-app delivery (browser tab closed), notifications are dispatched via **Firebase Cloud Messaging** through the notification-service. FCM tokens are registered on login (`POST /api/save-fcm-token`) and cleaned up nightly by the scheduler.
+
+---
+
+## AI Features (SSE)
+
+The AI chatbot and AI Insights endpoints use **Server-Sent Events (SSE)** rather than WebSocket, because they are unidirectional streaming responses (server → client) that don't require bidirectional communication.
+
+### AI Chatbot
+
+`POST /api/chatbot/message` — streams the assistant's reply in real time.
+
+The chatbot runs a **tool-calling loop** (up to 5 iterations):
+
+1. User message sent to Ollama (qwen2.5-coder:14b).
+2. If the model emits a tool call (e.g. `getAttendance`, `getLeaveBalance`), the gateway executes it against the tenant's database.
+3. The tool result is appended to the conversation context.
+4. The model generates the next token; loop repeats until the model emits a final text response.
+
+Available tools: `getAttendance`, `getLeaveBalance`, `getLeaveApplications`, `getEmployee`, `getJobOpenings`, `getHrActivities`.
+
+Custom error handling in the chatbot route bypasses the standard `handleError` utility because SSE requires writing to `res` (the stream) rather than returning a JSON response — this exception is intentional.
+
+### AI Insights
+
+`GET /api/ai-insights?module=<module>&period=<period>` — streams a one-shot analytical report for a given HRMS module and time period. Unlike the chatbot, this is a single generation with no tool calls.
 
 ---
 
 ## Presence (Online Status)
 
-Users joining the Socket.IO server emit a presence signal. The gateway tracks connected usernames and can broadcast presence updates to interested clients.
+Users joining the Socket.IO server are assigned to a personal room (`user:<username>`). The gateway tracks connected sockets and can broadcast presence updates to interested clients.
 
-- User connects → joins `user:<username>` room
-- User disconnects → room is vacated
+- Connect → join `user:<username>` room
+- Disconnect → room vacated
 - Presence state is ephemeral (in Redis via Socket.IO adapter)
 
 ---
 
 ## Redis Adapter
 
-The Socket.IO Redis adapter (`@socket.io/redis-adapter`) allows multiple API gateway instances to share Socket.IO state:
+The `@socket.io/redis-adapter` stores room memberships in Redis and forwards events across multiple API gateway instances. This enables horizontal scaling without sticky sessions:
 
-- Room memberships are stored in Redis
-- Events emitted on one instance are forwarded to all instances
-- Enables horizontal scaling without sticky sessions
+- Any gateway instance can emit to any room.
+- All instances receive room-scoped events.
 
-Configuration is centralized in `packages/websocket/src/socketio.ts` and shared by the gateway.
+Configuration is centralised in `@hrms/websocket` and injected at gateway startup.
 
 ---
 
@@ -117,7 +165,6 @@ Configuration is centralized in `packages/websocket/src/socketio.ts` and shared 
 **File:** `apps/web/src/app/providers/SocketContext.tsx`
 
 ```tsx
-// Simplified example
 const socket = io(VITE_SOCKET_URL, {
   auth: { token: getAccessToken() },
   transports: ["websocket"],
@@ -127,7 +174,7 @@ const socket = io(VITE_SOCKET_URL, {
 
 The `SocketContext` provider:
 
-1. Initializes the connection after login.
-2. Re-authenticates if the access token is refreshed.
+1. Initialises the connection after a successful login.
+2. Re-authenticates (reconnects with updated token) when the access token is refreshed.
 3. Tears down the connection on logout.
-4. Exposes the `socket` instance to all feature components.
+4. Exposes the `socket` instance to all feature components via `useContext(SocketContext)`.

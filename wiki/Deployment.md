@@ -6,13 +6,13 @@
 
 ### Backend services — `docker/base.Dockerfile`
 
-A multi-stage build that uses Turborepo pruning to produce minimal images:
+A multi-stage build using Turborepo pruning to produce minimal images:
 
-| Stage     | What happens                                                                                                |
-| --------- | ----------------------------------------------------------------------------------------------------------- |
-| `pruner`  | `turbo prune --scope=<service>` produces a minimal subtree containing only the files needed by that service |
-| `builder` | Installs pruned dependencies, runs `pnpm proto:gen` and `pnpm db:generate`, compiles TypeScript             |
-| `runner`  | Copies only the production build artifacts, drops all dev dependencies, runs as a non-root `nodejs` user    |
+| Stage     | What happens                                                                                          |
+| --------- | ----------------------------------------------------------------------------------------------------- |
+| `pruner`  | `turbo prune --scope=<service>` produces a minimal subtree with only the files needed by that service |
+| `builder` | Installs pruned dependencies, runs `pnpm proto:gen` and `pnpm db:generate`, compiles TypeScript       |
+| `runner`  | Copies only production build artifacts, drops all dev dependencies, runs as a non-root `nodejs` user  |
 
 ### Frontend — `docker/web.Dockerfile`
 
@@ -78,39 +78,44 @@ gRPC ports (50051–50060) are internal to the Docker network and are never expo
 
 ### API Gateway
 
-| Variable                 | Required | Description                                    |
-| ------------------------ | -------- | ---------------------------------------------- |
-| `NODE_ENV`               | Yes      | `production` or `development`                  |
-| `API_GATEWAY_PORT`       | Yes      | Port to bind (default `9002`)                  |
-| `CLIENT_URL`             | Yes      | Allowed frontend origin(s), comma-separated    |
-| `JWT_SECRET_ACCESS`      | Yes      | Access token signing key (≥ 32 random bytes)   |
-| `JWT_SECRET_REFRESH`     | Yes      | Refresh token signing key (≥ 32 random bytes)  |
-| `CSRF_SECRET`            | Yes      | CSRF double-cookie secret (≥ 32 random bytes)  |
-| `GOOGLE_CLIENT_ID`       | Yes      | Google OAuth 2.0 client ID                     |
-| `GOOGLE_CLIENT_SECRET`   | Yes      | Google OAuth 2.0 client secret                 |
-| `GOOGLE_CALLBACK_URL`    | Yes      | OAuth redirect URI (must match Google Console) |
-| `REDIS_HOST`             | Yes      | Redis hostname                                 |
-| `REDIS_PORT`             | No       | Redis port (default `6379`)                    |
-| `REDIS_PASSWORD`         | No       | Redis password (if auth enabled)               |
-| `AUTH_SERVICE_PORT`      | No       | Default `50051`                                |
-| `EMPLOYEE_SERVICE_PORT`  | No       | Default `50053`                                |
-| _(etc for each service)_ |          |                                                |
+| Variable                  | Required | Description                                          |
+| ------------------------- | -------- | ---------------------------------------------------- |
+| `NODE_ENV`                | Yes      | `production` or `development`                        |
+| `API_GATEWAY_PORT`        | Yes      | Port to bind (default `9002`)                        |
+| `CLIENT_URL`              | Yes      | Allowed frontend origin(s), comma-separated          |
+| `JWT_SECRET_ACCESS`       | Yes      | Access token signing key (≥ 32 random bytes)         |
+| `JWT_SECRET_REFRESH`      | Yes      | Refresh token signing key (≥ 32 random bytes)        |
+| `CSRF_SECRET`             | Yes      | CSRF double-cookie secret (≥ 32 random bytes)        |
+| `GOOGLE_CLIENT_ID`        | Yes      | Google OAuth 2.0 client ID                           |
+| `GOOGLE_CLIENT_SECRET`    | Yes      | Google OAuth 2.0 client secret                       |
+| `GOOGLE_CALLBACK_URL`     | Yes      | OAuth redirect URI (must match Google Console)       |
+| `REDIS_HOST`              | Yes      | Redis hostname                                       |
+| `REDIS_PORT`              | No       | Redis port (default `6379`)                          |
+| `REDIS_PASSWORD`          | No       | Redis password (if auth enabled)                     |
+| `RAZORPAY_KEY_ID`         | Yes      | Razorpay API key ID                                  |
+| `RAZORPAY_KEY_SECRET`     | Yes      | Razorpay API key secret                              |
+| `RAZORPAY_WEBHOOK_SECRET` | Yes      | Razorpay webhook HMAC secret                         |
+| `OLLAMA_BASE_URL`         | No       | Ollama server URL (default `http://localhost:11434`) |
+| `AUTH_SERVICE_PORT`       | No       | Default `50051`                                      |
+| `EMPLOYEE_SERVICE_PORT`   | No       | Default `50053`                                      |
+| _(etc. for each service)_ |          |                                                      |
 
 ### All backend services
 
-| Variable                   | Required | Description                                |
-| -------------------------- | -------- | ------------------------------------------ |
-| `MONGO_URI`                | Yes      | MongoDB connection string                  |
-| `NODE_ENV`                 | Yes      |                                            |
-| `FIELD_ENCRYPTION_KEY`     | Yes      | AES-256 key for sensitive field encryption |
-| `AWS_ACCESS_KEY_ID`        | Yes      | For S3 file uploads and Secrets Manager    |
-| `AWS_SECRET_ACCESS_KEY`    | Yes      |                                            |
-| `AWS_REGION`               | Yes      |                                            |
-| `FIREBASE_SERVICE_ACCOUNT` | Yes      | Stringified FCM service account JSON       |
-| `SMTP_HOST`                | Yes      | Email relay host                           |
-| `SMTP_PORT`                | No       | Default `587`                              |
-| `SMTP_USER`                | Yes      |                                            |
-| `SMTP_PASS`                | Yes      |                                            |
+| Variable                   | Required | Description                                 |
+| -------------------------- | -------- | ------------------------------------------- |
+| `MONGO_URI`                | Yes      | MongoDB connection string (master database) |
+| `NODE_ENV`                 | Yes      |                                             |
+| `FIELD_ENCRYPTION_KEY`     | Yes      | AES-256 key for sensitive field encryption  |
+| `AWS_ACCESS_KEY_ID`        | Yes      | For S3 file uploads and Secrets Manager     |
+| `AWS_SECRET_ACCESS_KEY`    | Yes      |                                             |
+| `AWS_REGION`               | Yes      |                                             |
+| `S3_BUCKET_NAME`           | Yes      | S3 bucket for file uploads                  |
+| `FIREBASE_SERVICE_ACCOUNT` | Yes      | Stringified FCM service account JSON        |
+| `SMTP_HOST`                | Yes      | Email relay host                            |
+| `SMTP_PORT`                | No       | Default `587`                               |
+| `SMTP_USER`                | Yes      |                                             |
+| `SMTP_PASS`                | Yes      |                                             |
 
 ### Frontend (Vite)
 
@@ -129,28 +134,40 @@ The API gateway and Vite dev server both require SSL certificates.
 
 **Development:** Self-signed certificates in `packages/certificates/cert.pem` and `packages/certificates/key.pem`.
 
-**Production:** Use certificates from a trusted CA (Let's Encrypt, ACM, etc.) and mount them into the container or terminate TLS at the load balancer.
+**Production:** Use certificates from a trusted CA (Let's Encrypt, AWS ACM, etc.) and mount them into the container or terminate TLS at the load balancer.
+
+---
+
+## Database Strategy in Production
+
+Because each tenant gets its own MongoDB database, production deployments should consider:
+
+- **Connection pool memory:** `getClientForDb` creates one `PrismaClient` per tenant. For large numbers of tenants, memory usage grows linearly. Consider evicting idle clients from the pool after a TTL.
+- **Backups:** Each tenant database should be backed up independently. Automate backups via MongoDB Atlas or mongodump cron jobs.
+- **Migrations:** Schema changes applied via `pnpm db:push` affect all databases. For production, apply schema changes in a rolling deployment and verify backward compatibility first.
+- **Monitoring:** Add per-tenant tags to metrics and logs to identify slow tenants.
 
 ---
 
 ## Health Checks
 
-Each gRPC service implements the standard `grpc.health.v1.Health` service (from `packages/proto-definitions/src/proto/health/health.proto`). The API gateway exposes:
+Each gRPC service implements the standard `grpc.health.v1.Health` service. The API gateway exposes:
 
 ```
 GET /health   → 200 OK
 ```
 
-Docker Compose healthchecks use this endpoint to determine when the gateway is ready.
+Docker Compose healthchecks use this endpoint to determine when the gateway is ready before routing traffic.
 
 ---
 
 ## Scaling
 
-- The API gateway is **stateless** (tokens verified from JWT secret, no local state) and can be scaled horizontally.
-- Socket.IO uses the **Redis adapter** so multiple gateway instances share room memberships — no sticky sessions needed.
-- gRPC services are stateless and scale independently.
-- The scheduler-service should run as a **single instance** to avoid duplicate cron job executions (or use BullMQ's built-in deduplication).
+- The **API gateway** is stateless and can be scaled horizontally. Socket.IO uses the Redis adapter, so multiple instances share room memberships — no sticky sessions needed.
+- **gRPC services** are stateless and scale independently.
+- The **scheduler-service** should run as a **single instance** to prevent duplicate cron job executions (or use BullMQ's built-in job ID deduplication).
+- **MongoDB** can be scaled by moving high-traffic tenant databases to dedicated MongoDB Atlas clusters.
+- **Redis** can be scaled with Redis Cluster or Redis Sentinel for HA.
 
 ---
 
@@ -158,12 +175,31 @@ Docker Compose healthchecks use this endpoint to determine when the gateway is r
 
 The recommended pipeline:
 
-1. On push to `main`:
+1. **On push to `main`:**
    - `pnpm lint`
    - `pnpm build`
    - `docker compose -f docker-compose.ci.yml build`
-2. On success:
+2. **On success:**
    - Tag and push images to the container registry
    - Deploy to staging: `TAG_NAME=<sha> docker compose -f docker-compose.prod.yml up -d`
-3. After staging smoke tests:
+3. **After staging smoke tests:**
    - Promote to production
+
+---
+
+## Observability
+
+| Signal  | Local stack          | Production          |
+| ------- | -------------------- | ------------------- |
+| Metrics | Prometheus + Grafana | AWS CloudWatch      |
+| Logs    | Loki + Grafana       | AWS CloudWatch Logs |
+
+Each service exposes a `/metrics` endpoint on `METRICS_PORT` (separate from the gRPC port) scraped by Prometheus. Structured JSON logs are written by `@hrms/logger` (Winston) and shipped to Loki or CloudWatch depending on `NODE_ENV`.
+
+Key metrics to monitor:
+
+- Gateway request rate, latency P50/P95/P99
+- gRPC call duration per service
+- Redis cache hit ratio (L1 and L2)
+- BullMQ queue depth and job failure rate
+- Active tenant connection pool size

@@ -1,24 +1,43 @@
 # Microservices
 
-All backend logic is split across independent gRPC microservices. The API gateway is the only public-facing service; all others are internal and communicate via gRPC on localhost.
+All backend business logic is split across independent gRPC microservices. The API gateway is the only public-facing service; all others are internal and communicate via gRPC on the Docker network. Some business routes in the gateway also query the database directly via `prismaWithTenant` (rules, policies, audit logs, tenant settings) — these do not need a dedicated microservice because the gateway is the only caller.
 
 ---
 
 ## Service Map
 
-| Service                                       | gRPC Port | Domain                                  |
-| --------------------------------------------- | --------- | --------------------------------------- |
-| [auth-service](#auth-service)                 | 50051     | Authentication, tokens, passkeys, OAuth |
-| [user-service](#user-service)                 | 50052     | User accounts                           |
-| [employee-service](#employee-service)         | 50053     | Employee profiles, KYC, org             |
-| [attendance-service](#attendance-service)     | 50054     | Check-in/out, reports                   |
-| [leave-service](#leave-service)               | 50055     | Leave applications, approvals, balance  |
-| [recruitment-service](#recruitment-service)   | 50056     | Job openings, applications, interviews  |
-| [hrm-service](#hrm-service)                   | 50057     | Appraisals, policies, HR activities     |
-| [salary-service](#salary-service)             | 50058     | Salary structures, payslips             |
-| [analytics-service](#analytics-service)       | 50059     | Business analytics dashboards           |
-| [notification-service](#notification-service) | 50060     | FCM tokens, push notifications          |
-| [scheduler-service](#scheduler-service)       | —         | Background BullMQ jobs                  |
+| Service                                       | gRPC Port | Domain                                          |
+| --------------------------------------------- | --------- | ----------------------------------------------- |
+| [auth-service](#auth-service)                 | 50051     | Authentication, tokens, passkeys, OAuth         |
+| [user-service](#user-service)                 | 50052     | User accounts                                   |
+| [employee-service](#employee-service)         | 50053     | Employee profiles, KYC, org                     |
+| [attendance-service](#attendance-service)     | 50054     | Check-in/out, reports, geofencing               |
+| [leave-service](#leave-service)               | 50055     | Leave applications, approvals, balance          |
+| [recruitment-service](#recruitment-service)   | 50056     | Job openings, applications, interviews          |
+| [hrm-service](#hrm-service)                   | 50057     | Appraisals, HR activities                       |
+| [salary-service](#salary-service)             | 50058     | Salary structures, payslips                     |
+| [analytics-service](#analytics-service)       | 50059     | Workforce and business analytics                |
+| [notification-service](#notification-service) | 50060     | FCM tokens, push dispatch, in-app notifications |
+| [scheduler-service](#scheduler-service)       | —         | BullMQ cron workers + background tasks          |
+
+---
+
+## Gateway-Direct Routes (no separate service)
+
+The following domains are handled directly by the API gateway via `prismaWithTenant`:
+
+| Domain            | Routes                       | Notes                                            |
+| ----------------- | ---------------------------- | ------------------------------------------------ |
+| Business Rules    | `/rules/*`                   | Full CRUD + dry-run testing + status toggle      |
+| Policies          | `/policies/*`                | CRUD + PDF generation/download                   |
+| Tenant Settings   | `/tenant-settings/*`         | Versioned CRUD + pending change management       |
+| Audit Logs        | (written inline in handlers) | Append-only; readable via Developer/Analytics    |
+| Chat              | `/chat/*`                    | REST (history) + Socket.IO (real-time)           |
+| AI Chatbot        | `/chatbot/message`           | SSE streaming, tool-calling loop (up to 5 iters) |
+| AI Insights       | `/ai-insights`               | One-shot analytical streaming report             |
+| Developer         | `/developer/*`               | Log streaming, identity verification             |
+| Payments          | `/payment/*`                 | Razorpay subscription lifecycle                  |
+| Tenant management | `/tenants/*`                 | Org setup, profile, tenant switching             |
 
 ---
 
@@ -27,25 +46,26 @@ All backend logic is split across independent gRPC microservices. The API gatewa
 **Port:** 50051  
 **Proto:** `packages/proto-definitions/src/proto/auth/auth.proto`
 
-Responsible for all authentication and token management operations.
+Handles all authentication and token management operations.
 
-### Handlers
+### Key handlers
 
-| Handler                         | Description                                         |
-| ------------------------------- | --------------------------------------------------- |
-| `getProfile`                    | Fetch user profile with all fields                  |
-| `refreshToken`                  | Issue a new access token from a valid refresh token |
-| `logout`                        | Invalidate refresh token in Redis                   |
-| `webAuthnRegistrationOptions`   | Generate credential creation options                |
-| `webAuthnRegistrationVerify`    | Verify credential and persist to User model         |
-| `webAuthnAuthenticationOptions` | Generate authentication challenge                   |
-| `webAuthnAuthenticationVerify`  | Verify assertion and issue tokens                   |
-| `googleOAuthCallback`           | Exchange authorization code for tokens; upsert user |
+| Handler                         | Description                                            |
+| ------------------------------- | ------------------------------------------------------ |
+| `getProfile`                    | Fetch user profile with all fields                     |
+| `refreshToken`                  | Issue a new access token from a valid refresh token    |
+| `logout`                        | Invalidate refresh token in Redis                      |
+| `webAuthnRegistrationOptions`   | Generate `PublicKeyCredentialCreationOptions`          |
+| `webAuthnRegistrationVerify`    | Verify attestation; persist credential to `User`       |
+| `webAuthnAuthenticationOptions` | Generate `PublicKeyCredentialRequestOptions`           |
+| `webAuthnAuthenticationVerify`  | Verify assertion; issue tokens                         |
+| `googleOAuthCallback`           | Exchange authorization code; upsert user; issue tokens |
+| `loginRiskScore`                | Compute 6-signal risk score; persist `LoginEvent`      |
 
 ### Key dependencies
 
-- `@hrms/cache` — stores refresh tokens and WebAuthn challenges in Redis
-- `@hrms/db` — reads/writes `User.webAuthnCredentials`
+- `@hrms/cache` — refresh tokens and WebAuthn challenges stored in Redis
+- `@hrms/db` — reads/writes `User.webAuthnCredentials` and `LoginEvent`
 - `@hrms/crypto` — JWT signing/verification
 
 ---
@@ -55,7 +75,7 @@ Responsible for all authentication and token management operations.
 **Port:** 50052  
 **Proto:** `packages/proto-definitions/src/proto/user/user.proto`
 
-Manages user account creation and account-level operations (distinct from employee-level profile data).
+Manages user account creation and account-level operations (distinct from employee profile data managed by employee-service).
 
 ---
 
@@ -64,24 +84,23 @@ Manages user account creation and account-level operations (distinct from employ
 **Port:** 50053  
 **Proto:** `packages/proto-definitions/src/proto/employee/employee.proto`
 
-Manages the employee profile, KYC documents, and organizational structure.
+Manages the employee profile, KYC documents, and org metadata.
 
-### Handlers
+### Key handlers
 
 | Handler               | Description                                        |
 | --------------------- | -------------------------------------------------- |
 | `getEmployee`         | Fetch full employee record by username             |
-| `updateEmployee`      | Update allowed profile fields (allowlist approach) |
-| `submitKyc`           | Submit identity documents for verification         |
+| `updateEmployee`      | Update allowed profile fields (explicit allowlist) |
+| `getAllUsers`         | Paginated user list for the current tenant         |
+| `submitKyc`           | Submit identity documents for review               |
 | `approveKyc`          | HR approves a KYC submission                       |
 | `rejectKyc`           | HR rejects with reason                             |
-| `getKycList`          | Paginated list of KYC submissions                  |
+| `getKycList`          | Paginated KYC submissions                          |
 | `getKycInsights`      | Aggregate KYC statistics                           |
-| `getEmployeeInsights` | Headcount, department distribution                 |
+| `getEmployeeInsights` | Headcount and department distribution              |
 
-### Security note
-
-The `updateEmployee` handler uses an explicit allowlist of field names — it never forwards `role`, `permissions`, `isSuperUser`, or any salary fields from the request body.
+> **Security note:** `updateEmployee` uses an explicit allowlist of field names. It never forwards `role`, `permissions`, `isSuperUser`, salary fields, or any sensitive PII from the request body.
 
 ---
 
@@ -90,32 +109,22 @@ The `updateEmployee` handler uses an explicit allowlist of field names — it ne
 **Port:** 50054  
 **Proto:** `packages/proto-definitions/src/proto/attendance/attendance.proto`
 
-Tracks daily attendance for all employees.
+Tracks daily attendance. Integrates with `TenantSettings` for geofencing and late-arrival thresholds.
 
-### Core model
-
-```protobuf
-message AttendanceRecord {
-  string username     = 1;
-  string date         = 2;
-  string timeIn       = 3;
-  string timeOut      = 4;
-  float  workingHours = 5;
-  string status       = 6;   // Present | Absent | Leave | WFH
-  bool   isCorrected  = 7;
-  string correctedBy  = 8;
-}
-```
-
-### Handlers
+### Key handlers
 
 | Handler                 | Description                                        |
 | ----------------------- | -------------------------------------------------- |
-| `checkIn`               | Record check-in time for today                     |
-| `checkOut`              | Record check-out time and compute working hours    |
+| `checkIn`               | Record check-in; validates geofence if enabled     |
+| `checkOut`              | Record check-out; compute working hours            |
 | `getAttendance`         | Fetch records (filterable by username, date range) |
 | `requestCorrection`     | Employee submits a correction request              |
+| `approveCorrection`     | HR approves or rejects a correction                |
+| `getAttendanceSummary`  | Monthly summary for a specific employee            |
+| `getAllAttendances`     | Paginated org-wide attendance                      |
 | `getAttendanceInsights` | On-time rate, absent count, WFH stats              |
+
+**Geofencing:** When `TenantSettings.geofencingEnabled = true`, check-in is rejected if the employee's GPS coordinates fall outside `geofenceRadiusMeters` of the office (or their designated WFH home location).
 
 ---
 
@@ -128,19 +137,20 @@ Manages the full leave lifecycle: application → approval/rejection → balance
 
 ### Leave types
 
-Casual, Sick, Earned, Unpaid, Half-day, Compensatory
+Standard: Casual, Sick, Earned/Paid, Unpaid, Half-day, Compensatory.  
+Custom types can be configured per org in `TenantSettings.customLeaveTypes`.
 
-### Handlers
+### Key handlers
 
-| Handler                        | Description                                 |
-| ------------------------------ | ------------------------------------------- |
-| `applyLeave`                   | Submit a leave application                  |
-| `getLeaveApplications`         | List applications (own or all for managers) |
-| `updateLeaveApplication`       | Edit a pending application                  |
-| `withdrawLeave`                | Withdraw before approval                    |
-| `approveLeave` / `rejectLeave` | Manager approves or rejects                 |
-| `getLeaveBalance`              | Current balance for each leave type         |
-| `getLeaveInsights`             | Aggregate leave statistics                  |
+| Handler                | Description                                 |
+| ---------------------- | ------------------------------------------- |
+| `applyLeave`           | Submit a leave application                  |
+| `getLeaveApplications` | List applications (own or all for managers) |
+| `updateLeaveStatus`    | Manager approves, rejects, or withdraws     |
+| `getLeaveBalance`      | Current balance for each leave type         |
+| `getLeaveInsights`     | Aggregate leave statistics                  |
+
+Leave quotas (e.g. `sickLeavesPerYear`) are read from the active `TenantSettings` row. The scheduler resets and accrues balances on the 1st of each month.
 
 ---
 
@@ -151,17 +161,26 @@ Casual, Sick, Earned, Unpaid, Half-day, Compensatory
 
 Manages open positions and the candidate pipeline.
 
-### Handlers
+### Key handlers
 
-| Handler                | Description                           |
-| ---------------------- | ------------------------------------- |
-| `createJobOpening`     | Create a new job posting              |
-| `getJobOpenings`       | List (with status filter, pagination) |
-| `updateJobOpening`     | Edit opening details or status        |
-| `submitJobApplication` | Public endpoint — no auth required    |
-| `getJobApplications`   | List applications for a posting       |
-| `scheduleInterview`    | Create an interview slot              |
-| `getPublicJobListings` | Career page data — no auth required   |
+| Handler                 | Description                            |
+| ----------------------- | -------------------------------------- |
+| `createJobOpening`      | Create a new job posting               |
+| `getJobOpenings`        | List (with status filter, pagination)  |
+| `updateJobOpening`      | Edit opening details or status         |
+| `deleteJobOpening`      | Remove a posting                       |
+| `applyForJob`           | Public endpoint — no auth required     |
+| `getJobApplications`    | List applications for a posting        |
+| `scheduleInterview`     | Create an interview slot               |
+| `rescheduleInterview`   | Modify interview time                  |
+| `reassignInterviewer`   | Reassign the interviewing panel        |
+| `hireCandidate`         | Mark as hired; optionally create user  |
+| `rejectApplication`     | Mark as rejected with reason           |
+| `updateCandidateStatus` | Move candidate through pipeline stages |
+| `getPublicJobListings`  | Career page data — no auth required    |
+| `getJobOpeningInsights` | Funnel metrics, vacancy fill rates     |
+
+**AI resume scoring:** On application submission, an async BullMQ job is queued. A worker parses the resume PDF via `pdf-parse`, sends content to Ollama for scoring against the job description, and persists `aiScore` (0–100) and `aiNotes` on the `JobApplication`. Applications below a configurable threshold can be auto-rejected.
 
 ---
 
@@ -170,14 +189,13 @@ Manages open positions and the candidate pipeline.
 **Port:** 50057  
 **Proto:** `packages/proto-definitions/src/proto/hrm/hrm.proto`
 
-Covers general HR functions not tied to a specific transaction (attendance, leave, payroll).
+General HR functions not tied to a specific transaction.
 
 ### Capabilities
 
-- **HR Activities** — company events, announcements
-- **Appraisals** — performance reviews, feedback forms
-- **Policies** — upload and distribute company policy documents
-- **Business Rules** — configurable rules engine for HR workflows
+- **HR Activities** — company events, announcements; status lifecycle managed by scheduler.
+- **Appraisals** — performance reviews and feedback forms.
+- **Holidays** — per-org holiday calendar; birthdays and work anniversaries.
 
 ---
 
@@ -200,14 +218,15 @@ Defines salary structures and generates payslips.
 | `salaryEsi`        | Employee State Insurance deduction |
 | `salaryPt`         | Professional Tax deduction         |
 
-### Handlers
+### Key handlers
 
 | Handler                 | Description                               |
 | ----------------------- | ----------------------------------------- |
 | `getSalaryStructure`    | Fetch component breakdown for an employee |
-| `updateSalaryStructure` | HR updates salary components              |
+| `updateSalaryStructure` | HR updates salary components (HR only)    |
 | `generatePayslip`       | Compute and persist a monthly payslip     |
 | `getPayslips`           | List payslips for an employee             |
+| `generateSalarySlip`    | Render and return a PDF payslip           |
 
 ---
 
@@ -216,16 +235,18 @@ Defines salary structures and generates payslips.
 **Port:** 50059  
 **Proto:** `packages/proto-definitions/src/proto/analytics/analytics.proto`
 
-Aggregates data across other services to power dashboard charts and KPI cards.
+Aggregates data to power dashboard charts and KPI cards. Responses are serialised as **binary Protobuf** (`Content-Type: application/x-protobuf`) for performance on large datasets. The API gateway sets `isProto: true` on these Axios requests and the client decodes the `ArrayBuffer`.
 
 ### Analytics domains
 
 | Dashboard   | Metrics                                                     |
 | ----------- | ----------------------------------------------------------- |
 | Workforce   | Headcount by department, turnover rate, new hires           |
-| Attendance  | Daily present/absent/WFH/leave, on-time rate                |
-| Salary      | Median salary, salary bands, cost by department             |
+| Attendance  | Daily present/absent/WFH/leave distribution, on-time rate   |
+| Salary      | Median salary, salary bands, cost-per-department            |
 | Recruitment | Open positions, applications per opening, funnel conversion |
+
+A separate `analyticsRoutesRouter` in the gateway handles superuser-level cross-tenant analytics queries directly via `prismaWithTenant`.
 
 ---
 
@@ -234,19 +255,19 @@ Aggregates data across other services to power dashboard charts and KPI cards.
 **Port:** 50060  
 **Proto:** `packages/proto-definitions/src/proto/notification/notification.proto`
 
-Manages device tokens and dispatches push notifications via Firebase Cloud Messaging (FCM).
+Manages device tokens and dispatches push notifications via Firebase Cloud Messaging.
 
-### Handlers
+### Key handlers
 
-| Handler                | Description                                     |
-| ---------------------- | ----------------------------------------------- |
-| `registerFcmToken`     | Store a device's FCM token                      |
-| `sendPushNotification` | Dispatch FCM message to a user's devices        |
-| `createNotification`   | Persist an in-app notification record           |
-| `getNotifications`     | Fetch in-app notifications for the current user |
-| `markAsRead`           | Clear notification for a user                   |
-
-### FCM token cleanup
+| Handler                 | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| `registerFcmToken`      | Store a device's FCM token                      |
+| `sendPushNotification`  | Dispatch FCM message to a user's devices        |
+| `createNotification`    | Persist an in-app notification record           |
+| `getNotifications`      | Fetch in-app notifications for the current user |
+| `clearNotification`     | Dismiss a single notification                   |
+| `clearAllNotifications` | Dismiss all notifications for a user            |
+| `disablePushNotif`      | Unregister all FCM tokens for a user            |
 
 The scheduler-service runs `cleanupFcmTokens` nightly to remove expired or revoked device tokens.
 
@@ -254,22 +275,30 @@ The scheduler-service runs `cleanupFcmTokens` nightly to remove expired or revok
 
 ## scheduler-service
 
-**Port:** N/A (no gRPC server — workers only)  
+**Port:** N/A — no gRPC server; workers only  
 **Queue:** BullMQ on Redis
 
-Runs background jobs on cron schedules using BullMQ.
+Runs background jobs on cron schedules. Also processes async jobs queued by other services (AI resume scoring, Razorpay webhook side effects, email dispatch).
 
 ### Scheduled jobs
 
-| Job                         | Schedule     | Time                   | Purpose                                                        |
-| --------------------------- | ------------ | ---------------------- | -------------------------------------------------------------- |
-| `updateExpiredHrActivities` | `0 1 * * *`  | 1:00 AM                | Mark past HR events as expired                                 |
-| `updateExpiredJobOpenings`  | `0 1 * * *`  | 1:00 AM                | Close job postings past deadline                               |
-| `updateEmployeeStatus`      | `15 0 * * *` | 12:15 AM               | Transition employees (onboarding → active, resignation → left) |
-| `reconcileAttendance`       | `15 0 * * *` | 12:15 AM               | Auto-mark absent if no check-in recorded                       |
-| `updateLeaveBalance`        | `30 0 1 * *` | 1st of month, 12:30 AM | Reset and accrue monthly leave balance                         |
-| `sendKycReminders`          | `0 9 * * *`  | 9:00 AM                | Email employees who haven't completed KYC                      |
-| `cleanupFcmTokens`          | `0 2 * * *`  | 2:00 AM                | Remove expired push notification device tokens                 |
+| Job                         | Cron schedule | Runs at                | Purpose                                                              |
+| --------------------------- | ------------- | ---------------------- | -------------------------------------------------------------------- |
+| `updateExpiredHrActivities` | `0 1 * * *`   | 1:00 AM daily          | Mark past HR events as expired                                       |
+| `updateExpiredJobOpenings`  | `0 1 * * *`   | 1:00 AM daily          | Close job postings past their application deadline                   |
+| `updateEmployeeStatus`      | `15 0 * * *`  | 12:15 AM daily         | Transition employees: probation → active, pending resignation → left |
+| `reconcileAttendance`       | `15 0 * * *`  | 12:15 AM daily         | Auto-mark `Absent` if no check-in recorded for previous day          |
+| `updateLeaveBalance`        | `30 0 1 * *`  | 1st of month, 12:30 AM | Reset monthly leave quotas; accrue earned leave                      |
+| `sendKycReminders`          | `0 9 * * *`   | 9:00 AM daily          | Email employees who haven't submitted KYC                            |
+| `cleanupFcmTokens`          | `0 2 * * *`   | 2:00 AM daily          | Remove expired or revoked FCM device tokens                          |
+
+### Async (event-driven) jobs
+
+| Job                | Triggered by                      | Purpose                                                  |
+| ------------------ | --------------------------------- | -------------------------------------------------------- |
+| `parseResumeScore` | Job application submitted         | `pdf-parse` → Ollama resume scoring → persist `aiScore`  |
+| `razorpayWebhook`  | Razorpay payment webhook          | Update `subscriptionStatus`, `planExpiresAt` on `Tenant` |
+| `sendEmail`        | KYC reminders, login alerts, etc. | Nodemailer-based email dispatch                          |
 
 See [Background Jobs](Background-Jobs) for queue architecture details.
 
@@ -281,7 +310,8 @@ See [Background Jobs](Background-Jobs) for queue architecture details.
 2. Add `.proto` definitions in `packages/proto-definitions/src/proto/new-service/`.
 3. Run `pnpm proto:gen` to generate TypeScript bindings.
 4. Implement gRPC handlers using `@hrms/grpc-server`.
-5. Register the service in `apps/api-gateway/src/grpc/clients.ts`.
+5. Register the gRPC client in `apps/api-gateway/src/grpc/clients.ts`.
 6. Add REST routes in `apps/api-gateway/src/routes/`.
 7. Add handler functions in `apps/api-gateway/src/handlers/`.
 8. Update all `docker-compose*.yml` files with the new service.
+9. Add the new `*_SERVICE_PORT` environment variable to `.env.example` and Deployment docs.

@@ -1,0 +1,228 @@
+paths:
+  /api/v1/developer/status:
+    get:
+      summary: Get developer mode status
+      description: >
+        Returns whether developer mode is currently active for the authenticated user.
+        Developer mode requires a separate WebAuthn identity verification step beyond
+        normal login, and grants access to live log streaming and historical logs.
+      tags: [Developer Mode]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Developer mode status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      isDeveloper: { type: boolean, example: false }
+        "401":
+          description: Unauthorized
+
+  /api/v1/developer/verify-status:
+    get:
+      summary: Check identity verification status
+      description: >
+        Returns whether the user has completed the WebAuthn identity verification
+        required to unlock developer mode endpoints.
+      tags: [Developer Mode]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Verification status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      verified: { type: boolean, example: false }
+        "401":
+          description: Unauthorized
+
+  /api/v1/developer/verify-identity:
+    post:
+      summary: Initiate identity verification
+      description: >
+        Begins the WebAuthn identity verification flow for developer mode.
+        Returns a challenge that the client must sign with the enrolled passkey.
+        This is a separate verification from the login flow — even authenticated
+        users must re-verify their identity to access developer endpoints.
+      tags: [Developer Mode]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Verification initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    description: Challenge options for the client
+        "401":
+          description: Unauthorized
+        "400":
+          description: No WebAuthn credentials enrolled
+
+  /api/v1/developer/verify-identity/webauthn-options:
+    post:
+      summary: Get WebAuthn options for developer verification
+      description: >
+        Returns `PublicKeyCredentialRequestOptions` to begin the WebAuthn assertion
+        for developer identity verification.
+      tags: [Developer Mode]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: WebAuthn options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    description: PublicKeyCredentialRequestOptions
+        "401":
+          description: Unauthorized
+
+  /api/v1/developer/verify-identity/webauthn-verify:
+    post:
+      summary: Complete WebAuthn verification for developer mode
+      description: >
+        Verifies the WebAuthn assertion and activates developer mode for this session.
+        On success, the user can access `/developer/logs/stream` and `/developer/logs/all`.
+      tags: [Developer Mode]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: AuthenticationResponseJSON from the browser's WebAuthn API
+      responses:
+        "200":
+          description: Developer mode activated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      verified: { type: boolean, example: true }
+        "400":
+          description: Verification failed
+        "401":
+          description: Unauthorized
+
+  /api/v1/developer/logs/stream:
+    get:
+      summary: Stream live application logs
+      description: >
+        Streams live structured application logs as Server-Sent Events (SSE).
+        Each event is a JSON log entry on a `data:` line.
+
+        **Requires developer mode** — the user must have completed WebAuthn identity
+        verification (`/developer/verify-identity/webauthn-verify`) in the current session.
+
+        The stream remains open until the client disconnects. Logs from all running
+        services are multiplexed into a single stream.
+      tags: [Developer Mode]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: SSE stream of log entries
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  Newline-delimited SSE events. Each event is a JSON log object:
+                  `{ level, message, timestamp, service, ...context }`
+              example: |
+                data: {"level":"info","message":"User logged in","timestamp":"2026-05-25T10:00:00Z","service":"auth-service"}
+                data: {"level":"error","message":"gRPC call failed","timestamp":"2026-05-25T10:00:01Z","service":"employee-service"}
+        "401":
+          description: Unauthorized
+        "403":
+          description: Developer mode not activated — identity verification required
+
+  /api/v1/developer/logs/all:
+    get:
+      summary: Get historical application logs
+      description: >
+        Returns a paginated list of historical structured log entries.
+
+        **Requires developer mode** — the user must have completed WebAuthn identity
+        verification in the current session.
+      tags: [Developer Mode]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [error, warn, info, debug]
+          description: Filter by log level
+        - name: service
+          in: query
+          schema: { type: string }
+          description: Filter by service name
+          example: "employee-service"
+      responses:
+        "200":
+          description: Historical log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            level: { type: string, example: "info" }
+                            message: { type: string }
+                            timestamp: { type: string, format: date-time }
+                            service: { type: string }
+                      total: { type: integer }
+                      page: { type: integer }
+                      limit: { type: integer }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Developer mode not activated — identity verification required

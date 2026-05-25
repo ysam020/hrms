@@ -6,9 +6,11 @@
 | -------------------------------- | ---------- | -------------------------------------------- |
 | Node.js                          | ≥ 18       |                                              |
 | pnpm                             | 8.15.6     | Set by `packageManager` field — use corepack |
-| Docker + Docker Compose          | Any recent | For containerized local dev                  |
+| Docker + Docker Compose          | Any recent | For containerised local dev                  |
 | `protoc` + `protoc-gen-ts_proto` | Any recent | For regenerating gRPC types                  |
 | OpenSSL                          | Any        | For generating local SSL certificates        |
+| MongoDB                          | ≥ 6        | Local or Docker (see below)                  |
+| Redis                            | ≥ 7        | Local or Docker (see below)                  |
 
 ### Install pnpm via corepack
 
@@ -48,11 +50,11 @@ Edit `.env` with your values. Required variables:
 
 | Variable                   | Purpose                                                                     |
 | -------------------------- | --------------------------------------------------------------------------- |
-| `MONGO_URI`                | MongoDB connection string                                                   |
+| `MONGO_URI`                | MongoDB connection string for the **master** database                       |
 | `REDIS_HOST`               | Redis hostname                                                              |
 | `REDIS_PORT`               | Redis port (default `6379`)                                                 |
-| `JWT_SECRET_ACCESS`        | Access token signing key                                                    |
-| `JWT_SECRET_REFRESH`       | Refresh token signing key                                                   |
+| `JWT_SECRET_ACCESS`        | Access token signing key (≥ 32 random bytes)                                |
+| `JWT_SECRET_REFRESH`       | Refresh token signing key (≥ 32 random bytes)                               |
 | `GOOGLE_CLIENT_ID`         | Google OAuth client ID                                                      |
 | `GOOGLE_CLIENT_SECRET`     | Google OAuth client secret                                                  |
 | `GOOGLE_CALLBACK_URL`      | OAuth redirect URI (e.g. `https://localhost:9002/api/auth/google/callback`) |
@@ -60,10 +62,18 @@ Edit `.env` with your values. Required variables:
 | `AWS_ACCESS_KEY_ID`        | S3 / Secrets Manager                                                        |
 | `AWS_SECRET_ACCESS_KEY`    | S3 / Secrets Manager                                                        |
 | `AWS_REGION`               | AWS region                                                                  |
-| `CSRF_SECRET`              | CSRF protection secret (random string)                                      |
+| `S3_BUCKET_NAME`           | S3 bucket for file uploads                                                  |
+| `CSRF_SECRET`              | CSRF protection secret (≥ 32 random bytes)                                  |
 | `CLIENT_URL`               | Frontend origin(s), comma-separated                                         |
 | `API_GATEWAY_PORT`         | Gateway port (default `9002`)                                               |
+| `FIELD_ENCRYPTION_KEY`     | AES-256 key for sensitive field encryption                                  |
 | `NODE_ENV`                 | `development` or `production`                                               |
+| `RAZORPAY_KEY_ID`          | Razorpay API key ID                                                         |
+| `RAZORPAY_KEY_SECRET`      | Razorpay API key secret                                                     |
+| `RAZORPAY_WEBHOOK_SECRET`  | Razorpay webhook HMAC secret                                                |
+| `OLLAMA_BASE_URL`          | Ollama server URL for AI features (default `http://localhost:11434`)        |
+
+> **Multi-tenant note:** `MONGO_URI` points to the master database (`hrms-master`). Tenant databases (`hrms-<slug>`) are created automatically the first time a tenant is set up. No manual database creation is needed.
 
 ### 3. Generate Protobuf types
 
@@ -92,7 +102,7 @@ pnpm setup:project   # proto:gen → db:generate → build
 
 ---
 
-## Running in development
+## Running in Development
 
 ```bash
 pnpm dev
@@ -124,7 +134,23 @@ Turborepo starts all services and the frontend concurrently (up to 25 tasks in p
 
 ---
 
-## Command reference
+## First-Time Tenant Setup
+
+After starting the services for the first time:
+
+1. Open `https://localhost:5173` and sign in with Google OAuth.
+2. You will receive a **pending-setup JWT** (no tenant yet).
+3. Follow the org setup wizard:
+   - Enter organisation name, slug, industry, company size.
+   - Complete the Razorpay subscription flow (use test mode for development).
+4. Once the subscription webhook fires (`subscription.activated`), you receive a full JWT.
+5. You're now in your organisation's isolated database (`hrms-<slug>`).
+
+> **Local development with Razorpay:** Use Razorpay test mode keys and set up [ngrok](https://ngrok.com/) or [smee.io](https://smee.io/) to forward webhooks to `https://localhost:9002/api/payment/webhook`.
+
+---
+
+## Command Reference
 
 ```bash
 # Install dependencies
@@ -151,8 +177,8 @@ pnpm proto:gen
 # Prisma: apply schema changes (no migration file)
 pnpm db:push
 
-# Prisma: run migrations
-pnpm db:migrate
+# Prisma: regenerate client after schema change
+pnpm db:generate
 
 # Prisma: open visual data browser
 pnpm db:studio
@@ -194,17 +220,23 @@ See [Deployment](Deployment) for production Docker usage.
 
 ## Troubleshooting
 
-**`protoc: command not found`**
-Install Protocol Buffers: `brew install protobuf` (macOS) or download from the [GitHub releases](https://github.com/protocolbuffers/protobuf/releases).
+**`protoc: command not found`**  
+Install Protocol Buffers: `brew install protobuf` (macOS) or download from [GitHub releases](https://github.com/protocolbuffers/protobuf/releases).
 
-**`ECONNREFUSED` on startup**
+**`ECONNREFUSED` on startup**  
 Make sure MongoDB and Redis are running. Use `docker compose -f docker-compose.local.yml up mongo redis` to start only the infra.
 
-**`SSL certificate error` in browser**
-Accept the self-signed certificate in your browser, or add it to your system's trusted certificates.
+**`SSL certificate error` in browser**  
+Accept the self-signed certificate in your browser, or add `packages/certificates/cert.pem` to your system's trusted certificates.
 
-**Prisma client not found**
+**Prisma client not found**  
 Run `pnpm db:generate` to regenerate the Prisma client after schema changes.
 
-**gRPC connection errors between services**
+**gRPC connection errors between services**  
 Verify that the port environment variables match what each service binds to. All services must be running for the gateway to function.
+
+**Tenant database not created**  
+Tenant databases are created lazily on the first request from a new tenant. If you're seeing "database not found" errors, check that `MONGO_URI` has permission to create new databases, and that `getClientForDb` is being called (check the `dbName` field in the JWT).
+
+**Razorpay webhooks not firing locally**  
+You need a public URL. Use ngrok: `ngrok http 9002` then set `RAZORPAY_WEBHOOK_URL` to the ngrok HTTPS URL + `/api/payment/webhook`.

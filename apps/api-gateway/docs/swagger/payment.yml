@@ -1,0 +1,177 @@
+paths:
+  /api/v1/payment/create-subscription:
+    post:
+      summary: Create a Razorpay subscription
+      description: >
+        Creates a new Razorpay subscription for the authenticated user's organisation.
+        Called during the onboarding wizard after the org is created (pendingSetup users
+        can access this endpoint). On success, returns a Razorpay subscription ID and
+        payment link for the user to complete payment.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId]
+              properties:
+                planId:
+                  type: string
+                  description: Razorpay plan ID to subscribe to
+                  example: "plan_OABcDEfGhIjKlM"
+      responses:
+        "200":
+          description: Subscription created — user must complete payment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      subscriptionId:
+                        { type: string, example: "sub_OABcDEfGhIjKlM" }
+                      shortUrl:
+                        { type: string, example: "https://rzp.io/l/xyz" }
+        "400":
+          description: Invalid plan ID
+        "401":
+          description: Unauthorized
+
+  /api/v1/payment/pending-setup:
+    get:
+      summary: Check subscription activation status
+      description: >
+        Polls whether the Razorpay subscription has been activated (payment confirmed).
+        Called by the onboarding wizard to detect when the webhook has fired.
+        Returns `{ activated: true }` once `subscriptionStatus = "active"`.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Activation status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      activated: { type: boolean, example: false }
+                      subscriptionStatus:
+                        type: string
+                        enum: [active, grace_period, cancelling, expired]
+        "401":
+          description: Unauthorized
+
+  /api/v1/payment/cancel-subscription:
+    post:
+      summary: Cancel subscription
+      description: >
+        Schedules the active Razorpay subscription for cancellation.
+        The subscription transitions to `cancelling` status; access continues until
+        the current billing period ends, at which point it moves to `expired`.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cancellation scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Subscription will be cancelled at period end",
+                    }
+        "400":
+          description: Subscription is not active
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription already expired
+
+  /api/v1/payment/reactivate-subscription:
+    post:
+      summary: Reactivate subscription
+      description: >
+        Reactivates a subscription that is in `cancelling` status before the billing
+        period ends. Moves it back to `active` status.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Subscription reactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Subscription reactivated" }
+        "400":
+          description: Subscription is not in cancelling state
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription already expired
+
+  /api/v1/payment/webhook:
+    post:
+      summary: Razorpay payment webhook
+      description: >
+        Receives payment lifecycle events from Razorpay. Protected by HMAC signature
+        verification using `RAZORPAY_WEBHOOK_SECRET`. This endpoint is mounted
+        **before** the CSRF middleware and `express.json()` so that the raw request
+        body is preserved for signature validation — do not add CSRF or JSON parsing
+        middleware to this route.
+
+        Handled events and their effects on `Tenant.subscriptionStatus`:
+
+        - `subscription.activated` → `active`; sets `planActivatedAt`
+
+        - `subscription.charged` → extends `planExpiresAt`; clears grace period
+
+        - `subscription.payment_failed` → `grace_period` (first failure)
+
+        - `subscription.deactivated` → `expired`
+
+        - `subscription.cancelled` → `cancelling` or `expired` based on timing
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Razorpay webhook payload (raw JSON body)
+      parameters:
+        - in: header
+          name: x-razorpay-signature
+          required: true
+          schema: { type: string }
+          description: HMAC-SHA256 signature of the raw request body
+      responses:
+        "200":
+          description: Webhook acknowledged (processing is async)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean, example: true }
+        "400":
+          description: Invalid signature or malformed payload
