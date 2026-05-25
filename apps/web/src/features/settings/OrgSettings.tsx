@@ -24,6 +24,7 @@ import Alert from "@mui/material/Alert";
 import Chip from "@mui/material/Chip";
 import InputAdornment from "@mui/material/InputAdornment";
 import Dialog from "@mui/material/Dialog";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -732,7 +733,14 @@ function SaveDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      maxWidth="xs"
+      fullWidth
+      slots={{ transition: SlideUpTransition }}
+      transitionDuration={{ enter: 280, exit: 200 }}
+    >
       <DialogTitle sx={{ fontWeight: 600 }}>
         When should changes take effect?
       </DialogTitle>

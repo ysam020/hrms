@@ -20,7 +20,6 @@ import useFetchData from "@web/shared/hooks/useFetchData";
 import { Dropdown } from "primereact/dropdown";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
 import { jobTitles } from "@web/assets/data/jobTitles";
-import { useMemo } from "react";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function valuetext(value) {

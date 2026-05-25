@@ -20,6 +20,22 @@ export { default as PasswordStrength } from "./PasswordStrength";
 export { default as ProfilerOverlay } from "./ProfilerOverlay";
 export { default as ResponsiveImage } from "./ResponsiveImage";
 export { default as SafeApexChart } from "./SafeApexChart";
+export { default as SlideUpTransition } from "./SlideUpTransition";
+export {
+  FadeUp,
+  AnimatedList,
+  AnimatedItem,
+  PageTransition,
+  motion,
+  AnimatePresence,
+  fadeUpVariants,
+  fadeVariants,
+  scaleVariants,
+  staggerContainer,
+  staggerItem,
+  spring,
+  ease,
+} from "./motion";
 export { default as TabsPanel } from "./TabsPanel";
 export { default as ThemedDialog } from "./ThemedDialog";
 export { default as ThemedPaper } from "./ThemedPaper";

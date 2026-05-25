@@ -8,6 +8,7 @@ import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -251,6 +252,8 @@ export default function CompanyInfo() {
         onClose={() => !saving && setEditOpen(false)}
         maxWidth="xs"
         fullWidth
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
       >
         <DialogTitle>Edit Organisation Profile</DialogTitle>
         <DialogContent

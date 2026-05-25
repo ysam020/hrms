@@ -24,6 +24,7 @@ import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import { saveNotifications } from "@web/core/db";
+import { AnimatePresence, motion } from "framer-motion";
 
 function Notifications() {
   const { notifications, loading, setNotifications } =
@@ -286,115 +287,136 @@ function Notifications() {
         </Stack>
       ) : groupedNotifications.length > 0 ? (
         <Stack spacing={1.5}>
-          {groupedNotifications.map(([title, group], index) => {
-            const accent = getGroupAccent(index);
-            return (
-              <Paper
-                key={index}
-                elevation={0}
-                sx={{
-                  borderRadius: 2,
-                  overflow: "hidden",
-                  backgroundColor: theme === "light" ? "#fff" : "#212e35",
-                  border: `1px solid ${
-                    theme === "light" ? "#e5e7eb" : "rgba(255, 255, 255, 0.12)"
-                  }`,
-                  transition: "box-shadow 0.2s ease",
-                  "&:hover": {
-                    boxShadow:
-                      theme === "light"
-                        ? "0 2px 8px rgba(0, 0, 0, 0.08)"
-                        : "0 2px 8px rgba(0, 0, 0, 0.3)",
-                  },
-                }}
-              >
-                {/* Group Header */}
-                <Box
-                  onClick={() => handleExpandToggle(title)}
-                  sx={{
-                    p: 1,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    borderLeft: `3px solid ${
-                      theme === "light" ? accent.light : accent.dark
-                    }`,
-                    borderBottom: expandedGroups[title]
-                      ? `1px solid ${
-                          theme === "light"
-                            ? "#e5e7eb"
-                            : "rgba(255, 255, 255, 0.12)"
-                        }`
-                      : "none",
-                    "&:hover": {
-                      backgroundColor:
-                        theme === "light"
-                          ? accent.bg
-                          : "rgba(255, 255, 255, 0.02)",
-                    },
+          <AnimatePresence initial={false}>
+            {groupedNotifications.map(([title, group], index) => {
+              const accent = getGroupAccent(index);
+              return (
+                <motion.div
+                  key={title}
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{
+                    opacity: 0,
+                    scale: 0.96,
+                    transition: { duration: 0.16 },
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 320,
+                    damping: 26,
+                    delay: index * 0.045,
                   }}
                 >
-                  <Stack direction="row" alignItems="center" spacing={1.5}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{
-                        fontWeight: 500,
-                        fontSize: "0.9375rem",
-                        color: theme === "light" ? "#111827" : "#f9fafb",
-                      }}
-                    >
-                      {title}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 1,
-                        backgroundColor:
-                          theme === "light"
-                            ? accent.bg
-                            : "rgba(255, 255, 255, 0.05)",
-                        color: theme === "light" ? accent.light : accent.dark,
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {group.length}
-                    </Typography>
-                  </Stack>
-                  <IconButton
-                    size="small"
+                  <Paper
+                    elevation={0}
                     sx={{
-                      transition: "transform 0.2s ease",
-                      transform: expandedGroups[title]
-                        ? "rotate(180deg)"
-                        : "rotate(0deg)",
-                      color: theme === "light" ? "#9ca3af" : "#6b7280",
+                      borderRadius: 2,
+                      overflow: "hidden",
+                      backgroundColor: theme === "light" ? "#fff" : "#212e35",
+                      border: `1px solid ${
+                        theme === "light"
+                          ? "#e5e7eb"
+                          : "rgba(255, 255, 255, 0.12)"
+                      }`,
+                      transition: "box-shadow 0.2s ease",
+                      "&:hover": {
+                        boxShadow:
+                          theme === "light"
+                            ? "0 2px 8px rgba(0, 0, 0, 0.08)"
+                            : "0 2px 8px rgba(0, 0, 0, 0.3)",
+                      },
                     }}
                   >
-                    <ExpandMoreIcon sx={{ fontSize: 20 }} />
-                  </IconButton>
-                </Box>
-
-                {/* Notifications in Group */}
-                <Collapse in={expandedGroups[title]} timeout={200}>
-                  <Box sx={{ p: 1.5 }}>
-                    {group.map((item, id) => (
-                      <Box
-                        key={id}
-                        onClick={() => handleNotificationClick(item.title)}
-                        sx={{ cursor: "pointer" }}
+                    {/* Group Header */}
+                    <Box
+                      onClick={() => handleExpandToggle(title)}
+                      sx={{
+                        p: 1,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        borderLeft: `3px solid ${
+                          theme === "light" ? accent.light : accent.dark
+                        }`,
+                        borderBottom: expandedGroups[title]
+                          ? `1px solid ${
+                              theme === "light"
+                                ? "#e5e7eb"
+                                : "rgba(255, 255, 255, 0.12)"
+                            }`
+                          : "none",
+                        "&:hover": {
+                          backgroundColor:
+                            theme === "light"
+                              ? accent.bg
+                              : "rgba(255, 255, 255, 0.02)",
+                        },
+                      }}
+                    >
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            fontWeight: 500,
+                            fontSize: "0.9375rem",
+                            color: theme === "light" ? "#111827" : "#f9fafb",
+                          }}
+                        >
+                          {title}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: 1,
+                            backgroundColor:
+                              theme === "light"
+                                ? accent.bg
+                                : "rgba(255, 255, 255, 0.05)",
+                            color:
+                              theme === "light" ? accent.light : accent.dark,
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {group.length}
+                        </Typography>
+                      </Stack>
+                      <IconButton
+                        size="small"
+                        sx={{
+                          transition: "transform 0.2s ease",
+                          transform: expandedGroups[title]
+                            ? "rotate(180deg)"
+                            : "rotate(0deg)",
+                          color: theme === "light" ? "#9ca3af" : "#6b7280",
+                        }}
                       >
-                        {renderNotificationContent(item)}
+                        <ExpandMoreIcon sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    </Box>
+
+                    {/* Notifications in Group */}
+                    <Collapse in={expandedGroups[title]} timeout={200}>
+                      <Box sx={{ p: 1.5 }}>
+                        {group.map((item, id) => (
+                          <Box
+                            key={id}
+                            onClick={() => handleNotificationClick(item.title)}
+                            sx={{ cursor: "pointer" }}
+                          >
+                            {renderNotificationContent(item)}
+                          </Box>
+                        ))}
                       </Box>
-                    ))}
-                  </Box>
-                </Collapse>
-              </Paper>
-            );
-          })}
+                    </Collapse>
+                  </Paper>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </Stack>
       ) : (
         <Paper

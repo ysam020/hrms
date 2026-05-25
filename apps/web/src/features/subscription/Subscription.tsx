@@ -8,6 +8,7 @@ import Divider from "@mui/material/Divider";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
@@ -619,6 +620,8 @@ export default function Subscription() {
         onClose={() => !cancelling && setCancelOpen(false)}
         maxWidth="xs"
         fullWidth
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
       >
         <DialogTitle>Cancel Subscription?</DialogTitle>
         <DialogContent>

@@ -1,5 +1,6 @@
 import "./App.scss";
 import { useState, useMemo, useEffect, Suspense, lazy, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { flushSync } from "react-dom";
 import DomMagnifier from "@web/shared/components/DomMagnifier";
 import ProfilerOverlay from "@web/shared/components/ProfilerOverlay";
@@ -374,23 +375,38 @@ function App() {
                 aria-live="polite"
                 aria-atomic="true"
               >
-                <Alert
-                  severity={alert.severity}
-                  variant="filled"
-                  onClose={() => setAlert({ ...alert, open: false })}
-                  sx={{
-                    display: alert.open ? "flex" : "none",
-                    position: "fixed",
-                    top: "20px",
-                    right: "20px",
-                    zIndex: 9999,
-                    minWidth: "200px",
-                    maxWidth: "400px",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-                  }}
-                >
-                  {alert.message}
-                </Alert>
+                <AnimatePresence>
+                  {alert.open && (
+                    <motion.div
+                      key={alert.message}
+                      initial={{ opacity: 0, y: -16, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -12, scale: 0.96 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 380,
+                        damping: 26,
+                      }}
+                      style={{
+                        position: "fixed",
+                        top: "20px",
+                        right: "20px",
+                        zIndex: 9999,
+                        minWidth: "200px",
+                        maxWidth: "400px",
+                      }}
+                    >
+                      <Alert
+                        severity={alert.severity}
+                        variant="filled"
+                        onClose={() => setAlert({ ...alert, open: false })}
+                        sx={{ boxShadow: "0 4px 20px rgba(0,0,0,0.25)" }}
+                      >
+                        {alert.message}
+                      </Alert>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               <DomMagnifier enabled={magnifierOn} />

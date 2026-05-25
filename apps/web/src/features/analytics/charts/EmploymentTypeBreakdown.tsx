@@ -4,7 +4,6 @@ import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import LoadingState from "@web/shared/components/LoadingState";
-import { lazy, Suspense } from "react";
 const ReactApexChart = lazy(() => import("react-apexcharts"));
 
 const EmploymentTypeBreakdown = ({ theme }) => {

@@ -16,6 +16,7 @@
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import Dialog from "@mui/material/Dialog";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -149,6 +150,8 @@ export default function OnboardingModals() {
         maxWidth="sm"
         fullWidth
         disableEscapeKeyDown
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle sx={{ pb: 1 }}>
@@ -218,6 +221,8 @@ export default function OnboardingModals() {
         open={hintOpen}
         maxWidth="xs"
         fullWidth
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle>

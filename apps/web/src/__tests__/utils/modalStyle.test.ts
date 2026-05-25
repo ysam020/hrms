@@ -1,16 +1,17 @@
 import { style } from "@web/shared/utils/modalStyle";
 
 describe("modalStyle", () => {
-  it("positions the modal absolutely at 50% center", () => {
-    expect(style.position).toBe("absolute");
-    expect(style.top).toBe("50%");
-    expect(style.left).toBe("50%");
-    expect(style.transform).toBe("translate(-50%,-50%)");
+  it("does NOT contain position/transform properties (centering is handled by CustomModal flex container)", () => {
+    expect((style as any).position).toBeUndefined();
+    expect((style as any).top).toBeUndefined();
+    expect((style as any).left).toBeUndefined();
+    expect((style as any).transform).toBeUndefined();
   });
 
   it("has correct dimensions and overflow", () => {
     expect(style.width).toBe(700);
     expect(style.maxHeight).toBe("95%");
+    expect(style.overflow).toBe("auto");
   });
 
   it("has shadow, border radius, and no outline", () => {

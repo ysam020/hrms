@@ -12,6 +12,7 @@ import TableRow from "@mui/material/TableRow";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Dialog from "@mui/material/Dialog";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -760,6 +761,8 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         maxWidth="xs"
         fullWidth
         disablePortal
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{
           sx: {
             borderRadius: 2,
@@ -837,6 +840,8 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         maxWidth="lg"
         fullWidth
         disablePortal
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{
           sx: {
             borderRadius: 2,
@@ -1010,6 +1015,8 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         onClose={() => setShowDeleteDialog(false)}
         maxWidth="xs"
         disablePortal
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{
           sx: {
             borderRadius: 2,

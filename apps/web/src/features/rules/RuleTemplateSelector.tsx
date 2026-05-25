@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import {
   Dialog,
   DialogTitle,
@@ -104,6 +105,8 @@ const RuleTemplateSelector = ({
       onClose={onClose}
       maxWidth="lg"
       fullWidth
+      slots={{ transition: SlideUpTransition }}
+      transitionDuration={{ enter: 280, exit: 200 }}
       PaperProps={{
         sx: { minHeight: "70vh", maxHeight: "90vh" },
       }}

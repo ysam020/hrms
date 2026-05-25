@@ -10,7 +10,7 @@ import Chip from "@mui/material/Chip";
 import Avatar from "@mui/material/Avatar";
 import Tooltip from "@mui/material/Tooltip";
 import Fab from "@mui/material/Fab";
-import Zoom from "@mui/material/Zoom";
+import { AnimatePresence, motion } from "framer-motion";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import SendIcon from "@mui/icons-material/Send";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -292,326 +292,363 @@ export default function Chatbot() {
   return (
     <>
       {/* ── Floating panel ── */}
-      <Box
-        role="dialog"
-        aria-modal="true"
-        aria-label="HRMS AI Assistant"
-        aria-hidden={!open}
-        sx={{
-          position: "fixed",
-          bottom: 88,
-          right: 24,
-          width: 380,
-          height: 520,
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: 3,
-          border: `1px solid ${c.border}`,
-          bgcolor: c.panelBg,
-          boxShadow: c.panelShadow,
-          overflow: "hidden",
-          transformOrigin: "bottom right",
-          transform: open ? "scale(1)" : "scale(0.85)",
-          opacity: open ? 1 : 0,
-          pointerEvents: open ? "auto" : "none",
-          transition:
-            "transform 0.2s cubic-bezier(0.34,1.56,0.64,1), opacity 0.15s ease",
-          zIndex: 1300,
-        }}
-      >
-        {/* Header */}
-        <Box
-          sx={{
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            px: 2,
-            py: 1.25,
-            bgcolor: c.surfaceBg,
-            borderBottom: `1px solid ${c.border}`,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-            <Avatar sx={{ width: 30, height: 30, bgcolor: c.brand }}>
-              <SmartToyIcon sx={{ fontSize: 17, color: "#fff" }} />
-            </Avatar>
-            <Typography
-              variant="subtitle2"
-              fontWeight={700}
-              sx={{ color: c.text }}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="HRMS AI Assistant"
+            initial={{ opacity: 0, scale: 0.85, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.88, y: 12 }}
+            transition={{
+              type: "spring",
+              stiffness: 340,
+              damping: 26,
+              mass: 0.8,
+            }}
+            style={{
+              position: "fixed",
+              bottom: 88,
+              right: 24,
+              width: 380,
+              height: 520,
+              display: "flex",
+              flexDirection: "column",
+              borderRadius: 12,
+              border: `1px solid ${c.border}`,
+              background: c.panelBg,
+              boxShadow: c.panelShadow,
+              overflow: "hidden",
+              transformOrigin: "bottom right",
+              zIndex: 1300,
+            }}
+          >
+            {/* Header */}
+            <Box
+              sx={{
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                px: 2,
+                py: 1.25,
+                bgcolor: c.surfaceBg,
+                borderBottom: `1px solid ${c.border}`,
+              }}
             >
-              HRMS Assistant
-            </Typography>
-          </Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                <Avatar sx={{ width: 30, height: 30, bgcolor: c.brand }}>
+                  <SmartToyIcon sx={{ fontSize: 17, color: "#fff" }} />
+                </Avatar>
+                <Typography
+                  variant="subtitle2"
+                  fontWeight={700}
+                  sx={{ color: c.text }}
+                >
+                  HRMS Assistant
+                </Typography>
+              </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            {messages.length > 0 && (
-              <Tooltip title="Clear conversation">
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                {messages.length > 0 && (
+                  <Tooltip title="Clear conversation">
+                    <IconButton
+                      size="small"
+                      onClick={clearConversation}
+                      aria-label="Clear conversation"
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 <IconButton
                   size="small"
-                  onClick={clearConversation}
-                  aria-label="Clear conversation"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close assistant"
                 >
-                  <DeleteOutlineIcon fontSize="small" />
+                  <CloseIcon fontSize="small" />
                 </IconButton>
-              </Tooltip>
-            )}
-            <IconButton
-              size="small"
-              onClick={() => setOpen(false)}
-              aria-label="Close assistant"
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        </Box>
+              </Box>
+            </Box>
 
-        {/* Messages */}
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            px: 2,
-            py: 1.5,
-            display: "flex",
-            flexDirection: "column",
-            gap: 1.5,
-          }}
-        >
-          {messages.length === 0 && (
+            {/* Messages */}
             <Box
               sx={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                px: 2,
+                py: 1.5,
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                flex: 1,
                 gap: 1.5,
-                textAlign: "center",
-                px: 1,
               }}
             >
-              <SmartToyIcon
-                sx={{
-                  fontSize: 40,
-                  opacity: 0.7,
-                  color: "#fff",
-                }}
-              />
-
-              <Box>
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                  Hi{user?.first_name ? `, ${user.first_name}` : ""}! How can I
-                  help?
-                </Typography>
-                <Typography variant="caption" sx={{ color: c.subText }}>
-                  Ask about leaves, salary, attendance, or policies.
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 0.75,
-                  justifyContent: "center",
-                }}
-              >
-                {SUGGESTED.map((q) => (
-                  <Chip
-                    key={q}
-                    label={q}
-                    size="small"
-                    variant="outlined"
-                    clickable
-                    onClick={() => sendMessage(q)}
-                    sx={{ fontSize: "0.7rem" }}
+              {messages.length === 0 && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flex: 1,
+                    gap: 1.5,
+                    textAlign: "center",
+                    px: 1,
+                  }}
+                >
+                  <SmartToyIcon
+                    sx={{
+                      fontSize: 40,
+                      opacity: 0.7,
+                      color: "#fff",
+                    }}
                   />
-                ))}
-              </Box>
-            </Box>
-          )}
 
-          {messages.map((msg, i) => (
-            <Box
-              key={i}
-              sx={{
-                display: "flex",
-                flexDirection: msg.role === "user" ? "row-reverse" : "row",
-                alignItems: "flex-start",
-                gap: 1,
-              }}
-            >
-              <Avatar
-                sx={{
-                  width: 24,
-                  height: 24,
-                  flexShrink: 0,
-                  bgcolor:
-                    msg.role === "user"
-                      ? c.primary
-                      : muiTheme.palette.secondary.main,
-                  mt: 0.25,
-                }}
-              >
-                {msg.role === "user" ? (
-                  <AccountCircleIcon sx={{ fontSize: 14, color: "#fff" }} />
-                ) : (
-                  <SmartToyIcon sx={{ fontSize: 14, color: "#fff" }} />
-                )}
-              </Avatar>
-
-              <Paper
-                elevation={0}
-                sx={{
-                  px: 1.5,
-                  py: 1,
-                  maxWidth: "78%",
-                  borderRadius:
-                    msg.role === "user"
-                      ? "12px 3px 12px 12px"
-                      : "3px 12px 12px 12px",
-                  bgcolor: msg.role === "user" ? c.userBubble : c.botBubble,
-                  color:
-                    msg.role === "user"
-                      ? muiTheme.palette.primary.contrastText
-                      : c.text,
-                  border:
-                    msg.role === "assistant" ? `1px solid ${c.border}` : "none",
-                  boxShadow: "none",
-                }}
-              >
-                {msg.role === "assistant" && streaming && msg.content === "" ? (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <CircularProgress size={10} thickness={5} />
+                  <Box>
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight={600}
+                      gutterBottom
+                    >
+                      Hi{user?.first_name ? `, ${user.first_name}` : ""}! How
+                      can I help?
+                    </Typography>
                     <Typography variant="caption" sx={{ color: c.subText }}>
-                      Thinking…
+                      Ask about leaves, salary, attendance, or policies.
                     </Typography>
                   </Box>
-                ) : (
-                  <Typography
-                    variant="body2"
+                  <Box
                     sx={{
-                      whiteSpace: "pre-wrap",
-                      lineHeight: 1.6,
-                      fontSize: "0.8rem",
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 0.75,
+                      justifyContent: "center",
                     }}
                   >
-                    {msg.content}
-                    {msg.role === "assistant" &&
-                      streaming &&
-                      i === messages.length - 1 &&
-                      msg.content !== "" && (
-                        <Box
-                          component="span"
-                          sx={{
-                            display: "inline-block",
-                            width: "2px",
-                            height: "0.9em",
-                            bgcolor: "currentColor",
-                            ml: "2px",
-                            verticalAlign: "text-bottom",
-                            animation: "blink 1s step-end infinite",
-                            "@keyframes blink": {
-                              "0%, 100%": { opacity: 1 },
-                              "50%": { opacity: 0 },
-                            },
-                          }}
-                        />
-                      )}
-                  </Typography>
-                )}
-                {!streaming && (
-                  <Typography
-                    variant="caption"
+                    {SUGGESTED.map((q) => (
+                      <Chip
+                        key={q}
+                        label={q}
+                        size="small"
+                        variant="outlined"
+                        clickable
+                        onClick={() => sendMessage(q)}
+                        sx={{ fontSize: "0.7rem" }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 360,
+                    damping: 28,
+                    mass: 0.7,
+                  }}
+                  style={{
+                    display: "flex",
+                    flexDirection: msg.role === "user" ? "row-reverse" : "row",
+                    alignItems: "flex-start",
+                    gap: 8,
+                  }}
+                >
+                  <Avatar
                     sx={{
-                      display: "block",
+                      width: 24,
+                      height: 24,
+                      flexShrink: 0,
+                      bgcolor:
+                        msg.role === "user"
+                          ? c.primary
+                          : muiTheme.palette.secondary.main,
                       mt: 0.25,
-                      opacity: 0.45,
-                      fontSize: "0.62rem",
-                      textAlign: msg.role === "user" ? "left" : "right",
                     }}
                   >
-                    {formatTime(msg.ts)}
-                  </Typography>
-                )}
-              </Paper>
+                    {msg.role === "user" ? (
+                      <AccountCircleIcon sx={{ fontSize: 14, color: "#fff" }} />
+                    ) : (
+                      <SmartToyIcon sx={{ fontSize: 14, color: "#fff" }} />
+                    )}
+                  </Avatar>
+
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      px: 1.5,
+                      py: 1,
+                      maxWidth: "78%",
+                      borderRadius:
+                        msg.role === "user"
+                          ? "12px 3px 12px 12px"
+                          : "3px 12px 12px 12px",
+                      bgcolor: msg.role === "user" ? c.userBubble : c.botBubble,
+                      color:
+                        msg.role === "user"
+                          ? muiTheme.palette.primary.contrastText
+                          : c.text,
+                      border:
+                        msg.role === "assistant"
+                          ? `1px solid ${c.border}`
+                          : "none",
+                      boxShadow: "none",
+                    }}
+                  >
+                    {msg.role === "assistant" &&
+                    streaming &&
+                    msg.content === "" ? (
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <CircularProgress size={10} thickness={5} />
+                        <Typography variant="caption" sx={{ color: c.subText }}>
+                          Thinking…
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          whiteSpace: "pre-wrap",
+                          lineHeight: 1.6,
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {msg.content}
+                        {msg.role === "assistant" &&
+                          streaming &&
+                          i === messages.length - 1 &&
+                          msg.content !== "" && (
+                            <Box
+                              component="span"
+                              sx={{
+                                display: "inline-block",
+                                width: "2px",
+                                height: "0.9em",
+                                bgcolor: "currentColor",
+                                ml: "2px",
+                                verticalAlign: "text-bottom",
+                                animation: "blink 1s step-end infinite",
+                                "@keyframes blink": {
+                                  "0%, 100%": { opacity: 1 },
+                                  "50%": { opacity: 0 },
+                                },
+                              }}
+                            />
+                          )}
+                      </Typography>
+                    )}
+                    {!streaming && (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          display: "block",
+                          mt: 0.25,
+                          opacity: 0.45,
+                          fontSize: "0.62rem",
+                          textAlign: msg.role === "user" ? "left" : "right",
+                        }}
+                      >
+                        {formatTime(msg.ts)}
+                      </Typography>
+                    )}
+                  </Paper>
+                </motion.div>
+              ))}
+
+              <div ref={bottomRef} />
             </Box>
-          ))}
 
-          <div ref={bottomRef} />
-        </Box>
-
-        {/* Input */}
-        <Box
-          sx={{
-            flexShrink: 0,
-            px: 1.5,
-            py: 1.25,
-            borderTop: `1px solid ${c.border}`,
-            bgcolor: c.surfaceBg,
-          }}
-        >
-          <Box sx={{ display: "flex", gap: 0.75, alignItems: "center" }}>
-            <TextField
-              inputRef={inputRef}
-              fullWidth
-              multiline
-              maxRows={3}
-              size="small"
-              placeholder="Ask about leaves, salary, policies…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={streaming}
-              slotProps={{ htmlInput: { maxLength: 1000 } }}
-              sx={{ "& .MuiInputBase-input": { fontSize: "0.82rem" } }}
-            />
-            <IconButton
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || streaming}
-              size="small"
+            {/* Input */}
+            <Box
               sx={{
-                bgcolor: input.trim() && !streaming ? c.brand : "transparent",
-                color: input.trim() && !streaming ? "#fff" : c.subText,
-                borderRadius: 1.5,
-                transition: "background-color 0.15s ease, color 0.15s ease",
-                "&:hover": {
-                  bgcolor:
-                    input.trim() && !streaming ? c.brandHover : undefined,
-                },
+                flexShrink: 0,
+                px: 1.5,
+                py: 1.25,
+                borderTop: `1px solid ${c.border}`,
+                bgcolor: c.surfaceBg,
               }}
             >
-              {streaming ? (
-                <CircularProgress size={16} thickness={5} />
-              ) : (
-                <SendIcon sx={{ fontSize: 16 }} />
-              )}
-            </IconButton>
-          </Box>
-        </Box>
-      </Box>
+              <Box sx={{ display: "flex", gap: 0.75, alignItems: "center" }}>
+                <TextField
+                  inputRef={inputRef}
+                  fullWidth
+                  multiline
+                  maxRows={3}
+                  size="small"
+                  placeholder="Ask about leaves, salary, policies…"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={streaming}
+                  slotProps={{ htmlInput: { maxLength: 1000 } }}
+                  sx={{ "& .MuiInputBase-input": { fontSize: "0.82rem" } }}
+                />
+                <IconButton
+                  onClick={() => sendMessage()}
+                  disabled={!input.trim() || streaming}
+                  size="small"
+                  sx={{
+                    bgcolor:
+                      input.trim() && !streaming ? c.brand : "transparent",
+                    color: input.trim() && !streaming ? "#fff" : c.subText,
+                    borderRadius: 1.5,
+                    transition: "background-color 0.15s ease, color 0.15s ease",
+                    "&:hover": {
+                      bgcolor:
+                        input.trim() && !streaming ? c.brandHover : undefined,
+                    },
+                  }}
+                >
+                  {streaming ? (
+                    <CircularProgress size={16} thickness={5} />
+                  ) : (
+                    <SendIcon sx={{ fontSize: 16 }} />
+                  )}
+                </IconButton>
+              </Box>
+            </Box>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── FAB ── */}
-      <Zoom in={!open}>
-        <Fab
-          onClick={() => setOpen(true)}
-          aria-label="Open HRMS AI Assistant"
-          sx={{
-            position: "fixed",
-            bottom: 24,
-            right: 24,
-            zIndex: 1300,
-            bgcolor: c.brand,
-            color: "#fff",
-            boxShadow: c.fabShadow,
-            "&:hover": { bgcolor: c.brandHover },
-          }}
-        >
-          <SmartToyIcon sx={{ color: "#fff" }} />
-        </Fab>
-      </Zoom>
+      <AnimatePresence>
+        {!open && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 380, damping: 22 }}
+            style={{
+              position: "fixed",
+              bottom: 24,
+              right: 24,
+              zIndex: 1300,
+            }}
+          >
+            <Fab
+              onClick={() => setOpen(true)}
+              aria-label="Open HRMS AI Assistant"
+              sx={{
+                bgcolor: c.brand,
+                color: "#fff",
+                boxShadow: c.fabShadow,
+                "&:hover": { bgcolor: c.brandHover },
+              }}
+            >
+              <SmartToyIcon sx={{ color: "#fff" }} />
+            </Fab>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

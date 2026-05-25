@@ -72,10 +72,6 @@ function HiringModal(props) {
   });
 
   const modalStyle = {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
     width: { xs: "90%", sm: 520 },
     maxHeight: "90vh",
     overflow: "auto",
