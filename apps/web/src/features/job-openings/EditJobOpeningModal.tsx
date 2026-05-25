@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from "react";
+import { memo, useContext, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
@@ -405,4 +405,4 @@ function EditJobOpeningModal(props) {
   );
 }
 
-export default React.memo(EditJobOpeningModal);
+export default memo(EditJobOpeningModal);

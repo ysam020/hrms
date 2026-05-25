@@ -1,9 +1,10 @@
-import React, {
-  useState,
-  useMemo,
-  useContext,
+import {
+  memo,
   useCallback,
+  useContext,
+  useMemo,
   useRef,
+  useState,
 } from "react";
 import {
   MaterialReactTable,
@@ -773,4 +774,4 @@ function ViewHrActivities({ refreshKey = 0 }) {
   );
 }
 
-export default React.memo(ViewHrActivities);
+export default memo(ViewHrActivities);

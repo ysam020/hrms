@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -19,7 +19,6 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
 import Alert from "@mui/material/Alert";
-import Snackbar from "@mui/material/Snackbar";
 import Tooltip from "@mui/material/Tooltip";
 import Paper from "@mui/material/Paper";
 import TablePagination from "@mui/material/TablePagination";
@@ -46,18 +45,14 @@ import InactiveIcon from "@mui/icons-material/Cancel";
 import DraftIcon from "@mui/icons-material/Schedule";
 import FilterIcon from "@mui/icons-material/FilterList";
 import apiClient from "@web/core/http/axiosConfig";
+import { AlertContext } from "@web/app/providers/AlertContext";
 import { useApiClient } from "@web/shared/hooks/useApiClient";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
-type SnackbarState = {
-  open: boolean;
-  message: string;
-  severity: "error" | "warning" | "info" | "success";
-};
-
 const RuleList = ({ onEditRule, onCreateRule }) => {
   const api = useApiClient();
+  const { setAlert } = useContext(AlertContext);
   // State management
   const [rules, setRules] = useState<any[]>([]);
   const [filteredRules, setFilteredRules] = useState<any[]>([]);
@@ -76,12 +71,6 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [selectedCategoryForCreation, setSelectedCategoryForCreation] =
     useState("attendance");
-
-  const [snackbar, setSnackbar] = useState<SnackbarState>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
 
   // Categories configuration
   const categories = [
@@ -104,7 +93,11 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
       setRules(response.data.data || []);
     } catch (error) {
       console.error("Error loading rules:", error);
-      showSnackbar("Failed to load rules", "error");
+      setAlert({
+        open: true,
+        message: "Failed to load rules",
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -139,17 +132,6 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
     setPage(0);
   };
 
-  const showSnackbar = (
-    message: string,
-    severity: "success" | "error" | "info" | "warning" = "success",
-  ) => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
   const handleCreateVisualRule = () => {
     setShowCategoryDialog(true);
   };
@@ -177,16 +159,21 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
 
     try {
       await apiClient.delete(API_ENDPOINTS.DELETE_RULE(ruleToDelete._id));
-      showSnackbar("Rule deleted successfully");
+      setAlert({
+        open: true,
+        message: "Rule deleted successfully",
+        severity: "success",
+      });
       loadRules();
       setShowDeleteDialog(false);
       setRuleToDelete(null);
     } catch (error) {
       console.error("Error deleting rule:", error);
-      showSnackbar(
-        error.response?.data?.message || "Failed to delete rule",
-        "error",
-      );
+      setAlert({
+        open: true,
+        message: error.response?.data?.message || "Failed to delete rule",
+        severity: "error",
+      });
     }
   };
 
@@ -200,9 +187,11 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
       await apiClient.patch(API_ENDPOINTS.TOGGLE_RULE_STATUS(rule._id), {
         status: newStatus,
       });
-      showSnackbar(
-        `Rule ${newStatus === "active" ? "activated" : "deactivated"} successfully`,
-      );
+      setAlert({
+        open: true,
+        message: `Rule ${newStatus === "active" ? "activated" : "deactivated"} successfully`,
+        severity: "success",
+      });
     } catch (error) {
       // Revert on failure
       setRules((prev) =>
@@ -211,10 +200,12 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         ),
       );
       console.error("Error toggling rule status:", error);
-      showSnackbar(
-        error.response?.data?.message || "Failed to update rule status",
-        "error",
-      );
+      setAlert({
+        open: true,
+        message:
+          error.response?.data?.message || "Failed to update rule status",
+        severity: "error",
+      });
     }
   };
 
@@ -252,13 +243,17 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         testData: parsedTestData,
       });
       setTestResult(response.data.data);
-      showSnackbar("Rule test completed");
+      setAlert({
+        open: true,
+        message: "Rule test completed",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error testing rule:", error);
       setTestResult({
         error: error.response?.data?.message || error.message || "Test failed",
       });
-      showSnackbar("Test failed", "error");
+      setAlert({ open: true, message: "Test failed", severity: "error" });
     }
   };
 
@@ -280,7 +275,11 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
     link.download = `rules-all-${new Date().toISOString().split("T")[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    showSnackbar("Rules exported successfully");
+    setAlert({
+      open: true,
+      message: "Rules exported successfully",
+      severity: "success",
+    });
   };
 
   const getStatusIcon = (status) => {
@@ -1038,23 +1037,6 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: "100%" }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

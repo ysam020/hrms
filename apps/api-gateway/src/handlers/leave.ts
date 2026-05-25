@@ -6,14 +6,7 @@ import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
-
-async function isSuperUser(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
-  return user?.isSuperUser === true;
-}
+import { isSuperUser } from "../utils/user";
 
 export async function addLeave(req: Request, res: Response) {
   const { user } = req as AuthRequest;

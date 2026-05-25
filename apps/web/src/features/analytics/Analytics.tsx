@@ -1,4 +1,4 @@
-import React, { useContext, lazy, useMemo } from "react";
+import { lazy, memo, useContext, useMemo } from "react";
 import Box from "@mui/material/Box";
 import TrendingUp from "@mui/icons-material/TrendingUp";
 import People from "@mui/icons-material/People";
@@ -160,4 +160,4 @@ function Analytics() {
   );
 }
 
-export default React.memo(Analytics);
+export default memo(Analytics);

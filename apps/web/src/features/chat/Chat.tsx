@@ -1,10 +1,13 @@
-import React, {
+import {
+  Suspense,
+  lazy,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
-  useCallback,
-  useMemo,
+  type ComponentType,
 } from "react";
 import Avatar from "@mui/material/Avatar";
 import Typography from "@mui/material/Typography";
@@ -26,7 +29,7 @@ import MenuItem from "@mui/material/MenuItem";
 import _Linkify from "react-linkify";
 // react-linkify is an old CJS alpha; esbuild may expose the module namespace
 // object instead of .default — normalise across both interop modes.
-const Linkify: React.ComponentType<any> = (_Linkify as any).default ?? _Linkify;
+const Linkify: ComponentType<any> = (_Linkify as any).default ?? _Linkify;
 import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -38,32 +41,26 @@ import "../../styles/chat.scss";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 // Lazy-loaded MUI icons
-const SendIcon = React.lazy(() => import("@mui/icons-material/Send"));
-const AttachFileIcon = React.lazy(
-  () => import("@mui/icons-material/AttachFile"),
-);
-const SearchIcon = React.lazy(() => import("@mui/icons-material/Search"));
-const CloseIcon = React.lazy(() => import("@mui/icons-material/Close"));
-const ReplyIcon = React.lazy(() => import("@mui/icons-material/Reply"));
-const InsertDriveFileIcon = React.lazy(
+const SendIcon = lazy(() => import("@mui/icons-material/Send"));
+const AttachFileIcon = lazy(() => import("@mui/icons-material/AttachFile"));
+const SearchIcon = lazy(() => import("@mui/icons-material/Search"));
+const CloseIcon = lazy(() => import("@mui/icons-material/Close"));
+const ReplyIcon = lazy(() => import("@mui/icons-material/Reply"));
+const InsertDriveFileIcon = lazy(
   () => import("@mui/icons-material/InsertDriveFile"),
 );
-const DoneAllIcon = React.lazy(() => import("@mui/icons-material/DoneAll"));
-const DoneIcon = React.lazy(() => import("@mui/icons-material/Done"));
-const ArrowBackIcon = React.lazy(() => import("@mui/icons-material/ArrowBack"));
-const DeleteIcon = React.lazy(() => import("@mui/icons-material/Delete"));
-const MoreVertIcon = React.lazy(() => import("@mui/icons-material/MoreVert"));
-const EmojiEmotionsIcon = React.lazy(
+const DoneAllIcon = lazy(() => import("@mui/icons-material/DoneAll"));
+const DoneIcon = lazy(() => import("@mui/icons-material/Done"));
+const ArrowBackIcon = lazy(() => import("@mui/icons-material/ArrowBack"));
+const DeleteIcon = lazy(() => import("@mui/icons-material/Delete"));
+const MoreVertIcon = lazy(() => import("@mui/icons-material/MoreVert"));
+const EmojiEmotionsIcon = lazy(
   () => import("@mui/icons-material/EmojiEmotions"),
 );
-const PictureAsPdfIcon = React.lazy(
-  () => import("@mui/icons-material/PictureAsPdf"),
-);
-const TableChartIcon = React.lazy(
-  () => import("@mui/icons-material/TableChart"),
-);
-const ArticleIcon = React.lazy(() => import("@mui/icons-material/Article"));
-const VideoFileIcon = React.lazy(() => import("@mui/icons-material/VideoFile"));
+const PictureAsPdfIcon = lazy(() => import("@mui/icons-material/PictureAsPdf"));
+const TableChartIcon = lazy(() => import("@mui/icons-material/TableChart"));
+const ArticleIcon = lazy(() => import("@mui/icons-material/Article"));
+const VideoFileIcon = lazy(() => import("@mui/icons-material/VideoFile"));
 
 function getOtherParticipant(room, myUserId) {
   const otherId = room.participants?.find((p) => p !== myUserId);
@@ -119,38 +116,38 @@ function FileTypeIcon({
 }) {
   if (!mime)
     return (
-      <React.Suspense fallback={null}>
+      <Suspense fallback={null}>
         <InsertDriveFileIcon fontSize={size} />
-      </React.Suspense>
+      </Suspense>
     );
   if (mime === "application/pdf")
     return (
-      <React.Suspense fallback={null}>
+      <Suspense fallback={null}>
         <PictureAsPdfIcon fontSize={size} sx={{ color: "#e53935" }} />
-      </React.Suspense>
+      </Suspense>
     );
   if (mime.includes("sheet") || mime.includes("excel") || mime === "text/csv")
     return (
-      <React.Suspense fallback={null}>
+      <Suspense fallback={null}>
         <TableChartIcon fontSize={size} sx={{ color: "#2e7d32" }} />
-      </React.Suspense>
+      </Suspense>
     );
   if (mime.includes("word") || mime.includes("document"))
     return (
-      <React.Suspense fallback={null}>
+      <Suspense fallback={null}>
         <ArticleIcon fontSize={size} sx={{ color: "#1565c0" }} />
-      </React.Suspense>
+      </Suspense>
     );
   if (mime.startsWith("video/"))
     return (
-      <React.Suspense fallback={null}>
+      <Suspense fallback={null}>
         <VideoFileIcon fontSize={size} sx={{ color: "#6a1b9a" }} />
-      </React.Suspense>
+      </Suspense>
     );
   return (
-    <React.Suspense fallback={null}>
+    <Suspense fallback={null}>
       <InsertDriveFileIcon fontSize={size} />
-    </React.Suspense>
+    </Suspense>
   );
 }
 
@@ -406,7 +403,7 @@ function MessageBubble({
               {formatTime(msg.createdAt)}
             </Typography>
             {isMine && (
-              <React.Suspense fallback={null}>
+              <Suspense fallback={null}>
                 {isRead ? (
                   <DoneAllIcon
                     sx={{ fontSize: 14, ml: 0.25, color: "#53bdeb" }}
@@ -414,7 +411,7 @@ function MessageBubble({
                 ) : (
                   <DoneIcon sx={{ fontSize: 14, ml: 0.25 }} />
                 )}
-              </React.Suspense>
+              </Suspense>
             )}
           </div>
         </div>
@@ -428,9 +425,9 @@ function MessageBubble({
             onClick={() => onReply(msg)}
             title="Reply"
           >
-            <React.Suspense fallback={null}>
+            <Suspense fallback={null}>
               <ReplyIcon sx={{ fontSize: 16 }} />
-            </React.Suspense>
+            </Suspense>
           </div>
           {isMine && (
             <div
@@ -438,9 +435,9 @@ function MessageBubble({
               onClick={() => onDelete(msg)}
               title="Delete"
             >
-              <React.Suspense fallback={null}>
+              <Suspense fallback={null}>
                 <DeleteIcon sx={{ fontSize: 16 }} />
-              </React.Suspense>
+              </Suspense>
             </div>
           )}
         </div>
@@ -785,9 +782,9 @@ function Chat() {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <React.Suspense fallback={null}>
+                  <Suspense fallback={null}>
                     <SearchIcon fontSize="small" />
-                  </React.Suspense>
+                  </Suspense>
                 </InputAdornment>
               ),
               endAdornment: searching ? (
@@ -880,9 +877,9 @@ function Chat() {
                     setActiveRoomId(null);
                   }}
                 >
-                  <React.Suspense fallback={null}>
+                  <Suspense fallback={null}>
                     <ArrowBackIcon fontSize="small" />
-                  </React.Suspense>
+                  </Suspense>
                 </IconButton>
                 <Avatar sx={{ width: 36, height: 36, fontSize: 14, mr: 1 }}>
                   {otherUser?.[0]?.toUpperCase()}
@@ -900,9 +897,9 @@ function Chat() {
                   size="small"
                   onClick={(e) => setHeaderMenuAnchor(e.currentTarget)}
                 >
-                  <React.Suspense fallback={null}>
+                  <Suspense fallback={null}>
                     <MoreVertIcon fontSize="small" />
-                  </React.Suspense>
+                  </Suspense>
                 </IconButton>
                 <Menu
                   anchorEl={headerMenuAnchor}
@@ -916,9 +913,9 @@ function Chat() {
                       setDeleteConvConfirm(true);
                     }}
                   >
-                    <React.Suspense fallback={null}>
+                    <Suspense fallback={null}>
                       <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                    </React.Suspense>
+                    </Suspense>
                     Delete Chat
                   </MenuItem>
                 </Menu>
@@ -997,9 +994,9 @@ function Chat() {
                   </Typography>
                 </div>
                 <IconButton size="small" onClick={() => setReplyTo(null)}>
-                  <React.Suspense fallback={null}>
+                  <Suspense fallback={null}>
                     <CloseIcon fontSize="small" />
-                  </React.Suspense>
+                  </Suspense>
                 </IconButton>
               </div>
             )}
@@ -1022,13 +1019,13 @@ function Chat() {
                     size="small"
                     className="chat-attach-btn"
                   >
-                    <React.Suspense fallback={null}>
+                    <Suspense fallback={null}>
                       {uploading ? (
                         <CircularProgress size={18} />
                       ) : (
                         <AttachFileIcon fontSize="small" />
                       )}
-                    </React.Suspense>
+                    </Suspense>
                   </IconButton>
                 </span>
               </Tooltip>
@@ -1041,9 +1038,9 @@ function Chat() {
                     size="small"
                     className="chat-attach-btn"
                   >
-                    <React.Suspense fallback={null}>
+                    <Suspense fallback={null}>
                       <EmojiEmotionsIcon fontSize="small" />
-                    </React.Suspense>
+                    </Suspense>
                   </IconButton>
                 </Tooltip>
                 {showEmojiPicker && (
@@ -1083,9 +1080,9 @@ function Chat() {
                     color="primary"
                     className="chat-send-btn"
                   >
-                    <React.Suspense fallback={null}>
+                    <Suspense fallback={null}>
                       <SendIcon fontSize="small" />
-                    </React.Suspense>
+                    </Suspense>
                   </IconButton>
                 </span>
               </Tooltip>
@@ -1111,9 +1108,9 @@ function Chat() {
               zIndex: 1,
             }}
           >
-            <React.Suspense fallback={null}>
+            <Suspense fallback={null}>
               <CloseIcon />
-            </React.Suspense>
+            </Suspense>
           </IconButton>
           {lightboxUrl && (
             <img

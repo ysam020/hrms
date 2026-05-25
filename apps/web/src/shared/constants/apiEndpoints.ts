@@ -40,8 +40,8 @@ const ATTENDANCE = {
     page: number,
     limit: number,
   ) => `/get-all-attendances/${year}/${month}?page=${page}&limit=${limit}`,
-  GET_EMPLOYEE_ATTENDANCE: (month: number, year: number) =>
-    `/get-attendances/${month}/${year}`,
+  GET_EMPLOYEE_ATTENDANCE: (year: number, month: number) =>
+    `/get-attendances/${year}/${month}`,
 };
 
 const LEAVE = {
@@ -195,6 +195,21 @@ const ORG_SETTINGS = {
   CANCEL_PENDING_ORG_SETTINGS: (id: string) => `/tenant-settings/pending/${id}`,
 };
 
+const PAYMENT = {
+  CREATE_SUBSCRIPTION: "/payment/create-subscription",
+  CANCEL_SUBSCRIPTION: "/payment/cancel-subscription",
+  REACTIVATE_SUBSCRIPTION: "/payment/reactivate-subscription",
+  PENDING_SETUP: "/payment/pending-setup",
+};
+
+const TENANT = {
+  ORG_PROFILE: "/tenants/org-profile",
+  COMPLETE_PENDING_SETUP: "/tenants/complete-pending-setup",
+  COMPLETE_ORG_SETUP: "/tenants/complete-org-setup",
+  SELECT_TENANT: "/tenants/select",
+  MY_TENANT: "/tenants/me",
+};
+
 export const API_ENDPOINTS = {
   ...NOTIFICATIONS,
   ...CHAT,
@@ -217,4 +232,6 @@ export const API_ENDPOINTS = {
   ...AI_INSIGHTS,
   ...DEVELOPER,
   ...ORG_SETTINGS,
+  ...PAYMENT,
+  ...TENANT,
 };

@@ -104,7 +104,7 @@ export function DashboardProvider({
           kycInsightsRes,
           birthdaysAnniversariesRes,
         ] = await Promise.allSettled([
-          apiClient.get(API_ENDPOINTS.GET_EMPLOYEE_ATTENDANCE(month, year), {
+          apiClient.get(API_ENDPOINTS.GET_EMPLOYEE_ATTENDANCE(year, month), {
             signal,
           }),
           apiClient.get(

@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from "react";
+import { memo, useContext, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
@@ -149,4 +149,4 @@ function EditHrActivityModal(props) {
   );
 }
 
-export default React.memo(EditHrActivityModal);
+export default memo(EditHrActivityModal);

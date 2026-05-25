@@ -1,4 +1,4 @@
-import * as React from "react";
+import { memo } from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import useTheme from "@mui/material/styles/useTheme";
@@ -44,4 +44,4 @@ function NotificationDrawer(props) {
   );
 }
 
-export default React.memo(NotificationDrawer);
+export default memo(NotificationDrawer);

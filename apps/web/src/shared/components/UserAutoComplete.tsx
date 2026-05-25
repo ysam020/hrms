@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { memo, useState } from "react";
 import { AutoComplete } from "primereact/autocomplete";
 import apiClient from "@web/core/http/axiosConfig";
 
@@ -62,4 +62,4 @@ function UserAutoComplete(props: {
   );
 }
 
-export default React.memo(UserAutoComplete);
+export default memo(UserAutoComplete);

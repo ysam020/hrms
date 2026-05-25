@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { memo, useContext } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
@@ -157,4 +157,4 @@ function RejectModal(props) {
   );
 }
 
-export default React.memo(RejectModal);
+export default memo(RejectModal);

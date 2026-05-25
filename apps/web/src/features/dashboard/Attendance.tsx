@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { memo, useMemo } from "react";
 import Grid from "@mui/material/Grid2";
 import Skeleton from "@mui/material/Skeleton";
 import Box from "@mui/material/Box";
@@ -194,4 +194,4 @@ function Attendance() {
   );
 }
 
-export default React.memo(Attendance);
+export default memo(Attendance);

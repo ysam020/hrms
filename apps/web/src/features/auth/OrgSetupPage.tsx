@@ -1,9 +1,10 @@
-import React, {
+import {
   useState,
   useContext,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
 } from "react";
 import Grid from "@mui/material/Grid2";
 import Box from "@mui/material/Box";
@@ -35,6 +36,7 @@ import WorkIcon from "@mui/icons-material/Work";
 import { alpha } from "@mui/material/styles";
 import { useNavigate, useLocation } from "react-router-dom";
 import apiClient, { setAccessToken } from "@web/core/http/axiosConfig";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -171,20 +173,20 @@ export default function OrgSetupPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [fetching, setFetching] = useState(true);
 
-  const orgNameRef = React.useRef(orgName);
-  const industryRef = React.useRef(industry);
-  const companySizeRef = React.useRef(companySize);
-  const billingRef = React.useRef(billing);
-  React.useEffect(() => {
+  const orgNameRef = useRef(orgName);
+  const industryRef = useRef(industry);
+  const companySizeRef = useRef(companySize);
+  const billingRef = useRef(billing);
+  useEffect(() => {
     orgNameRef.current = orgName;
   }, [orgName]);
-  React.useEffect(() => {
+  useEffect(() => {
     industryRef.current = industry;
   }, [industry]);
-  React.useEffect(() => {
+  useEffect(() => {
     companySizeRef.current = companySize;
   }, [companySize]);
-  React.useEffect(() => {
+  useEffect(() => {
     billingRef.current = billing;
   }, [billing]);
 
@@ -206,7 +208,7 @@ export default function OrgSetupPage() {
 
         try {
           const form = JSON.parse(raw) as PendingOrgForm;
-          const setupRes = await apiClient.get("/payment/pending-setup");
+          const setupRes = await apiClient.get(API_ENDPOINTS.PENDING_SETUP);
           if (!setupRes.data?.data?.hasPending) {
             localStorage.removeItem(PENDING_FORM_KEY);
             return;
@@ -214,7 +216,7 @@ export default function OrgSetupPage() {
 
           setResuming(true);
           const createRes = await apiClient.post(
-            "/tenants/complete-pending-setup",
+            API_ENDPOINTS.COMPLETE_PENDING_SETUP,
             {
               name: form.orgName,
               ...(form.industry && { industry: form.industry }),
@@ -246,7 +248,7 @@ export default function OrgSetupPage() {
   }, [setAlert]);
 
   const finishSetup = useCallback(async () => {
-    const res = await apiClient.get("/profile");
+    const res = await apiClient.get(API_ENDPOINTS.GET_PROFILE);
     if (res.data?.success) {
       setUser(res.data.data.user);
       navigate("/", { replace: true });
@@ -255,7 +257,7 @@ export default function OrgSetupPage() {
 
   const handleCompleteOrgSetup = useCallback(async () => {
     try {
-      const res = await apiClient.post("/tenants/complete-org-setup");
+      const res = await apiClient.post(API_ENDPOINTS.COMPLETE_ORG_SETUP);
       if (res.data?.success && res.data.data?.accessToken) {
         setAccessToken(res.data.data.accessToken);
       }
@@ -278,7 +280,7 @@ export default function OrgSetupPage() {
         return;
       }
 
-      const subRes = await apiClient.post("/payment/create-subscription", {
+      const subRes = await apiClient.post(API_ENDPOINTS.CREATE_SUBSCRIPTION, {
         billing,
       });
       if (!subRes.data?.success) {
@@ -382,7 +384,9 @@ export default function OrgSetupPage() {
   const handleSelectTenant = async (tenantId: string) => {
     setLoading(true);
     try {
-      const res = await apiClient.post("/tenants/select", { tenantId });
+      const res = await apiClient.post(API_ENDPOINTS.SELECT_TENANT, {
+        tenantId,
+      });
       if (res.data?.success) {
         setAccessToken(res.data.data.accessToken);
         await finishSetup();
@@ -930,7 +934,7 @@ export default function OrgSetupPage() {
                   onClick={async () => {
                     setLoading(true);
                     try {
-                      await apiClient.put("/tenants/org-profile", {
+                      await apiClient.put(API_ENDPOINTS.ORG_PROFILE, {
                         ...(helpPhone && { helpPhone }),
                         ...(helpEmail && { helpEmail }),
                         ...(officeAddress && { officeAddress }),

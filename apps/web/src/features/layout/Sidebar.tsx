@@ -1,10 +1,12 @@
-import React, {
+import {
+  Suspense,
+  lazy,
+  memo,
   useContext,
-  useMemo,
   useEffect,
+  useMemo,
   useRef,
   useState,
-  Suspense,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "../../styles/sidebar.scss";
@@ -17,22 +19,20 @@ import Typography from "@mui/material/Typography";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
 
-const SpaceDashboardIcon = React.lazy(
+const SpaceDashboardIcon = lazy(
   () => import("@mui/icons-material/SpaceDashboard"),
 );
-const LiveHelpIcon = React.lazy(() => import("@mui/icons-material/LiveHelp"));
-const CalendarMonthIcon = React.lazy(
+const LiveHelpIcon = lazy(() => import("@mui/icons-material/LiveHelp"));
+const CalendarMonthIcon = lazy(
   () => import("@mui/icons-material/CalendarMonth"),
 );
-const SettingsIcon = React.lazy(() => import("@mui/icons-material/Settings"));
-const EqualizerIcon = React.lazy(() => import("@mui/icons-material/Equalizer"));
-const AccountTreeIcon = React.lazy(
-  () => import("@mui/icons-material/AccountTree"),
-);
-const ChecklistIcon = React.lazy(() => import("@mui/icons-material/Checklist"));
-const ForumIcon = React.lazy(() => import("@mui/icons-material/Forum"));
-const PolicyIcon = React.lazy(() => import("@mui/icons-material/Policy"));
-const TuneIcon = React.lazy(() => import("@mui/icons-material/Tune"));
+const SettingsIcon = lazy(() => import("@mui/icons-material/Settings"));
+const EqualizerIcon = lazy(() => import("@mui/icons-material/Equalizer"));
+const AccountTreeIcon = lazy(() => import("@mui/icons-material/AccountTree"));
+const ChecklistIcon = lazy(() => import("@mui/icons-material/Checklist"));
+const ForumIcon = lazy(() => import("@mui/icons-material/Forum"));
+const PolicyIcon = lazy(() => import("@mui/icons-material/Policy"));
+const TuneIcon = lazy(() => import("@mui/icons-material/Tune"));
 
 function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const navigate = useNavigate();
@@ -163,4 +163,4 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   );
 }
 
-export default React.memo(Sidebar);
+export default memo(Sidebar);

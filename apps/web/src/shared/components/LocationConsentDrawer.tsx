@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from "react";
+import { memo, useContext, useEffect, useState } from "react";
 import Drawer from "@mui/material/Drawer";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -452,4 +452,4 @@ function LocationConsentDrawer({
   );
 }
 
-export default React.memo(LocationConsentDrawer);
+export default memo(LocationConsentDrawer);

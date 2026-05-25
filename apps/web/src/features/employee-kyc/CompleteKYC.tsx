@@ -1,4 +1,4 @@
-import React, { useRef, useContext, useEffect } from "react";
+import { useRef, useContext, useEffect, memo } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
@@ -43,6 +43,15 @@ function CompleteKYC(props) {
   });
 
   const { setAlert } = useContext(AlertContext);
+
+  const onFileUploaded = (uploaded: boolean) => {
+    if (uploaded)
+      setAlert({
+        open: true,
+        message: "File uploaded successfully!",
+        severity: "success",
+      });
+  };
 
   const formik = useFormik({
     initialValues: {
@@ -175,7 +184,7 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.employeePhoto = el)
                       }
                       accept="image/*"
-                      setFileSnackbar={() => {}}
+                      setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       folderName="employee_kyc"
                       username={username || user.username}
@@ -419,7 +428,7 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.aadharPhotoFront = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={() => {}}
+                      setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
                     />
@@ -434,7 +443,7 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.aadharPhotoBack = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={() => {}}
+                      setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
                     />
@@ -449,7 +458,7 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.panPhoto = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={() => {}}
+                      setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
                     />
@@ -464,7 +473,7 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.educationCertificates = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={() => {}}
+                      setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       inputProps={{ multiple: true }}
                       username={username || user.username}
@@ -480,7 +489,7 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.experienceCertificate = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={() => {}}
+                      setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
                     />
@@ -495,7 +504,7 @@ function CompleteKYC(props) {
                         (fileUploadRefs.current.electricityBill = el)
                       }
                       accept="image/*,application/pdf"
-                      setFileSnackbar={() => {}}
+                      setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
                     />
@@ -568,4 +577,4 @@ function CompleteKYC(props) {
   );
 }
 
-export default React.memo(CompleteKYC);
+export default memo(CompleteKYC);

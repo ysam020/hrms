@@ -1,4 +1,14 @@
-import * as React from "react";
+import {
+  type ReactNode,
+  Suspense,
+  createElement,
+  isValidElement,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
@@ -28,7 +38,7 @@ function CustomTabPanel({
   index,
   ...other
 }: {
-  children?: React.ReactNode;
+  children?: ReactNode;
   value: number;
   index: number;
   [key: string]: any;
@@ -56,16 +66,16 @@ function a11yProps(index: number) {
 function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme } = React.useContext(ThemeContext);
+  const { theme } = useContext(ThemeContext);
 
-  const slugs = React.useMemo(
+  const slugs = useMemo(
     () =>
       tabData.map((tab, i) => tab.slug || labelToSlug(tab.label) || String(i)),
     [tabData],
   );
 
   // Derive active tab index from URL when basePath is provided
-  const urlValue = React.useMemo(() => {
+  const urlValue = useMemo(() => {
     if (!basePath) return null;
     const baseDepth = basePath
       .replace(/^\//, "")
@@ -78,7 +88,7 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
     return index >= 0 ? index : 0;
   }, [basePath, location.pathname, slugs]);
 
-  const [localValue, setLocalValue] = React.useState(() =>
+  const [localValue, setLocalValue] = useState(() =>
     basePath ? 0 : Number(localStorage.getItem(tabKey)) || 0,
   );
 
@@ -86,7 +96,7 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
 
   // Redirect to default tab if URL is at base or has unknown slug
   // Uses localStorage to restore last visited tab
-  React.useEffect(() => {
+  useEffect(() => {
     if (!basePath || slugs.length === 0) return;
     const baseDepth = basePath
       .replace(/^\//, "")
@@ -150,7 +160,7 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
       <Box>
         {tabData.map((tab, index) => (
           <CustomTabPanel value={value} index={index} key={index}>
-            <React.Suspense
+            <Suspense
               fallback={
                 <Box
                   sx={{
@@ -165,11 +175,11 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
               }
             >
               <ErrorBoundary fallback={<ErrorFallback />}>
-                {React.isValidElement(tab.component)
+                {isValidElement(tab.component)
                   ? tab.component
-                  : React.createElement(tab.component)}
+                  : createElement(tab.component)}
               </ErrorBoundary>
-            </React.Suspense>
+            </Suspense>
           </CustomTabPanel>
         ))}
       </Box>
@@ -177,4 +187,4 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
   );
 }
 
-export default React.memo(TabsPanel);
+export default memo(TabsPanel);

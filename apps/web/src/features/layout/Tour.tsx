@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { memo, useMemo } from "react";
 import Joyride, { STATUS } from "react-joyride";
 import { tourSteps } from "@web/assets/data/tourSteps";
 
@@ -54,4 +54,4 @@ function Tour({ run, setRun }) {
   );
 }
 
-export default React.memo(Tour);
+export default memo(Tour);

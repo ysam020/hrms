@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useContext } from "react";
+import { memo, useCallback, useContext, useMemo, useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
 import CreateTeamModal from "./CreateTeamModal";
 import apiClient from "@web/core/http/axiosConfig";
@@ -518,4 +518,4 @@ function Teams() {
   );
 }
 
-export default React.memo(Teams);
+export default memo(Teams);

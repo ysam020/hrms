@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
+import { handleError } from "../utils/handleError";
 
 export async function getEmploymentTypeBreakdown(_req: Request, res: Response) {
   try {
@@ -10,7 +11,10 @@ export async function getEmploymentTypeBreakdown(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:employment-type`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Employment type breakdown retrieved",
+        data: cached,
+      });
 
     const where: any = { employeeStatus: "Active" };
     const [total, wfh] = await Promise.all([
@@ -23,12 +27,13 @@ export async function getEmploymentTypeBreakdown(_req: Request, res: Response) {
       totalEmployees: total,
     };
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-employment-type-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employment type breakdown retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-employment-type-breakdown error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -41,7 +46,10 @@ export async function getEmployeeStatusDistribution(
     const cacheKey = `t:${tenantId}:analytics:employee-status`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Employee status distribution retrieved",
+        data: cached,
+      });
 
     const groups = await prisma.user.groupBy({
       by: ["employeeStatus"],
@@ -54,12 +62,13 @@ export async function getEmployeeStatusDistribution(
       }))
       .sort((a: any, b: any) => b.count - a.count);
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-employee-status-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employee status distribution retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-employee-status-distribution error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -69,7 +78,10 @@ export async function getEmployeeDepartments(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:employee-departments`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Employee departments retrieved",
+        data: cached,
+      });
 
     const groups = await prisma.user.groupBy({
       by: ["department"],
@@ -81,12 +93,13 @@ export async function getEmployeeDepartments(_req: Request, res: Response) {
       .filter((g: any) => g.department)
       .map((g: any) => ({ _id: g.department!, count: g._count.id }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-employee-departments error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employee departments retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-employee-departments error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -96,7 +109,10 @@ export async function getEmployeeDesignations(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:employee-designations`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Employee designations retrieved",
+        data: cached,
+      });
 
     const groups = await prisma.user.groupBy({
       by: ["designation"],
@@ -108,12 +124,13 @@ export async function getEmployeeDesignations(_req: Request, res: Response) {
       .filter((g: any) => g.designation)
       .map((g: any) => ({ _id: g.designation!, count: g._count.id }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-employee-designations error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employee designations retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-employee-designations error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -123,7 +140,10 @@ export async function getAgeDistribution(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:age-distribution`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Age distribution retrieved",
+        data: cached,
+      });
 
     const tenantIdMatch =
       tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
@@ -171,12 +191,13 @@ export async function getAgeDistribution(_req: Request, res: Response) {
       count: ageCount[_id] ?? 0,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-age-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Age distribution retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-age-distribution error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -186,7 +207,10 @@ export async function getJoiningData(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:joining-data`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Joining data retrieved",
+        data: cached,
+      });
 
     const tenantIdMatch =
       tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
@@ -208,12 +232,13 @@ export async function getJoiningData(_req: Request, res: Response) {
       count: r.count,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-joining-data error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Joining data retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-joining-data error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -223,7 +248,10 @@ export async function getTenureDistribution(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:tenure-distribution`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Tenure distribution retrieved",
+        data: cached,
+      });
 
     const YEAR_MS = 365.25 * 24 * 3600 * 1000;
     const tenantIdMatch =
@@ -283,12 +311,13 @@ export async function getTenureDistribution(_req: Request, res: Response) {
       }),
     );
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-tenure-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Tenure distribution retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-tenure-distribution error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -298,7 +327,10 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:headcount-growth`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Headcount growth retrieved",
+        data: cached,
+      });
 
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -355,12 +387,13 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
       };
     });
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-headcount-growth error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Headcount growth retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-headcount-growth error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -370,7 +403,10 @@ export async function getLeaveApprovalRate(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:leave-approval-rate`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Leave approval rate retrieved",
+        data: cached,
+      });
 
     const [approved, pending, rejected, total] = await Promise.all([
       prisma.leaveApplication.count({ where: { status: "Approved" } }),
@@ -381,12 +417,13 @@ export async function getLeaveApprovalRate(_req: Request, res: Response) {
     const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
     const data = { approvalRate, approved, pending, rejected, total };
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-leave-approval-rate error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Leave approval rate retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-leave-approval-rate error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -396,7 +433,10 @@ export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:leave-type-breakdown`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Leave type breakdown retrieved",
+        data: cached,
+      });
 
     const groups = await prisma.leaveApplication.groupBy({
       by: ["leaveType"],
@@ -409,12 +449,13 @@ export async function getLeaveTypeBreakdown(_req: Request, res: Response) {
       totalDays: Math.round(g._sum.days ?? 0),
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-leave-type-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Leave type breakdown retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-leave-type-breakdown error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -424,7 +465,10 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:monthly-leave-patterns`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Monthly leave patterns retrieved",
+        data: cached,
+      });
 
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
@@ -455,12 +499,13 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
       count: r.count,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-monthly-leave-patterns error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Monthly leave patterns retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-monthly-leave-patterns error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -470,7 +515,10 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:attendance-trends`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Attendance trends retrieved",
+        data: cached,
+      });
 
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
@@ -518,12 +566,13 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
         r.total > 0 ? Math.round((r.hours / r.total) * 100) / 100 : 0,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-attendance-trends error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Attendance trends retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-attendance-trends error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -536,7 +585,10 @@ export async function getWorkingHoursDistribution(
     const cacheKey = `t:${tenantId}:analytics:working-hours-distribution`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Working hours distribution retrieved",
+        data: cached,
+      });
 
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
@@ -578,12 +630,13 @@ export async function getWorkingHoursDistribution(
       count: hoursCount[_id] ?? 0,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-working-hours-distribution error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Working hours distribution retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-working-hours-distribution error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -593,7 +646,10 @@ export async function getJobOpeningsByStatus(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:job-openings-by-status`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Job openings by status retrieved",
+        data: cached,
+      });
 
     const groups = await prisma.jobOpening.groupBy({
       by: ["status"],
@@ -604,12 +660,13 @@ export async function getJobOpeningsByStatus(_req: Request, res: Response) {
       count: g._count.id,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-job-openings-by-status error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Job openings by status retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-job-openings-by-status error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -619,7 +676,10 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:applications-by-job-role`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Applications by job role retrieved",
+        data: cached,
+      });
 
     const groups: any[] = await (prisma.jobOpening.groupBy as any)({
       by: ["jobTitle", "status"],
@@ -654,12 +714,13 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
     }
     const data = Object.values(byRole);
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-applications-by-job-role error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Applications by job role retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-applications-by-job-role error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -669,7 +730,10 @@ export async function getHiringFunnel(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:hiring-funnel`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Hiring funnel retrieved",
+        data: cached,
+      });
 
     const [applied, shortlisted, interviewed, offered, hired] =
       await Promise.all([
@@ -701,12 +765,13 @@ export async function getHiringFunnel(_req: Request, res: Response) {
       hireRate: pct(hired, offered),
     };
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-hiring-funnel error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Hiring funnel retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-hiring-funnel error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -719,7 +784,10 @@ export async function getHiringManagerPerformance(
     const cacheKey = `t:${tenantId}:analytics:hiring-manager-performance`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Hiring manager performance retrieved",
+        data: cached,
+      });
 
     const groups: any[] = await (prisma.jobOpening.groupBy as any)({
       by: ["hiringManager", "status"],
@@ -754,12 +822,13 @@ export async function getHiringManagerPerformance(
           : 0,
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-hiring-manager-performance error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Hiring manager performance retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-hiring-manager-performance error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -772,7 +841,10 @@ export async function getSalaryDistributionByDepartment(
     const cacheKey = `t:${tenantId}:analytics:salary-distribution-by-dept`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Salary distribution by department retrieved",
+        data: cached,
+      });
 
     const groups = await prisma.user.groupBy({
       by: ["department"],
@@ -792,12 +864,13 @@ export async function getSalaryDistributionByDepartment(
         employeeCount: g._count.id,
       }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-salary-distribution-by-department error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Salary distribution by department retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-salary-distribution-by-department error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -807,7 +880,10 @@ export async function getCompensationBreakdown(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:compensation-breakdown`;
     const cached = await cacheManager.get<any>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Compensation breakdown retrieved",
+        data: cached,
+      });
 
     const agg = await prisma.user.aggregate({
       where: { NOT: { salary: null } },
@@ -831,12 +907,13 @@ export async function getCompensationBreakdown(_req: Request, res: Response) {
       avgPT: Math.round(agg._avg.salaryPt ?? 0),
     };
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-compensation-breakdown error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Compensation breakdown retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-compensation-breakdown error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -849,7 +926,10 @@ export async function getAverageSalaryByDesignation(
     const cacheKey = `t:${tenantId}:analytics:avg-salary-by-designation`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Average salary by designation retrieved",
+        data: cached,
+      });
 
     const groups = await prisma.user.groupBy({
       by: ["designation"],
@@ -870,12 +950,13 @@ export async function getAverageSalaryByDesignation(
       }))
       .sort((a: any, b: any) => b.avgSalary - a.avgSalary);
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-average-salary-by-designation error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Average salary by designation retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-average-salary-by-designation error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -885,7 +966,10 @@ export async function getSalaryBands(_req: Request, res: Response) {
     const cacheKey = `t:${tenantId}:analytics:salary-bands`;
     const cached = await cacheManager.get<any[]>(cacheKey);
     if (cached)
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: cached });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Salary bands retrieved",
+        data: cached,
+      });
 
     const tenantIdMatch =
       tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
@@ -915,11 +999,12 @@ export async function getSalaryBands(_req: Request, res: Response) {
       avgSalary: Math.round(b.avgSalary ?? 0),
     }));
     await cacheManager.set(cacheKey, data, "analytics");
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
-  } catch (err) {
-    logger.error("get-salary-bands error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Salary bands retrieved",
+      data,
     });
+  } catch (error: unknown) {
+    logger.error("get-salary-bands error:", { error });
+    return handleError(res, error);
   }
 }

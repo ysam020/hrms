@@ -1,4 +1,4 @@
-import * as React from "react";
+import { Suspense, lazy, memo, useContext, useEffect, useMemo } from "react";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
@@ -10,24 +10,24 @@ import Teams from "./Teams";
 import { useNavigate, useLocation } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 
-const ManageRoles = React.lazy(() => import("./ManageRoles"));
-const UserPermissions = React.lazy(() => import("./UserPermissions"));
+const ManageRoles = lazy(() => import("./ManageRoles"));
+const UserPermissions = lazy(() => import("./UserPermissions"));
 
 const tabSlugs = ["manage-roles", "user-permissions", "teams"];
 
 function Permissions() {
-  const { theme } = React.useContext(ThemeContext);
+  const { theme } = useContext(ThemeContext);
   const { a11yProps } = useTabs();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const value = React.useMemo(() => {
+  const value = useMemo(() => {
     const slug = location.pathname.split("/").pop();
     const index = tabSlugs.indexOf(slug || "");
     return index >= 0 ? index : 0;
   }, [location.pathname]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const parts = location.pathname.split("/").filter(Boolean);
     if (parts.length < 2 || !tabSlugs.includes(parts[1])) {
       const savedSlug = localStorage.getItem("permissions_tab_value");
@@ -65,7 +65,7 @@ function Permissions() {
 
       <Box sx={{ p: 2 }}>
         {value === 0 && (
-          <React.Suspense
+          <Suspense
             fallback={
               <Box
                 sx={{
@@ -82,11 +82,11 @@ function Permissions() {
             <ErrorBoundary fallback={<ErrorFallback />}>
               <ManageRoles />
             </ErrorBoundary>
-          </React.Suspense>
+          </Suspense>
         )}
 
         {value === 1 && (
-          <React.Suspense
+          <Suspense
             fallback={
               <Box
                 sx={{
@@ -103,11 +103,11 @@ function Permissions() {
             <ErrorBoundary fallback={<ErrorFallback />}>
               <UserPermissions />
             </ErrorBoundary>
-          </React.Suspense>
+          </Suspense>
         )}
 
         {value === 2 && (
-          <React.Suspense
+          <Suspense
             fallback={
               <Box
                 sx={{
@@ -124,11 +124,11 @@ function Permissions() {
             <ErrorBoundary fallback={<ErrorFallback />}>
               <Teams />
             </ErrorBoundary>
-          </React.Suspense>
+          </Suspense>
         )}
       </Box>
     </Box>
   );
 }
 
-export default React.memo(Permissions);
+export default memo(Permissions);

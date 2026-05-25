@@ -1,4 +1,4 @@
-import React, { useState, useContext, useCallback } from "react";
+import { memo, useCallback, useContext, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import {
   MaterialReactTable,
@@ -501,7 +501,7 @@ function ViewPolicies({ refreshKey = 0 }) {
     }
   };
 
-  const columns = React.useMemo(
+  const columns = useMemo(
     () => [
       {
         accessorKey: "category",
@@ -629,4 +629,4 @@ function ViewPolicies({ refreshKey = 0 }) {
   );
 }
 
-export default React.memo(ViewPolicies);
+export default memo(ViewPolicies);

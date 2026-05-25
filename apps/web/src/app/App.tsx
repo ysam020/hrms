@@ -1,5 +1,5 @@
 import "./App.scss";
-import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { useState, useMemo, useEffect, Suspense, lazy, useRef } from "react";
 import { flushSync } from "react-dom";
 import DomMagnifier from "@web/shared/components/DomMagnifier";
 import ProfilerOverlay from "@web/shared/components/ProfilerOverlay";
@@ -21,7 +21,6 @@ import { UserContext } from "@web/app/providers/UserContext";
 import Alert from "@mui/material/Alert";
 import Loading from "@web/shared/components/Loading";
 import useLogout from "@web/shared/hooks/useLogout";
-import { useSwUpdate } from "@web/shared/hooks/useSwUpdate";
 import {
   setUnauthorizedHandler,
   setPaymentRequiredHandler,
@@ -39,17 +38,14 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { SocketProvider } from "@web/app/providers/SocketContext";
 import { ChatUnreadProvider } from "@web/app/providers/ChatUnreadContext";
-const HomePage = React.lazy(() => import("@web/pages/HomePage"));
-const LoginPage = React.lazy(() => import("@web/features/auth/LoginPage"));
-const OrgSetupPage = React.lazy(
-  () => import("@web/features/auth/OrgSetupPage"),
-);
-const CareersPage = React.lazy(() => import("@web/pages/CareersPage"));
-const JobApplicationPage = React.lazy(
-  () => import("@web/pages/JobApplicationPage"),
-);
-const InvitePage = React.lazy(() => import("@web/pages/InvitePage"));
-const BroadcastModal = React.lazy(
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
+const HomePage = lazy(() => import("@web/pages/HomePage"));
+const LoginPage = lazy(() => import("@web/features/auth/LoginPage"));
+const OrgSetupPage = lazy(() => import("@web/features/auth/OrgSetupPage"));
+const CareersPage = lazy(() => import("@web/pages/CareersPage"));
+const JobApplicationPage = lazy(() => import("@web/pages/JobApplicationPage"));
+const InvitePage = lazy(() => import("@web/pages/InvitePage"));
+const BroadcastModal = lazy(
   () => import("@web/features/layout/modals/BroadcastModal"),
 );
 
@@ -83,7 +79,6 @@ function App() {
   });
 
   const handleLogout = useLogout(setUser);
-  const { updateAvailable, triggerUpdate } = useSwUpdate();
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -109,7 +104,7 @@ function App() {
       // stale cached content is never visible — even for a single frame.
       flushSync(() => setBooting(true));
       apiClient
-        .get("/profile")
+        .get(API_ENDPOINTS.GET_PROFILE)
         .then((res) => {
           setUser(res.data?.success ? res.data.data.user : null);
           setBooting(false);
@@ -125,7 +120,7 @@ function App() {
 
   // Capture search params synchronously at component init — before Navigate's
   // useEffect can change the URL to /login (child effects run before parent effects).
-  const initialSearch = React.useRef(location.search);
+  const initialSearch = useRef(location.search);
 
   // On every page load, silently exchange the HttpOnly refresh-token cookie
   // for a new access token (stored in memory only — never localStorage).
@@ -179,7 +174,7 @@ function App() {
           return;
         }
 
-        const res = await apiClient.get("/profile");
+        const res = await apiClient.get(API_ENDPOINTS.GET_PROFILE);
         if (cancelled) return;
         if (res.data?.success) setUser(res.data.data.user);
         setBooting(false);
@@ -396,36 +391,6 @@ function App() {
                 >
                   {alert.message}
                 </Alert>
-
-                {updateAvailable && (
-                  <Alert
-                    severity="info"
-                    variant="filled"
-                    action={
-                      <span
-                        onClick={triggerUpdate}
-                        style={{
-                          cursor: "pointer",
-                          fontWeight: 600,
-                          textDecoration: "underline",
-                        }}
-                      >
-                        Refresh
-                      </span>
-                    }
-                    sx={{
-                      position: "fixed",
-                      bottom: "20px",
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      zIndex: 9999,
-                      boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    A new version is available.
-                  </Alert>
-                )}
               </div>
 
               <DomMagnifier enabled={magnifierOn} />

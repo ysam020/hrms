@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useContext } from "react";
+import { memo, useCallback, useContext, useState } from "react";
 import TabsPanel from "@web/shared/components/TabsPanel";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
@@ -44,4 +44,4 @@ function JobOpenings() {
   );
 }
 
-export default React.memo(JobOpenings);
+export default memo(JobOpenings);

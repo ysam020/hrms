@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { memo, useState } from "react";
 import { useParams } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -211,4 +211,4 @@ function ViewIndividualJob() {
   );
 }
 
-export default React.memo(ViewIndividualJob);
+export default memo(ViewIndividualJob);

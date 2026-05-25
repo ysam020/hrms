@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useContext } from "react";
+import { memo, useCallback, useContext, useMemo, useState } from "react";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import AddIcon from "@mui/icons-material/Add";
@@ -480,4 +480,4 @@ function ManageRoles() {
   );
 }
 
-export default React.memo(ManageRoles);
+export default memo(ManageRoles);

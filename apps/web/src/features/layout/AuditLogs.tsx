@@ -1,4 +1,4 @@
-import * as React from "react";
+import { type CSSProperties, memo, useContext, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
@@ -24,17 +24,15 @@ import { entityOptions } from "@web/assets/data/entityOptions";
 import { getDeviceInfo } from "@web/shared/utils/getDeviceInfo";
 
 function AuditLogs(props) {
-  const [selectedDays, setSelectedDays] = React.useState(1);
-  const [selectedEntity, setSelectedEntity] = React.useState<string | null>(
-    null,
-  );
-  const [selectedUser, setSelectedUser] = React.useState<string | null>(null);
-  const [expandedLogId, setExpandedLogId] = React.useState<string | null>(null);
+  const [selectedDays, setSelectedDays] = useState(1);
+  const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const userList = useUserList();
-  const { theme } = React.useContext(ThemeContext);
+  const { theme } = useContext(ThemeContext);
 
-  const queryParams = React.useMemo(() => {
+  const queryParams = useMemo(() => {
     const params = new URLSearchParams();
     params.append("days", String(selectedDays));
 
@@ -225,7 +223,7 @@ function AuditLogs(props) {
                                     "--w-rjv-cursor-pointer": "default",
                                     "--w-rjv-line-color": "transparent",
                                     "--w-rjv-arrow-size": "0px",
-                                  } as React.CSSProperties
+                                  } as CSSProperties
                                 }
                               />
                             </Box>
@@ -249,7 +247,7 @@ function AuditLogs(props) {
                                     "--w-rjv-cursor-pointer": "default",
                                     "--w-rjv-line-color": "transparent",
                                     "--w-rjv-arrow-size": "0px",
-                                  } as React.CSSProperties
+                                  } as CSSProperties
                                 }
                               />
                             </Box>
@@ -293,4 +291,4 @@ function AuditLogs(props) {
   );
 }
 
-export default React.memo(AuditLogs);
+export default memo(AuditLogs);

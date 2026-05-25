@@ -1,9 +1,9 @@
-import React, { Suspense, useMemo } from "react";
+import { Suspense, lazy, memo, useMemo } from "react";
 import Drawer from "@mui/material/Drawer";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
-const Sidebar = React.lazy(() => import("./Sidebar"));
+const Sidebar = lazy(() => import("./Sidebar"));
 
 const drawerWidth = 60;
 const mobileDrawerWidth = 240;
@@ -134,4 +134,4 @@ function DrawerComponent(props) {
   );
 }
 
-export default React.memo(DrawerComponent);
+export default memo(DrawerComponent);

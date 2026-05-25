@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { memo, useContext } from "react";
 import Modal from "@mui/material/Modal";
 import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
@@ -222,4 +222,4 @@ function HiringModal(props) {
   );
 }
 
-export default React.memo(HiringModal);
+export default memo(HiringModal);

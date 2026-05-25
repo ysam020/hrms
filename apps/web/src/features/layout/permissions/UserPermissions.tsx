@@ -1,4 +1,11 @@
-import * as React from "react";
+import {
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Dropdown } from "primereact/dropdown";
 import Box from "@mui/material/Box";
 import apiClient from "@web/core/http/axiosConfig";
@@ -23,19 +30,19 @@ import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function UserPermissions() {
-  const { setAlert } = React.useContext(AlertContext);
-  const [activeModule, setActiveModule] = React.useState("Attendance");
-  const [permissions, setPermissions] = React.useState<any[]>([]);
-  const [originalUserPermissions, setOriginalUserPermissions] = React.useState<
-    any[]
-  >([]);
-  const [saving, setSaving] = React.useState(false);
-  const [hasChanges, setHasChanges] = React.useState(false);
-  const [selectedUser, setSelectedUser] = React.useState<any>(null);
-  const [selectedRole, setSelectedRole] = React.useState<any>(null);
-  const [isSuperUser, setIsSuperUser] = React.useState(false);
-  const [typedUser, setTypedUser] = React.useState("");
-  const [filteredUsers, setFilteredUsers] = React.useState<any[]>([]);
+  const { setAlert } = useContext(AlertContext);
+  const [activeModule, setActiveModule] = useState("Attendance");
+  const [permissions, setPermissions] = useState<any[]>([]);
+  const [originalUserPermissions, setOriginalUserPermissions] = useState<any[]>(
+    [],
+  );
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedRole, setSelectedRole] = useState<any>(null);
+  const [isSuperUser, setIsSuperUser] = useState(false);
+  const [typedUser, setTypedUser] = useState("");
+  const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
 
   const userList = useUserList();
 
@@ -67,7 +74,7 @@ function UserPermissions() {
   );
 
   // Extract roles from the fetched data
-  const roles = React.useMemo(() => {
+  const roles = useMemo(() => {
     return rolesData || [];
   }, [rolesData]);
 
@@ -113,7 +120,7 @@ function UserPermissions() {
     }
   };
 
-  const handleSearch = React.useCallback(
+  const handleSearch = useCallback(
     (query) => {
       // Add safety check for userList
       if (!userList || !Array.isArray(userList)) {
@@ -130,19 +137,19 @@ function UserPermissions() {
     [userList],
   );
 
-  const debouncedSearchUser = React.useMemo(
+  const debouncedSearchUser = useMemo(
     () => debounce(handleSearch, 300),
     [handleSearch],
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       debouncedSearchUser.cancel(); // cleanup
     };
   }, [debouncedSearchUser]);
 
   // Watch for permission changes and update hasChanges accordingly
-  React.useEffect(() => {
+  useEffect(() => {
     if (originalUserPermissions.length === 0 && permissions.length === 0) {
       // Both are empty, no changes
       setHasChanges(false);
@@ -159,14 +166,14 @@ function UserPermissions() {
   }, [permissions, originalUserPermissions]);
 
   // Update superuser status when data is fetched
-  React.useEffect(() => {
+  useEffect(() => {
     if (superUserData && superUserData.isSuperUser !== undefined) {
       setIsSuperUser(superUserData.isSuperUser);
     }
   }, [superUserData]);
 
   // Update permissions when user permissions data is fetched
-  React.useEffect(() => {
+  useEffect(() => {
     if (userPermissionsData && !fetchingPermissions) {
       const userPermissions = Array.isArray(userPermissionsData)
         ? userPermissionsData
@@ -399,4 +406,4 @@ function UserPermissions() {
   );
 }
 
-export default React.memo(UserPermissions);
+export default memo(UserPermissions);

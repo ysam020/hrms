@@ -1,4 +1,4 @@
-import * as React from "react";
+import { memo, useCallback, useContext, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import EventIcon from "@mui/icons-material/Event";
@@ -28,9 +28,9 @@ function AddEventModal({
   editEventData = null as any,
   isEditMode = false,
 }) {
-  const { setAlert } = React.useContext(AlertContext);
+  const { setAlert } = useContext(AlertContext);
 
-  const getInitialValues = React.useCallback(() => {
+  const getInitialValues = useCallback(() => {
     const baseValues = {
       title: "",
       date: "",
@@ -139,7 +139,7 @@ function AddEventModal({
   });
 
   // Reset form when modal closes
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) {
       formik.resetForm();
     }
@@ -348,4 +348,4 @@ function AddEventModal({
   );
 }
 
-export default React.memo(AddEventModal);
+export default memo(AddEventModal);

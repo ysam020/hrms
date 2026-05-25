@@ -1,7 +1,8 @@
-import React, {
+import {
+  memo,
   useCallback,
-  useMemo,
   useContext,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -259,4 +260,4 @@ function ViewKycList() {
   );
 }
 
-export default React.memo(ViewKycList);
+export default memo(ViewKycList);

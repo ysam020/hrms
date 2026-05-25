@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { memo, useContext } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
@@ -220,4 +220,4 @@ function ExitFeedbackForm() {
   );
 }
 
-export default React.memo(ExitFeedbackForm);
+export default memo(ExitFeedbackForm);

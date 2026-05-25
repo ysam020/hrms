@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import { memo, useContext, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import AppBar from "@mui/material/AppBar";
 import IconButton from "@mui/material/IconButton";
@@ -628,4 +628,4 @@ function AppbarComponent({
   );
 }
 
-export default React.memo(AppbarComponent);
+export default memo(AppbarComponent);

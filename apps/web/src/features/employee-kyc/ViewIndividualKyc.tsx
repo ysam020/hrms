@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { memo, useContext } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import BasicInfo from "@web/features/profile/BasicInfo";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -120,4 +120,4 @@ function ViewIndividualKyc() {
   );
 }
 
-export default React.memo(ViewIndividualKyc);
+export default memo(ViewIndividualKyc);

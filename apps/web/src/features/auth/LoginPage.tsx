@@ -1,9 +1,11 @@
-import React, {
-  useState,
-  useMemo,
+import {
+  lazy,
+  memo,
   useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useState,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Grid from "@mui/material/Grid2";
@@ -25,7 +27,7 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import LogoDark from "@web/assets/data/LogoDark";
 import Box from "@mui/material/Box";
 import LogoLight from "@web/assets/data/LogoLight";
-const WebAuthnLoginForm = React.lazy(() => import("./WebAuthnLoginForm"));
+const WebAuthnLoginForm = lazy(() => import("./WebAuthnLoginForm"));
 
 // VIEW STATES
 const VIEW = {
@@ -405,4 +407,4 @@ function LoginPage() {
   );
 }
 
-export default React.memo(LoginPage);
+export default memo(LoginPage);

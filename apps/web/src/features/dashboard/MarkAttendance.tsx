@@ -1,4 +1,4 @@
-import React, { Suspense, useContext, useState, useCallback } from "react";
+import { Suspense, lazy, memo, useCallback, useContext, useState } from "react";
 import Skeleton from "@mui/material/Skeleton";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -25,17 +25,17 @@ import { useAttendanceProcess } from "@web/shared/hooks/useAttendanceProcess";
 // Components
 import Button from "@web/shared/components/Button";
 
-const FaceRecognitionDialog = React.lazy(() =>
+const FaceRecognitionDialog = lazy(() =>
   import("./FaceRecognitionDialog").then((module) => ({
     default: module.FaceRecognitionDialog,
   })),
 );
 
-const LocationConsentDrawer = React.lazy(
+const LocationConsentDrawer = lazy(
   () => import("@web/shared/components/LocationConsentDrawer"),
 );
 
-const CameraConsentDrawer = React.lazy(
+const CameraConsentDrawer = lazy(
   () => import("@web/shared/components/CameraConsentDrawer"),
 );
 
@@ -367,7 +367,7 @@ function MarkAttendance({ compact = false }) {
 // SUB-COMPONENTS
 // ==========================================
 
-const AttendanceCard = React.memo(
+const AttendanceCard = memo(
   ({
     status,
     disableFields,
@@ -439,7 +439,7 @@ const AttendanceCard = React.memo(
   ),
 );
 
-const AttendanceButtons = React.memo(
+const AttendanceButtons = memo(
   ({
     disableFields,
     dialogOpen,
@@ -515,7 +515,7 @@ const AttendanceButtons = React.memo(
   ),
 );
 
-const TimeDisplayCards = React.memo(
+const TimeDisplayCards = memo(
   ({
     loading,
     todayTimeIn,
@@ -600,7 +600,7 @@ const TimeDisplayCards = React.memo(
   ),
 );
 
-const TimeCard = React.memo(
+const TimeCard = memo(
   ({
     label,
     time,
@@ -709,4 +709,4 @@ const TimeCard = React.memo(
   ),
 );
 
-export default React.memo(MarkAttendance);
+export default memo(MarkAttendance);

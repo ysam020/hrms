@@ -1,4 +1,4 @@
-import * as React from "react";
+import { Suspense, lazy, memo, useContext, useEffect, useMemo } from "react";
 import "../../styles/profile.scss";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -12,10 +12,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
-const BasicInfo = React.lazy(() => import("./BasicInfo"));
-const PushNotifications = React.lazy(() => import("./PushNotifications"));
-const WebAuthnDevices = React.lazy(() => import("./WebAuthnDevices"));
-const SalarySlip = React.lazy(() => import("./SalarySlip"));
+const BasicInfo = lazy(() => import("./BasicInfo"));
+const PushNotifications = lazy(() => import("./PushNotifications"));
+const WebAuthnDevices = lazy(() => import("./WebAuthnDevices"));
+const SalarySlip = lazy(() => import("./SalarySlip"));
 
 const tabLabels = [
   "Basic Info",
@@ -32,20 +32,20 @@ const tabSlugs = [
 ];
 
 function Profile() {
-  const { setUser, user } = React.useContext(UserContext);
+  const { setUser, user } = useContext(UserContext);
   const navigate = useNavigate();
   const location = useLocation();
   const { a11yProps } = useTabs();
-  const { theme } = React.useContext(ThemeContext);
+  const { theme } = useContext(ThemeContext);
 
-  const value = React.useMemo(() => {
+  const value = useMemo(() => {
     const slug = location.pathname.split("/").pop();
     const index = tabSlugs.indexOf(slug || "");
     return index >= 0 ? index : 0;
   }, [location.pathname]);
 
   // Redirect /profile or unknown sub-paths to last visited tab (or default)
-  React.useEffect(() => {
+  useEffect(() => {
     const parts = location.pathname.split("/").filter(Boolean);
     if (parts.length < 2 || !tabSlugs.includes(parts[1])) {
       const savedSlug = localStorage.getItem("profile_tab_value");
@@ -62,7 +62,7 @@ function Profile() {
   };
 
   // Fetch full profile data on mount and merge into user context (in-memory only)
-  React.useEffect(() => {
+  useEffect(() => {
     apiClient(API_ENDPOINTS.GET_PROFILE)
       .then((res) => {
         if (res.data.success) {
@@ -104,7 +104,7 @@ function Profile() {
 
       <Box sx={{ p: 1 }}>
         {value === 0 && (
-          <React.Suspense
+          <Suspense
             fallback={
               <Box
                 sx={{
@@ -121,11 +121,11 @@ function Profile() {
             <ErrorBoundary fallback={<ErrorFallback />}>
               <BasicInfo user={user} />
             </ErrorBoundary>
-          </React.Suspense>
+          </Suspense>
         )}
 
         {value === 1 && (
-          <React.Suspense
+          <Suspense
             fallback={
               <Box
                 sx={{
@@ -142,11 +142,11 @@ function Profile() {
             <ErrorBoundary fallback={<ErrorFallback />}>
               <PushNotifications />
             </ErrorBoundary>
-          </React.Suspense>
+          </Suspense>
         )}
 
         {value === 2 && (
-          <React.Suspense
+          <Suspense
             fallback={
               <Box
                 sx={{
@@ -163,11 +163,11 @@ function Profile() {
             <ErrorBoundary fallback={<ErrorFallback />}>
               <WebAuthnDevices />
             </ErrorBoundary>
-          </React.Suspense>
+          </Suspense>
         )}
 
         {value === 3 && (
-          <React.Suspense
+          <Suspense
             fallback={
               <Box
                 sx={{
@@ -184,11 +184,11 @@ function Profile() {
             <ErrorBoundary fallback={<ErrorFallback />}>
               <SalarySlip />
             </ErrorBoundary>
-          </React.Suspense>
+          </Suspense>
         )}
       </Box>
     </Box>
   );
 }
 
-export default React.memo(Profile);
+export default memo(Profile);

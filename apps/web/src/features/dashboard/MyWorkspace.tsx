@@ -1,4 +1,4 @@
-import React, { Suspense, useContext, useMemo } from "react";
+import { Suspense, lazy, memo, useContext, useMemo } from "react";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -21,7 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { UserContext } from "@web/app/providers/UserContext";
 import { useDashboard } from "@web/app/providers/DashboardContext";
 
-const MarkAttendance = React.lazy(() => import("./MarkAttendance"));
+const MarkAttendance = lazy(() => import("./MarkAttendance"));
 
 const SectionLabel = ({ children }) => (
   <Typography
@@ -737,4 +737,4 @@ function MyWorkspace({ isDark }) {
   );
 }
 
-export default React.memo(MyWorkspace);
+export default memo(MyWorkspace);

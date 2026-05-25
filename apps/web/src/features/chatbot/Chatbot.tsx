@@ -1,10 +1,5 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useContext,
-  useCallback,
-} from "react";
+import { useState, useRef, useEffect, useContext, useCallback } from "react";
+import type React from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -23,6 +18,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import { useTheme, alpha } from "@mui/material/styles";
 import { UserContext } from "@web/app/providers/UserContext";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
   getAccessToken,
   fetchCsrfToken,
@@ -116,7 +112,7 @@ export default function Chatbot() {
       history: { role: string; content: string }[],
       controller: AbortController,
     ) => {
-      const res = await fetch(`${API_URL}/chatbot/message`, {
+      const res = await fetch(`${API_URL}${API_ENDPOINTS.CHATBOT_MESSAGE}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -168,14 +164,26 @@ export default function Chatbot() {
 
         const csrfToken = await fetchCsrfToken();
 
-        let res = await streamSse(token, csrfToken, content, history, controller);
+        let res = await streamSse(
+          token,
+          csrfToken,
+          content,
+          history,
+          controller,
+        );
 
         // Single 401 retry — mirrors the axios response interceptor.
         if (res.status === 401) {
           try {
             token = await performRefresh();
             const freshCsrf = await fetchCsrfToken();
-            res = await streamSse(token, freshCsrf, content, history, controller);
+            res = await streamSse(
+              token,
+              freshCsrf,
+              content,
+              history,
+              controller,
+            );
           } catch {
             setMessages((prev) => {
               const u = [...prev];
@@ -340,12 +348,20 @@ export default function Chatbot() {
           <Box sx={{ display: "flex", alignItems: "center" }}>
             {messages.length > 0 && (
               <Tooltip title="Clear conversation">
-                <IconButton size="small" onClick={clearConversation} aria-label="Clear conversation">
+                <IconButton
+                  size="small"
+                  onClick={clearConversation}
+                  aria-label="Clear conversation"
+                >
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
-            <IconButton size="small" onClick={() => setOpen(false)} aria-label="Close assistant">
+            <IconButton
+              size="small"
+              onClick={() => setOpen(false)}
+              aria-label="Close assistant"
+            >
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>

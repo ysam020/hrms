@@ -4,6 +4,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
+import { isSuperUser } from "../utils/user";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,9 +111,9 @@ export async function getTenantSettings(req: AuthRequest, res: Response) {
         pending: pending.map(toPublic),
       },
     });
-  } catch (err) {
-    logger.error("getTenantSettings error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("getTenantSettings error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -130,14 +131,10 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
     });
   }
 
-  const actor = await (prisma as any).user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
+  const superUser = await isSuperUser(userId);
 
   const isPrivileged =
-    actor?.isSuperUser ||
-    ["owner", "admin"].includes(req.user!.tenantRole ?? "");
+    superUser || ["owner", "admin"].includes(req.user!.tenantRole ?? "");
 
   if (!isPrivileged) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
@@ -292,14 +289,14 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
         ? "Settings applied immediately."
         : `Settings scheduled for ${effectiveFrom.toISOString().slice(0, 10)}.`,
     });
-  } catch (err: any) {
-    if (err?.message && !err?.code) {
+  } catch (error: any) {
+    if (error?.message && !error?.code) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: err.message,
+        message: error.message,
       });
     }
-    logger.error("updateTenantSettings error:", { err });
-    return handleError(res, err);
+    logger.error("updateTenantSettings error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -316,13 +313,9 @@ export async function cancelPendingSettings(req: AuthRequest, res: Response) {
     });
   }
 
-  const actor = await (prisma as any).user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
+  const superUser = await isSuperUser(userId);
   const isPrivileged =
-    actor?.isSuperUser ||
-    ["owner", "admin"].includes(req.user!.tenantRole ?? "");
+    superUser || ["owner", "admin"].includes(req.user!.tenantRole ?? "");
 
   if (!isPrivileged) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
@@ -344,8 +337,8 @@ export async function cancelPendingSettings(req: AuthRequest, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Pending settings change cancelled.",
     });
-  } catch (err) {
-    logger.error("cancelPendingSettings error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("cancelPendingSettings error:", { error });
+    return handleError(res, error);
   }
 }

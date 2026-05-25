@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prismaWithTenant as prisma, prismaWithTenant } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { AuthRequest } from "../middleware/authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
@@ -16,9 +16,9 @@ export async function getRoles(_req: Request, res: Response) {
         assignedTo: r.assignedTo,
       })),
     });
-  } catch (err) {
-    logger.error("get-roles error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("get-roles error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -35,7 +35,7 @@ export async function createRole(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Role with this name already exists",
       });
-    const role = await prismaWithTenant.role.create({
+    const role = await prisma.role.create({
       data: {
         tenantId: user!.tenantId!,
         name,
@@ -47,11 +47,9 @@ export async function createRole(req: Request, res: Response) {
       message: "Role created successfully",
       data: { roleId: role.id },
     });
-  } catch (err) {
-    logger.error("create-role error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to create role",
-    });
+  } catch (error: unknown) {
+    logger.error("create-role error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -75,11 +73,9 @@ export async function deleteRole(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Role deleted successfully",
     });
-  } catch (err) {
-    logger.error("delete-role error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to delete role",
-    });
+  } catch (error: unknown) {
+    logger.error("delete-role error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -100,11 +96,9 @@ export async function updateRolePermissions(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Role permissions updated successfully",
     });
-  } catch (err) {
-    logger.error("update-role-permissions error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to update role permissions",
-    });
+  } catch (error: unknown) {
+    logger.error("update-role-permissions error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -124,11 +118,9 @@ export async function getRolePermissions(req: Request, res: Response) {
         permissions: role.permissions,
       },
     });
-  } catch (err) {
-    logger.error("get-role-permissions error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to get role permissions",
-    });
+  } catch (error: unknown) {
+    logger.error("get-role-permissions error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -142,9 +134,9 @@ export async function getRoleAndPermissions(_req: Request, res: Response) {
         permissions: r.permissions,
       })),
     });
-  } catch (err) {
-    logger.error("get-role-and-permissions error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("get-role-and-permissions error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -213,11 +205,9 @@ export async function saveUserPermissions(req: Request, res: Response) {
       message: "User permissions updated successfully",
       data: { addedCount, removedCount },
     });
-  } catch (err) {
-    logger.error("save-user-permissions error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to save user permissions",
-    });
+  } catch (error: unknown) {
+    logger.error("save-user-permissions error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -230,9 +220,9 @@ export async function getUserPermissions(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { permissions: user?.permissions ?? [], role: user?.role ?? [] },
     });
-  } catch (err) {
-    logger.error("get-user-permissions error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("get-user-permissions error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -253,11 +243,9 @@ export async function updateSuperuser(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: `Superuser status ${isSuperUser ? "granted" : "revoked"} successfully`,
     });
-  } catch (err) {
-    logger.error("update-superuser error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to update superuser status",
-    });
+  } catch (error: unknown) {
+    logger.error("update-superuser error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -317,11 +305,9 @@ export async function deleteUserRole(req: Request, res: Response) {
         },
       },
     });
-  } catch (err) {
-    logger.error("delete-user-role error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to remove user role",
-    });
+  } catch (error: unknown) {
+    logger.error("delete-user-role error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -336,9 +322,9 @@ export async function getTeams(_req: Request, res: Response) {
         members: t.members,
       })),
     });
-  } catch (err) {
-    logger.error("get-teams error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("get-teams error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -363,7 +349,7 @@ export async function createTeam(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Team with this name already exists",
       });
-    const team = await prismaWithTenant.team.create({
+    const team = await prisma.team.create({
       data: {
         tenantId: user!.tenantId!,
         teamName: name,
@@ -375,11 +361,9 @@ export async function createTeam(req: Request, res: Response) {
       message: "Team created successfully",
       data: { teamId: team.id },
     });
-  } catch (err) {
-    logger.error("create-team error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to create team",
-    });
+  } catch (error: unknown) {
+    logger.error("create-team error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -396,11 +380,9 @@ export async function deleteTeam(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Team deleted successfully",
     });
-  } catch (err) {
-    logger.error("delete-team error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to delete team",
-    });
+  } catch (error: unknown) {
+    logger.error("delete-team error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -424,11 +406,9 @@ export async function addTeamMembers(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Team members added successfully",
     });
-  } catch (err) {
-    logger.error("add-team-members error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to add team members",
-    });
+  } catch (error: unknown) {
+    logger.error("add-team-members error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -451,10 +431,8 @@ export async function deleteUserFromTeam(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "User removed from team successfully",
     });
-  } catch (err) {
-    logger.error("delete-user-from-team error:", { err });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to remove user from team",
-    });
+  } catch (error: unknown) {
+    logger.error("delete-user-from-team error:", { error });
+    return handleError(res, error);
   }
 }

@@ -1,9 +1,10 @@
-import React, {
-  useContext,
-  useState,
-  useMemo,
+import {
+  memo,
   useCallback,
+  useContext,
+  useMemo,
   useRef,
+  useState,
 } from "react";
 import dayjs from "dayjs";
 import {
@@ -624,4 +625,4 @@ function ViewLeaveApplications() {
   );
 }
 
-export default React.memo(ViewLeaveApplications);
+export default memo(ViewLeaveApplications);

@@ -63,9 +63,9 @@ export async function fetchPaymentMethod(
     const rzp = getRazorpay();
     const payment = await (rzp.payments.fetch as any)(paymentId);
     return extractPaymentMethodFromEntity(payment);
-  } catch (err) {
+  } catch (error: unknown) {
     logger.warn(`fetchPaymentMethod: could not fetch payment ${paymentId}`, {
-      err,
+      error,
     });
     return null;
   }
@@ -148,9 +148,9 @@ export async function createSubscription(req: AuthRequest, res: Response) {
         billing: period,
       },
     });
-  } catch (err) {
-    logger.error("createSubscription error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("createSubscription error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -184,9 +184,9 @@ export async function getPendingSetup(req: AuthRequest, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { hasPending: true, billing: pending.billing },
     });
-  } catch (err) {
-    logger.error("getPendingSetup error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("getPendingSetup error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -230,9 +230,9 @@ export async function cancelSubscription(req: AuthRequest, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Subscription cancellation initiated.",
     });
-  } catch (err) {
-    logger.error("cancelSubscription error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("cancelSubscription error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -297,9 +297,9 @@ export async function reactivateSubscription(req: AuthRequest, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Subscription reactivated.",
     });
-  } catch (err) {
-    logger.error("reactivateSubscription error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("reactivateSubscription error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -456,8 +456,8 @@ export async function handleWebhook(req: Request, res: Response) {
       `Razorpay webhook processed: ${event} for subscription ${subscriptionId}`,
     );
     return res.json({ ok: true });
-  } catch (err) {
-    logger.error("handleWebhook error:", { err });
+  } catch (error: unknown) {
+    logger.error("handleWebhook error:", { error });
     return res.status(500).json({ ok: false });
   }
 }

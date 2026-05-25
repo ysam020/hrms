@@ -13,7 +13,7 @@ attendanceRouter.post(
   h.addAttendance,
 );
 attendanceRouter.get(
-  "/get-attendances/:month/:year",
+  "/get-attendances/:year/:month",
   authenticate,
   h.getAttendances,
 );

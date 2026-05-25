@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { Suspense, lazy, memo, useMemo } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
@@ -110,4 +110,4 @@ const EmploymentTypeBreakdown = ({ theme }) => {
   );
 };
 
-export default React.memo(EmploymentTypeBreakdown);
+export default memo(EmploymentTypeBreakdown);

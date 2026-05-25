@@ -1,4 +1,4 @@
-import React, { useContext, useMemo } from "react";
+import { memo, useContext, useMemo } from "react";
 import Popover from "@mui/material/Popover";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -275,4 +275,4 @@ function EventPopover({
   );
 }
 
-export default React.memo(EventPopover);
+export default memo(EventPopover);
