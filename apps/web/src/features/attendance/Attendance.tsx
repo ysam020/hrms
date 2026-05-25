@@ -1,5 +1,5 @@
 import TabsPanel from "@web/shared/components/TabsPanel";
-import * as React from "react";
+import { memo } from "react";
 import LeaveApplication from "./LeaveApplication";
 import ViewAttendances from "./ViewAttendances";
 import ViewLeaveApplications from "./ViewLeaveApplications";
@@ -24,4 +24,4 @@ function Attendances() {
   );
 }
 
-export default React.memo(Attendances);
+export default memo(Attendances);

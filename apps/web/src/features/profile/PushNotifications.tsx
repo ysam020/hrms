@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from "react";
+import { lazy, memo, useContext, useEffect, useState } from "react";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
@@ -21,12 +21,10 @@ import { generateDeviceFingerprint } from "@web/shared/utils/pushNotifications/d
 import apiClient from "@web/core/http/axiosConfig";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
-const ConfirmationDialog = React.lazy(
+const ConfirmationDialog = lazy(
   () => import("@web/shared/components/ConfirmationDialog"),
 );
-const EmptyState = React.lazy(
-  () => import("@web/shared/components/EmptyState"),
-);
+const EmptyState = lazy(() => import("@web/shared/components/EmptyState"));
 
 function PushNotifications() {
   const { setAlert } = useContext(AlertContext);
@@ -594,4 +592,4 @@ function PushNotifications() {
   );
 }
 
-export default React.memo(PushNotifications);
+export default memo(PushNotifications);

@@ -1,10 +1,13 @@
-import React, {
-  useState,
-  useEffect,
+import {
   Suspense,
-  useContext,
-  useMemo,
+  cloneElement,
+  lazy,
+  memo,
   useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
 import { Calendar, dayjsLocalizer } from "react-big-calendar";
 import dayjs from "dayjs";
@@ -39,10 +42,10 @@ import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import CircularProgress from "@mui/material/CircularProgress";
 
-const AddEventModal = React.lazy(
+const AddEventModal = lazy(
   () => import("@web/features/layout/modals/AddEventModal"),
 );
-const EventPopover = React.lazy(() => import("./EventPopover"));
+const EventPopover = lazy(() => import("./EventPopover"));
 
 // Extend dayjs with required plugins
 dayjs.extend(relativeTime);
@@ -266,7 +269,7 @@ const CustomCalendar = () => {
     const isCurrentDateInCurrentMonth =
       cellDate.isSame(today, "day") && viewingCurrentMonth;
 
-    return React.cloneElement(children, {
+    return cloneElement(children, {
       className: `${children.props.className} ${
         isCurrentDateInCurrentMonth ? "rbc-current-highlight" : ""
       }`.trim(),
@@ -618,4 +621,4 @@ const CustomCalendar = () => {
   );
 };
 
-export default React.memo(CustomCalendar);
+export default memo(CustomCalendar);

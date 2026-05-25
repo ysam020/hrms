@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import { memo, useContext, useState } from "react";
 import DOMPurify from "dompurify";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -161,4 +161,4 @@ function CreatePolicy({ onSaved }) {
   );
 }
 
-export default React.memo(CreatePolicy);
+export default memo(CreatePolicy);

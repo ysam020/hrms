@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { memo, useState } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -605,4 +605,4 @@ function AttendanceInsights() {
   );
 }
 
-export default React.memo(AttendanceInsights);
+export default memo(AttendanceInsights);

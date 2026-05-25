@@ -5,15 +5,8 @@ import { prismaWithTenant as prisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
+import { isSuperUser } from "../utils/user";
 import { jsPDF } from "jspdf";
-
-async function isSuperUser(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
-  return user?.isSuperUser === true;
-}
 
 export async function updateSalary(req: Request, res: Response) {
   try {

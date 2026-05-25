@@ -1,11 +1,14 @@
-import React, {
+import {
   Suspense,
-  useContext,
-  useState,
+  lazy,
+  memo,
   useCallback,
-  useMemo,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
+  useState,
+  type ReactNode,
 } from "react";
 import Box from "@mui/material/Box";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -32,16 +35,16 @@ import "../../styles/dashboard.scss";
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 // Lazy-loaded widgets
-const HrActivities = React.lazy(() => import("./HrActivities"));
-const AttendanceCalendar = React.lazy(() => import("./AttendanceCalendar"));
-const QuickStats = React.lazy(() => import("./QuickStats"));
-const PendingApprovals = React.lazy(() => import("./PendingApprovals"));
-const MyWorkspace = React.lazy(() => import("./MyWorkspace"));
-const KycStatus = React.lazy(() => import("./KycStatus"));
-const JobOpeningsList = React.lazy(() => import("./JobOpeningsList"));
-const BirthdayAnniversary = React.lazy(() => import("./BirthdayAnniversary"));
-const DepartmentBreakdown = React.lazy(() => import("./DepartmentBreakdown"));
-const WorkforceStatus = React.lazy(() => import("./WorkforceStatus"));
+const HrActivities = lazy(() => import("./HrActivities"));
+const AttendanceCalendar = lazy(() => import("./AttendanceCalendar"));
+const QuickStats = lazy(() => import("./QuickStats"));
+const PendingApprovals = lazy(() => import("./PendingApprovals"));
+const MyWorkspace = lazy(() => import("./MyWorkspace"));
+const KycStatus = lazy(() => import("./KycStatus"));
+const JobOpeningsList = lazy(() => import("./JobOpeningsList"));
+const BirthdayAnniversary = lazy(() => import("./BirthdayAnniversary"));
+const DepartmentBreakdown = lazy(() => import("./DepartmentBreakdown"));
+const WorkforceStatus = lazy(() => import("./WorkforceStatus"));
 
 // Constants
 const STORAGE_KEY_LAYOUT = "db_layout_v13";
@@ -163,7 +166,7 @@ function renderWidget(id) {
   }
 }
 
-const WidgetCard = React.memo(
+const WidgetCard = memo(
   ({
     label,
     editMode,
@@ -175,7 +178,7 @@ const WidgetCard = React.memo(
     editMode: boolean;
     onHide: () => void;
     isDark: boolean;
-    children: React.ReactNode;
+    children: ReactNode;
   }) => (
     <Box
       sx={{
@@ -244,7 +247,7 @@ const WidgetCard = React.memo(
   ),
 );
 
-const RightPanel = React.memo(({ isDark }: { isDark: boolean }) => {
+const RightPanel = memo(({ isDark }: { isDark: boolean }) => {
   const isMobile = useMediaQuery("(max-width:767px)");
   return (
     <Box

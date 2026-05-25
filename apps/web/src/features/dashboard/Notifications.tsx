@@ -1,9 +1,10 @@
-import React, {
+import {
+  memo,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
-  useEffect,
-  useCallback,
 } from "react";
 import Box from "@mui/material/Box";
 import Skeleton from "@mui/material/Skeleton";
@@ -457,4 +458,4 @@ function Notifications() {
   );
 }
 
-export default React.memo(Notifications);
+export default memo(Notifications);

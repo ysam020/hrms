@@ -1,4 +1,12 @@
-import * as React from "react";
+import {
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Box,
   Modal,
@@ -20,16 +28,16 @@ import routesConfig from "@web/app/router/routesConfig";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function SpotlightModal({ open, handleClose }) {
-  const { theme } = React.useContext(ThemeContext);
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const { theme } = useContext(ThemeContext);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
-  const [inputValue, setInputValue] = React.useState("");
-  const [filteredRoutes, setFilteredRoutes] = React.useState<any[]>([]);
-  const [highlightedIndex, setHighlightedIndex] = React.useState(0);
-  const recognitionRef = React.useRef(null);
+  const [inputValue, setInputValue] = useState("");
+  const [filteredRoutes, setFilteredRoutes] = useState<any[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const recognitionRef = useRef(null);
 
   // 1. Memoize routes and search engine to prevent re-indexing on every keystroke
-  const { fuse, moduleNames } = React.useMemo(() => {
+  const { fuse, moduleNames } = useMemo(() => {
     const routes = routesConfig();
     const names: string[] = [];
     const fuseInstance = new Fuse(routes, {
@@ -47,7 +55,7 @@ function SpotlightModal({ open, handleClose }) {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setInputValue("");
       setFilteredRoutes([]);
@@ -56,7 +64,7 @@ function SpotlightModal({ open, handleClose }) {
   }, [open]);
 
   // 3. Simplified scroll logic using native browser optimization
-  React.useEffect(() => {
+  useEffect(() => {
     if (filteredRoutes.length > 0) {
       const element = document.querySelector(
         `[data-index="${highlightedIndex}"]`,
@@ -67,7 +75,7 @@ function SpotlightModal({ open, handleClose }) {
     }
   }, [highlightedIndex, filteredRoutes]);
 
-  const handleInputChange = React.useCallback(
+  const handleInputChange = useCallback(
     (event) => {
       const value = event.target.value;
       setInputValue(value);
@@ -277,4 +285,4 @@ function SpotlightModal({ open, handleClose }) {
   );
 }
 
-export default React.memo(SpotlightModal);
+export default memo(SpotlightModal);

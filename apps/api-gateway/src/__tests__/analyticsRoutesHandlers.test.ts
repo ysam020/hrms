@@ -101,6 +101,7 @@ describe("getEmploymentTypeBreakdown", () => {
     await getEmploymentTypeBreakdown(makeReq(), res);
     expect(mockUserCount).not.toHaveBeenCalled();
     expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employment type breakdown retrieved",
       data: cached,
     });
   });
@@ -110,6 +111,7 @@ describe("getEmploymentTypeBreakdown", () => {
     const res = makeRes();
     await getEmploymentTypeBreakdown(makeReq(), res);
     expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employment type breakdown retrieved",
       data: { wfhCount: 5, officeCount: 15, totalEmployees: 20 },
     });
     expect(mockSet).toHaveBeenCalled();
@@ -139,6 +141,7 @@ describe("getEmployeeStatusDistribution", () => {
     await getEmployeeStatusDistribution(makeReq(), res);
     expect(mockUserGroupBy).not.toHaveBeenCalled();
     expect(mockApiResponse).toHaveBeenCalledWith(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Employee status distribution retrieved",
       data: cached,
     });
   });

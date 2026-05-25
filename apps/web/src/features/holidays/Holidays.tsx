@@ -1,9 +1,10 @@
-import React, {
+import {
+  memo,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
-  useCallback,
 } from "react";
 import {
   MaterialReactTable,
@@ -577,4 +578,4 @@ function ViewAddHolidays() {
   );
 }
 
-export default React.memo(ViewAddHolidays);
+export default memo(ViewAddHolidays);

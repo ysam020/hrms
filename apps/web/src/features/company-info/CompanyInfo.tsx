@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, type ReactNode } from "react";
 import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
@@ -20,6 +20,7 @@ import LanguageIcon from "@mui/icons-material/Language";
 import EditIcon from "@mui/icons-material/Edit";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import apiClient from "@web/core/http/axiosConfig";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { UserContext } from "@web/app/providers/UserContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
 
@@ -37,7 +38,7 @@ function InfoRow({
   value,
   href,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string | null | undefined;
   href?: string;
@@ -104,7 +105,7 @@ export default function CompanyInfo() {
 
   useEffect(() => {
     apiClient
-      .get("/tenants/org-profile")
+      .get(API_ENDPOINTS.ORG_PROFILE)
       .then((res) => {
         if (res.data?.success) setProfile(res.data.data.orgProfile);
       })
@@ -123,7 +124,7 @@ export default function CompanyInfo() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await apiClient.put("/tenants/org-profile", {
+      const res = await apiClient.put(API_ENDPOINTS.ORG_PROFILE, {
         helpPhone: editPhone || null,
         helpEmail: editEmail || null,
         officeAddress: editAddress || null,

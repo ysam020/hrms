@@ -1,4 +1,10 @@
-import React, { useContext, useEffect, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
 import Box from "@mui/material/Box";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -14,7 +20,7 @@ import Subscription from "@web/features/subscription/Subscription";
 interface SettingsTab {
   label: string;
   slug: string;
-  component: React.ReactNode;
+  component: ReactNode;
 }
 
 const BASE_TABS: SettingsTab[] = [
@@ -86,7 +92,7 @@ export default function Settings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_: SyntheticEvent, newValue: number) => {
     const slug = tabs[newValue].slug;
     setActiveTab(newValue);
     localStorage.setItem(LS_KEY, slug);

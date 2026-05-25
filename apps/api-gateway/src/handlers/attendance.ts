@@ -5,6 +5,7 @@ import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
+import { isSuperUser } from "../utils/user";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -195,15 +196,8 @@ export async function attendanceCorrection(req: Request, res: Response) {
         message: "userId is required",
       });
 
-    const requestingUser = await prisma.user.findUnique({
-      where: { id: user!.userId },
-      select: { isSuperUser: true },
-    });
-    if (!requestingUser)
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "User not found",
-      });
-    if (!requestingUser.isSuperUser && user!.userId !== targetUserId)
+    const requestingUserIsSuperUser = await isSuperUser(user!.userId);
+    if (!requestingUserIsSuperUser && user!.userId !== targetUserId)
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });

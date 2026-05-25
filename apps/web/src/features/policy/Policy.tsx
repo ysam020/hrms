@@ -1,10 +1,10 @@
-import React, { useMemo, useState, useCallback, useContext } from "react";
+import { lazy, memo, useCallback, useContext, useMemo, useState } from "react";
 import TabsPanel from "@web/shared/components/TabsPanel";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 
-const CreatePolicy = React.lazy(() => import("./CreatePolicy"));
-const ViewPolicies = React.lazy(() => import("./ViewPolicies"));
+const CreatePolicy = lazy(() => import("./CreatePolicy"));
+const ViewPolicies = lazy(() => import("./ViewPolicies"));
 
 function Policy() {
   const { user } = useContext(UserContext);
@@ -42,4 +42,4 @@ function Policy() {
   );
 }
 
-export default React.memo(Policy);
+export default memo(Policy);

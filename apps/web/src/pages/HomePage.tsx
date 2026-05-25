@@ -1,9 +1,12 @@
-import React, {
-  useState,
-  useContext,
+import {
   Suspense,
+  lazy,
+  memo,
+  useContext,
   useEffect,
   useMemo,
+  useRef,
+  useState,
 } from "react";
 import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -27,25 +30,23 @@ import useSpotlightModal from "@web/shared/hooks/useSpotlightModal";
 import GlobalDock from "@web/features/dashboard/GlobalDock";
 import { BottomDrawerProvider } from "@web/app/providers/BottomDrawerContext";
 
-const ChatbotFab = React.lazy(() => import("@web/features/chatbot/Chatbot"));
-const OnboardingModals = React.lazy(
+const ChatbotFab = lazy(() => import("@web/features/chatbot/Chatbot"));
+const OnboardingModals = lazy(
   () => import("@web/features/onboarding/OnboardingModals"),
 );
 
-const UnAuthorisedRoute = React.lazy(
+const UnAuthorisedRoute = lazy(
   () => import("@web/app/router/UnAuthorisedRoute"),
 );
-const Tour = React.lazy(() => import("@web/features/layout/Tour"));
-const ActivityDrawer = React.lazy(
-  () => import("@web/features/layout/AuditLogs"),
-);
-const NotificationDrawer = React.lazy(
+const Tour = lazy(() => import("@web/features/layout/Tour"));
+const ActivityDrawer = lazy(() => import("@web/features/layout/AuditLogs"));
+const NotificationDrawer = lazy(
   () => import("@web/features/layout/NotificationDrawer"),
 );
-const NotificationConsentDrawer = React.lazy(
+const NotificationConsentDrawer = lazy(
   () => import("@web/shared/components/NotificationConsentDrawer"),
 );
-const SpotlightModal = React.lazy(
+const SpotlightModal = lazy(
   () => import("@web/features/layout/modals/SpotlightModal"),
 );
 
@@ -92,7 +93,7 @@ function HomePage(props) {
     [theme],
   );
 
-  const fcmRefreshed = React.useRef(false);
+  const fcmRefreshed = useRef(false);
   useEffect(() => {
     // Only run once per session — user object reference changes on every profile
     // update, which would otherwise re-trigger the consent drawer each time.
@@ -102,9 +103,8 @@ function HomePage(props) {
     }
   }, [user]);
 
-  const [openActivityDrawer, setOpenActivityDrawer] = React.useState(false);
-  const [openNotificationDrawer, setOpenNotificationDrawer] =
-    React.useState(false);
+  const [openActivityDrawer, setOpenActivityDrawer] = useState(false);
+  const [openNotificationDrawer, setOpenNotificationDrawer] = useState(false);
 
   const toggleActivityDrawer = (isOpen) => (event) => {
     if (
@@ -263,4 +263,4 @@ function HomePage(props) {
   );
 }
 
-export default React.memo(HomePage);
+export default memo(HomePage);

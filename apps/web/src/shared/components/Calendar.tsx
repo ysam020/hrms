@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useCallback } from "react";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   Calendar,
   dayjsLocalizer,
@@ -190,7 +196,7 @@ const AttendanceCalendar = (props: {
       const isToday = dayjs(date).isSame(dayjs(today), "day");
 
       let className = "";
-      const style: React.CSSProperties = {};
+      const style: CSSProperties = {};
 
       if (isToday) {
         className = "attendance-today-compact";
@@ -244,4 +250,4 @@ const AttendanceCalendar = (props: {
   );
 };
 
-export default React.memo(AttendanceCalendar);
+export default memo(AttendanceCalendar);

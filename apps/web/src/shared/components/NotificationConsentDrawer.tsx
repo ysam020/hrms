@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from "react";
+import { memo, useContext, useEffect } from "react";
 import Drawer from "@mui/material/Drawer";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -177,4 +177,4 @@ function NotificationConsentDrawer({
   );
 }
 
-export default React.memo(NotificationConsentDrawer);
+export default memo(NotificationConsentDrawer);

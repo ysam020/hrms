@@ -1,4 +1,10 @@
-import React, { useContext } from "react";
+import {
+  Children,
+  cloneElement,
+  memo,
+  useContext,
+  type ReactElement,
+} from "react";
 import dayjs from "dayjs";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -30,7 +36,7 @@ import Info from "@mui/icons-material/Info";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 type DataFieldProps = {
-  icon: React.ReactElement;
+  icon: ReactElement;
   label: string;
   value: any;
   link?: string;
@@ -162,7 +168,7 @@ function BasicInfo({ user }) {
               alignItems: "center",
             }}
           >
-            {React.cloneElement(icon, { sx: { fontSize: { xs: 16, sm: 18 } } })}
+            {cloneElement(icon, { sx: { fontSize: { xs: 16, sm: 18 } } })}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography
@@ -262,7 +268,7 @@ function BasicInfo({ user }) {
           gap: 1,
         }}
       >
-        {React.Children.map(children, (child, index) => (
+        {Children.map(children, (child, index) => (
           <Card key={index} variant="outlined">
             <CardContent
               sx={{
@@ -579,4 +585,4 @@ function BasicInfo({ user }) {
   );
 }
 
-export default React.memo(BasicInfo);
+export default memo(BasicInfo);

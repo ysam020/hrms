@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { cloneElement, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
@@ -436,7 +436,7 @@ const OrganisationTree = () => {
                         justifyContent: "center",
                       }}
                     >
-                      {React.cloneElement(stat.icon, {
+                      {cloneElement(stat.icon, {
                         sx: { fontSize: { xs: "0.9rem", sm: "1rem" } },
                       })}
                     </Box>

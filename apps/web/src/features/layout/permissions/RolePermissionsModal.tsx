@@ -1,4 +1,4 @@
-import * as React from "react";
+import { memo, useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Modal from "@mui/material/Modal";
 import { style } from "@web/shared/utils/modalStyle";
@@ -23,12 +23,12 @@ import useFetchData from "@web/shared/hooks/useFetchData";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function RolePermissionsModal(props) {
-  const { setAlert } = React.useContext(AlertContext);
-  const [activeModule, setActiveModule] = React.useState("");
-  const [rolePermissions, setRolePermissions] = React.useState<any[]>([]);
-  const [saving, setSaving] = React.useState(false);
-  const [hasChanges, setHasChanges] = React.useState(false);
-  const { theme } = React.useContext(ThemeContext);
+  const { setAlert } = useContext(AlertContext);
+  const [activeModule, setActiveModule] = useState("");
+  const [rolePermissions, setRolePermissions] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const { theme } = useContext(ThemeContext);
 
   const { data: fetchedPermissions, loading } = useFetchData(
     `/get-role-permissions/${props.roleId}`,
@@ -253,7 +253,7 @@ function RolePermissionsModal(props) {
   };
 
   // Set initial active module on first render
-  React.useEffect(() => {
+  useEffect(() => {
     // Set first module in alphabetical order as active if exists
     if (modules.length > 0) {
       setActiveModule(modules[0]);
@@ -261,7 +261,7 @@ function RolePermissionsModal(props) {
   }, []);
 
   // Update rolePermissions state when data is fetched
-  React.useEffect(() => {
+  useEffect(() => {
     if (fetchedPermissions && !loading) {
       let permissions: any[] = [];
 
@@ -359,4 +359,4 @@ function RolePermissionsModal(props) {
   );
 }
 
-export default React.memo(RolePermissionsModal);
+export default memo(RolePermissionsModal);

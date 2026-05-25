@@ -1,5 +1,5 @@
 import { FileUpload } from "primereact/fileupload";
-import React, { useCallback } from "react";
+import { memo, useCallback } from "react";
 import handleFileUpload from "@web/shared/utils/handleFileUpload";
 
 function FileUploadWrapper({
@@ -75,4 +75,4 @@ function FileUploadWrapper({
   );
 }
 
-export default React.memo(FileUploadWrapper);
+export default memo(FileUploadWrapper);

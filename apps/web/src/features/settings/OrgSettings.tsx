@@ -1,10 +1,11 @@
-import React, {
+import {
+  Suspense,
+  lazy,
+  useCallback,
   useContext,
   useEffect,
   useState,
-  useCallback,
-  lazy,
-  Suspense,
+  type ReactNode,
 } from "react";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
@@ -140,7 +141,7 @@ function TabPanel({
   value,
   index,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   value: number;
   index: number;
 }) {

@@ -4,6 +4,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
+import { handleError } from "../utils/handleError";
 import { randomBytes } from "crypto";
 import path from "path";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
@@ -133,10 +134,7 @@ export async function getHolidays(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("get-holidays error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-      data: [],
-    });
+    return handleError(res, error);
   }
 }
 
@@ -190,10 +188,7 @@ export async function getCalendarEvents(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("get-calendar-events error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-      data: [],
-    });
+    return handleError(res, error);
   }
 }
 
@@ -277,10 +272,7 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("birthdays-anniversaries error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-      data: [],
-    });
+    return handleError(res, error);
   }
 }
 
@@ -328,10 +320,7 @@ export async function getAuditLogs(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("audit-logs error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-      data: [],
-    });
+    return handleError(res, error);
   }
 }
 
@@ -400,9 +389,7 @@ export async function addHoliday(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("add-holiday error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -449,9 +436,7 @@ export async function deleteHoliday(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("delete-holiday error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -487,9 +472,7 @@ export async function addEvent(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("add-event error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -541,9 +524,7 @@ export async function editCalendarEvent(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("edit-calendar-event error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -581,9 +562,7 @@ export async function deleteCalendarEvent(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("delete-calendar-event error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -641,8 +620,6 @@ export async function getPresignedUrl(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("presigned-url error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }

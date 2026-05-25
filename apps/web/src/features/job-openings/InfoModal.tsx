@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import { memo, useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
@@ -498,4 +498,4 @@ function InfoModal(props) {
   );
 }
 
-export default React.memo(InfoModal);
+export default memo(InfoModal);

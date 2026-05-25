@@ -175,31 +175,33 @@ async function buildTenant(
   ]);
 
   // Force Atlas to materialise the tenant database, then seed default settings.
+  // Fire-and-forget: failures are logged but must not block the main setup flow.
   const tenantClient = getClientForDb(dbName);
-  (tenantClient.$runCommandRaw as any)({
-    insert: "_init",
-    documents: [
-      {
-        _id: { $oid: tenant.id },
-        tenantId: tenant.id,
-        initializedAt: new Date(),
-      },
-    ],
-  })
-    .then(() =>
+  void (async () => {
+    try {
+      await (tenantClient.$runCommandRaw as any)({
+        insert: "_init",
+        documents: [
+          {
+            _id: { $oid: tenant.id },
+            tenantId: tenant.id,
+            initializedAt: new Date(),
+          },
+        ],
+      });
       // Seed the initial TenantSettings version so services always have a DB record.
-      (tenantClient as any).tenantSettings.create({
+      await (tenantClient as any).tenantSettings.create({
         data: {
           tenantId: tenant.id,
           effectiveFrom: now,
           createdBy: userId,
           note: "Initial defaults",
         },
-      }),
-    )
-    .catch((e: unknown) =>
-      logger.warn("[buildTenant] Failed to seed TenantSettings:", { e }),
-    );
+      });
+    } catch (error: unknown) {
+      logger.warn("[buildTenant] Failed to seed TenantSettings:", { error });
+    }
+  })();
 
   await Promise.all([
     prisma.user.update({
@@ -294,9 +296,9 @@ export async function createTenant(req: AuthRequest, res: Response) {
       },
       res,
     );
-  } catch (err) {
-    logger.error("createTenant error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("createTenant error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -359,12 +361,12 @@ export async function completePendingSetup(req: AuthRequest, res: Response) {
     );
 
     // Fire-and-forget cleanup — response already sent by buildTenant.
-    clearPendingSubscription(userId).catch((e) =>
-      logger.warn("clearPendingSubscription failed:", { e }),
+    clearPendingSubscription(userId).catch((error) =>
+      logger.warn("clearPendingSubscription failed:", { error }),
     );
-  } catch (err) {
-    logger.error("completePendingSetup error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("completePendingSetup error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -435,9 +437,9 @@ export async function selectTenant(req: AuthRequest, res: Response) {
       },
       message: "Tenant selected.",
     });
-  } catch (err) {
-    logger.error("selectTenant error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("selectTenant error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -526,9 +528,9 @@ export async function inviteUser(req: AuthRequest, res: Response) {
       },
       message: "Invite created successfully.",
     });
-  } catch (err) {
-    logger.error("inviteUser error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("inviteUser error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -559,9 +561,9 @@ export async function resolveInvite(req: Request, res: Response) {
         expiresAt: invite.expiresAt,
       },
     });
-  } catch (err) {
-    logger.error("resolveInvite error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("resolveInvite error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -591,9 +593,9 @@ export async function listAvailableTenants(req: AuthRequest, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { tenants: result },
     });
-  } catch (err) {
-    logger.error("listAvailableTenants error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("listAvailableTenants error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -613,8 +615,8 @@ export async function getMyTenant(req: AuthRequest, res: Response) {
       });
     }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: { tenant } });
-  } catch (err) {
-    return handleError(res, err);
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -656,8 +658,8 @@ export async function listTenantMembers(req: AuthRequest, res: Response) {
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: { members } });
-  } catch (err) {
-    return handleError(res, err);
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -683,8 +685,8 @@ export async function getOrgProfile(req: AuthRequest, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { orgProfile: tenant },
     });
-  } catch (err) {
-    return handleError(res, err);
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -739,8 +741,8 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
       data: { orgProfile: tenant },
       message: "Organisation profile updated.",
     });
-  } catch (err) {
-    return handleError(res, err);
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }
 
@@ -774,9 +776,9 @@ export async function completeOrgSetup(req: AuthRequest, res: Response) {
     );
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: { accessToken } });
-  } catch (err) {
-    logger.error("completeOrgSetup error:", { err });
-    return handleError(res, err);
+  } catch (error: unknown) {
+    logger.error("completeOrgSetup error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -807,7 +809,7 @@ export async function revokeInvite(req: AuthRequest, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Invite revoked.",
     });
-  } catch (err) {
-    return handleError(res, err);
+  } catch (error: unknown) {
+    return handleError(res, error);
   }
 }

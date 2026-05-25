@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { memo, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Skeleton from "@mui/material/Skeleton";
@@ -263,4 +263,4 @@ function BirthdayAnniversary() {
   );
 }
 
-export default React.memo(BirthdayAnniversary);
+export default memo(BirthdayAnniversary);

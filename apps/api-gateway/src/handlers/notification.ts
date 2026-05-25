@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { notificationClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
+import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
 
 export async function getNotifications(req: Request, res: Response) {
@@ -14,9 +16,8 @@ export async function getNotifications(req: Request, res: Response) {
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("GET /get-notifications error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -29,9 +30,8 @@ export async function clearNotification(req: Request, res: Response) {
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("PUT /clear-notification error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -44,8 +44,7 @@ export async function clearAllNotifications(req: Request, res: Response) {
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("PUT /clear-all-notifications error:", { error });
+    return handleError(res, error);
   }
 }

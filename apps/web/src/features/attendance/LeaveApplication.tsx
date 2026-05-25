@@ -1,4 +1,4 @@
-import React, { useContext, useState, useRef } from "react";
+import { useContext, useState, useRef, memo } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
@@ -8,7 +8,6 @@ import Chip from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
-import Snackbar from "@mui/material/Snackbar";
 import CalendarToday from "@mui/icons-material/CalendarToday";
 import EventNote from "@mui/icons-material/EventNote";
 import Info from "@mui/icons-material/Info";
@@ -29,7 +28,6 @@ function LeaveApplication() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const [sickLeave, setIsSickLeave] = useState(false);
-  const [fileSnackbar, setFileSnackbar] = useState(false);
 
   const fileUploadRef = useRef(null);
 
@@ -242,7 +240,15 @@ function LeaveApplication() {
                         formik={formik}
                         fileUploadRef={fileUploadRef}
                         accept="image/*,application/pdf"
-                        setFileSnackbar={setFileSnackbar}
+                        setFileSnackbar={(uploaded: boolean) => {
+                          if (uploaded)
+                            setAlert({
+                              open: true,
+                              message:
+                                "Medical certificate uploaded successfully!",
+                              severity: "success",
+                            });
+                        }}
                         username={user?.username}
                       />
                     </Grid>
@@ -266,25 +272,9 @@ function LeaveApplication() {
             </Grid>
           </Grid>
         </form>
-
-        <Snackbar
-          open={fileSnackbar}
-          autoHideDuration={4000}
-          onClose={() => setFileSnackbar(false)}
-          message="Medical certificate uploaded successfully!"
-          sx={{
-            left: "auto !important",
-            right: "24px !important",
-            "& .MuiSnackbarContent-root": {
-              backgroundColor: "#10b981",
-              borderRadius: "8px",
-              fontWeight: "500",
-            },
-          }}
-        />
       </CardContent>
     </Card>
   );
 }
 
-export default React.memo(LeaveApplication);
+export default memo(LeaveApplication);

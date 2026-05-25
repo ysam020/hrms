@@ -1,8 +1,9 @@
-import React, {
+import {
   createContext,
-  useContext,
-  useState,
   useCallback,
+  useContext,
+  useMemo,
+  useState,
   type ReactNode,
 } from "react";
 
@@ -26,7 +27,7 @@ export function BottomDrawerProvider({ children }: { children: ReactNode }) {
     setOpenCount((prev) => (isOpen ? prev + 1 : Math.max(0, prev - 1)));
   }, []);
 
-  const value = React.useMemo(
+  const value = useMemo(
     () => ({
       isAnyOpen: openCount > 0,
       setDrawerOpen,

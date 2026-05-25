@@ -3,8 +3,10 @@ import { userClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { camelToSnake, apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { logger } from "@hrms/logger";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
+import { isSuperUser } from "../utils/user";
 
 export async function getAllUsers(req: Request, res: Response) {
   try {
@@ -20,9 +22,8 @@ export async function getAllUsers(req: Request, res: Response) {
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("GET /users error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -72,11 +73,8 @@ export async function getUserData(req: Request, res: Response) {
     // Strip PII that only the owner or a superuser may see
     const callerIsOwner = user?.userId === req.params.username;
     if (!callerIsOwner) {
-      const caller = await prisma.user.findUnique({
-        where: { id: user!.userId },
-        select: { isSuperUser: true },
-      });
-      if (!caller?.isSuperUser) {
+      const callerIsSuperUser = await isSuperUser(user!.userId);
+      if (!callerIsSuperUser) {
         delete snake.aadhar_no;
         delete snake.bank_account_no;
         delete snake.pan_no;
@@ -88,9 +86,8 @@ export async function getUserData(req: Request, res: Response) {
       data: snake,
     });
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("GET /user-data error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -109,9 +106,8 @@ export async function saveFcmToken(req: Request, res: Response) {
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("POST /save-fcm-token error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -126,9 +122,8 @@ export async function disablePushNotifications(req: Request, res: Response) {
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("DELETE /disable-push-notifications error:", { error });
+    return handleError(res, error);
   }
 }
 

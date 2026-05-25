@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { memo, useContext } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
@@ -195,4 +195,4 @@ function AddTeamMembersModal(props) {
   );
 }
 
-export default React.memo(AddTeamMembersModal);
+export default memo(AddTeamMembersModal);

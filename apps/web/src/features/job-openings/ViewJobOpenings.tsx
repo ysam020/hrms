@@ -1,9 +1,10 @@
-import React, {
-  useState,
-  useEffect,
-  useMemo,
+import {
+  memo,
   useCallback,
   useContext,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
 import {
   MaterialReactTable,
@@ -673,4 +674,4 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   );
 }
 
-export default React.memo(ViewJobOpenings);
+export default memo(ViewJobOpenings);

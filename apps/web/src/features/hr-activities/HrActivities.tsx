@@ -1,9 +1,9 @@
-import React, { useState, useCallback, useContext } from "react";
+import { lazy, memo, useCallback, useContext, useState } from "react";
 import TabsPanel from "@web/shared/components/TabsPanel";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
-const AddHrActivity = React.lazy(() => import("./AddHrActivity"));
-const ViewHrActivities = React.lazy(() => import("./ViewHrActivities"));
+const AddHrActivity = lazy(() => import("./AddHrActivity"));
+const ViewHrActivities = lazy(() => import("./ViewHrActivities"));
 
 function HrActivities() {
   const { user } = useContext(UserContext);
@@ -42,4 +42,4 @@ function HrActivities() {
   );
 }
 
-export default React.memo(HrActivities);
+export default memo(HrActivities);

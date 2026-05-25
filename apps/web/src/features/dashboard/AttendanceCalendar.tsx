@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Skeleton from "@mui/material/Skeleton";
@@ -242,4 +242,4 @@ function AttendanceCalendar() {
   );
 }
 
-export default React.memo(AttendanceCalendar);
+export default memo(AttendanceCalendar);

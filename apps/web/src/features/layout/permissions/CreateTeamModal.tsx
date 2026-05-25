@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { memo, useContext, useEffect } from "react";
 import Modal from "@mui/material/Modal";
 import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
@@ -82,7 +82,7 @@ function CreateTeamModal(props) {
   });
 
   // Reset team leader if not in selected members
-  React.useEffect(() => {
+  useEffect(() => {
     if (
       formik.values.team_leader &&
       !formik.values.members.includes(formik.values.team_leader)
@@ -398,4 +398,4 @@ function CreateTeamModal(props) {
   );
 }
 
-export default React.memo(CreateTeamModal);
+export default memo(CreateTeamModal);

@@ -568,9 +568,9 @@ export async function googleAuthCallback(req: Request, res: Response) {
       );
     }
     return jsRedirect(res, `${clientUrl}/?${redirectParams.toString()}`);
-  } catch (err: unknown) {
+  } catch (error: unknown) {
     logger.error("[OAuth callback error]", {
-      message: err instanceof Error ? err.message : err,
+      message: error instanceof Error ? error.message : error,
     });
     return jsRedirect(
       res,

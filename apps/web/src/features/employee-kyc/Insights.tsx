@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import { memo, useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -533,4 +533,4 @@ function KycInsights() {
   );
 }
 
-export default React.memo(KycInsights);
+export default memo(KycInsights);

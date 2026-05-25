@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from "react";
+import { memo, useContext, useEffect, useState } from "react";
 import Drawer from "@mui/material/Drawer";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -370,4 +370,4 @@ function CameraConsentDrawer({
   );
 }
 
-export default React.memo(CameraConsentDrawer);
+export default memo(CameraConsentDrawer);

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useRef } from "react";
+import { useState, useContext, useEffect, useRef } from "react";
 import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
@@ -27,6 +27,7 @@ import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import WalletIcon from "@mui/icons-material/Wallet";
 import { alpha } from "@mui/material/styles";
 import apiClient from "@web/core/http/axiosConfig";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 
@@ -160,7 +161,7 @@ export default function Subscription() {
 
   useEffect(() => {
     apiClient
-      .get("/tenants/me")
+      .get(API_ENDPOINTS.MY_TENANT)
       .then((res) => {
         if (res.data?.success) setTenant(res.data.data.tenant);
       })
@@ -171,7 +172,7 @@ export default function Subscription() {
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      const res = await apiClient.post("/payment/cancel-subscription");
+      const res = await apiClient.post(API_ENDPOINTS.CANCEL_SUBSCRIPTION);
       if (res.data?.success) {
         setTenant((prev) =>
           prev ? { ...prev, subscriptionStatus: "expired" } : prev,
@@ -215,7 +216,7 @@ export default function Subscription() {
         return;
       }
 
-      const subRes = await apiClient.post("/payment/create-subscription", {
+      const subRes = await apiClient.post(API_ENDPOINTS.CREATE_SUBSCRIPTION, {
         billing: renewBillingRef.current,
       });
       if (!subRes.data?.success) {
@@ -262,7 +263,7 @@ export default function Subscription() {
                   message: "Subscription renewed successfully!",
                   severity: "success",
                 });
-                return apiClient.get("/tenants/me");
+                return apiClient.get(API_ENDPOINTS.MY_TENANT);
               }
               setAlert({
                 open: true,

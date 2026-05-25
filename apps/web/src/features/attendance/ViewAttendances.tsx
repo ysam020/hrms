@@ -1,9 +1,10 @@
-import React, {
-  useState,
-  useMemo,
-  useContext,
+import {
+  memo,
   useCallback,
+  useContext,
+  useMemo,
   useRef,
+  useState,
 } from "react";
 import {
   MaterialReactTable,
@@ -41,7 +42,7 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 import CircularProgress from "@mui/material/CircularProgress";
 
 // Mobile Card Component
-const AttendanceCard = React.memo(({ employee }: { employee: any }) => (
+const AttendanceCard = memo(({ employee }: { employee: any }) => (
   <Card sx={{ mb: 2, boxShadow: 2 }}>
     <CardContent>
       <Grid container>
@@ -435,4 +436,4 @@ function ViewAttendances() {
   );
 }
 
-export default React.memo(ViewAttendances);
+export default memo(ViewAttendances);

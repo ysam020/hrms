@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useMemo, useContext } from "react";
+import {
+  Fragment,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -105,7 +112,7 @@ function Help() {
       sx={{ flexWrap: "wrap", gap: { xs: 0.4, sm: 0.5 } }}
     >
       {keys.map((key, index) => (
-        <React.Fragment key={index}>
+        <Fragment key={index}>
           <Chip
             label={key}
             size="small"
@@ -140,7 +147,7 @@ function Help() {
               +
             </Typography>
           )}
-        </React.Fragment>
+        </Fragment>
       ))}
     </Stack>
   );
@@ -433,4 +440,4 @@ function Help() {
   );
 }
 
-export default React.memo(Help);
+export default memo(Help);

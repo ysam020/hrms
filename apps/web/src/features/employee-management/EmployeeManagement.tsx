@@ -1,5 +1,5 @@
 import TabsPanel from "@web/shared/components/TabsPanel";
-import * as React from "react";
+import { memo } from "react";
 import EmployeeList from "./EmployeeList";
 import EmployeeInsights from "./EmployeeInsights";
 
@@ -18,4 +18,4 @@ function EmployeeManagement() {
   );
 }
 
-export default React.memo(EmployeeManagement);
+export default memo(EmployeeManagement);

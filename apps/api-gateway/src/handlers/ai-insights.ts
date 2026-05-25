@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { handleError } from "../utils/handleError";
 import dayjs from "dayjs";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
@@ -821,9 +822,7 @@ export async function generateInsights(req: Request, res: Response) {
     }
   } catch (error: unknown) {
     logger.error("AI insights data fetch error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Failed to fetch module data",
-    });
+    return handleError(res, error);
   }
 
   // Switch to SSE after all validation and data-fetching succeed

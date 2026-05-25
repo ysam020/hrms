@@ -13,7 +13,7 @@
  * dismissed flag exists for their tenantId.
  */
 
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -58,7 +58,7 @@ function markOnboardingDismissed(tenantId: string): void {
 interface OnboardingStep {
   title: string;
   description: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   actionLabel: string;
   skipLabel: string;
   route: string;

@@ -13,7 +13,9 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  console.error("Failed to start scheduler service");
-  console.error(err instanceof Error ? err.name : "unknown error");
+  logger.error(
+    "Failed to start: could not load secrets from AWS Secrets Manager",
+  );
+  logger.error(err instanceof Error ? err.name : "unknown error");
   process.exit(1);
 });

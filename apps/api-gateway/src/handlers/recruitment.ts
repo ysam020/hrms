@@ -7,14 +7,7 @@ import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
-
-async function isSuperUser(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
-  return user?.isSuperUser === true;
-}
+import { isSuperUser } from "../utils/user";
 
 export async function viewJobOpenings(req: Request, res: Response) {
   try {
@@ -353,11 +346,8 @@ export async function withdrawResignation(req: Request, res: Response) {
         message: "Resignation not found",
       });
 
-    const caller = await prisma.user.findUnique({
-      where: { id: user!.userId },
-      select: { isSuperUser: true },
-    });
-    if (!caller?.isSuperUser && user!.userId !== resignation.userId)
+    const callerIsSuperUser = await isSuperUser(user!.userId);
+    if (!callerIsSuperUser && user!.userId !== resignation.userId)
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });

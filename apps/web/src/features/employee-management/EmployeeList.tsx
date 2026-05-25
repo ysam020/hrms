@@ -1,7 +1,8 @@
-import React, {
+import {
+  memo,
   useCallback,
-  useMemo,
   useContext,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -191,4 +192,4 @@ function EmployeeList() {
   );
 }
 
-export default React.memo(EmployeeList);
+export default memo(EmployeeList);

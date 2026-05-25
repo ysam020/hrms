@@ -222,9 +222,7 @@ export async function employeeInsights(_req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("employee-insights error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -271,9 +269,7 @@ export async function completeKyc(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     logger.error("completeKyc error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -292,9 +288,7 @@ export async function editKyc(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     logger.error("editKyc error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -325,9 +319,8 @@ export async function kycApproval(req: Request, res: Response) {
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    logger.error("kycApproval error:", { error });
+    return handleError(res, error);
   }
 }
 
@@ -400,9 +393,7 @@ export async function viewAllKycs(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("view-all-kycs error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -448,8 +439,6 @@ export async function getKycInsights(_req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("get-kyc-insights error:", { error });
-    return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
-      message: "Internal Server Error",
-    });
+    return handleError(res, error);
   }
 }

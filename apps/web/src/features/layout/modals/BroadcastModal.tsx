@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { memo, useContext } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -106,4 +106,4 @@ function BroadcastModal(props) {
   );
 }
 
-export default React.memo(BroadcastModal);
+export default memo(BroadcastModal);
