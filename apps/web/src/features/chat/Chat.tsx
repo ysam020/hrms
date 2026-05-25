@@ -19,6 +19,7 @@ import Badge from "@mui/material/Badge";
 import InputAdornment from "@mui/material/InputAdornment";
 import Divider from "@mui/material/Divider";
 import Dialog from "@mui/material/Dialog";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
@@ -1096,6 +1097,8 @@ function Chat() {
         open={Boolean(lightboxUrl)}
         onClose={() => setLightboxUrl(null)}
         maxWidth="lg"
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
       >
         <DialogContent sx={{ p: 0, bgcolor: "black", position: "relative" }}>
           <IconButton
@@ -1126,6 +1129,8 @@ function Chat() {
       <Dialog
         open={Boolean(deleteTargetMsg)}
         onClose={() => setDeleteTargetMsg(null)}
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
       >
         <DialogTitle>Delete Message</DialogTitle>
         <DialogContent>
@@ -1149,6 +1154,8 @@ function Chat() {
       <Dialog
         open={deleteConvConfirm}
         onClose={() => setDeleteConvConfirm(false)}
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
       >
         <DialogTitle>Delete Chat</DialogTitle>
         <DialogContent>

@@ -7,6 +7,7 @@ import DialogContentText from "@mui/material/DialogContentText";
 import Button from "./Button";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import Box from "@mui/material/Box";
+import SlideUpTransition from "./SlideUpTransition";
 
 function ConfirmationDialog({
   open,
@@ -40,6 +41,8 @@ function ConfirmationDialog({
       open={open}
       onClose={!loading ? onClose : undefined}
       disablePortal
+      slots={{ transition: SlideUpTransition }}
+      transitionDuration={{ enter: 280, exit: 200 }}
       aria-labelledby="confirmation-dialog-title"
       aria-describedby="confirmation-dialog-description"
       slotProps={{

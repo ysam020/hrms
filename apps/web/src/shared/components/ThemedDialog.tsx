@@ -5,6 +5,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
+import SlideUpTransition from "./SlideUpTransition";
 
 function ThemedDialog({
   open,
@@ -39,6 +40,8 @@ function ThemedDialog({
       onClose={onClose}
       maxWidth={maxWidth}
       fullWidth={fullWidth}
+      slots={{ transition: SlideUpTransition }}
+      transitionDuration={{ enter: 280, exit: 200 }}
       slotProps={{
         paper: defaultPaperProps,
       }}

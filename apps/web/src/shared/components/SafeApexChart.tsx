@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import LoadingState from "./LoadingState";
 const ReactApexChart = lazy(() => import("react-apexcharts"));
 

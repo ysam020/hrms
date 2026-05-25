@@ -11,7 +11,8 @@ import {
 import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import Toolbar from "@mui/material/Toolbar";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
+import { PageTransition } from "@web/shared/components/motion";
 import { TabValueContext } from "@web/app/providers/TabValueContext";
 import AppbarComponent from "@web/features/layout/AppbarComponent";
 import { DashboardEditProvider } from "@web/app/providers/DashboardEditContext";
@@ -53,6 +54,7 @@ const SpotlightModal = lazy(
 const drawerWidth = 60;
 
 function HomePage(props) {
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [run, setRun] = useState(false);
@@ -176,39 +178,41 @@ function HomePage(props) {
                     overflowX: "hidden",
                   }}
                 >
-                  <Routes>
-                    {filteredRoutes
-                      .filter((r) => !r.spotlightOnly)
-                      .map(({ path, element, allowedModules }, index) => (
-                        <Route
-                          key={index}
-                          path={path}
-                          element={
-                            allowedModules.length === 0 ? (
-                              element
-                            ) : (
-                              <Suspense
-                                fallback={<LoadingState size="small" />}
-                              >
-                                <ErrorBoundary fallback={<ErrorFallback />}>
-                                  {element}
-                                </ErrorBoundary>
-                              </Suspense>
-                            )
-                          }
-                        />
-                      ))}
-                    <Route
-                      path="*"
-                      element={
-                        <Suspense fallback={<LoadingState size="small" />}>
-                          <ErrorBoundary fallback={<ErrorFallback />}>
-                            <UnAuthorisedRoute />
-                          </ErrorBoundary>
-                        </Suspense>
-                      }
-                    />
-                  </Routes>
+                  <PageTransition locationKey={location.pathname}>
+                    <Routes location={location}>
+                      {filteredRoutes
+                        .filter((r) => !r.spotlightOnly)
+                        .map(({ path, element, allowedModules }, index) => (
+                          <Route
+                            key={index}
+                            path={path}
+                            element={
+                              allowedModules.length === 0 ? (
+                                element
+                              ) : (
+                                <Suspense
+                                  fallback={<LoadingState size="small" />}
+                                >
+                                  <ErrorBoundary fallback={<ErrorFallback />}>
+                                    {element}
+                                  </ErrorBoundary>
+                                </Suspense>
+                              )
+                            }
+                          />
+                        ))}
+                      <Route
+                        path="*"
+                        element={
+                          <Suspense fallback={<LoadingState size="small" />}>
+                            <ErrorBoundary fallback={<ErrorFallback />}>
+                              <UnAuthorisedRoute />
+                            </ErrorBoundary>
+                          </Suspense>
+                        }
+                      />
+                    </Routes>
+                  </PageTransition>
                 </Box>
 
                 <Suspense fallback={null}>

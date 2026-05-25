@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo } from "react";
 import Box from "@mui/material/Box";
+import { motion } from "framer-motion";
 import { Dock } from "primereact/dock";
 import { useNavigate } from "react-router-dom";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -200,11 +201,17 @@ function GlobalDock() {
   }, [setDockVisible]);
 
   return (
-    <Box
-      className={`global-dock${isDark ? " global-dock-dark" : ""} global-dock-visible`}
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.15 }}
     >
-      <Dock model={dockItems} position="bottom" />
-    </Box>
+      <Box
+        className={`global-dock${isDark ? " global-dock-dark" : ""} global-dock-visible`}
+      >
+        <Dock model={dockItems} position="bottom" />
+      </Box>
+    </motion.div>
   );
 }
 

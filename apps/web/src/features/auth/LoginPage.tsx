@@ -20,6 +20,7 @@ import WorkOutline from "@mui/icons-material/WorkOutline";
 import KeyIcon from "@mui/icons-material/Key";
 
 import "@web/styles/login.scss";
+import { motion } from "framer-motion";
 import { ErrorBoundary } from "react-error-boundary";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -102,7 +103,17 @@ function LoginPage() {
     <Grid container className="login-row">
       {/* Left Column */}
       <Grid size={6} className="login-left-col" style={leftColStyle}>
-        <div className="login-left-content">
+        <motion.div
+          className="login-left-content"
+          initial={{ opacity: 0, x: -24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 280,
+            damping: 26,
+            mass: 0.9,
+          }}
+        >
           <div className="login-left-header">
             <div className="company-badge">
               <People sx={{ fontSize: 20, mr: 1 }} />
@@ -127,7 +138,18 @@ function LoginPage() {
 
           <div className="features-grid">
             {features.map((feature, index) => (
-              <div key={index} className="feature-card">
+              <motion.div
+                key={index}
+                className="feature-card"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 26,
+                  delay: 0.12 + index * 0.06,
+                }}
+              >
                 <div className="feature-icon" style={{ color: feature.color }}>
                   {feature.icon}
                 </div>
@@ -139,7 +161,7 @@ function LoginPage() {
                     {feature.description}
                   </Typography>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
 
@@ -171,12 +193,23 @@ function LoginPage() {
               </Typography>
             </div>
           </div>
-        </div>
+        </motion.div>
       </Grid>
 
       {/* Right Column */}
       <Grid size={6} className="login-right-col">
-        <div className="login-right-col-inner-container">
+        <motion.div
+          className="login-right-col-inner-container"
+          initial={{ opacity: 0, x: 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 280,
+            damping: 26,
+            mass: 0.9,
+            delay: 0.06,
+          }}
+        >
           {/* Logo */}
           <div className="logo-section">
             <div className="logo-container">
@@ -401,7 +434,7 @@ function LoginPage() {
           >
             View Open Positions
           </Button>
-        </div>
+        </motion.div>
       </Grid>
     </Grid>
   );

@@ -8,6 +8,7 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Collapse from "@mui/material/Collapse";
 import Dialog from "@mui/material/Dialog";
+import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -577,6 +578,8 @@ const OrganisationTree = () => {
         maxWidth="sm"
         fullWidth
         fullScreen={isMobile}
+        slots={{ transition: SlideUpTransition }}
+        transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{
           sx: { borderRadius: { xs: 0, sm: 2 }, m: { xs: 0, sm: 2 } },
         }}

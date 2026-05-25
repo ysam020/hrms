@@ -1,6 +1,69 @@
 @use "../styles/constants.scss";
 @use "../styles/primereact-theme-overrides.scss";
 
+// ─── Mount/unmount keyframes ───────────────────────────────────────────────
+
+// Cards, panels, and dashboard widgets that enter the viewport
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Subtle scale-in for chips, badges, and small atoms
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// Slide-in from the right for sidepanels/drawers content
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+// Alert toast is animated via framer-motion (App.tsx AnimatePresence)
+
+// ─── Utility animation classes ─────────────────────────────────────────────
+
+// Apply to any card/panel that should animate on mount
+.animate-fade-up {
+  animation: fadeSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+// Staggered list items — set --stagger-index CSS var on each item
+.animate-stagger {
+  animation: fadeSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--stagger-index, 0) * 40ms);
+}
+
+// Small atoms (chips, badges)
+.animate-scale-in {
+  animation: scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+// Drawer panel content
+.animate-slide-right {
+  animation: slideInRight 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .App {
   font-family: "Poppins", sans-serif;
   height: 100vh;
@@ -308,15 +371,7 @@ form h5 {
   width: 100% !important;
 }
 
-// Alert
-.MuiAlert-root {
-  position: absolute;
-  z-index: 99999 !important;
-  top: 15px !important;
-  right: 80px !important;
-  bottom: auto !important;
-  width: 400px;
-}
+// Alert — position is handled by the framer-motion wrapper in App.tsx
 
 // Grid
 .MuiGrid2-direction-xs-row {
