@@ -1,0 +1,97 @@
+paths:
+  /api/v1/ai-insights:
+    get:
+      summary: Generate an AI analytics report
+      description: >
+        Streams an AI-generated analytical report for a given HRMS module and time period.
+        The response is delivered as Server-Sent Events (SSE). Unlike the chatbot, this
+        is a one-shot generation with no tool calls — the model receives aggregated module
+        data and produces a structured narrative analysis.
+
+        Available modules and what they analyse:
+
+        - `attendance` — on-time rates, late arrivals, absenteeism patterns, WFH trends
+
+        - `leave` — leave utilisation, approval rates, leave type breakdown, seasonal trends
+
+        - `recruitment` — pipeline conversion, time-to-hire, hiring manager performance
+
+        - `salary` — salary distribution by department, median vs budget, pay equity signals
+
+        - `workforce` — headcount growth, department distribution, turnover rates
+
+        The `period` parameter accepts ISO 8601 date ranges or keywords like `last_30_days`,
+        `last_quarter`, `this_year`.
+      tags: [AI Insights]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: module
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [attendance, leave, recruitment, salary, workforce]
+          example: "attendance"
+          description: The HRMS module to generate insights for
+        - name: period
+          in: query
+          required: false
+          schema: { type: string }
+          example: "last_30_days"
+          description: >
+            Time period for the report. Accepts keywords: `last_7_days`, `last_30_days`,
+            `last_quarter`, `this_year`, `last_year`. Defaults to `last_30_days`.
+      responses:
+        "200":
+          description: >
+            SSE stream of the AI-generated report. Content-Type is `text/event-stream`.
+            Each line is a `data: <json>` event.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  Newline-delimited SSE events. Each event is one of:
+
+                  - `data: {"token": "..."}` — next text token from the model
+
+                  - `data: {"done": true}` — stream complete
+
+                  - `data: {"error": "..."}` — error during generation
+              example: |
+                data: {"token":"## Attendance Analysis — Last 30 Days\n\n"}
+                data: {"token":"Overall on-time rate is **87%**, which is "}
+                data: {"token":"3 percentage points below the previous period.\n\n"}
+                data: {"token":"**Key findings:**\n"}
+                data: {"token":"- Late arrivals peaked on Mondays (avg 12 per day)\n"}
+                data: {"token":"- Engineering department has the highest WFH usage (42%)\n"}
+                data: {"done":true}
+        "400":
+          description: Invalid module or period
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    {
+                      type: string,
+                      example: "Invalid module: 'payroll'. Valid modules are: attendance, leave, recruitment, salary, workforce",
+                    }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "503":
+          description: AI service (Ollama) is unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    {
+                      type: string,
+                      example: "AI service is currently unavailable",
+                    }

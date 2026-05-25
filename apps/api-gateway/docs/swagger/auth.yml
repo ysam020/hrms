@@ -1,8 +1,30 @@
 paths:
+  /api/v1/csrf-token:
+    get:
+      summary: Fetch CSRF token
+      description: >
+        Returns a CSRF token derived from the server-side secret. The token must
+        be included as `X-CSRF-Token` on all state-changing requests (POST, PUT,
+        DELETE). The client Axios interceptor calls this lazily on the first
+        mutation and caches the result; it is invalidated on logout or 403.
+      tags: [Authentication]
+      responses:
+        "200":
+          description: CSRF token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csrfToken: { type: string, example: "9a3f...d2" }
+
   /api/v1/profile:
     get:
       summary: Get authenticated user profile
-      description: Returns the full profile of the currently authenticated user
+      description: >
+        Returns the full profile of the currently authenticated user including
+        their active tenant context (`tenantId`, `tenantRole`, `dbName`) and
+        whether they are in a pending-setup flow.
       tags: [Authentication]
       security:
         - bearerAuth: []
@@ -21,8 +43,48 @@ paths:
                       id: { type: string, example: "6672a2501aa931b68b091faf" }
                       email: { type: string, example: "user@example.com" }
                       username: { type: string, example: "sameer_yadav" }
-                      role: { type: string, example: "admin" }
+                      first_name: { type: string, example: "Sameer" }
+                      last_name: { type: string, example: "Yadav" }
+                      role:
+                        {
+                          type: array,
+                          items: { type: string },
+                          example: ["admin"],
+                        }
+                      permissions: { type: array, items: { type: string } }
                       isSuperUser: { type: boolean, example: false }
+                      tenantId:
+                        type: string
+                        nullable: true
+                        example: "6672a2501aa931b68b091faf"
+                        description: Active tenant ID. Null for pendingSetup users.
+                      tenantRole:
+                        type: string
+                        nullable: true
+                        enum: [owner, admin, hr, manager, employee]
+                        example: "admin"
+                        description: Role within the active tenant. Null for pendingSetup users.
+                      dbName:
+                        type: string
+                        nullable: true
+                        example: "hrms-acme-corp"
+                        description: Active tenant database name. Null for pendingSetup users.
+                      pendingSetup:
+                        type: boolean
+                        example: false
+                        description: >
+                          True if the user authenticated but has not yet created or
+                          joined an organisation. A pendingSetup user can only access
+                          tenant creation and payment endpoints.
+                      employeeStatus: { type: string, example: "Active" }
+                      designation:
+                        { type: string, example: "Full Stack Developer" }
+                      department: { type: string, example: "Engineering" }
+                      profile_photo: { type: string, nullable: true }
+                      kycStatus:
+                        type: string
+                        enum: [Pending, Submitted, Approved, Rejected]
+                        example: "Approved"
         "401":
           description: Unauthorized
 
