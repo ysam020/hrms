@@ -282,18 +282,30 @@ const CustomCalendar = () => {
       <Box className="rbc-toolbar-compact" data-theme={theme}>
         <Box className="rbc-btn-group">
           <Tooltip title="Previous">
-            <IconButton onClick={() => onNavigate("PREV")} size="small">
-              <ChevronLeftIcon />
+            <IconButton
+              onClick={() => onNavigate("PREV")}
+              size="small"
+              aria-label="Previous period"
+            >
+              <ChevronLeftIcon aria-hidden="true" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Today">
-            <IconButton onClick={() => onNavigate("TODAY")} size="small">
-              <TodayIcon />
+            <IconButton
+              onClick={() => onNavigate("TODAY")}
+              size="small"
+              aria-label="Go to today"
+            >
+              <TodayIcon aria-hidden="true" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Next">
-            <IconButton onClick={() => onNavigate("NEXT")} size="small">
-              <ChevronRightIcon />
+            <IconButton
+              onClick={() => onNavigate("NEXT")}
+              size="small"
+              aria-label="Next period"
+            >
+              <ChevronRightIcon aria-hidden="true" />
             </IconButton>
           </Tooltip>
         </Box>
@@ -307,27 +319,33 @@ const CustomCalendar = () => {
             <IconButton
               onClick={() => onView("month")}
               size="small"
+              aria-label="Month view"
+              aria-pressed={view === "month"}
               className={view === "month" ? "active-view" : ""}
             >
-              <ViewModuleIcon />
+              <ViewModuleIcon aria-hidden="true" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Week View">
             <IconButton
               onClick={() => onView("week")}
               size="small"
+              aria-label="Week view"
+              aria-pressed={view === "week"}
               className={view === "week" ? "active-view" : ""}
             >
-              <ViewWeekIcon />
+              <ViewWeekIcon aria-hidden="true" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Day View">
             <IconButton
               onClick={() => onView("day")}
               size="small"
+              aria-label="Day view"
+              aria-pressed={view === "day"}
               className={view === "day" ? "active-view" : ""}
             >
-              <ViewDayIcon />
+              <ViewDayIcon aria-hidden="true" />
             </IconButton>
           </Tooltip>
         </Box>
@@ -399,8 +417,11 @@ const CustomCalendar = () => {
               <Typography variant="subtitle1" sx={{ fontWeight: 600, flex: 1 }}>
                 Upcoming Events
               </Typography>
-              <IconButton onClick={() => handleOpen()}>
-                <AddIcon />
+              <IconButton
+                onClick={() => handleOpen()}
+                aria-label="Add calendar event"
+              >
+                <AddIcon aria-hidden="true" />
               </IconButton>
             </Box>
 

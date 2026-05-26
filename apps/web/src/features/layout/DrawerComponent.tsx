@@ -82,7 +82,7 @@ function DrawerComponent(props) {
     <Box
       component="nav"
       sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
-      aria-label="mailbox folders"
+      aria-label="Main navigation"
     >
       {/* Drawer mobile */}
       <SwipeableDrawer

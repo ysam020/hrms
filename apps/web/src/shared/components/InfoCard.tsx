@@ -31,6 +31,19 @@ function InfoCard({
     <Stack
       direction="row"
       spacing={1.5}
+      // When the card is clickable make it keyboard-accessible
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick(e as any);
+              }
+            }
+          : undefined
+      }
       sx={{
         p: 1.5,
         borderRadius: 2,
@@ -94,6 +107,7 @@ function InfoCard({
       {link && (
         <IconButton
           size="small"
+          aria-label={`Open ${label} in a new tab`}
           onClick={(e) => {
             e.stopPropagation();
             window.open(link, "_blank");
@@ -106,7 +120,7 @@ function InfoCard({
             height: 24,
           }}
         >
-          <OpenInNewIcon sx={{ fontSize: 12 }} />
+          <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 12 }} />
         </IconButton>
       )}
     </Stack>

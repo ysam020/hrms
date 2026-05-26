@@ -124,7 +124,8 @@ function Button({
     cursor: disabled || loading ? "not-allowed" : "pointer",
     opacity: disabled || loading ? 0.6 : 1,
     border: variant === "outline" || variant === "ghost" ? undefined : "none",
-    outline: "none",
+    // Don't suppress focus outlines — we restore them for keyboard users via
+    // :focus-visible in the CSS. Setting outline:none here would fail WCAG 2.4.7.
     borderRadius: "8px",
     display: "flex",
     alignItems: "center",

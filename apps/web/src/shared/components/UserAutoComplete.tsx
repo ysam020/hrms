@@ -40,9 +40,12 @@ function UserAutoComplete(props: {
     }
   };
 
+  const errorId = `${fieldName}-error`;
+
   return (
     <div className="form-field-container">
       <AutoComplete
+        inputId={fieldName}
         value={formik.values[fieldName]}
         suggestions={filteredUsers}
         completeMethod={searchUser}
@@ -52,11 +55,15 @@ function UserAutoComplete(props: {
         placeholder={props.placeholder || "Select User"}
         className={`login-input ${hasError ? "p-invalid" : ""}`}
         dropdown
+        aria-invalid={!!hasError}
+        aria-describedby={hasError ? errorId : undefined}
         {...props.inputProps}
         appendTo={"self"}
       />
       {hasError && (
-        <small className="p-error">{formik.errors[fieldName]}</small>
+        <small id={errorId} className="p-error" role="alert">
+          {formik.errors[fieldName]}
+        </small>
       )}
     </div>
   );

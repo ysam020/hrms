@@ -27,6 +27,9 @@ function LoadingState({
 
   return (
     <Box
+      role="status"
+      aria-label={typeof message === "string" ? message : "Loading"}
+      aria-live="polite"
       className="dashboard-container"
       sx={{
         height,

@@ -622,8 +622,11 @@ export default function Subscription() {
         fullWidth
         slots={{ transition: SlideUpTransition }}
         transitionDuration={{ enter: 280, exit: 200 }}
+        aria-labelledby="cancel-sub-dialog-title"
       >
-        <DialogTitle>Cancel Subscription?</DialogTitle>
+        <DialogTitle id="cancel-sub-dialog-title">
+          Cancel Subscription?
+        </DialogTitle>
         <DialogContent>
           <DialogContentText>
             Your subscription will be cancelled immediately and your team will

@@ -261,7 +261,13 @@ function LoginPage() {
                     },
                   }}
                   startIcon={
-                    <svg width="18" height="18" viewBox="0 0 48 48">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 48 48"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
                       <path
                         fill="#4285F4"
                         d="M47.5 24.6c0-1.6-.1-3.1-.4-4.6H24v8.7h13.2c-.6 3-2.3 5.5-4.8 7.2v6h7.8c4.6-4.2 7.3-10.5 7.3-17.3z"
@@ -299,7 +305,7 @@ function LoginPage() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<KeyIcon />}
+                  startIcon={<KeyIcon aria-hidden="true" />}
                   onClick={() => setView(VIEW.WEBAUTHN)}
                   sx={{
                     py: 1.2,
@@ -370,7 +376,13 @@ function LoginPage() {
                     },
                   }}
                   startIcon={
-                    <svg width="18" height="18" viewBox="0 0 48 48">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 48 48"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
                       <path
                         fill="#4285F4"
                         d="M47.5 24.6c0-1.6-.1-3.1-.4-4.6H24v8.7h13.2c-.6 3-2.3 5.5-4.8 7.2v6h7.8c4.6-4.2 7.3-10.5 7.3-17.3z"
@@ -398,7 +410,10 @@ function LoginPage() {
 
           {/* Security badge */}
           <div className="security-badge">
-            <CheckCircle sx={{ fontSize: 16, color: "#4caf50", mr: 1 }} />
+            <CheckCircle
+              sx={{ fontSize: 16, color: "#4caf50", mr: 1 }}
+              aria-hidden="true"
+            />
             <Typography
               variant="caption"
               sx={{ color: "var(--text-color)", opacity: 0.8 }}

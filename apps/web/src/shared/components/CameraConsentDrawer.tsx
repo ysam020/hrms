@@ -129,6 +129,7 @@ function CameraConsentDrawer({
     >
       <Box sx={{ position: "relative" }}>
         <IconButton
+          aria-label="Close camera consent dialog"
           onClick={handleClose}
           sx={{
             position: "absolute",
@@ -137,7 +138,7 @@ function CameraConsentDrawer({
             color: "text.secondary",
           }}
         >
-          <CloseIcon />
+          <CloseIcon aria-hidden="true" />
         </IconButton>
 
         {!permissionBlocked ? (

@@ -97,7 +97,13 @@
 
   <body>
     <div id="root">
-      <div class="loading-spinner" id="initial-loader"></div>
+      <div
+        class="loading-spinner"
+        id="initial-loader"
+        role="status"
+        aria-live="polite"
+        aria-label="Application loading"
+      ></div>
     </div>
 
     <script type="module" src="/src/main.tsx"></script>

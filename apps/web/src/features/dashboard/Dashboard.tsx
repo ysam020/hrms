@@ -221,6 +221,7 @@ const WidgetCard = memo(
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
             <DragIndicatorIcon
               sx={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}
+              aria-hidden="true"
             />
             <Typography
               variant="caption"
@@ -233,13 +234,14 @@ const WidgetCard = memo(
             size="small"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={onHide}
+            aria-label={`Hide ${label} widget`}
             sx={{
               color: "rgba(255,255,255,0.7)",
               p: 0.2,
               "&:hover": { color: "#fff", bgcolor: "rgba(255,255,255,0.18)" },
             }}
           >
-            <CloseIcon sx={{ fontSize: 13 }} />
+            <CloseIcon sx={{ fontSize: 13 }} aria-hidden="true" />
           </IconButton>
         </Box>
       )}
@@ -421,6 +423,7 @@ function DashboardInner() {
                   visibility[id] ? undefined : (
                     <VisibilityOffIcon
                       sx={{ fontSize: 11, "&&": { ml: 0.75 } }}
+                      aria-hidden="true"
                     />
                   )
                 }
@@ -437,9 +440,10 @@ function DashboardInner() {
               <IconButton
                 size="small"
                 onClick={handleResetLayout}
+                aria-label="Reset dashboard to default layout"
                 sx={{ color: "text.secondary", ml: "auto" }}
               >
-                <RestartAltIcon sx={{ fontSize: 16 }} />
+                <RestartAltIcon sx={{ fontSize: 16 }} aria-hidden="true" />
               </IconButton>
             </Tooltip>
           </Box>

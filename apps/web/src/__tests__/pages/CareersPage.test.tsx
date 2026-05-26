@@ -228,7 +228,7 @@ describe("CareersPage – navigation", () => {
 
   it("navigates back when the back icon button is clicked", async () => {
     renderPage();
-    const backBtn = screen.getByRole("button", { name: "" }); // ArrowBack icon button
+    const backBtn = screen.getByRole("button", { name: "Go back" });
     await userEvent.click(backBtn);
     expect(mockNavigate).toHaveBeenCalledWith(-1);
   });

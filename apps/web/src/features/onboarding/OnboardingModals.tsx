@@ -152,11 +152,12 @@ export default function OnboardingModals() {
         disableEscapeKeyDown
         slots={{ transition: SlideUpTransition }}
         transitionDuration={{ enter: 280, exit: 200 }}
+        aria-labelledby="onboarding-dialog-title"
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
-        <DialogTitle sx={{ pb: 1 }}>
+        <DialogTitle id="onboarding-dialog-title" sx={{ pb: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <SettingsIcon color="primary" />
+            <SettingsIcon color="primary" aria-hidden="true" />
             <Typography variant="h6" fontWeight={700}>
               Welcome! Let's get you set up
             </Typography>

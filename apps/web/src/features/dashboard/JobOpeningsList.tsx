@@ -134,6 +134,15 @@ function JobOpeningsList() {
               <Box
                 key={job._id || i}
                 onClick={() => navigate("/job-openings")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate("/job-openings");
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`View job opening: ${job.jobTitle || job.title || "Untitled"}`}
                 sx={{
                   px: 1.5,
                   py: 0.85,

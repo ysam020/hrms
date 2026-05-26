@@ -94,6 +94,19 @@ function Attendance() {
   return (
     <div
       onClick={!isLoading ? () => navigate("/attendance") : undefined}
+      onKeyDown={
+        !isLoading
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate("/attendance");
+              }
+            }
+          : undefined
+      }
+      role={!isLoading ? "button" : undefined}
+      tabIndex={!isLoading ? 0 : undefined}
+      aria-label={!isLoading ? "View attendance details" : undefined}
       className="dashboard-container attendance"
       style={{
         cursor: isLoading ? "default" : "pointer",
@@ -179,7 +192,10 @@ function Attendance() {
                 display: "flex",
               }}
             >
-              <WarningRoundedIcon sx={{ color: "#FF9800", fontSize: "16px" }} />
+              <WarningRoundedIcon
+                sx={{ color: "#FF9800", fontSize: "16px" }}
+                aria-hidden="true"
+              />
               <span
                 className="corrections-text"
                 style={{ marginLeft: "5px", fontSize: "12px" }}

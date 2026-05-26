@@ -20,6 +20,7 @@ function NotificationDrawer(props) {
       onClose={props.toggleDrawer(false)}
       ModalProps={{ disablePortal: true }}
       disablePortal={true}
+      aria-label="Notifications"
       PaperProps={{
         sx: {
           width: drawerWidth,

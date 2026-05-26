@@ -438,6 +438,7 @@ function ViewLeaveApplications() {
               <Tooltip title="Approve">
                 <IconButton
                   size="small"
+                  aria-label={`Approve leave for ${cell.row.original.username}`}
                   onClick={() =>
                     handleLeaveActionClick(
                       cell.row.original.id || cell.row.original._id,
@@ -462,13 +463,14 @@ function ViewLeaveApplications() {
                     },
                   }}
                 >
-                  <CheckIcon sx={{ fontSize: 16 }} />
+                  <CheckIcon sx={{ fontSize: 16 }} aria-hidden="true" />
                 </IconButton>
               </Tooltip>
 
               <Tooltip title="Reject">
                 <IconButton
                   size="small"
+                  aria-label={`Reject leave for ${cell.row.original.username}`}
                   onClick={() =>
                     handleLeaveActionClick(
                       cell.row.original.id || cell.row.original._id,
@@ -493,7 +495,7 @@ function ViewLeaveApplications() {
                     },
                   }}
                 >
-                  <CloseIcon sx={{ fontSize: 16 }} />
+                  <CloseIcon sx={{ fontSize: 16 }} aria-hidden="true" />
                 </IconButton>
               </Tooltip>
             </Box>
@@ -588,8 +590,9 @@ function ViewLeaveApplications() {
               disabled={!data || data.length === 0 || loading}
               color="primary"
               size="small"
+              aria-label="Download leave applications as Excel"
             >
-              <Download sx={{ fontSize: 20 }} />
+              <Download sx={{ fontSize: 20 }} aria-hidden="true" />
             </IconButton>
           </span>
         </Tooltip>

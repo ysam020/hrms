@@ -110,9 +110,10 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
       >
         <IconButton
           onClick={() => handleNavigation("/profile")}
+          aria-label={`View ${user.fullName ? user.fullName + "'s" : "your"} profile`}
           className="avatar-button"
         >
-          <Avatar src={user?.employee_photo} alt="Employee Photo" />
+          <Avatar src={user?.employee_photo} alt="" />
         </IconButton>
       </Tooltip>
 

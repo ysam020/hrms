@@ -175,6 +175,7 @@ function ViewResignationFeedbackModal(props) {
         <IconButton
           onClick={props.handleClose}
           size="small"
+          aria-label="Close feedback"
           sx={{
             color: "text.secondary",
             "&:hover": { bgcolor: "action.hover" },

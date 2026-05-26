@@ -284,6 +284,7 @@ function ViewAddHolidays() {
                 <Tooltip title="Save Holiday">
                   <IconButton
                     size="small"
+                    aria-label="Save holiday"
                     onClick={() => formik.handleSubmit()}
                     disabled={formik.isSubmitting}
                     sx={{
@@ -309,6 +310,7 @@ function ViewAddHolidays() {
                 <Tooltip title="Cancel">
                   <IconButton
                     size="small"
+                    aria-label="Cancel adding holiday"
                     onClick={handleCancelAdd}
                     sx={{
                       width: 28,
@@ -340,6 +342,7 @@ function ViewAddHolidays() {
             <Tooltip title="Delete Holiday">
               <IconButton
                 size="small"
+                aria-label={`Delete holiday ${rowData.name}`}
                 onClick={() => handleDeleteClick(rowData.date, rowData.name)}
                 sx={{
                   width: 28,
@@ -374,6 +377,7 @@ function ViewAddHolidays() {
               <IconButton
                 onClick={(e) => handleDetailsClick(e, cell.row.original)}
                 size="small"
+                aria-label="View holiday details"
                 sx={{
                   width: 28,
                   height: 28,
@@ -449,8 +453,9 @@ function ViewAddHolidays() {
                 disabled={isAdding}
                 color="primary"
                 size="small"
+                aria-label="Add holiday"
               >
-                <Add sx={{ fontSize: 20 }} />
+                <Add aria-hidden="true" sx={{ fontSize: 20 }} />
               </IconButton>
             </span>
           </Tooltip>

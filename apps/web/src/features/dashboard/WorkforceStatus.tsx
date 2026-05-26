@@ -28,6 +28,15 @@ function WorkforceStatus() {
         cursor: "pointer",
       }}
       onClick={() => navigate("/employee-management")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate("/employee-management");
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="View workforce status in employee management"
     >
       {/* Header */}
       <Box

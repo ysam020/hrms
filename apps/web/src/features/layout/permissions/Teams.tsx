@@ -243,8 +243,11 @@ function Teams() {
               width: "100%",
             }}
           >
-            <IconButton onClick={handleOpenCreateTeam}>
-              <AddIcon />
+            <IconButton
+              onClick={handleOpenCreateTeam}
+              aria-label="Create new team"
+            >
+              <AddIcon aria-hidden="true" />
             </IconButton>
           </div>
         ),
@@ -338,8 +341,12 @@ function Teams() {
                 {teamData?.name} Members
               </Typography>
             </Box>
-            <IconButton onClick={handlePopoverClose} size="small">
-              <CloseIcon fontSize="small" />
+            <IconButton
+              onClick={handlePopoverClose}
+              size="small"
+              aria-label="Close team members panel"
+            >
+              <CloseIcon aria-hidden="true" fontSize="small" />
             </IconButton>
           </Box>
 
@@ -430,8 +437,9 @@ function Teams() {
                   </Box>
                   <IconButton
                     onClick={() => handleMemberDeleteClick(user, teamData?.id)}
-                    disabled={deletingUser === user || isTeamLeader} // Disable delete for team leader
+                    disabled={deletingUser === user || isTeamLeader}
                     size="small"
+                    aria-label={`Remove ${user} from team`}
                     sx={{
                       color: isTeamLeader
                         ? "rgba(241, 92, 109, 0.3)"

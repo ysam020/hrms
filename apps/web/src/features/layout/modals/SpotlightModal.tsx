@@ -161,11 +161,18 @@ function SpotlightModal({ open, handleClose }) {
     border: theme === "light" ? "1px solid #e5e7eb" : "1px solid #374151",
   };
 
+  const listboxId = "spotlight-listbox";
+  const activeId =
+    filteredRoutes.length > 0
+      ? `spotlight-option-${highlightedIndex}`
+      : undefined;
+
   return (
     <Modal
       open={open}
       onClose={handleClose}
       closeAfterTransition
+      aria-label="Quick navigation search"
       BackdropComponent={Backdrop}
       BackdropProps={{ timeout: 200, sx: { backdropFilter: "blur(4px)" } }}
     >
@@ -175,20 +182,34 @@ function SpotlightModal({ open, handleClose }) {
             <TextField
               inputRef={inputRef}
               fullWidth
-              placeholder="Search routes..."
+              placeholder="Search routes…"
               value={inputValue}
               onChange={handleInputChange}
               autoComplete="off"
+              // ARIA combobox pattern: the input controls the listbox below
+              inputProps={{
+                role: "combobox",
+                "aria-expanded": filteredRoutes.length > 0,
+                "aria-haspopup": "listbox",
+                "aria-controls": listboxId,
+                "aria-activedescendant": activeId,
+                "aria-label": "Search routes",
+                "aria-autocomplete": "list",
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon aria-hidden="true" />
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={handleMicClick} size="small">
-                      <MicIcon />
+                    <IconButton
+                      onClick={handleMicClick}
+                      size="small"
+                      aria-label="Search by voice"
+                    >
+                      <MicIcon aria-hidden="true" />
                     </IconButton>
                   </InputAdornment>
                 ),
@@ -197,12 +218,29 @@ function SpotlightModal({ open, handleClose }) {
             />
           </Box>
 
-          <Box sx={{ maxHeight: 400, overflowY: "auto" }}>
+          {/* Live region announces result count to screen readers */}
+          <div aria-live="polite" aria-atomic="true" className="sr-only">
+            {filteredRoutes.length > 0
+              ? `${filteredRoutes.length} result${filteredRoutes.length === 1 ? "" : "s"} found`
+              : inputValue
+                ? "No results found"
+                : ""}
+          </div>
+
+          <Box
+            id={listboxId}
+            role="listbox"
+            aria-label="Navigation suggestions"
+            sx={{ maxHeight: 400, overflowY: "auto" }}
+          >
             {filteredRoutes.length > 0 ? (
               <List sx={{ p: 1 }}>
                 {filteredRoutes.map((route, index) => (
                   <ListItem key={route.path} disablePadding>
                     <ListItemButton
+                      id={`spotlight-option-${index}`}
+                      role="option"
+                      aria-selected={highlightedIndex === index}
                       selected={highlightedIndex === index}
                       onClick={() => handleSuggestionClick(route.path)}
                       data-index={index}
@@ -261,6 +299,7 @@ function SpotlightModal({ open, handleClose }) {
                           label="↵"
                           size="small"
                           color="primary"
+                          aria-hidden="true"
                           sx={{ flexShrink: 0 }}
                         />
                       )}
@@ -271,6 +310,7 @@ function SpotlightModal({ open, handleClose }) {
             ) : (
               inputValue && (
                 <Typography
+                  role="status"
                   sx={{ p: 4, textAlign: "center" }}
                   color="text.secondary"
                 >

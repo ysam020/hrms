@@ -69,6 +69,15 @@ function QuickStats() {
         <Box
           key={stat.label}
           onClick={() => navigate(stat.path)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate(stat.path);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={`${stat.label}: ${stat.value ?? "loading"}`}
           sx={{
             flex: 1,
             display: "flex",

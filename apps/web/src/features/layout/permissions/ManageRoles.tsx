@@ -257,8 +257,11 @@ function ManageRoles() {
               width: "100%",
             }}
           >
-            <IconButton onClick={handleOpenCreateRole}>
-              <AddIcon />
+            <IconButton
+              onClick={handleOpenCreateRole}
+              aria-label="Create new role"
+            >
+              <AddIcon aria-hidden="true" />
             </IconButton>
           </div>
         ),
@@ -355,8 +358,12 @@ function ManageRoles() {
                 {roleData?.name} Members
               </Typography>
             </Box>
-            <IconButton onClick={handlePopoverClose} size="small">
-              <CloseIcon fontSize="small" />
+            <IconButton
+              onClick={handlePopoverClose}
+              size="small"
+              aria-label="Close role members panel"
+            >
+              <CloseIcon aria-hidden="true" fontSize="small" />
             </IconButton>
           </Box>
 
@@ -409,6 +416,7 @@ function ManageRoles() {
                   }
                   disabled={deletingUser === user.username}
                   size="small"
+                  aria-label={`Remove ${user.username} from role`}
                   sx={{
                     color: "#F15C6D",
                     backgroundColor: "rgba(241, 92, 109, 0.1)",

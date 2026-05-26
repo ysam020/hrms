@@ -97,12 +97,16 @@ function AttendanceCalendar() {
         </Typography>
         <Typography
           variant="caption"
+          component="button"
           onClick={() => navigate("/attendance")}
           sx={{
             color: "primary.main",
             fontSize: "0.68rem",
             fontWeight: 600,
             cursor: "pointer",
+            background: "none",
+            border: "none",
+            padding: 0,
             "&:hover": { textDecoration: "underline" },
           }}
         >
@@ -157,6 +161,15 @@ function AttendanceCalendar() {
               key={day.num}
               data-today={day.isToday ? "true" : undefined}
               onClick={() => navigate("/attendance")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigate("/attendance");
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${day.dayName} ${day.num}${day.badge ? `, ${day.badge.label}` : ""}`}
               sx={{
                 position: "relative",
                 display: "flex",

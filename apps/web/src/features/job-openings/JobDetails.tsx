@@ -102,12 +102,13 @@ const JobDetails = (props) => {
         {link && value && (
           <IconButton
             size="small"
+            aria-label={`Open ${value} in a new tab`}
             onClick={() => window.open(link, "_blank")}
             sx={{
               color: "primary.main",
             }}
           >
-            <OpenInNew sx={{ fontSize: 16 }} />
+            <OpenInNew aria-hidden="true" sx={{ fontSize: 16 }} />
           </IconButton>
         )}
       </Box>

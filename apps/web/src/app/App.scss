@@ -1,6 +1,34 @@
 @use "../styles/constants.scss";
 @use "../styles/primereact-theme-overrides.scss";
 
+// ─── Screen-reader-only utility ────────────────────────────────────────────
+// Visually hidden but read by screen readers (cf. Bootstrap's .sr-only).
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ─── Global focus-visible styles ───────────────────────────────────────────
+// Keyboard users get a clearly visible ring; mouse/touch users are unaffected.
+// Covers the custom Button component (.btn) and raw <button>/<a> elements.
+:focus-visible {
+  outline: 3px solid #1976d2;
+  outline-offset: 2px;
+}
+
+// The custom Button component removes its border in JS; restore focus ring.
+.btn:focus-visible {
+  outline: 3px solid #1976d2;
+  outline-offset: 2px;
+}
+
 // ─── Mount/unmount keyframes ───────────────────────────────────────────────
 
 // Cards, panels, and dashboard widgets that enter the viewport

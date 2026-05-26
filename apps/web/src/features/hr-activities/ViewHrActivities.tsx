@@ -352,6 +352,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
                 <Tooltip title="Edit">
                   <IconButton
                     size="small"
+                    aria-label={`Edit HR activity: ${cell.row.original.title}`}
                     onClick={() => handleOpenModal(cell.row.original)}
                     sx={{
                       width: 28,
@@ -379,6 +380,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
                 <Tooltip title="Delete">
                   <IconButton
                     size="small"
+                    aria-label={`Delete HR activity: ${cell.row.original.title}`}
                     onClick={() =>
                       handleDeleteClick(
                         cell.row.original.id,
@@ -420,6 +422,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
               <IconButton
                 onClick={(e) => handleDetailsClick(e, cell.row.original)}
                 size="small"
+                aria-label="View HR activity details"
                 sx={{
                   width: 28,
                   height: 28,
@@ -603,6 +606,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
               <IconButton
                 onClick={handleDetailsClose}
                 size="small"
+                aria-label="Close details"
                 sx={{
                   color: "text.secondary",
                   "&:hover": {
@@ -610,7 +614,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
                   },
                 }}
               >
-                <CloseIcon fontSize="small" />
+                <CloseIcon aria-hidden="true" fontSize="small" />
               </IconButton>
             </Tooltip>
           </Box>

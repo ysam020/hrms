@@ -22,6 +22,8 @@ type TabsPanelProps = {
   tabData: any[];
   tabKey: string;
   basePath?: string;
+  /** Human-readable label for the tab list (used by screen readers). */
+  ariaLabel?: string;
 };
 
 const labelToSlug = (label: any) =>
@@ -63,7 +65,7 @@ function a11yProps(index: number) {
   };
 }
 
-function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
+function TabsPanel({ tabData, tabKey, basePath, ariaLabel }: TabsPanelProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useContext(ThemeContext);
@@ -140,7 +142,7 @@ function TabsPanel({ tabData, tabKey, basePath }: TabsPanelProps) {
         <Tabs
           value={value}
           onChange={handleChange}
-          aria-label="basic tabs example"
+          aria-label={ariaLabel ?? "Page tabs"}
           variant="scrollable"
           scrollButtons="auto"
         >

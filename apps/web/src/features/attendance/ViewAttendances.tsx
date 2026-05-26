@@ -345,8 +345,9 @@ function ViewAttendances() {
             disabled={loading}
             color="primary"
             size="small"
+            aria-label="Refresh attendance data"
           >
-            <RefreshIcon />
+            <RefreshIcon aria-hidden="true" />
           </IconButton>
         </Tooltip>
 
@@ -356,8 +357,9 @@ function ViewAttendances() {
             disabled={!data || data.length === 0 || loading || isDownloading}
             color="primary"
             size="small"
+            aria-label="Download attendance as Excel"
           >
-            <Download />
+            <Download aria-hidden="true" />
           </IconButton>
         </Tooltip>
       </Box>
@@ -388,14 +390,19 @@ function ViewAttendances() {
             <Box sx={{ display: "flex", gap: 1 }}>
               {dateToolbar.renderTopToolbarCustomActions &&
                 dateToolbar.renderTopToolbarCustomActions()}
-              <IconButton onClick={refresh} disabled={loading}>
-                <RefreshIcon />
+              <IconButton
+                onClick={refresh}
+                disabled={loading}
+                aria-label="Refresh attendance data"
+              >
+                <RefreshIcon aria-hidden="true" />
               </IconButton>
               <IconButton
                 onClick={handleDownloadExcel}
                 disabled={loading || isDownloading}
+                aria-label="Download attendance as Excel"
               >
-                <Download />
+                <Download aria-hidden="true" />
               </IconButton>
             </Box>
           </Box>

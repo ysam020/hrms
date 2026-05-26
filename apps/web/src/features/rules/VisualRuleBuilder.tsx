@@ -1147,6 +1147,7 @@ const VisualRuleBuilderInner = ({
                 <IconButton
                   onClick={handleDeleteNode}
                   size="small"
+                  aria-label="Delete node"
                   sx={{
                     color: "error.main",
                     bgcolor: "rgba(244, 67, 54, 0.08)",
@@ -1155,13 +1156,14 @@ const VisualRuleBuilderInner = ({
                     },
                   }}
                 >
-                  <DeleteIcon fontSize="small" />
+                  <DeleteIcon fontSize="small" aria-hidden="true" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Close" arrow placement="left">
                 <IconButton
                   onClick={() => setShowNodeEditor(false)}
                   size="small"
+                  aria-label="Close node editor"
                   sx={{
                     color: "text.secondary",
                     "&:hover": {
@@ -1172,7 +1174,7 @@ const VisualRuleBuilderInner = ({
                     },
                   }}
                 >
-                  <CloseIcon fontSize="small" />
+                  <CloseIcon fontSize="small" aria-hidden="true" />
                 </IconButton>
               </Tooltip>
             </Stack>

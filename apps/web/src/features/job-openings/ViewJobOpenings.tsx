@@ -338,6 +338,7 @@ function ViewJobOpenings({ refreshKey = 0 }) {
                 <Tooltip title="Edit">
                   <IconButton
                     size="small"
+                    aria-label={`Edit job opening: ${cell.row.original.title ?? ""}`}
                     onClick={(e) => handleOpenModal(e, cell.row.original)}
                     sx={{
                       width: 28,
@@ -365,6 +366,7 @@ function ViewJobOpenings({ refreshKey = 0 }) {
                 <Tooltip title="Delete">
                   <IconButton
                     size="small"
+                    aria-label={`Delete job opening: ${cell.row.original.title ?? ""}`}
                     onClick={(e) => handleDeleteClick(e, cell.row.original.id)}
                     sx={{
                       width: 28,
@@ -400,6 +402,7 @@ function ViewJobOpenings({ refreshKey = 0 }) {
             <Tooltip title="View Details">
               <IconButton
                 onClick={(e) => handleDetailsClick(e, cell.row.original)}
+                aria-label="View job opening details"
                 size="small"
                 sx={{
                   width: 28,

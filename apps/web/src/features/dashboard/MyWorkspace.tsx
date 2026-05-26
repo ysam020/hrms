@@ -44,6 +44,15 @@ const ActionBtn = ({ icon, label, onClick, isDark }) => (
   <Tooltip title={label} placement="top" arrow>
     <Box
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -538,6 +547,15 @@ function MyWorkspace({ isDark }) {
           {!loading.pendingLeaves && pendingCount > 0 && (
             <Box
               onClick={() => navigate("/attendance")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigate("/attendance");
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${pendingCount} leave${pendingCount > 1 ? "s" : ""} pending approval. Go to attendance.`}
               sx={{
                 mt: 0.75,
                 py: 0.6,

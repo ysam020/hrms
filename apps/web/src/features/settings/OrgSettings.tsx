@@ -740,8 +740,9 @@ function SaveDialog({
       fullWidth
       slots={{ transition: SlideUpTransition }}
       transitionDuration={{ enter: 280, exit: 200 }}
+      aria-labelledby="effective-date-dialog-title"
     >
-      <DialogTitle sx={{ fontWeight: 600 }}>
+      <DialogTitle id="effective-date-dialog-title" sx={{ fontWeight: 600 }}>
         When should changes take effect?
       </DialogTitle>
       <DialogContent>

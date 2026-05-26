@@ -138,6 +138,7 @@ function LocationConsentDrawer({
         <IconButton
           onClick={handleClose}
           size={isMobile ? "small" : "medium"}
+          aria-label="Close location consent dialog"
           sx={{
             position: "absolute",
             right: { xs: 6, sm: 8 },
@@ -146,7 +147,7 @@ function LocationConsentDrawer({
             zIndex: 1,
           }}
         >
-          <CloseIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+          <CloseIcon sx={{ fontSize: { xs: 20, sm: 24 } }} aria-hidden="true" />
         </IconButton>
 
         {!permissionBlocked ? (

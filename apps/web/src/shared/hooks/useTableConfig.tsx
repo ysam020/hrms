@@ -121,6 +121,15 @@ function useTableConfig(
           },
         },
       },
+      muiTableBodyRowProps: () => ({
+        tabIndex: 0,
+        sx: {
+          "&:focus-visible": {
+            outline: "2px solid #1976d2",
+            outlineOffset: "-2px",
+          },
+        },
+      }),
       mrtTheme: () => ({
         baseBackgroundColor: baseBackgroundColor,
       }),
@@ -161,13 +170,18 @@ function useTableConfig(
           showRowsPerPage: true,
           rowsPerPageOptions: pageSizeOptions,
         },
-        muiTableBodyRowProps: {
+        muiTableBodyRowProps: () => ({
+          tabIndex: 0,
           sx: {
+            "&:focus-visible": {
+              outline: "2px solid #1976d2",
+              outlineOffset: "-2px",
+            },
             "&:hover": {
               backgroundColor: theme.palette.action.hover,
             },
           },
-        },
+        }),
         // Merge custom options
         ...customOptions,
       };

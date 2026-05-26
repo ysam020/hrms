@@ -177,7 +177,10 @@ const EmployeeInsights = () => {
                   "&:last-child": { pb: 1.5 },
                 }}
               >
-                <metric.icon sx={{ fontSize: 32, color: metric.color }} />
+                <metric.icon
+                  sx={{ fontSize: 32, color: metric.color }}
+                  aria-hidden="true"
+                />
                 <Box sx={{ flexGrow: 1 }}>
                   <Typography
                     variant="h4"
@@ -214,7 +217,10 @@ const EmployeeInsights = () => {
                         "&:last-child": { pb: 1.5 },
                       }}
                     >
-                      <status.icon sx={{ fontSize: 32, color: status.color }} />
+                      <status.icon
+                        sx={{ fontSize: 32, color: status.color }}
+                        aria-hidden="true"
+                      />
                       <Box sx={{ flexGrow: 1 }}>
                         <Typography
                           variant="h4"
@@ -246,7 +252,7 @@ const EmployeeInsights = () => {
           <Divider sx={{ mb: 1.5 }} />
 
           <TableContainer>
-            <Table size="small">
+            <Table size="small" aria-label="Department breakdown">
               <TableHead>
                 <TableRow>
                   <TableCell>
@@ -334,7 +340,7 @@ const EmployeeInsights = () => {
             <Divider sx={{ mb: 1.5 }} />
 
             <TableContainer>
-              <Table size="small">
+              <Table size="small" aria-label="Employee status summary">
                 <TableHead>
                   <TableRow>
                     <TableCell>
