@@ -254,8 +254,11 @@ export default function CompanyInfo() {
         fullWidth
         slots={{ transition: SlideUpTransition }}
         transitionDuration={{ enter: 280, exit: 200 }}
+        aria-labelledby="edit-org-dialog-title"
       >
-        <DialogTitle>Edit Organisation Profile</DialogTitle>
+        <DialogTitle id="edit-org-dialog-title">
+          Edit Organisation Profile
+        </DialogTitle>
         <DialogContent
           sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}
         >

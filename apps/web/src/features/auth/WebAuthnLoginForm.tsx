@@ -243,9 +243,15 @@ function WebAuthnLoginForm(props) {
   return (
     <div className="login-form">
       <form onSubmit={formik.handleSubmit}>
+        <label htmlFor="webauthn-username" className="sr-only">
+          Username
+        </label>
         <InputText
+          id="webauthn-username"
           ref={usernameRef}
           name="username"
+          placeholder="Username"
+          aria-label="Username"
           value={formik.values.username}
           onChange={formik.handleChange}
           disabled={isSubmitting}

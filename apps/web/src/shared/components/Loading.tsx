@@ -4,6 +4,9 @@ import React from "react";
 function Loading() {
   return (
     <div
+      role="status"
+      aria-label="Loading"
+      aria-live="polite"
       style={{
         display: "flex",
         justifyContent: "center",
@@ -12,6 +15,7 @@ function Loading() {
       }}
     >
       <CircularProgress />
+      <span className="sr-only">Loading…</span>
     </div>
   );
 }

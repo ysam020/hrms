@@ -84,6 +84,7 @@ function HiringModal(props) {
       onClose={props.handleClose}
       closeAfterTransition
       disablePortal
+      aria-labelledby="hiring-modal-title"
       BackdropComponent={Backdrop}
       BackdropProps={{
         timeout: 200,
@@ -142,9 +143,10 @@ function HiringModal(props) {
             <IconButton
               onClick={props.handleClose}
               size="small"
+              aria-label="Close hiring modal"
               sx={{ color: "text.secondary" }}
             >
-              <CloseIcon fontSize="small" />
+              <CloseIcon aria-hidden="true" fontSize="small" />
             </IconButton>
           </Box>
 

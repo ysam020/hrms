@@ -42,12 +42,14 @@ function ThemedDialog({
       fullWidth={fullWidth}
       slots={{ transition: SlideUpTransition }}
       transitionDuration={{ enter: 280, exit: 200 }}
+      aria-labelledby={title ? "themed-dialog-title" : undefined}
       slotProps={{
         paper: defaultPaperProps,
       }}
     >
       {title && (
         <DialogTitle
+          id="themed-dialog-title"
           sx={{
             display: "flex",
             alignItems: "center",
@@ -58,11 +60,12 @@ function ThemedDialog({
           {title}
           {showCloseButton && (
             <IconButton
+              aria-label="Close dialog"
               onClick={onClose}
               size="small"
               sx={{ color: "text.secondary" }}
             >
-              <CloseIcon />
+              <CloseIcon aria-hidden="true" />
             </IconButton>
           )}
         </DialogTitle>

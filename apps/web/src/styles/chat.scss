@@ -125,6 +125,12 @@
   &:hover {
     background: var(--chat-search-result-hover);
   }
+
+  &:focus-visible {
+    outline: 2px solid #1976d2;
+    outline-offset: -2px;
+    background: var(--chat-search-result-hover);
+  }
 }
 
 .chat-conv-list {
@@ -144,6 +150,12 @@
   border-bottom: 1px solid var(--chat-border);
 
   &:hover {
+    background: var(--chat-hover-conv);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #1976d2;
+    outline-offset: -2px;
     background: var(--chat-hover-conv);
   }
 

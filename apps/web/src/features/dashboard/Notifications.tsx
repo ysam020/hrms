@@ -168,6 +168,7 @@ function Notifications() {
               clearNotification(item._id);
             }}
             size="small"
+            aria-label="Dismiss notification"
             sx={{
               color: theme === "light" ? "#9ca3af" : "#6b7280",
               padding: "4px",
@@ -180,7 +181,7 @@ function Notifications() {
               },
             }}
           >
-            <CloseIcon sx={{ fontSize: 16 }} />
+            <CloseIcon sx={{ fontSize: 16 }} aria-hidden="true" />
           </IconButton>
         </Box>
       </Box>
@@ -257,6 +258,7 @@ function Notifications() {
           <IconButton
             onClick={clearAllNotifications}
             size="small"
+            aria-label="Clear all notifications"
             sx={{
               color: theme === "light" ? "#6b7280" : "#9ca3af",
               fontSize: "0.875rem",
@@ -272,7 +274,10 @@ function Notifications() {
               },
             }}
           >
-            <DeleteOutlineIcon sx={{ fontSize: 18, mr: 0.5 }} />
+            <DeleteOutlineIcon
+              sx={{ fontSize: 18, mr: 0.5 }}
+              aria-hidden="true"
+            />
             Clear All
           </IconButton>
         )}
@@ -330,6 +335,16 @@ function Notifications() {
                     {/* Group Header */}
                     <Box
                       onClick={() => handleExpandToggle(title)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleExpandToggle(title);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={expandedGroups[title]}
+                      aria-controls={`notification-group-${title}`}
                       sx={{
                         p: 1,
                         cursor: "pointer",
@@ -386,6 +401,12 @@ function Notifications() {
                       </Stack>
                       <IconButton
                         size="small"
+                        aria-label={
+                          expandedGroups[title]
+                            ? `Collapse ${title} notifications`
+                            : `Expand ${title} notifications`
+                        }
+                        tabIndex={-1}
                         sx={{
                           transition: "transform 0.2s ease",
                           transform: expandedGroups[title]
@@ -394,13 +415,16 @@ function Notifications() {
                           color: theme === "light" ? "#9ca3af" : "#6b7280",
                         }}
                       >
-                        <ExpandMoreIcon sx={{ fontSize: 20 }} />
+                        <ExpandMoreIcon
+                          sx={{ fontSize: 20 }}
+                          aria-hidden="true"
+                        />
                       </IconButton>
                     </Box>
 
                     {/* Notifications in Group */}
                     <Collapse in={expandedGroups[title]} timeout={200}>
-                      <Box sx={{ p: 1.5 }}>
+                      <Box id={`notification-group-${title}`} sx={{ p: 1.5 }}>
                         {group.map((item, id) => (
                           <Box
                             key={id}

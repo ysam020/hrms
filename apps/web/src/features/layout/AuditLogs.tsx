@@ -125,8 +125,11 @@ function AuditLogs(props) {
                 </MenuItem>
               ))}
             </TextField>
-            <IconButton onClick={clearAllFilters}>
-              <FilterAltOffIcon />
+            <IconButton
+              onClick={clearAllFilters}
+              aria-label="Clear all filters"
+            >
+              <FilterAltOffIcon aria-hidden="true" />
             </IconButton>
           </div>
         </div>
@@ -260,12 +263,18 @@ function AuditLogs(props) {
                   {hasDetails && (
                     <IconButton
                       onClick={() => toggleDetails(item._id)}
+                      aria-label={
+                        expandedLogId === item._id
+                          ? "Collapse details"
+                          : "Expand details"
+                      }
+                      aria-expanded={expandedLogId === item._id}
                       style={{ position: "absolute", top: 15, right: 20 }}
                     >
                       {expandedLogId === item._id ? (
-                        <ExpandLessIcon />
+                        <ExpandLessIcon aria-hidden="true" />
                       ) : (
-                        <ExpandMoreIcon />
+                        <ExpandMoreIcon aria-hidden="true" />
                       )}
                     </IconButton>
                   )}
@@ -285,6 +294,7 @@ function AuditLogs(props) {
       onClose={props.toggleDrawer(false)}
       disablePortal={true}
       ModalProps={{ disablePortal: true }}
+      aria-label="Audit logs"
     >
       {drawerContent}
     </Drawer>

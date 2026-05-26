@@ -107,11 +107,12 @@ const RuleTemplateSelector = ({
       fullWidth
       slots={{ transition: SlideUpTransition }}
       transitionDuration={{ enter: 280, exit: 200 }}
+      aria-labelledby="template-selector-title"
       PaperProps={{
         sx: { minHeight: "70vh", maxHeight: "90vh" },
       }}
     >
-      <DialogTitle>
+      <DialogTitle id="template-selector-title">
         <Box
           sx={{
             display: "flex",
@@ -224,12 +225,18 @@ const RuleTemplateSelector = ({
                       <Tooltip title="View details">
                         <IconButton
                           size="small"
+                          aria-label={
+                            expandedCard === template.id
+                              ? `Collapse ${template.name} details`
+                              : `Expand ${template.name} details`
+                          }
+                          aria-expanded={expandedCard === template.id}
                           onClick={() => toggleCardExpansion(template.id)}
                         >
                           {expandedCard === template.id ? (
-                            <ExpandLessIcon />
+                            <ExpandLessIcon aria-hidden="true" />
                           ) : (
-                            <ExpandMoreIcon />
+                            <ExpandMoreIcon aria-hidden="true" />
                           )}
                         </IconButton>
                       </Tooltip>

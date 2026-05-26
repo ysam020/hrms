@@ -126,8 +126,12 @@ function JobApplicationPage() {
           backgroundColor: "var(--card-background-secondary, #fff)",
         }}
       >
-        <IconButton onClick={() => navigate(-1)} size="small">
-          <ArrowBack />
+        <IconButton
+          onClick={() => navigate(-1)}
+          size="small"
+          aria-label="Go back"
+        >
+          <ArrowBack aria-hidden="true" />
         </IconButton>
         <People sx={{ fontSize: 26, color: "#2196f3" }} />
         <Typography variant="h6" sx={{ fontWeight: 700 }}>

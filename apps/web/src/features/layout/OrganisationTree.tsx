@@ -248,6 +248,12 @@ const OrganisationTree = () => {
                 <Grid item>
                   <IconButton
                     size="small"
+                    aria-label={
+                      isExpanded
+                        ? `Collapse ${employee.username}'s reports`
+                        : `Expand ${employee.username}'s reports`
+                    }
+                    aria-expanded={isExpanded}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleNode(employee.username);
@@ -262,10 +268,12 @@ const OrganisationTree = () => {
                   >
                     {isExpanded ? (
                       <ExpandLess
+                        aria-hidden="true"
                         sx={{ fontSize: { xs: "1.1rem", sm: "1rem" } }}
                       />
                     ) : (
                       <ExpandMore
+                        aria-hidden="true"
                         sx={{ fontSize: { xs: "1.1rem", sm: "1rem" } }}
                       />
                     )}
@@ -604,10 +612,14 @@ const OrganisationTree = () => {
               </Typography>
               <IconButton
                 onClick={() => setSelectedEmployee(null)}
+                aria-label="Close employee details"
                 sx={{ color: theme.palette.primary.contrastText, p: 0.5 }}
                 size="small"
               >
-                <Close sx={{ fontSize: { xs: "1.3rem", sm: "1.2rem" } }} />
+                <Close
+                  aria-hidden="true"
+                  sx={{ fontSize: { xs: "1.3rem", sm: "1.2rem" } }}
+                />
               </IconButton>
             </DialogTitle>
 

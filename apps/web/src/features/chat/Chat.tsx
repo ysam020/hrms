@@ -425,9 +425,18 @@ function MessageBubble({
             className="chat-action-btn"
             onClick={() => onReply(msg)}
             title="Reply"
+            role="button"
+            tabIndex={0}
+            aria-label="Reply to message"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onReply(msg);
+              }
+            }}
           >
             <Suspense fallback={null}>
-              <ReplyIcon sx={{ fontSize: 16 }} />
+              <ReplyIcon sx={{ fontSize: 16 }} aria-hidden="true" />
             </Suspense>
           </div>
           {isMine && (
@@ -435,9 +444,18 @@ function MessageBubble({
               className="chat-action-btn chat-action-delete"
               onClick={() => onDelete(msg)}
               title="Delete"
+              role="button"
+              tabIndex={0}
+              aria-label="Delete message"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onDelete(msg);
+                }
+              }}
             >
               <Suspense fallback={null}>
-                <DeleteIcon sx={{ fontSize: 16 }} />
+                <DeleteIcon sx={{ fontSize: 16 }} aria-hidden="true" />
               </Suspense>
             </div>
           )}
@@ -466,6 +484,16 @@ function ConversationItem({ conv, myUserId, isActive, onClick, unread }) {
     <div
       className={`chat-conv-item ${isActive ? "active" : ""}`}
       onClick={() => onClick(conv)}
+      role="button"
+      tabIndex={0}
+      aria-label={`${other}${unread > 0 ? `, ${unread} unread message${unread > 1 ? "s" : ""}` : ""}`}
+      aria-current={isActive ? "true" : undefined}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick(conv);
+        }
+      }}
     >
       <Avatar sx={{ width: 44, height: 44, fontSize: 16, flexShrink: 0 }}>
         {other[0]?.toUpperCase()}
@@ -803,6 +831,15 @@ function Chat() {
                   key={u.username}
                   className="chat-search-result-item"
                   onClick={() => handleStartConversation(u)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Start conversation with ${u.fullName || u.username}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleStartConversation(u);
+                    }
+                  }}
                 >
                   <Avatar sx={{ width: 32, height: 32, fontSize: 13, mr: 1 }}>
                     {u.username?.[0]?.toUpperCase()}
@@ -873,13 +910,14 @@ function Chat() {
                 <IconButton
                   className="chat-back-btn"
                   size="small"
+                  aria-label="Back to conversations"
                   onClick={() => {
                     setMobileShowThread(false);
                     setActiveRoomId(null);
                   }}
                 >
                   <Suspense fallback={null}>
-                    <ArrowBackIcon fontSize="small" />
+                    <ArrowBackIcon fontSize="small" aria-hidden="true" />
                   </Suspense>
                 </IconButton>
                 <Avatar sx={{ width: 36, height: 36, fontSize: 14, mr: 1 }}>
@@ -896,10 +934,12 @@ function Chat() {
               <div>
                 <IconButton
                   size="small"
+                  aria-label="Chat options"
+                  aria-haspopup="menu"
                   onClick={(e) => setHeaderMenuAnchor(e.currentTarget)}
                 >
                   <Suspense fallback={null}>
-                    <MoreVertIcon fontSize="small" />
+                    <MoreVertIcon fontSize="small" aria-hidden="true" />
                   </Suspense>
                 </IconButton>
                 <Menu
@@ -994,9 +1034,13 @@ function Chat() {
                     {replyTo.content || replyTo.fileName || "File"}
                   </Typography>
                 </div>
-                <IconButton size="small" onClick={() => setReplyTo(null)}>
+                <IconButton
+                  size="small"
+                  aria-label="Cancel reply"
+                  onClick={() => setReplyTo(null)}
+                >
                   <Suspense fallback={null}>
-                    <CloseIcon fontSize="small" />
+                    <CloseIcon fontSize="small" aria-hidden="true" />
                   </Suspense>
                 </IconButton>
               </div>
@@ -1018,13 +1062,14 @@ function Chat() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                     size="small"
+                    aria-label="Attach file"
                     className="chat-attach-btn"
                   >
                     <Suspense fallback={null}>
                       {uploading ? (
-                        <CircularProgress size={18} />
+                        <CircularProgress size={18} aria-hidden="true" />
                       ) : (
-                        <AttachFileIcon fontSize="small" />
+                        <AttachFileIcon fontSize="small" aria-hidden="true" />
                       )}
                     </Suspense>
                   </IconButton>
@@ -1037,10 +1082,16 @@ function Chat() {
                   <IconButton
                     onClick={() => setShowEmojiPicker((p) => !p)}
                     size="small"
+                    aria-label={
+                      showEmojiPicker
+                        ? "Close emoji picker"
+                        : "Open emoji picker"
+                    }
+                    aria-expanded={showEmojiPicker}
                     className="chat-attach-btn"
                   >
                     <Suspense fallback={null}>
-                      <EmojiEmotionsIcon fontSize="small" />
+                      <EmojiEmotionsIcon fontSize="small" aria-hidden="true" />
                     </Suspense>
                   </IconButton>
                 </Tooltip>
@@ -1079,10 +1130,11 @@ function Chat() {
                     onClick={handleSend}
                     disabled={!text.trim() && !uploading}
                     color="primary"
+                    aria-label="Send message"
                     className="chat-send-btn"
                   >
                     <Suspense fallback={null}>
-                      <SendIcon fontSize="small" />
+                      <SendIcon fontSize="small" aria-hidden="true" />
                     </Suspense>
                   </IconButton>
                 </span>
@@ -1103,6 +1155,7 @@ function Chat() {
         <DialogContent sx={{ p: 0, bgcolor: "black", position: "relative" }}>
           <IconButton
             onClick={() => setLightboxUrl(null)}
+            aria-label="Close image preview"
             sx={{
               position: "absolute",
               top: 8,
@@ -1112,7 +1165,7 @@ function Chat() {
             }}
           >
             <Suspense fallback={null}>
-              <CloseIcon />
+              <CloseIcon aria-hidden="true" />
             </Suspense>
           </IconButton>
           {lightboxUrl && (

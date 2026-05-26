@@ -122,6 +122,15 @@ function PendingApprovals() {
               <Box
                 key={i}
                 onClick={() => navigate("/attendance")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate("/attendance");
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Pending leave approval for ${displayName}`}
                 sx={{
                   px: 1.5,
                   py: 0.8,

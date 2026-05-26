@@ -290,6 +290,7 @@ function ViewResignations() {
               <Tooltip title="View Feedback">
                 <IconButton
                   size="small"
+                  aria-label={`View feedback for ${rowData.username ?? "employee"}`}
                   onClick={() => handleOpenModal(rowData)}
                   sx={{
                     width: 28,
@@ -317,6 +318,7 @@ function ViewResignations() {
                   <Tooltip title="Approve">
                     <IconButton
                       size="small"
+                      aria-label={`Approve resignation for ${rowData.username ?? "employee"}`}
                       onClick={() =>
                         handleResignationAction({
                           id: rowData.id,
@@ -348,6 +350,7 @@ function ViewResignations() {
                   <Tooltip title="Reject">
                     <IconButton
                       size="small"
+                      aria-label={`Reject resignation for ${rowData.username ?? "employee"}`}
                       onClick={() =>
                         handleResignationAction({
                           id: rowData.id,
@@ -382,6 +385,7 @@ function ViewResignations() {
                 <Tooltip title="Withdraw">
                   <IconButton
                     size="small"
+                    aria-label={`Withdraw resignation for ${rowData.username ?? "employee"}`}
                     onClick={() =>
                       handleResignationAction({
                         id: rowData.id,

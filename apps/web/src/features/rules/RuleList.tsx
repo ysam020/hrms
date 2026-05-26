@@ -479,18 +479,31 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
             </FormControl>
             <Stack direction="row" spacing={0.5}>
               <Tooltip title="Refresh">
-                <IconButton size="small" onClick={loadRules} disabled={loading}>
-                  <RefreshIcon fontSize="small" />
+                <IconButton
+                  size="small"
+                  onClick={loadRules}
+                  disabled={loading}
+                  aria-label="Refresh rules"
+                >
+                  <RefreshIcon fontSize="small" aria-hidden="true" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Export">
-                <IconButton size="small" onClick={handleExportRules}>
-                  <ExportIcon fontSize="small" />
+                <IconButton
+                  size="small"
+                  onClick={handleExportRules}
+                  aria-label="Export rules"
+                >
+                  <ExportIcon fontSize="small" aria-hidden="true" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Create Rule">
-                <IconButton size="small" onClick={handleCreateVisualRule}>
-                  <AddIcon fontSize="small" />
+                <IconButton
+                  size="small"
+                  onClick={handleCreateVisualRule}
+                  aria-label="Create rule"
+                >
+                  <AddIcon fontSize="small" aria-hidden="true" />
                 </IconButton>
               </Tooltip>
             </Stack>
@@ -706,26 +719,38 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
                                 <Tooltip title="Edit">
                                   <IconButton
                                     size="small"
+                                    aria-label={`Edit rule: ${rule.name}`}
                                     onClick={() => handleEditRule(rule)}
                                   >
-                                    <EditIcon fontSize="small" />
+                                    <EditIcon
+                                      fontSize="small"
+                                      aria-hidden="true"
+                                    />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Test">
                                   <IconButton
                                     size="small"
+                                    aria-label={`Test rule: ${rule.name}`}
                                     onClick={() => handleTestRule(rule)}
                                   >
-                                    <TestIcon fontSize="small" />
+                                    <TestIcon
+                                      fontSize="small"
+                                      aria-hidden="true"
+                                    />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Delete">
                                   <IconButton
                                     size="small"
+                                    aria-label={`Delete rule: ${rule.name}`}
                                     onClick={() => handleDeleteClick(rule)}
                                     color="error"
                                   >
-                                    <DeleteIcon fontSize="small" />
+                                    <DeleteIcon
+                                      fontSize="small"
+                                      aria-hidden="true"
+                                    />
                                   </IconButton>
                                 </Tooltip>
                               </Stack>
@@ -761,6 +786,7 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         maxWidth="xs"
         fullWidth
         disablePortal
+        aria-labelledby="category-dialog-title"
         slots={{ transition: SlideUpTransition }}
         transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{
@@ -776,7 +802,7 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
           },
         }}
       >
-        <DialogTitle>
+        <DialogTitle id="category-dialog-title">
           <Typography variant="h6" fontWeight={600}>
             Select Category
           </Typography>
@@ -840,6 +866,7 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         maxWidth="lg"
         fullWidth
         disablePortal
+        aria-labelledby="test-dialog-title"
         slots={{ transition: SlideUpTransition }}
         transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{
@@ -852,6 +879,7 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         }}
       >
         <DialogTitle
+          id="test-dialog-title"
           sx={{ pb: 1.5, borderBottom: "1px solid var(--text-input-border)" }}
         >
           <Typography variant="h6" fontWeight={600}>
@@ -1015,6 +1043,7 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
         onClose={() => setShowDeleteDialog(false)}
         maxWidth="xs"
         disablePortal
+        aria-labelledby="delete-dialog-title"
         slots={{ transition: SlideUpTransition }}
         transitionDuration={{ enter: 280, exit: 200 }}
         PaperProps={{
@@ -1024,7 +1053,7 @@ const RuleList = ({ onEditRule, onCreateRule }) => {
           },
         }}
       >
-        <DialogTitle>
+        <DialogTitle id="delete-dialog-title">
           <Typography variant="h6" fontWeight={600}>
             Confirm Delete
           </Typography>

@@ -110,6 +110,8 @@ export default function DomMagnifier({ enabled = true }) {
   const lens = (
     <div
       data-dom-magnifier-lens="true"
+      aria-hidden="true"
+      role="presentation"
       style={{
         position: "fixed",
         left: lensLeft,

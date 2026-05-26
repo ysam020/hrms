@@ -160,6 +160,7 @@ function EventPopover({
           <IconButton
             onClick={handlePopoverClose}
             size="small"
+            aria-label="Close event details"
             sx={{
               color: "text.secondary",
               "&:hover": {
@@ -167,7 +168,7 @@ function EventPopover({
               },
             }}
           >
-            <CloseIcon fontSize="small" />
+            <CloseIcon aria-hidden="true" fontSize="small" />
           </IconButton>
         </Box>
 
@@ -245,6 +246,7 @@ function EventPopover({
             <IconButton
               onClick={() => handleEditClick(selectedEvent)}
               size="small"
+              aria-label="Edit event"
               sx={{
                 color: "primary.main",
                 "&:hover": {
@@ -252,13 +254,14 @@ function EventPopover({
                 },
               }}
             >
-              <EditIcon fontSize="small" />
+              <EditIcon aria-hidden="true" fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Delete Event">
             <IconButton
               onClick={() => handleDeleteClick(selectedEvent)}
               size="small"
+              aria-label="Delete event"
               sx={{
                 color: "error.main",
                 "&:hover": {

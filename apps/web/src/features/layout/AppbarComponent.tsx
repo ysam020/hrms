@@ -221,6 +221,7 @@ function AppbarComponent({
                     >
                       <Box
                         component="button"
+                        aria-label="Reset to default layout"
                         onClick={resetFn}
                         sx={{
                           display: "flex",
@@ -257,6 +258,10 @@ function AppbarComponent({
                   >
                     <Box
                       component="button"
+                      aria-label={
+                        editMode ? "Done customizing" : "Customize layout"
+                      }
+                      aria-pressed={editMode}
                       onClick={toggleEditMode}
                       sx={{
                         display: "flex",
@@ -465,6 +470,7 @@ function AppbarComponent({
           </Typography>
           <Box
             component="button"
+            aria-label="Close menu"
             onClick={() => setMobileMenuOpen(false)}
             sx={{
               background: "none",
@@ -483,7 +489,11 @@ function AppbarComponent({
               },
             }}
           >
-            <i className="pi pi-times" style={{ fontSize: 14 }} />
+            <i
+              className="pi pi-times"
+              aria-hidden="true"
+              style={{ fontSize: 14 }}
+            />
           </Box>
         </Box>
 

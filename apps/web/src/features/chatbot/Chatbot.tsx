@@ -595,6 +595,7 @@ export default function Chatbot() {
                   onClick={() => sendMessage()}
                   disabled={!input.trim() || streaming}
                   size="small"
+                  aria-label="Send message"
                   sx={{
                     bgcolor:
                       input.trim() && !streaming ? c.brand : "transparent",
@@ -608,9 +609,13 @@ export default function Chatbot() {
                   }}
                 >
                   {streaming ? (
-                    <CircularProgress size={16} thickness={5} />
+                    <CircularProgress
+                      size={16}
+                      thickness={5}
+                      aria-hidden="true"
+                    />
                   ) : (
-                    <SendIcon sx={{ fontSize: 16 }} />
+                    <SendIcon sx={{ fontSize: 16 }} aria-hidden="true" />
                   )}
                 </IconButton>
               </Box>

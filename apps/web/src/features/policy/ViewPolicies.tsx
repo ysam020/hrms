@@ -126,12 +126,13 @@ function PolicyViewer({ policy, onClose, theme }) {
         <IconButton
           onClick={onClose}
           size="small"
+          aria-label="Close policy viewer"
           sx={{
             color: "text.secondary",
             "&:hover": { bgcolor: "action.hover" },
           }}
         >
-          <CloseIcon fontSize="small" />
+          <CloseIcon aria-hidden="true" fontSize="small" />
         </IconButton>
       </Box>
 
@@ -295,12 +296,13 @@ function EditPolicyModal({ policy, onClose, onSaved, theme }) {
         <IconButton
           onClick={onClose}
           size="small"
+          aria-label="Close policy viewer"
           sx={{
             color: "text.secondary",
             "&:hover": { bgcolor: "action.hover" },
           }}
         >
-          <CloseIcon fontSize="small" />
+          <CloseIcon aria-hidden="true" fontSize="small" />
         </IconButton>
       </Box>
 
@@ -374,9 +376,10 @@ function EditPolicyModal({ policy, onClose, onSaved, theme }) {
         <IconButton
           size="small"
           onClick={onClose}
+          aria-label="Close policy editor"
           sx={{ color: "text.secondary" }}
         >
-          <CloseIcon fontSize="small" />
+          <CloseIcon aria-hidden="true" fontSize="small" />
         </IconButton>
         <Box
           component="button"
@@ -559,12 +562,20 @@ function ViewPolicies({ refreshKey = 0 }) {
     renderRowActions: ({ row }) => (
       <Box display="flex" gap={0.5}>
         <Tooltip title="View">
-          <IconButton size="small" onClick={() => setViewPolicy(row.original)}>
+          <IconButton
+            size="small"
+            aria-label={`View policy: ${row.original.title}`}
+            onClick={() => setViewPolicy(row.original)}
+          >
             <VisibilityIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Download PDF">
-          <IconButton size="small" onClick={() => handleDownload(row.original)}>
+          <IconButton
+            size="small"
+            aria-label={`Download policy: ${row.original.title}`}
+            onClick={() => handleDownload(row.original)}
+          >
             <DownloadIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -573,9 +584,10 @@ function ViewPolicies({ refreshKey = 0 }) {
             <IconButton
               size="small"
               color="warning"
+              aria-label={`Edit policy: ${row.original.title}`}
               onClick={() => setEditPolicy(row.original)}
             >
-              <EditIcon fontSize="small" />
+              <EditIcon aria-hidden="true" fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
@@ -584,9 +596,10 @@ function ViewPolicies({ refreshKey = 0 }) {
             <IconButton
               size="small"
               color="error"
+              aria-label={`Delete policy: ${row.original.title}`}
               onClick={() => handleDeleteClick(row.original)}
             >
-              <DeleteIcon fontSize="small" />
+              <DeleteIcon aria-hidden="true" fontSize="small" />
             </IconButton>
           </Tooltip>
         )}

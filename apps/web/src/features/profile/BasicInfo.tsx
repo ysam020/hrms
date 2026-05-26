@@ -205,13 +205,17 @@ function BasicInfo({ user }) {
         {link && value && (
           <IconButton
             size="small"
+            aria-label={`Open ${value} in a new tab`}
             onClick={() => window.open(link, "_blank")}
             sx={{
               color: "primary.main",
               flexShrink: 0,
             }}
           >
-            <OpenInNew sx={{ fontSize: { xs: 14, sm: 16 } }} />
+            <OpenInNew
+              aria-hidden="true"
+              sx={{ fontSize: { xs: 14, sm: 16 } }}
+            />
           </IconButton>
         )}
       </Box>

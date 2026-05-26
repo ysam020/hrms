@@ -69,6 +69,7 @@ function NotificationConsentDrawer({
       <Box sx={{ position: "relative" }}>
         <IconButton
           onClick={handleClose}
+          aria-label="Close notification consent dialog"
           sx={{
             position: "absolute",
             right: 8,
@@ -76,7 +77,7 @@ function NotificationConsentDrawer({
             color: "text.secondary",
           }}
         >
-          <CloseIcon />
+          <CloseIcon aria-hidden="true" />
         </IconButton>
 
         <Box sx={{ p: 3, pb: 2 }}>

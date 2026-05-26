@@ -13,6 +13,7 @@ function CheckboxWrapper({
   formik: any;
 }) {
   const hasError = formik.touched[name] && formik.errors[name];
+  const errorId = `${name}-error`;
 
   return (
     <div className="form-field-container">
@@ -25,12 +26,20 @@ function CheckboxWrapper({
               checked={formik.values[name]}
               onChange={formik.handleChange}
               onBlur={() => formik.setFieldTouched(name, true)}
+              inputProps={{
+                "aria-invalid": !!hasError,
+                "aria-describedby": hasError ? errorId : undefined,
+              }}
             />
           }
           label={label}
         />
       </FormGroup>
-      {hasError && <small className="p-error">{formik.errors[name]}</small>}
+      {hasError && (
+        <small id={errorId} className="p-error" role="alert">
+          {formik.errors[name]}
+        </small>
+      )}
     </div>
   );
 }

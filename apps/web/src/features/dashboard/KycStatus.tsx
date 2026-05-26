@@ -35,6 +35,15 @@ function KycStatus() {
         cursor: "pointer",
       }}
       onClick={() => navigate("/kyc")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate("/kyc");
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="View KYC status"
     >
       {/* Header */}
       <Box

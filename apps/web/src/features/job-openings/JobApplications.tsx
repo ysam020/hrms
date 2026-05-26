@@ -123,6 +123,7 @@ const JobApplications = (props) => {
           <Tooltip title="Download resume">
             <IconButton
               size="small"
+              aria-label={`Download resume for ${cell.row.original.name}`}
               onClick={handleDownload}
               sx={{
                 width: 28,
@@ -160,6 +161,7 @@ const JobApplications = (props) => {
         <Tooltip title="Schedule interview">
           <IconButton
             size="small"
+            aria-label={`Schedule interview for ${cell.row.original.name}`}
             onClick={() =>
               props.handleOpenInterviewModal({
                 ...cell.row.original,
@@ -198,6 +200,7 @@ const JobApplications = (props) => {
           <Tooltip title="Hire candidate">
             <IconButton
               size="small"
+              aria-label={`Hire ${cell.row.original.name}`}
               onClick={() => props.handleOpenHiringModal(cell.row.original)}
               sx={{
                 width: 28,
@@ -222,6 +225,7 @@ const JobApplications = (props) => {
           <Tooltip title="Reject candidate">
             <IconButton
               size="small"
+              aria-label={`Reject ${cell.row.original.name}`}
               onClick={() => props.handleOpenRejectModal(cell.row.original)}
               sx={{
                 width: 28,
@@ -261,6 +265,7 @@ const JobApplications = (props) => {
             <IconButton
               onClick={handleClick}
               size="small"
+              aria-label={`View details for ${cell.row.original.name}`}
               sx={{
                 width: 28,
                 height: 28,

@@ -35,6 +35,15 @@ function DepartmentBreakdown() {
         cursor: "pointer",
       }}
       onClick={() => navigate("/employee-management")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate("/employee-management");
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="View department breakdown in employee management"
     >
       {/* Header */}
       <Box

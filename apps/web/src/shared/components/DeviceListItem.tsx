@@ -91,7 +91,27 @@ function DeviceListItem({
   };
 
   return (
-    <Box sx={getThemedStyles()} onClick={onClick}>
+    <Box
+      sx={getThemedStyles()}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      aria-label={
+        onClick
+          ? `View details for ${device?.deviceInfo?.deviceType ?? "device"}`
+          : undefined
+      }
+    >
       <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
         <Box sx={{ mt: 0.5 }}>
           {getDeviceIcon(device?.deviceInfo?.deviceType)}
