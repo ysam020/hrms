@@ -60,7 +60,7 @@ describe("getTodayAttendance", () => {
     await getTodayAttendance(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
-      expect.objectContaining({ status: 5, data: null }),
+      expect.objectContaining({ status: 5, data: {} }),
     );
     expect(mockCacheSet).not.toHaveBeenCalled();
   });

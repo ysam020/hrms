@@ -9,6 +9,8 @@
 #   Windows  → %USERPROFILE%  (e.g. C:\Users\sam)
 #   macOS    → $HOME          (e.g. /Users/sam)
 #   Linux    → $HOME          (e.g. /home/sam)
+name: hrms-dev
+
 x-backend-service: &backend-service
   volumes:
     - ${USERPROFILE:-${HOME}}/.aws:/app/.aws:ro
@@ -17,7 +19,7 @@ x-backend-service: &backend-service
 
 services:
   api-gateway:
-    container_name: api-gateway
+    container_name: hrms-dev-api-gateway
     image: ysam090/hrms-api-gateway:latest
     build:
       context: .
@@ -53,7 +55,7 @@ services:
     <<: *backend-service
 
   auth-service:
-    container_name: auth-service
+    container_name: hrms-dev-auth-service
     image: ysam090/hrms-auth-service:latest
     build:
       context: .
@@ -77,7 +79,7 @@ services:
     <<: *backend-service
 
   user-service:
-    container_name: user-service
+    container_name: hrms-dev-user-service
     image: ysam090/hrms-user-service:latest
     build:
       context: .
@@ -101,7 +103,7 @@ services:
     <<: *backend-service
 
   employee-service:
-    container_name: employee-service
+    container_name: hrms-dev-employee-service
     image: ysam090/hrms-employee-service:latest
     build:
       context: .
@@ -125,7 +127,7 @@ services:
     <<: *backend-service
 
   attendance-service:
-    container_name: attendance-service
+    container_name: hrms-dev-attendance-service
     image: ysam090/hrms-attendance-service:latest
     build:
       context: .
@@ -149,7 +151,7 @@ services:
     <<: *backend-service
 
   leave-service:
-    container_name: leave-service
+    container_name: hrms-dev-leave-service
     image: ysam090/hrms-leave-service:latest
     build:
       context: .
@@ -173,7 +175,7 @@ services:
     <<: *backend-service
 
   recruitment-service:
-    container_name: recruitment-service
+    container_name: hrms-dev-recruitment-service
     image: ysam090/hrms-recruitment-service:latest
     build:
       context: .
@@ -198,7 +200,7 @@ services:
     <<: *backend-service
 
   hrm-service:
-    container_name: hrm-service
+    container_name: hrms-dev-hrm-service
     image: ysam090/hrms-hrm-service:latest
     build:
       context: .
@@ -222,7 +224,7 @@ services:
     <<: *backend-service
 
   salary-service:
-    container_name: salary-service
+    container_name: hrms-dev-salary-service
     image: ysam090/hrms-salary-service:latest
     build:
       context: .
@@ -246,7 +248,7 @@ services:
     <<: *backend-service
 
   analytics-service:
-    container_name: analytics-service
+    container_name: hrms-dev-analytics-service
     image: ysam090/hrms-analytics-service:latest
     build:
       context: .
@@ -270,7 +272,7 @@ services:
     <<: *backend-service
 
   notification-service:
-    container_name: notification-service
+    container_name: hrms-dev-notification-service
     image: ysam090/hrms-notification-service:latest
     build:
       context: .
@@ -294,7 +296,7 @@ services:
     <<: *backend-service
 
   scheduler-service:
-    container_name: scheduler-service
+    container_name: hrms-dev-scheduler-service
     image: ysam090/hrms-scheduler-service:latest
     build:
       context: .
@@ -316,7 +318,7 @@ services:
     <<: *backend-service
 
   web:
-    container_name: web
+    container_name: hrms-dev-web
     image: ysam090/hrms-web:latest
     build:
       context: .
@@ -332,7 +334,7 @@ services:
     restart: on-failure
 
   mongodb:
-    container_name: hrms-mongodb
+    container_name: hrms-dev-mongodb
     image: mongo:7
     ports:
       - "27017:27017"
@@ -349,7 +351,7 @@ services:
     restart: unless-stopped
 
   redis:
-    container_name: hrms-redis
+    container_name: hrms-dev-redis
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -364,7 +366,7 @@ services:
     restart: unless-stopped
 
   prometheus:
-    container_name: hrms-prometheus
+    container_name: hrms-dev-prometheus
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
@@ -379,7 +381,7 @@ services:
     restart: unless-stopped
 
   loki:
-    container_name: hrms-loki
+    container_name: hrms-dev-loki
     image: grafana/loki:latest
     user: "0"
     ports:
@@ -391,7 +393,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    container_name: hrms-grafana
+    container_name: hrms-dev-grafana
     image: grafana/grafana:latest
     ports:
       - "3000:3000"

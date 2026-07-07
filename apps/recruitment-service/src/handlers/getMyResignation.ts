@@ -26,7 +26,7 @@ export const getMyResignation = async (
       return callback(null, {
         message: MESSAGES.NO_RESIGNATION_FOUND,
         status: status.NOT_FOUND,
-        data: null,
+        data: {},
       });
     }
 
