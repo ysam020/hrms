@@ -2,6 +2,11 @@ name: Deploy to EC2
 
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to the commit SHA that was built). Use this to roll back to a previous tag already in ECR."
+        required: false
+        type: string
   workflow_run:
     workflows:
       - Build and publish Docker images
@@ -12,6 +17,10 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
 
 jobs:
   deploy:
@@ -19,33 +28,72 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy application to EC2
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ vars.EC2_HOST }}
-          username: ${{ vars.EC2_USERNAME || 'ubuntu' }}
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          script_stop: true
-          script: |
-            set -euo pipefail
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
 
-            export AWS_REGION="${{ vars.AWS_REGION || 'ap-south-1' }}"
-            export AWS_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID }}"
-            export ECR_REPOSITORY_PREFIX="${{ vars.ECR_REPOSITORY_PREFIX || 'dev' }}"
-            export TAG_NAME="${{ github.sha }}"
-
-            if [ ! -d /home/ubuntu/hrms/.git ]; then
-              rm -rf /home/ubuntu/hrms
-              git clone "https://github.com/${{ github.repository }}.git" /home/ubuntu/hrms
+      - name: Resolve image tag
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${{ inputs.image_tag }}"
+          if [ -z "$IMAGE_TAG" ]; then
+            if [ "${{ github.event_name }}" = "workflow_run" ]; then
+              IMAGE_TAG="${{ github.event.workflow_run.head_sha }}"
+            else
+              IMAGE_TAG="${{ github.sha }}"
             fi
+          fi
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
 
-            cd /home/ubuntu/hrms
-            git fetch origin main
-            git checkout main
-            git pull origin main
+      - name: Publish deploy config to S3
+        run: |
+          set -euo pipefail
+          aws s3 cp docker-compose.prod.yml "s3://${{ vars.DEPLOY_ARTIFACTS_BUCKET }}/docker-compose.prod.yml"
 
-            aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+      - name: Point instances at the new image tag
+        run: |
+          set -euo pipefail
+          aws ssm put-parameter \
+            --name /hrms/prod/image-tag \
+            --value "$IMAGE_TAG" \
+            --type String \
+            --overwrite
 
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            docker compose -f docker-compose.prod.yml ps
+      - name: Roll out to ASG instances via SSM
+        run: |
+          set -euo pipefail
+
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "${{ vars.ASG_NAME }}" \
+            --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId' \
+            --output text)
+
+          if [ -z "$INSTANCE_IDS" ]; then
+            echo "No in-service instances found in ASG ${{ vars.ASG_NAME }}"
+            exit 1
+          fi
+          echo "Deploying $IMAGE_TAG to: $INSTANCE_IDS"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids $INSTANCE_IDS \
+            --parameters 'commands=["sudo /opt/hrms/deploy.sh"]' \
+            --comment "hrms deploy $IMAGE_TAG" \
+            --query 'Command.CommandId' --output text)
+
+          FAILED=0
+          for id in $INSTANCE_IDS; do
+            if ! aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$id"; then
+              echo "::error::Deploy failed on instance $id"
+              aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$id" \
+                --query '{Status:Status,StdErr:StandardErrorContent}' --output text || true
+              FAILED=1
+            fi
+          done
+
+          exit $FAILED

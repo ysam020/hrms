@@ -71,10 +71,6 @@ jobs:
             dockerfile: docker/base.Dockerfile
             repo: scheduler-service
             build_args: --build-arg APP_DIR=scheduler-service --build-arg PROJECT=scheduler-service
-          - name: web
-            dockerfile: docker/web.Dockerfile
-            repo: web
-            build_args: ""
 
     steps:
       - name: Checkout repository
