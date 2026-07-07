@@ -1,0 +1,51 @@
+name: Deploy to EC2
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Build and publish Docker images
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy application to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ vars.EC2_HOST }}
+          username: ${{ vars.EC2_USERNAME || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            export AWS_REGION="${{ vars.AWS_REGION || 'ap-south-1' }}"
+            export AWS_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID }}"
+            export ECR_REPOSITORY_PREFIX="${{ vars.ECR_REPOSITORY_PREFIX || 'dev' }}"
+            export TAG_NAME="${{ github.sha }}"
+
+            if [ ! -d /home/ubuntu/hrms/.git ]; then
+              rm -rf /home/ubuntu/hrms
+              git clone "https://github.com/${{ github.repository }}.git" /home/ubuntu/hrms
+            fi
+
+            cd /home/ubuntu/hrms
+            git fetch origin main
+            git checkout main
+            git pull origin main
+
+            aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml ps

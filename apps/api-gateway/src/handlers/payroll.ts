@@ -1,0 +1,1159 @@
+/**
+ * Payroll handler – gateway-direct (no separate gRPC service).
+ *
+ * Lifecycle:  draft → processing → approved → disbursed | cancelled
+ *
+ * Security notes:
+ *  – Only HR/admin/owner may initiate or approve runs.
+ *  – Runs are idempotent: @@unique([tenantId, month, year]) prevents duplicates.
+ *  – Line-items are computed at initiation time from the *current* User salary
+ *    snapshot + any pending SalaryAdvance EMIs; they are immutable after that.
+ *  – Disbursement is a status flag only (no real bank call for test mode).
+ *    Hook in RazorpayX Payouts here when ready for production.
+ *  – Approval requires a different user than the initiator (four-eyes principle).
+ */
+
+import { Request, Response } from "express";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import { logger } from "@hrms/logger";
+import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { handleError } from "../utils/handleError";
+import { AuthRequest } from "../middleware/authenticate";
+import { parsePagination } from "../utils/pagination";
+import { emitWebhookEvent } from "../utils/webhookEmitter";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+type AllowedRole = "owner" | "admin" | "hr" | "manager" | "employee";
+
+async function assertRole(
+  userId: string,
+  allowed: AllowedRole[],
+): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, isSuperUser: true },
+  });
+  if (!user) return false;
+  if (user.isSuperUser) return true;
+  return user.role.some((r) => allowed.includes(r as AllowedRole));
+}
+
+// SLA hours by priority (used by helpdesk too, kept here for co-location)
+const SLA_HOURS: Record<string, number> = {
+  critical: 4,
+  high: 8,
+  medium: 24,
+  low: 72,
+};
+export { SLA_HOURS };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RazorpayX Payouts helpers
+//
+// RazorpayX is a SEPARATE product from Razorpay Payment Gateway:
+//   Existing vars (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)  → PG, collects money FROM tenants
+//   New vars below                                          → X,  sends money   TO employees
+//
+// Required env vars for live payouts:
+//   RAZORPAY_X_KEY_ID          – RazorpayX dashboard key
+//   RAZORPAY_X_KEY_SECRET      – RazorpayX dashboard secret
+//   RAZORPAY_X_ACCOUNT_NUMBER  – your RazorpayX current account number
+//   RAZORPAY_X_WEBHOOK_SECRET  – for verifying async payout webhooks
+//
+// If RAZORPAY_X_KEY_ID is absent the disburse step is flag-only (test/dev mode).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RZP_X_BASE = "https://api.razorpay.com/v1";
+
+function getRzpXAuth(): string | null {
+  const key = process.env.RAZORPAY_X_KEY_ID;
+  const secret = process.env.RAZORPAY_X_KEY_SECRET;
+  if (!key || !secret) return null;
+  return "Basic " + Buffer.from(`${key}:${secret}`).toString("base64");
+}
+
+/**
+ * Returns the RazorpayX contact_id for an employee.
+ * Tries existing contact by reference_id (userId) first; creates if missing.
+ * Contacts are reused across payroll runs — one per employee for life.
+ */
+async function getOrCreateRzpContact(
+  auth: string,
+  userId: string,
+  name: string,
+): Promise<string> {
+  const listRes = await fetch(
+    `${RZP_X_BASE}/contacts?reference_id=${encodeURIComponent(userId)}&count=1`,
+    { headers: { Authorization: auth } },
+  );
+  if (listRes.ok) {
+    const list = (await listRes.json()) as any;
+    if (list.count > 0 && list.items?.[0]?.id)
+      return list.items[0].id as string;
+  }
+  const createRes = await fetch(`${RZP_X_BASE}/contacts`, {
+    method: "POST",
+    headers: { Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ name, type: "employee", reference_id: userId }),
+  });
+  const body = (await createRes.json()) as any;
+  if (!createRes.ok)
+    throw new Error(
+      body.error?.description ?? "RazorpayX contact creation failed",
+    );
+  return body.id as string;
+}
+
+/**
+ * Creates a fund_account (bank account) under a contact.
+ * A fresh fund_account is created each run so bank-detail changes are picked up.
+ */
+async function createRzpFundAccount(
+  auth: string,
+  contactId: string,
+  holderName: string,
+  bankAccountNo: string,
+  ifsc: string,
+): Promise<string> {
+  const res = await fetch(`${RZP_X_BASE}/fund_accounts`, {
+    method: "POST",
+    headers: { Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contact_id: contactId,
+      account_type: "bank_account",
+      bank_account: { name: holderName, ifsc, account_number: bankAccountNo },
+    }),
+  });
+  const body = (await res.json()) as any;
+  if (!res.ok)
+    throw new Error(
+      body.error?.description ?? "RazorpayX fund account creation failed",
+    );
+  return body.id as string;
+}
+
+/**
+ * Creates a RazorpayX payout and returns { id, status }.
+ * X-Payout-Idempotency = runId_userId prevents double-payment on retry.
+ */
+async function createRzpPayout(
+  auth: string,
+  params: {
+    accountNumber: string;
+    fundAccountId: string;
+    amountPaise: number;
+    runId: string;
+    userId: string;
+    month: number;
+    year: number;
+  },
+): Promise<{ id: string; status: string }> {
+  const res = await fetch(`${RZP_X_BASE}/payouts`, {
+    method: "POST",
+    headers: {
+      Authorization: auth,
+      "Content-Type": "application/json",
+      "X-Payout-Idempotency": `${params.runId}_${params.userId}`,
+    },
+    body: JSON.stringify({
+      account_number: params.accountNumber,
+      fund_account_id: params.fundAccountId,
+      amount: params.amountPaise, // in paise
+      currency: "INR",
+      mode: "IMPS", // instant; falls back to NEFT automatically
+      purpose: "salary",
+      queue_if_low_balance: true,
+      reference_id: `${params.runId}_${params.userId}`,
+      narration: `Salary ${String(params.month).padStart(2, "0")}/${params.year}`,
+    }),
+  });
+  const body = (await res.json()) as any;
+  if (!res.ok)
+    throw new Error(
+      body.error?.description ?? "RazorpayX payout creation failed",
+    );
+  return { id: body.id as string, status: body.status as string };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payroll Run Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /payroll/runs
+ * Initiates a new payroll run for the given month/year.
+ * Computes line-items for all active employees at this point in time.
+ */
+export async function initiatePayrollRun(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    if (!allowed) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Only HR, admin, or owner can initiate payroll runs",
+      });
+    }
+
+    const { month, year, notes } = req.body as {
+      month: number;
+      year: number;
+      notes?: string;
+    };
+
+    const tenantId = getTenantId();
+
+    // Guard: payroll can only be initiated for past months (never current or future).
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-indexed
+    if (year > currentYear || (year === currentYear && month >= currentMonth)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Payroll can only be initiated for past months, not the current or future months.",
+      });
+    }
+
+    // Guard: no duplicate run for the same period.
+    const existing = await prisma.payrollRun.findUnique({
+      where: { tenantId_month_year: { tenantId: tenantId!, month, year } },
+    });
+    if (existing) {
+      return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+        message: `Payroll run for ${year}-${String(month).padStart(2, "0")} already exists (status: ${existing.status})`,
+      });
+    }
+
+    // Fetch all active employees — only their base (full-month) gross salary is needed;
+    // components are re-derived from attendance-based pro-rata gross below.
+    const employees = await prisma.user.findMany({
+      where: { employeeStatus: "Active" },
+      select: { id: true, salary: true },
+    });
+
+    if (employees.length === 0) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "No active employees found to process payroll for",
+      });
+    }
+
+    const empIds = employees.map((e) => e.id);
+
+    // ── Attendance data for the payroll month ─────────────────────────────────
+    // Date range: midnight on the 1st → 23:59:59.999 on the last day.
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+    const totalMonthDays = new Date(year, month, 0).getDate(); // e.g. 28/29/30/31
+
+    const [attendanceRecords, leaveBalances] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: {
+          userId: { in: empIds },
+          date: { gte: monthStart, lte: monthEnd },
+        },
+        select: { userId: true, status: true },
+      }),
+      prisma.leaveBalance.findMany({
+        where: { userId: { in: empIds } },
+        select: { userId: true, balances: true },
+      }),
+    ]);
+
+    // Aggregate per-employee attendance counts.
+    type AttAgg = {
+      present: number;
+      late: number;
+      halfDay: number;
+      holiday: number;
+      wfh: number;
+    };
+    const attByUser = new Map<string, AttAgg>();
+    for (const emp of employees) {
+      attByUser.set(emp.id, {
+        present: 0,
+        late: 0,
+        halfDay: 0,
+        holiday: 0,
+        wfh: 0,
+      });
+    }
+    for (const r of attendanceRecords as any[]) {
+      const agg = attByUser.get(r.userId);
+      if (!agg) continue;
+      if (r.status === "Present") agg.present++;
+      else if (r.status === "Late") agg.late++;
+      else if (r.status === "Half Day") agg.halfDay++;
+      else if (r.status === "Holiday") agg.holiday++;
+      else if (r.status === "WFH") agg.wfh++;
+    }
+
+    // Extract paid-leave count per employee for this month from LeaveBalance.balances JSON.
+    const paidLeaveByUser = new Map<string, number>();
+    for (const lb of leaveBalances as any[]) {
+      if (!lb.balances || !Array.isArray(lb.balances)) continue;
+      const mb = lb.balances.find(
+        (b: any) =>
+          String(b.year) === String(year) && String(b.month) === String(month),
+      );
+      paidLeaveByUser.set(lb.userId, mb?.usedPL ?? 0);
+    }
+
+    // Professional Tax slab (approximate; adjust per state rules as needed).
+    const calcPt = (gross: number): number => {
+      if (gross < 6000) return 0;
+      if (gross < 9000) return 80;
+      if (gross < 12000) return 150;
+      return 200;
+    };
+
+    // Fetch pending salary advances eligible for deduction this month.
+    const advances = await prisma.salaryAdvance.findMany({
+      where: { status: { in: ["Approved", "Repaying"] } },
+      select: {
+        id: true,
+        userId: true,
+        emiAmount: true,
+        remainingAmount: true,
+      },
+    });
+    const advanceMap = new Map<
+      string,
+      { id: string; emi: number; remaining: number }
+    >();
+    for (const adv of advances) {
+      if (adv.emiAmount && adv.emiAmount > 0) {
+        advanceMap.set(adv.userId, {
+          id: adv.id,
+          emi: adv.emiAmount,
+          remaining: adv.remainingAmount ?? adv.emiAmount,
+        });
+      }
+    }
+
+    // ── Build line-items (attendance-based pro-rata) ──────────────────────────
+    let totalGross = 0;
+    let totalNet = 0;
+    let totalDeductions = 0;
+
+    const lineItems = employees.map((emp) => {
+      const fullGross = emp.salary ?? 0;
+
+      // Paid days = present + late + halfDays×0.5 + holidays + WFH days + paid leaves.
+      const att = attByUser.get(emp.id) ?? {
+        present: 0,
+        late: 0,
+        halfDay: 0,
+        holiday: 0,
+        wfh: 0,
+      };
+      const paidLeaves = paidLeaveByUser.get(emp.id) ?? 0;
+      const paidDays = Math.min(
+        att.present +
+          att.late +
+          att.halfDay * 0.5 +
+          att.holiday +
+          att.wfh +
+          paidLeaves,
+        totalMonthDays, // cap at total days to avoid overrun
+      );
+
+      // Pro-rata gross.
+      const gross =
+        totalMonthDays > 0
+          ? Math.round((fullGross * paidDays) / totalMonthDays)
+          : fullGross;
+
+      // Derive salary components from pro-rata gross.
+      const basicPay = Math.round(gross * 0.5);
+      const hra = Math.round(gross * 0.25);
+      const conveyance = Math.round(gross * 0.25);
+
+      // Statutory deductions.
+      const pf = Math.round(basicPay * 0.12);
+      const esi = gross <= 21000 ? Math.round(gross * 0.0175) : 0;
+      const pt = calcPt(gross);
+
+      const adv = advanceMap.get(emp.id);
+      const advanceDeduction = adv ? Math.min(adv.emi, adv.remaining) : 0;
+
+      const totalDed = pf + esi + pt + advanceDeduction;
+      const net = Math.max(0, gross - totalDed);
+
+      totalGross += gross;
+      totalDeductions += totalDed;
+      totalNet += net;
+
+      return {
+        tenantId: tenantId ?? undefined,
+        userId: emp.id,
+        grossSalary: gross,
+        basicPay,
+        hra,
+        conveyance,
+        pf,
+        esi,
+        pt,
+        advanceDeduction,
+        otherDeductions: 0,
+        totalDeductions: totalDed,
+        netPayable: net,
+      };
+    });
+
+    // Create run first, then line-items sequentially.
+    // (MongoDB standalone does not support multi-document transactions.)
+    const run = await prisma.payrollRun.create({
+      data: {
+        tenantId: tenantId ?? undefined,
+        month,
+        year,
+        status: "draft",
+        initiatedBy: user!.userId,
+        totalGross,
+        totalNet,
+        totalDeductions,
+        employeeCount: employees.length,
+        notes: notes ?? null,
+      },
+    });
+
+    // createMany on MongoDB does not support skipDuplicates — plain createMany is fine here.
+    if (lineItems.length > 0) {
+      await prisma.payrollLineItem.createMany({
+        data: lineItems.map((li) => ({ ...li, payrollRunId: run.id })),
+      });
+    }
+
+    logger.info(`Payroll run initiated: ${run.id} for ${year}-${month}`, {
+      initiatedBy: user!.userId,
+      employeeCount: employees.length,
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.CREATED, {
+      message: `Payroll run created for ${year}-${String(month).padStart(2, "0")}`,
+      data: {
+        runId: run.id,
+        status: run.status,
+        employeeCount: employees.length,
+        totalGross,
+        totalNet,
+        totalDeductions,
+      },
+    });
+  } catch (error) {
+    logger.error("POST /payroll/runs error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * GET /payroll/runs
+ * Lists payroll runs with optional status filter.
+ */
+export async function listPayrollRuns(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    if (!allowed) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Access restricted to HR, admin, or owner",
+      });
+    }
+
+    const { status } = req.query as Record<string, string>;
+    const { page, limit } = parsePagination(req.query);
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [runs, total] = await Promise.all([
+      prisma.payrollRun.findMany({
+        where,
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+        skip,
+        take,
+      }),
+      prisma.payrollRun.count({ where }),
+    ]);
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Payroll runs retrieved",
+      data: runs,
+      total,
+    });
+  } catch (error) {
+    logger.error("GET /payroll/runs error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * GET /payroll/runs/:runId
+ * Returns a run with its full line-items and employee names.
+ */
+export async function getPayrollRun(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    if (!allowed) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+    }
+
+    const run = await prisma.payrollRun.findUnique({
+      where: { id: String(req.params.runId) },
+      include: { lineItems: true },
+    });
+    if (!run) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Payroll run not found",
+      });
+    }
+
+    // Enrich with employee names.
+    const userIds = [
+      ...new Set((run.lineItems as any[]).map((li: any) => li.userId)),
+    ];
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds as string[] } },
+      select: {
+        id: true,
+        username: true,
+        first_name: true,
+        last_name: true,
+        designation: true,
+        department: true,
+      },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    const enrichedItems = (run.lineItems as any[]).map((li: any) => ({
+      ...li,
+      employee: userMap.get(li.userId) ?? { id: li.userId },
+    }));
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Payroll run retrieved",
+      data: { ...run, lineItems: enrichedItems },
+    });
+  } catch (error) {
+    logger.error("GET /payroll/runs/:runId error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * PATCH /payroll/runs/status
+ * Transitions a run through its lifecycle.
+ *
+ * Body: { runId, status, notes? }
+ * status is the TARGET status the caller wants to reach:
+ *   "processing" → draft→processing (HR submits for review)
+ *   "approved"   → processing→approved (four-eyes)
+ *   "disbursed"  → approved→disbursed (marks as paid)
+ *   "cancelled"  → any→cancelled
+ */
+export async function updatePayrollRunStatus(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { runId, status, notes } = req.body as {
+      runId: string;
+      status: string;
+      notes?: string;
+    };
+
+    // Map target status → internal action name for the state machine.
+    const statusToAction: Record<string, string> = {
+      processing: "submit",
+      approved: "approve",
+      disbursed: "disburse",
+      cancelled: "cancel",
+    };
+    const action = statusToAction[status];
+    if (!action) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Invalid target status: ${status}`,
+      });
+    }
+
+    const run = await prisma.payrollRun.findUnique({
+      where: { id: runId },
+    });
+    if (!run) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Payroll run not found",
+      });
+    }
+
+    // Validate transitions.
+    const validTransitions: Record<
+      string,
+      { from: string[]; toStatus: string; roles: AllowedRole[] }
+    > = {
+      submit: {
+        from: ["draft"],
+        toStatus: "processing",
+        roles: ["owner", "admin", "hr"],
+      },
+      approve: {
+        from: ["processing"],
+        toStatus: "approved",
+        roles: ["owner", "admin", "hr"],
+      },
+      disburse: {
+        from: ["approved"],
+        toStatus: "disbursed",
+        roles: ["owner", "admin"],
+      },
+      cancel: {
+        from: ["draft", "processing", "approved"],
+        toStatus: "cancelled",
+        roles: ["owner", "admin"],
+      },
+    };
+
+    const transition = validTransitions[action];
+    if (!transition) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Invalid action: ${action}`,
+      });
+    }
+    if (!transition.from.includes((run as any).status)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Cannot ${action} a run with status '${(run as any).status}'`,
+      });
+    }
+
+    const allowed = await assertRole(user!.userId, transition.roles);
+    if (!allowed) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: `Only ${transition.roles.join("/")} can ${action} a payroll run`,
+      });
+    }
+
+    // Four-eyes: final approval must be by a different user than the one who submitted.
+    if (action === "approve" && (run as any).initiatedBy === user!.userId) {
+      const isSU = await prisma.user.findUnique({
+        where: { id: user!.userId },
+        select: { isSuperUser: true },
+      });
+      if (!isSU?.isSuperUser) {
+        return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+          message:
+            "The initiator cannot approve their own payroll run (four-eyes policy)",
+        });
+      }
+    }
+
+    // ── Pre-flight for disburse: validate bank details BEFORE touching run status ──
+    // Only enforced when RazorpayX is configured — dev/test environments without
+    // the env vars skip this and do flag-only disbursement.
+    if (action === "disburse" && process.env.RAZORPAY_X_KEY_ID) {
+      const lineUserIds = await prisma.payrollLineItem.findMany({
+        where: { payrollRunId: run.id },
+        select: { userId: true },
+      });
+      const emps = await prisma.user.findMany({
+        where: { id: { in: (lineUserIds as any[]).map((l: any) => l.userId) } },
+        select: {
+          id: true,
+          username: true,
+          bank_account_no: true,
+          ifsc_code: true,
+        },
+      });
+      const missing = emps.filter((e) => !e.bank_account_no || !e.ifsc_code);
+      if (missing.length > 0) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message:
+            "Cannot disburse: the following employees are missing bank account details. " +
+            "Update their profiles before disbursing.",
+          data: {
+            missing: missing.map((e) => ({
+              userId: e.id,
+              username: e.username,
+            })),
+          },
+        });
+      }
+    }
+
+    const updateData: any = {
+      status: transition.toStatus,
+      ...(notes ? { notes } : {}),
+    };
+    if (action === "approve") {
+      updateData.approvedBy = user!.userId;
+      updateData.approvedAt = new Date();
+    }
+    if (action === "disburse") {
+      updateData.disbursedBy = user!.userId;
+      updateData.disbursedAt = new Date();
+    }
+
+    // Update the run status (sequential — MongoDB standalone has no multi-doc transactions).
+    await prisma.payrollRun.update({ where: { id: run.id }, data: updateData });
+
+    // On disburse: initiate bank payouts → reconcile advances → generate payslips → notify.
+    if (action === "disburse") {
+      const tenantId = getTenantId();
+      const runMonth = (run as any).month as number;
+      const runYear = (run as any).year as number;
+
+      // Fetch all line items (id included for payout status updates).
+      const allLineItems = await prisma.payrollLineItem.findMany({
+        where: { payrollRunId: run.id },
+        select: {
+          id: true,
+          userId: true,
+          advanceDeduction: true,
+          grossSalary: true,
+          basicPay: true,
+          hra: true,
+          conveyance: true,
+          pf: true,
+          esi: true,
+          pt: true,
+          totalDeductions: true,
+          netPayable: true,
+        },
+      });
+
+      // ── 0. RazorpayX Payouts ─────────────────────────────────────────────────
+      // Initiate a bank transfer per employee via RazorpayX.
+      // If RAZORPAY_X_KEY_ID is not set we skip and do flag-only (dev/test mode).
+      const rzpXAuth = getRzpXAuth();
+      const rzpXAccount = process.env.RAZORPAY_X_ACCOUNT_NUMBER;
+      if (rzpXAuth && rzpXAccount) {
+        // Fetch employee bank details in one shot.
+        const empIds = (allLineItems as any[]).map((li: any) => li.userId);
+        const employees = await prisma.user.findMany({
+          where: { id: { in: empIds } },
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            username: true,
+            bank_account_no: true,
+            ifsc_code: true,
+          },
+        });
+        const empMap = new Map(employees.map((e) => [e.id, e]));
+
+        let payoutOk = 0,
+          payoutFail = 0;
+        for (const li of allLineItems as any[]) {
+          const emp = empMap.get(li.userId);
+          if (!emp || !emp.bank_account_no || !emp.ifsc_code) {
+            // Should never reach here after the pre-flight check, but be safe.
+            await prisma.payrollLineItem.update({
+              where: { id: li.id },
+              data: {
+                payoutStatus: "failed",
+                payoutFailureReason: "Missing bank details",
+                payoutInitiatedAt: new Date(),
+              },
+            });
+            payoutFail++;
+            continue;
+          }
+
+          const holderName =
+            `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() ||
+            emp.username;
+          const amountPaise = Math.round(li.netPayable * 100); // RazorpayX expects paise
+
+          // Skip zero/negative net (e.g. full advance deduction month).
+          if (amountPaise <= 0) {
+            await prisma.payrollLineItem.update({
+              where: { id: li.id },
+              data: {
+                payoutStatus: "skipped",
+                payoutFailureReason: "Net payable is zero",
+                payoutInitiatedAt: new Date(),
+              },
+            });
+            continue;
+          }
+
+          try {
+            const contactId = await getOrCreateRzpContact(
+              rzpXAuth,
+              li.userId,
+              holderName,
+            );
+            const fundAccountId = await createRzpFundAccount(
+              rzpXAuth,
+              contactId,
+              holderName,
+              emp.bank_account_no!,
+              emp.ifsc_code!,
+            );
+            const payout = await createRzpPayout(rzpXAuth, {
+              accountNumber: rzpXAccount,
+              fundAccountId,
+              amountPaise,
+              runId: run.id,
+              userId: li.userId,
+              month: runMonth,
+              year: runYear,
+            });
+            await prisma.payrollLineItem.update({
+              where: { id: li.id },
+              data: {
+                payoutId: payout.id,
+                payoutStatus: payout.status, // "processing" usually at this point
+                payoutInitiatedAt: new Date(),
+              },
+            });
+            payoutOk++;
+          } catch (payoutErr: any) {
+            logger.error(`RazorpayX payout failed for user ${li.userId}`, {
+              runId: run.id,
+              err: payoutErr.message,
+            });
+            await prisma.payrollLineItem.update({
+              where: { id: li.id },
+              data: {
+                payoutStatus: "failed",
+                payoutFailureReason: payoutErr.message ?? "Unknown error",
+                payoutInitiatedAt: new Date(),
+              },
+            });
+            payoutFail++;
+          }
+        }
+        logger.info(
+          `RazorpayX payouts: ${payoutOk} initiated, ${payoutFail} failed`,
+          { runId: run.id },
+        );
+      } else {
+        logger.warn(
+          "RAZORPAY_X_KEY_ID not configured — disburse is flag-only (no real bank transfers)",
+        );
+      }
+
+      // 1. Reconcile salary advance repayments.
+      for (const item of allLineItems as any[]) {
+        if (!item.advanceDeduction || item.advanceDeduction <= 0) continue;
+        const adv = await prisma.salaryAdvance.findFirst({
+          where: {
+            userId: item.userId,
+            status: { in: ["Approved", "Repaying"] },
+          },
+        });
+        if (!adv) continue;
+        const newPaid = (adv as any).paidMonths + 1;
+        const newRemaining =
+          ((adv as any).remainingAmount ?? 0) - item.advanceDeduction;
+        const isDone =
+          newRemaining <= 0 || newPaid >= ((adv as any).emiMonths ?? 1);
+        await prisma.salaryAdvance.update({
+          where: { id: adv.id },
+          data: {
+            paidMonths: newPaid,
+            remainingAmount: Math.max(0, newRemaining),
+            status: isDone ? "Repaid" : "Repaying",
+          },
+        });
+      }
+
+      // 2. Generate payslips — upsert a SalaryStructure record per employee so that
+      //    GET /payroll/my-payslips shows the disbursed salary immediately.
+      for (const li of allLineItems as any[]) {
+        const payslipData = {
+          tenantId: tenantId ?? undefined,
+          userId: li.userId,
+          month: runMonth,
+          year: runYear,
+          grossSalary: li.grossSalary,
+          basicPay: li.basicPay ?? null,
+          hra: li.hra ?? null,
+          conveyance: li.conveyance ?? null,
+          pf: li.pf ?? null,
+          esi: li.esi ?? null,
+          pt: li.pt ?? null,
+          deductions: li.totalDeductions,
+          grossEarnings: li.grossSalary,
+          netPayable: li.netPayable,
+        };
+        // No @@unique on SalaryStructure — guard manually to avoid duplicates.
+        const existing = await prisma.salaryStructure.findFirst({
+          where: { userId: li.userId, month: runMonth, year: runYear },
+          select: { id: true },
+        });
+        if (existing) {
+          await prisma.salaryStructure.update({
+            where: { id: existing.id },
+            data: payslipData,
+          });
+        } else {
+          await prisma.salaryStructure.create({ data: payslipData });
+        }
+      }
+
+      // 3. Broadcast an in-app notification to every disbursed employee.
+      if (allLineItems.length > 0) {
+        const notif = await prisma.notification.create({
+          data: {
+            tenantId: tenantId ?? undefined,
+            title: "Salary Disbursed 🎉",
+            message: `Your salary for ${String(runMonth).padStart(2, "0")}/${runYear} has been processed and disbursed.`,
+            eventType: "payroll",
+            priority: "high",
+          },
+        });
+        await prisma.notificationRecipient.createMany({
+          data: (allLineItems as any[]).map((li: any) => ({
+            tenantId: tenantId ?? undefined,
+            notificationId: notif.id,
+            userId: li.userId,
+          })),
+        });
+        logger.info(
+          `Payroll disburse: ${allLineItems.length} payslips generated, notifications sent`,
+          {
+            runId: run.id,
+            month: runMonth,
+            year: runYear,
+          },
+        );
+      }
+    }
+
+    // Fire webhook.
+    if (action === "disburse" || action === "approve") {
+      await emitWebhookEvent(
+        `payroll.${action === "disburse" ? "disbursed" : "approved"}`,
+        {
+          runId: run.id,
+          month: (run as any).month,
+          year: (run as any).year,
+          employeeCount: (run as any).employeeCount,
+        },
+      );
+    }
+
+    logger.info(`Payroll run ${run.id} → ${transition.toStatus}`, {
+      userId: user!.userId,
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message:
+        action === "disburse"
+          ? `Payroll disbursed. Payslips generated and employees notified.`
+          : `Payroll run ${action}d successfully`,
+      data: { runId: run.id, status: transition.toStatus },
+    });
+  } catch (error) {
+    logger.error("PATCH /payroll/runs/:runId/status error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Salary Advance Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /payroll/advances
+ * Employee requests a salary advance.
+ */
+export async function requestSalaryAdvance(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { amount, reason, emiMonths } = req.body as {
+      amount: number;
+      reason: string;
+      emiMonths: number;
+    };
+
+    // Only one active advance per employee.
+    const active = await prisma.salaryAdvance.findFirst({
+      where: {
+        userId: user!.userId,
+        status: { in: ["Pending", "Approved", "Repaying"] },
+      },
+    });
+    if (active) {
+      return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+        message: `You already have an active salary advance (status: ${(active as any).status})`,
+      });
+    }
+
+    const emiAmount = parseFloat((amount / emiMonths).toFixed(2));
+
+    const advance = await prisma.salaryAdvance.create({
+      data: {
+        tenantId: getTenantId() ?? undefined,
+        userId: user!.userId,
+        amount,
+        reason,
+        emiMonths,
+        emiAmount,
+        remainingAmount: amount,
+        status: "Pending",
+      },
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.CREATED, {
+      message: "Salary advance requested",
+      data: { advanceId: advance.id, amount, emiAmount, emiMonths },
+    });
+  } catch (error) {
+    logger.error("POST /payroll/advances error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * GET /payroll/advances
+ * HR sees all advances; employees see their own.
+ */
+export async function listSalaryAdvances(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const isPrivileged = await assertRole(user!.userId, [
+      "owner",
+      "admin",
+      "hr",
+    ]);
+    const { status } = req.query as Record<string, string>;
+    const { page, limit } = parsePagination(req.query);
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const where: any = {};
+    if (!isPrivileged) where.userId = user!.userId;
+    if (status) where.status = status;
+
+    const [advances, total] = await Promise.all([
+      prisma.salaryAdvance.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+      }),
+      prisma.salaryAdvance.count({ where }),
+    ]);
+
+    // Enrich with usernames.
+    const uids = [...new Set((advances as any[]).map((a: any) => a.userId))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: uids as string[] } },
+      select: { id: true, username: true, first_name: true, last_name: true },
+    });
+    const uMap = new Map(users.map((u) => [u.id, u]));
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Salary advances retrieved",
+      data: (advances as any[]).map((a: any) => ({
+        ...a,
+        employee: uMap.get(a.userId),
+      })),
+      total,
+    });
+  } catch (error) {
+    logger.error("GET /payroll/advances error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * PATCH /payroll/advances/:advanceId/status
+ * HR approves or rejects a salary advance.
+ */
+export async function updateSalaryAdvanceStatus(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    if (!allowed) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Only HR/admin/owner can update advance status",
+      });
+    }
+
+    const { advanceId, action, emiAmount } = req.body as {
+      advanceId: string;
+      action: "approve" | "reject";
+      emiAmount?: number;
+    };
+
+    const advance = await prisma.salaryAdvance.findUnique({
+      where: { id: advanceId },
+    });
+    if (!advance) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Advance not found",
+      });
+    }
+    if ((advance as any).status !== "Pending") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Cannot ${action} an advance with status '${(advance as any).status}'`,
+      });
+    }
+
+    if (action === "approve" && emiAmount !== undefined) {
+      // HR can override the EMI amount.
+      const months = Math.ceil((advance as any).amount / emiAmount);
+      await prisma.salaryAdvance.update({
+        where: { id: advanceId },
+        data: {
+          status: "Approved",
+          approvedBy: user!.userId,
+          approvedAt: new Date(),
+          emiAmount,
+          emiMonths: months,
+        },
+      });
+    } else if (action === "approve") {
+      await prisma.salaryAdvance.update({
+        where: { id: advanceId },
+        data: {
+          status: "Approved",
+          approvedBy: user!.userId,
+          approvedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.salaryAdvance.update({
+        where: { id: advanceId },
+        data: { status: "Rejected" },
+      });
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `Salary advance ${action}d`,
+    });
+  } catch (error) {
+    logger.error("PATCH /payroll/advances/:advanceId/status error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * GET /payroll/my-payslips
+ * Returns the current employee's payslips (from SalaryStructure).
+ */
+export async function getMyPayslips(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const payslips = await prisma.salaryStructure.findMany({
+      where: { userId: user!.userId },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      take: 24,
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Payslips retrieved",
+      data: payslips,
+    });
+  } catch (error) {
+    logger.error("GET /payroll/my-payslips error:", { error });
+    return handleError(res, error);
+  }
+}

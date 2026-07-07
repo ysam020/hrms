@@ -18,6 +18,13 @@ import { chatbotRouter } from "./chatbot";
 import { aiInsightsRouter } from "./ai-insights";
 import { paymentRouter } from "./payment";
 import { tenantSettingsRouter } from "./tenantSettings";
+// ── New features ──────────────────────────────────────────────────────────────
+import { payrollRouter } from "./payroll";
+import { assetsRouter } from "./assets";
+import { wfhRouter } from "./wfh";
+import { helpdeskRouter } from "./helpdesk";
+import { webhooksRouter } from "./webhooks";
+import { reportsRouter } from "./reports";
 import { authLimiter, defaultLimiter } from "../middleware/rateLimiter";
 import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
 import { authenticate, requireTenant } from "../middleware/authenticate";
@@ -54,3 +61,10 @@ rootRouter.use(...subscriptionGuard, chatRouter);
 rootRouter.use(...subscriptionGuard, chatbotRouter);
 rootRouter.use(...subscriptionGuard, aiInsightsRouter);
 rootRouter.use(...subscriptionGuard, tenantSettingsRouter);
+// ── New feature routers ───────────────────────────────────────────────────────
+rootRouter.use("/payroll", ...subscriptionGuard, payrollRouter);
+rootRouter.use("/assets", ...subscriptionGuard, assetsRouter);
+rootRouter.use("/wfh", ...subscriptionGuard, wfhRouter);
+rootRouter.use("/helpdesk", ...subscriptionGuard, helpdeskRouter);
+rootRouter.use("/webhooks", ...subscriptionGuard, webhooksRouter);
+rootRouter.use("/reports", ...subscriptionGuard, reportsRouter);

@@ -174,7 +174,8 @@ function EmployeeManagement() {
           sx: { maxHeight: "650px", overflowY: "auto" },
         },
         muiTableBodyRowProps: ({ row }) => ({
-          onClick: () => navigate(`/salary-management/${row.original.id}`),
+          onClick: () =>
+            navigate(`/payroll/salary-management/${row.original.id}`),
           style: { cursor: "pointer" },
         }),
       }),

@@ -611,3 +611,318 @@ model LoginEvent {
   @@index([tenantId, userId, timestamp])
   @@map("login_events")
 }
+
+// ─── Payroll ──────────────────────────────────────────────────────────────────
+// A PayrollRun represents one complete monthly payroll cycle.
+// @@unique([tenantId, month, year]) prevents duplicate runs for the same period.
+
+model PayrollRun {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String?   @db.ObjectId
+  month           Int       // 1–12
+  year            Int
+  // draft → processing → approved → disbursed | cancelled
+  status          String    @default("draft")
+  initiatedBy     String    @db.ObjectId
+  approvedBy      String?   @db.ObjectId
+  disbursedBy     String?   @db.ObjectId
+  totalGross      Float?
+  totalNet        Float?
+  totalDeductions Float?
+  employeeCount   Int?
+  notes           String?
+  approvedAt      DateTime?
+  disbursedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lineItems       PayrollLineItem[]
+
+  @@unique([tenantId, month, year])
+  @@index([tenantId, status])
+  @@map("payroll_runs")
+}
+
+// One row per employee per PayrollRun — immutable snapshot of earnings/deductions.
+model PayrollLineItem {
+  id               String  @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId         String? @db.ObjectId
+  payrollRunId     String  @db.ObjectId
+  userId           String  @db.ObjectId
+  grossSalary      Float
+  basicPay         Float   @default(0)
+  hra              Float   @default(0)
+  conveyance       Float   @default(0)
+  incentive        Float   @default(0)
+  pf               Float   @default(0)
+  esi              Float   @default(0)
+  pt               Float   @default(0)
+  advanceDeduction Float   @default(0) // SalaryAdvance EMI deducted this month
+  otherDeductions  Float   @default(0)
+  totalDeductions  Float   @default(0)
+  netPayable       Float
+  payslipId        String? @db.ObjectId // reference to SalaryStructure once generated
+
+  // RazorpayX payout tracking — populated on disburse.
+  payoutId            String?   // RazorpayX payout_id (e.g. "pout_xxx")
+  payoutStatus        String?   // pending | processing | processed | failed
+  payoutFailureReason String?
+  payoutInitiatedAt   DateTime?
+
+  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id])
+
+  @@index([payrollRunId])
+  @@index([tenantId, userId])
+  @@map("payroll_line_items")
+}
+
+// Employee salary advance (loan) – repaid via monthly EMI deductions.
+model SalaryAdvance {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String?   @db.ObjectId
+  userId          String    @db.ObjectId
+  amount          Float
+  reason          String?
+  // Pending | Approved | Rejected | Repaying | Repaid
+  status          String    @default("Pending")
+  approvedBy      String?   @db.ObjectId
+  approvedAt      DateTime?
+  emiAmount       Float?    // per-month deduction
+  emiMonths       Int?      // total repayment months
+  paidMonths      Int       @default(0)
+  remainingAmount Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+  @@map("salary_advances")
+}
+
+// ─── Asset Management ─────────────────────────────────────────────────────────
+
+model Asset {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
+  assetCode     String    // unique per tenant (e.g. "LAP-001")
+  name          String
+  category      String    // Laptop | Phone | Monitor | Furniture | Vehicle | Other
+  brand         String?
+  model         String?
+  serialNumber  String?
+  purchaseDate  DateTime?
+  purchaseValue Float?
+  // available | assigned | maintenance | retired
+  status        String    @default("available")
+  // good | fair | damaged
+  condition     String    @default("good")
+  notes         String?
+  qrCodeUrl     String?   // S3 URL for generated QR image
+  createdBy     String    @db.ObjectId
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  assignments   AssetAssignment[]
+  issues        AssetIssue[]
+
+  @@unique([tenantId, assetCode])
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@map("assets")
+}
+
+// Full audit trail: every assign and return is a new row.
+model AssetAssignment {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String?   @db.ObjectId
+  assetId        String    @db.ObjectId
+  userId         String    @db.ObjectId  // who holds the asset
+  assignedBy     String    @db.ObjectId  // HR/admin who assigned
+  assignedOn     DateTime  @default(now())
+  expectedReturn DateTime?
+  returnedOn     DateTime?
+  returnedTo     String?   @db.ObjectId  // who received it back
+  conditionOut      String    @default("good")
+  conditionIn       String?   // recorded on return
+  notes             String?
+  // Employee signs off that they received the asset in the stated condition.
+  acknowledgedAt    DateTime?
+  acknowledgedNote  String?
+
+  asset          Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([assetId])
+  @@index([tenantId, userId])
+  @@map("asset_assignments")
+}
+
+// Issue / defect report raised by an employee against an asset they hold.
+model AssetIssue {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
+  assetId       String    @db.ObjectId
+  assignmentId  String?   @db.ObjectId   // the active assignment when the issue was raised
+  reportedBy    String    @db.ObjectId   // employee who reported
+  // malfunction | damage | lost | stolen | return_request | other
+  type          String
+  // low | medium | high | critical
+  priority      String    @default("medium")
+  title         String
+  description   String
+  // open | in_review | approved | resolved | rejected
+  status        String    @default("open")
+  reviewedBy    String?   @db.ObjectId   // HR/admin who acted on it
+  reviewedAt    DateTime?
+  reviewNotes   String?   // HR's notes at review/decision time
+  resolvedAt    DateTime?
+  resolverNotes String?   // HR's notes at resolution time
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  asset         Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([tenantId, assetId])
+  @@index([tenantId, reportedBy, status])
+  @@index([tenantId, status])
+  @@map("asset_issues")
+}
+
+// ─── WFH Requests ─────────────────────────────────────────────────────────────
+
+model WfhRequest {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String?   @db.ObjectId
+  userId          String    @db.ObjectId
+  date            DateTime  // UTC midnight of the requested day
+  reason          String?
+  // Pending | Approved | Rejected | Cancelled
+  status          String    @default("Pending")
+  approvedBy      String?   @db.ObjectId
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Prevent duplicate requests for the same employee-day.
+  @@unique([tenantId, userId, date])
+  @@index([tenantId, userId, status])
+  @@index([tenantId, date, status])
+  @@map("wfh_requests")
+}
+
+// ─── HR Helpdesk ──────────────────────────────────────────────────────────────
+
+model Ticket {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?   @db.ObjectId
+  ticketNo    String    // auto-generated sequential: TICK-00001
+  title       String
+  description String
+  // IT | Payroll | Leave | Onboarding | HR | Other
+  category    String
+  // low | medium | high | critical
+  priority    String    @default("medium")
+  // open | in_progress | resolved | closed
+  status      String    @default("open")
+  raisedBy    String    @db.ObjectId
+  assignedTo  String?   @db.ObjectId
+  resolvedBy  String?   @db.ObjectId
+  resolvedAt  DateTime?
+  slaDeadline DateTime? // computed at creation from priority SLA hours
+  slaBreached Boolean   @default(false)
+  attachments String[]  // S3 URLs
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  comments    TicketComment[]
+
+  @@index([tenantId, raisedBy])
+  @@index([tenantId, assignedTo, status])
+  @@index([tenantId, status])
+  @@index([tenantId, slaDeadline, slaBreached])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String?   @db.ObjectId
+  ticketId   String    @db.ObjectId
+  userId     String    @db.ObjectId
+  comment    String
+  isInternal Boolean   @default(false) // internal note — hidden from the ticket raiser
+  createdAt  DateTime  @default(now())
+
+  ticket     Ticket    @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
+
+// ─── Tenant Webhooks ──────────────────────────────────────────────────────────
+
+model WebhookEndpoint {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String    @db.ObjectId
+  url       String
+  // AES-256 encrypted signing secret; never returned in responses
+  secret    String
+  // e.g. ["leave.approved", "employee.created", "payroll.disbursed"]
+  events    String[]
+  isActive  Boolean   @default(true)
+  createdBy String    @db.ObjectId
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId])
+  @@map("webhook_endpoints")
+}
+
+// Immutable delivery log — one row per delivery attempt batch.
+model WebhookDelivery {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?   @db.ObjectId
+  endpointId  String    @db.ObjectId
+  eventType   String
+  payload     Json
+  // pending | success | failed
+  status      String    @default("pending")
+  httpStatus  Int?
+  attempts    Int       @default(0)
+  nextRetryAt DateTime?
+  deliveredAt DateTime?
+  responseBody String?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  endpoint    WebhookEndpoint @relation(fields: [endpointId], references: [id])
+
+  @@index([endpointId, status])
+  @@index([tenantId, status])
+  @@index([nextRetryAt])    // for retry sweeper job
+  @@map("webhook_deliveries")
+}
+
+// ─── Custom Report Builder ────────────────────────────────────────────────────
+
+model SavedReport {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?   @db.ObjectId
+  name        String
+  description String?
+  // employee | attendance | leave | salary | recruitment | payroll
+  entity      String
+  // { filters: [...], columns: [...], groupBy?, sort?, limit? }
+  config      Json
+  schedule    String?   // cron expression for auto-delivery (null = on-demand only)
+  recipients  String[]  // email addresses for scheduled delivery
+  createdBy   String    @db.ObjectId
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, entity])
+  @@index([tenantId, createdBy])
+  @@map("saved_reports")
+}

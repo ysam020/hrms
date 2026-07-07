@@ -16,6 +16,9 @@ const JOB_SCHEDULES: JobSchedule[] = [
   { name: "sendKycReminders", pattern: "0 9 * * *" }, // 9:00 AM daily
   { name: "cleanupFcmTokens", pattern: "0 2 * * *" }, // 2:00 AM daily
   { name: "checkSubscriptionExpiry", pattern: "0 3 * * *" }, // 3:00 AM daily
+  // ── New feature jobs ────────────────────────────────────────────────────────
+  { name: "checkTicketSla", pattern: "0 4 * * *" }, // 4:00 AM — bulk SLA sweep
+  { name: "retryFailedWebhooks", pattern: "0 6 * * *" }, // 6:00 AM — stale delivery sweep
 ];
 
 export async function registerScheduledJobs(): Promise<void> {

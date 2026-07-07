@@ -19,6 +19,7 @@ import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
 import { googleAuthCallback } from "./handlers/auth";
 import { handleWebhook } from "./handlers/payment";
+import { handleRazorpayXWebhook } from "./handlers/razorpayxWebhook";
 import { startSubscriptionReconciler } from "./services/subscriptionReconciler";
 
 const app = http2Express(express);
@@ -63,6 +64,16 @@ app.post(
   "/api/v1/payment/webhook",
   express.raw({ type: "application/json" }),
   handleWebhook,
+);
+
+// ─── RazorpayX Payout webhook ─────────────────────────────────────────────────
+// Same constraints as the PG webhook above:
+//   • express.raw() preserves the bytes RazorpayX signed.
+//   • Mounted before CSRF so server-to-server calls aren't rejected.
+app.post(
+  "/api/v1/integrations/razorpayx/webhook",
+  express.raw({ type: "application/json" }),
+  handleRazorpayXWebhook,
 );
 // ─────────────────────────────────────────────────────────────────────────────
 

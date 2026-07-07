@@ -5,6 +5,7 @@ export {
   getResumeParsingQueue,
   getSchedulerQueue,
   getDeadLetterQueue,
+  getWebhookQueue,
 } from "./queues";
 export type {
   EmailJobData,
@@ -12,4 +13,5 @@ export type {
   ResumeParsingJobData,
   SchedulerJobData,
   SchedulerJobName,
+  WebhookDeliveryJobData,
 } from "./types";

@@ -170,17 +170,66 @@ const DOCK_ITEMS = (navigate, isDark) => {
       ),
       command: () => navigate("/resignation-process"),
     },
+    // ── New modules ──────────────────────────────────────────────────────────
     {
-      label: "Salary",
+      label: "Payroll",
       icon: () => (
         <DockIcon
-          iconClass="pi-money-bill"
-          color={c.teal}
-          label="Salary"
+          iconClass="pi-wallet"
+          color={c.green}
+          label="Payroll"
           isDark={isDark}
         />
       ),
-      command: () => navigate("/salary-management"),
+      command: () => navigate("/payroll"),
+    },
+    {
+      label: "Assets",
+      icon: () => (
+        <DockIcon
+          iconClass="pi-desktop"
+          color={c.blue}
+          label="Assets"
+          isDark={isDark}
+        />
+      ),
+      command: () => navigate("/assets"),
+    },
+    {
+      label: "WFH",
+      icon: () => (
+        <DockIcon
+          iconClass="pi-home"
+          color={c.teal}
+          label="WFH"
+          isDark={isDark}
+        />
+      ),
+      command: () => navigate("/wfh"),
+    },
+    {
+      label: "Helpdesk",
+      icon: () => (
+        <DockIcon
+          iconClass="pi-headphones"
+          color={c.gold}
+          label="Helpdesk"
+          isDark={isDark}
+        />
+      ),
+      command: () => navigate("/helpdesk"),
+    },
+    {
+      label: "Reports",
+      icon: () => (
+        <DockIcon
+          iconClass="pi-file-export"
+          color={c.slate}
+          label="Reports"
+          isDark={isDark}
+        />
+      ),
+      command: () => navigate("/reports"),
     },
   ];
 };

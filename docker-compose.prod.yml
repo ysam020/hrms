@@ -1,7 +1,7 @@
 services:
   api-gateway:
     container_name: api-gateway
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/api-gateway:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/api-gateway:${TAG_NAME:-latest}
     environment:
       - AUTH_SERVICE_HOST=auth-service
       - USER_SERVICE_HOST=user-service
@@ -20,61 +20,61 @@ services:
 
   auth-service:
     container_name: auth-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/auth-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/auth-service:${TAG_NAME:-latest}
     env_file: .env
 
   user-service:
     container_name: user-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/user-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/user-service:${TAG_NAME:-latest}
     env_file: .env
 
   employee-service:
     container_name: employee-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/employee-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/employee-service:${TAG_NAME:-latest}
     env_file: .env
 
   attendance-service:
     container_name: attendance-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/attendance-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/attendance-service:${TAG_NAME:-latest}
     env_file: .env
 
   leave-service:
     container_name: leave-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/leave-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/leave-service:${TAG_NAME:-latest}
     env_file: .env
 
   recruitment-service:
     container_name: recruitment-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/recruitment-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/recruitment-service:${TAG_NAME:-latest}
     env_file: .env
 
   hrm-service:
     container_name: hrm-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/hrm-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/hrm-service:${TAG_NAME:-latest}
     env_file: .env
 
   salary-service:
     container_name: salary-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/salary-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/salary-service:${TAG_NAME:-latest}
     env_file: .env
 
   analytics-service:
     container_name: analytics-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/analytics-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/analytics-service:${TAG_NAME:-latest}
     env_file: .env
 
   notification-service:
     container_name: notification-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/notification-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/notification-service:${TAG_NAME:-latest}
     env_file: .env
 
   scheduler-service:
     container_name: scheduler-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/scheduler-service:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/scheduler-service:${TAG_NAME:-latest}
     env_file: .env
 
   web:
     container_name: web
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/web:${TAG_NAME}
+    image: ${ECR_REGISTRY:-061039808638.dkr.ecr.ap-south-1.amazonaws.com}/${ECR_REPOSITORY_PREFIX:-dev}/web:${TAG_NAME:-latest}
     ports:
       - "80:80"

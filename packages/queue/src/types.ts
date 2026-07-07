@@ -28,12 +28,22 @@ export type SchedulerJobName =
   | "updateLeaveBalance"
   | "sendKycReminders"
   | "cleanupFcmTokens"
-  | "checkSubscriptionExpiry";
+  | "checkSubscriptionExpiry"
+  // New scheduler jobs
+  | "checkTicketSla" // lazily mark helpdesk SLA as breached
+  | "retryFailedWebhooks"; // sweep for pending/failed webhook deliveries
 
 export interface SchedulerJobData {
   jobName: SchedulerJobName;
+  // Optional extra context for non-standard jobs (e.g. ticketId for SLA check)
+  ticketId?: string;
 }
 
 export interface ResumeParsingJobData {
   applicationId: string;
+}
+
+// Webhook delivery – dispatched by webhookEmitter.ts, processed by deliverWebhook.ts
+export interface WebhookDeliveryJobData {
+  deliveryId: string;
 }

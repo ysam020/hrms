@@ -25,12 +25,12 @@ const s = service ? ` ${service}` : "";
 switch (command) {
   case "build":
     run("node scripts/generate-certs.mjs");
-    run(`cross-env COMPOSE_PARALLEL_LIMIT=4 ${COMPOSE} build${s}`);
+    run(`cross-env COMPOSE_PARALLEL_LIMIT=2 ${COMPOSE} build${s}`);
     break;
 
   case "build:force":
     run("node scripts/generate-certs.mjs");
-    run(`cross-env COMPOSE_PARALLEL_LIMIT=4 ${COMPOSE} build --no-cache${s}`);
+    run(`cross-env COMPOSE_PARALLEL_LIMIT=2 ${COMPOSE} build --no-cache${s}`);
     break;
 
   case "up":
