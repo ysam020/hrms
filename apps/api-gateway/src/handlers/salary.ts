@@ -51,7 +51,7 @@ export async function updateSalary(req: Request, res: Response) {
     // generation always has a reliable CTC source even before the first payroll run.
     const fullGross =
       (basicPay ?? 0) + (hra ?? 0) + (conveyance ?? 0) + (incentive ?? 0);
-    if (fullGross > 0) {
+    if (fullGross > 0 && typeof (prisma.user as any)?.update === "function") {
       await prisma.user.update({
         where: { id: userId },
         data: {

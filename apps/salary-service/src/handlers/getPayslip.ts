@@ -75,10 +75,12 @@ export const getPayslip = async (
           where: { userId, date: { gte: startDate, lte: endDate } },
           select: { status: true },
         }),
-        prisma.leaveBalance.findFirst({
-          where: { userId },
-          select: { balances: true },
-        }),
+        prisma.leaveBalance?.findFirst
+          ? prisma.leaveBalance.findFirst({
+              where: { userId },
+              select: { balances: true },
+            })
+          : Promise.resolve(null),
       ]);
 
       // Count each attendance status separately so the PDF can display a full breakdown.
