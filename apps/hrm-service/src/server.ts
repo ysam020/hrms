@@ -4,7 +4,7 @@ import { logger } from "@hrms/logger";
 async function startServer() {
   try {
     const server = new HrmServer();
-    const host = process.env.HRM_SERVICE_HOST || "localhost";
+    const host = "0.0.0.0";
     const port = process.env.HRM_SERVICE_PORT || "50057";
     server.start(`${host}:${port}`);
     logger.info("HrmServer started");

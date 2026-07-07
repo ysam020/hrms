@@ -4,7 +4,7 @@ import { logger } from "@hrms/logger";
 async function startServer() {
   try {
     const server = new AttendanceServer();
-    const host = process.env.ATTENDANCE_SERVICE_HOST || "localhost";
+    const host = "0.0.0.0";
     const port = process.env.ATTENDANCE_SERVICE_PORT || "50054";
     server.start(`${host}:${port}`);
     logger.info("AttendanceServer started");

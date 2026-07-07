@@ -27,7 +27,7 @@ Parameters:
       ECR/S3/Secrets Manager/SSM egress — no NAT gateway required).
   InstanceType:
     Type: String
-    Default: t3.small
+    Default: m7i-flex.large
   MinSize:
     Type: Number
     Default: 1
@@ -417,10 +417,10 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       VpcId: !Ref VpcId
-      Protocol: HTTP
+      Protocol: HTTPS
       Port: 19002
       TargetType: instance
-      HealthCheckProtocol: HTTP
+      HealthCheckProtocol: HTTPS
       HealthCheckPath: /health
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 2
@@ -462,6 +462,12 @@ Resources:
           Arn: !GetAtt HrmsInstanceProfile.Arn
         SecurityGroupIds:
           - !Ref InstanceSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 30
+              VolumeType: gp3
+              DeleteOnTermination: true
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -494,11 +500,24 @@ Resources:
             export ECR_REGISTRY ECR_REPOSITORY_PREFIX TAG_NAME
 
             aws s3 cp "s3://${DeployArtifactsBucket}/docker-compose.prod.yml" /opt/hrms/docker-compose.prod.yml --region "$AWS_REGION"
+
+            mkdir -p /opt/hrms/packages/certificates
+            if [ ! -f /opt/hrms/packages/certificates/cert.pem ]; then
+              openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+                -keyout /opt/hrms/packages/certificates/key.pem \
+                -out /opt/hrms/packages/certificates/cert.pem \
+                -subj "/CN=localhost" \
+                -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+              cp /opt/hrms/packages/certificates/cert.pem /opt/hrms/packages/certificates/rootCA.pem
+              chmod 644 /opt/hrms/packages/certificates/*.pem
+            fi
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
             cd /opt/hrms
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            docker image prune -af --filter "until=24h"
             DEPLOY_EOF
             chmod +x /opt/hrms/deploy.sh
 

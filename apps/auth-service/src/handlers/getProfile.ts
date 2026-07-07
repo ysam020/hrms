@@ -30,7 +30,16 @@ export const getProfile = async (
       return callback(null, {
         message: MESSAGES.USER_NOT_FOUND,
         status: status.NOT_FOUND,
-        data: null,
+        data: {
+          id: "",
+          email: "",
+          username: "",
+          role: "",
+          firstName: "",
+          lastName: "",
+          tenantId: "",
+          tenantRole: "",
+        },
       });
     }
 
@@ -55,7 +64,16 @@ export const getProfile = async (
     return callback(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,
-      data: null,
+      data: {
+        id: "",
+        email: "",
+        username: "",
+        role: "",
+        firstName: "",
+        lastName: "",
+        tenantId: "",
+        tenantRole: "",
+      },
     });
   }
 };

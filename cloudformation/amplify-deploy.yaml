@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  HRMS web client (apps/web) on AWS Amplify Hosting, connected to the GitHub
+  repo, building via the turborepo monorepo path, with a custom domain.
+  Amplify provisions and renews its own ACM certificate for the domain
+  automatically (no ACM resource needed here), and auto-manages the Route53
+  validation/target records since the hosted zone is in this same account.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Root domain, e.g. praesto.cloud
+  ApiSubdomain:
+    Type: String
+    Default: api
+    Description: Must match the ApiSubdomain used in hrms-deploy.yaml, used only to build the default VITE_SERVER_URL value.
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/ysam020/hrms
+  GithubAccessToken:
+    Type: String
+    NoEcho: true
+    Description: >
+      GitHub personal access token (classic, "repo" scope) used once to create
+      the webhook and read-only deploy key. Not stored by Amplify after use.
+      Consider sourcing this from Secrets Manager via a dynamic reference in
+      the parameter value rather than passing a literal token on the CLI.
+  BranchName:
+    Type: String
+    Default: main
+
+Resources:
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: hrms-web
+      Repository: !Ref RepositoryUrl
+      AccessToken: !Ref GithubAccessToken
+      Platform: WEB
+      EnvironmentVariables:
+        - Name: VITE_SERVER_URL
+          Value: !Sub "https://${ApiSubdomain}.${DomainName}"
+        - Name: VITE_API_STRING
+          Value: !Sub "https://${ApiSubdomain}.${DomainName}/api/v1"
+        - Name: AMPLIFY_MONOREPO_APP_ROOT
+          Value: apps/web
+        - Name: AMPLIFY_DIFF_DEPLOY
+          Value: "false"
+      BuildSpec: |
+        version: 1
+        applications:
+          - appRoot: apps/web
+            frontend:
+              phases:
+                preBuild:
+                  commands:
+                    - cd "$(git rev-parse --show-toplevel)" && corepack enable && corepack prepare pnpm@8.15.6 --activate && pnpm install --frozen-lockfile
+                build:
+                  commands:
+                    - cd "$(git rev-parse --show-toplevel)" && pnpm turbo build --filter=web
+              artifacts:
+                baseDirectory: dist
+                files:
+                  - '**/*'
+              cache:
+                paths:
+                  - ../../node_modules/**/*
+                  - ../../.pnpm-store/**/*
+      CustomRules:
+        - Source: </^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>
+          Target: /index.html
+          Status: "200"
+
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: !Ref BranchName
+      Stage: PRODUCTION
+      EnableAutoBuild: true
+
+  AmplifyDomain:
+    Type: AWS::Amplify::Domain
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      DomainName: !Ref DomainName
+      SubDomainSettings:
+        - Prefix: ""
+          BranchName: !GetAtt AmplifyBranch.BranchName
+        - Prefix: www
+          BranchName: !GetAtt AmplifyBranch.BranchName
+
+Outputs:
+  AmplifyAppId:
+    Value: !GetAtt AmplifyApp.AppId
+  AmplifyDefaultDomain:
+    Description: The *.amplifyapp.com domain, usable immediately while the custom domain validates
+    Value: !Sub "https://${BranchName}.${AmplifyApp.DefaultDomain}"
+  CustomDomainUrl:
+    Value: !Sub "https://${DomainName}"
+  DomainAssociationStatus:
+    Description: Check `aws amplify get-domain-association` if this stays PENDING_VERIFICATION for long
+    Value: !GetAtt AmplifyDomain.DomainStatus

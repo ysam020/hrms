@@ -4,7 +4,7 @@ import { logger } from "@hrms/logger";
 async function startServer() {
   try {
     const server = new SalaryServer();
-    const host = process.env.SALARY_SERVICE_HOST || "localhost";
+    const host = "0.0.0.0";
     const port = process.env.SALARY_SERVICE_PORT || "50058";
     server.start(`${host}:${port}`);
     logger.info("SalaryServer started");

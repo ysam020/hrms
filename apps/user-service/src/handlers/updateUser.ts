@@ -49,7 +49,7 @@ export const updateUser = async (
     return callback(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,
-      data: null,
+      data: {},
     });
   }
 };
