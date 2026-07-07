@@ -226,3 +226,232 @@ export const saveFcmTokenSchema = z.object({
     })
     .optional(),
 });
+
+// ── Payroll ───────────────────────────────────────────────────────────────────
+
+export const initiatePayrollRunSchema = z.object({
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2000).max(2100),
+  notes: z.string().max(1000).optional(),
+});
+
+export const updatePayrollRunStatusSchema = z.object({
+  runId: z.string().min(1),
+  status: z.enum(["processing", "approved", "disbursed", "cancelled"]),
+  notes: z.string().max(1000).optional(),
+});
+
+export const requestSalaryAdvanceSchema = z.object({
+  amount: z.number().positive().max(10_000_000),
+  reason: z.string().min(1).max(1000),
+  emiMonths: z.number().int().min(1).max(24),
+});
+
+export const updateSalaryAdvanceStatusSchema = z.object({
+  advanceId: z.string().min(1),
+  action: z.enum(["approve", "reject"]),
+  emiAmount: z.number().positive().optional(), // required when action=approve
+});
+
+// ── Assets ────────────────────────────────────────────────────────────────────
+
+export const createAssetSchema = z.object({
+  assetCode: z
+    .string()
+    .min(1)
+    .max(32)
+    .regex(
+      /^[A-Z0-9-]+$/,
+      "Asset code must be uppercase alphanumeric with hyphens",
+    ),
+  name: z.string().min(1).max(256),
+  category: z.enum([
+    "Laptop",
+    "Phone",
+    "Monitor",
+    "Furniture",
+    "Vehicle",
+    "Other",
+  ]),
+  brand: z.string().max(128).optional(),
+  model: z.string().max(128).optional(),
+  serialNumber: z.string().max(128).optional(),
+  purchaseDate: z.string().optional(),
+  purchaseValue: z.number().nonnegative().optional(),
+  condition: z.enum(["good", "fair", "damaged"]).optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+export const updateAssetSchema = createAssetSchema
+  .omit({ assetCode: true })
+  .extend({
+    status: z
+      .enum(["available", "assigned", "maintenance", "retired"])
+      .optional(),
+  })
+  .partial();
+
+export const assignAssetSchema = z.object({
+  assetId: z.string().min(1),
+  userId: z.string().min(1),
+  expectedReturn: z.string().optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const returnAssetSchema = z.object({
+  assetId: z.string().min(1),
+  conditionIn: z.enum(["good", "fair", "damaged"]),
+  notes: z.string().max(500).optional(),
+});
+
+export const acknowledgeAssignmentSchema = z.object({
+  note: z.string().max(500).optional(),
+});
+
+export const reportAssetIssueSchema = z.object({
+  assetId: z.string().min(1),
+  type: z.enum([
+    "malfunction",
+    "damage",
+    "lost",
+    "stolen",
+    "return_request",
+    "other",
+  ]),
+  priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+  title: z.string().min(1).max(256),
+  description: z.string().min(1).max(2000),
+});
+
+export const updateAssetIssueStatusSchema = z.object({
+  status: z.enum(["in_review", "approved", "rejected", "resolved"]),
+  notes: z.string().max(1000).optional(),
+});
+
+// ── WFH Requests ─────────────────────────────────────────────────────────────
+
+export const requestWfhSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  reason: z.string().max(500).optional(),
+});
+
+export const updateWfhStatusSchema = z.object({
+  requestId: z.string().min(1),
+  action: z.enum(["approve", "reject", "cancel"]),
+  rejectionReason: z.string().max(500).optional(),
+});
+
+// ── Helpdesk ──────────────────────────────────────────────────────────────────
+
+export const createTicketSchema = z.object({
+  title: z.string().min(1).max(256),
+  description: z.string().min(1).max(5000),
+  category: z.enum(["IT", "Payroll", "Leave", "Onboarding", "HR", "Other"]),
+  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  attachments: z.array(z.string().max(2048)).max(5).optional(),
+});
+
+export const updateTicketSchema = z.object({
+  title: z.string().min(1).max(256).optional(),
+  description: z.string().min(1).max(5000).optional(),
+  category: z
+    .enum(["IT", "Payroll", "Leave", "Onboarding", "HR", "Other"])
+    .optional(),
+  priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+  status: z.enum(["open", "in_progress", "resolved", "closed"]).optional(),
+  assignedTo: z.string().optional(),
+});
+
+export const addTicketCommentSchema = z.object({
+  comment: z.string().min(1).max(3000),
+  isInternal: z.boolean().optional(),
+});
+
+// ── Webhooks ──────────────────────────────────────────────────────────────────
+
+const ALLOWED_WEBHOOK_EVENTS = [
+  "employee.created",
+  "employee.updated",
+  "employee.terminated",
+  "leave.applied",
+  "leave.approved",
+  "leave.rejected",
+  "attendance.checkin",
+  "attendance.absent",
+  "payroll.approved",
+  "payroll.disbursed",
+  "resignation.submitted",
+  "resignation.approved",
+  "asset.assigned",
+  "asset.returned",
+  "asset.retired",
+  "asset.issue_reported",
+  "asset.issue_updated",
+  "ticket.created",
+  "ticket.resolved",
+] as const;
+
+export const createWebhookSchema = z.object({
+  url: z.string().url().max(2048),
+  events: z.array(z.enum(ALLOWED_WEBHOOK_EVENTS)).min(1).max(20),
+});
+
+export const updateWebhookSchema = z.object({
+  url: z.string().url().max(2048).optional(),
+  events: z.array(z.enum(ALLOWED_WEBHOOK_EVENTS)).min(1).max(20).optional(),
+  isActive: z.boolean().optional(),
+});
+
+// ── Custom Reports ────────────────────────────────────────────────────────────
+
+const reportFilterSchema = z.object({
+  field: z.string().min(1).max(64),
+  operator: z.enum(["eq", "ne", "gt", "gte", "lt", "lte", "in", "contains"]),
+  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]),
+});
+
+export const runReportSchema = z.object({
+  entity: z.enum([
+    "employee",
+    "attendance",
+    "leave",
+    "salary",
+    "recruitment",
+    "payroll",
+  ]),
+  filters: z.array(reportFilterSchema).max(10).optional(),
+  columns: z.array(z.string().min(1).max(64)).min(1).max(20),
+  groupBy: z.string().max(64).optional(),
+  sort: z
+    .object({
+      field: z.string().max(64),
+      direction: z.enum(["asc", "desc"]),
+    })
+    .optional(),
+  limit: z.number().int().min(1).max(10_000).default(1000),
+  format: z.enum(["json", "csv"]).default("json"),
+});
+
+export const saveReportSchema = z.object({
+  name: z.string().min(1).max(256),
+  description: z.string().max(1000).optional(),
+  entity: z.enum([
+    "employee",
+    "attendance",
+    "leave",
+    "salary",
+    "recruitment",
+    "payroll",
+  ]),
+  config: z.object({
+    filters: z.array(reportFilterSchema).max(10).optional(),
+    columns: z.array(z.string()).min(1).max(20),
+    groupBy: z.string().optional(),
+    sort: z
+      .object({ field: z.string(), direction: z.enum(["asc", "desc"]) })
+      .optional(),
+    limit: z.number().int().min(1).max(10_000).optional(),
+  }),
+  schedule: z.string().max(64).optional(), // cron expression
+  recipients: z.array(z.string().email()).max(10).optional(),
+});

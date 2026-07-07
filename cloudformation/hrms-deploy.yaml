@@ -1,0 +1,571 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  HRMS backend deployment: EC2 launch template + ASG + ALB fronted by ACM/Route53,
+  IAM roles for the instances and for GitHub Actions (build + deploy via SSM),
+  an S3 bucket for the deploy-time docker-compose.prod.yml, and the SSM parameter
+  that tells instances which image tag to run. Web (apps/web) is deployed to
+  Amplify separately and is not part of this stack.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Root domain, e.g. example.com
+  ApiSubdomain:
+    Type: String
+    Default: api
+    Description: Subdomain the API is served on (results in <ApiSubdomain>.<DomainName>)
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Existing public Route53 hosted zone ID for DomainName
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >
+      At least two subnets, in different AZs, with a route to an internet gateway.
+      Used for both the ALB and the ASG instances (instances get a public IP for
+      ECR/S3/Secrets Manager/SSM egress — no NAT gateway required).
+  InstanceType:
+    Type: String
+    Default: t3.small
+  MinSize:
+    Type: Number
+    Default: 1
+  MaxSize:
+    Type: Number
+    Default: 4
+  DesiredCapacity:
+    Type: Number
+    Default: 2
+  SecretsManagerSecretName:
+    Type: String
+    Description: >
+      Name (not ARN) of the existing Secrets Manager secret holding runtime env
+      vars. Must already exist — this stack only grants read access to it.
+  EcrRepositoryPrefix:
+    Type: String
+    Default: dev
+  GithubOrg:
+    Type: String
+    Description: GitHub org/user that owns the repo, e.g. ysam020
+  GithubRepo:
+    Type: String
+    Default: hrms
+  CreateGithubOidcProvider:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: >
+      Set to "false" if a GitHub Actions OIDC provider (token.actions.githubusercontent.com)
+      already exists in this AWS account — an account can only have one, and stack
+      creation will fail if you try to create a duplicate.
+  ExistingGithubOidcProviderArn:
+    Type: String
+    Default: ""
+    Description: Required only when CreateGithubOidcProvider is "false".
+
+Conditions:
+  ShouldCreateOidcProvider: !Equals [!Ref CreateGithubOidcProvider, "true"]
+
+Resources:
+  # ─────────────────────────── GitHub OIDC ───────────────────────────
+  GithubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  # ─────────────────────────── S3: deploy artifacts ───────────────────────────
+  DeployArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  # ─────────────────────────── ECR repositories ───────────────────────────
+  # One per backend service built by .github/workflows/build-and-push.yml.
+  # `web` is not included — it's deployed to Amplify, not ECR/EC2.
+  ApiGatewayRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/api-gateway"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  AuthServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/auth-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  UserServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/user-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  EmployeeServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/employee-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  AttendanceServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/attendance-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  LeaveServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/leave-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  RecruitmentServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/recruitment-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  HrmServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/hrm-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  SalaryServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/salary-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  AnalyticsServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/analytics-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  NotificationServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/notification-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  SchedulerServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/scheduler-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  # ─────────────────────────── SSM: current image tag ───────────────────────────
+  # Deployed to by .github/workflows/deploy-ec2.yml on every deploy — the Value
+  # here is only the bootstrap default for the very first `create-stack`.
+  ImageTagParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /hrms/prod/image-tag
+      Type: String
+      Value: latest
+
+  # ─────────────────────────── IAM: EC2 instance role ───────────────────────────
+  HrmsInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: HrmsInstancePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EcrAuth
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: EcrPull
+                Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchCheckLayerAvailability
+                Resource: !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrRepositoryPrefix}/*"
+              - Sid: SecretsRead
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretsManagerSecretName}-*"
+              - Sid: ImageTagParamRead
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ImageTagParameter}"
+              - Sid: DeployArtifactsRead
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "${DeployArtifactsBucket.Arn}/*"
+
+  HrmsInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref HrmsInstanceRole
+
+  # ─────────────────────────── IAM: GitHub Actions roles ───────────────────────────
+  HrmsBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated:
+                !If [
+                  ShouldCreateOidcProvider,
+                  !Ref GithubOidcProvider,
+                  !Ref ExistingGithubOidcProviderArn,
+                ]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GithubOrg}/${GithubRepo}:*"
+      Policies:
+        - PolicyName: HrmsBuildPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EcrAuth
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Sid: EcrPush
+                Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                  - ecr:DescribeRepositories
+                  - ecr:CreateRepository
+                  - ecr:PutImageScanningConfiguration
+                Resource: !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrRepositoryPrefix}/*"
+
+  HrmsDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated:
+                !If [
+                  ShouldCreateOidcProvider,
+                  !Ref GithubOidcProvider,
+                  !Ref ExistingGithubOidcProviderArn,
+                ]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GithubOrg}/${GithubRepo}:*"
+      Policies:
+        - PolicyName: HrmsDeployPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: PublishDeployConfig
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "${DeployArtifactsBucket.Arn}/*"
+              - Sid: SetImageTag
+                Effect: Allow
+                Action: ssm:PutParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ImageTagParameter}"
+              - Sid: DescribeAsg
+                Effect: Allow
+                Action: autoscaling:DescribeAutoScalingGroups
+                Resource: "*"
+              - Sid: RunDeployScript
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript"
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
+              - Sid: ReadCommandResults
+                Effect: Allow
+                Action:
+                  - ssm:GetCommandInvocation
+                  - ssm:ListCommandInvocations
+                Resource: "*"
+
+  # ─────────────────────────── Networking ───────────────────────────
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HRMS ALB - public HTTP/HTTPS
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HRMS EC2 instances - api-gateway reachable only from the ALB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 19002
+          ToPort: 19002
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # ─────────────────────────── ACM ───────────────────────────
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "${ApiSubdomain}.${DomainName}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub "${ApiSubdomain}.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
+
+  # ─────────────────────────── ALB ───────────────────────────
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Subnets: !Ref PublicSubnetIds
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 19002
+      TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref ApiCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
+
+  # ─────────────────────────── Launch template / ASG ───────────────────────────
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt HrmsInstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref InstanceSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: hrms-prod
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euo pipefail
+
+            dnf install -y docker
+            systemctl enable --now docker
+
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+              -o /usr/local/lib/docker/cli-plugins/docker-compose
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+            mkdir -p /opt/hrms
+
+            cat > /opt/hrms/deploy.sh <<'DEPLOY_EOF'
+            #!/bin/bash
+            set -euo pipefail
+
+            AWS_REGION="${AWS::Region}"
+            ECR_REGISTRY="${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+            ECR_REPOSITORY_PREFIX="${EcrRepositoryPrefix}"
+
+            TAG_NAME=$(aws ssm get-parameter --name /hrms/prod/image-tag --region "$AWS_REGION" --query 'Parameter.Value' --output text)
+            export ECR_REGISTRY ECR_REPOSITORY_PREFIX TAG_NAME
+
+            aws s3 cp "s3://${DeployArtifactsBucket}/docker-compose.prod.yml" /opt/hrms/docker-compose.prod.yml --region "$AWS_REGION"
+            aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+            cd /opt/hrms
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            DEPLOY_EOF
+            chmod +x /opt/hrms/deploy.sh
+
+            cat > /etc/systemd/system/hrms.service <<'UNIT_EOF'
+            [Unit]
+            Description=HRMS docker compose stack
+            After=docker.service network-online.target
+            Requires=docker.service
+
+            [Service]
+            Type=oneshot
+            RemainAfterExit=yes
+            ExecStart=/opt/hrms/deploy.sh
+
+            [Install]
+            WantedBy=multi-user.target
+            UNIT_EOF
+
+            systemctl daemon-reload
+            systemctl enable --now hrms.service
+
+  Asg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: HttpsListener
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+      VPCZoneIdentifier: !Ref PublicSubnetIds
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 180
+      Tags:
+        - Key: Name
+          Value: hrms-prod
+          PropagateAtLaunch: true
+
+  # ─────────────────────────── DNS ───────────────────────────
+  ApiDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${ApiSubdomain}.${DomainName}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Alb.DNSName
+        HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+
+Outputs:
+  ApiUrl:
+    Value: !Sub "https://${ApiSubdomain}.${DomainName}"
+  AlbDnsName:
+    Value: !GetAtt Alb.DNSName
+  AsgName:
+    Value: !Ref Asg
+  DeployArtifactsBucketName:
+    Value: !Ref DeployArtifactsBucket
+  HrmsBuildRoleArn:
+    Description: Set as the AWS_ROLE_TO_ASSUME repo variable for build-and-push.yml
+    Value: !GetAtt HrmsBuildRole.Arn
+  HrmsDeployRoleArn:
+    Description: Set as the AWS_DEPLOY_ROLE_TO_ASSUME repo variable for deploy-ec2.yml
+    Value: !GetAtt HrmsDeployRole.Arn
+  HrmsInstanceRoleArn:
+    Value: !GetAtt HrmsInstanceRole.Arn

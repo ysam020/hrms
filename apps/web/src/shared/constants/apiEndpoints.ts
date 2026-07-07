@@ -210,6 +210,81 @@ const TENANT = {
   MY_TENANT: "/tenants/me",
 };
 
+const PAYROLL = {
+  PAYROLL_RUNS: (page: number, limit: number) =>
+    `/payroll/runs?page=${page}&limit=${limit}`,
+  INITIATE_PAYROLL_RUN: "/payroll/runs",
+  UPDATE_PAYROLL_RUN_STATUS: "/payroll/runs/status",
+  SALARY_ADVANCES: (page: number, limit: number) =>
+    `/payroll/advances?page=${page}&limit=${limit}`,
+  REQUEST_SALARY_ADVANCE: "/payroll/advances",
+  UPDATE_SALARY_ADVANCE_STATUS: "/payroll/advances/status",
+  MY_PAYSLIPS: (page: number, limit: number) =>
+    `/payroll/my-payslips?page=${page}&limit=${limit}`,
+};
+
+const ASSETS = {
+  ASSETS: (page: number, limit: number, params = "") =>
+    `/assets?page=${page}&limit=${limit}${params}`,
+  CREATE_ASSET: "/assets",
+  UPDATE_ASSET: (id: string) => `/assets/${id}`,
+  ASSIGN_ASSET: "/assets/assign",
+  RETURN_ASSET: "/assets/return",
+  RETIRE_ASSET: (id: string) => `/assets/${id}/retire`,
+  ASSET_SUMMARY: "/assets/summary",
+  ASSET_ASSIGNMENTS: (page: number, limit: number) =>
+    `/assets/assignments?page=${page}&limit=${limit}`,
+  ACKNOWLEDGE_ASSIGNMENT: (assignmentId: string) =>
+    `/assets/assignments/${assignmentId}/acknowledge`,
+  ASSET_ISSUES: (page: number, limit: number, params = "") =>
+    `/assets/issues?page=${page}&limit=${limit}${params}`,
+  REPORT_ASSET_ISSUE: "/assets/issues",
+  UPDATE_ASSET_ISSUE_STATUS: (issueId: string) =>
+    `/assets/issues/${issueId}/status`,
+};
+
+const WFH = {
+  WFH_REQUESTS: (page: number, limit: number, params = "") =>
+    `/wfh/requests?page=${page}&limit=${limit}${params}`,
+  REQUEST_WFH: "/wfh/requests",
+  UPDATE_WFH_STATUS: "/wfh/requests/status",
+  WFH_CALENDAR: (year: number, month: number) =>
+    `/wfh/calendar?year=${year}&month=${month}`,
+};
+
+const HELPDESK = {
+  TICKETS: (page: number, limit: number, params = "") =>
+    `/helpdesk/tickets?page=${page}&limit=${limit}${params}`,
+  TICKET: (id: string) => `/helpdesk/tickets/${id}`,
+  CREATE_TICKET: "/helpdesk/tickets",
+  UPDATE_TICKET: (id: string) => `/helpdesk/tickets/${id}`,
+  ADD_TICKET_COMMENT: (id: string) => `/helpdesk/tickets/${id}/comments`,
+  HELPDESK_STATS: "/helpdesk/stats",
+};
+
+const WEBHOOKS = {
+  WEBHOOK_ENDPOINTS: "/webhooks/endpoints",
+  CREATE_WEBHOOK_ENDPOINT: "/webhooks/endpoints",
+  UPDATE_WEBHOOK_ENDPOINT: (id: string) => `/webhooks/endpoints/${id}`,
+  DELETE_WEBHOOK_ENDPOINT: (id: string) => `/webhooks/endpoints/${id}`,
+  WEBHOOK_DELIVERIES: (endpointId: string, page: number, limit: number) =>
+    `/webhooks/endpoints/${endpointId}/deliveries?page=${page}&limit=${limit}`,
+  RETRY_WEBHOOK_DELIVERY: (deliveryId: string) =>
+    `/webhooks/deliveries/${deliveryId}/retry`,
+  TEST_WEBHOOK_ENDPOINT: "/webhooks/test",
+};
+
+const REPORTS = {
+  RUN_REPORT: "/reports/run",
+  SAVED_REPORTS: (page: number, limit: number) =>
+    `/reports/saved?page=${page}&limit=${limit}`,
+  SAVE_REPORT: "/reports/saved",
+  GET_SAVED_REPORT: (id: string) => `/reports/saved/${id}`,
+  RUN_SAVED_REPORT: (id: string) => `/reports/saved/${id}/run`,
+  DELETE_SAVED_REPORT: (id: string) => `/reports/saved/${id}`,
+  ENTITY_SCHEMA: (entity: string) => `/reports/schema/${entity}`,
+};
+
 export const API_ENDPOINTS = {
   ...NOTIFICATIONS,
   ...CHAT,
@@ -234,4 +309,10 @@ export const API_ENDPOINTS = {
   ...ORG_SETTINGS,
   ...PAYMENT,
   ...TENANT,
+  ...PAYROLL,
+  ...ASSETS,
+  ...WFH,
+  ...HELPDESK,
+  ...WEBHOOKS,
+  ...REPORTS,
 };
