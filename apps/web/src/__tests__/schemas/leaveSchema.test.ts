@@ -81,4 +81,60 @@ describe("leaveSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("defaults unit to full_day when omitted", () => {
+    const result = leaveSchema.safeParse({
+      from: toDateStr(today),
+      to: toDateStr(tomorrow),
+      reason: "Personal work",
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.unit).toBe("full_day");
+  });
+
+  it("rejects half_day without a session", () => {
+    const result = leaveSchema.safeParse({
+      from: toDateStr(today),
+      to: toDateStr(today),
+      reason: "Doctor visit",
+      unit: "half_day",
+    });
+    expect(result.success).toBe(false);
+    const issues = result.error?.issues ?? [];
+    expect(issues.some((i) => i.path.includes("session"))).toBe(true);
+  });
+
+  it("accepts half_day with a session", () => {
+    const result = leaveSchema.safeParse({
+      from: toDateStr(today),
+      to: toDateStr(today),
+      reason: "Doctor visit",
+      unit: "half_day",
+      session: "first_half",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects short_leave without hours", () => {
+    const result = leaveSchema.safeParse({
+      from: toDateStr(today),
+      to: toDateStr(today),
+      reason: "Bank work",
+      unit: "short_leave",
+    });
+    expect(result.success).toBe(false);
+    const issues = result.error?.issues ?? [];
+    expect(issues.some((i) => i.path.includes("shortLeaveHours"))).toBe(true);
+  });
+
+  it("accepts short_leave with hours", () => {
+    const result = leaveSchema.safeParse({
+      from: toDateStr(today),
+      to: toDateStr(today),
+      reason: "Bank work",
+      unit: "short_leave",
+      shortLeaveHours: 2,
+    });
+    expect(result.success).toBe(true);
+  });
 });

@@ -6,13 +6,10 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import { Dropdown } from "primereact/dropdown";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
@@ -32,10 +29,18 @@ import MenuItem from "@mui/material/MenuItem";
 import Grid from "@mui/material/Grid";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import FilterList from "@mui/icons-material/FilterList";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import { API_ENDPOINTS } from "@web/shared/constants";
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Open", value: "open" },
+  { label: "In Progress", value: "in_progress" },
+  { label: "Resolved", value: "resolved" },
+  { label: "Closed", value: "closed" },
+];
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   open: { color: "#059669", bg: "rgba(5,150,105,0.15)" },
@@ -95,6 +100,7 @@ function Tickets() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,7 +108,10 @@ function Tickets() {
     async ({ page, limit }) => {
       try {
         const search = searchRef.current;
-        const params = search ? `&search=${encodeURIComponent(search)}` : "";
+        let params = search ? `&search=${encodeURIComponent(search)}` : "";
+        if (statusFilter && statusFilter !== "All") {
+          params += `&status=${statusFilter}`;
+        }
         const res = await apiClient(API_ENDPOINTS.TICKETS(page, limit, params));
         return {
           data: res.data.data?.tickets || res.data.data || [],
@@ -119,7 +128,7 @@ function Tickets() {
         throw err;
       }
     },
-    [setAlert],
+    [statusFilter, setAlert],
   );
 
   const {
@@ -131,7 +140,10 @@ function Tickets() {
     handlePageSizeChange,
     refresh,
     resetPagination,
-  } = useServerPagination(fetchTickets, { initialPageSize: 10 });
+  } = useServerPagination(fetchTickets, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
 
   const handleGlobalFilterChange = useCallback(
     (value: string) => {
@@ -170,34 +182,28 @@ function Tickets() {
   const columns = useMemo(
     () => [
       {
-        accessorKey: "ticketNo",
-        header: "Ticket #",
-        size: 120,
-        Cell: ({ cell }: any) => (
+        key: "ticketNo",
+        label: "Ticket #",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Typography
             variant="body2"
             fontSize="0.8rem"
             fontWeight={700}
             sx={{ fontFamily: "monospace", color: "#6366f1" }}
           >
-            {cell.getValue()}
+            {row.ticketNo}
           </Typography>
         ),
       },
       {
-        accessorKey: "title",
-        header: "Title",
-        size: 240,
-        Cell: ({ cell }: any) => (
-          <Typography
-            variant="body2"
-            fontSize="0.8rem"
-            fontWeight={500}
-            sx={{ cursor: "pointer", "&:hover": { color: "#6366f1" } }}
-            onClick={() => navigate(`/helpdesk/${cell.row.original.id}`)}
-          >
-            {cell.getValue()}
-            {cell.row.original.slaBreached && (
+        key: "title",
+        label: "Title",
+        render: (row: any) => (
+          <>
+            {row.title}
+            {row.slaBreached && (
               <WarningAmberIcon
                 sx={{
                   fontSize: 14,
@@ -207,137 +213,114 @@ function Tickets() {
                 }}
               />
             )}
-          </Typography>
+          </>
+        ),
+      },
+      { key: "category", label: "Category" },
+      {
+        key: "priority",
+        label: "Priority",
+        hideLabel: true,
+        render: (row: any) => (
+          <StatusChip status={row.priority} cfg={PRIORITY_CFG} />
         ),
       },
       {
-        accessorKey: "category",
-        header: "Category",
-        size: 110,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => (
+          <StatusChip status={row.status} cfg={STATUS_CFG} />
         ),
       },
       {
-        accessorKey: "priority",
-        header: "Priority",
-        size: 100,
-        Cell: ({ cell }: any) => (
-          <StatusChip status={cell.getValue()} cfg={PRIORITY_CFG} />
-        ),
+        key: "raisedByUser",
+        label: "Raised By",
+        render: (row: any) =>
+          row.raisedByUser
+            ? `${row.raisedByUser.first_name} ${row.raisedByUser.last_name}`
+            : "—",
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 120,
-        Cell: ({ cell }: any) => (
-          <StatusChip status={cell.getValue()} cfg={STATUS_CFG} />
-        ),
-      },
-      {
-        accessorKey: "raisedByUser",
-        header: "Raised By",
-        size: 160,
-        Cell: ({ cell }: any) => {
-          const u = cell.getValue();
-          return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {u ? `${u.first_name} ${u.last_name}` : "—"}
-            </Typography>
-          );
-        },
-      },
-      {
-        accessorKey: "slaDeadline",
-        header: "SLA Deadline",
-        size: 140,
-        Cell: ({ cell }: any) => {
-          const date = cell.getValue();
-          if (!date)
-            return (
-              <Typography variant="body2" fontSize="0.8rem">
-                —
-              </Typography>
-            );
-          const isPast = dayjs(date).isBefore(dayjs());
+        key: "slaDeadline",
+        label: "SLA Deadline",
+        render: (row: any) => {
+          if (!row.slaDeadline) return "—";
+          const isPast = dayjs(row.slaDeadline).isBefore(dayjs());
           return (
             <Typography
-              variant="body2"
-              fontSize="0.8rem"
-              color={isPast ? "error.main" : "text.primary"}
+              component="span"
+              variant="caption"
+              color={isPast ? "error.main" : "text.secondary"}
+              fontWeight={500}
             >
-              {dayjs(date).format("DD MMM, HH:mm")}
+              {dayjs(row.slaDeadline).format("DD MMM, HH:mm")}
             </Typography>
           );
         },
       },
-      {
-        accessorKey: "ticketView",
-        header: "View",
-        size: 80,
-        enableSorting: false,
-        Cell: ({ cell }: any) => (
-          <Tooltip title="View Ticket">
-            <IconButton
-              size="small"
-              sx={{
-                width: 28,
-                height: 28,
-                borderRadius: "6px",
-                color: "#6366f1",
-                backgroundColor: "rgba(99,102,241,0.12)",
-                "&:hover": { backgroundColor: "rgba(99,102,241,0.2)" },
-              }}
-              onClick={() => navigate(`/helpdesk/${cell.row.original.id}`)}
-            >
-              <VisibilityIcon sx={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
-        ),
-      },
     ],
-    [navigate],
+    [],
   );
-
-  const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: { ...tableConfig.table.state, isLoading: loading, globalFilter },
-    onGlobalFilterChange: handleGlobalFilterChange,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title="Raise Ticket">
-          <span>
-            <IconButton
-              color="primary"
-              size="small"
-              onClick={() => setOpenCreate(true)}
-              aria-label="Raise support ticket"
-            >
-              <AddIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Box>
-    ),
-  });
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Support tickets"
+        data={data || []}
+        columns={columns}
+        loading={loading}
+        emptyMessage="No tickets found"
+        onRowClick={(row: any) => navigate(`/helpdesk/${row.id}`)}
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search tickets…",
+        }}
+        toolbarActions={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 130 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "130px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+            <Tooltip title="Raise Ticket">
+              <span>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => setOpenCreate(true)}
+                  aria-label="Raise support ticket"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50],
+        }}
+      />
 
       <Dialog
         open={openCreate}

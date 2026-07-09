@@ -32,6 +32,11 @@ jest.mock("../grpc/clients", () => ({
   grpcCall: jest.fn(),
 }));
 
+jest.mock("../handlers/approvalChains", () => ({
+  actOnApprovalForEntity: jest.fn(),
+  isPrivileged: jest.fn().mockResolvedValue(false),
+}));
+
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn(), findMany: jest.fn() },
@@ -65,6 +70,7 @@ jest.mock("@hrms/common", () => ({
     BAD_REQUEST: 400,
     NOT_FOUND: 404,
     CREATED: 201,
+    FORBIDDEN: 403,
     INTERNAL_SERVER_ERROR: 500,
   },
 }));
@@ -75,9 +81,11 @@ jest.mock("@hrms/logger", () => ({
 
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { actOnApprovalForEntity } from "../handlers/approvalChains";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
+const mockActOnApprovalForEntity = actOnApprovalForEntity as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockJobCount = (prisma as any).jobOpening.count as jest.Mock;
@@ -97,7 +105,7 @@ const mockResignFindFirst = (prisma as any).resignation.findFirst as jest.Mock;
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: any = {}) =>
   ({
-    user: { userId: "user-1" },
+    user: { userId: "user-1", tenantId: "t1", tenantRole: "member" },
     query: {},
     params: {},
     body: {},
@@ -108,6 +116,12 @@ describe("recruitmentHandlers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGrpcCall.mockResolvedValue({ data: {} });
+    mockActOnApprovalForEntity.mockResolvedValue({
+      instanceId: "i1",
+      decision: "approved",
+      isFinal: true,
+      finalStatus: "approved",
+    });
     mockUserFindUnique.mockResolvedValue({
       username: "admin",
       isSuperUser: false,
@@ -298,53 +312,83 @@ describe("recruitmentHandlers", () => {
     });
   });
 
-  it("approveResignation calls approveResignation with params id", async () => {
-    await approveResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
-    expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
-      "approveResignation",
-      expect.objectContaining({ id: "res-1" }),
+  it("approveResignation acts on the pending approval instance via the Approval Chain", async () => {
+    await approveResignation(
+      makeReq({ params: { _id: "res-1" }, body: { comments: "ok" } }),
+      makeRes(),
     );
+    expect(mockActOnApprovalForEntity).toHaveBeenCalledWith(
+      "t1",
+      "resignation",
+      "res-1",
+      "user-1",
+      "approved",
+      "ok",
+      false,
+      expect.objectContaining({}),
+    );
+    expect(mockGrpcCall).not.toHaveBeenCalled();
   });
 
-  it("approveResignation returns INTERNAL on error", async () => {
-    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+  it("approveResignation returns BAD_REQUEST when actOnApprovalForEntity rejects with a plain message", async () => {
+    mockActOnApprovalForEntity.mockRejectedValue(
+      new Error("You are not the approver for this request."),
+    );
     const res = makeRes();
     await approveResignation(makeReq({ params: { _id: "res-1" } }), res);
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
-      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
-      expect.any(Object),
+      RESPONSE_STATUS.BAD_REQUEST,
+      expect.objectContaining({
+        message: "You are not the approver for this request.",
+      }),
     );
   });
 
-  it("rejectResignation calls rejectResignation with params id", async () => {
-    await rejectResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
-    expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
-      "rejectResignation",
-      expect.objectContaining({ id: "res-1" }),
+  it("rejectResignation acts on the pending approval instance via the Approval Chain", async () => {
+    await rejectResignation(
+      makeReq({
+        params: { _id: "res-1" },
+        body: { rejectionReason: "not a fit" },
+      }),
+      makeRes(),
     );
+    expect(mockActOnApprovalForEntity).toHaveBeenCalledWith(
+      "t1",
+      "resignation",
+      "res-1",
+      "user-1",
+      "rejected",
+      undefined,
+      false,
+      expect.objectContaining({ rejectionReason: "not a fit" }),
+    );
+    expect(mockGrpcCall).not.toHaveBeenCalled();
   });
 
-  it("rejectResignation returns INTERNAL on error", async () => {
-    mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+  it("rejectResignation returns BAD_REQUEST when actOnApprovalForEntity rejects with a plain message", async () => {
+    mockActOnApprovalForEntity.mockRejectedValue(
+      new Error("No pending approval found for this resignation request."),
+    );
     const res = makeRes();
     await rejectResignation(makeReq({ params: { _id: "res-1" } }), res);
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
-      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      RESPONSE_STATUS.BAD_REQUEST,
       expect.any(Object),
     );
   });
 
-  it("withdrawResignation calls rejectResignation with Withdrawn status", async () => {
+  it("withdrawResignation calls the withdrawResignation RPC (not rejectResignation)", async () => {
+    // Previously this called rejectResignation with status: "Withdrawn",
+    // which that handler silently ignored and always recorded as
+    // "Rejected" — withdrawResignation is the real, dedicated RPC.
     mockResignFindUnique.mockResolvedValue({ userId: "user-1" });
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
-      "rejectResignation",
-      expect.objectContaining({ id: "res-1", status: "Withdrawn" }),
+      "withdrawResignation",
+      expect.objectContaining({ id: "res-1" }),
     );
   });
 

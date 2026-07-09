@@ -2,6 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import { toJobOpeningProto } from "./jobOpeningSerializer";
 
 export const getJobOpening = async (
   call: ServerUnaryCall<any, any>,
@@ -36,29 +37,7 @@ export const getJobOpening = async (
     return callback(null, {
       message: MESSAGES.JOB_OPENING_FETCHED,
       status: status.OK,
-      data: {
-        id: jobOpening.id,
-        jobTitle: jobOpening.jobTitle,
-        numberOfVacancies: jobOpening.numberOfVacancies ?? 0,
-        jobPostingDate: jobOpening.jobPostingDate
-          ? jobOpening.jobPostingDate.toISOString()
-          : "",
-        applicationDeadline: jobOpening.applicationDeadline
-          ? jobOpening.applicationDeadline.toISOString()
-          : "",
-        jobDescription: jobOpening.jobDescription || "",
-        requiredSkills: jobOpening.requiredSkills || "",
-        experience: jobOpening.experience ?? 0,
-        budget: Array.isArray(jobOpening.budget) ? jobOpening.budget : [],
-        department: jobOpening.department || "",
-        hiringManager: jobOpening.hiringManager || "",
-        candidatesHired: jobOpening.candidatesHired ?? 0,
-        status: jobOpening.status || "",
-        createdBy: jobOpening.createdBy || "",
-        createdOn: jobOpening.createdOn
-          ? jobOpening.createdOn.toISOString()
-          : "",
-      },
+      data: toJobOpeningProto(jobOpening),
     });
   } catch (err) {
     logger.error("GetJobOpening error:", { err });

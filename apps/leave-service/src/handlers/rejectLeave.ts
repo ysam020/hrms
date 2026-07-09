@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
 
 export const rejectLeave = async (
   call: ServerUnaryCall<any, any>,
@@ -57,7 +58,7 @@ export const rejectLeave = async (
     return callback(null, {
       message: MESSAGES.LEAVE_REJECTED,
       status: status.OK,
-      data: updatedLeave,
+      data: toLeaveApplicationProto(updatedLeave),
     });
   } catch (err) {
     logger.error("RejectLeave error:", { err });

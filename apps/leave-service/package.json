@@ -7,6 +7,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@hrms/approval-engine": "workspace:*",
     "@hrms/cache": "workspace:*",
     "@hrms/common": "workspace:*",
     "@hrms/db": "workspace:*",

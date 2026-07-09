@@ -7,12 +7,9 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import dayjs from "dayjs";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import { Dropdown } from "primereact/dropdown";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
@@ -36,9 +33,19 @@ import RateReviewIcon from "@mui/icons-material/RateReview";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
+import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 // ── Config ──────────────────────────────────────────────────────────────────
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Open", value: "open" },
+  { label: "In Review", value: "in_review" },
+  { label: "Approved", value: "approved" },
+  { label: "Rejected", value: "rejected" },
+  { label: "Resolved", value: "resolved" },
+];
 
 const ISSUE_TYPES = [
   { value: "malfunction", label: "Malfunction" },
@@ -104,32 +111,6 @@ const NEXT_ACTIONS: Record<
   ],
 };
 
-const ACTION_BTN_STYLE: Record<
-  string,
-  { color: string; bg: string; hoverBg: string }
-> = {
-  in_review: {
-    color: "#6366f1",
-    bg: "rgba(99,102,241,0.12)",
-    hoverBg: "rgba(99,102,241,0.22)",
-  },
-  approved: {
-    color: "#059669",
-    bg: "rgba(5,150,105,0.12)",
-    hoverBg: "rgba(5,150,105,0.22)",
-  },
-  rejected: {
-    color: "#dc2626",
-    bg: "rgba(220,38,38,0.12)",
-    hoverBg: "rgba(220,38,38,0.22)",
-  },
-  resolved: {
-    color: "#64748b",
-    bg: "rgba(100,116,139,0.12)",
-    hoverBg: "rgba(100,116,139,0.22)",
-  },
-};
-
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function StatusChip({ status }: { status: string }) {
@@ -178,6 +159,7 @@ function AssetIssues() {
 
   // ── Table state ────────────────────────────────────────────────────────────
   const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -232,7 +214,10 @@ function AssetIssues() {
     async ({ page, limit }) => {
       try {
         const search = searchRef.current;
-        const params = search ? `&search=${encodeURIComponent(search)}` : "";
+        let params = search ? `&search=${encodeURIComponent(search)}` : "";
+        if (statusFilter && statusFilter !== "All") {
+          params += `&status=${statusFilter}`;
+        }
         const res = await apiClient(
           API_ENDPOINTS.ASSET_ISSUES(page, limit, params),
         );
@@ -251,7 +236,7 @@ function AssetIssues() {
         throw err;
       }
     },
-    [setAlert],
+    [statusFilter, setAlert],
   );
 
   const {
@@ -263,7 +248,10 @@ function AssetIssues() {
     handlePageSizeChange,
     refresh,
     resetPagination,
-  } = useServerPagination(fetchIssues, { initialPageSize: 10 });
+  } = useServerPagination(fetchIssues, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
 
   const handleGlobalFilterChange = useCallback(
     (value: string) => {
@@ -333,187 +321,145 @@ function AssetIssues() {
   const columns = useMemo(
     () => [
       {
-        accessorKey: "asset",
-        header: "Asset",
-        size: 140,
-        Cell: ({ cell }: any) => {
-          const a = cell.getValue();
-          return (
-            <Box>
-              <Typography
-                variant="body2"
-                fontSize="0.8rem"
-                fontWeight={600}
-                sx={{ fontFamily: "monospace" }}
-              >
-                {a?.assetCode ?? "—"}
-              </Typography>
-              <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                {a?.name ?? ""}
-              </Typography>
-            </Box>
-          );
-        },
-      },
-      {
-        accessorKey: "type",
-        header: "Type",
-        size: 140,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {ISSUE_TYPES.find((t) => t.value === cell.getValue())?.label ??
-              cell.getValue()}
-          </Typography>
+        key: "asset",
+        label: "Asset",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
+          <Box>
+            <Typography
+              variant="body2"
+              fontSize="0.8rem"
+              fontWeight={600}
+              sx={{ fontFamily: "monospace" }}
+            >
+              {row.asset?.assetCode ?? "—"}
+            </Typography>
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+              {row.asset?.name ?? ""}
+            </Typography>
+          </Box>
         ),
       },
       {
-        accessorKey: "priority",
-        header: "Priority",
-        size: 90,
-        Cell: ({ cell }: any) => <PriorityLabel priority={cell.getValue()} />,
+        key: "type",
+        label: "Type",
+        render: (row: any) =>
+          ISSUE_TYPES.find((t) => t.value === row.type)?.label ?? row.type,
       },
       {
-        accessorKey: "title",
-        header: "Title",
-        size: 200,
-        Cell: ({ cell }: any) => (
-          <Typography
-            variant="body2"
-            fontSize="0.8rem"
-            sx={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {cell.getValue()}
-          </Typography>
-        ),
+        key: "priority",
+        label: "Priority",
+        render: (row: any) => <PriorityLabel priority={row.priority} />,
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 110,
-        Cell: ({ cell }: any) => <StatusChip status={cell.getValue()} />,
+        key: "title",
+        label: "Title",
+        render: (row: any) => row.title,
+      },
+      {
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => <StatusChip status={row.status} />,
       },
       ...(isHr
         ? [
             {
-              accessorKey: "reporter",
-              header: "Reported By",
-              size: 140,
-              Cell: ({ cell }: any) => {
-                const r = cell.getValue();
-                return (
-                  <Typography variant="body2" fontSize="0.8rem">
-                    {r?.username ?? "—"}
-                  </Typography>
-                );
-              },
+              key: "reporter",
+              label: "Reported By",
+              render: (row: any) => row.reporter?.username ?? "—",
             },
           ]
         : []),
       {
-        accessorKey: "createdAt",
-        header: "Reported On",
-        size: 120,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()
-              ? dayjs(cell.getValue()).format("DD MMM YYYY")
-              : "—"}
-          </Typography>
-        ),
+        key: "createdAt",
+        label: "Reported On",
+        render: (row: any) =>
+          row.createdAt ? dayjs(row.createdAt).format("DD MMM YYYY") : "—",
       },
-      ...(isHr
-        ? [
-            {
-              accessorKey: "hrActions",
-              header: "Actions",
-              size: 140,
-              enableSorting: false,
-              Cell: ({ cell }: any) => {
-                const row = cell.row.original;
-                const actions = NEXT_ACTIONS[row.status] ?? [];
-                if (actions.length === 0) return null;
-                return (
-                  <Box sx={{ display: "flex", gap: 0.5 }}>
-                    {actions.map((a) => {
-                      const style = ACTION_BTN_STYLE[a.status];
-                      return (
-                        <Tooltip key={a.status} title={a.label}>
-                          <IconButton
-                            size="small"
-                            sx={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: "6px",
-                              color: style.color,
-                              backgroundColor: style.bg,
-                              "&:hover": { backgroundColor: style.hoverBg },
-                            }}
-                            onClick={() =>
-                              setActionDialog({
-                                issueId: row.id,
-                                targetStatus: a.status,
-                                label: a.label,
-                                currentType: row.type,
-                              })
-                            }
-                          >
-                            {a.icon}
-                          </IconButton>
-                        </Tooltip>
-                      );
-                    })}
-                  </Box>
-                );
-              },
-            },
-          ]
-        : []),
     ],
     [isHr],
   );
 
-  const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: { ...tableConfig.table.state, isLoading: loading, globalFilter },
-    onGlobalFilterChange: handleGlobalFilterChange,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title="Report Issue">
-          <span>
-            <IconButton
-              color="primary"
-              size="small"
-              onClick={() => setOpenReport(true)}
-              aria-label="Report asset issue"
-            >
-              <AddIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Box>
-    ),
-  });
+  const rowActions = useCallback(
+    (row: any) => {
+      if (!isHr) return [];
+      const next = NEXT_ACTIONS[row.status] ?? [];
+      return next.map((a) => ({
+        icon: a.icon,
+        label: a.label,
+        onClick: () =>
+          setActionDialog({
+            issueId: row.id,
+            targetStatus: a.status,
+            label: a.label,
+            currentType: row.type,
+          }),
+      }));
+    },
+    [isHr],
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Asset issues"
+        data={data || []}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No asset issues found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search issues…",
+        }}
+        toolbarActions={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 130 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "130px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+            <Tooltip title="Report Issue">
+              <span>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => setOpenReport(true)}
+                  aria-label="Report asset issue"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50],
+        }}
+      />
 
       {/* ── Report Issue Dialog (Employee) ───────────────────────────────── */}
       <Dialog

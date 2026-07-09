@@ -6,12 +6,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import dayjs from "dayjs";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
@@ -22,8 +18,6 @@ import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import CircularProgress from "@mui/material/CircularProgress";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { API_ENDPOINTS } from "@web/shared/constants";
@@ -136,161 +130,130 @@ function WebhookDeliveries() {
   const columns = useMemo(
     () => [
       {
-        accessorKey: "eventType",
-        header: "Event",
-        size: 180,
-        Cell: ({ cell }: any) => (
+        key: "eventType",
+        label: "Event",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Typography
+            component="span"
             variant="body2"
             fontSize="0.8rem"
+            fontWeight={600}
             sx={{ fontFamily: "monospace" }}
           >
-            {cell.getValue()}
+            {row.eventType}
           </Typography>
         ),
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 100,
-        Cell: ({ cell }: any) => <StatusChip status={cell.getValue()} />,
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => <StatusChip status={row.status} />,
       },
       {
-        accessorKey: "httpStatus",
-        header: "HTTP",
-        size: 80,
-        Cell: ({ cell }: any) => {
-          const code = cell.getValue();
+        key: "httpStatus",
+        label: "HTTP",
+        render: (row: any) => {
+          const code = row.httpStatus;
           const color =
             code >= 200 && code < 300
-              ? "#059669"
+              ? "success.main"
               : code
-                ? "#dc2626"
-                : "#64748b";
+                ? "error.main"
+                : "text.secondary";
           return (
-            <Typography
-              variant="body2"
-              fontSize="0.8rem"
-              fontWeight={600}
-              color={color}
-            >
+            <Box component="span" sx={{ color, fontWeight: 600 }}>
               {code ?? "—"}
-            </Typography>
+            </Box>
           );
         },
       },
       {
-        accessorKey: "attempts",
-        header: "Attempts",
-        size: 90,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() ?? 0}
-          </Typography>
-        ),
+        key: "attempts",
+        label: "Attempts",
+        render: (row: any) => row.attempts ?? 0,
       },
       {
-        accessorKey: "error",
-        header: "Error",
-        size: 220,
-        Cell: ({ cell }: any) => (
-          <Typography
-            variant="body2"
-            fontSize="0.75rem"
-            color="error.main"
-            sx={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {cell.getValue() ?? ""}
-          </Typography>
-        ),
+        key: "error",
+        label: "Error",
+        render: (row: any) =>
+          row.error ? (
+            <Box component="span" sx={{ color: "error.main" }}>
+              {row.error}
+            </Box>
+          ) : null,
       },
       {
-        accessorKey: "createdAt",
-        header: "Sent At",
-        size: 140,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {dayjs(cell.getValue()).format("DD MMM, HH:mm:ss")}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "deliveryActions",
-        header: "Retry",
-        size: 80,
-        enableSorting: false,
-        Cell: ({ cell }: any) => {
-          const row = cell.row.original;
-          if (row.status === "success") return null;
-          return (
-            <Tooltip title="Retry delivery">
-              <IconButton
-                size="small"
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "6px",
-                  color: "#6366f1",
-                  backgroundColor: "rgba(99,102,241,0.12)",
-                  "&:hover": { backgroundColor: "rgba(99,102,241,0.2)" },
-                }}
-                onClick={() => handleRetry(row.id)}
-              >
-                <ReplayIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          );
-        },
+        key: "createdAt",
+        label: "Sent At",
+        render: (row: any) => dayjs(row.createdAt).format("DD MMM, HH:mm:ss"),
       },
     ],
+    [],
+  );
+
+  const rowActions = useCallback(
+    (row: any) => {
+      if (row.status === "success") return [];
+      return [
+        {
+          icon: <ReplayIcon sx={{ fontSize: 16 }} />,
+          label: "Retry delivery",
+          color: "primary" as const,
+          onClick: () => handleRetry(row.id),
+        },
+      ];
+    },
     [handleRetry],
   );
 
   const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [10, 20, 50, 100],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    state: { ...tableConfig.table.state, isLoading: loading },
-    renderTopToolbarCustomActions: () =>
-      loadingEndpoints ? (
-        <CircularProgress size={20} />
-      ) : (
-        <TextField
-          select
-          size="small"
-          label="Endpoint"
-          value={selectedEndpoint}
-          onChange={(e) => setSelectedEndpoint(e.target.value)}
-          sx={{ minWidth: 280 }}
-        >
-          {endpoints.length === 0 ? (
-            <MenuItem value="">No endpoints</MenuItem>
-          ) : (
-            endpoints.map((ep) => (
-              <MenuItem key={ep.id} value={ep.id}>
-                {ep.url}
-              </MenuItem>
-            ))
-          )}
-        </TextField>
-      ),
-  });
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Webhook deliveries"
+        data={memoizedData}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No deliveries found"
+        toolbarActions={
+          loadingEndpoints ? (
+            <CircularProgress size={20} />
+          ) : (
+            <TextField
+              select
+              size="small"
+              label="Endpoint"
+              value={selectedEndpoint}
+              onChange={(e) => setSelectedEndpoint(e.target.value)}
+              sx={{ minWidth: 280 }}
+            >
+              {endpoints.length === 0 ? (
+                <MenuItem value="">No endpoints</MenuItem>
+              ) : (
+                endpoints.map((ep) => (
+                  <MenuItem key={ep.id} value={ep.id}>
+                    {ep.url}
+                  </MenuItem>
+                ))
+              )}
+            </TextField>
+          )
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [10, 20, 50, 100],
+        }}
+      />
     </ErrorBoundary>
   );
 }

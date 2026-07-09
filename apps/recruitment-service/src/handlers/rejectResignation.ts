@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import { toResignationProto } from "./resignationSerializer";
 
 export const rejectResignation = async (
   call: ServerUnaryCall<any, any>,
@@ -65,7 +66,7 @@ export const rejectResignation = async (
     return callback(null, {
       message: MESSAGES.RESIGNATION_REJECTED,
       status: status.OK,
-      data: updatedResignation,
+      data: toResignationProto(updatedResignation),
     });
   } catch (err) {
     logger.error("RejectResignation error:", { err });

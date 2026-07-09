@@ -6,19 +6,15 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import dayjs from "dayjs";
 import { Calendar } from "primereact/calendar";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import { Dropdown } from "primereact/dropdown";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -35,6 +31,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import RemoveCircleIcon from "@mui/icons-material/RemoveCircle";
 import AddIcon from "@mui/icons-material/Add";
+import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
@@ -43,6 +40,14 @@ const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   Rejected: { color: "#dc2626", bg: "rgba(220,38,38,0.15)" },
   Cancelled: { color: "#64748b", bg: "rgba(100,116,139,0.15)" },
 };
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Pending", value: "Pending" },
+  { label: "Approved", value: "Approved" },
+  { label: "Rejected", value: "Rejected" },
+  { label: "Cancelled", value: "Cancelled" },
+];
 
 function StatusChip({ status }: { status: string }) {
   const cfg = STATUS_CFG[status] ?? STATUS_CFG.Pending;
@@ -65,7 +70,6 @@ function StatusChip({ status }: { status: string }) {
 
 function WFHRequests() {
   const { setAlert } = useContext(AlertContext);
-  const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
   const [openRequest, setOpenRequest] = useState(false);
   const [form, setForm] = useState({
@@ -74,6 +78,7 @@ function WFHRequests() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -85,9 +90,12 @@ function WFHRequests() {
   const fetchRequests = useCallback(
     async ({ page, limit }) => {
       try {
-        const params = searchRef.current
+        let params = searchRef.current
           ? `&search=${encodeURIComponent(searchRef.current)}`
           : "";
+        if (statusFilter && statusFilter !== "All") {
+          params += `&status=${statusFilter}`;
+        }
         const res = await apiClient(
           API_ENDPOINTS.WFH_REQUESTS(page, limit, params),
         );
@@ -106,7 +114,7 @@ function WFHRequests() {
         throw err;
       }
     },
-    [setAlert],
+    [statusFilter, setAlert],
   );
 
   const {
@@ -118,7 +126,10 @@ function WFHRequests() {
     handlePageSizeChange,
     refresh,
     resetPagination,
-  } = useServerPagination(fetchRequests, { initialPageSize: 10 });
+  } = useServerPagination(fetchRequests, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
 
   const handleGlobalFilterChange = useCallback(
     (value: string) => {
@@ -177,145 +188,131 @@ function WFHRequests() {
     }
   }, [form, refresh, setAlert]);
 
-  const iconBtn = (color: string, bg: string) => ({
-    width: 28,
-    height: 28,
-    borderRadius: "6px",
-    color,
-    backgroundColor: bg,
-    "&:hover": { backgroundColor: bg.replace("0.12", "0.22") },
-  });
-
   const columns = useMemo(
     () => [
       {
-        accessorKey: "employee",
-        header: "Employee",
-        size: 180,
-        Cell: ({ cell }: any) => {
-          const emp = cell.getValue();
-          return (
-            <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {emp ? `${emp.first_name} ${emp.last_name}` : "—"}
-            </Typography>
-          );
-        },
+        key: "employee",
+        label: "Employee",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) =>
+          row.employee
+            ? `${row.employee.first_name} ${row.employee.last_name}`
+            : "—",
       },
       {
-        accessorKey: "date",
-        header: "Date",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {dayjs(cell.getValue()).format("DD MMM YYYY")}
-          </Typography>
-        ),
+        key: "date",
+        label: "Date",
+        render: (row: any) => dayjs(row.date).format("DD MMM YYYY"),
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 110,
-        Cell: ({ cell }: any) => <StatusChip status={cell.getValue()} />,
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => <StatusChip status={row.status} />,
       },
       {
-        accessorKey: "reason",
-        header: "Reason",
-        size: 220,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem" color="text.secondary">
-            {cell.getValue() ?? "—"}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "wfhActions",
-        header: "Actions",
-        size: 140,
-        enableSorting: false,
-        Cell: ({ cell }: any) => {
-          const row = cell.row.original;
-          if (row.status !== "Pending") return null;
-          const isOwn = row.userId === user?.id;
-          return (
-            <Box sx={{ display: "flex", gap: 0.5 }}>
-              {isApprover && !isOwn && (
-                <>
-                  <Tooltip title="Approve">
-                    <IconButton
-                      size="small"
-                      sx={iconBtn("#059669", "rgba(5,150,105,0.12)")}
-                      onClick={() => handleAction(row.id, "approve")}
-                    >
-                      <CheckIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Reject">
-                    <IconButton
-                      size="small"
-                      sx={iconBtn("#dc2626", "rgba(220,38,38,0.12)")}
-                      onClick={() => handleAction(row.id, "reject")}
-                    >
-                      <CloseIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
-              {isOwn && (
-                <Tooltip title="Cancel">
-                  <IconButton
-                    size="small"
-                    sx={iconBtn("#64748b", "rgba(100,116,139,0.12)")}
-                    onClick={() => handleAction(row.id, "cancel")}
-                  >
-                    <RemoveCircleIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-          );
-        },
+        key: "reason",
+        label: "Reason",
+        render: (row: any) => row.reason ?? "—",
       },
     ],
+    [],
+  );
+
+  const rowActions = useCallback(
+    (row: any) => {
+      if (row.status !== "Pending") return [];
+      const isOwn = row.userId === user?.id;
+      const actions: any[] = [];
+      if (isApprover && !isOwn) {
+        actions.push(
+          {
+            icon: <CheckIcon sx={{ fontSize: 16 }} />,
+            label: "Approve",
+            color: "success" as const,
+            onClick: () => handleAction(row.id, "approve"),
+          },
+          {
+            icon: <CloseIcon sx={{ fontSize: 16 }} />,
+            label: "Reject",
+            color: "error" as const,
+            onClick: () => handleAction(row.id, "reject"),
+          },
+        );
+      }
+      if (isOwn) {
+        actions.push({
+          icon: <RemoveCircleIcon sx={{ fontSize: 16 }} />,
+          label: "Cancel",
+          onClick: () => handleAction(row.id, "cancel"),
+        });
+      }
+      return actions;
+    },
     [isApprover, user?.id, handleAction],
   );
 
   const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: { ...tableConfig.table.state, isLoading: loading, globalFilter },
-    onGlobalFilterChange: handleGlobalFilterChange,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title="Request WFH">
-          <span>
-            <IconButton
-              color="primary"
-              size="small"
-              onClick={() => setOpenRequest(true)}
-              aria-label="Request WFH"
-            >
-              <AddIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Box>
-    ),
-  });
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="WFH requests"
+        data={memoizedData}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No WFH requests found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search…",
+        }}
+        toolbarActions={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 130 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "130px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+            <Tooltip title="Request WFH">
+              <span>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => setOpenRequest(true)}
+                  aria-label="Request WFH"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50],
+        }}
+      />
 
       <Dialog
         open={openRequest}

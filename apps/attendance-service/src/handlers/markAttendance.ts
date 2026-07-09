@@ -91,6 +91,46 @@ function haversineMeters(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// ─── Shift resolution ───────────────────────────────────────────────────────
+// Resolution order: User.shiftId > Team.shiftId > TenantSettings defaults.
+// A tenant with no Shift rows behaves exactly as before — every check-in
+// resolves straight to the tenant-wide cfg.
+
+interface ShiftOverride {
+  workStartHour: number;
+  workStartMinute: number;
+  lateGracePeriodMinutes: number;
+  halfDayMinHours: number;
+}
+
+async function resolveShift(
+  tenantId: string,
+  userId: string,
+  userShiftId: string | null,
+): Promise<ShiftOverride | null> {
+  let shiftId = userShiftId;
+  if (!shiftId) {
+    const team = await (prisma as any).team.findFirst({
+      where: { tenantId, members: { has: userId } },
+      select: { shiftId: true },
+    });
+    shiftId = team?.shiftId ?? null;
+  }
+  if (!shiftId) return null;
+
+  const shift = await (prisma as any).shift.findFirst({
+    where: { id: shiftId, tenantId, isActive: true },
+  });
+  if (!shift) return null;
+
+  return {
+    workStartHour: shift.startHour,
+    workStartMinute: shift.startMinute,
+    lateGracePeriodMinutes: shift.lateGracePeriodMinutes,
+    halfDayMinHours: shift.halfDayMinHours,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function isLate(t: Date, cfg: AttendanceSettings): boolean {
@@ -150,8 +190,26 @@ export const markAttendance = async (
         });
       }
 
+      // Look up the employee's WFH status, home location, branch, shift, and
+      // field/remote exemption once — used by both geofencing and shift resolution.
+      const employee = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          wfh: true,
+          wfhHomeLatitude: true,
+          wfhHomeLongitude: true,
+          wfhHomeName: true,
+          branchId: true,
+          shiftId: true,
+          attendanceMode: true,
+        },
+      });
+      const attendanceMode = (employee as any)?.attendanceMode ?? "office";
+
       // ── Geofencing check ────────────────────────────────────────────────────
-      if (cfg.geofencingEnabled) {
+      // Field/remote employees are exempt entirely — they can't check in from
+      // a fixed radius by definition.
+      if (cfg.geofencingEnabled && attendanceMode === "office") {
         const { latitude, longitude } = call.request;
         const lat = parseFloat(latitude);
         const lng = parseFloat(longitude);
@@ -164,19 +222,9 @@ export const markAttendance = async (
           });
         }
 
-        // Look up the employee's WFH status and home location
-        const employee = await prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            wfh: true,
-            wfhHomeLatitude: true,
-            wfhHomeLongitude: true,
-            wfhHomeName: true,
-          },
-        });
-
         let fenceLat: number | null = null;
         let fenceLng: number | null = null;
+        let fenceRadius = cfg.geofenceRadiusMeters;
         let fenceLabel = "office";
 
         if (employee?.wfh) {
@@ -185,6 +233,22 @@ export const markAttendance = async (
           fenceLabel = (employee as any).wfhHomeName
             ? `home (${(employee as any).wfhHomeName.split(",")[0]})`
             : "home";
+        } else if ((employee as any)?.branchId) {
+          const branch = await (prisma as any).branch.findFirst({
+            where: { id: (employee as any).branchId, isActive: true },
+          });
+          if (branch?.latitude != null && branch?.longitude != null) {
+            fenceLat = branch.latitude;
+            fenceLng = branch.longitude;
+            fenceRadius =
+              branch.geofenceRadiusMeters ?? cfg.geofenceRadiusMeters;
+            fenceLabel = branch.name;
+          } else {
+            // Branch exists but has no coordinates set — fall back to the
+            // tenant-wide legacy office fields rather than blocking outright.
+            fenceLat = cfg.officeLatitude;
+            fenceLng = cfg.officeLongitude;
+          }
         } else {
           fenceLat = cfg.officeLatitude;
           fenceLng = cfg.officeLongitude;
@@ -194,7 +258,7 @@ export const markAttendance = async (
           // Geofencing is on but no reference point saved yet — block and ask admin
           const hint = employee?.wfh
             ? "Ask your admin to set the employee's home location in Employee Management."
-            : "Ask your admin to set the office location in Organisation Settings → Attendance.";
+            : "Ask your admin to set the branch location in Settings → Branches & Shifts.";
           return callback(null, {
             message: `Geofencing is enabled but no ${fenceLabel} location is configured. ${hint}`,
             status: status.FAILED_PRECONDITION,
@@ -202,16 +266,25 @@ export const markAttendance = async (
         }
 
         const dist = haversineMeters(lat, lng, fenceLat, fenceLng);
-        if (dist > cfg.geofenceRadiusMeters) {
+        if (dist > fenceRadius) {
           return callback(null, {
-            message: `You are ${Math.round(dist)} m from the ${fenceLabel} (allowed: ${cfg.geofenceRadiusMeters} m). Move closer and try again.`,
+            message: `You are ${Math.round(dist)} m from the ${fenceLabel} (allowed: ${fenceRadius} m). Move closer and try again.`,
             status: status.PERMISSION_DENIED,
           });
         }
       }
       // ────────────────────────────────────────────────────────────────────────
 
-      const attendanceStatus = isLate(now, cfg) ? "Late" : "Present";
+      const shiftOverride = tenantId
+        ? await resolveShift(
+            tenantId,
+            userId,
+            (employee as any)?.shiftId ?? null,
+          )
+        : null;
+      const effectiveCfg = shiftOverride ? { ...cfg, ...shiftOverride } : cfg;
+
+      const attendanceStatus = isLate(now, effectiveCfg) ? "Late" : "Present";
 
       const record = existingRecord
         ? await prisma.attendanceRecord.update({
@@ -254,8 +327,25 @@ export const markAttendance = async (
         });
       }
 
+      const userShift = tenantId
+        ? await prisma.user.findUnique({
+            where: { id: userId },
+            select: { shiftId: true },
+          })
+        : null;
+      const shiftOverride =
+        tenantId && userShift
+          ? await resolveShift(
+              tenantId,
+              userId,
+              (userShift as any)?.shiftId ?? null,
+            )
+          : null;
+      const effectiveHalfDayMinHours =
+        shiftOverride?.halfDayMinHours ?? cfg.halfDayMinHours;
+
       const workingHours = calcWorkingHours(existingRecord.timeIn, now);
-      const isHalfDay = workingHours < cfg.halfDayMinHours;
+      const isHalfDay = workingHours < effectiveHalfDayMinHours;
 
       const record = await prisma.attendanceRecord.update({
         where: { id: existingRecord.id },

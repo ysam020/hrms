@@ -1,9 +1,3 @@
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
@@ -29,6 +23,8 @@ import { Calendar } from "primereact/calendar";
 import { MultiSelect } from "primereact/multiselect";
 import { InputNumber } from "primereact/inputnumber";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
+import DropdownWrapper from "@web/shared/components/DropdownWrapper";
+import DataList from "@web/shared/components/DataList";
 import { validationSchema } from "./schemas";
 import { assets } from "@web/assets/data/companyAssets";
 import Button from "@web/shared/components/Button";
@@ -96,6 +92,8 @@ function ViewDetails() {
       wfhHomeLatitude: null as number | null,
       wfhHomeLongitude: null as number | null,
       wfhHomeName: null as string | null,
+      employmentType: "employee" as "employee" | "contractor",
+      workState: null as string | null,
     },
     validationSchema,
     onSubmit: async (values) => {
@@ -196,6 +194,9 @@ function ViewDetails() {
       wfhHomeLatitude: data?.wfhHomeLatitude ?? null,
       wfhHomeLongitude: data?.wfhHomeLongitude ?? null,
       wfhHomeName: data?.wfhHomeName ?? null,
+      employmentType:
+        data?.employmentType === "contractor" ? "contractor" : "employee",
+      workState: data?.workState ?? null,
     });
     setIsEditing(true);
   };
@@ -528,6 +529,57 @@ function ViewDetails() {
                       </Box>
                     )}
                   </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    {isEditing ? (
+                      <DropdownWrapper
+                        name="employmentType"
+                        options={[
+                          { label: "Employee", value: "employee" },
+                          { label: "Contractor", value: "contractor" },
+                        ]}
+                        placeholder="Employment Type"
+                        formik={formik}
+                      />
+                    ) : (
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ mb: 0.5, display: "block" }}
+                        >
+                          Employment Type
+                        </Typography>
+                        <Typography variant="body2">
+                          {data?.employmentType === "contractor"
+                            ? "Contractor"
+                            : "Employee"}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    {isEditing ? (
+                      <FormikInputWrapper
+                        type="text"
+                        name="workState"
+                        placeholder="Work State (for Professional Tax)"
+                        formik={formik}
+                      />
+                    ) : (
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ mb: 0.5, display: "block" }}
+                        >
+                          Work State
+                        </Typography>
+                        <Typography variant="body2">
+                          {data?.workState || "--"}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Grid>
                 </Grid>
               </Paper>
             </Grid>
@@ -541,99 +593,77 @@ function ViewDetails() {
                     Salary Structure
                   </Typography>
                 </Box>
-                <TableContainer
-                  component={Paper}
+                <Box
                   sx={{
                     boxShadow: isEditing ? 1 : "0 4px 12px rgba(0, 0, 0, 0.1)",
                     borderRadius: 2,
                   }}
                 >
-                  <Table
-                    size="small"
-                    sx={{
-                      "& .MuiTableCell-root": { padding: "4px 8px" },
-                      "& tbody tr:last-child td": { borderBottom: "none" },
-                    }}
-                  >
-                    <TableHead>
-                      <TableRow
-                        sx={{
-                          bgcolor: isEditing ? "background.paper" : "inherit",
-                        }}
-                      >
-                        <TableCell
-                          sx={{ fontWeight: "bold", fontSize: "0.875rem" }}
-                        >
-                          Component
-                        </TableCell>
-                        <TableCell
-                          sx={{ fontWeight: "bold", fontSize: "0.875rem" }}
-                        >
-                          Amount
-                        </TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {salaryComponents.map((component) => (
-                        <TableRow key={component.key} hover={isEditing}>
-                          <TableCell
-                            sx={{ fontWeight: 500, fontSize: ".875rem" }}
-                          >
-                            {component.label}
-                          </TableCell>
-
-                          <TableCell>
-                            {isEditing ? (
-                              <Box>
-                                <InputNumber
-                                  value={
-                                    formik.values.salaryStructure[component.key]
-                                  }
-                                  onValueChange={(e) =>
-                                    handleAmountChange(component.key, e.value)
-                                  }
-                                  onBlur={() =>
-                                    formik.setFieldTouched(
-                                      `salaryStructure.${component.key}`,
-                                      true,
-                                    )
-                                  }
-                                  placeholder="0.00"
-                                  min={0}
-                                  minFractionDigits={0}
-                                  maxFractionDigits={2}
-                                  inputStyle={{
-                                    padding: "6px 8px",
-                                    fontSize: "0.875rem",
-                                    width: "120px",
-                                  }}
-                                  disabled={["pf", "esi", "pt"].includes(
-                                    component.key,
-                                  )}
-                                />
-                                {getFieldError(
-                                  `salaryStructure.${component.key}`,
-                                ) && (
-                                  <Typography
-                                    variant="caption"
-                                    color="error"
-                                    sx={{ display: "block", mt: 0.5 }}
-                                  >
-                                    {getFieldError(
-                                      `salaryStructure.${component.key}`,
-                                    )}
-                                  </Typography>
+                  <DataList
+                    ariaLabel="Salary structure"
+                    variant="rows"
+                    data={salaryComponents}
+                    getRowId={(component: any) => component.key}
+                    columns={[
+                      {
+                        key: "label",
+                        label: "Component",
+                        primary: true,
+                        render: (component: any) => component.label,
+                      },
+                      {
+                        key: "amount",
+                        label: "Amount",
+                        render: (component: any) =>
+                          isEditing ? (
+                            <Box>
+                              <InputNumber
+                                value={
+                                  formik.values.salaryStructure[component.key]
+                                }
+                                onValueChange={(e) =>
+                                  handleAmountChange(component.key, e.value)
+                                }
+                                onBlur={() =>
+                                  formik.setFieldTouched(
+                                    `salaryStructure.${component.key}`,
+                                    true,
+                                  )
+                                }
+                                placeholder="0.00"
+                                min={0}
+                                minFractionDigits={0}
+                                maxFractionDigits={2}
+                                inputStyle={{
+                                  padding: "6px 8px",
+                                  fontSize: "0.875rem",
+                                  width: "120px",
+                                }}
+                                disabled={["pf", "esi", "pt"].includes(
+                                  component.key,
                                 )}
-                              </Box>
-                            ) : (
-                              (data?.salaryStructure?.[component.key] ?? "--")
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                              />
+                              {getFieldError(
+                                `salaryStructure.${component.key}`,
+                              ) && (
+                                <Typography
+                                  variant="caption"
+                                  color="error"
+                                  sx={{ display: "block", mt: 0.5 }}
+                                >
+                                  {getFieldError(
+                                    `salaryStructure.${component.key}`,
+                                  )}
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            (data?.salaryStructure?.[component.key] ?? "--")
+                          ),
+                      },
+                    ]}
+                  />
+                </Box>
               </Paper>
             </Grid>
 

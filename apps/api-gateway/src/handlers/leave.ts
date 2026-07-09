@@ -7,12 +7,22 @@ import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
 import { isSuperUser } from "../utils/user";
+import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
 
 export async function addLeave(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const { from, to, leaveType, reason, sick_leave, medicalCertificate } =
-      req.body;
+    const {
+      from,
+      to,
+      leaveType,
+      reason,
+      sick_leave,
+      medicalCertificate,
+      unit,
+      session,
+      shortLeaveHours,
+    } = req.body;
     const response = await grpcCall(leaveClient, "applyLeave", {
       userId: user!.userId,
       leaveType,
@@ -21,6 +31,9 @@ export async function addLeave(req: Request, res: Response) {
       reason: reason || "",
       sickLeave: sick_leave || false,
       medicalCertificate: medicalCertificate || "",
+      unit: unit || "full_day",
+      session: session || "",
+      shortLeaveHours: shortLeaveHours || 0,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -86,35 +99,67 @@ export async function getLeaveApplications(req: Request, res: Response) {
 }
 
 export async function updateLeaveStatus(req: Request, res: Response) {
-  const { user } = req as AuthRequest;
+  const authReq = req as AuthRequest;
+  const { user } = authReq;
   try {
-    const { action, leaveId } = req.body;
+    const { action, leaveId, reason } = req.body;
     if (!leaveId || !action)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "leaveId and action are required",
       });
 
-    let method: string;
-    let payload: Record<string, any>;
-
-    if (action === "approve") {
-      method = "approveLeave";
-      payload = { id: leaveId, approvedById: user!.userId };
-    } else if (action === "reject") {
-      method = "rejectLeave";
-      payload = { id: leaveId };
-    } else if (action === "cancel") {
-      method = "cancelLeave";
-      payload = { id: leaveId, userId: user!.userId };
-    } else {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "Invalid action. Use approve, reject or cancel",
+    if (action === "approve" || action === "reject") {
+      // Every leave application gets an Approval Chain instance at apply
+      // time (see leave-service/applyLeave.ts), so the decision is recorded
+      // against that instance instead of calling approveLeave/rejectLeave
+      // directly — this is what enforces that only the resolved approver
+      // (or an owner/admin/superuser) can act, and lets a multi-step chain
+      // forward to the next approver instead of finalizing immediately.
+      const tenantId = user!.tenantId;
+      if (!tenantId) {
+        return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+          message: "No active tenant.",
+        });
+      }
+      const privileged = await isPrivileged(authReq);
+      const result = await actOnApprovalForEntity(
+        tenantId,
+        "leave",
+        leaveId,
+        user!.userId,
+        action === "approve" ? "approved" : "rejected",
+        reason || undefined,
+        privileged,
+      );
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: result.isFinal
+          ? `Leave ${result.finalStatus}.`
+          : "Approved — forwarded to the next approver.",
+        data: result,
       });
     }
 
-    const response = (await grpcCall(leaveClient, method, payload)) as any;
-    return apiResponse(res, grpcToHttpStatus(response.status), response);
-  } catch (error: unknown) {
+    if (action === "cancel") {
+      // If the leave is still Pending this cancels immediately; if it's
+      // already Approved, leave-service instead requests cancellation and
+      // routes it through the Approval Chain (module "leave").
+      const response = (await grpcCall(leaveClient, "cancelLeave", {
+        id: leaveId,
+        userId: user!.userId,
+        reason: reason || "",
+      })) as any;
+      return apiResponse(res, grpcToHttpStatus(response.status), response);
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+      message: "Invalid action. Use approve, reject or cancel",
+    });
+  } catch (error: any) {
+    if (error?.message && !error?.code) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: error.message,
+      });
+    }
     logger.error("PUT /update-leave-status error:", { error });
     return handleError(res, error);
   }

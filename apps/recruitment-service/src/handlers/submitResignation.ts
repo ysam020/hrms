@@ -3,7 +3,10 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
+import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
+import { resolveNoticePeriodDays } from "./noticePeriod";
+import { toResignationProto } from "./resignationSerializer";
 import dayjs from "dayjs";
 
 export const submitResignation = async (
@@ -19,10 +22,19 @@ export const submitResignation = async (
       overallJobSatisfaction,
       suggestions,
     } = call.request;
+    const exitType: string = call.request.exitType || "voluntary";
 
     if (!userId || !resignationDate) {
       return callback(null, {
         message: MESSAGES.USERNAME_RESIGNATION_DATE_REQUIRED,
+        status: status.INVALID_ARGUMENT,
+      });
+    }
+    if (
+      !["voluntary", "termination", "absconding", "mutual"].includes(exitType)
+    ) {
+      return callback(null, {
+        message: MESSAGES.INVALID_EXIT_TYPE,
         status: status.INVALID_ARGUMENT,
       });
     }
@@ -37,12 +49,44 @@ export const submitResignation = async (
       });
     }
 
+    const tenantId = getTenantId()!;
+    const resignedOn = dayjs(resignationDate).toDate();
+
+    // Absconding has no notice period by definition; everything else resolves
+    // via NoticePeriodPolicy (tenure/role/department bands), falling back to
+    // the tenant's flat TenantSettings.noticePeriodDays when unconfigured.
+    let noticePeriodDays = 0;
+    let computedLastWorkingDay: Date | null = lastDate
+      ? dayjs(lastDate).toDate()
+      : null;
+    if (exitType !== "absconding") {
+      const employee = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { joining_date: true, designation: true, department: true },
+      });
+      noticePeriodDays = await resolveNoticePeriodDays(tenantId, {
+        joining_date: employee?.joining_date ?? null,
+        designation: employee?.designation ?? null,
+        department: employee?.department ?? null,
+      });
+      // Only default lastWorkingDay from the notice period when the employee
+      // didn't explicitly propose one — their proposal is a request, not yet
+      // a commitment either way (HR can still counter on approval).
+      if (!computedLastWorkingDay) {
+        computedLastWorkingDay = dayjs(resignedOn)
+          .add(noticePeriodDays, "day")
+          .toDate();
+      }
+    } else {
+      computedLastWorkingDay = resignedOn;
+    }
+
     const resignation = await prisma.resignation.create({
       data: {
-        tenantId: getTenantId()!,
+        tenantId,
         userId,
-        resignationDate: dayjs(resignationDate).toDate(),
-        lastWorkingDay: lastDate ? dayjs(lastDate).toDate() : null,
+        resignationDate: resignedOn,
+        lastWorkingDay: computedLastWorkingDay,
         reason: reason || null,
         overallJobSatisfaction: overallJobSatisfaction
           ? parseFloat(String(overallJobSatisfaction))
@@ -50,10 +94,21 @@ export const submitResignation = async (
         suggestions: suggestions || null,
         status: "Submitted",
         submittedOn: new Date(),
+        exitType,
+        noticePeriodDays,
       },
     });
 
     await cacheManager.invalidatePattern("resignations:*");
+
+    // Routes the approve/reject decision through the tenant's configured
+    // Approval Chain (zero-config default: requester's reporting manager,
+    // falling back to an owner/admin) — api-gateway's actOnApprovalForEntity
+    // resolves this instance and drives approveResignation/rejectResignation
+    // once acted on.
+    await instantiateApproval(tenantId, "resignation", resignation.id, userId, {
+      exitType,
+    });
 
     // Notify HR + team leaders (fire-and-forget)
     Promise.all([
@@ -108,7 +163,7 @@ export const submitResignation = async (
     return callback(null, {
       message: MESSAGES.RESIGNATION_SUBMITTED,
       status: status.OK,
-      data: resignation,
+      data: toResignationProto(resignation),
     });
   } catch (err) {
     logger.error("SubmitResignation error:", { err });

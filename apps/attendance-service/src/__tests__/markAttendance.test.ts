@@ -17,6 +17,15 @@ jest.mock("@hrms/db", () => {
     user: {
       findUnique: jest.fn(),
     },
+    team: {
+      findFirst: jest.fn(),
+    },
+    shift: {
+      findFirst: jest.fn(),
+    },
+    branch: {
+      findFirst: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -50,6 +59,9 @@ const mockCacheGet = (cacheManager as any).get as jest.Mock;
 const mockCacheSet = (cacheManager as any).set as jest.Mock;
 const mockSettingsFindFirst = (prisma as any).tenantSettings
   .findFirst as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
+const mockTeamFindFirst = (prisma as any).team.findFirst as jest.Mock;
+const mockShiftFindFirst = (prisma as any).shift.findFirst as jest.Mock;
 
 const DEFAULT_ATTENDANCE_SETTINGS = {
   workStartHour: 9,
@@ -73,6 +85,19 @@ describe("markAttendance", () => {
     // Return valid attendance settings so the handler proceeds past the
     // FAILED_PRECONDITION guard on every test that doesn't override this.
     mockSettingsFindFirst.mockResolvedValue(DEFAULT_ATTENDANCE_SETTINGS);
+    // No branch/shift/attendanceMode overrides by default — every existing
+    // test exercises the zero-config tenant-default path.
+    mockUserFindUnique.mockResolvedValue({
+      wfh: false,
+      wfhHomeLatitude: null,
+      wfhHomeLongitude: null,
+      wfhHomeName: null,
+      branchId: null,
+      shiftId: null,
+      attendanceMode: "office",
+    });
+    mockTeamFindFirst.mockResolvedValue(null);
+    mockShiftFindFirst.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when userId or type is missing", async () => {
@@ -147,6 +172,73 @@ describe("markAttendance", () => {
         }),
       );
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it("uses the employee's assigned shift start time instead of the tenant default", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        wfh: false,
+        wfhHomeLatitude: null,
+        wfhHomeLongitude: null,
+        wfhHomeName: null,
+        branchId: null,
+        shiftId: "shift-1",
+        attendanceMode: "office",
+      });
+      mockShiftFindFirst.mockResolvedValue({
+        id: "shift-1",
+        startHour: 12,
+        startMinute: 0,
+        lateGracePeriodMinutes: 15,
+        halfDayMinHours: 4,
+      });
+      jest.useFakeTimers();
+      // 10:00 local is "Late" under the tenant default (9:00 + 30min grace)
+      // but well within the assigned Night Shift's 12:00 start.
+      jest.setSystemTime(new Date(2024, 2, 4, 10, 0, 0));
+
+      mockFindFirst.mockResolvedValue(null);
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+
+      const cb = makeCallback();
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: "Present" }),
+        }),
+      );
+      jest.useRealTimers();
+    });
+
+    it("skips the geofence check entirely for field/remote employees", async () => {
+      mockSettingsFindFirst.mockResolvedValue({
+        ...DEFAULT_ATTENDANCE_SETTINGS,
+        geofencingEnabled: true,
+        officeLatitude: 12.9716,
+        officeLongitude: 77.5946,
+      });
+      mockUserFindUnique.mockResolvedValue({
+        wfh: false,
+        wfhHomeLatitude: null,
+        wfhHomeLongitude: null,
+        wfhHomeName: null,
+        branchId: null,
+        shiftId: null,
+        attendanceMode: "field",
+      });
+      mockFindFirst.mockResolvedValue(null);
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+
+      const cb = makeCallback();
+      // No latitude/longitude in the request — would fail the geofence
+      // precondition for an "office" employee, but a field employee should
+      // check in successfully anyway.
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+
+      expect(cb).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ status: status.OK }),
+      );
     });
 
     it("includes (late) in message when checking in after 9:30", async () => {

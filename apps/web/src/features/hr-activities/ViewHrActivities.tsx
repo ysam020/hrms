@@ -6,11 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
@@ -263,255 +259,121 @@ function ViewHrActivities({ refreshKey = 0 }) {
 
   const columns = useMemo(
     () => [
+      { key: "title", label: "Title", primary: true, hideLabel: true },
+      { key: "description", label: "Description" },
       {
-        accessorKey: "title",
-        header: "Title",
-        size: 300,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "description",
-        header: "Description",
-        size: 300,
-        Cell: ({ cell }) => (
-          <Typography
-            variant="body2"
-            fontSize="0.8rem"
-            sx={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-            }}
-          >
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "date",
-        header: "Date",
-        size: 120,
-        Cell: ({ cell }) => {
-          const date = cell.getValue();
-          if (!date || typeof date !== "string") {
-            return <Skeleton width="50%" />;
-          }
-          const [year, month, day] = date.split("-");
-          return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {`${day}-${month}-${year}`}
-            </Typography>
-          );
+        key: "date",
+        label: "Date",
+        render: (row: any) => {
+          if (!row.date || typeof row.date !== "string")
+            return <Skeleton width={60} />;
+          const [year, month, day] = row.date.split("-");
+          return `${day}-${month}-${year}`;
         },
       },
       {
-        accessorKey: "time",
-        header: "Time",
-        size: 100,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {formatTime(cell.getValue())}
-          </Typography>
-        ),
+        key: "time",
+        label: "Time",
+        render: (row: any) => formatTime(row.time),
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 100,
-        Cell: ({ cell }) => getStatusChip(cell.getValue()),
-      },
-      {
-        accessorKey: "actions",
-        header: "Actions",
-        size: 120,
-        Cell: ({ cell }) => {
-          const rowStatus = cell.row.original.status;
-          const isDeleted = rowStatus === "Deleted";
-
-          if (isDeleted) {
-            return (
-              <Typography
-                variant="caption"
-                fontSize="0.7rem"
-                sx={{ color: "text.disabled", fontStyle: "italic" }}
-              >
-                —
-              </Typography>
-            );
-          }
-
-          return (
-            <Box sx={{ display: "flex", gap: 0.5 }}>
-              {canEdit && (
-                <Tooltip title="Edit">
-                  <IconButton
-                    size="small"
-                    aria-label={`Edit HR activity: ${cell.row.original.title}`}
-                    onClick={() => handleOpenModal(cell.row.original)}
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "6px",
-                      color: theme === "light" ? "#6366f1" : "#818cf8",
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(99, 102, 241, 0.12)"
-                          : "rgba(129, 140, 248, 0.15)",
-                      "&:hover": {
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(99, 102, 241, 0.2)"
-                            : "rgba(129, 140, 248, 0.25)",
-                      },
-                    }}
-                  >
-                    <EditIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-
-              {canDelete && (
-                <Tooltip title="Delete">
-                  <IconButton
-                    size="small"
-                    aria-label={`Delete HR activity: ${cell.row.original.title}`}
-                    onClick={() =>
-                      handleDeleteClick(
-                        cell.row.original.id,
-                        cell.row.original.title,
-                      )
-                    }
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "6px",
-                      color: theme === "light" ? "#dc2626" : "#f87171",
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(239, 68, 68, 0.12)"
-                          : "rgba(248, 113, 113, 0.15)",
-                      "&:hover": {
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(239, 68, 68, 0.2)"
-                            : "rgba(248, 113, 113, 0.25)",
-                      },
-                    }}
-                  >
-                    <DeleteIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-          );
-        },
-      },
-      {
-        accessorKey: "details",
-        header: "Details",
-        size: 100,
-        Cell: ({ cell }) => {
-          return (
-            <Tooltip title="View Details">
-              <IconButton
-                onClick={(e) => handleDetailsClick(e, cell.row.original)}
-                size="small"
-                aria-label="View HR activity details"
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "6px",
-                  color: theme === "light" ? "#6366f1" : "#818cf8",
-                  backgroundColor:
-                    theme === "light"
-                      ? "rgba(99, 102, 241, 0.12)"
-                      : "rgba(129, 140, 248, 0.15)",
-                  "&:hover": {
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(99, 102, 241, 0.2)"
-                        : "rgba(129, 140, 248, 0.25)",
-                  },
-                }}
-              >
-                <InfoIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          );
-        },
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => getStatusChip(row.status),
       },
     ],
-
-    [
-      handleOpenModal,
-      handleDeleteClick,
-      handleDetailsClick,
-      theme,
-      canEdit,
-      canDelete,
-    ],
+    [],
   );
 
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50, 100],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: {
-      ...tableConfig.table.state,
-      isLoading: loading,
-      globalFilter,
+  const rowActions = useCallback(
+    (row: any) => {
+      if (row.status === "Deleted") return [];
+      const actions: any[] = [];
+      if (canEdit) {
+        actions.push({
+          icon: <EditIcon sx={{ fontSize: 16 }} />,
+          label: `Edit HR activity: ${row.title}`,
+          color: "primary" as const,
+          onClick: () => handleOpenModal(row),
+        });
+      }
+      if (canDelete) {
+        actions.push({
+          icon: <DeleteIcon sx={{ fontSize: 16 }} />,
+          label: `Delete HR activity: ${row.title}`,
+          color: "error" as const,
+          onClick: () => handleDeleteClick(row.id, row.title),
+        });
+      }
+      actions.push({
+        icon: <InfoIcon sx={{ fontSize: 16 }} />,
+        label: "View HR activity details",
+        onClick: (r: any, e: any) => handleDetailsClick(e, r),
+      });
+      return actions;
     },
-    onGlobalFilterChange: handleGlobalFilterChange,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <FilterList
-            sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-          />
-          <Typography variant="body2" fontSize="0.8rem" color="text.secondary">
-            Filter by status:
-          </Typography>
-        </Box>
-        <Box sx={{ minWidth: 120 }}>
-          <Dropdown
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.value)}
-            appendTo={() => document.querySelector("#root .App") as HTMLElement}
-            options={[
-              { label: "All", value: "All" },
-              { label: "Active", value: "Active" },
-              { label: "Expired", value: "Expired" },
-              { label: "Deleted", value: "Deleted" },
-            ]}
-            placeholder="Select Status"
-            className="w-full"
-            style={{ minWidth: "120px" }}
-          />
-        </Box>
-        <Typography variant="caption" fontSize="0.75rem" color="text.secondary">
-          Total: {totalCount} activities
-        </Typography>
-      </Box>
-    ),
-  });
+    [canEdit, canDelete],
+  );
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="HR activities"
+        data={memoizedData}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No HR activities found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search activities…",
+        }}
+        toolbarActions={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Typography
+                variant="body2"
+                fontSize="0.8rem"
+                color="text.secondary"
+              >
+                Filter by status:
+              </Typography>
+            </Box>
+            <Box sx={{ minWidth: 120 }}>
+              <Dropdown
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.value)}
+                appendTo={() =>
+                  document.querySelector("#root .App") as HTMLElement
+                }
+                options={[
+                  { label: "All", value: "All" },
+                  { label: "Active", value: "Active" },
+                  { label: "Expired", value: "Expired" },
+                  { label: "Deleted", value: "Deleted" },
+                ]}
+                placeholder="Select Status"
+                className="w-full"
+                style={{ minWidth: "120px" }}
+              />
+            </Box>
+          </Box>
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50, 100],
+        }}
+      />
 
       <EditHrActivityModal
         open={openModal}

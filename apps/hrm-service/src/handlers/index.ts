@@ -8,10 +8,6 @@ import { listPolicies } from "./listPolicies";
 import { getUserRoles } from "./getUserRoles";
 import { checkPermission } from "./checkPermission";
 import { assignRole } from "./assignRole";
-import { createRule } from "./createRule";
-import { listRules } from "./listRules";
-import { updateRule } from "./updateRule";
-import { deleteRule } from "./deleteRule";
 
 export const handlers = {
   CreateHrActivity: createHrActivity,
@@ -24,8 +20,4 @@ export const handlers = {
   GetUserRoles: getUserRoles,
   CheckPermission: checkPermission,
   AssignRole: assignRole,
-  CreateRule: createRule,
-  ListRules: listRules,
-  UpdateRule: updateRule,
-  DeleteRule: deleteRule,
 };

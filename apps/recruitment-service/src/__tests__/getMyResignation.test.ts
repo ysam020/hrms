@@ -58,7 +58,14 @@ describe("getMyResignation", () => {
     );
     expect(cb).toHaveBeenCalledWith(
       null,
-      expect.objectContaining({ status: 0, data: resignation }),
+      expect.objectContaining({
+        status: 0,
+        data: expect.objectContaining({
+          id: resignation.id,
+          userId: resignation.userId,
+          status: resignation.status,
+        }),
+      }),
     );
   });
 

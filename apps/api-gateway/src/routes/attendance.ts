@@ -2,7 +2,12 @@ import { Router } from "express";
 import { authenticate, requireSuperUser } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import * as h from "../handlers/attendance";
-import { addAttendanceSchema, attendanceCorrectionSchema } from "../schemas";
+import * as breaks from "../handlers/attendanceBreaks";
+import {
+  addAttendanceSchema,
+  attendanceCorrectionSchema,
+  startBreakSchema,
+} from "../schemas";
 
 export const attendanceRouter: Router = Router();
 
@@ -38,4 +43,16 @@ attendanceRouter.get(
   "/attendance-insights",
   authenticate,
   h.attendanceInsights,
+);
+
+attendanceRouter.post(
+  "/attendance/:recordId/breaks",
+  authenticate,
+  validate(startBreakSchema),
+  breaks.startBreak,
+);
+attendanceRouter.put(
+  "/attendance/breaks/:id/end",
+  authenticate,
+  breaks.endBreak,
 );

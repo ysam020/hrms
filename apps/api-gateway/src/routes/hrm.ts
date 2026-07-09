@@ -5,10 +5,6 @@ import * as h from "../handlers/hrm";
 import {
   addHrActivitySchema,
   editHrActivitySchema,
-  createRuleSchema,
-  updateRuleSchema,
-  updateRuleStatusSchema,
-  testRuleSchema,
   createOrUpdatePolicySchema,
   updatePolicySchema,
 } from "../schemas";
@@ -46,37 +42,6 @@ hrmRouter.delete(
   authenticate,
   requireSuperUser,
   h.deleteHrActivity,
-);
-
-hrmRouter.get("/rules", authenticate, h.getRules);
-hrmRouter.post(
-  "/rules",
-  authenticate,
-  requireSuperUser,
-  validate(createRuleSchema),
-  h.createRule,
-);
-hrmRouter.put(
-  "/rules/:id",
-  authenticate,
-  requireSuperUser,
-  validate(updateRuleSchema),
-  h.updateRule,
-);
-hrmRouter.delete("/rules/:id", authenticate, requireSuperUser, h.deleteRule);
-hrmRouter.patch(
-  "/rules/:id/status",
-  authenticate,
-  requireSuperUser,
-  validate(updateRuleStatusSchema),
-  h.updateRuleStatus,
-);
-hrmRouter.post(
-  "/rules/test",
-  authenticate,
-  requireSuperUser,
-  validate(testRuleSchema),
-  h.testRule,
 );
 
 hrmRouter.get("/policies", authenticate, h.getPolicies);

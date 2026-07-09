@@ -56,8 +56,8 @@ const KYC = {
   COMPLETE_KYC: "/complete-kyc",
   GET_KYC_INSIGHTS: "/get-kyc-insights",
   KYC_APPROVAL: "/kyc-approval",
-  VIEW_ALL_KYCS: (page: number, limit: number) =>
-    `/view-all-kycs?page=${page}&limit=${limit}`,
+  VIEW_ALL_KYCS: (page: number, limit: number, params = "") =>
+    `/view-all-kycs?page=${page}&limit=${limit}${params}`,
 };
 
 const EMPLOYEE = {
@@ -103,9 +103,71 @@ const RESIGNATION = {
   ADD_EXIT_FEEDBACK: "/add-exit-feedback",
   RESIGNATION_INSIGHTS: "/resignation-insights",
   ADD_RESIGNATION: "/add-resignation",
-  VIEW_RESIGNATIONS: (page: number, limit: number) =>
-    `/view-resignations?page=${page}&limit=${limit}`,
+  GET_MY_RESIGNATION: "/my-resignation",
+  VIEW_RESIGNATIONS: (page: number, limit: number, params = "") =>
+    `/view-resignations?page=${page}&limit=${limit}${params}`,
   UPDATE_RESIGNATION: (id: string | number) => `/update-resignation/${id}`,
+  APPROVE_RESIGNATION: (id: string) => `/approve-resignation/${id}`,
+  REJECT_RESIGNATION: (id: string) => `/reject-resignation/${id}`,
+  WITHDRAW_RESIGNATION: (id: string) => `/withdraw-resignation/${id}`,
+  GET_RESIGNATION_CHECKLIST: (id: string) => `/resignations/${id}/checklist`,
+  UPDATE_RESIGNATION_CHECKLIST_ITEM: (id: string, itemDefId: string) =>
+    `/resignations/${id}/checklist/${itemDefId}`,
+  RENEGOTIATE_NOTICE: (id: string) => `/resignations/${id}/renegotiate-notice`,
+  RESIGNATION_NOTICE_EVENTS: (id: string) =>
+    `/resignations/${id}/notice-events`,
+  SET_REHIRE_ELIGIBILITY: (id: string) =>
+    `/resignations/${id}/rehire-eligibility`,
+  COMPUTE_FNF_SETTLEMENT: (id: string) => `/resignations/${id}/fnf-settlement`,
+  APPROVE_FNF_SETTLEMENT: (id: string) =>
+    `/resignations/${id}/fnf-settlement/approve`,
+  SUBMIT_EXIT_INTERVIEW_RESPONSE: (id: string) =>
+    `/resignations/${id}/exit-interview-response`,
+};
+
+const ONBOARDING = {
+  GET_ONBOARDING_CHECKLIST: "/onboarding-checklist",
+  UPDATE_ONBOARDING_CHECKLIST_ITEM: (stepKey: string) =>
+    `/onboarding-checklist/${stepKey}`,
+};
+
+const PAYROLL_COMPONENTS = {
+  LIST_SALARY_COMPONENTS: "/salary-component-definitions",
+  CREATE_SALARY_COMPONENT: "/salary-component-definitions",
+  UPDATE_SALARY_COMPONENT: (id: string) =>
+    `/salary-component-definitions/${id}`,
+  DELETE_SALARY_COMPONENT: (id: string) =>
+    `/salary-component-definitions/${id}`,
+  LIST_PT_SLABS: "/pt-slabs",
+  CREATE_PT_SLAB: "/pt-slabs",
+  UPDATE_PT_SLAB: (id: string) => `/pt-slabs/${id}`,
+  DELETE_PT_SLAB: (id: string) => `/pt-slabs/${id}`,
+  LIST_PAY_CYCLES: "/pay-cycles",
+  CREATE_PAY_CYCLE: "/pay-cycles",
+  UPDATE_PAY_CYCLE: (id: string) => `/pay-cycles/${id}`,
+  DELETE_PAY_CYCLE: (id: string) => `/pay-cycles/${id}`,
+};
+
+const RECRUITMENT_PIPELINE = {
+  LIST_INTERVIEW_PIPELINE_TEMPLATES: "/interview-pipeline-templates",
+  CREATE_INTERVIEW_PIPELINE_TEMPLATE: "/interview-pipeline-templates",
+  UPDATE_INTERVIEW_PIPELINE_TEMPLATE: (id: string) =>
+    `/interview-pipeline-templates/${id}`,
+  DELETE_INTERVIEW_PIPELINE_TEMPLATE: (id: string) =>
+    `/interview-pipeline-templates/${id}`,
+};
+
+const EXIT_POLICY = {
+  LIST_NOTICE_PERIOD_POLICIES: "/notice-period-policies",
+  CREATE_NOTICE_PERIOD_POLICY: "/notice-period-policies",
+  UPDATE_NOTICE_PERIOD_POLICY: (id: string) => `/notice-period-policies/${id}`,
+  DELETE_NOTICE_PERIOD_POLICY: (id: string) => `/notice-period-policies/${id}`,
+  GET_EXIT_INTERVIEW_TEMPLATE: "/exit-interview-templates",
+  UPDATE_EXIT_INTERVIEW_TEMPLATE: "/exit-interview-templates",
+  LIST_EXIT_CHECKLIST_DEFS: "/exit-checklist-item-defs",
+  CREATE_EXIT_CHECKLIST_DEF: "/exit-checklist-item-defs",
+  UPDATE_EXIT_CHECKLIST_DEF: (id: string) => `/exit-checklist-item-defs/${id}`,
+  DELETE_EXIT_CHECKLIST_DEF: (id: string) => `/exit-checklist-item-defs/${id}`,
 };
 
 const SALARY_MANAGEMENT = {
@@ -153,15 +215,6 @@ const CHAT = {
   OG_PREVIEW: (url: string) => `/og-preview?url=${encodeURIComponent(url)}`,
 };
 
-const RULES = {
-  GET_RULES: "/rules",
-  DELETE_RULE: (id: string | number) => `/rules/${id}`,
-  TOGGLE_RULE_STATUS: (id: string | number) => `/rules/${id}/status`,
-  TEST_RULE: "/rules/test",
-  UPDATE_RULE: (id: string | number) => `/rules/${id}`,
-  ADD_RULE: "/rules",
-};
-
 const POLICY = {
   CREATE_POLICY: "/policies",
   GET_POLICIES: (page = 1, limit = 10) =>
@@ -195,6 +248,18 @@ const ORG_SETTINGS = {
   CANCEL_PENDING_ORG_SETTINGS: (id: string) => `/tenant-settings/pending/${id}`,
 };
 
+const BRANCHES_SHIFTS = {
+  LIST_BRANCHES: "/branches",
+  CREATE_BRANCH: "/branches",
+  UPDATE_BRANCH: (id: string) => `/branches/${id}`,
+  DELETE_BRANCH: (id: string) => `/branches/${id}`,
+  LIST_SHIFTS: "/shifts",
+  CREATE_SHIFT: "/shifts",
+  UPDATE_SHIFT: (id: string) => `/shifts/${id}`,
+  DELETE_SHIFT: (id: string) => `/shifts/${id}`,
+  ASSIGN_SHIFT: (id: string) => `/shifts/${id}/assign`,
+};
+
 const PAYMENT = {
   CREATE_SUBSCRIPTION: "/payment/create-subscription",
   CANCEL_SUBSCRIPTION: "/payment/cancel-subscription",
@@ -211,12 +276,12 @@ const TENANT = {
 };
 
 const PAYROLL = {
-  PAYROLL_RUNS: (page: number, limit: number) =>
-    `/payroll/runs?page=${page}&limit=${limit}`,
+  PAYROLL_RUNS: (page: number, limit: number, params = "") =>
+    `/payroll/runs?page=${page}&limit=${limit}${params}`,
   INITIATE_PAYROLL_RUN: "/payroll/runs",
   UPDATE_PAYROLL_RUN_STATUS: "/payroll/runs/status",
-  SALARY_ADVANCES: (page: number, limit: number) =>
-    `/payroll/advances?page=${page}&limit=${limit}`,
+  SALARY_ADVANCES: (page: number, limit: number, params = "") =>
+    `/payroll/advances?page=${page}&limit=${limit}${params}`,
   REQUEST_SALARY_ADVANCE: "/payroll/advances",
   UPDATE_SALARY_ADVANCE_STATUS: "/payroll/advances/status",
   MY_PAYSLIPS: (page: number, limit: number) =>
@@ -274,6 +339,11 @@ const WEBHOOKS = {
   TEST_WEBHOOK_ENDPOINT: "/webhooks/test",
 };
 
+const APPROVALS = {
+  GET_PENDING_APPROVALS: "/approvals/pending",
+  ACT_ON_APPROVAL: (instanceId: string) => `/approvals/${instanceId}/act`,
+};
+
 const REPORTS = {
   RUN_REPORT: "/reports/run",
   SAVED_REPORTS: (page: number, limit: number) =>
@@ -300,13 +370,17 @@ export const API_ENDPOINTS = {
   ...RESIGNATION,
   ...SALARY_MANAGEMENT,
   ...USER,
-  ...RULES,
   ...POLICY,
   ...UPLOAD,
   ...CHATBOT,
   ...AI_INSIGHTS,
   ...DEVELOPER,
   ...ORG_SETTINGS,
+  ...BRANCHES_SHIFTS,
+  ...EXIT_POLICY,
+  ...RECRUITMENT_PIPELINE,
+  ...PAYROLL_COMPONENTS,
+  ...ONBOARDING,
   ...PAYMENT,
   ...TENANT,
   ...PAYROLL,
@@ -315,4 +389,5 @@ export const API_ENDPOINTS = {
   ...HELPDESK,
   ...WEBHOOKS,
   ...REPORTS,
+  ...APPROVALS,
 };

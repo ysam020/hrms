@@ -8,6 +8,7 @@ import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { isSuperUser } from "../utils/user";
+import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
 
 export async function viewJobOpenings(req: Request, res: Response) {
   try {
@@ -45,6 +46,9 @@ export async function addJobOpening(req: Request, res: Response) {
       numberOfVacancies,
       jobStatus,
       createdBy,
+      pipelineTemplateId,
+      visibility,
+      branchIds,
     } = req.body;
     const response = await grpcCall(recruitmentClient, "createJobOpening", {
       jobTitle: jobTitle || "",
@@ -57,6 +61,9 @@ export async function addJobOpening(req: Request, res: Response) {
       numberOfVacancies: parseInt(String(numberOfVacancies || "0")) || 0,
       jobStatus: jobStatus || "Active",
       createdBy: createdBy || "",
+      pipelineTemplateId: pipelineTemplateId || "",
+      visibility: visibility || "external",
+      branchIds: Array.isArray(branchIds) ? branchIds : [],
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -76,6 +83,9 @@ export async function editJobOpening(req: Request, res: Response) {
       budget,
       numberOfVacancies,
       jobStatus,
+      pipelineTemplateId,
+      visibility,
+      branchIds,
     } = req.body;
     const grpcPayload: Record<string, any> = {
       id: req.params._id,
@@ -89,6 +99,9 @@ export async function editJobOpening(req: Request, res: Response) {
       numberOfVacancies: parseInt(String(numberOfVacancies || "0")) || 0,
     };
     if (jobStatus) grpcPayload.jobStatus = jobStatus;
+    if (pipelineTemplateId) grpcPayload.pipelineTemplateId = pipelineTemplateId;
+    if (visibility) grpcPayload.visibility = visibility;
+    if (Array.isArray(branchIds)) grpcPayload.branchIds = branchIds;
     const response = await grpcCall(
       recruitmentClient,
       "updateJobOpening",
@@ -256,6 +269,7 @@ export async function addResignation(req: Request, res: Response) {
       resignationDate,
       overallJobSatisfaction,
       suggestions,
+      exitType,
     } = req.body;
     const response = (await grpcCall(recruitmentClient, "submitResignation", {
       userId: user!.userId,
@@ -266,6 +280,20 @@ export async function addResignation(req: Request, res: Response) {
         ? parseFloat(overallJobSatisfaction)
         : 0,
       suggestions: suggestions || "",
+      exitType: exitType || "voluntary",
+    })) as any;
+    return apiResponse(res, grpcToHttpStatus(response.status), response);
+  } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
+/** GET /my-resignation — the caller's own most recent resignation, if any. */
+export async function getMyResignation(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const response = (await grpcCall(recruitmentClient, "getMyResignation", {
+      userId: user!.userId,
     })) as any;
     return apiResponse(res, grpcToHttpStatus(response.status), response);
   } catch (error: unknown) {
@@ -311,25 +339,81 @@ export async function viewResignations(req: Request, res: Response) {
 }
 
 export async function approveResignation(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
-    const response = await grpcCall(recruitmentClient, "approveResignation", {
-      id: req.params._id,
-      status: "Approved",
+    const {
+      lastWorkingDay,
+      comments,
+      noticePeriodWaived,
+      buyoutAmount,
+      relievedFromDutyOn,
+    } = req.body ?? {};
+    const tenantId = user!.tenantId;
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "No active tenant.",
+      });
+    }
+    const privileged = await isPrivileged(req as AuthRequest);
+    const result = await actOnApprovalForEntity(
+      tenantId,
+      "resignation",
+      String(req.params._id),
+      user!.userId,
+      "approved",
+      comments || undefined,
+      privileged,
+      { lastWorkingDay, noticePeriodWaived, buyoutAmount, relievedFromDutyOn },
+    );
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: result.isFinal
+        ? "Resignation approved."
+        : "Approved — forwarded to the next approver.",
+      data: result,
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: unknown) {
+  } catch (error: any) {
+    if (error?.message && !error?.code) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: error.message,
+      });
+    }
     return handleError(res, error);
   }
 }
 
 export async function rejectResignation(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
-    const response = await grpcCall(recruitmentClient, "rejectResignation", {
-      id: req.params._id,
-      status: "Rejected",
+    const { rejectionReason, comments } = req.body ?? {};
+    const tenantId = user!.tenantId;
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "No active tenant.",
+      });
+    }
+    const privileged = await isPrivileged(req as AuthRequest);
+    const result = await actOnApprovalForEntity(
+      tenantId,
+      "resignation",
+      String(req.params._id),
+      user!.userId,
+      "rejected",
+      comments || undefined,
+      privileged,
+      { rejectionReason },
+    );
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: result.isFinal
+        ? "Resignation rejected."
+        : "Rejected — forwarded to the next approver.",
+      data: result,
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
-  } catch (error: unknown) {
+  } catch (error: any) {
+    if (error?.message && !error?.code) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: error.message,
+      });
+    }
     return handleError(res, error);
   }
 }
@@ -352,9 +436,12 @@ export async function withdrawResignation(req: Request, res: Response) {
         message: "Forbidden",
       });
 
-    const response = await grpcCall(recruitmentClient, "rejectResignation", {
+    // Was previously (incorrectly) calling rejectResignation with
+    // status: "Withdrawn", which that handler silently ignored and always
+    // recorded as "Rejected". WithdrawResignation is the real fix.
+    const response = await grpcCall(recruitmentClient, "withdrawResignation", {
       id: req.params._id,
-      status: "Withdrawn",
+      userId: user!.userId,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {

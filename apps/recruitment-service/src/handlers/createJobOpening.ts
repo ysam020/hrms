@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import { toJobOpeningProto } from "./jobOpeningSerializer";
 
 export const createJobOpening = async (
   call: ServerUnaryCall<any, any>,
@@ -20,6 +21,9 @@ export const createJobOpening = async (
       numberOfVacancies,
       jobStatus,
       createdBy,
+      pipelineTemplateId,
+      visibility,
+      branchIds,
     } = call.request;
 
     if (!jobTitle || !applicationDeadline) {
@@ -44,6 +48,9 @@ export const createJobOpening = async (
           : null,
         status: jobStatus || "Active",
         createdBy: createdBy || "",
+        pipelineTemplateId: pipelineTemplateId || null,
+        visibility: visibility || "external",
+        branchIds: Array.isArray(branchIds) ? branchIds : [],
       },
     });
 
@@ -51,29 +58,7 @@ export const createJobOpening = async (
     return callback(null, {
       message: MESSAGES.JOB_OPENING_CREATED,
       status: status.OK,
-      data: {
-        id: jobOpening.id,
-        jobTitle: jobOpening.jobTitle,
-        numberOfVacancies: jobOpening.numberOfVacancies ?? 0,
-        jobPostingDate: jobOpening.jobPostingDate
-          ? jobOpening.jobPostingDate.toISOString()
-          : "",
-        applicationDeadline: jobOpening.applicationDeadline
-          ? jobOpening.applicationDeadline.toISOString()
-          : "",
-        jobDescription: jobOpening.jobDescription || "",
-        requiredSkills: jobOpening.requiredSkills || "",
-        experience: jobOpening.experience ?? 0,
-        budget: Array.isArray(jobOpening.budget) ? jobOpening.budget : [],
-        department: jobOpening.department || "",
-        hiringManager: jobOpening.hiringManager || "",
-        candidatesHired: jobOpening.candidatesHired ?? 0,
-        status: jobOpening.status || "",
-        createdBy: jobOpening.createdBy || "",
-        createdOn: jobOpening.createdOn
-          ? jobOpening.createdOn.toISOString()
-          : "",
-      },
+      data: toJobOpeningProto(jobOpening),
     });
   } catch (err) {
     logger.error("CreateJobOpening error:", { err });

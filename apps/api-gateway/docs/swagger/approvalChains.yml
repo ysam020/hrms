@@ -1,0 +1,110 @@
+paths:
+  /api/v1/approval-chains:
+    get:
+      summary: List configured approval chains
+      description: >
+        Returns the tenant's configured `ApprovalChain` rows (optionally filtered
+        by `module`), each with its ordered steps. A module with no chains uses
+        the zero-config default: a single step resolved to the requester's
+        reporting manager, falling back to any owner/admin.
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: module
+          schema:
+            {
+              type: string,
+              enum: [leave, resignation, wfh, salary_advance, overtime],
+            }
+      responses:
+        "200": { description: List of approval chains with steps }
+    post:
+      summary: Create an approval chain
+      description: Owner/admin only. Steps are ordered by array position.
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Chain created }
+        "403": { description: Not an owner/admin }
+
+  /api/v1/approval-chains/{id}:
+    put:
+      summary: Update an approval chain
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Chain updated }
+    delete:
+      summary: Delete an approval chain
+      description: Rejected if any approval is currently pending against this chain.
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Chain deleted }
+        "400": { description: Chain has in-progress approvals }
+
+  /api/v1/approval-delegates:
+    get:
+      summary: List approval delegates
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: List of delegates }
+    post:
+      summary: Add a date-ranged proxy approver for yourself
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Delegate added }
+
+  /api/v1/approval-delegates/{id}:
+    delete:
+      summary: Remove a delegate assignment
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Delegate removed }
+
+  /api/v1/approvals/pending:
+    get:
+      summary: List approvals awaiting the current user's decision
+      description: Across every module (leave, resignation, ...), not just one.
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: List of pending approval steps }
+
+  /api/v1/approvals/{instanceId}/act:
+    put:
+      summary: Approve or reject the current step of an approval
+      description: >
+        Owners/admins may act on any pending approval regardless of who it's
+        resolved to (matches existing admin-override behavior). Approving a
+        non-final step advances the chain to the next approver instead of
+        completing it.
+      tags: [Approvals]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: instanceId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Decision recorded }
+        "400": { description: Not the resolved approver, or already decided }

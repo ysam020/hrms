@@ -29,10 +29,10 @@ const CalendarMonthIcon = lazy(
 const SettingsIcon = lazy(() => import("@mui/icons-material/Settings"));
 const EqualizerIcon = lazy(() => import("@mui/icons-material/Equalizer"));
 const AccountTreeIcon = lazy(() => import("@mui/icons-material/AccountTree"));
-const ChecklistIcon = lazy(() => import("@mui/icons-material/Checklist"));
 const ForumIcon = lazy(() => import("@mui/icons-material/Forum"));
 const PolicyIcon = lazy(() => import("@mui/icons-material/Policy"));
 const TuneIcon = lazy(() => import("@mui/icons-material/Tune"));
+const InboxIcon = lazy(() => import("@mui/icons-material/Inbox"));
 
 function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const navigate = useNavigate();
@@ -50,6 +50,11 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const navItems = useMemo(() => {
     return [
       { title: "Dashboard", icon: <SpaceDashboardIcon />, path: "/" },
+      {
+        title: "Pending Approvals",
+        icon: <InboxIcon />,
+        path: "/approvals",
+      },
       { title: "Calendar", icon: <CalendarMonthIcon />, path: "/calendar" },
       { title: "Chat", icon: <ForumIcon />, path: "/chat" },
       { title: "Permissions", icon: <SettingsIcon />, path: "/permissions" },
@@ -58,7 +63,6 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
         icon: <AccountTreeIcon />,
         path: "/organization-tree",
       },
-      { title: "Rules", icon: <ChecklistIcon />, path: "/rules" },
       { title: "Analytics", icon: <EqualizerIcon />, path: "/analytics" },
       { title: "Policy", icon: <PolicyIcon />, path: "/policy" },
       { title: "Settings", icon: <TuneIcon />, path: "/settings" },

@@ -2,6 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import { toResignationProto } from "./resignationSerializer";
 
 export const getResignation = async (
   call: ServerUnaryCall<any, any>,
@@ -29,7 +30,7 @@ export const getResignation = async (
     return callback(null, {
       message: MESSAGES.RESIGNATIONS_FETCHED,
       status: status.OK,
-      data: resignation,
+      data: toResignationProto(resignation),
     });
   } catch (err) {
     logger.error("GetResignation error:", { err });

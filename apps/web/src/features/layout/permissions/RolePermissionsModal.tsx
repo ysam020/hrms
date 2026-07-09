@@ -7,18 +7,12 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import Typography from "@mui/material/Typography";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import Checkbox from "@mui/material/Checkbox";
 import CircularProgress from "@mui/material/CircularProgress";
 import { permissionStructure } from "@web/assets/data/permissionStructure";
-import { ThemeContext } from "@web/app/providers/ThemeContext";
 import Button from "@web/shared/components/Button";
+import DataList from "@web/shared/components/DataList";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
@@ -28,7 +22,6 @@ function RolePermissionsModal(props) {
   const [rolePermissions, setRolePermissions] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const { theme } = useContext(ThemeContext);
 
   const { data: fetchedPermissions, loading } = useFetchData(
     `/get-role-permissions/${props.roleId}`,
@@ -156,98 +149,45 @@ function RolePermissionsModal(props) {
           overflow: "auto",
         }}
       >
-        <TableContainer
-          component={Paper}
-          sx={{
-            overflow: "auto",
-          }}
-        >
-          <Table
-            aria-label="permission matrix"
-            size="small"
-            padding="none"
-            sx={{ backgroundColor: theme === "light" ? "#fff" : "#1C262A" }}
-          >
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ py: 1, px: 1, fontWeight: "bold" }}>
-                  Action
-                </TableCell>
-                {/* Only show scope columns that are relevant to this module */}
-                {availableScopes.map((scope) => (
-                  <TableCell
-                    key={scope}
-                    align="center"
-                    sx={{ py: 1, px: 1, fontWeight: "bold" }}
-                  >
-                    {scope === "-"
-                      ? "Global"
-                      : scope.charAt(0).toUpperCase() + scope.slice(1)}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {actions.map((action) => (
-                <TableRow key={action} hover>
-                  <TableCell component="th" scope="row" sx={{ py: 0.5, px: 1 }}>
-                    {action
-                      .split("_")
-                      .map(
-                        (word) => word.charAt(0).toUpperCase() + word.slice(1),
-                      )
-                      .join(" ")}
-                  </TableCell>
-                  {availableScopes.map((scope) => {
-                    // Only show checkboxes for scopes that are valid for this action
-                    const isValidScope =
-                      moduleStructure.actions[action].includes(scope);
-
-                    return isValidScope ? (
-                      <TableCell
-                        key={scope}
-                        align="center"
-                        sx={{ py: 0, px: 1 }}
-                      >
-                        <Checkbox
-                          checked={hasPermission(module, action, scope)}
-                          onChange={() =>
-                            togglePermission(module, action, scope)
-                          }
-                          size="small"
-                        />
-                      </TableCell>
-                    ) : scope === "-" &&
-                      moduleStructure.actions[action].includes("-") ? (
-                      <TableCell
-                        key={scope}
-                        colSpan={4}
-                        align="center"
-                        sx={{ py: 0, px: 1 }}
-                      >
-                        <Checkbox
-                          checked={hasPermission(module, action, scope)}
-                          onChange={() =>
-                            togglePermission(module, action, scope)
-                          }
-                          size="small"
-                        />
-                      </TableCell>
-                    ) : (
-                      <TableCell
-                        key={scope}
-                        align="center"
-                        sx={{ py: 0, px: 1 }}
-                      >
-                        {/* Empty disabled cell for invalid combinations */}—
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <DataList
+          ariaLabel={`Permission matrix for ${module}`}
+          variant="rows"
+          data={actions}
+          getRowId={(action: string) => action}
+          columns={[
+            {
+              key: "action",
+              label: "Action",
+              primary: true,
+              hideLabel: true,
+              render: (action: string) =>
+                action
+                  .split("_")
+                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join(" "),
+            },
+            ...availableScopes.map((scope) => ({
+              key: scope,
+              label:
+                scope === "-"
+                  ? "Global"
+                  : scope.charAt(0).toUpperCase() + scope.slice(1),
+              render: (action: string) => {
+                const isValidScope =
+                  moduleStructure.actions[action].includes(scope);
+                return isValidScope ? (
+                  <Checkbox
+                    checked={hasPermission(module, action, scope)}
+                    onChange={() => togglePermission(module, action, scope)}
+                    size="small"
+                  />
+                ) : (
+                  "—"
+                );
+              },
+            })),
+          ]}
+        />
       </Box>
     );
   };

@@ -1,18 +1,11 @@
 import { memo, useCallback, useContext, useMemo } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import Box from "@mui/material/Box";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import DownloadIcon from "@mui/icons-material/Download";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
@@ -65,118 +58,67 @@ function MyPayslips() {
     handlePageSizeChange,
   } = useServerPagination(fetchPayslips, { initialPageSize: 12 });
 
+  const money = (v: number | null | undefined) =>
+    v != null ? `₹${Number(v).toLocaleString("en-IN")}` : "—";
+
   const columns = useMemo(
     () => [
       {
-        accessorKey: "month",
-        header: "Period",
-        size: 140,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-            {MONTHS[(cell.row.original.month ?? 1) - 1]}{" "}
-            {cell.row.original.year}
-          </Typography>
-        ),
+        key: "month",
+        label: "Period",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => `${MONTHS[(row.month ?? 1) - 1]} ${row.year}`,
       },
       {
-        accessorKey: "grossSalary",
-        header: "Gross",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
-              : "—"}
-          </Typography>
-        ),
+        key: "grossSalary",
+        label: "Gross",
+        render: (row: any) => money(row.grossSalary),
       },
       {
-        accessorKey: "basicPay",
-        header: "Basic Pay",
-        size: 120,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
-              : "—"}
-          </Typography>
-        ),
+        key: "basicPay",
+        label: "Basic Pay",
+        render: (row: any) => money(row.basicPay),
       },
       {
-        accessorKey: "netPayable",
-        header: "Net Payable",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography
-            variant="body2"
-            fontSize="0.8rem"
-            fontWeight={600}
-            color="success.main"
-          >
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
-              : "—"}
-          </Typography>
+        key: "netPayable",
+        label: "Net Payable",
+        render: (row: any) => (
+          <Box component="span" sx={{ color: "success.main", fontWeight: 600 }}>
+            {money(row.netPayable)}
+          </Box>
         ),
       },
+      { key: "pf", label: "PF", render: (row: any) => money(row.pf) },
+    ],
+    [],
+  );
+
+  const actions = useCallback(
+    (row: any) => [
       {
-        accessorKey: "pf",
-        header: "PF",
-        size: 100,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
-              : "—"}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "download",
-        header: "Download",
-        size: 100,
-        enableSorting: false,
-        Cell: ({ cell }: any) => {
-          const row = cell.row.original;
-          return (
-            <Box>
-              <Tooltip title="Download PDF">
-                <IconButton
-                  size="small"
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: "#6366f1",
-                    backgroundColor: "rgba(99,102,241,0.12)",
-                    "&:hover": { backgroundColor: "rgba(99,102,241,0.2)" },
-                  }}
-                  onClick={async () => {
-                    try {
-                      const res = await apiClient(
-                        `/generate-salary-slip/${row.userId}/${row.year}/${row.month}`,
-                        { responseType: "blob" },
-                      );
-                      const url = URL.createObjectURL(res.data);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `payslip_${MONTHS[(row.month ?? 1) - 1]}_${row.year}.pdf`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    } catch {
-                      setAlert({
-                        open: true,
-                        message: "Failed to download payslip",
-                        severity: "error",
-                      });
-                    }
-                  }}
-                >
-                  <DownloadIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          );
+        icon: <DownloadIcon sx={{ fontSize: 16 }} />,
+        label: "Download PDF",
+        color: "primary" as const,
+        onClick: async () => {
+          try {
+            const res = await apiClient(
+              `/generate-salary-slip/${row.userId}/${row.year}/${row.month}`,
+              { responseType: "blob" },
+            );
+            const url = URL.createObjectURL(res.data);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `payslip_${MONTHS[(row.month ?? 1) - 1]}_${row.year}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch {
+            setAlert({
+              open: true,
+              message: "Failed to download payslip",
+              severity: "error",
+            });
+          }
         },
       },
     ],
@@ -184,23 +126,26 @@ function MyPayslips() {
   );
 
   const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [12, 24, 60],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    state: { ...tableConfig.table.state, isLoading: loading },
-  });
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="My payslips"
+        data={memoizedData}
+        columns={columns}
+        actions={actions}
+        loading={loading}
+        emptyMessage="No payslips found"
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [12, 24, 60],
+        }}
+      />
     </ErrorBoundary>
   );
 }

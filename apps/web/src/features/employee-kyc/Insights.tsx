@@ -7,16 +7,10 @@ import Grid from "@mui/material/Grid";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
-import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Container from "@mui/material/Container";
+import DataList from "@web/shared/components/DataList";
 
 import VerifiedUser from "@mui/icons-material/VerifiedUser";
 import People from "@mui/icons-material/People";
@@ -341,63 +335,76 @@ function KycInsights() {
               <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
                 Department-wise KYC Performance
               </Typography>
-              <TableContainer component={Paper} elevation={0}>
-                <Table
-                  size="small"
-                  sx={{ "& .MuiTableCell-root": { py: 0.5 } }}
-                >
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Department</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right">Completion Rate</TableCell>
-                      <TableCell align="right">Approved</TableCell>
-                      <TableCell align="right">Pending</TableCell>
-                      <TableCell align="right">Rejected</TableCell>
-                      <TableCell align="right">Incomplete</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {insights.departmentBreakdown.map((dept, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Box display="flex" alignItems="center" gap={0.5}>
-                            <Work fontSize="small" />
-                            {dept.department}
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">{dept.total}</TableCell>
-                        <TableCell align="right">
-                          <Box>
-                            <Typography variant="body2">
-                              {dept.completionRate}%
-                            </Typography>
-                            <LinearProgress
-                              variant="determinate"
-                              value={dept.completionRate}
-                              sx={{
-                                mt: 0.25,
-                                height: 3,
-                                borderRadius: 2,
-                                backgroundColor: "#e0e0e0",
-                                "& .MuiLinearProgress-bar": {
-                                  backgroundColor: getProgressColor(
-                                    dept.completionRate,
-                                  ),
-                                },
-                              }}
-                            />
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">{dept.approved}</TableCell>
-                        <TableCell align="right">{dept.pending}</TableCell>
-                        <TableCell align="right">{dept.rejected}</TableCell>
-                        <TableCell align="right">{dept.incomplete}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <DataList
+                ariaLabel="Department-wise KYC performance"
+                variant="rows"
+                data={insights.departmentBreakdown}
+                getRowId={(dept: any) => dept.department}
+                columns={[
+                  {
+                    key: "department",
+                    label: "Department",
+                    primary: true,
+                    render: (dept: any) => (
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Work fontSize="small" />
+                        {dept.department}
+                      </Box>
+                    ),
+                  },
+                  {
+                    key: "total",
+                    label: "Total",
+                    render: (dept: any) => dept.total,
+                  },
+                  {
+                    key: "completionRate",
+                    label: "Completion Rate",
+                    render: (dept: any) => (
+                      <Box sx={{ minWidth: 80 }}>
+                        <Typography variant="body2">
+                          {dept.completionRate}%
+                        </Typography>
+                        <LinearProgress
+                          variant="determinate"
+                          value={dept.completionRate}
+                          sx={{
+                            mt: 0.25,
+                            height: 3,
+                            borderRadius: 2,
+                            backgroundColor: "#e0e0e0",
+                            "& .MuiLinearProgress-bar": {
+                              backgroundColor: getProgressColor(
+                                dept.completionRate,
+                              ),
+                            },
+                          }}
+                        />
+                      </Box>
+                    ),
+                  },
+                  {
+                    key: "approved",
+                    label: "Approved",
+                    render: (dept: any) => dept.approved,
+                  },
+                  {
+                    key: "pending",
+                    label: "Pending",
+                    render: (dept: any) => dept.pending,
+                  },
+                  {
+                    key: "rejected",
+                    label: "Rejected",
+                    render: (dept: any) => dept.rejected,
+                  },
+                  {
+                    key: "incomplete",
+                    label: "Incomplete",
+                    render: (dept: any) => dept.incomplete,
+                  },
+                ]}
+              />
             </CardContent>
           </Card>
         )}
