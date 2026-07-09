@@ -37,7 +37,7 @@ export const getTodayAttendance = async (
       return callback(null, {
         message: MESSAGES.NO_ATTENDANCE_RECORD_TODAY,
         status: status.NOT_FOUND,
-        data: null,
+        data: {},
       });
     }
 

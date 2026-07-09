@@ -15,6 +15,12 @@ message LeaveApplication {
   bool sick_leave = 11;
   string medical_certificate = 12;
   string approved_on = 13;
+  // full_day (default) | half_day | short_leave
+  string unit = 14;
+  // first_half | second_half — set when unit = half_day
+  string session = 15;
+  // set when unit = short_leave
+  float short_leave_hours = 16;
 }
 
 message LeaveBalance {
@@ -32,6 +38,12 @@ message ApplyLeaveRequest {
   string reason = 5;
   bool sick_leave = 6;
   string medical_certificate = 7;
+  // full_day (default) | half_day | short_leave
+  string unit = 8;
+  // first_half | second_half — required when unit = half_day
+  string session = 9;
+  // required when unit = short_leave
+  float short_leave_hours = 10;
 }
 
 message LeaveResponse {
@@ -66,6 +78,14 @@ message RejectLeaveRequest {
 message CancelLeaveRequest {
   string id = 1;
   string user_id = 2;
+  string reason = 3;
+}
+
+// Finalizes a cancellation that went through approval (see approve/reject on
+// module "leave", conditionField "isCancellation" in packages/approval-engine).
+message FinalizeLeaveCancellationRequest {
+  string id = 1;
+  bool approved = 2;
 }
 
 message GetLeaveByIdRequest {
@@ -99,8 +119,13 @@ service LeaveService {
   rpc ApproveLeave (ApproveLeaveRequest) returns (BasicLeaveResponse);
   // Rejects a pending leave application.
   rpc RejectLeave (RejectLeaveRequest) returns (BasicLeaveResponse);
-  // Cancels an approved or pending leave application.
+  // Cancels a pending leave application immediately, or — if it's already
+  // approved — requests cancellation, routed through the Approval Chain.
   rpc CancelLeave (CancelLeaveRequest) returns (BasicLeaveResponse);
+  // Applies the outcome of an approved/rejected cancellation request
+  // (crediting the balance back on approval, or reverting to Approved on
+  // rejection). Called by api-gateway's generic approval act-on-step handler.
+  rpc FinalizeLeaveCancellation (FinalizeLeaveCancellationRequest) returns (BasicLeaveResponse);
   // Returns the leave balance for an employee.
   rpc GetLeaveBalance (GetLeaveBalanceRequest) returns (GetLeaveBalanceResponse);
   // Updates the leave balance for an employee.

@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import { toJobOpeningProto } from "./jobOpeningSerializer";
 
 export const listJobOpenings = async (
   call: ServerUnaryCall<any, any>,
@@ -47,25 +48,7 @@ export const listJobOpenings = async (
       prisma.jobOpening.count({ where }),
     ]);
 
-    const data = jobOpenings.map((j) => ({
-      id: j.id,
-      jobTitle: j.jobTitle,
-      numberOfVacancies: j.numberOfVacancies ?? 0,
-      jobPostingDate: j.jobPostingDate ? j.jobPostingDate.toISOString() : "",
-      applicationDeadline: j.applicationDeadline
-        ? j.applicationDeadline.toISOString()
-        : "",
-      jobDescription: j.jobDescription || "",
-      requiredSkills: j.requiredSkills || "",
-      experience: j.experience ?? 0,
-      budget: Array.isArray(j.budget) ? j.budget : [],
-      department: j.department || "",
-      hiringManager: j.hiringManager || "",
-      candidatesHired: j.candidatesHired ?? 0,
-      status: j.status || "",
-      createdBy: j.createdBy || "",
-      createdOn: j.createdOn ? j.createdOn.toISOString() : "",
-    }));
+    const data = jobOpenings.map((j) => toJobOpeningProto(j));
 
     const response = {
       message: MESSAGES.JOB_OPENINGS_LISTED,

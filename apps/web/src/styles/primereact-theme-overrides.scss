@@ -1,5 +1,11 @@
 @use "./constants.scss";
 
+// When a PrimeReact Calendar is appended to <body> (e.g. inside an MUI Dialog),
+// ensure it renders above MUI Dialog's z-index of 1300.
+body > .p-datepicker {
+  z-index: 1400 !important;
+}
+
 #dark {
   // Password Input Component
   .p-password {

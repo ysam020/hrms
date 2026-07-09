@@ -13,6 +13,7 @@ import DevicesIcon from "@mui/icons-material/Devices";
 import TvIcon from "@mui/icons-material/Tv";
 import WatchIcon from "@mui/icons-material/Watch";
 import useTheme from "@mui/material/styles/useTheme";
+import { alpha } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -227,43 +228,37 @@ function PushNotifications() {
   };
 
   // Theme-aware styling
-  const getThemedBoxStyles = () => {
-    return {
-      mt: 2,
-      backgroundColor: theme === "light" ? "#ffffff" : "#111b21",
-      borderRadius: 1,
-      border: `1px solid ${
-        theme === "light" ? "#e0e0e0" : muiTheme.palette.divider
-      }`,
-      p: { xs: 1.5, sm: 2 },
-    };
-  };
+  const getThemedBoxStyles = () => ({
+    mt: 2,
+    bgcolor: "background.paper",
+    borderRadius: 1.5,
+    border: "1px solid",
+    borderColor: "divider",
+    p: { xs: 1.5, sm: 2 },
+  });
 
   const getThemedListItemStyles = (tokenObj) => {
     const isCurrentDev = isCurrentDevice(tokenObj);
 
     return {
-      border: `1px solid ${
-        theme === "light" ? "#e0e0e0" : muiTheme.palette.divider
-      }`,
+      border: "1px solid",
+      borderColor: isCurrentDev ? "primary.main" : "divider",
       borderRadius: "8px",
       mb: 1,
-      backgroundColor: isCurrentDev
-        ? theme === "light"
-          ? "#E3F2FD"
-          : "#16394f"
-        : theme === "light"
-          ? "#DDE6ED"
-          : "#212E35",
-      transition: "background-color 0.2s",
+      bgcolor: isCurrentDev
+        ? alpha(
+            muiTheme.palette.primary.main,
+            muiTheme.palette.mode === "light" ? 0.08 : 0.16,
+          )
+        : "background.paper",
+      transition: "background-color 0.15s ease",
       "&:hover": {
-        backgroundColor: isCurrentDev
-          ? theme === "light"
-            ? "#BBDEFB"
-            : "#0B3F61"
-          : theme === "light"
-            ? "#C8D4DD"
-            : "#2A3A42",
+        bgcolor: isCurrentDev
+          ? alpha(
+              muiTheme.palette.primary.main,
+              muiTheme.palette.mode === "light" ? 0.14 : 0.24,
+            )
+          : "action.hover",
       },
     };
   };
@@ -275,21 +270,19 @@ function PushNotifications() {
       <Grid size={12}>
         <List disablePadding sx={{ width: "100%" }}>
           <ListItem
-            alignItems="flex-start"
             sx={{
               display: "flex",
               flexDirection: { xs: "column", sm: "row" },
               justifyContent: "space-between",
               alignItems: { xs: "flex-start", sm: "center" },
-              backgroundColor:
-                theme === "light"
-                  ? "#ffffff"
-                  : muiTheme.palette.background.paper,
-              borderRadius: 1,
+              bgcolor: "background.paper",
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1.5,
               mb: 1,
-              py: { xs: 2, sm: 1 },
+              py: { xs: 2, sm: 1.25 },
               px: { xs: 2, sm: 2 },
-              gap: { xs: 0, sm: 0 },
+              gap: { xs: 1, sm: 0 },
             }}
           >
             <ListItemText
@@ -306,21 +299,15 @@ function PushNotifications() {
                 display: "flex",
                 flexDirection: { xs: "column", sm: "row" },
                 alignItems: { xs: "stretch", sm: "center" },
-                gap: { xs: 0, sm: 1 },
+                gap: 1,
                 width: { xs: "100%", sm: "auto" },
               }}
             >
               <Button
+                size="small"
                 onClick={handleEnablePushNotifications}
                 disabled={loading || currentDeviceEnabled}
-                style={{
-                  opacity: currentDeviceEnabled ? 0.6 : 1,
-                  cursor: currentDeviceEnabled ? "not-allowed" : "pointer",
-                  fontSize: isMobile ? "0.85rem" : "0.875rem",
-                  padding: isMobile ? "8px 16px" : undefined,
-                  marginLeft: 0,
-                  whiteSpace: isMobile ? "normal" : "nowrap",
-                }}
+                style={{ whiteSpace: isMobile ? "normal" : "nowrap" }}
               >
                 {loading
                   ? "Enabling..."
@@ -331,13 +318,8 @@ function PushNotifications() {
                     : "Enable on this device"}
               </Button>
               <Button
-                style={{
-                  marginLeft: isMobile ? 0 : "10px",
-                  backgroundColor: "#f44336",
-                  color: "white",
-                  fontSize: isMobile ? "0.85rem" : "0.875rem",
-                  padding: isMobile ? "8px 16px" : undefined,
-                }}
+                size="small"
+                variant="danger"
                 onClick={() => setDisableAllDialog(true)}
                 disabled={loading}
               >
@@ -504,15 +486,9 @@ function PushNotifications() {
                       }}
                     >
                       <Button
-                        style={{
-                          backgroundColor: "#ff9800",
-                          color: "white",
-                          fontSize: isMobile ? "0.8rem" : "0.75rem",
-                          padding: isMobile ? "6px 16px" : "4px 8px",
-                          marginRight: 0,
-                          marginTop: 0,
-                          width: isMobile ? "100%" : "auto",
-                        }}
+                        variant="warning"
+                        size="small"
+                        style={{ width: isMobile ? "100%" : "auto" }}
                         onClick={() => {
                           if (typeof tokenObj === "string") {
                             setAlert({

@@ -1,7 +1,36 @@
+# Deployed on EC2 via SSM (see .github/workflows/deploy-ec2.yml). Requires
+# ECR_REGISTRY, ECR_REPOSITORY_PREFIX and TAG_NAME to be exported before
+# `docker compose -f docker-compose.prod.yml pull/up` — deploy.sh (embedded in
+# the launch template UserData, see cloudformation/hrms-deploy.yaml) sets these.
+# `web` is excluded from the default `up -d` via its profile — it's hosted on
+# Amplify, not on this stack.
+name: hrms-prod
+
+x-backend-service: &backend-service
+  volumes:
+    - ./packages/certificates:/app/packages/certificates:ro
+  restart: on-failure
+  depends_on:
+    redis:
+      condition: service_healthy
+
 services:
+  redis:
+    container_name: hrms-prod-redis
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   api-gateway:
-    container_name: api-gateway
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/api-gateway:${TAG_NAME}
+    container_name: hrms-prod-api-gateway
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/api-gateway:${TAG_NAME:-latest}
     environment:
       - AUTH_SERVICE_HOST=auth-service
       - USER_SERVICE_HOST=user-service
@@ -15,66 +44,75 @@ services:
       - NOTIFICATION_SERVICE_HOST=notification-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
     ports:
-      - "9002:9002"
-    env_file: .env
+      - "19002:9002"
+      - "19003:9003"
+    <<: *backend-service
 
   auth-service:
-    container_name: auth-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/auth-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-auth-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/auth-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   user-service:
-    container_name: user-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/user-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-user-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/user-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   employee-service:
-    container_name: employee-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/employee-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-employee-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/employee-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   attendance-service:
-    container_name: attendance-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/attendance-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-attendance-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/attendance-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   leave-service:
-    container_name: leave-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/leave-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-leave-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/leave-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   recruitment-service:
-    container_name: recruitment-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/recruitment-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-recruitment-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/recruitment-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   hrm-service:
-    container_name: hrm-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/hrm-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-hrm-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/hrm-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   salary-service:
-    container_name: salary-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/salary-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-salary-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/salary-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   analytics-service:
-    container_name: analytics-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/analytics-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-analytics-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/analytics-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   notification-service:
-    container_name: notification-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/notification-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-notification-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/notification-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   scheduler-service:
-    container_name: scheduler-service
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/scheduler-service:${TAG_NAME}
-    env_file: .env
+    container_name: hrms-prod-scheduler-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/scheduler-service:${TAG_NAME:-latest}
+    <<: *backend-service
 
   web:
-    container_name: web
-    image: 061039808638.dkr.ecr.ap-south-1.amazonaws.com/dev/web:${TAG_NAME}
+    container_name: hrms-prod-web
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/web:${TAG_NAME:-latest}
+    profiles: ["web"]
     ports:
-      - "80:80"
+      - "18080:80"
+      - "18443:443"
+    volumes:
+      - ./packages/certificates:/app/packages/certificates:ro
+    restart: on-failure
+
+volumes:
+  redis-data:

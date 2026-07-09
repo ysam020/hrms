@@ -50,6 +50,14 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+jest.mock("@hrms/approval-engine", () => ({
+  instantiateApproval: jest.fn().mockResolvedValue({
+    instanceId: "instance-1",
+    firstApproverId: "manager-1",
+    usedDefaultChain: true,
+  }),
+}));
+
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
@@ -146,10 +154,10 @@ describe("applyLeave", () => {
     mockFindMany.mockResolvedValue([]); // no pending/approved leaves
     const leaveApp = {
       id: "leave-1",
-      username: "john",
+      userId: "john",
       leaveType: "Casual",
-      from: "2024-03-01",
-      to: "2024-03-05",
+      from: new Date("2024-03-01"),
+      to: new Date("2024-03-05"),
       days: 4,
       status: "Pending",
     };
@@ -157,11 +165,45 @@ describe("applyLeave", () => {
 
     const cb = makeCallback();
     await applyLeave(makeCall(validRequest), cb);
-    expect(cb).toHaveBeenCalledWith(null, {
-      message: MESSAGES.LEAVE_APPLIED,
-      status: status.OK,
-      data: leaveApp,
-    });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        message: MESSAGES.LEAVE_APPLIED,
+        status: status.OK,
+        data: expect.objectContaining({
+          id: "leave-1",
+          userId: "john",
+          leaveType: "Casual",
+          days: 4,
+          status: "Pending",
+        }),
+      }),
+    );
+  });
+
+  it("instantiates an Approval Chain instance for the new application", async () => {
+    mockFindMany.mockResolvedValue([]);
+    const leaveApp = {
+      id: "leave-1",
+      userId: "john",
+      leaveType: "Casual",
+      from: new Date("2024-03-01"),
+      to: new Date("2024-03-05"),
+      days: 4,
+      status: "Pending",
+    };
+    mockCreate.mockResolvedValue(leaveApp);
+
+    await applyLeave(makeCall(validRequest), makeCallback());
+
+    const { instantiateApproval } = jest.requireMock("@hrms/approval-engine");
+    expect(instantiateApproval).toHaveBeenCalledWith(
+      "t1",
+      "leave",
+      "leave-1",
+      "john",
+      expect.objectContaining({ unit: "full_day" }),
+    );
   });
 
   it("creates leave with correct working days (excludes weekends)", async () => {

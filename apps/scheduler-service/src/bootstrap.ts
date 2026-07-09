@@ -1,15 +1,23 @@
+// ⚠️ Telemetry MUST be the very first import — before any other module.
+import "./telemetry";
+
 import { loadSecrets } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { registerScheduledJobs } from "./scheduler";
-import { startSchedulerWorker } from "./worker";
+import { startSchedulerWorker, startWebhookWorker } from "./worker";
 
 async function bootstrap() {
   await loadSecrets("hrms/config");
 
   await registerScheduledJobs();
+
+  // Cron/business logic jobs (serial).
   startSchedulerWorker();
 
-  logger.info("Scheduler service started");
+  // Webhook HTTP delivery (high-concurrency, separate queue).
+  startWebhookWorker();
+
+  logger.info("Scheduler service started (schedulerWorker + webhookWorker)");
 }
 
 bootstrap().catch((err) => {

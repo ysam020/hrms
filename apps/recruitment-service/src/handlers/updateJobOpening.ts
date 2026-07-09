@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import { toJobOpeningProto } from "./jobOpeningSerializer";
 
 export const updateJobOpening = async (
   call: ServerUnaryCall<any, any>,
@@ -50,6 +51,8 @@ export const updateJobOpening = async (
       "location",
       "jobType",
       "jobStatus",
+      "pipelineTemplateId",
+      "visibility",
     ];
 
     for (const field of allowedFields) {
@@ -64,6 +67,9 @@ export const updateJobOpening = async (
         }
       }
     }
+    if (Array.isArray(updateData.branchIds)) {
+      cleanedData.branchIds = updateData.branchIds;
+    }
 
     const updatedJobOpening = await prisma.jobOpening.update({
       where: { id },
@@ -74,7 +80,7 @@ export const updateJobOpening = async (
     return callback(null, {
       message: MESSAGES.JOB_OPENING_UPDATED,
       status: status.OK,
-      data: updatedJobOpening,
+      data: toJobOpeningProto(updatedJobOpening),
     });
   } catch (err) {
     logger.error("UpdateJobOpening error:", { err });

@@ -6,6 +6,20 @@ const Help = lazy(() => import("@web/features/layout/Help"));
 const Calendar = lazy(() => import("@web/features/layout/Calendar"));
 const Analytics = lazy(() => import("@web/features/analytics/Analytics"));
 
+// New feature modules
+const Payroll = lazy(() => import("@web/features/payroll/Payroll"));
+const AssetManagement = lazy(
+  () => import("@web/features/assets/AssetManagement"),
+);
+const WFH = lazy(() => import("@web/features/wfh/WFH"));
+const Helpdesk = lazy(() => import("@web/features/helpdesk/Helpdesk"));
+const TicketDetail = lazy(() => import("@web/features/helpdesk/TicketDetail"));
+const Webhooks = lazy(() => import("@web/features/webhooks/Webhooks"));
+const Reports = lazy(() => import("@web/features/reports/Reports"));
+const ApprovalsInbox = lazy(
+  () => import("@web/features/approvals/ApprovalsInbox"),
+);
+
 const Permissions = lazy(
   () => import("@web/features/layout/permissions/Permissions"),
 );
@@ -32,10 +46,7 @@ const ViewDetails = lazy(
   () => import("@web/features/employee-management/ViewDetails"),
 );
 
-// Salary Management
-const SalaryManagement = lazy(
-  () => import("@web/features/salary/SalaryManagement"),
-);
+// Salary Management (detail view only — the list is a tab inside Payroll)
 const EditSalaryStructure = lazy(
   () => import("@web/features/salary/EditSalaryStructure"),
 );
@@ -63,7 +74,6 @@ const Attendance = lazy(() => import("@web/features/attendance/Attendance"));
 const Resignation = lazy(() => import("@web/features/resignation/Resignation"));
 
 // Rules
-const RuleManager = lazy(() => import("@web/features/rules/RuleManager"));
 
 // Chat
 const Chat = lazy(() => import("@web/features/chat/Chat"));
@@ -94,13 +104,6 @@ const routesConfig = () => {
       element: <Profile />,
       allowedModules: [],
       name: "Profile",
-      category: null,
-    },
-    {
-      path: "/rules",
-      element: <RuleManager />,
-      allowedModules: [],
-      name: "Rule Management",
       category: null,
     },
     {
@@ -246,20 +249,6 @@ const routesConfig = () => {
       category: "HR & Management",
     },
     {
-      path: "/salary-management",
-      element: <SalaryManagement />,
-      allowedModules: ["Salary Management"],
-      name: "Salary Management",
-      category: "HR & Management",
-    },
-    {
-      path: "/salary-management/:userId",
-      element: <EditSalaryStructure />,
-      allowedModules: ["Salary Management"],
-      name: "Salary Management",
-      category: "HR & Management",
-    },
-    {
       path: "/holidays",
       element: <Holidays />,
       allowedModules: ["Holidays"],
@@ -292,6 +281,72 @@ const routesConfig = () => {
       element: <Resignation />,
       allowedModules: ["Resignation Process"],
       name: "Resignation Process",
+      category: "HR & Management",
+    },
+    // ── New feature modules ──────────────────────────────────────────────────
+    // Detail route must sit BEFORE the /payroll/* wildcard so React Router's
+    // specificity scoring picks it over the wildcard when navigating to a userId.
+    {
+      path: "/payroll/salary-management/:userId",
+      element: <EditSalaryStructure />,
+      allowedModules: ["Salary Management"],
+      name: "Edit Salary Structure",
+      category: "HR & Management",
+    },
+    {
+      path: "/payroll/*",
+      element: <Payroll />,
+      allowedModules: ["Payroll Management"],
+      name: "Payroll Management",
+      category: "HR & Management",
+    },
+    {
+      path: "/assets/*",
+      element: <AssetManagement />,
+      allowedModules: ["Asset Management"],
+      name: "Asset Management",
+      category: "HR & Management",
+    },
+    {
+      path: "/wfh/*",
+      element: <WFH />,
+      allowedModules: ["WFH Requests"],
+      name: "WFH Requests",
+      category: "HR & Management",
+    },
+    {
+      path: "/approvals",
+      element: <ApprovalsInbox />,
+      allowedModules: [],
+      name: "Pending Approvals",
+      category: "HR & Management",
+    },
+    {
+      path: "/helpdesk",
+      element: <Helpdesk />,
+      allowedModules: [],
+      name: "HR Helpdesk",
+      category: "HR & Management",
+    },
+    {
+      path: "/helpdesk/:ticketId",
+      element: <TicketDetail />,
+      allowedModules: [],
+      name: "Ticket Detail",
+      category: "HR & Management",
+    },
+    {
+      path: "/webhooks/*",
+      element: <Webhooks />,
+      allowedModules: [],
+      name: "Webhooks",
+      category: null,
+    },
+    {
+      path: "/reports/*",
+      element: <Reports />,
+      allowedModules: [],
+      name: "Reports",
       category: "HR & Management",
     },
     // Spotlight-only tab routes (not rendered as Routes, only appear in search)
@@ -343,14 +398,7 @@ const routesConfig = () => {
       category: "Profile",
       spotlightOnly: true,
     },
-    {
-      path: "/profile/salary-slip",
-      element: null,
-      allowedModules: [],
-      name: "Salary Slip",
-      category: "Profile",
-      spotlightOnly: true,
-    },
+
     {
       path: "/permissions/manage-roles",
       element: null,
@@ -557,6 +605,116 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Resignation Insights",
       category: "Resignation Process",
+      spotlightOnly: true,
+    },
+    // Payroll spotlight entries
+    {
+      path: "/payroll/payroll-runs",
+      element: null,
+      allowedModules: [],
+      name: "Payroll Runs",
+      category: "Payroll Management",
+      spotlightOnly: true,
+    },
+    {
+      path: "/payroll/salary-management",
+      element: null,
+      allowedModules: [],
+      name: "Salary Management",
+      category: "Payroll Management",
+      spotlightOnly: true,
+    },
+    {
+      path: "/payroll/salary-advances",
+      element: null,
+      allowedModules: [],
+      name: "Salary Advances",
+      category: "Payroll Management",
+      spotlightOnly: true,
+    },
+    {
+      path: "/payroll/my-payslips",
+      element: null,
+      allowedModules: [],
+      name: "My Payslips",
+      category: "Payroll Management",
+      spotlightOnly: true,
+    },
+    // Assets spotlight entries
+    {
+      path: "/assets/inventory",
+      element: null,
+      allowedModules: [],
+      name: "Asset Inventory",
+      category: "Asset Management",
+      spotlightOnly: true,
+    },
+    {
+      path: "/assets/summary",
+      element: null,
+      allowedModules: [],
+      name: "Asset Summary",
+      category: "Asset Management",
+      spotlightOnly: true,
+    },
+    // WFH spotlight entries
+    {
+      path: "/wfh/requests",
+      element: null,
+      allowedModules: [],
+      name: "WFH Requests",
+      category: "WFH",
+      spotlightOnly: true,
+    },
+    {
+      path: "/wfh/calendar",
+      element: null,
+      allowedModules: [],
+      name: "WFH Calendar",
+      category: "WFH",
+      spotlightOnly: true,
+    },
+    // Helpdesk spotlight entries
+    {
+      path: "/helpdesk/all-tickets",
+      element: null,
+      allowedModules: [],
+      name: "All Tickets",
+      category: "HR Helpdesk",
+      spotlightOnly: true,
+    },
+    // Webhooks spotlight entries
+    {
+      path: "/webhooks/endpoints",
+      element: null,
+      allowedModules: [],
+      name: "Webhook Endpoints",
+      category: "Webhooks",
+      spotlightOnly: true,
+    },
+    {
+      path: "/webhooks/delivery-log",
+      element: null,
+      allowedModules: [],
+      name: "Delivery Log",
+      category: "Webhooks",
+      spotlightOnly: true,
+    },
+    // Reports spotlight entries
+    {
+      path: "/reports/report-builder",
+      element: null,
+      allowedModules: [],
+      name: "Report Builder",
+      category: "Reports",
+      spotlightOnly: true,
+    },
+    {
+      path: "/reports/saved-reports",
+      element: null,
+      allowedModules: [],
+      name: "Saved Reports",
+      category: "Reports",
       spotlightOnly: true,
     },
   ];

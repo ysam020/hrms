@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { authenticate, requireSuperUser } from "../middleware/authenticate";
+import { validate } from "../middleware/validate";
 import * as h from "../handlers/recruitment";
+import { submitResignationSchema } from "../schemas";
 
 export const recruitmentRouter: Router = Router();
 
@@ -51,18 +53,25 @@ recruitmentRouter.put(
   requireSuperUser,
   h.rejectApplication,
 );
-recruitmentRouter.post("/add-resignation", authenticate, h.addResignation);
+recruitmentRouter.post(
+  "/add-resignation",
+  authenticate,
+  validate(submitResignationSchema),
+  h.addResignation,
+);
+recruitmentRouter.get("/my-resignation", authenticate, h.getMyResignation);
 recruitmentRouter.get("/view-resignations", authenticate, h.viewResignations);
+// No requireSuperUser guard: the Approval Chain resolves who may act (the
+// requester's reporting manager by default, or an owner/admin/superuser
+// override) — see actOnApprovalForEntity in handlers/approvalChains.ts.
 recruitmentRouter.put(
   "/approve-resignation/:_id",
   authenticate,
-  requireSuperUser,
   h.approveResignation,
 );
 recruitmentRouter.put(
   "/reject-resignation/:_id",
   authenticate,
-  requireSuperUser,
   h.rejectResignation,
 );
 recruitmentRouter.put(

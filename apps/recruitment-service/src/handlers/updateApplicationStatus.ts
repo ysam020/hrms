@@ -73,7 +73,18 @@ export const updateApplicationStatus = async (
     return callback(null, {
       message: MESSAGES.APPLICATION_STATUS_UPDATED,
       status: status.OK,
-      data: updatedApplication,
+      data: {
+        id: updatedApplication.id,
+        jobTitleId: updatedApplication.jobTitleId || "",
+        name: updatedApplication.name || "",
+        email: updatedApplication.email || "",
+        mobile: updatedApplication.mobile || "",
+        resume: updatedApplication.resume || "",
+        status: updatedApplication.status || "",
+        appliedAt: "",
+        resumeScore: updatedApplication.resumeScore ?? 0,
+        aiNotes: updatedApplication.aiNotes || "",
+      },
     });
   } catch (err) {
     logger.error("UpdateApplicationStatus error:", { err });

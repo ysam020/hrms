@@ -21,7 +21,7 @@ const mockFindUnique = (prisma as any).resignation.findUnique as jest.Mock;
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
 
-const resignation = { id: "res-1", username: "john", status: "Submitted" };
+const resignation = { id: "res-1", userId: "john", status: "Submitted" };
 
 describe("getResignation", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -52,7 +52,14 @@ describe("getResignation", () => {
     await getResignation(makeCall({ id: "res-1" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
-      expect.objectContaining({ status: 0, data: resignation }),
+      expect.objectContaining({
+        status: 0,
+        data: expect.objectContaining({
+          id: "res-1",
+          userId: "john",
+          status: "Submitted",
+        }),
+      }),
     );
   });
 

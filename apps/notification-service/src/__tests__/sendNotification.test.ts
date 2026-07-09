@@ -141,7 +141,7 @@ describe("sendNotification", () => {
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,
-      data: null,
+      data: {},
     });
   });
 });

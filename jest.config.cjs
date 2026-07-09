@@ -28,6 +28,7 @@ module.exports = {
   ],
   moduleNameMapper: {
     "^@hrms/db$": "<rootDir>/packages/database/dist/index.js",
+    "^@hrms/approval-engine$": "<rootDir>/packages/approval-engine/dist/index.js",
     "^@hrms/cache$": "<rootDir>/packages/cache/dist/index.js",
     "^@hrms/queue$": "<rootDir>/packages/queue/dist/index.js",
     "^@hrms/logger$": "<rootDir>/packages/logger/dist/index.js",

@@ -11,7 +11,7 @@ import SecurityIcon from "@mui/icons-material/Security";
 import UsbIcon from "@mui/icons-material/Usb";
 import NfcIcon from "@mui/icons-material/Nfc";
 import BluetoothIcon from "@mui/icons-material/Bluetooth";
-import { useTheme } from "@mui/material/styles";
+import { useTheme, alpha } from "@mui/material/styles";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import {
@@ -228,43 +228,37 @@ function WebAuthnDevices() {
   };
 
   // Theme-aware styling (same as PushNotifications)
-  const getThemedBoxStyles = () => {
-    return {
-      mt: 2,
-      backgroundColor: theme === "light" ? "#fff" : "#111b21",
-      borderRadius: 1,
-      border: `1px solid ${
-        theme === "light" ? "#e0e0e0" : muiTheme.palette.divider
-      }`,
-      p: 2,
-    };
-  };
+  const getThemedBoxStyles = () => ({
+    mt: 2,
+    bgcolor: "background.paper",
+    borderRadius: 1.5,
+    border: "1px solid",
+    borderColor: "divider",
+    p: 2,
+  });
 
   const getThemedListItemStyles = (credential) => {
     const isCurrentDev = isCurrentDevice(credential.credentialID);
 
     return {
-      border: `1px solid ${
-        theme === "light" ? "#e0e0e0" : muiTheme.palette.divider
-      }`,
+      border: "1px solid",
+      borderColor: isCurrentDev ? "primary.main" : "divider",
       borderRadius: "8px",
       mb: 1,
-      backgroundColor: isCurrentDev
-        ? theme === "light"
-          ? "#E3F2FD"
-          : "#16394f"
-        : theme === "light"
-          ? "#DDE6ED"
-          : "#212E35",
-      transition: "background-color 0.2s",
+      bgcolor: isCurrentDev
+        ? alpha(
+            muiTheme.palette.primary.main,
+            muiTheme.palette.mode === "light" ? 0.08 : 0.16,
+          )
+        : "background.paper",
+      transition: "background-color 0.15s ease",
       "&:hover": {
-        backgroundColor: isCurrentDev
-          ? theme === "light"
-            ? "#BBDEFB"
-            : "#0B3F61"
-          : theme === "light"
-            ? "#C8D4DD"
-            : "#2A3A42",
+        bgcolor: isCurrentDev
+          ? alpha(
+              muiTheme.palette.primary.main,
+              muiTheme.palette.mode === "light" ? 0.14 : 0.24,
+            )
+          : "action.hover",
       },
     };
   };
@@ -274,40 +268,39 @@ function WebAuthnDevices() {
       <Grid size={12}>
         <List disablePadding sx={{ width: "100%" }}>
           <ListItem
-            alignItems="flex-start"
             sx={{
               display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
               justifyContent: "space-between",
-              backgroundColor:
-                theme === "light"
-                  ? "#ffffff"
-                  : muiTheme.palette.background.paper,
-              borderRadius: 1,
+              alignItems: { xs: "flex-start", sm: "center" },
+              gap: { xs: 1, sm: 0 },
+              bgcolor: "background.paper",
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1.5,
               mb: 1,
+              py: { xs: 2, sm: 1.25 },
+              px: 2,
             }}
           >
             <ListItemText primary="WebAuthn / Passkeys" />
             <Box
               sx={{
                 display: "flex",
-                alignItems: "center",
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: { xs: "stretch", sm: "center" },
                 gap: 1,
-                flexWrap: "wrap",
+                width: { xs: "100%", sm: "auto" },
               }}
             >
               <Button
+                size="small"
                 onClick={handleRegisterWebAuthn}
                 disabled={
                   registerLoading ||
                   disableLoading ||
                   isCurrentDeviceRegistered()
                 }
-                style={{
-                  opacity: isCurrentDeviceRegistered() ? 0.6 : 1,
-                  cursor: isCurrentDeviceRegistered()
-                    ? "not-allowed"
-                    : "pointer",
-                }}
               >
                 {registerLoading
                   ? "Registering..."
@@ -316,11 +309,8 @@ function WebAuthnDevices() {
                     : "Register this device"}
               </Button>
               <Button
-                style={{
-                  marginLeft: "10px",
-                  backgroundColor: "#f44336",
-                  color: "white",
-                }}
+                size="small"
+                variant="danger"
                 onClick={() => setDisableAllDialog(true)}
                 disabled={registerLoading || disableLoading}
               >
@@ -413,14 +403,8 @@ function WebAuthnDevices() {
 
                     <Box sx={{ display: "flex", alignItems: "center", mr: 2 }}>
                       <Button
-                        style={{
-                          backgroundColor: "#ff9800",
-                          color: "white",
-                          fontSize: "12px",
-                          padding: "4px 8px",
-                          marginRight: 0,
-                          marginTop: 0,
-                        }}
+                        variant="warning"
+                        size="small"
                         onClick={() =>
                           handleRemoveClick(
                             credential.credentialID,

@@ -47,10 +47,32 @@ services:
       - prometheus
       - loki
 
+  # ── Distributed Tracing (OpenTelemetry) ─────────────────────────────────────
+  # Jaeger all-in-one: collects OTLP traces from api-gateway + all services.
+  # UI: http://localhost:16686
+  # OTLP HTTP ingest: http://localhost:4318  (used by telemetry.ts)
+  jaeger:
+    container_name: hrms-jaeger
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver (used by OTEL_EXPORTER_OTLP_ENDPOINT)
+      - "6831:6831/udp" # Jaeger agent (legacy UDP, keep for compat)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=warn
+    volumes:
+      - jaeger-data:/badger
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   prometheus-data:
     driver: local
   loki-data:
     driver: local
   grafana-data:
+    driver: local
+  jaeger-data:
     driver: local

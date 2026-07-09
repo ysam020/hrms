@@ -1,13 +1,7 @@
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Paper from "@mui/material/Paper";
 import Checkbox from "@mui/material/Checkbox";
+import DataList from "@web/shared/components/DataList";
 
 const isCheckboxDisabled = (isSuperUser) => {
   // Only disable if user is a super user
@@ -36,6 +30,11 @@ const renderPermissionMatrix = (
     actions.some((action) => moduleStructure.actions[action].includes(scope)),
   );
 
+  const isDisabled = isCheckboxDisabled(isSuperUser);
+  const tooltipMessage = isSuperUser
+    ? "Super admin permissions cannot be modified"
+    : "";
+
   return (
     <Box
       sx={{
@@ -44,120 +43,63 @@ const renderPermissionMatrix = (
         mt: 2,
       }}
     >
-      <TableContainer component={Paper}>
-        <Table aria-label="permission matrix" size="small" padding="none">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ py: 1, px: 1, fontWeight: "bold" }}>
-                Action
-              </TableCell>
-              {/* Only show scope columns that are relevant to this module */}
-              {availableScopes.map((scope) => (
-                <TableCell
-                  key={scope}
-                  align="center"
-                  sx={{ py: 1, px: 1, fontWeight: "bold" }}
-                >
-                  {scope === "-"
-                    ? "Global"
-                    : scope.charAt(0).toUpperCase() + scope.slice(1)}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {actions.map((action) => (
-              <TableRow key={action} hover>
-                <TableCell component="th" scope="row" sx={{ py: 0.5, px: 1 }}>
-                  {action
-                    .split("_")
-                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(" ")}
-                </TableCell>
-                {availableScopes.map((scope) => {
-                  // Only show checkboxes for scopes that are valid for this action
-                  const isValidScope =
-                    moduleStructure.actions[action].includes(scope);
-
-                  const isDisabled = isCheckboxDisabled(isSuperUser);
-                  const getTooltipMessage = () => {
-                    if (isSuperUser)
-                      return "Super admin permissions cannot be modified";
-                    return "";
-                  };
-
-                  return isValidScope ? (
-                    <TableCell
-                      key={scope}
-                      align="center"
-                      sx={{ py: 0, px: 1 }}
-                      title={getTooltipMessage()}
-                    >
-                      <Checkbox
-                        checked={hasPermission(
-                          module,
-                          action,
-                          scope,
-                          isSuperUser,
-                          permissions,
-                        )}
-                        onChange={() =>
-                          togglePermission(
-                            module,
-                            action,
-                            scope,
-                            isSuperUser,
-                            permissions,
-                            setPermissions,
-                            setHasChanges,
-                          )
-                        }
-                        disabled={isDisabled}
-                        size="small"
-                      />
-                    </TableCell>
-                  ) : scope === "-" &&
-                    moduleStructure.actions[action].includes("-") ? (
-                    <TableCell
-                      key={scope}
-                      colSpan={4}
-                      align="center"
-                      sx={{ py: 0, px: 1 }}
-                    >
-                      <Checkbox
-                        checked={hasPermission(
-                          module,
-                          action,
-                          scope,
-                          isSuperUser,
-                          permissions,
-                        )}
-                        onChange={() =>
-                          togglePermission(
-                            module,
-                            action,
-                            scope,
-                            isSuperUser,
-                            permissions,
-                            setPermissions,
-                            setHasChanges,
-                          )
-                        }
-                        disabled={isSuperUser}
-                        size="small"
-                      />
-                    </TableCell>
-                  ) : (
-                    <TableCell key={scope} align="center" sx={{ py: 0, px: 1 }}>
-                      {/* Empty disabled cell for invalid combinations */}—
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DataList
+        ariaLabel={`Permission matrix for ${module}`}
+        variant="rows"
+        data={actions}
+        getRowId={(action: string) => action}
+        columns={[
+          {
+            key: "action",
+            label: "Action",
+            primary: true,
+            hideLabel: true,
+            render: (action: string) =>
+              action
+                .split("_")
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(" "),
+          },
+          ...availableScopes.map((scope) => ({
+            key: scope,
+            label:
+              scope === "-"
+                ? "Global"
+                : scope.charAt(0).toUpperCase() + scope.slice(1),
+            render: (action: string) => {
+              const isValidScope =
+                moduleStructure.actions[action].includes(scope);
+              return isValidScope ? (
+                <Checkbox
+                  checked={hasPermission(
+                    module,
+                    action,
+                    scope,
+                    isSuperUser,
+                    permissions,
+                  )}
+                  onChange={() =>
+                    togglePermission(
+                      module,
+                      action,
+                      scope,
+                      isSuperUser,
+                      permissions,
+                      setPermissions,
+                      setHasChanges,
+                    )
+                  }
+                  disabled={isDisabled}
+                  size="small"
+                  title={tooltipMessage}
+                />
+              ) : (
+                "—"
+              );
+            },
+          })),
+        ]}
+      />
     </Box>
   );
 };

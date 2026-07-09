@@ -97,6 +97,23 @@ model User {
   dateOfAbscond               DateTime?
   designation                 String?
   department                  String?
+  // Optional FKs alongside the free-text strings above — kept free-text as
+  // the source of truth so onboarding/employee-add never blocks on Org
+  // Structure being configured. UI/reports prefer the resolved relation name
+  // when set, else fall back to the string. See POST /org-structure/migrate-from-free-text.
+  departmentId                 String?   @db.ObjectId
+  designationId                String?   @db.ObjectId
+  branchId                    String?   @db.ObjectId
+  // Resolution order for attendance: User.shiftId > Team.shiftId > TenantSettings defaults.
+  shiftId                     String?   @db.ObjectId
+  // office (default, geofenced) | field | remote — field/remote skip geofencing entirely.
+  attendanceMode              String    @default("office")
+  // employee (default) | contractor — branches TDS logic (194J vs 192) in payroll.
+  employmentType               String    @default("employee")
+  // Work-location state, for Professional Tax slab lookup — distinct from
+  // permanent_address_state since home address ≠ work location.
+  workState                     String?
+  payCycleId                    String?   @db.ObjectId
   joining_date                DateTime?
   employee_photo              String?
   face_descriptor             Json?
@@ -172,10 +189,48 @@ model AttendanceRecord {
   correctedBy  String?  @db.ObjectId
 
   user         User?    @relation(fields: [userId], references: [id])
+  breaks       AttendanceBreak[]
 
   @@unique([tenantId, userId, date])
   @@index([tenantId, date])
   @@map("attendance_records")
+}
+
+// Sub-punches within a single AttendanceRecord day — the unique-per-day
+// constraint above stays as the one canonical timeIn/timeOut; breaks are
+// nested inside that day rather than requiring a full multi-punch redesign.
+model AttendanceBreak {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId           String    @db.ObjectId
+  attendanceRecordId String    @db.ObjectId
+  breakType          String    @default("lunch") // lunch | short_break | other
+  isPaid             Boolean   @default(false)
+  startTime          DateTime
+  endTime            DateTime?
+  durationMinutes    Float?
+
+  record             AttendanceRecord @relation(fields: [attendanceRecordId], references: [id])
+
+  @@index([attendanceRecordId])
+  @@map("attendance_breaks")
+}
+
+model OvertimeRequest {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String    @db.ObjectId
+  userId       String    @db.ObjectId
+  date         DateTime
+  plannedHours Float
+  reason       String?
+  status       String    @default("Pending") // Pending | Approved | Rejected
+  approvedBy   String?   @db.ObjectId
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, userId, date])
+  @@index([tenantId, status])
+  @@map("overtime_requests")
 }
 
 // ─── Leave ────────────────────────────────────────────────────────────────────
@@ -196,11 +251,45 @@ model LeaveApplication {
   approvedById      String?  @db.ObjectId
   approvedOn        DateTime?
 
+  // Application unit — "full_day" is the legacy default. session is required
+  // when unit=half_day; shortLeaveHours is required when unit=short_leave.
+  unit               String    @default("full_day") // full_day | half_day | short_leave
+  session            String?   // first_half | second_half
+  shortLeaveHours    Float?
+
+  // Cancellation-after-approval: status transitions to "Cancellation Requested"
+  // then "Cancelled" once approved, at which point `days` is credited back to
+  // LeaveBalance. See packages/approval-engine module "leave", condition
+  // isCancellation.
+  cancelledOn        DateTime?
+  cancelledBy        String?   @db.ObjectId
+  cancellationReason String?
+
   user              User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
   @@map("leaves")
+}
+
+// Comp-off earned by working a holiday/weekend — a transactional fact tied to
+// a specific worked date, distinct from the policy-level config in
+// TenantSettings.leavePolicies (which just flags a leave type as isCompOff
+// and sets its default expiry window).
+model CompOffCredit {
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                 String    @db.ObjectId
+  userId                   String    @db.ObjectId
+  sourceDate               DateTime  // the worked holiday/weekend that earned it
+  earnedDays               Float     @default(1)
+  expiresOn                DateTime?
+  status                   String    @default("available") // available | used | expired
+  usedInLeaveApplicationId String?   @db.ObjectId
+  createdBy                String    @db.ObjectId
+  createdAt                DateTime  @default(now())
+
+  @@index([tenantId, userId, status])
+  @@map("comp_off_credits")
 }
 
 model LeaveBalance {
@@ -242,6 +331,12 @@ model JobOpening {
 
   applications       JobApplication[]
 
+  // null = tenant default template. Multi-location vacancies + internal/
+  // external visibility gate.
+  pipelineTemplateId String?   @db.ObjectId
+  visibility         String    @default("external") // internal | external | both
+  branchIds          String[]  @db.ObjectId
+
   @@map("jobopenings")
 }
 
@@ -254,17 +349,100 @@ model JobApplication {
   aadharNo     String?
   jobTitleId   String?  @db.ObjectId
   resume       String?
+  // Legacy unstructured pipeline storage — left untouched for existing rows.
+  // New code writes ApplicationStageEvent instead (see below).
   interviews   Json?
   reason       String?
   status       String   @default("Applied")
   resumeScore  Float?
   aiNotes      String?
 
+  // Set when an existing employee applies internally, rather than being
+  // re-entered as an external candidate.
+  userId             String?  @db.ObjectId
+  // Snapshot of the template used at apply-time, in case it's edited later.
+  pipelineTemplateId String?  @db.ObjectId
+  currentStageOrder  Int      @default(0)
+  referredByUserId   String?  @db.ObjectId
+
   jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id])
+  stageEvents  ApplicationStageEvent[]
+  offers       Offer[]
 
   @@index([jobTitleId])
   @@index([status])
   @@map("jobapplications")
+}
+
+// Reusable, tenant-configurable interview pipeline — replaces the implicit,
+// ad-hoc round structure previously stored inline in JobApplication.interviews.
+model InterviewPipelineTemplate {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  name      String   // "Engineering - Standard", "Sales Pipeline"
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  // [{ order, name, interviewerRole, outcomeOptions: ["pass","fail","hold"],
+  //    isBgvStage, bgvVendor? }]
+  stages    Json
+  createdBy String   @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+  @@map("interview_pipeline_templates")
+}
+
+// Append-only stage-by-stage audit trail for one application moving through
+// its pipeline — who interviewed, what the outcome was, panel scorecards.
+model ApplicationStageEvent {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String    @db.ObjectId
+  applicationId String    @db.ObjectId
+  stageName     String
+  stageOrder    Int
+  outcome       String?   // pass | fail | hold | pending
+  interviewerId String?   @db.ObjectId
+  scorecards    Json?     // panel: [{ interviewerId, score, notes }]
+  bgvVendor     String?
+  bgvResult     String?   // clear | flagged | pending
+  scheduledAt   DateTime?
+  completedAt   DateTime?
+  notes         String?
+  createdBy     String    @db.ObjectId
+  createdAt     DateTime  @default(now())
+
+  application   JobApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId, stageOrder])
+  @@index([tenantId, applicationId])
+  @@map("application_stage_events")
+}
+
+// Versioned offer — an offer, a counter, and a revised offer each get their
+// own row rather than overwriting a single "offer" field.
+model Offer {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String    @db.ObjectId
+  applicationId String    @db.ObjectId
+  version       Int       @default(1)
+  designation   String?
+  department    String?
+  offeredCTC    Float?
+  joiningDate   DateTime?
+  status        String    @default("Draft") // Draft|Sent|Negotiating|Accepted|Declined|Withdrawn|Expired
+  sentAt        DateTime?
+  respondedAt   DateTime?
+  candidateNote String?
+  internalNote  String?
+  createdBy     String    @db.ObjectId
+  createdAt     DateTime  @default(now())
+
+  application   JobApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId, version])
+  @@index([tenantId, status])
+  @@map("offers")
 }
 
 // ─── Resignation ─────────────────────────────────────────────────────────────
@@ -295,9 +473,144 @@ model Resignation {
   feedbackSubmittedOn         DateTime?
   lastUpdatedOn               DateTime?
 
+  // voluntary | termination | absconding | mutual — branches the workflow
+  // (absconding skips notice-period logic entirely; termination may skip the
+  // employee-initiated steps).
+  exitType             String    @default("voluntary")
+  // Resolved from NoticePeriodPolicy at submission time. Kept alongside the
+  // tenant-wide TenantSettings.noticePeriodDays flat fallback for tenants that
+  // never configure tenure-based bands.
+  noticePeriodDays     Int?
+  noticePeriodWaived   Boolean   @default(false)
+  buyoutAmount         Float?
+  // Garden leave — relieved from active duty immediately, distinct from
+  // lastWorkingDay (which payroll still runs through).
+  relievedFromDutyOn   DateTime?
+  rehireEligible       Boolean?
+
   @@index([tenantId, userId])
   @@index([tenantId, status])
   @@map("resignations")
+}
+
+// Tenure/role/department-based notice period bands. No rows for a tenant =
+// zero-config default: the flat TenantSettings.noticePeriodDays value applies
+// to everyone, exactly as today.
+model NoticePeriodPolicy {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId          String   @db.ObjectId
+  minTenureMonths   Int      @default(0)
+  maxTenureMonths   Int?     // null = no upper bound
+  designation       String?  // null = applies to all
+  department        String?
+  noticePeriodDays  Int
+  // Applies while the employee is still within TenantSettings.probationPeriodDays,
+  // taking priority over tenure-based bands.
+  isProbationPolicy Boolean  @default(false)
+  priority          Int      @default(0)
+  createdBy         String   @db.ObjectId
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("notice_period_policies")
+}
+
+// Audit trail for lastWorkingDay renegotiation (e.g. employee asks to leave
+// earlier, then manager asks them to stay two more weeks) — lastWorkingDay
+// itself only ever holds the current value.
+model ResignationNoticeEvent {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId               String   @db.ObjectId
+  resignationId          String   @db.ObjectId
+  previousLastWorkingDay DateTime?
+  newLastWorkingDay      DateTime
+  reason                 String?
+  changedBy              String   @db.ObjectId
+  createdAt              DateTime @default(now())
+
+  @@index([resignationId])
+  @@map("resignation_notice_events")
+}
+
+// Configurable exit-interview question set, replacing the hardcoded
+// qualityOfCommunication/supportFromManager/... columns above (which stay,
+// unused by new tenants, for backward compatibility with existing responses).
+model ExitInterviewTemplate {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  isActive  Boolean  @default(true)
+  questions Json     // [{ id, label, type: "rating"|"text"|"boolean", required }]
+  createdBy String   @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("exit_interview_templates")
+}
+
+model ExitInterviewResponse {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String   @db.ObjectId
+  resignationId String   @db.ObjectId @unique
+  templateId    String   @db.ObjectId
+  answers       Json     // [{ questionId, value }]
+  submittedOn   DateTime @default(now())
+
+  @@map("exit_interview_responses")
+}
+
+// Configurable multi-department exit clearance checklist, replacing the
+// assetsReturned/fnfDone booleans above (which stay as a quick top-level
+// summary for tenants that never configure a custom checklist).
+model ExitChecklistItemDef {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String   @db.ObjectId
+  label      String   // "Return laptop", "Clear IT access"
+  owningRole String   // "IT" | "Finance" | "HR" | "Admin"
+  isRequired Boolean  @default(true)
+  order      Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, isActive])
+  @@map("exit_checklist_item_defs")
+}
+
+model ExitChecklistItemStatus {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String    @db.ObjectId
+  resignationId String    @db.ObjectId
+  itemDefId     String    @db.ObjectId
+  isComplete    Boolean   @default(false)
+  completedBy   String?   @db.ObjectId
+  completedAt   DateTime?
+  notes         String?
+
+  @@unique([resignationId, itemDefId])
+  @@index([resignationId])
+  @@map("exit_checklist_item_statuses")
+}
+
+model FnfSettlement {
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                 String    @db.ObjectId
+  resignationId            String    @db.ObjectId @unique
+  userId                   String    @db.ObjectId
+  lineItems                Json      // [{ label, type: "earning"|"deduction", amount }]
+  leaveEncashmentAmount    Float     @default(0)
+  noticeShortfallDeduction Float     @default(0)
+  grossPayable             Float
+  totalDeductions          Float
+  netPayable               Float
+  status                   String    @default("draft") // draft | approved | disbursed
+  approvedBy               String?   @db.ObjectId
+  approvedAt               DateTime?
+  disbursedAt              DateTime?
+  createdBy                String    @db.ObjectId
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@map("fnf_settlements")
 }
 
 // ─── Salary ───────────────────────────────────────────────────────────────────
@@ -322,10 +635,73 @@ model SalaryStructure {
   createdAt       DateTime? @default(now())
   updatedAt       DateTime? @updatedAt
 
+  // [{code, name, type: "earning"|"deduction", amount}] — when set, supersedes
+  // the fixed basicPay/hra/... columns above for tenants that have configured
+  // SalaryComponentDefinition rows. Those columns stay as the legacy 7-component
+  // fallback when this is null.
+  componentBreakdown Json?
+
   user            User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId, userId, year, month])
   @@map("salarystructures")
+}
+
+// Tenant-configurable salary component (replaces/extends the fixed
+// basic/hra/conveyance/incentive/pf/esi/pt column set). No rows for a tenant
+// = every payroll run keeps using the 7 fixed columns, exactly as today.
+model SalaryComponentDefinition {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String   @db.ObjectId
+  name         String
+  code         String   // "BASIC","HRA","SPECIAL_ALLOWANCE","SHIFT_ALLOWANCE"
+  type         String   // earning | deduction
+  isTaxable    Boolean  @default(true)
+  calcType     String   @default("fixed") // fixed | percent_of_basic | formula
+  percentOf    String?
+  percentValue Float?
+  isStatutory  Boolean  @default(false) // PF/ESI/PT — cannot be deleted, only toggled
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdBy    String   @db.ObjectId
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@map("salary_component_definitions")
+}
+
+// State-wise Professional Tax slabs — pt on SalaryStructure/PayrollLineItem
+// stays a manually-entered flat value until a tenant configures slabs here.
+model ProfessionalTaxSlab {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String   @db.ObjectId
+  state         String
+  minGross      Float
+  maxGross      Float?
+  monthlyPT     Float
+  effectiveFrom DateTime @default(now())
+
+  @@index([tenantId, state])
+  @@map("professional_tax_slabs")
+}
+
+// Multiple pay cycles within one tenant (e.g. bi-weekly factory floor vs
+// monthly office staff). PayrollRun.payCycleId is an optional tag, not a
+// uniqueness key — see PayrollRun comment.
+model PayCycle {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  name      String
+  frequency String   @default("monthly") // monthly | biweekly | weekly
+  payDay    Int
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, isActive])
+  @@map("pay_cycles")
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────
@@ -490,30 +866,179 @@ model Policy {
 
 // ─── Business Rules ───────────────────────────────────────────────────────────
 
-model Rule {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId       String?   @db.ObjectId
-  name           String
-  category       String
-  description    String?
-  priority       Int       @default(0)
-  status         String    @default("draft")
-  tags           String[]
-  conditions     Json?
-  conditionLogic String    @default("AND")
-  actions        Json?
-  effectiveFrom  DateTime?
-  effectiveTo    DateTime?
-  createdBy      String?
-  lastModifiedBy String?
-  executionCount Int       @default(0)
-  lastExecuted   DateTime?
-  createdAt      DateTime? @default(now())
-  updatedAt      DateTime? @updatedAt
+// ─── Approval Chains ────────────────────────────────────────────────────────
+// Generic, reusable multi-level approval routing consumed by Leave, Resignation,
+// and (future) WFH/SalaryAdvance/Overtime. See packages/approval-engine.
+// No ApprovalChain rows for a module = zero-config default: a single step
+// resolved as the requester's reporting manager (Team.teamLeaderId), falling
+// back to any owner/admin TenantMembership.
 
-  @@index([tenantId, status])
-  @@index([tenantId, category, status])
-  @@map("rules")
+model ApprovalChain {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String   @db.ObjectId
+  module         String   // "leave" | "resignation" | "wfh" | "salary_advance" | "overtime"
+  name           String
+  // Optional gate, e.g. { conditionField: "days", conditionOp: "gte", conditionValue: 5 }
+  // for "leave > 5 days needs 2 approvers". Null condition = default/fallback chain
+  // for the module.
+  conditionField String?
+  conditionOp    String?  // "gte" | "lte" | "eq" | "in"
+  conditionValue Json?
+  priority       Int      @default(0) // higher wins when multiple chains match
+  isActive       Boolean  @default(true)
+  createdBy      String   @db.ObjectId
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId, module, isActive])
+  @@map("approval_chains")
+}
+
+model ApprovalChainStep {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String  @db.ObjectId
+  chainId        String  @db.ObjectId
+  order          Int
+  // How the actual approver is resolved when a request is instantiated:
+  approverType   String  // "reporting_manager" | "specific_user" | "role" | "team_leader"
+  approverUserId String? @db.ObjectId // when approverType = specific_user
+  approverRole   String? // when approverType = role, e.g. "hr" | "admin" | "owner"
+
+  @@index([chainId, order])
+  @@map("approval_chain_steps")
+}
+
+// Runtime instance — one per approvable entity (LeaveApplication, Resignation, ...).
+// Polymorphic by (module, entityId) rather than a hard relation, since the owning
+// row may live in a different service's collection space.
+model ApprovalInstance {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String   @db.ObjectId
+  module      String
+  entityId    String   @db.ObjectId
+  requestedBy String   @db.ObjectId // original requester — used to resolve reporting-manager-type steps at any step order
+  chainId     String?  @db.ObjectId // null = zero-config default chain was used
+  status      String   @default("pending") // pending | approved | rejected | cancelled
+  currentStep Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Not unique: an entity can accumulate more than one instance over its
+  // lifetime (e.g. a leave's original apply-approval, then later a separate
+  // instance for a cancellation-approval) — only one may be "pending" at a
+  // time, enforced by application logic, not the DB.
+  @@index([module, entityId, status])
+  @@index([tenantId, module, status])
+  @@map("approval_instances")
+}
+
+model ApprovalStepInstance {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId           String    @db.ObjectId
+  instanceId         String    @db.ObjectId
+  order              Int
+  resolvedApproverId String    @db.ObjectId // after delegate resolution — who must act
+  status             String    @default("pending") // pending | approved | rejected | skipped
+  actedAt            DateTime?
+  comment            String?
+
+  @@index([instanceId, order])
+  @@index([tenantId, resolvedApproverId, status])
+  @@map("approval_step_instances")
+}
+
+// Date-ranged proxy approver, checked by the resolver before routing any step.
+model ApprovalDelegate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String   @db.ObjectId
+  delegatorId String   @db.ObjectId // the out-of-office approver
+  delegateId  String   @db.ObjectId // proxy
+  startDate   DateTime
+  endDate     DateTime
+  module      String?  // null = applies to all modules
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, delegatorId, startDate, endDate])
+  @@map("approval_delegates")
+}
+
+// ─── Branches & Shifts ──────────────────────────────────────────────────────
+// A tenant with no Branch rows still works exactly as before: geofencing reads
+// straight from TenantSettings' single office lat/long. The first time a
+// tenant opens the Branches settings page, a "Head Office" Branch row is
+// auto-created from those legacy fields (see api-gateway handlers/branches.ts).
+
+model Branch {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId             String   @db.ObjectId
+  name                 String
+  address              String?
+  latitude             Float?
+  longitude            Float?
+  geofenceRadiusMeters Int?     // null = fall back to TenantSettings.geofenceRadiusMeters
+  isHeadOffice         Boolean  @default(false)
+  isActive             Boolean  @default(true)
+  createdBy            String   @db.ObjectId
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+  @@map("branches")
+}
+
+model Shift {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId               String   @db.ObjectId
+  name                   String   // "General", "Night Shift"
+  startHour              Int
+  startMinute            Int
+  endHour                Int
+  endMinute              Int
+  lateGracePeriodMinutes Int      @default(30)
+  fullDayMinHours        Float    @default(8)
+  halfDayMinHours        Float    @default(4)
+  isDefault              Boolean  @default(false)
+  isActive               Boolean  @default(true)
+  createdBy              String   @db.ObjectId
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+  @@map("shifts")
+}
+
+// ─── Org Structure ──────────────────────────────────────────────────────────
+// Optional promotion of User.department/designation (free-text) into real
+// entities with identity — a department head, a designation level/hierarchy.
+// Tenants that never open Settings → Org Structure keep working purely off
+// the free-text strings forever.
+
+model Department {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String   @db.ObjectId
+  name       String
+  headUserId String?  @db.ObjectId
+  isActive   Boolean  @default(true)
+  createdBy  String?  @db.ObjectId
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, name])
+  @@map("departments")
+}
+
+model Designation {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String   @db.ObjectId
+  name         String
+  departmentId String?  @db.ObjectId
+  level        Int?
+  isActive     Boolean  @default(true)
+  createdBy    String?  @db.ObjectId
+  createdAt    DateTime @default(now())
+
+  @@unique([tenantId, name])
+  @@map("designations")
 }
 
 // ─── Teams ────────────────────────────────────────────────────────────────────
@@ -524,6 +1049,11 @@ model Team {
   teamName     String
   teamLeaderId String   @db.ObjectId
   members      String[] @db.ObjectId
+  // Team-level shift assignment — overrides TenantSettings defaults for
+  // members who don't have their own User.shiftId set.
+  shiftId      String?  @db.ObjectId
+  // null = tenant default; same shape as TenantSettings.workWeekPattern.
+  workWeekPatternOverride Json?
 
   @@index([tenantId])
   @@map("teams")
@@ -540,6 +1070,13 @@ model TenantSettings {
   // When this version becomes active. Defaults to now → immediate effect.
   effectiveFrom          DateTime @default(now())
 
+  // ── Work week ──────────────────────────────────────────────────────────────
+  // { type: "mon_fri" | "mon_sat" | "custom", workingDays: number[] } (0=Sun..6=Sat).
+  // Asked once at signup (OrgSetupPage) because getting it wrong silently
+  // corrupts attendance/leave day-count math — everything else in this model
+  // is safe to auto-default and edit later.
+  workWeekPattern        Json?
+
   // ── Leave ──────────────────────────────────────────────────────────────────
   paidLeavesPerYear      Int      @default(12)
   sickLeavesPerYear      Int      @default(12)
@@ -548,6 +1085,14 @@ model TenantSettings {
   medicalCertRequired    Boolean  @default(false)
   // Extra leave types: [{ name, key, daysPerYear, requiresProof }]
   customLeaveTypes       Json?
+  // Richer per-leave-type policy, superseding the 3 scalar quota fields above
+  // and customLeaveTypes when set: [{ key, name, daysPerYear, isStatutory,
+  // requiresProof, accrualMethod, prorateByJoinDate, carryForward: {enabled,
+  // maxDays, expiryMonths}, encashment: {enabled, ratePerDay, maxDaysPerYear},
+  // isCompOff, compOffExpiryDays, onExhaustion, blackoutPeriods, teamConcurrentCapPercent }]
+  // Left null, every tenant keeps today's behavior — simple quotas, no
+  // carry-forward/encashment/blackout rules.
+  leavePolicies          Json?
 
   // ── Attendance ─────────────────────────────────────────────────────────────
   // Work starts at workStartHour:workStartMinute (24-hour clock)
@@ -559,6 +1104,11 @@ model TenantSettings {
   fullDayMinHours        Float    @default(8)
   // Minimum working hours to count as a half day (anything below → Half Day)
   halfDayMinHours        Float    @default(4)
+  // How many days back an employee/admin may backdate a regularization request.
+  regularizationBackdateWindowDays Int     @default(3)
+  // When true, hours beyond the shift end only count as overtime once an
+  // OvertimeRequest for that date has been approved.
+  overtimePreApprovalRequired      Boolean @default(false)
 
   // ── Geofencing ─────────────────────────────────────────────────────────────
   // When true, CHECK_IN is blocked if employee is outside the allowed radius.
@@ -583,6 +1133,18 @@ model TenantSettings {
 
   @@unique([tenantId, effectiveFrom])
   @@map("tenant_settings")
+}
+
+// One row per tenant — org-level setup progress, not per-user. Any owner/admin
+// completing or skipping a step marks it for the whole org, so a second admin
+// logging in on another device doesn't see the whole checklist again.
+model OnboardingChecklistState {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String   @db.ObjectId @unique
+  itemStatus Json     @default("{}") // { stepKey: "completed" | "skipped" }
+  updatedAt  DateTime @updatedAt
+
+  @@map("onboarding_checklist_states")
 }
 
 // ─── Login Events ─────────────────────────────────────────────────────────────
@@ -610,4 +1172,327 @@ model LoginEvent {
 
   @@index([tenantId, userId, timestamp])
   @@map("login_events")
+}
+
+// ─── Payroll ──────────────────────────────────────────────────────────────────
+// A PayrollRun represents one complete monthly payroll cycle.
+// @@unique([tenantId, month, year]) prevents duplicate runs for the same period.
+
+model PayrollRun {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String?   @db.ObjectId
+  month           Int       // 1–12
+  year            Int
+  // draft → processing → approved → disbursed | cancelled
+  status          String    @default("draft")
+  initiatedBy     String    @db.ObjectId
+  approvedBy      String?   @db.ObjectId
+  disbursedBy     String?   @db.ObjectId
+  totalGross      Float?
+  totalNet        Float?
+  totalDeductions Float?
+  employeeCount   Int?
+  notes           String?
+  // Optional tag, not part of the uniqueness key below — a tenant running
+  // multiple PayCycles still gets one run per (tenant, month, year) today;
+  // full multi-cycle-per-month support needs a follow-up migration (see
+  // PayCycle model comment) rather than changing this constraint inline.
+  payCycleId      String?   @db.ObjectId
+  employeeGroup   String?
+  approvedAt      DateTime?
+  disbursedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lineItems       PayrollLineItem[]
+
+  @@unique([tenantId, month, year])
+  @@index([tenantId, status])
+  @@map("payroll_runs")
+}
+
+// One row per employee per PayrollRun — immutable snapshot of earnings/deductions.
+model PayrollLineItem {
+  id               String  @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId         String? @db.ObjectId
+  payrollRunId     String  @db.ObjectId
+  userId           String  @db.ObjectId
+  grossSalary      Float
+  basicPay         Float   @default(0)
+  hra              Float   @default(0)
+  conveyance       Float   @default(0)
+  incentive        Float   @default(0)
+  pf               Float   @default(0)
+  esi              Float   @default(0)
+  pt               Float   @default(0)
+  advanceDeduction Float   @default(0) // SalaryAdvance EMI deducted this month
+  otherDeductions  Float   @default(0)
+  totalDeductions  Float   @default(0)
+  netPayable       Float
+  payslipId        String? @db.ObjectId // reference to SalaryStructure once generated
+  // Same shape/fallback rule as SalaryStructure.componentBreakdown.
+  componentBreakdown Json?
+
+  // RazorpayX payout tracking — populated on disburse.
+  payoutId            String?   // RazorpayX payout_id (e.g. "pout_xxx")
+  payoutStatus        String?   // pending | processing | processed | failed
+  payoutFailureReason String?
+  payoutInitiatedAt   DateTime?
+
+  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id])
+
+  @@index([payrollRunId])
+  @@index([tenantId, userId])
+  @@map("payroll_line_items")
+}
+
+// Employee salary advance (loan) – repaid via monthly EMI deductions.
+model SalaryAdvance {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String?   @db.ObjectId
+  userId          String    @db.ObjectId
+  amount          Float
+  reason          String?
+  // Pending | Approved | Rejected | Repaying | Repaid
+  status          String    @default("Pending")
+  approvedBy      String?   @db.ObjectId
+  approvedAt      DateTime?
+  emiAmount       Float?    // per-month deduction
+  emiMonths       Int?      // total repayment months
+  paidMonths      Int       @default(0)
+  remainingAmount Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+  @@map("salary_advances")
+}
+
+// ─── Asset Management ─────────────────────────────────────────────────────────
+
+model Asset {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
+  assetCode     String    // unique per tenant (e.g. "LAP-001")
+  name          String
+  category      String    // Laptop | Phone | Monitor | Furniture | Vehicle | Other
+  brand         String?
+  model         String?
+  serialNumber  String?
+  purchaseDate  DateTime?
+  purchaseValue Float?
+  // available | assigned | maintenance | retired
+  status        String    @default("available")
+  // good | fair | damaged
+  condition     String    @default("good")
+  notes         String?
+  qrCodeUrl     String?   // S3 URL for generated QR image
+  createdBy     String    @db.ObjectId
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  assignments   AssetAssignment[]
+  issues        AssetIssue[]
+
+  @@unique([tenantId, assetCode])
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@map("assets")
+}
+
+// Full audit trail: every assign and return is a new row.
+model AssetAssignment {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String?   @db.ObjectId
+  assetId        String    @db.ObjectId
+  userId         String    @db.ObjectId  // who holds the asset
+  assignedBy     String    @db.ObjectId  // HR/admin who assigned
+  assignedOn     DateTime  @default(now())
+  expectedReturn DateTime?
+  returnedOn     DateTime?
+  returnedTo     String?   @db.ObjectId  // who received it back
+  conditionOut      String    @default("good")
+  conditionIn       String?   // recorded on return
+  notes             String?
+  // Employee signs off that they received the asset in the stated condition.
+  acknowledgedAt    DateTime?
+  acknowledgedNote  String?
+
+  asset          Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([assetId])
+  @@index([tenantId, userId])
+  @@map("asset_assignments")
+}
+
+// Issue / defect report raised by an employee against an asset they hold.
+model AssetIssue {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
+  assetId       String    @db.ObjectId
+  assignmentId  String?   @db.ObjectId   // the active assignment when the issue was raised
+  reportedBy    String    @db.ObjectId   // employee who reported
+  // malfunction | damage | lost | stolen | return_request | other
+  type          String
+  // low | medium | high | critical
+  priority      String    @default("medium")
+  title         String
+  description   String
+  // open | in_review | approved | resolved | rejected
+  status        String    @default("open")
+  reviewedBy    String?   @db.ObjectId   // HR/admin who acted on it
+  reviewedAt    DateTime?
+  reviewNotes   String?   // HR's notes at review/decision time
+  resolvedAt    DateTime?
+  resolverNotes String?   // HR's notes at resolution time
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  asset         Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([tenantId, assetId])
+  @@index([tenantId, reportedBy, status])
+  @@index([tenantId, status])
+  @@map("asset_issues")
+}
+
+// ─── WFH Requests ─────────────────────────────────────────────────────────────
+
+model WfhRequest {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String?   @db.ObjectId
+  userId          String    @db.ObjectId
+  date            DateTime  // UTC midnight of the requested day
+  reason          String?
+  // Pending | Approved | Rejected | Cancelled
+  status          String    @default("Pending")
+  approvedBy      String?   @db.ObjectId
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Prevent duplicate requests for the same employee-day.
+  @@unique([tenantId, userId, date])
+  @@index([tenantId, userId, status])
+  @@index([tenantId, date, status])
+  @@map("wfh_requests")
+}
+
+// ─── HR Helpdesk ──────────────────────────────────────────────────────────────
+
+model Ticket {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?   @db.ObjectId
+  ticketNo    String    // auto-generated sequential: TICK-00001
+  title       String
+  description String
+  // IT | Payroll | Leave | Onboarding | HR | Other
+  category    String
+  // low | medium | high | critical
+  priority    String    @default("medium")
+  // open | in_progress | resolved | closed
+  status      String    @default("open")
+  raisedBy    String    @db.ObjectId
+  assignedTo  String?   @db.ObjectId
+  resolvedBy  String?   @db.ObjectId
+  resolvedAt  DateTime?
+  slaDeadline DateTime? // computed at creation from priority SLA hours
+  slaBreached Boolean   @default(false)
+  attachments String[]  // S3 URLs
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  comments    TicketComment[]
+
+  @@index([tenantId, raisedBy])
+  @@index([tenantId, assignedTo, status])
+  @@index([tenantId, status])
+  @@index([tenantId, slaDeadline, slaBreached])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String?   @db.ObjectId
+  ticketId   String    @db.ObjectId
+  userId     String    @db.ObjectId
+  comment    String
+  isInternal Boolean   @default(false) // internal note — hidden from the ticket raiser
+  createdAt  DateTime  @default(now())
+
+  ticket     Ticket    @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
+
+// ─── Tenant Webhooks ──────────────────────────────────────────────────────────
+
+model WebhookEndpoint {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String    @db.ObjectId
+  url       String
+  // AES-256 encrypted signing secret; never returned in responses
+  secret    String
+  // e.g. ["leave.approved", "employee.created", "payroll.disbursed"]
+  events    String[]
+  isActive  Boolean   @default(true)
+  createdBy String    @db.ObjectId
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId])
+  @@map("webhook_endpoints")
+}
+
+// Immutable delivery log — one row per delivery attempt batch.
+model WebhookDelivery {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?   @db.ObjectId
+  endpointId  String    @db.ObjectId
+  eventType   String
+  payload     Json
+  // pending | success | failed
+  status      String    @default("pending")
+  httpStatus  Int?
+  attempts    Int       @default(0)
+  nextRetryAt DateTime?
+  deliveredAt DateTime?
+  responseBody String?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  endpoint    WebhookEndpoint @relation(fields: [endpointId], references: [id])
+
+  @@index([endpointId, status])
+  @@index([tenantId, status])
+  @@index([nextRetryAt])    // for retry sweeper job
+  @@map("webhook_deliveries")
+}
+
+// ─── Custom Report Builder ────────────────────────────────────────────────────
+
+model SavedReport {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?   @db.ObjectId
+  name        String
+  description String?
+  // employee | attendance | leave | salary | recruitment | payroll
+  entity      String
+  // { filters: [...], columns: [...], groupBy?, sort?, limit? }
+  config      Json
+  schedule    String?   // cron expression for auto-delivery (null = on-demand only)
+  recipients  String[]  // email addresses for scheduled delivery
+  createdBy   String    @db.ObjectId
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, entity])
+  @@index([tenantId, createdBy])
+  @@map("saved_reports")
 }

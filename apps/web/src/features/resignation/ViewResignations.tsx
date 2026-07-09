@@ -7,11 +7,8 @@ import {
   useState,
 } from "react";
 import dayjs from "dayjs";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import { Dropdown } from "primereact/dropdown";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
@@ -20,9 +17,9 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import ViewFeedbackModal from "./ViewFeedbackModal";
+import ResignationDecisionDialog from "./ResignationDecisionDialog";
+import ExitManagementDialog from "./ExitManagementDialog";
 import Checkbox from "@mui/material/Checkbox";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -31,7 +28,17 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
+import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Submitted", value: "Submitted" },
+  { label: "Approved", value: "Approved" },
+  { label: "Rejected", value: "Rejected" },
+  { label: "Withdrawn", value: "Withdrawn" },
+];
 
 function ViewResignations() {
   const { user } = useContext(UserContext);
@@ -39,7 +46,17 @@ function ViewResignations() {
   const { theme } = useContext(ThemeContext);
   const [resignationData, setResignationData] = useState(null);
   const [openModal, setOpenModal] = useState(false);
-  const [statusFilter] = useState("All");
+  const [decisionDialog, setDecisionDialog] = useState<{
+    mode: "approve" | "reject";
+    id: string;
+    name?: string;
+  } | null>(null);
+  const [exitManagement, setExitManagement] = useState<{
+    id: string;
+    name?: string;
+    rehireEligible?: boolean | null;
+  } | null>(null);
+  const [statusFilter, setStatusFilter] = useState("All");
   const [globalFilter, setGlobalFilter] = useState("");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,334 +234,248 @@ function ViewResignations() {
     [theme],
   );
 
+  const canEditRow = useCallback(
+    (rowData: any) =>
+      (user?.isSuperUser || rowData.userId !== user.id) &&
+      rowData.status !== "Withdrawn" &&
+      rowData.status !== "Rejected",
+    [user],
+  );
+
   const columns = useMemo(
     () => [
       {
-        accessorKey: "username",
-        header: "Username",
-        size: 160,
-        Cell: ({ cell }) => (
+        key: "username",
+        label: "Username",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Person
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
             <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {cell.getValue()}
+              {row.username}
             </Typography>
           </Box>
         ),
       },
       {
-        accessorKey: "resignationDate",
-        header: "Resignation Date",
-        size: 140,
-        Cell: ({ cell }) => {
-          const dateValue = cell.row.original?.resignationDate;
-          const displayDate = dateValue
-            ? dayjs(dateValue).format("DD-MM-YYYY")
-            : "N/A";
-          return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {displayDate}
-            </Typography>
-          );
-        },
+        key: "resignationDate",
+        label: "Resignation Date",
+        render: (row: any) =>
+          row.resignationDate
+            ? dayjs(row.resignationDate).format("DD-MM-YYYY")
+            : "N/A",
       },
       {
-        accessorKey: "lastWorkingDate",
-        header: "Last Date",
-        size: 120,
-        Cell: ({ cell }) => {
-          const dateValue = cell.row.original?.lastWorkingDate;
-          const displayDate = dateValue
-            ? dayjs(dateValue).format("DD-MM-YYYY")
-            : "N/A";
-          return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {displayDate}
-            </Typography>
-          );
-        },
+        key: "lastWorkingDate",
+        label: "Last Date",
+        render: (row: any) =>
+          row.lastWorkingDate
+            ? dayjs(row.lastWorkingDate).format("DD-MM-YYYY")
+            : "N/A",
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 120,
-        Cell: ({ cell }) => getStatusChip(cell.getValue()),
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => getStatusChip(row.status),
       },
       {
-        accessorKey: "action",
-        header: "Actions",
-        size: 200,
-        Cell: ({ cell }) => {
-          const rowData = cell.row.original;
-          const canApproveReject =
-            !["Withdrawn", "Rejected", "Approved"].includes(rowData.status) &&
-            (user?.isSuperUser || rowData.userId !== user.id);
-          const canWithdraw =
-            !["Withdrawn"].includes(rowData.status) &&
-            (rowData.userId === user.id || user?.isSuperUser);
-
-          return (
-            <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-              <Tooltip title="View Feedback">
-                <IconButton
-                  size="small"
-                  aria-label={`View feedback for ${rowData.username ?? "employee"}`}
-                  onClick={() => handleOpenModal(rowData)}
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: theme === "light" ? "#6366f1" : "#818cf8",
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(99, 102, 241, 0.12)"
-                        : "rgba(129, 140, 248, 0.15)",
-                    "&:hover": {
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(99, 102, 241, 0.2)"
-                          : "rgba(129, 140, 248, 0.25)",
-                    },
-                  }}
-                >
-                  <VisibilityIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-
-              {canApproveReject && (
-                <>
-                  <Tooltip title="Approve">
-                    <IconButton
-                      size="small"
-                      aria-label={`Approve resignation for ${rowData.username ?? "employee"}`}
-                      onClick={() =>
-                        handleResignationAction({
-                          id: rowData.id,
-                          action: "approve-resignation",
-                          successMessage: "Resignation approved successfully",
-                        })
-                      }
-                      sx={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "6px",
-                        color: theme === "light" ? "#059669" : "#34d399",
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(16, 185, 129, 0.12)"
-                            : "rgba(52, 211, 153, 0.15)",
-                        "&:hover": {
-                          backgroundColor:
-                            theme === "light"
-                              ? "rgba(16, 185, 129, 0.2)"
-                              : "rgba(52, 211, 153, 0.25)",
-                        },
-                      }}
-                    >
-                      <CheckIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  </Tooltip>
-
-                  <Tooltip title="Reject">
-                    <IconButton
-                      size="small"
-                      aria-label={`Reject resignation for ${rowData.username ?? "employee"}`}
-                      onClick={() =>
-                        handleResignationAction({
-                          id: rowData.id,
-                          action: "reject-resignation",
-                          successMessage: "Resignation rejected successfully",
-                        })
-                      }
-                      sx={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "6px",
-                        color: theme === "light" ? "#dc2626" : "#f87171",
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(239, 68, 68, 0.12)"
-                            : "rgba(248, 113, 113, 0.15)",
-                        "&:hover": {
-                          backgroundColor:
-                            theme === "light"
-                              ? "rgba(239, 68, 68, 0.2)"
-                              : "rgba(248, 113, 113, 0.25)",
-                        },
-                      }}
-                    >
-                      <CloseIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
-
-              {canWithdraw && (
-                <Tooltip title="Withdraw">
-                  <IconButton
-                    size="small"
-                    aria-label={`Withdraw resignation for ${rowData.username ?? "employee"}`}
-                    onClick={() =>
-                      handleResignationAction({
-                        id: rowData.id,
-                        action: "withdraw-resignation",
-                        successMessage: "Resignation withdrawn successfully",
-                      })
-                    }
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "6px",
-                      color: theme === "light" ? "#64748b" : "#94a3b8",
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(100, 116, 139, 0.12)"
-                          : "rgba(148, 163, 184, 0.15)",
-                      "&:hover": {
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(100, 116, 139, 0.2)"
-                            : "rgba(148, 163, 184, 0.25)",
-                      },
-                    }}
-                  >
-                    <RemoveCircleOutlineIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-          );
-        },
+        key: "assetsReturned",
+        label: "Assets Returned",
+        render: (row: any) =>
+          !canEditRow(row) ? (
+            "—"
+          ) : (
+            <Checkbox
+              checked={row.assetsReturned}
+              onChange={(e) =>
+                handleCheckboxChange({
+                  id: row.id,
+                  status: "Assets Returned",
+                  value: e.target.checked,
+                })
+              }
+              size="small"
+              sx={{ p: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}
+            />
+          ),
       },
       {
-        accessorKey: "assetsReturned",
-        header: "Assets Returned",
-        size: 200,
-        Cell: ({ cell }) => {
-          const rowData = cell.row.original;
-          const canEdit =
-            (user?.isSuperUser || rowData.userId !== user.id) &&
-            rowData.status !== "Withdrawn" &&
-            rowData.status !== "Rejected";
-
-          if (!canEdit) {
-            return (
-              <Typography
-                variant="body2"
-                fontSize="0.7rem"
-                color="text.disabled"
-              >
-                —
-              </Typography>
-            );
-          }
-
-          return (
-            <Box sx={{ display: "flex", justifyContent: "center" }}>
-              <Checkbox
-                checked={rowData.assetsReturned}
-                onChange={(e) =>
-                  handleCheckboxChange({
-                    id: rowData.id,
-                    status: "Assets Returned",
-                    value: e.target.checked,
-                  })
-                }
-                size="small"
-                sx={{
-                  "& .MuiSvgIcon-root": { fontSize: 18 },
-                }}
-              />
-            </Box>
-          );
-        },
-      },
-      {
-        accessorKey: "fnfDone",
-        header: "FnF Done",
-        size: 200,
-        Cell: ({ cell }) => {
-          const rowData = cell.row.original;
-          const canEdit =
-            (user?.isSuperUser || rowData.userId !== user.id) &&
-            rowData.status !== "Withdrawn" &&
-            rowData.status !== "Rejected";
-
-          if (!canEdit) {
-            return (
-              <Typography
-                variant="body2"
-                fontSize="0.7rem"
-                color="text.disabled"
-              >
-                —
-              </Typography>
-            );
-          }
-
-          return (
-            <Box sx={{ display: "flex", justifyContent: "center" }}>
-              <Checkbox
-                checked={rowData.fnfDone}
-                onChange={(e) =>
-                  handleCheckboxChange({
-                    id: rowData.id,
-                    status: "FnF Done",
-                    value: e.target.checked,
-                  })
-                }
-                size="small"
-                sx={{
-                  "& .MuiSvgIcon-root": { fontSize: 18 },
-                }}
-              />
-            </Box>
-          );
-        },
+        key: "fnfDone",
+        label: "FnF Done",
+        render: (row: any) =>
+          !canEditRow(row) ? (
+            "—"
+          ) : (
+            <Checkbox
+              checked={row.fnfDone}
+              onChange={(e) =>
+                handleCheckboxChange({
+                  id: row.id,
+                  status: "FnF Done",
+                  value: e.target.checked,
+                })
+              }
+              size="small"
+              sx={{ p: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}
+            />
+          ),
       },
     ],
-    [
-      user,
-      handleOpenModal,
-      handleResignationAction,
-      handleCheckboxChange,
-      getStatusChip,
-      theme,
-    ],
+    [canEditRow, handleCheckboxChange, getStatusChip],
   );
 
-  const memoizedData = useMemo(() => data || [], [data]);
+  const actions = useCallback(
+    (rowData: any) => {
+      const canApproveReject =
+        !["Withdrawn", "Rejected", "Approved"].includes(rowData.status) &&
+        (user?.isSuperUser || rowData.userId !== user.id);
+      const canWithdraw =
+        !["Withdrawn"].includes(rowData.status) &&
+        (rowData.userId === user.id || user?.isSuperUser);
+      const canManageExit =
+        user?.isSuperUser &&
+        !["Withdrawn", "Rejected"].includes(rowData.status);
 
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50, 100],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: {
-      ...tableConfig.table.state,
-      isLoading: loading,
-      globalFilter,
+      return [
+        {
+          icon: <VisibilityIcon sx={{ fontSize: 16 }} />,
+          label: `View feedback for ${rowData.username ?? "employee"}`,
+          color: "primary" as const,
+          onClick: () => handleOpenModal(rowData),
+        },
+        ...(canApproveReject
+          ? [
+              {
+                icon: <CheckIcon sx={{ fontSize: 16 }} />,
+                label: `Approve resignation for ${rowData.username ?? "employee"}`,
+                color: "success" as const,
+                onClick: () =>
+                  setDecisionDialog({
+                    mode: "approve" as const,
+                    id: rowData.id,
+                    name: rowData.username,
+                  }),
+              },
+              {
+                icon: <CloseIcon sx={{ fontSize: 16 }} />,
+                label: `Reject resignation for ${rowData.username ?? "employee"}`,
+                color: "error" as const,
+                onClick: () =>
+                  setDecisionDialog({
+                    mode: "reject" as const,
+                    id: rowData.id,
+                    name: rowData.username,
+                  }),
+              },
+            ]
+          : []),
+        ...(canWithdraw
+          ? [
+              {
+                icon: <RemoveCircleOutlineIcon sx={{ fontSize: 16 }} />,
+                label: `Withdraw resignation for ${rowData.username ?? "employee"}`,
+                onClick: () =>
+                  handleResignationAction({
+                    id: rowData.id,
+                    action: "withdraw-resignation",
+                    successMessage: "Resignation withdrawn successfully",
+                  }),
+              },
+            ]
+          : []),
+        ...(canManageExit
+          ? [
+              {
+                icon: <ManageAccountsIcon sx={{ fontSize: 16 }} />,
+                label: `Manage exit for ${rowData.username ?? "employee"}`,
+                color: "secondary" as const,
+                onClick: () =>
+                  setExitManagement({
+                    id: rowData.id,
+                    name: rowData.username,
+                    rehireEligible: rowData.rehireEligible,
+                  }),
+              },
+            ]
+          : []),
+      ];
     },
-    onGlobalFilterChange: handleGlobalFilterChange,
-  });
+    [user, handleOpenModal, handleResignationAction],
+  );
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Resignations"
+        data={data || []}
+        columns={columns}
+        actions={actions}
+        loading={loading}
+        emptyMessage="No resignations found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search resignations…",
+        }}
+        toolbarActions={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <FilterList
+              sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+            />
+            <Box sx={{ minWidth: 130 }}>
+              <Dropdown
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.value)}
+                options={STATUS_OPTIONS}
+                placeholder="Select Status"
+                className="w-full"
+                style={{ minWidth: "130px" }}
+                appendTo={() =>
+                  document.querySelector("#root .App") as HTMLElement
+                }
+              />
+            </Box>
+          </Box>
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50, 100],
+        }}
+      />
 
       <ViewFeedbackModal
         open={openModal}
         handleClose={handleCloseModal}
         resignationData={resignationData}
+      />
+
+      <ResignationDecisionDialog
+        open={!!decisionDialog}
+        mode={decisionDialog?.mode ?? "approve"}
+        resignationId={decisionDialog?.id ?? null}
+        employeeName={decisionDialog?.name}
+        onClose={() => setDecisionDialog(null)}
+        onDone={() => {
+          setDecisionDialog(null);
+          refresh();
+        }}
+      />
+
+      <ExitManagementDialog
+        open={!!exitManagement}
+        resignationId={exitManagement?.id ?? null}
+        employeeName={exitManagement?.name}
+        rehireEligible={exitManagement?.rehireEligible}
+        onClose={() => setExitManagement(null)}
       />
     </ErrorBoundary>
   );

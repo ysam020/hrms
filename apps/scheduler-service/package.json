@@ -12,6 +12,7 @@
     "@hrms/db": "workspace:*",
     "@hrms/logger": "workspace:*",
     "@hrms/queue": "workspace:*",
+    "@hrms/telemetry": "workspace:*",
     "bullmq": "^5.41.7",
     "dayjs": "^1.11.13",
     "firebase-admin": "^12.0.0"

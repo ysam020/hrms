@@ -11,7 +11,6 @@ import {
   type ReactNode,
 } from "react";
 import Box from "@mui/material/Box";
-import { motion } from "framer-motion";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
@@ -471,32 +470,20 @@ function DashboardInner() {
             onLayoutChange={handleLayoutChange}
             resizeHandles={["se"]}
           >
-            {visibleIds.map((id, index) => (
-              <div key={id}>
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.97, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 320,
-                    damping: 28,
-                    delay: index * 0.04,
-                  }}
-                  style={{ height: "100%" }}
+            {visibleIds.map((id) => (
+              <div key={id} style={{ height: "100%" }}>
+                <WidgetCard
+                  label={WIDGET_LABELS[id]}
+                  editMode={editMode}
+                  onHide={() => handleHideWidget(id)}
+                  isDark={isDark}
                 >
-                  <WidgetCard
-                    label={WIDGET_LABELS[id]}
-                    editMode={editMode}
-                    onHide={() => handleHideWidget(id)}
-                    isDark={isDark}
-                  >
-                    <ErrorBoundary fallback={<ErrorFallback />}>
-                      <Suspense fallback={<WidgetSkeleton />}>
-                        {renderWidget(id)}
-                      </Suspense>
-                    </ErrorBoundary>
-                  </WidgetCard>
-                </motion.div>
+                  <ErrorBoundary fallback={<ErrorFallback />}>
+                    <Suspense fallback={<WidgetSkeleton />}>
+                      {renderWidget(id)}
+                    </Suspense>
+                  </ErrorBoundary>
+                </WidgetCard>
               </div>
             ))}
           </ResponsiveGridLayout>

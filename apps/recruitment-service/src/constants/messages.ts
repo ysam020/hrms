@@ -33,5 +33,12 @@ export const MESSAGES = {
   NO_RESIGNATION_FOUND: "No resignation found for this user",
   RESIGNATION_FETCHED: "Resignation fetched successfully",
   RESIGNATIONS_FETCHED: "Resignations fetched successfully",
+  INVALID_EXIT_TYPE:
+    "exitType must be voluntary, termination, absconding, or mutual",
+  ONLY_SUBMITTED_CAN_BE_WITHDRAWN:
+    "Only submitted resignations can be withdrawn",
+  CANNOT_WITHDRAW_OTHERS_RESIGNATION:
+    "You can only withdraw your own resignation",
+  RESIGNATION_WITHDRAWN: "Resignation withdrawn",
   INTERNAL_SERVER_ERROR: "Internal server error",
 };

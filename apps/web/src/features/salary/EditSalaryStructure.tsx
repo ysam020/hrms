@@ -4,12 +4,6 @@ import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid2";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -26,6 +20,7 @@ import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { Calendar } from "primereact/calendar";
 import Button from "@web/shared/components/Button";
+import DataList from "@web/shared/components/DataList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import {
   computeSalaryComponents,
@@ -495,82 +490,65 @@ function ViewEditSalaryStructure() {
                     Salary Components
                   </Typography>
                 </Box>
-                <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: "background.paper" }}>
-                        <TableCell
-                          sx={{ fontWeight: "600", fontSize: "0.875rem" }}
-                        >
-                          Component
-                        </TableCell>
-                        <TableCell
-                          sx={{ fontWeight: "600", fontSize: "0.875rem" }}
-                        >
-                          Fixed Rate
-                        </TableCell>
-                        <TableCell
-                          sx={{ fontWeight: "600", fontSize: "0.875rem" }}
-                        >
-                          Amount
-                        </TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {updatedSalaryComponents.map((component) => (
-                        <TableRow key={component.key} hover={isEditing}>
-                          <TableCell
-                            sx={{ fontWeight: 500, fontSize: "0.875rem" }}
-                          >
-                            {component.label}
-                          </TableCell>
-                          <TableCell
-                            sx={{
-                              fontSize: "0.875rem",
-                              color: "text.secondary",
-                            }}
-                          >
-                            {fixedStructure?.[component.key] ?? "-"}
-                          </TableCell>
-                          <TableCell>
-                            {isEditing ? (
-                              <InputNumber
-                                value={
-                                  formik.values.salaryStructure[component.key]
-                                }
-                                onValueChange={(e) =>
-                                  handleAmountChange(component.key, e.value)
-                                }
-                                onBlur={() =>
-                                  formik.setFieldTouched(
-                                    `salaryStructure.${component.key}`,
-                                    true,
-                                  )
-                                }
-                                placeholder="0.00"
-                                min={0}
-                                minFractionDigits={0}
-                                maxFractionDigits={2}
-                                inputStyle={{
-                                  padding: "6px 8px",
-                                  fontSize: "0.875rem",
-                                  width: "120px",
-                                }}
-                              />
-                            ) : (
-                              <Typography
-                                variant="body2"
-                                sx={{ fontSize: "0.875rem" }}
-                              >
-                                ₹{currentSalaryData?.[component.key] || "0.00"}
-                              </Typography>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <Box sx={{ boxShadow: 1, borderRadius: 1 }}>
+                  <DataList
+                    ariaLabel="Salary components"
+                    variant="rows"
+                    data={updatedSalaryComponents}
+                    getRowId={(component: any) => component.key}
+                    columns={[
+                      {
+                        key: "label",
+                        label: "Component",
+                        primary: true,
+                        render: (component: any) => component.label,
+                      },
+                      {
+                        key: "fixedRate",
+                        label: "Fixed Rate",
+                        render: (component: any) =>
+                          fixedStructure?.[component.key] ?? "-",
+                      },
+                      {
+                        key: "amount",
+                        label: "Amount",
+                        render: (component: any) =>
+                          isEditing ? (
+                            <InputNumber
+                              value={
+                                formik.values.salaryStructure[component.key]
+                              }
+                              onValueChange={(e) =>
+                                handleAmountChange(component.key, e.value)
+                              }
+                              onBlur={() =>
+                                formik.setFieldTouched(
+                                  `salaryStructure.${component.key}`,
+                                  true,
+                                )
+                              }
+                              placeholder="0.00"
+                              min={0}
+                              minFractionDigits={0}
+                              maxFractionDigits={2}
+                              inputStyle={{
+                                padding: "6px 8px",
+                                fontSize: "0.875rem",
+                                width: "120px",
+                              }}
+                            />
+                          ) : (
+                            <Typography
+                              variant="body2"
+                              sx={{ fontSize: "0.875rem" }}
+                            >
+                              ₹{currentSalaryData?.[component.key] || "0.00"}
+                            </Typography>
+                          ),
+                      },
+                    ]}
+                  />
+                </Box>
 
                 {/* Summary Row */}
                 <Box

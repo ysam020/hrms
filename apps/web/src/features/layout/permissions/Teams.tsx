@@ -3,18 +3,14 @@ import AddIcon from "@mui/icons-material/Add";
 import CreateTeamModal from "./CreateTeamModal";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
-import { getTableColumns } from "@web/shared/utils/table/getTableColumns";
+import DataList from "@web/shared/components/DataList";
 import IconButton from "@mui/material/IconButton";
 import Avatar from "@mui/material/Avatar";
 import AvatarGroup from "@mui/material/AvatarGroup";
 import Popover from "@mui/material/Popover";
 import CircularProgress from "@mui/material/CircularProgress";
 import DeleteIcon from "@mui/icons-material/Delete";
+import GroupAddIcon from "@mui/icons-material/GroupAdd";
 import StarIcon from "@mui/icons-material/Star";
 import AddTeamMembersModal from "./AddTeamMembersModal";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -154,18 +150,21 @@ function Teams() {
     }
   }, [memberDeleteDialog, refetch, handlePopoverClose, setAlert]);
 
-  const baseColumns = useMemo(
+  const columns = useMemo(
     () => [
-      { accessorKey: "team_name", header: "Name of Team" },
       {
-        accessorKey: "members",
-        header: "Members",
-        Cell: ({ cell }) => {
-          const members = cell.row.original.members;
-
+        key: "team_name",
+        label: "Name of Team",
+        primary: true,
+        hideLabel: true,
+      },
+      {
+        key: "members",
+        label: "Members",
+        render: (row: any) => {
+          const members = row.members;
           if (!Array.isArray(members) || members.length === 0)
             return "No members assigned";
-
           return (
             <AvatarGroup
               spacing="medium"
@@ -174,91 +173,62 @@ function Teams() {
                 handleAvatarGroupClick(
                   e,
                   members,
-                  cell.row.original._id,
-                  cell.row.original.team_name,
-                  cell.row.original.teamLeaderId,
+                  row._id,
+                  row.team_name,
+                  row.teamLeaderId,
                 )
               }
               sx={{
                 cursor: "pointer",
-                "& .MuiAvatar-root": {
-                  width: 28,
-                  height: 28,
-                  fontSize: 12,
-                },
+                "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 12 },
               }}
             >
-              {members.map((user) => (
+              {members.map((user: string) => (
                 <Avatar key={user} alt={user} sx={{ width: 28, height: 28 }} />
               ))}
             </AvatarGroup>
           );
         },
       },
+    ],
+    [],
+  );
+
+  const rowActions = useCallback(
+    (row: any) => [
       {
-        accessorKey: "manage",
-        header: "Manage",
-        Cell: ({ cell }) => {
-          return (
-            <>
-              <span
-                className="link approve-link"
-                onClick={() => handleOpenAddTeamMembers(cell.row.original._id)}
-              >
-                Add Team Members
-              </span>
-              <span
-                className="link reject-link"
-                onClick={() =>
-                  handleTeamDeleteClick(
-                    cell.row.original._id,
-                    cell.row.original.team_name,
-                  )
-                }
-              >
-                Delete
-              </span>
-            </>
-          );
-        },
+        icon: <GroupAddIcon fontSize="small" />,
+        label: "Add Team Members",
+        color: "primary" as const,
+        onClick: () => handleOpenAddTeamMembers(row._id),
+      },
+      {
+        icon: <DeleteIcon fontSize="small" />,
+        label: "Delete team",
+        color: "error" as const,
+        onClick: () => handleTeamDeleteClick(row._id, row.team_name),
       },
     ],
     [handleTeamDeleteClick, handleOpenAddTeamMembers],
   );
 
-  const columns = useMemo(() => getTableColumns(baseColumns), [baseColumns]);
-
-  //Destructure the table property from useTableConfig
-  const { table: baseConfig } = useTableConfig(teams || [], columns, false);
-
-  const table = useMaterialReactTable(
-    useMemo(
-      () => ({
-        ...baseConfig,
-        renderTopToolbarCustomActions: () => (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              width: "100%",
-            }}
-          >
-            <IconButton
-              onClick={handleOpenCreateTeam}
-              aria-label="Create new team"
-            >
-              <AddIcon aria-hidden="true" />
-            </IconButton>
-          </div>
-        ),
-      }),
-      [baseConfig, handleOpenCreateTeam],
-    ),
-  );
-
   return (
     <div>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Teams"
+        data={teams || []}
+        columns={columns}
+        actions={rowActions}
+        emptyMessage="No teams found"
+        toolbarActions={
+          <IconButton
+            onClick={handleOpenCreateTeam}
+            aria-label="Create new team"
+          >
+            <AddIcon aria-hidden="true" />
+          </IconButton>
+        }
+      />
       <CreateTeamModal
         open={openCreateTeam}
         handleClose={handleCloseCreateTeam}

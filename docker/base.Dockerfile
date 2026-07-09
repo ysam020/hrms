@@ -30,7 +30,7 @@ COPY --from=pruner /app/out/json/ .
 
 RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    pnpm install --no-frozen-lockfile --ignore-scripts
+    pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
 
 COPY --from=pruner /app/out/full/ .
 

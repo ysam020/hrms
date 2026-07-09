@@ -1,10 +1,6 @@
 import { memo, useCallback, useContext, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -13,14 +9,12 @@ import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import CustomModal from "@web/shared/components/Modal";
 import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import Chip from "@mui/material/Chip";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Divider from "@mui/material/Divider";
 import Avatar from "@mui/material/Avatar";
 import Stack from "@mui/material/Stack";
-import Skeleton from "@mui/material/Skeleton";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -507,111 +501,101 @@ function ViewPolicies({ refreshKey = 0 }) {
   const columns = useMemo(
     () => [
       {
-        accessorKey: "category",
-        header: "Policy",
-        size: 220,
-        Cell: ({ row }) => (
+        key: "category",
+        label: "Policy",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Box>
             <Chip
-              label={row.original.category}
-              color={POLICY_TYPE_COLORS[row.original.category] || "default"}
+              label={row.category}
+              color={POLICY_TYPE_COLORS[row.category] || "default"}
               size="small"
               variant="outlined"
             />
-            {row.original.title && (
+            {row.title && (
               <Typography
                 variant="caption"
                 display="block"
                 color="text.secondary"
                 sx={{ mt: 0.25 }}
               >
-                {row.original.title}
+                {row.title}
               </Typography>
             )}
           </Box>
         ),
       },
       {
-        accessorKey: "createdAt",
-        header: "Created At",
-        size: 130,
-        Cell: ({ cell }) => fmt(cell.getValue()),
+        key: "createdAt",
+        label: "Created At",
+        render: (row: any) => fmt(row.createdAt),
       },
       {
-        accessorKey: "updatedAt",
-        header: "Last Updated",
-        size: 130,
-        Cell: ({ cell }) => fmt(cell.getValue()),
+        key: "updatedAt",
+        label: "Last Updated",
+        render: (row: any) => fmt(row.updatedAt),
       },
     ],
     [],
   );
 
-  const { table: tableConfig } = useTableConfig(data || [], columns, loading);
-
-  const table = useMaterialReactTable({
-    ...tableConfig,
-    columns,
-    data: data || [],
-    rowCount: totalCount,
-    state: { pagination, isLoading: loading },
-    onPaginationChange: setPagination,
-    manualPagination: true,
-    enableRowActions: true,
-    positionActionsColumn: "last",
-    renderRowActions: ({ row }) => (
-      <Box display="flex" gap={0.5}>
-        <Tooltip title="View">
-          <IconButton
-            size="small"
-            aria-label={`View policy: ${row.original.title}`}
-            onClick={() => setViewPolicy(row.original)}
-          >
-            <VisibilityIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Download PDF">
-          <IconButton
-            size="small"
-            aria-label={`Download policy: ${row.original.title}`}
-            onClick={() => handleDownload(row.original)}
-          >
-            <DownloadIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        {canUpdate && (
-          <Tooltip title="Edit">
-            <IconButton
-              size="small"
-              color="warning"
-              aria-label={`Edit policy: ${row.original.title}`}
-              onClick={() => setEditPolicy(row.original)}
-            >
-              <EditIcon aria-hidden="true" fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-        {canDelete && (
-          <Tooltip title="Delete">
-            <IconButton
-              size="small"
-              color="error"
-              aria-label={`Delete policy: ${row.original.title}`}
-              onClick={() => handleDeleteClick(row.original)}
-            >
-              <DeleteIcon aria-hidden="true" fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-    ),
-    renderTopToolbarCustomActions: () =>
-      loading ? <Skeleton width={120} height={32} /> : null,
-  });
+  const actions = useCallback(
+    (row: any) => [
+      {
+        icon: <VisibilityIcon fontSize="small" />,
+        label: `View policy: ${row.title}`,
+        onClick: () => setViewPolicy(row),
+      },
+      {
+        icon: <DownloadIcon fontSize="small" />,
+        label: `Download policy: ${row.title}`,
+        onClick: () => handleDownload(row),
+      },
+      ...(canUpdate
+        ? [
+            {
+              icon: <EditIcon fontSize="small" />,
+              label: `Edit policy: ${row.title}`,
+              color: "warning" as const,
+              onClick: () => setEditPolicy(row),
+            },
+          ]
+        : []),
+      ...(canDelete
+        ? [
+            {
+              icon: <DeleteIcon fontSize="small" />,
+              label: `Delete policy: ${row.title}`,
+              color: "error" as const,
+              onClick: () => handleDeleteClick(row),
+            },
+          ]
+        : []),
+    ],
+    [canUpdate, canDelete],
+  );
 
   return (
     <>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Policies"
+        data={data || []}
+        columns={columns}
+        actions={actions}
+        loading={loading}
+        emptyMessage="No policies found"
+        emptyIcon={<PolicyOutlinedIcon />}
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            setPagination({ ...pagination, pageIndex: page }),
+          onPageSizeChange: (pageSize) =>
+            setPagination({ pageIndex: 0, pageSize }),
+        }}
+      />
       <PolicyViewer
         policy={viewPolicy}
         onClose={() => setViewPolicy(null)}

@@ -6,10 +6,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
@@ -19,7 +15,7 @@ import Save from "@mui/icons-material/Save";
 import Cancel from "@mui/icons-material/Cancel";
 import InfoIcon from "@mui/icons-material/Info";
 import DeleteIcon from "@mui/icons-material/Delete";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -200,11 +196,12 @@ function ViewAddHolidays() {
   const columns = useMemo(
     () => [
       {
-        accessorKey: "name",
-        header: "Holiday Name",
-        size: 400,
-        Cell: ({ cell, row }) => {
-          if (row.original.isAddRow) {
+        key: "name",
+        label: "Holiday Name",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => {
+          if (row.isAddRow) {
             return (
               <Box
                 sx={{
@@ -230,18 +227,17 @@ function ViewAddHolidays() {
             );
           }
           return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {cell.getValue()}
+            <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
+              {row.name}
             </Typography>
           );
         },
       },
       {
-        accessorKey: "date",
-        header: "Date",
-        size: 300,
-        Cell: ({ cell, row }) => {
-          if (row.original.isAddRow) {
+        key: "date",
+        label: "Date",
+        render: (row: any) => {
+          if (row.isAddRow) {
             return (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Calendar
@@ -264,154 +260,49 @@ function ViewAddHolidays() {
               </Box>
             );
           }
-          return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {cell.getValue()}
-            </Typography>
-          );
-        },
-      },
-      {
-        accessorKey: "actions",
-        header: "Actions",
-        size: 200,
-        Cell: ({ row }) => {
-          const rowData = row.original;
-
-          if (rowData.isAddRow) {
-            return (
-              <Box sx={{ display: "flex", gap: 0.5 }}>
-                <Tooltip title="Save Holiday">
-                  <IconButton
-                    size="small"
-                    aria-label="Save holiday"
-                    onClick={() => formik.handleSubmit()}
-                    disabled={formik.isSubmitting}
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "6px",
-                      color: theme === "light" ? "#059669" : "#34d399",
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(16, 185, 129, 0.12)"
-                          : "rgba(52, 211, 153, 0.15)",
-                      "&:hover": {
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(16, 185, 129, 0.2)"
-                            : "rgba(52, 211, 153, 0.25)",
-                      },
-                    }}
-                  >
-                    <Save sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Cancel">
-                  <IconButton
-                    size="small"
-                    aria-label="Cancel adding holiday"
-                    onClick={handleCancelAdd}
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "6px",
-                      color: theme === "light" ? "#64748b" : "#94a3b8",
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(100, 116, 139, 0.12)"
-                          : "rgba(148, 163, 184, 0.15)",
-                      "&:hover": {
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(100, 116, 139, 0.2)"
-                            : "rgba(148, 163, 184, 0.25)",
-                      },
-                    }}
-                  >
-                    <Cancel sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            );
-          }
-
-          if (!canDelete) return null;
-
-          return (
-            <Tooltip title="Delete Holiday">
-              <IconButton
-                size="small"
-                aria-label={`Delete holiday ${rowData.name}`}
-                onClick={() => handleDeleteClick(rowData.date, rowData.name)}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "6px",
-                  color: theme === "light" ? "#dc2626" : "#f87171",
-                  backgroundColor:
-                    theme === "light"
-                      ? "rgba(239, 68, 68, 0.12)"
-                      : "rgba(248, 113, 113, 0.15)",
-                  "&:hover": {
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(239, 68, 68, 0.2)"
-                        : "rgba(248, 113, 113, 0.25)",
-                  },
-                }}
-              >
-                <DeleteIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        accessorKey: "details",
-        header: "Details",
-        size: 200,
-        Cell: ({ cell }) => {
-          return (
-            <Tooltip title="View Details">
-              <IconButton
-                onClick={(e) => handleDetailsClick(e, cell.row.original)}
-                size="small"
-                aria-label="View holiday details"
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "6px",
-                  color: theme === "light" ? "#6366f1" : "#818cf8",
-                  backgroundColor:
-                    theme === "light"
-                      ? "rgba(99, 102, 241, 0.12)"
-                      : "rgba(129, 140, 248, 0.15)",
-                  "&:hover": {
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(99, 102, 241, 0.2)"
-                        : "rgba(129, 140, 248, 0.25)",
-                  },
-                }}
-              >
-                <InfoIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          );
+          return row.date;
         },
       },
     ],
+    [formik],
+  );
 
-    [
-      formik,
-      isAdding,
-      handleDeleteClick,
-      handleDetailsClick,
-      theme,
-      canAdd,
-      canDelete,
-    ],
+  const rowActions = useCallback(
+    (row: any) => {
+      if (row.isAddRow) {
+        return [
+          {
+            icon: <Save sx={{ fontSize: 16 }} />,
+            label: "Save holiday",
+            color: "success" as const,
+            onClick: () => formik.handleSubmit(),
+          },
+          {
+            icon: <Cancel sx={{ fontSize: 16 }} />,
+            label: "Cancel adding holiday",
+            onClick: () => handleCancelAdd(),
+          },
+        ];
+      }
+      const actions: any[] = [
+        {
+          icon: <InfoIcon sx={{ fontSize: 16 }} />,
+          label: "View holiday details",
+          color: "primary" as const,
+          onClick: (r: any, e: any) => handleDetailsClick(e, r),
+        },
+      ];
+      if (canDelete) {
+        actions.push({
+          icon: <DeleteIcon sx={{ fontSize: 16 }} />,
+          label: `Delete holiday ${row.name}`,
+          color: "error" as const,
+          onClick: () => handleDeleteClick(row.date, row.name),
+        });
+      }
+      return actions;
+    },
+    [formik, canDelete, handleDeleteClick, handleDetailsClick],
   );
 
   const tableData = useMemo(() => {
@@ -429,48 +320,45 @@ function ViewAddHolidays() {
     return holidayData;
   }, [data, isAdding]);
 
-  const { table: tableConfig } = useTableConfig(tableData, columns, false);
-
-  const table = useMaterialReactTable({
-    ...tableConfig,
-    renderTopToolbarCustomActions: () => (
-      <div style={{ width: "100%", display: "flex", alignItems: "center" }}>
-        <Calendar
-          value={date}
-          onChange={(e) => e.value && setDate(e.value)}
-          view="year"
-          dateFormat="yy"
-          showIcon
-          placeholder="Select Year"
-          style={{ maxWidth: 300 }}
-        />
-        <div style={{ flex: 1 }}></div>
-        {canAdd && (
-          <Tooltip title="Add Holiday">
-            <span>
-              <IconButton
-                onClick={handleAddClick}
-                disabled={isAdding}
-                color="primary"
-                size="small"
-                aria-label="Add holiday"
-              >
-                <Add aria-hidden="true" sx={{ fontSize: 20 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
-        )}
-      </div>
-    ),
-    state: {
-      isLoading: formik.isSubmitting,
-    },
-  });
-
   return (
     <Box sx={{ p: 2 }}>
       <ErrorBoundary fallback={<ErrorFallback />}>
-        <MaterialReactTable table={table} />
+        <DataList
+          ariaLabel="Holidays"
+          data={tableData}
+          columns={columns}
+          actions={rowActions}
+          loading={formik.isSubmitting}
+          emptyMessage="No holidays configured"
+          toolbarActions={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Calendar
+                value={date}
+                onChange={(e) => e.value && setDate(e.value)}
+                view="year"
+                dateFormat="yy"
+                showIcon
+                placeholder="Select Year"
+                style={{ maxWidth: 180 }}
+              />
+              {canAdd && (
+                <Tooltip title="Add Holiday">
+                  <span>
+                    <IconButton
+                      onClick={handleAddClick}
+                      disabled={isAdding}
+                      color="primary"
+                      size="small"
+                      aria-label="Add holiday"
+                    >
+                      <Add aria-hidden="true" sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
+            </Box>
+          }
+        />
 
         <Popover
           open={isDetailsPopoverOpen}

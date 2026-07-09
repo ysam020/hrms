@@ -34,15 +34,6 @@ message Role {
   repeated Permission permissions = 3;
 }
 
-message BusinessRule {
-  string id = 1;
-  string name = 2;
-  string description = 3;
-  string condition = 4;
-  string action = 5;
-  bool isActive = 6;
-}
-
 message BasicResponse {
   string message = 1;
   int32 status = 2;
@@ -124,25 +115,6 @@ message CheckPermissionResponse {
   string message = 2;
 }
 
-message CreateRuleRequest {
-  string name = 1;
-  string description = 2;
-  string condition = 3;
-  string action = 4;
-}
-
-message RuleResponse {
-  string message = 1;
-  int32 status = 2;
-  BusinessRule data = 3;
-}
-
-message ListRulesResponse {
-  string message = 1;
-  int32 status = 2;
-  repeated BusinessRule data = 3;
-}
-
 service HrmService {
   // Creates a new HR activity record.
   rpc CreateHrActivity (CreateActivityRequest) returns (ActivityResponse);
@@ -164,12 +136,4 @@ service HrmService {
   rpc CheckPermission (CheckPermissionRequest) returns (CheckPermissionResponse);
   // Assigns a role to a user.
   rpc AssignRole (GetRolesRequest) returns (BasicResponse);
-  // Creates a new access-control rule.
-  rpc CreateRule (CreateRuleRequest) returns (RuleResponse);
-  // Returns all access-control rules for an organisation.
-  rpc ListRules (IdRequest) returns (ListRulesResponse);
-  // Updates an existing access-control rule.
-  rpc UpdateRule (CreateRuleRequest) returns (RuleResponse);
-  // Deletes an access-control rule by ID.
-  rpc DeleteRule (IdRequest) returns (BasicResponse);
 }

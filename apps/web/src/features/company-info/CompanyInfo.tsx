@@ -1,4 +1,10 @@
-import { useState, useEffect, useContext, type ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  useContext,
+  cloneElement,
+  type ReactElement,
+} from "react";
 import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
@@ -39,15 +45,19 @@ function InfoRow({
   value,
   href,
 }: {
-  icon: ReactNode;
+  icon: ReactElement;
   label: string;
   value: string | null | undefined;
   href?: string;
 }) {
   if (!value) return null;
   return (
-    <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", py: 1.5 }}>
-      <Box sx={{ color: "primary.main", mt: 0.25, flexShrink: 0 }}>{icon}</Box>
+    <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", py: 1.5 }}>
+      <Box sx={{ mt: 0.25, flexShrink: 0, display: "flex" }}>
+        {cloneElement(icon, {
+          sx: { fontSize: 18, color: "primary.main" },
+        } as any)}
+      </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography variant="caption" color="text.secondary" display="block">
           {label}
@@ -299,11 +309,20 @@ export default function CompanyInfo() {
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setEditOpen(false)} disabled={saving}>
+          <Button
+            size="small"
+            onClick={() => setEditOpen(false)}
+            disabled={saving}
+          >
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
-            {saving ? <CircularProgress size={20} color="inherit" /> : "Save"}
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? <CircularProgress size={16} color="inherit" /> : "Save"}
           </Button>
         </DialogActions>
       </Dialog>

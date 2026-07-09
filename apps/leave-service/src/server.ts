@@ -4,7 +4,7 @@ import { logger } from "@hrms/logger";
 async function startServer() {
   try {
     const server = new LeaveServer();
-    const host = process.env.LEAVE_SERVICE_HOST || "localhost";
+    const host = "0.0.0.0";
     const port = process.env.LEAVE_SERVICE_PORT || "50055";
     server.start(`${host}:${port}`);
     logger.info("LeaveServer started");

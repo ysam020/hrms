@@ -42,6 +42,10 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import LogoDark from "@web/assets/data/LogoDark";
 import LogoLight from "@web/assets/data/LogoLight";
+import WorkWeekPicker, {
+  defaultWorkWeek,
+  type WorkWeekValue,
+} from "@web/shared/components/WorkWeekPicker";
 import "@web/styles/login.scss";
 
 interface Tenant {
@@ -58,6 +62,7 @@ interface PendingOrgForm {
   orgName: string;
   industry: string;
   companySize: string;
+  workWeek: WorkWeekValue;
 }
 
 type Billing = "monthly" | "annual";
@@ -163,6 +168,7 @@ export default function OrgSetupPage() {
   const [orgName, setOrgName] = useState("");
   const [industry, setIndustry] = useState("");
   const [companySize, setCompanySize] = useState("");
+  const [workWeek, setWorkWeek] = useState<WorkWeekValue>(defaultWorkWeek());
   const [billing, setBilling] = useState<Billing>("monthly");
   const [loading, setLoading] = useState(false);
   const [resuming, setResuming] = useState(false);
@@ -176,6 +182,7 @@ export default function OrgSetupPage() {
   const orgNameRef = useRef(orgName);
   const industryRef = useRef(industry);
   const companySizeRef = useRef(companySize);
+  const workWeekRef = useRef(workWeek);
   const billingRef = useRef(billing);
   useEffect(() => {
     orgNameRef.current = orgName;
@@ -186,6 +193,9 @@ export default function OrgSetupPage() {
   useEffect(() => {
     companySizeRef.current = companySize;
   }, [companySize]);
+  useEffect(() => {
+    workWeekRef.current = workWeek;
+  }, [workWeek]);
   useEffect(() => {
     billingRef.current = billing;
   }, [billing]);
@@ -221,6 +231,7 @@ export default function OrgSetupPage() {
               name: form.orgName,
               ...(form.industry && { industry: form.industry }),
               ...(form.companySize && { companySize: form.companySize }),
+              workWeekPattern: form.workWeek ?? defaultWorkWeek(),
             },
           );
           if (createRes.data?.success) {
@@ -315,6 +326,7 @@ export default function OrgSetupPage() {
           const name = orgNameRef.current.trim();
           const ind = industryRef.current;
           const size = companySizeRef.current;
+          const week = workWeekRef.current;
           const bill = billingRef.current;
 
           // Store non-sensitive form data so we can recover if the tab closes
@@ -325,6 +337,7 @@ export default function OrgSetupPage() {
               orgName: name,
               industry: ind,
               companySize: size,
+              workWeek: week,
             } satisfies PendingOrgForm),
           );
 
@@ -333,6 +346,7 @@ export default function OrgSetupPage() {
               name,
               ...(ind && { industry: ind }),
               ...(size && { companySize: size }),
+              workWeekPattern: week,
               billing: bill,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySubscriptionId: response.razorpay_subscription_id,
@@ -634,7 +648,7 @@ export default function OrgSetupPage() {
                 </Select>
               </FormControl>
 
-              <FormControl fullWidth sx={{ mb: 3 }}>
+              <FormControl fullWidth sx={{ mb: 2 }}>
                 <InputLabel>Company size</InputLabel>
                 <Select
                   value={companySize}
@@ -649,6 +663,10 @@ export default function OrgSetupPage() {
                   ))}
                 </Select>
               </FormControl>
+
+              <Box sx={{ mb: 3 }}>
+                <WorkWeekPicker value={workWeek} onChange={setWorkWeek} />
+              </Box>
 
               <Button
                 variant="contained"

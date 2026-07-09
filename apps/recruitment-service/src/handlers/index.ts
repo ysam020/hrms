@@ -10,6 +10,7 @@ import { submitResignation } from "./submitResignation";
 import { getResignation } from "./getResignation";
 import { approveResignation } from "./approveResignation";
 import { rejectResignation } from "./rejectResignation";
+import { withdrawResignation } from "./withdrawResignation";
 import { getMyResignation } from "./getMyResignation";
 import { listResignations } from "./listResignations";
 
@@ -26,6 +27,7 @@ export const handlers = {
   GetResignation: getResignation,
   ApproveResignation: approveResignation,
   RejectResignation: rejectResignation,
+  WithdrawResignation: withdrawResignation,
   GetMyResignation: getMyResignation,
   ListResignations: listResignations,
 };

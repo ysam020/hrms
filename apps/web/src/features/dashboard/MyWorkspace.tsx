@@ -222,8 +222,8 @@ function MyWorkspace({ isDark }) {
     },
     {
       icon: <PaymentsIcon sx={{ fontSize: 18 }} />,
-      label: "Salary Slip",
-      path: "/salary-management",
+      label: "My Payslips",
+      path: "/payroll/my-payslips",
     },
     {
       icon: <PersonIcon sx={{ fontSize: 18 }} />,

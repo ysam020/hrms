@@ -5,7 +5,7 @@ import { startResumeParserWorker } from "./workers/resumeParser";
 async function startServer() {
   try {
     const server = new RecruitmentServer();
-    const host = process.env.RECRUITMENT_SERVICE_HOST || "localhost";
+    const host = "0.0.0.0";
     const port = process.env.RECRUITMENT_SERVICE_PORT || "50056";
     server.start(`${host}:${port}`);
     logger.info("RecruitmentServer started");

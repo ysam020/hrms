@@ -25,6 +25,8 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       wfhHomeLatitude,
       wfhHomeLongitude,
       wfhHomeName,
+      employmentType,
+      workState,
     } = req.body;
 
     const targetUser = await prisma.user.findUnique({
@@ -60,6 +62,9 @@ export async function editEmployeeDetails(req: Request, res: Response) {
         : null;
     if (dateOfAbscond !== undefined)
       updateData.dateOfAbscond = dateOfAbscond ? new Date(dateOfAbscond) : null;
+    if (employmentType !== undefined)
+      updateData.employmentType = employmentType;
+    if (workState !== undefined) updateData.workState = workState ?? null;
 
     await prisma.user.update({
       where: { id: targetUser.id },
@@ -122,6 +127,8 @@ export async function getEmployeeDetails(req: Request, res: Response) {
         dateOfTermination: true,
         dateOfAbscond: true,
         isSuperUser: true,
+        employmentType: true,
+        workState: true,
       },
     });
 
@@ -336,6 +343,9 @@ export async function viewAllKycs(req: Request, res: Response) {
         { department: { $regex: escaped, $options: "i" } },
         { designation: { $regex: escaped, $options: "i" } },
       ];
+    }
+    if (req.query.status && req.query.status !== "All") {
+      match.kyc_approval = req.query.status;
     }
 
     const [rows, countRows] = await Promise.all([

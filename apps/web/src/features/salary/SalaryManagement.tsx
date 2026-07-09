@@ -6,15 +6,10 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import { useNavigate } from "react-router-dom";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
-import { getTableColumns } from "@web/shared/utils/table/getTableColumns";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -88,108 +83,57 @@ function EmployeeManagement() {
 
   const memoizedData = useMemo(() => data, [data]);
 
-  const baseColumns = useMemo(
+  const columns = useMemo(
     () => [
       {
-        accessorKey: "first_name",
-        header: "First Name",
-        size: 170,
-        Cell: ({ cell }) => (
+        key: "first_name",
+        label: "Name",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Person
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
             <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {cell.getValue()}
+              {row.first_name} {row.middle_name || ""} {row.last_name}
             </Typography>
           </Box>
         ),
       },
-      {
-        accessorKey: "middle_name",
-        header: "Middle Name",
-        size: 170,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() || "—"}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "last_name",
-        header: "Last Name",
-        size: 170,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "department",
-        header: "Department",
-        size: 220,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "designation",
-        header: "Designation",
-        size: 220,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
+      { key: "department", label: "Department" },
+      { key: "designation", label: "Designation" },
     ],
     [],
-  );
-
-  const columns = useMemo(() => getTableColumns(baseColumns), [baseColumns]);
-
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50, 100],
-  });
-
-  const table = useMaterialReactTable(
-    useMemo(
-      () => ({
-        ...tableConfig.table,
-        manualFiltering: true,
-        state: {
-          ...tableConfig.table.state,
-          globalFilter,
-        },
-        onGlobalFilterChange: handleGlobalFilterChange,
-        muiTableContainerProps: {
-          sx: { maxHeight: "650px", overflowY: "auto" },
-        },
-        muiTableBodyRowProps: ({ row }) => ({
-          onClick: () => navigate(`/salary-management/${row.original.id}`),
-          style: { cursor: "pointer" },
-        }),
-      }),
-      [tableConfig.table, navigate, globalFilter, handleGlobalFilterChange],
-    ),
   );
 
   return (
     <Box sx={{ p: 2 }}>
       <ErrorBoundary fallback={<ErrorFallback />}>
-        {loading ? (
-          <p>Loading Employee List...</p>
-        ) : (
-          <MaterialReactTable table={table} />
-        )}
+        <DataList
+          ariaLabel="Employee salaries"
+          data={memoizedData || []}
+          columns={columns}
+          loading={loading}
+          emptyMessage="No employees found"
+          onRowClick={(row: any) =>
+            navigate(`/payroll/salary-management/${row.id}`)
+          }
+          search={{
+            value: globalFilter,
+            onChange: handleGlobalFilterChange,
+            placeholder: "Search employees…",
+          }}
+          pagination={{
+            page: pagination.pageIndex,
+            pageSize: pagination.pageSize,
+            totalCount,
+            onPageChange: (page) =>
+              handlePaginationChange({ ...pagination, pageIndex: page }),
+            onPageSizeChange: handlePageSizeChange,
+            pageSizeOptions: [5, 10, 25, 50, 100],
+          }}
+        />
       </ErrorBoundary>
     </Box>
   );

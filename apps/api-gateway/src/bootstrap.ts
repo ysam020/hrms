@@ -1,3 +1,6 @@
+// ⚠️ Telemetry must be the very first import — before express, prisma, grpc.
+import "./telemetry";
+
 import { loadSecrets } from "@hrms/common";
 import { logger } from "@hrms/logger";
 

@@ -1,7 +1,6 @@
 export const ROUTES = {
   DASHBOARD: "/",
   PROFILE: "/profile/*",
-  RULES: "/rules",
   CALENDAR: "/calendar",
   ANALYTICS: "/analytics/*",
   PERMISSIONS: "/permissions/*",
@@ -17,8 +16,8 @@ export const ROUTES = {
   EMPLOYEE_MANAGEMENT_LIST: "/employee-management/employee-list",
   EMPLOYEE_MANAGEMENT_INSIGHTS: "/employee-management/insights",
   EMPLOYEE_MANAGEMENT_DETAILS: "/employee-management/:username",
-  SALARY_MANAGEMENT: "/salary-management",
-  SALARY_MANAGEMENT_EDIT: "/salary-management/:userId",
+  SALARY_MANAGEMENT: "/payroll/salary-management",
+  SALARY_MANAGEMENT_EDIT: "/payroll/salary-management/:userId",
   HOLIDAYS: "/holidays",
   JOB_OPENINGS: "/job-openings/*",
   VIEW_JOB_OPENING: "/view-job-opening/:_id",

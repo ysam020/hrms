@@ -6,12 +6,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import { useNavigate } from "react-router-dom";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
@@ -231,259 +227,115 @@ function ViewJobOpenings({ refreshKey = 0 }) {
 
   const columns = useMemo(
     () => [
+      { key: "jobTitle", label: "Job Title", primary: true, hideLabel: true },
       {
-        accessorKey: "jobTitle",
-        header: "Job Title",
-        size: 220,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "applicationDeadline",
-        header: "Deadline",
-        size: 130,
-        Cell: ({ cell }) => {
-          const date = new Date(
-            cell.row.original.applicationDeadline,
-          ).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          });
-          return date === "Invalid Date" ? (
-            <Skeleton width="50%" />
-          ) : (
-            <Typography variant="body2" fontSize="0.8rem">
-              {date}
-            </Typography>
+        key: "applicationDeadline",
+        label: "Deadline",
+        render: (row: any) => {
+          const date = new Date(row.applicationDeadline).toLocaleDateString(
+            "en-US",
+            { year: "numeric", month: "2-digit", day: "2-digit" },
           );
+          return date === "Invalid Date" ? <Skeleton width={60} /> : date;
+        },
+      },
+      { key: "numberOfVacancies", label: "Vacancies" },
+      { key: "candidatesHired", label: "Hired" },
+      {
+        key: "budget",
+        label: "Budget",
+        render: (row: any) => {
+          const budget = row.budget;
+          return `${budget[0] ? `${budget[0]} LPA` : "—"} - ${budget[1] ? `${budget[1]} LPA` : "—"}`;
         },
       },
       {
-        accessorKey: "numberOfVacancies",
-        header: "Vacancies",
-        size: 140,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "candidatesHired",
-        header: "Hired",
-        size: 120,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "budget",
-        header: "Budget",
-        size: 140,
-        Cell: ({ cell }) => {
-          const budget = cell.row.original.budget;
-          return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {!budget[0] ? (
-                <Skeleton width="30%" component="span" />
-              ) : (
-                `${budget[0]} LPA`
-              )}
-              {" - "}
-              {!budget[1] ? (
-                <Skeleton width="30%" component="span" />
-              ) : (
-                `${budget[1]} LPA`
-              )}
-            </Typography>
-          );
-        },
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        size: 120,
-        Cell: ({ cell }) => getStatusChip(cell.getValue()),
-      },
-      {
-        accessorKey: "actions",
-        header: "Actions",
-        size: 120,
-        Cell: ({ cell }) => {
-          const isDeleted =
-            cell.row.original.status === "Deleted" ||
-            cell.row.original.status === "deleted";
-
-          if (isDeleted) {
-            return (
-              <Typography
-                variant="caption"
-                fontSize="0.7rem"
-                sx={{ color: "text.disabled", fontStyle: "italic" }}
-              >
-                —
-              </Typography>
-            );
-          }
-
-          return (
-            <Box sx={{ display: "flex", gap: 0.5 }}>
-              {canEdit && (
-                <Tooltip title="Edit">
-                  <IconButton
-                    size="small"
-                    aria-label={`Edit job opening: ${cell.row.original.title ?? ""}`}
-                    onClick={(e) => handleOpenModal(e, cell.row.original)}
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "6px",
-                      color: theme === "light" ? "#6366f1" : "#818cf8",
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(99, 102, 241, 0.12)"
-                          : "rgba(129, 140, 248, 0.15)",
-                      "&:hover": {
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(99, 102, 241, 0.2)"
-                            : "rgba(129, 140, 248, 0.25)",
-                      },
-                    }}
-                  >
-                    <EditIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-
-              {canDelete && (
-                <Tooltip title="Delete">
-                  <IconButton
-                    size="small"
-                    aria-label={`Delete job opening: ${cell.row.original.title ?? ""}`}
-                    onClick={(e) => handleDeleteClick(e, cell.row.original.id)}
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "6px",
-                      color: theme === "light" ? "#dc2626" : "#f87171",
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(239, 68, 68, 0.12)"
-                          : "rgba(248, 113, 113, 0.15)",
-                      "&:hover": {
-                        backgroundColor:
-                          theme === "light"
-                            ? "rgba(239, 68, 68, 0.2)"
-                            : "rgba(248, 113, 113, 0.25)",
-                      },
-                    }}
-                  >
-                    <DeleteIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-          );
-        },
-      },
-      {
-        accessorKey: "details",
-        header: "Details",
-        size: 120,
-        Cell: ({ cell }) => {
-          return (
-            <Tooltip title="View Details">
-              <IconButton
-                onClick={(e) => handleDetailsClick(e, cell.row.original)}
-                aria-label="View job opening details"
-                size="small"
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "6px",
-                  color: theme === "light" ? "#6366f1" : "#818cf8",
-                  backgroundColor:
-                    theme === "light"
-                      ? "rgba(99, 102, 241, 0.12)"
-                      : "rgba(129, 140, 248, 0.15)",
-                  "&:hover": {
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(99, 102, 241, 0.2)"
-                        : "rgba(129, 140, 248, 0.25)",
-                  },
-                }}
-              >
-                <InfoIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          );
-        },
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => getStatusChip(row.status),
       },
     ],
-
-    [
-      handleOpenModal,
-      handleDeleteClick,
-      handleDetailsClick,
-      theme,
-      canEdit,
-      canDelete,
-    ],
+    [],
   );
 
-  const { table: baseConfig } = useTableConfig(memoizedData, columns, loading);
-
-  const table = useMaterialReactTable({
-    ...baseConfig,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <FilterList
-            sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-          />
-          <Typography variant="body2" fontSize="0.8rem" color="text.secondary">
-            Filter by status:
-          </Typography>
-        </Box>
-        <Box sx={{ minWidth: 120 }}>
-          <Dropdown
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.value)}
-            options={[
-              { label: "All", value: "All" },
-              { label: "Active", value: "Active" },
-              { label: "Expired", value: "Expired" },
-              { label: "Deleted", value: "Deleted" },
-            ]}
-            placeholder="Select Status"
-            className="w-full"
-            style={{ minWidth: "120px" }}
-            appendTo={() => document.querySelector("#root .App") as HTMLElement}
-          />
-        </Box>
-      </Box>
-    ),
-    muiTableBodyRowProps: ({ row }) => ({
-      onClick: () => navigate(`/view-job-opening/${row.original.id}`),
-      style: {
-        cursor: "pointer",
-        opacity: row.original.status === "Deleted" ? 0.6 : 1,
-      },
-    }),
-  });
+  const rowActions = useCallback(
+    (row: any) => {
+      const isDeleted = row.status === "Deleted" || row.status === "deleted";
+      if (isDeleted) return [];
+      const actions: any[] = [];
+      if (canEdit) {
+        actions.push({
+          icon: <EditIcon sx={{ fontSize: 16 }} />,
+          label: `Edit job opening: ${row.jobTitle ?? ""}`,
+          color: "primary" as const,
+          onClick: (r: any, e: any) => handleOpenModal(e, r),
+        });
+      }
+      if (canDelete) {
+        actions.push({
+          icon: <DeleteIcon sx={{ fontSize: 16 }} />,
+          label: `Delete job opening: ${row.jobTitle ?? ""}`,
+          color: "error" as const,
+          onClick: (r: any, e: any) => handleDeleteClick(e, r.id),
+        });
+      }
+      actions.push({
+        icon: <InfoIcon sx={{ fontSize: 16 }} />,
+        label: "View job opening details",
+        onClick: (r: any, e: any) => handleDetailsClick(e, r),
+      });
+      return actions;
+    },
+    [canEdit, canDelete],
+  );
 
   return (
     <div>
       <ErrorBoundary fallback={<ErrorFallback />}>
-        <MaterialReactTable table={table} />
+        <DataList
+          ariaLabel="Job openings"
+          data={memoizedData}
+          columns={columns}
+          actions={rowActions}
+          loading={loading}
+          emptyMessage="No job openings found"
+          onRowClick={(row: any) => navigate(`/view-job-opening/${row.id}`)}
+          toolbarActions={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <FilterList
+                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+                />
+                <Typography
+                  variant="body2"
+                  fontSize="0.8rem"
+                  color="text.secondary"
+                >
+                  Filter by status:
+                </Typography>
+              </Box>
+              <Box sx={{ minWidth: 120 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={[
+                    { label: "All", value: "All" },
+                    { label: "Active", value: "Active" },
+                    { label: "Expired", value: "Expired" },
+                    { label: "Deleted", value: "Deleted" },
+                  ]}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "120px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+          }
+        />
 
         <EditJobOpeningModal
           open={openModal}

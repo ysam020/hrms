@@ -15,21 +15,9 @@ import { ThemeContext } from "@web/app/providers/ThemeContext";
 const BasicInfo = lazy(() => import("./BasicInfo"));
 const PushNotifications = lazy(() => import("./PushNotifications"));
 const WebAuthnDevices = lazy(() => import("./WebAuthnDevices"));
-const SalarySlip = lazy(() => import("./SalarySlip"));
+const tabLabels = ["Basic Info", "Push Notifications", "Security Keys"];
 
-const tabLabels = [
-  "Basic Info",
-  "Push Notifications",
-  "Security Keys",
-  "Salary Slip",
-];
-
-const tabSlugs = [
-  "basic-info",
-  "push-notifications",
-  "security-keys",
-  "salary-slip",
-];
+const tabSlugs = ["basic-info", "push-notifications", "security-keys"];
 
 function Profile() {
   const { setUser, user } = useContext(UserContext);
@@ -162,27 +150,6 @@ function Profile() {
           >
             <ErrorBoundary fallback={<ErrorFallback />}>
               <WebAuthnDevices />
-            </ErrorBoundary>
-          </Suspense>
-        )}
-
-        {value === 3 && (
-          <Suspense
-            fallback={
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  p: 4,
-                }}
-              >
-                <CircularProgress size={24} />
-              </Box>
-            }
-          >
-            <ErrorBoundary fallback={<ErrorFallback />}>
-              <SalarySlip />
             </ErrorBoundary>
           </Suspense>
         )}

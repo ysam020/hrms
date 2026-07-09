@@ -12,6 +12,8 @@ jest.mock("@hrms/db", () => {
     },
     user: { findMany: jest.fn(), findUnique: jest.fn() },
     team: { findMany: jest.fn() },
+    tenantSettings: { findFirst: jest.fn() },
+    noticePeriodPolicy: { findMany: jest.fn() },
   };
   return {
     prisma: _db,
@@ -36,6 +38,14 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+jest.mock("@hrms/approval-engine", () => ({
+  instantiateApproval: jest.fn().mockResolvedValue({
+    instanceId: "instance-1",
+    firstApproverId: "manager-1",
+    usedDefaultChain: true,
+  }),
+}));
+
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
@@ -45,6 +55,10 @@ const mockResignationCreate = (prisma as any).resignation.create as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockTeamFindMany = (prisma as any).team.findMany as jest.Mock;
+const mockTenantSettingsFindFirst = (prisma as any).tenantSettings
+  .findFirst as jest.Mock;
+const mockNoticePeriodPolicyFindMany = (prisma as any).noticePeriodPolicy
+  .findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
 
@@ -61,6 +75,13 @@ describe("submitResignation", () => {
     mockUserFindMany.mockResolvedValue([]);
     mockUserFindUnique.mockResolvedValue(null);
     mockTeamFindMany.mockResolvedValue([]);
+    // No NoticePeriodPolicy rows -> flat 30-day fallback, matching today's
+    // TenantSettings.noticePeriodDays default for every existing test here.
+    mockTenantSettingsFindFirst.mockResolvedValue({
+      noticePeriodDays: 30,
+      probationPeriodDays: 90,
+    });
+    mockNoticePeriodPolicyFindMany.mockResolvedValue([]);
   });
 
   it("returns INVALID_ARGUMENT when userId is missing", async () => {
@@ -113,8 +134,8 @@ describe("submitResignation", () => {
   it("creates resignation with status 'Submitted' on happy path", async () => {
     const resignation = {
       id: "res-1",
-      username: "john",
-      resignationDate: "2024-04-01",
+      userId: "john",
+      resignationDate: new Date("2024-04-01"),
       status: "Submitted",
     };
     mockResignationCreate.mockResolvedValue(resignation);
@@ -145,11 +166,19 @@ describe("submitResignation", () => {
         }),
       }),
     );
-    expect(cb).toHaveBeenCalledWith(null, {
-      message: MESSAGES.RESIGNATION_SUBMITTED,
-      status: status.OK,
-      data: resignation,
-    });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        message: MESSAGES.RESIGNATION_SUBMITTED,
+        status: status.OK,
+        data: expect.objectContaining({
+          id: "res-1",
+          userId: "john",
+          status: "Submitted",
+          resignationDate: "2024-04-01T00:00:00.000Z",
+        }),
+      }),
+    );
   });
 
   it("sets optional fields to null/0 defaults when not provided", async () => {
@@ -160,13 +189,63 @@ describe("submitResignation", () => {
     expect(mockResignationCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          lastWorkingDay: null,
           reason: null,
           overallJobSatisfaction: 0,
           suggestions: null,
         }),
       }),
     );
+  });
+
+  it("defaults lastWorkingDay from the resolved notice period when not proposed", async () => {
+    mockResignationCreate.mockResolvedValue({ id: "res-1" });
+
+    await submitResignation(makeCall(validRequest), makeCallback());
+
+    const call = mockResignationCreate.mock.calls[0][0];
+    const resignationDate = call.data.resignationDate as Date;
+    const lastWorkingDay = call.data.lastWorkingDay as Date;
+    const daysApart = Math.round(
+      (lastWorkingDay.getTime() - resignationDate.getTime()) /
+        (1000 * 60 * 60 * 24),
+    );
+    expect(daysApart).toBe(30); // flat TenantSettings.noticePeriodDays fallback
+    expect(call.data.noticePeriodDays).toBe(30);
+    expect(call.data.exitType).toBe("voluntary");
+  });
+
+  it("absconding has no notice period — lastWorkingDay defaults to the resignation date itself", async () => {
+    mockResignationCreate.mockResolvedValue({ id: "res-1" });
+
+    await submitResignation(
+      makeCall({ ...validRequest, exitType: "absconding" }),
+      makeCallback(),
+    );
+
+    const call = mockResignationCreate.mock.calls[0][0];
+    expect(call.data.noticePeriodDays).toBe(0);
+    expect(call.data.lastWorkingDay).toEqual(call.data.resignationDate);
+    // Tenure/designation lookup for notice-period resolution is skipped
+    // entirely for absconding — only the (separate) notification fan-out
+    // looks up the applicant's username.
+    expect(mockUserFindUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ joining_date: true }),
+      }),
+    );
+  });
+
+  it("rejects an invalid exitType", async () => {
+    const cb = makeCallback();
+    await submitResignation(
+      makeCall({ ...validRequest, exitType: "not_a_real_type" }),
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.INVALID_EXIT_TYPE,
+      status: status.INVALID_ARGUMENT,
+    });
+    expect(mockResignationCreate).not.toHaveBeenCalled();
   });
 
   it("invalidates resignations cache after submission", async () => {
