@@ -1,6 +1,7 @@
 import { status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
+import { getNotificationQueue } from "@hrms/queue";
 import { cancelLeave } from "../handlers/cancelLeave";
 import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
@@ -14,6 +15,10 @@ jest.mock("@hrms/db", () => {
     approvalInstance: {
       findFirst: jest.fn().mockResolvedValue(null),
     },
+    user: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -24,6 +29,12 @@ jest.mock("@hrms/db", () => {
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },
+}));
+
+jest.mock("@hrms/queue", () => ({
+  getNotificationQueue: jest
+    .fn()
+    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
 }));
 
 jest.mock("@hrms/approval-engine", () => ({
@@ -45,11 +56,21 @@ const makeCallback = () => jest.fn();
 const mockFindUnique = prisma.leaveApplication.findUnique as jest.Mock;
 const mockUpdate = prisma.leaveApplication.update as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
+const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
+const mockNotificationAdd = getNotificationQueue().add as jest.Mock;
+
+// Waits for the fire-and-forget notification promise chain (kicked off but
+// not awaited by the handler) to settle before assertions run against it.
+const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("cancelLeave", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockInvalidate.mockResolvedValue(undefined);
+    mockUserFindUnique.mockResolvedValue(null);
+    mockUserFindMany.mockResolvedValue([]);
+    mockNotificationAdd.mockResolvedValue(undefined);
   });
 
   it("returns INVALID_ARGUMENT when id is missing", async () => {
@@ -104,6 +125,43 @@ describe("cancelLeave", () => {
     );
   });
 
+  it("notifies HR and the original approver when an approved leave's cancellation is requested", async () => {
+    mockFindUnique.mockResolvedValue({
+      id: "leave-1",
+      status: "Approved",
+      userId: "john",
+      approvedById: "manager-1",
+      from: new Date("2024-03-10T00:00:00.000Z"),
+      to: new Date("2024-03-10T00:00:00.000Z"),
+    });
+    mockUpdate.mockResolvedValue({
+      id: "leave-1",
+      status: "Cancellation Requested",
+    });
+    mockUserFindUnique.mockImplementation(({ where }: any) => {
+      if (where.id === "john") return { username: "john" };
+      if (where.id === "manager-1") return { id: "manager-1", username: "manager1" };
+      return null;
+    });
+    mockUserFindMany.mockResolvedValue([{ id: "hr-1", username: "hr1" }]);
+
+    await cancelLeave(
+      makeCall({ id: "leave-1", userId: "john" }),
+      makeCallback(),
+    );
+    await flushMicrotasks();
+
+    expect(mockNotificationAdd).toHaveBeenCalledWith(
+      "leaveCancellationRequested",
+      expect.objectContaining({
+        title: "Leave",
+        recipients: expect.arrayContaining(["hr-1", "manager-1"]),
+        pushTargets: expect.arrayContaining(["hr1", "manager1"]),
+        eventType: "leave_notification",
+      }),
+    );
+  });
+
   it("returns FAILED_PRECONDITION when leave is Rejected", async () => {
     mockFindUnique.mockResolvedValue({
       id: "leave-1",
@@ -113,7 +171,7 @@ describe("cancelLeave", () => {
     const cb = makeCallback();
     await cancelLeave(makeCall({ id: "leave-1", userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
-      message: MESSAGES.ONLY_PENDING_CAN_BE_CANCELLED,
+      message: MESSAGES.CANNOT_CANCEL_IN_CURRENT_STATE,
       status: status.FAILED_PRECONDITION,
     });
   });

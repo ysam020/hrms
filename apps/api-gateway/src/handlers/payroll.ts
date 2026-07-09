@@ -230,11 +230,21 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       });
     }
 
-    // Fetch all active employees — only their base (full-month) gross salary is needed;
-    // components are re-derived from attendance-based pro-rata gross below.
+    // Fetch all active employees — their base (full-month) gross salary and,
+    // when configured (Employee/Salary module), their own Basic/HRA/Conveyance
+    // breakdown, which is prorated by attendance below instead of being
+    // re-derived from a fixed split.
     const employees = await prisma.user.findMany({
       where: { employeeStatus: "Active" },
-      select: { id: true, salary: true, employmentType: true, workState: true },
+      select: {
+        id: true,
+        salary: true,
+        employmentType: true,
+        workState: true,
+        salaryBasicPay: true,
+        salaryHra: true,
+        salaryConveyance: true,
+      },
     });
 
     if (employees.length === 0) {
@@ -314,6 +324,16 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       : [];
     const ptSlabsByState = groupSlabsByState(ptSlabs);
 
+    // PF/ESI rates — tenant-configured SalaryComponentDefinition rows
+    // (Settings → Payroll Components) when present, else the 12%/1.75%
+    // defaults calcStatutoryDeductions already falls back to.
+    const componentRates = tenantId
+      ? await (prisma as any).salaryComponentDefinition.findMany({
+          where: { tenantId, code: { in: ["PF", "ESI"] }, isActive: true },
+          select: { code: true, percentValue: true },
+        })
+      : [];
+
     // Fetch pending salary advances eligible for deduction this month.
     const advances = await prisma.salaryAdvance.findMany({
       where: { status: { in: ["Approved", "Repaying"] } },
@@ -370,20 +390,37 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         totalMonthDays > 0
           ? Math.round((fullGross * paidDays) / totalMonthDays)
           : fullGross;
+      const prorationRatio =
+        totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
 
-      // Derive salary components from pro-rata gross.
-      const basicPay = Math.round(gross * 0.5);
-      const hra = Math.round(gross * 0.25);
-      const conveyance = Math.round(gross * 0.25);
+      // Use the employee's own configured Basic/HRA/Conveyance (set via the
+      // Employee/Salary module, itself tenant-rate-derived) prorated by the
+      // same attendance ratio as gross — falling back to the original fixed
+      // 50/25/25 split of pro-rata gross only when nothing's been configured
+      // for this employee yet, so unconfigured tenants see no change.
+      const basicPay =
+        emp.salaryBasicPay != null
+          ? Math.round(emp.salaryBasicPay * prorationRatio)
+          : Math.round(gross * 0.5);
+      const hra =
+        emp.salaryHra != null
+          ? Math.round(emp.salaryHra * prorationRatio)
+          : Math.round(gross * 0.25);
+      const conveyance =
+        emp.salaryConveyance != null
+          ? Math.round(emp.salaryConveyance * prorationRatio)
+          : Math.round(gross * 0.25);
 
       // Statutory deductions — see utils/payrollCalc.ts for the contractor
-      // exemption and state-wise PT slab lookup.
+      // exemption, tenant-configured PF/ESI rates, and state-wise PT slab
+      // lookup.
       const { pf, esi, pt } = calcStatutoryDeductions(
         gross,
         basicPay,
         emp.employmentType,
         emp.workState,
         ptSlabsByState,
+        componentRates,
       );
 
       const adv = advanceMap.get(emp.id);

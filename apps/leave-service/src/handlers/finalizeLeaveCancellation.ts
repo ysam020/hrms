@@ -10,6 +10,7 @@ import {
   restoreCompOffCredits,
 } from "./leaveBalanceHelpers";
 import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
+import { getLeaveSettings } from "../utils/leaveSettings";
 
 /**
  * Called by api-gateway once a "Cancellation Requested" leave has gone
@@ -46,16 +47,33 @@ export const finalizeLeaveCancellation = async (
       });
     }
 
-    const updatedLeave = await prisma.leaveApplication.update({
-      where: { id },
+    // Conditioned on status="Cancellation Requested" so two concurrent
+    // finalize calls for the same leave (duplicate approval-engine callback)
+    // can't both pass the check above and both credit the balance back —
+    // only the request that actually flips the status wins.
+    const transition = await prisma.leaveApplication.updateMany({
+      where: { id, status: "Cancellation Requested" },
       data: approved
         ? { status: "Cancelled", cancelledOn: new Date() }
         : { status: "Approved", cancellationReason: null },
     });
+    if (transition.count === 0) {
+      return callback(null, {
+        message: MESSAGES.LEAVE_CANCELLED,
+        status: status.OK,
+      });
+    }
+
+    const updatedLeave = await prisma.leaveApplication.findUniqueOrThrow({
+      where: { id },
+    });
 
     if (approved) {
       const tenantId = getTenantId();
-      if (tenantId && isCompOffLeaveType(leave.leaveType)) {
+      const leavePolicies = tenantId
+        ? (await getLeaveSettings(tenantId))?.leavePolicies
+        : undefined;
+      if (tenantId && isCompOffLeaveType(leave.leaveType, leavePolicies)) {
         await restoreCompOffCredits(leave.id).catch((err) =>
           logger.warn(
             "[finalizeLeaveCancellation] Comp-off credit restore failed:",

@@ -85,4 +85,19 @@ describe("calcStatutoryDeductions", () => {
     const result = calcStatutoryDeductions(20000, 10000, null, null, new Map());
     expect(result).toEqual({ pf: 1200, esi: 350, pt: 200 });
   });
+
+  it("uses tenant-configured PF/ESI rates when provided", () => {
+    const result = calcStatutoryDeductions(20000, 10000, "employee", null, new Map(), [
+      { code: "PF", percentValue: 10 },
+      { code: "ESI", percentValue: 1 },
+    ]);
+    expect(result).toEqual({ pf: 1000, esi: 200, pt: 200 });
+  });
+
+  it("falls back to the default rate for a code missing from the tenant's configured rows", () => {
+    const result = calcStatutoryDeductions(20000, 10000, "employee", null, new Map(), [
+      { code: "PF", percentValue: 10 },
+    ]);
+    expect(result).toEqual({ pf: 1000, esi: 350, pt: 200 }); // ESI defaults to 1.75%
+  });
 });

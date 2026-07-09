@@ -1,17 +1,26 @@
-import { prisma } from "@hrms/db";
+import { prisma, prismaWithTenant } from "@hrms/db";
 import { updateLeaveBalance } from "../jobs/updateLeaveBalance";
 
 jest.mock("@hrms/db", () => {
-  const _db = {
+  const _master = {
+    tenant: { findMany: jest.fn() },
+  };
+  const _tenantDb = {
     leaveBalance: {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    tenantSettings: {
+      findFirst: jest.fn(),
+    },
   };
   return {
-    prisma: _db,
-    prismaWithTenant: _db,
-    getTenantId: jest.fn().mockReturnValue("t1"),
+    prisma: _master,
+    prismaWithTenant: _tenantDb,
+    getClientForDb: jest.fn().mockReturnValue({}),
+    // Real runWithTenant uses AsyncLocalStorage; the unit test only cares
+    // that the callback actually runs, so just invoke it directly.
+    runWithTenant: jest.fn((_tenantId, _client, fn) => fn()),
   };
 });
 
@@ -19,13 +28,23 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-const mockFindMany = (prisma as any).leaveBalance.findMany as jest.Mock;
-const mockUpdate = (prisma as any).leaveBalance.update as jest.Mock;
+const mockTenantFindMany = (prisma as any).tenant.findMany as jest.Mock;
+const mockFindMany = (prismaWithTenant as any).leaveBalance
+  .findMany as jest.Mock;
+const mockUpdate = (prismaWithTenant as any).leaveBalance.update as jest.Mock;
+const mockSettingsFindFirst = (prismaWithTenant as any).tenantSettings
+  .findFirst as jest.Mock;
+
+const ONE_TENANT = [{ id: "t1", dbName: "tenant_t1" }];
 
 describe("updateLeaveBalance", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUpdate.mockResolvedValue(undefined);
+    mockTenantFindMany.mockResolvedValue(ONE_TENANT);
+    // No leavePolicies configured by default — falls back to the global
+    // env-var carry-forward cap, matching pre-existing behavior.
+    mockSettingsFindFirst.mockResolvedValue(null);
     // Default: non-April month
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2024, 5, 15)); // June 15
@@ -35,10 +54,22 @@ describe("updateLeaveBalance", () => {
     jest.useRealTimers();
   });
 
-  it("does nothing when there are no leave balance records", async () => {
+  it("does nothing when there are no tenants", async () => {
+    mockTenantFindMany.mockResolvedValue([]);
+    await updateLeaveBalance();
+    expect(mockFindMany).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when a tenant has no leave balance records", async () => {
     mockFindMany.mockResolvedValue([]);
     await updateLeaveBalance();
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("scopes the balance lookup to each tenant", async () => {
+    mockFindMany.mockResolvedValue([]);
+    await updateLeaveBalance();
+    expect(mockFindMany).toHaveBeenCalledWith({ where: { tenantId: "t1" } });
   });
 
   it("accumulates remainingPL from past months into accumulatedPLBeforeCurrentMonth", async () => {
@@ -186,8 +217,66 @@ describe("updateLeaveBalance", () => {
     });
   });
 
-  it("throws when the database call fails", async () => {
+  it("uses the tenant's leavePolicies PL carryForward.maxDays instead of the global default", async () => {
+    jest.setSystemTime(new Date(2024, 3, 1)); // April 1
+    mockSettingsFindFirst.mockResolvedValue({
+      leavePolicies: [
+        { key: "PL", name: "Paid Leave", carryForward: { enabled: true, maxDays: 5 } },
+      ],
+    });
+    mockFindMany.mockResolvedValue([
+      {
+        id: "lb-1",
+        accumulatedPLBeforeCurrentMonth: 10,
+        balances: [],
+      },
+    ]);
+
+    await updateLeaveBalance();
+
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "lb-1" },
+      data: expect.objectContaining({ accumulatedPLBeforeCurrentMonth: 5 }),
+    });
+  });
+
+  it("forfeits newly-freed PL (but keeps prior accumulation) when carryForward.enabled is false", async () => {
+    mockSettingsFindFirst.mockResolvedValue({
+      leavePolicies: [
+        { key: "PL", name: "Paid Leave", carryForward: { enabled: false } },
+      ],
+    });
+    mockFindMany.mockResolvedValue([
+      {
+        id: "lb-1",
+        accumulatedPLBeforeCurrentMonth: 5,
+        balances: [{ year: 2024, month: 4, remainingPL: 3 }],
+      },
+    ]);
+
+    await updateLeaveBalance();
+
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "lb-1" },
+      data: expect.objectContaining({ accumulatedPLBeforeCurrentMonth: 5 }),
+    });
+  });
+
+  it("continues processing other tenants when one tenant errors", async () => {
+    mockTenantFindMany.mockResolvedValue([
+      { id: "t1", dbName: "tenant_t1" },
+      { id: "t2", dbName: "tenant_t2" },
+    ]);
+    mockFindMany
+      .mockRejectedValueOnce(new Error("t1 DB unreachable"))
+      .mockResolvedValueOnce([]);
+
+    await expect(updateLeaveBalance()).resolves.toBeUndefined();
+    expect(mockFindMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not throw when a single tenant's database call fails", async () => {
     mockFindMany.mockRejectedValue(new Error("DB error"));
-    await expect(updateLeaveBalance()).rejects.toThrow("DB error");
+    await expect(updateLeaveBalance()).resolves.toBeUndefined();
   });
 });

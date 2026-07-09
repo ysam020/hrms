@@ -5,6 +5,8 @@ export const MESSAGES = {
   EMPLOYEE_ID_REQUIRED: "Employee ID is required",
   EMPLOYEE_NOT_FOUND: "Employee not found",
   EMPLOYEE_PERMANENTLY_DELETED: "Employee permanently deleted",
+  EMPLOYEE_HAS_HISTORICAL_RECORDS:
+    "Cannot permanently delete an employee with existing attendance, leave, or payroll records. Deactivate the employee instead.",
   EMPLOYEE_DEACTIVATED: "Employee deactivated successfully",
   EMPLOYEE_UPDATED: "Employee updated successfully",
   EMPLOYEE_FETCHED: "Employee fetched successfully",

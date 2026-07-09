@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma, prisma as rawPrisma } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
@@ -153,22 +153,20 @@ export async function generateSalarySlip(req: Request, res: Response) {
     const monthLabel = `${MONTH_NAMES[(month - 1) % 12]} ${year}`;
 
     // ── Attendance-based salary recalculation ──────────────────────────────────
-    // We use rawPrisma (no tenant middleware) for AttendanceRecord and LeaveBalance
-    // queries because the prismaWithTenant middleware silently returns empty results
-    // for those collections in the gateway context.
-    // User.salary is queried via prismaWithTenant (works correctly for User model).
+    // AttendanceRecord/LeaveBalance are business models — prismaWithTenant
+    // routes them to the tenant-specific physical DB when the tenant has
+    // one provisioned (Tenant.dbName), and falls back to the shared master
+    // DB otherwise. The explicit tenantId filter is a no-op in the former
+    // case (every row already belongs to this tenant) and required for
+    // correctness in the latter.
+    const tenantId = user!.tenantId;
 
     const totalMonthDays = new Date(year, month, 0).getDate(); // e.g. 30 for April
 
-    const [empUser, attRecords, lbRecord] = await Promise.all([
-      prisma.user.findUnique({
-        // tenant-filtered — OK for User
-        where: { id: requestedUserId },
-        select: { salary: true },
-      }),
-      rawPrisma.attendanceRecord.findMany({
-        // no tenant filter — required here
+    const [attRecords, lbRecord] = await Promise.all([
+      prisma.attendanceRecord.findMany({
         where: {
+          tenantId,
           userId: requestedUserId,
           date: {
             gte: new Date(year, month - 1, 1),
@@ -177,16 +175,11 @@ export async function generateSalarySlip(req: Request, res: Response) {
         },
         select: { status: true },
       }),
-      rawPrisma.leaveBalance.findFirst({
-        // no tenant filter — required here
-        where: { userId: requestedUserId },
+      prisma.leaveBalance.findFirst({
+        where: { tenantId, userId: requestedUserId },
         select: { balances: true },
       }),
     ]);
-
-    // CTC: gateway User record (reliable) with stored gross as last resort.
-    const fullMonthlyCTC: number =
-      empUser?.salary || salaryStructure.grossSalary || 0;
 
     // Count per-status attendance (case-insensitive to handle any capitalization).
     let attPresent = 0,
@@ -224,28 +217,66 @@ export async function generateSalarySlip(req: Request, res: Response) {
       totalMonthDays,
     );
 
-    // Pro-rata gross and component breakdown.
-    const proRataGross =
-      totalMonthDays > 0
-        ? Math.round((fullMonthlyCTC * paidDays) / totalMonthDays)
-        : fullMonthlyCTC;
-    const calcBasicPay = Math.round(proRataGross * 0.5);
-    const calcHra = Math.round(proRataGross * 0.25);
-    const calcConveyance = Math.round(proRataGross * 0.25);
-    const calcPf = Math.round(calcBasicPay * 0.12);
-    const calcEsi =
-      proRataGross <= 21000 ? Math.round(proRataGross * 0.0175) : 0;
-    const calcPt =
-      proRataGross < 6000
-        ? 0
-        : proRataGross < 9000
-          ? 80
-          : proRataGross < 12000
-            ? 150
-            : 200;
-    const calcIncentive = salaryStructure.incentive ?? 0;
-    const calcOtherDed = salaryStructure.deductions ?? 0;
-    const calcGrossEarnings = proRataGross + calcIncentive;
+    // If a real payroll run has already disbursed this exact month, its
+    // PayrollLineItem holds the final, already-prorated amount that was
+    // actually paid — use it as-is. Re-proportioning it again here (by the
+    // same attendance ratio initiatePayrollRun already applied) would
+    // silently under-report what the employee was actually paid.
+    const disbursedRun = tenantId
+      ? await prisma.payrollRun.findFirst({
+          where: { tenantId, month, year, status: "disbursed" },
+          select: { id: true },
+        })
+      : null;
+    const disbursedLineItem = disbursedRun
+      ? await prisma.payrollLineItem.findFirst({
+          where: { payrollRunId: disbursedRun.id, userId: requestedUserId },
+        })
+      : null;
+
+    let calcBasicPay: number,
+      calcHra: number,
+      calcConveyance: number,
+      calcPf: number,
+      calcEsi: number,
+      calcPt: number,
+      calcIncentive: number,
+      calcOtherDed: number;
+
+    if (disbursedLineItem) {
+      calcBasicPay = disbursedLineItem.basicPay ?? 0;
+      calcHra = disbursedLineItem.hra ?? 0;
+      calcConveyance = disbursedLineItem.conveyance ?? 0;
+      calcPf = disbursedLineItem.pf ?? 0;
+      calcEsi = disbursedLineItem.esi ?? 0;
+      calcPt = disbursedLineItem.pt ?? 0;
+      calcIncentive = 0;
+      calcOtherDed = disbursedLineItem.otherDeductions ?? 0;
+    } else {
+      // No disbursed run yet for this month — prorate the already-stored,
+      // already-configured baseline salary structure by attendance instead
+      // of recomputing Basic/HRA/Conveyance/PF/ESI/PT from a separate
+      // hardcoded formula, so a preview payslip agrees with whatever was
+      // actually configured for this employee (via the employee module or
+      // the salary module).
+      const prorationRatio =
+        totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
+      calcBasicPay = Math.round(
+        (salaryStructure.basicPay ?? 0) * prorationRatio,
+      );
+      calcHra = Math.round((salaryStructure.hra ?? 0) * prorationRatio);
+      calcConveyance = Math.round(
+        (salaryStructure.conveyance ?? 0) * prorationRatio,
+      );
+      calcPf = Math.round((salaryStructure.pf ?? 0) * prorationRatio);
+      calcEsi = Math.round((salaryStructure.esi ?? 0) * prorationRatio);
+      calcPt = Math.round((salaryStructure.pt ?? 0) * prorationRatio);
+      calcIncentive = salaryStructure.incentive ?? 0;
+      calcOtherDed = salaryStructure.deductions ?? 0;
+    }
+
+    const calcGrossEarnings =
+      calcBasicPay + calcHra + calcConveyance + calcIncentive;
     const calcTotalDed = calcPf + calcEsi + calcPt + calcOtherDed;
     const calcNetPayable = Math.max(0, calcGrossEarnings - calcTotalDed);
 
@@ -519,7 +550,7 @@ export async function generateSalarySlip(req: Request, res: Response) {
       curY += 8;
 
       // 2-row grid: label row + value row, 5 columns.
-      // All values come from the rawPrisma attendance queries above — authoritative.
+      // All values come from the tenant-scoped attendance queries above — authoritative.
       const attItems = [
         { label: "PRESENT", value: String(attPresent + attLate) },
         { label: "HALF DAYS", value: String(attHalfDay) },

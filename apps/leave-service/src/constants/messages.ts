@@ -10,8 +10,6 @@ export const MESSAGES = {
   LEAVE_APPLICATION_NOT_FOUND: "Leave application not found",
   LEAVE_APPROVED: "Leave approved successfully",
   LEAVE_REJECTED: "Leave rejected",
-  ONLY_PENDING_CAN_BE_CANCELLED:
-    "Only pending leave applications can be cancelled",
   ONLY_PENDING_CAN_BE_APPROVED:
     "Only pending leave applications can be approved",
   ONLY_PENDING_CAN_BE_REJECTED:
@@ -31,5 +29,7 @@ export const MESSAGES = {
   ONLY_APPROVED_CAN_REQUEST_CANCELLATION:
     "Only approved leave applications can have cancellation requested — pending applications can be cancelled directly",
   LEAVE_CANCELLATION_REQUESTED: "Cancellation requested — awaiting approval",
+  CANNOT_CANCEL_IN_CURRENT_STATE:
+    "Only pending or approved leave applications can be cancelled",
   INTERNAL_SERVER_ERROR: "Internal server error",
 };

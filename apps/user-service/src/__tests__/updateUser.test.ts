@@ -120,8 +120,8 @@ describe("updateUser", () => {
       makeCallback(),
     );
 
-    expect(mockInvalidate).toHaveBeenCalledWith("users:*");
-    expect(mockDelete).toHaveBeenCalledWith("user:user-1");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:users:*");
+    expect(mockDelete).toHaveBeenCalledWith("t:t1:user:user-1");
   });
 
   it("returns INTERNAL on database error", async () => {

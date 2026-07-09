@@ -25,10 +25,99 @@ async function isPrivileged(req: AuthRequest): Promise<boolean> {
 
 // ─── Salary component definitions ──────────────────────────────────────────────
 
+// The six components every payroll/payslip calculation has always hardcoded.
+// Seeded once per tenant (idempotent upsert, keyed by the tenantId+code unique
+// index) with values matching the old hardcoded behavior exactly, so seeding
+// a tenant changes nothing until they actually edit a rate in Settings.
+const DEFAULT_COMPONENTS = [
+  {
+    code: "BASIC",
+    name: "Basic Pay",
+    type: "earning",
+    calcType: "fixed",
+    percentOf: null,
+    percentValue: null,
+    isStatutory: false,
+    displayOrder: 0,
+  },
+  {
+    code: "HRA",
+    name: "HRA",
+    type: "earning",
+    calcType: "fixed",
+    percentOf: null,
+    percentValue: null,
+    isStatutory: false,
+    displayOrder: 1,
+  },
+  {
+    code: "CONVEYANCE",
+    name: "Conveyance Allowance",
+    type: "earning",
+    calcType: "fixed",
+    percentOf: null,
+    percentValue: null,
+    isStatutory: false,
+    displayOrder: 2,
+  },
+  {
+    code: "PF",
+    name: "Provident Fund",
+    type: "deduction",
+    calcType: "percent_of_basic",
+    percentOf: "basic",
+    percentValue: 12,
+    isStatutory: true,
+    displayOrder: 3,
+  },
+  {
+    code: "ESI",
+    name: "ESI",
+    type: "deduction",
+    calcType: "percent_of_basic",
+    percentOf: "gross",
+    percentValue: 1.75,
+    isStatutory: true,
+    displayOrder: 4,
+  },
+  {
+    code: "PT",
+    name: "Professional Tax",
+    type: "deduction",
+    calcType: "fixed",
+    percentOf: null,
+    percentValue: 200,
+    isStatutory: true,
+    displayOrder: 5,
+  },
+];
+
+async function seedDefaultComponentsIfMissing(
+  tenantId: string,
+  createdBy: string,
+): Promise<void> {
+  const existing = await (prisma as any).salaryComponentDefinition.findFirst({
+    where: { tenantId },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await Promise.all(
+    DEFAULT_COMPONENTS.map((c) =>
+      (prisma as any).salaryComponentDefinition.upsert({
+        where: { tenantId_code: { tenantId, code: c.code } },
+        update: {},
+        create: { tenantId, createdBy, ...c },
+      }),
+    ),
+  );
+}
+
 export async function listSalaryComponents(req: AuthRequest, res: Response) {
   const tenantId = requireTenantId(req, res);
   if (!tenantId) return;
   try {
+    await seedDefaultComponentsIfMissing(tenantId, req.user!.userId);
     const components = await (prisma as any).salaryComponentDefinition.findMany(
       {
         where: { tenantId, isActive: true },

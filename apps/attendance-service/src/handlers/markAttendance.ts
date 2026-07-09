@@ -5,70 +5,16 @@ import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import {
+  type AttendanceSettings,
+  getAttendanceSettings,
+  resolveShift,
+  calcWorkingHours,
+  getUnpaidBreakMinutes,
+} from "../utils/attendanceSettings";
+import { resolveLeaveConflictForCheckIn } from "../utils/leaveConflict";
 
 dayjs.extend(utc);
-
-// ─── Tenant-settings helpers ──────────────────────────────────────────────────
-
-const SETTINGS_CACHE_TTL = 900; // 15 min
-
-interface AttendanceSettings {
-  workStartHour: number;
-  workStartMinute: number;
-  lateGracePeriodMinutes: number;
-  halfDayMinHours: number;
-  // Geofencing
-  geofencingEnabled: boolean;
-  officeLatitude: number | null;
-  officeLongitude: number | null;
-  geofenceRadiusMeters: number;
-}
-
-/**
- * Fetches the currently *active* attendance settings from the DB.
- * Active = latest version where effectiveFrom ≤ now.
- * Cached for SETTINGS_CACHE_TTL seconds to keep hot paths fast.
- */
-async function getAttendanceSettings(
-  tenantId: string | null,
-): Promise<AttendanceSettings | null> {
-  if (!tenantId) return null;
-
-  const cacheKey = `tenantSettings:attendance:${tenantId}`;
-  const cached = await cacheManager.get(cacheKey);
-  if (cached) return cached as AttendanceSettings;
-
-  const settings = await (prisma as any).tenantSettings.findFirst({
-    where: { tenantId, effectiveFrom: { lte: new Date() } },
-    orderBy: { effectiveFrom: "desc" },
-    select: {
-      workStartHour: true,
-      workStartMinute: true,
-      lateGracePeriodMinutes: true,
-      halfDayMinHours: true,
-      geofencingEnabled: true,
-      officeLatitude: true,
-      officeLongitude: true,
-      geofenceRadiusMeters: true,
-    },
-  });
-
-  if (!settings) return null; // Tenant not yet configured — caller handles this.
-
-  const result: AttendanceSettings = {
-    workStartHour: settings.workStartHour,
-    workStartMinute: settings.workStartMinute,
-    lateGracePeriodMinutes: settings.lateGracePeriodMinutes,
-    halfDayMinHours: settings.halfDayMinHours,
-    geofencingEnabled: settings.geofencingEnabled ?? false,
-    officeLatitude: settings.officeLatitude ?? null,
-    officeLongitude: settings.officeLongitude ?? null,
-    geofenceRadiusMeters: settings.geofenceRadiusMeters ?? 200,
-  };
-
-  await cacheManager.set(cacheKey, result, "system", SETTINGS_CACHE_TTL);
-  return result;
-}
 
 // ─── Haversine distance ────────────────────────────────────────────────────────
 
@@ -91,46 +37,6 @@ function haversineMeters(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Shift resolution ───────────────────────────────────────────────────────
-// Resolution order: User.shiftId > Team.shiftId > TenantSettings defaults.
-// A tenant with no Shift rows behaves exactly as before — every check-in
-// resolves straight to the tenant-wide cfg.
-
-interface ShiftOverride {
-  workStartHour: number;
-  workStartMinute: number;
-  lateGracePeriodMinutes: number;
-  halfDayMinHours: number;
-}
-
-async function resolveShift(
-  tenantId: string,
-  userId: string,
-  userShiftId: string | null,
-): Promise<ShiftOverride | null> {
-  let shiftId = userShiftId;
-  if (!shiftId) {
-    const team = await (prisma as any).team.findFirst({
-      where: { tenantId, members: { has: userId } },
-      select: { shiftId: true },
-    });
-    shiftId = team?.shiftId ?? null;
-  }
-  if (!shiftId) return null;
-
-  const shift = await (prisma as any).shift.findFirst({
-    where: { id: shiftId, tenantId, isActive: true },
-  });
-  if (!shift) return null;
-
-  return {
-    workStartHour: shift.startHour,
-    workStartMinute: shift.startMinute,
-    lateGracePeriodMinutes: shift.lateGracePeriodMinutes,
-    halfDayMinHours: shift.halfDayMinHours,
-  };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 function isLate(t: Date, cfg: AttendanceSettings): boolean {
@@ -139,11 +45,6 @@ function isLate(t: Date, cfg: AttendanceSettings): boolean {
     cfg.workStartHour * 60 + cfg.workStartMinute + cfg.lateGracePeriodMinutes;
   const actualMinute = d.hour() * 60 + d.minute();
   return actualMinute > lateMinute;
-}
-
-function calcWorkingHours(timeIn: Date, timeOut: Date): number {
-  const diffMs = dayjs(timeOut).diff(dayjs(timeIn));
-  return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 }
 
 export const markAttendance = async (
@@ -286,6 +187,18 @@ export const markAttendance = async (
 
       const attendanceStatus = isLate(now, effectiveCfg) ? "Late" : "Present";
 
+      // Everything that could still make check-in fail (geofencing, shift
+      // resolution) has already passed at this point — only now is it safe
+      // to resolve a same-day leave conflict. A Pending leave is simply
+      // withdrawn (it was never approved, so nothing to restore); an
+      // Approved leave is treated as a same-day self-service cancellation —
+      // the balance is credited back immediately rather than requiring a
+      // second manager approval, since a successful check-in is itself
+      // strong proof the employee is at work.
+      const leaveConflictNote = tenantId
+        ? await resolveLeaveConflictForCheckIn(tenantId, userId, todayStart)
+        : null;
+
       const record = existingRecord
         ? await prisma.attendanceRecord.update({
             where: { id: existingRecord.id },
@@ -305,9 +218,10 @@ export const markAttendance = async (
         cacheManager.invalidatePattern(`attendance:${userId}:*`),
         cacheManager.delete(`todayAttendance:${userId}`),
         cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
+        cacheManager.invalidatePattern("leaves:*"),
       ]);
       return callback(null, {
-        message: `${MESSAGES.CHECKED_IN_SUCCESSFULLY}${attendanceStatus === "Late" ? " (late)" : ""}`,
+        message: `${MESSAGES.CHECKED_IN_SUCCESSFULLY}${attendanceStatus === "Late" ? " (late)" : ""}${leaveConflictNote ? ` — ${leaveConflictNote}` : ""}`,
         status: status.OK,
         data: record,
       });
@@ -344,7 +258,15 @@ export const markAttendance = async (
       const effectiveHalfDayMinHours =
         shiftOverride?.halfDayMinHours ?? cfg.halfDayMinHours;
 
-      const workingHours = calcWorkingHours(existingRecord.timeIn, now);
+      const unpaidBreakMinutes = await getUnpaidBreakMinutes(
+        existingRecord.id,
+        now,
+      );
+      const workingHours = calcWorkingHours(
+        existingRecord.timeIn,
+        now,
+        unpaidBreakMinutes,
+      );
       const isHalfDay = workingHours < effectiveHalfDayMinHours;
 
       const record = await prisma.attendanceRecord.update({

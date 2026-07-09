@@ -36,7 +36,11 @@ const masterScopedPrisma = prisma.$extends({
             };
           } else if (WRITE_ACTIONS.has(operation)) {
             args = { ...args, data: { ...args.data, tenantId } };
-          } else if (operation === "update" || operation === "upsert") {
+          } else if (
+            operation === "update" ||
+            operation === "upsert" ||
+            operation === "delete"
+          ) {
             args = { ...args, where: { ...args.where, tenantId } };
           }
         }

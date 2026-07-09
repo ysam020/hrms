@@ -45,10 +45,23 @@ export function groupSlabsByState(
   return map;
 }
 
+export interface ComponentRateRow {
+  code: string; // e.g. "PF", "ESI"
+  percentValue: number | null;
+}
+
+const DEFAULT_PF_PERCENT = 12;
+const DEFAULT_ESI_PERCENT = 1.75;
+
 /**
  * PF/ESI/PT statutory deductions. Contractors are exempt under Indian law
  * (subject to TDS u/s 194J instead, not modelled here yet) — every other
- * employee keeps the exact original calculation.
+ * employee keeps the exact original calculation by default.
+ *
+ * `componentRates` — the tenant's configured PF/ESI SalaryComponentDefinition
+ * rows (Settings → Payroll Components) — lets a tenant override the 12%/1.75%
+ * defaults. Omitted or missing a code falls back to that code's default rate,
+ * so a tenant with no configuration behaves exactly as before this existed.
  */
 export function calcStatutoryDeductions(
   gross: number,
@@ -56,13 +69,20 @@ export function calcStatutoryDeductions(
   employmentType: string | null | undefined,
   workState: string | null | undefined,
   slabsByState: Map<string, ProfessionalTaxSlabRow[]>,
+  componentRates?: ComponentRateRow[],
 ): { pf: number; esi: number; pt: number } {
   if (employmentType === "contractor") {
     return { pf: 0, esi: 0, pt: 0 };
   }
+  const pfPercent =
+    componentRates?.find((c) => c.code === "PF")?.percentValue ??
+    DEFAULT_PF_PERCENT;
+  const esiPercent =
+    componentRates?.find((c) => c.code === "ESI")?.percentValue ??
+    DEFAULT_ESI_PERCENT;
   return {
-    pf: Math.round(basicPay * 0.12),
-    esi: gross <= 21000 ? Math.round(gross * 0.0175) : 0,
+    pf: Math.round(basicPay * (pfPercent / 100)),
+    esi: gross <= 21000 ? Math.round(gross * (esiPercent / 100)) : 0,
     pt: calcProfessionalTax(gross, workState, slabsByState),
   };
 }

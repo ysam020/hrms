@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
+import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
@@ -163,6 +164,24 @@ export async function writeVersionedSettings(
           createdBy: userId,
         },
       });
+
+  // Every leave-service/attendance-service settings read is cached (up to 15
+  // min TTL). Only a row that's already active can change what those
+  // services should be resolving right now — a future-dated (pending) write
+  // doesn't need this, since nothing has cached it as "active" yet. Redis is
+  // shared across services, so deleting the key here is visible to them
+  // immediately; each service's own short-lived (5 min) in-process L1 cache
+  // is the only remaining staleness window.
+  if (effectiveFrom <= new Date()) {
+    await Promise.all([
+      cacheManager.delete(`tenantSettings:attendance:${tenantId}`),
+      cacheManager.delete(`tenantSettings:leave:${tenantId}`),
+    ]).catch((err) =>
+      logger.warn("[writeVersionedSettings] Cache invalidation failed:", {
+        err,
+      }),
+    );
+  }
 
   return {
     settings: toPublic(row),

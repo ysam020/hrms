@@ -9,17 +9,12 @@ export const listEmployees = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      department,
-      employeeStatus,
-      search,
-      isActive,
-    } = call.request;
+    const { page = 1, limit = 10, department, employeeStatus, search } =
+      call.request;
 
+    const MAX_LIMIT = 100;
     const pageNum = parseInt(String(page)) || 1;
-    const limitNum = parseInt(String(limit)) || 10;
+    const limitNum = Math.min(parseInt(String(limit)) || 10, MAX_LIMIT);
     const skip = (pageNum - 1) * limitNum;
 
     const tenantId = getTenantId() ?? "global";
@@ -35,10 +30,6 @@ export const listEmployees = async (
 
     if (employeeStatus) {
       where.employeeStatus = employeeStatus;
-    }
-
-    if (isActive !== undefined && isActive !== null) {
-      where.isActive = isActive;
     }
 
     if (search) {

@@ -10,6 +10,7 @@ import {
   consumeCompOffCredits,
 } from "./leaveBalanceHelpers";
 import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
+import { getLeaveSettings } from "../utils/leaveSettings";
 
 export const approveLeave = async (
   call: ServerUnaryCall<any, any>,
@@ -41,22 +42,44 @@ export const approveLeave = async (
       });
     }
 
-    const updatedLeave = await prisma.leaveApplication.update({
-      where: { id },
+    // Conditioned on status="Pending" so two concurrent approvals of the
+    // same leave (duplicate approval-engine callback, admin double-click)
+    // can't both pass the check above and both debit the balance — only the
+    // request that actually flips the status wins.
+    const transition = await prisma.leaveApplication.updateMany({
+      where: { id, status: "Pending" },
       data: {
         status: "Approved",
         approvedById: approvedById || null,
         approvedOn: new Date(),
       },
     });
+    if (transition.count === 0) {
+      return callback(null, {
+        message: MESSAGES.ONLY_PENDING_CAN_BE_APPROVED,
+        status: status.FAILED_PRECONDITION,
+      });
+    }
+
+    const updatedLeave = await prisma.leaveApplication.findUniqueOrThrow({
+      where: { id },
+    });
 
     await cacheManager.invalidatePattern("leaves:*");
 
     // Debit the balance — no-op unless this user/leave-type is already
     // balance-tracked (see leaveBalanceHelpers.ts). Comp-off draws down
-    // CompOffCredit records instead of the balances JSON.
+    // CompOffCredit records instead of the balances JSON. isCompOffLeaveType
+    // needs leavePolicies to recognize a tenant-defined comp-off type (not
+    // just the legacy literal "COMP_OFF" key), so it must agree with apply.
     const tenantId = getTenantId();
-    if (tenantId && isCompOffLeaveType(updatedLeave.leaveType)) {
+    const leavePolicies = tenantId
+      ? (await getLeaveSettings(tenantId))?.leavePolicies
+      : undefined;
+    if (
+      tenantId &&
+      isCompOffLeaveType(updatedLeave.leaveType, leavePolicies)
+    ) {
       await consumeCompOffCredits(
         tenantId,
         updatedLeave.userId,

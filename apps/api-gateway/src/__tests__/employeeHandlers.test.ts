@@ -64,6 +64,9 @@ jest.mock("@hrms/cache", () => ({
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
+import { getTenantId } from "@hrms/db";
+
+const mockGetTenantId = getTenantId as jest.Mock;
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
@@ -98,7 +101,7 @@ describe("employeeHandlers", () => {
       const res = makeRes();
       await editEmployeeDetails(
         makeReq({
-          body: { username: "user-1", employeeStatus: "Active", salary: 50000 },
+          body: { username: "user-1", employeeStatus: "Active" },
         }),
         res,
       );
@@ -109,6 +112,47 @@ describe("employeeHandlers", () => {
         res,
         RESPONSE_STATUS.SUCCESS,
         expect.any(Object),
+      );
+    });
+
+    it("ignores salary/salaryStructure in the body — that's now written only via updateSalary, not here", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "u1" });
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      const res = makeRes();
+      await editEmployeeDetails(
+        makeReq({
+          body: {
+            username: "user-1",
+            employeeStatus: "Active",
+            salary: 50000,
+            salaryStructure: { basicPay: 25000, pf: 3000 },
+          },
+        }),
+        res,
+      );
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "u1" },
+        data: { employeeStatus: "Active" },
+      });
+    });
+
+    it("invalidates the tenant-prefixed cache keys that getEmployeeDetails/employeeInsights actually read from", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "u1" });
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      const res = makeRes();
+      await editEmployeeDetails(
+        makeReq({ body: { username: "user-1", employeeStatus: "Active" } }),
+        res,
+      );
+      expect(cacheManager.invalidatePattern).toHaveBeenCalledWith(
+        "t:t1:employees:*",
+      );
+      expect(cacheManager.delete).toHaveBeenCalledWith("t:t1:employee:u1");
+      expect(cacheManager.delete).toHaveBeenCalledWith(
+        "t:t1:employee-details:user-1",
+      );
+      expect(cacheManager.delete).toHaveBeenCalledWith(
+        "t:t1:dashboard:employee-insights",
       );
     });
 
@@ -482,6 +526,18 @@ describe("employeeHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("errors instead of returning unfiltered all-tenant data when tenant context is missing", async () => {
+      mockGetTenantId.mockReturnValueOnce(null);
+      const res = makeRes();
+      await viewAllKycs(makeReq(), res);
+      expect(mockUserAggregateRaw).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("getKycInsights", () => {
@@ -521,6 +577,18 @@ describe("employeeHandlers", () => {
       mockUserAggregateRaw.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await getKycInsights(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+
+    it("errors instead of returning unfiltered all-tenant data when tenant context is missing", async () => {
+      mockGetTenantId.mockReturnValueOnce(null);
+      const res = makeRes();
+      await getKycInsights(makeReq(), res);
+      expect(mockUserAggregateRaw).not.toHaveBeenCalled();
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,

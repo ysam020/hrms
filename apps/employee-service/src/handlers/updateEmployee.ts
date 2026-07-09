@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -58,9 +58,13 @@ export const updateEmployee = async (
       data: cleanedData,
     });
 
+    const tenantId = getTenantId() ?? "global";
     await Promise.all([
-      cacheManager.invalidatePattern("employees:*"),
-      cacheManager.delete(`employee:${id}`),
+      cacheManager.invalidatePattern(`t:${tenantId}:employees:*`),
+      cacheManager.delete(`t:${tenantId}:employee:${id}`),
+      cacheManager.delete(
+        `t:${tenantId}:employee-details:${existingUser.username}`,
+      ),
     ]);
     return callback(null, {
       message: MESSAGES.EMPLOYEE_UPDATED,

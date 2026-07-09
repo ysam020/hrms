@@ -85,8 +85,11 @@ describe("approveKyc", () => {
       where: { id: "u1" },
       data: { kyc_approval: "Approved" },
     });
-    expect(mockInvalidate).toHaveBeenCalledWith("employees:*");
-    expect(mockCacheDelete).toHaveBeenCalledWith("employee:u1");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:employees:*");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:employee:u1");
+    expect(mockCacheDelete).toHaveBeenCalledWith(
+      "t:t1:employee-details:john",
+    );
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),

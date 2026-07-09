@@ -27,37 +27,58 @@ export function getTrackedRemaining(
   return typeof v === "number" ? v : null;
 }
 
-/** No-op if the user has no balance row, or this leave type isn't tracked. */
+/**
+ * No-op if the user has no balance row, or this leave type isn't tracked.
+ *
+ * Uses optimistic concurrency (compare-and-swap on `updatedAt`) instead of a
+ * plain read-modify-write: two different leave applications for the same
+ * user approved in the same instant must not silently lose one debit by both
+ * reading the same starting balance and overwriting each other's write.
+ */
 export async function adjustBalance(
   tenantId: string,
   userId: string,
   leaveType: string,
   delta: number,
 ): Promise<void> {
-  const row = await getBalanceRow(tenantId, userId);
-  if (!row) return;
-  const balances = { ...((row.balances as Record<string, number>) ?? {}) };
-  if (typeof balances[leaveType] !== "number") return;
-  balances[leaveType] = balances[leaveType] + delta;
-  await (prisma as any).leaveBalance.update({
-    where: { id: row.id },
-    data: { balances },
-  });
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const row = await getBalanceRow(tenantId, userId);
+    if (!row) return;
+    const balances = { ...((row.balances as Record<string, number>) ?? {}) };
+    if (typeof balances[leaveType] !== "number") return;
+    balances[leaveType] = balances[leaveType] + delta;
+
+    const result = await (prisma as any).leaveBalance.updateMany({
+      where: { id: row.id, updatedAt: row.updatedAt },
+      data: { balances },
+    });
+    if (result.count === 1) return; // won the race
+    // Someone else updated this row between our read and write — retry.
+  }
+  throw new Error(
+    `adjustBalance: too much contention on balance row for user ${userId} after ${MAX_ATTEMPTS} attempts`,
+  );
 }
 
 // ─── Comp-off credits ───────────────────────────────────────────────────────
 // A separate resource pool from `balances` — each CompOffCredit is a
 // transactional fact (a specific worked date), not a policy-level number.
-// Leave applications of type "COMP_OFF" (matching the literal key HR/Settings
-// use when crediting comp-off) draw down against available, unexpired credits
-// instead of the generic balances JSON.
+// Draws down against available, unexpired credits instead of the generic
+// balances JSON for any leave type resolved as comp-off — either the legacy
+// literal key "COMP_OFF", or any tenant-defined leavePolicies entry flagged
+// `isCompOff: true` (e.g. a custom-keyed "CO" type).
 
 const COMP_OFF_TYPE = "COMP_OFF";
 
 export function isCompOffLeaveType(
   leaveType: string | null | undefined,
+  policies?: LeavePolicy[],
 ): boolean {
-  return !!leaveType && leaveType.toUpperCase() === COMP_OFF_TYPE;
+  if (!leaveType) return false;
+  if (leaveType.toUpperCase() === COMP_OFF_TYPE) return true;
+  if (!policies) return false;
+  return !!findPolicy(policies, leaveType)?.isCompOff;
 }
 
 /** Sum of available, unexpired comp-off credit for this user — read-only, used to give early feedback at apply time. */
@@ -102,11 +123,14 @@ export async function consumeCompOffCredits(
   let covered = 0;
   for (const credit of credits) {
     if (covered >= days) break;
-    await (prisma as any).compOffCredit.update({
-      where: { id: credit.id },
+    // Guard against a concurrent consumer (two approvals racing on the same
+    // credit) claiming the same credit twice — the update only lands if the
+    // credit is still "available" at write time.
+    const claimed = await (prisma as any).compOffCredit.updateMany({
+      where: { id: credit.id, status: "available" },
       data: { status: "used", usedInLeaveApplicationId: leaveApplicationId },
     });
-    covered += credit.earnedDays;
+    if (claimed.count === 1) covered += credit.earnedDays;
   }
   return covered;
 }

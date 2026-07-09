@@ -14,61 +14,46 @@ import {
   getAvailableCompOffDays,
   type LeavePolicy,
 } from "./leaveBalanceHelpers";
+import { getLeaveSettings, DEFAULT_WORKING_DAYS } from "../utils/leaveSettings";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
-// ─── Tenant-settings helpers ──────────────────────────────────────────────────
-
-const SETTINGS_CACHE_TTL = 900; // 15 min
-
-const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]; // Mon-Fri — matches the previous hardcoded weekend exclusion
-
-/**
- * Returns the active leave-policy settings from the DB.
- * Active = latest version where effectiveFrom ≤ now.
- * Returns null when no settings record has been created yet.
- */
-async function getLeaveSettings(tenantId: string) {
-  const cacheKey = `tenantSettings:leave:${tenantId}`;
-  const cached = await cacheManager.get(cacheKey);
-  if (cached) return cached as any;
-
-  const settings = await (prisma as any).tenantSettings.findFirst({
-    where: { tenantId, effectiveFrom: { lte: new Date() } },
-    orderBy: { effectiveFrom: "desc" },
-    select: {
-      medicalCertRequired: true,
-      customLeaveTypes: true,
-      leavePolicies: true,
-      workWeekPattern: true,
-    },
-  });
-
-  if (!settings) return null;
-
-  const result = {
-    medicalCertRequired: settings.medicalCertRequired as boolean,
-    customLeaveTypes: (settings.customLeaveTypes as any[]) ?? [],
-    leavePolicies: (settings.leavePolicies as LeavePolicy[]) ?? [],
-    workingDays:
-      (settings.workWeekPattern as any)?.workingDays ?? DEFAULT_WORKING_DAYS,
-  };
-  await cacheManager.set(cacheKey, result, "system", SETTINGS_CACHE_TTL);
-  return result;
-}
-
 dayjs.extend(utc);
+
+/** Set of "YYYY-MM-DD" company holiday dates falling within [from, to]. */
+async function getHolidayDates(
+  from: dayjs.Dayjs,
+  to: dayjs.Dayjs,
+): Promise<Set<string>> {
+  const records = await (prisma as any).holiday.findMany({
+    where: { year: { gte: from.year(), lte: to.year() } },
+  });
+  const dates = new Set<string>();
+  for (const record of records) {
+    const list = Array.isArray(record.holidays) ? record.holidays : [];
+    for (const h of list) {
+      if (h?.date) dates.add(h.date);
+    }
+  }
+  return dates;
+}
 
 function calculateWorkingDays(
   from: dayjs.Dayjs,
   to: dayjs.Dayjs,
   workingDays: number[] = DEFAULT_WORKING_DAYS,
+  holidayDates: Set<string> = new Set(),
 ): number {
   let count = 0;
   let cur = from.startOf("day");
   const end = to.startOf("day");
   while (!cur.isAfter(end)) {
-    if (workingDays.includes(cur.day())) count++;
+    if (
+      workingDays.includes(cur.day()) &&
+      !holidayDates.has(cur.format("YYYY-MM-DD"))
+    ) {
+      count++;
+    }
     cur = cur.add(1, "day");
   }
   return count;
@@ -181,16 +166,20 @@ export const applyLeave = async (
           }
         }
 
-        // 2. Medical certificate required for sick leave.
+        // 2. Medical certificate required for sick leave (legacy scalar
+        // setting) OR when the matched leavePolicies entry itself is flagged
+        // requiresProof — a custom type (e.g. Maternity) may need proof
+        // without ever setting the legacy `sickLeave` flag.
         const { medicalCertificate } = call.request;
-        if (
-          sickLeave &&
-          leaveSettings.medicalCertRequired &&
-          !medicalCertificate
-        ) {
+        const matchedPolicy = findPolicy(leaveSettings.leavePolicies, leaveType);
+        const proofRequired =
+          (sickLeave && leaveSettings.medicalCertRequired) ||
+          matchedPolicy?.requiresProof;
+        if (proofRequired && !medicalCertificate) {
           return callback(null, {
-            message:
-              "A medical certificate is required for sick leave in your organisation.",
+            message: matchedPolicy?.requiresProof
+              ? `Proof/certificate is required for ${matchedPolicy.name || leaveType} in your organisation.`
+              : "A medical certificate is required for sick leave in your organisation.",
             status: status.INVALID_ARGUMENT,
           });
         }
@@ -221,25 +210,49 @@ export const applyLeave = async (
     } else if (unit === "short_leave") {
       days = Math.round((shortLeaveHours! / 8) * 100) / 100;
     } else {
-      days = calculateWorkingDays(startDay, endDay, leaveSettings?.workingDays);
+      const holidayDates = await getHolidayDates(startDay, endDay);
+      days = calculateWorkingDays(
+        startDay,
+        endDay,
+        leaveSettings?.workingDays,
+        holidayDates,
+      );
     }
     const fromDate = startDay.toDate();
     const toDate = endDay.toDate();
 
     // ── Exhaustion enforcement — opt-in and fail-open. Only applies when the
-    // tenant has both (a) configured this leave type in leavePolicies with
-    // onExhaustion="reject", and (b) already populated a numeric balance for
-    // it. Tenants who haven't touched either see identical behavior to today.
+    // tenant has configured this leave type in leavePolicies AND already
+    // populated a numeric balance for it. Tenants who haven't touched either
+    // see identical behavior to today.
+    //   - onExhaustion="reject": blocks the application outright.
+    //   - onExhaustion="auto_lop" / "manager_override": still allowed
+    //     through (as before), but the shortfall is now surfaced to the
+    //     approver via the approval-instance metadata + notification instead
+    //     of vanishing silently — "manager_override" means the approver
+    //     decides, which requires them to actually see it.
+    let exhaustionInfo: {
+      onExhaustion: string;
+      remaining: number;
+      shortfallDays: number;
+    } | null = null;
     if (tenantId && leaveSettings) {
       const policy = findPolicy(leaveSettings.leavePolicies, leaveType);
-      if (policy?.onExhaustion === "reject") {
+      if (policy?.onExhaustion) {
         const balanceRow = await getBalanceRow(tenantId, userId);
         const remaining = getTrackedRemaining(balanceRow?.balances, leaveType);
         if (remaining !== null && days > remaining) {
-          return callback(null, {
-            message: `Insufficient ${policy.name || leaveType} balance — ${remaining} day(s) remaining, ${days} requested.`,
-            status: status.FAILED_PRECONDITION,
-          });
+          if (policy.onExhaustion === "reject") {
+            return callback(null, {
+              message: `Insufficient ${policy.name || leaveType} balance — ${remaining} day(s) remaining, ${days} requested.`,
+              status: status.FAILED_PRECONDITION,
+            });
+          }
+          exhaustionInfo = {
+            onExhaustion: policy.onExhaustion,
+            remaining,
+            shortfallDays: Math.round((days - remaining) * 100) / 100,
+          };
         }
       }
     }
@@ -247,7 +260,10 @@ export const applyLeave = async (
     // Comp-off draws down against earned CompOffCredit rows, a separate pool
     // from the generic balances JSON — checked here for early feedback; the
     // credits are actually consumed on approval (see approveLeave.ts).
-    if (tenantId && isCompOffLeaveType(leaveType)) {
+    if (
+      tenantId &&
+      isCompOffLeaveType(leaveType, leaveSettings?.leavePolicies)
+    ) {
       const available = await getAvailableCompOffDays(tenantId, userId);
       if (days > available) {
         return callback(null, {
@@ -290,6 +306,7 @@ export const applyLeave = async (
         {
           days,
           unit,
+          ...(exhaustionInfo ? { exhaustion: exhaustionInfo } : {}),
         },
       );
     }
@@ -332,13 +349,16 @@ export const applyLeave = async (
         const uniqueIds = [...new Set(allTargets.map((u) => u.id))];
         const uniqueUsernames = [...new Set(allTargets.map((u) => u.username))];
         if (uniqueUsernames.length === 0) return;
+        const shortfallNote = exhaustionInfo
+          ? ` — exceeds balance by ${exhaustionInfo.shortfallDays} day(s) (${exhaustionInfo.remaining} remaining); ${exhaustionInfo.onExhaustion === "manager_override" ? "approver must decide" : "will be treated as loss-of-pay"}.`
+          : "";
         await getNotificationQueue().add("leaveApplied", {
           title: "Leave",
-          message: `${applicantUsername} has applied for leave from ${fromStr} to ${toStr}`,
+          message: `${applicantUsername} has applied for leave from ${fromStr} to ${toStr}${shortfallNote}`,
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           eventType: "leave_notification",
-          priority: "medium",
+          priority: exhaustionInfo ? "high" : "medium",
         });
       })
       .catch((err) =>

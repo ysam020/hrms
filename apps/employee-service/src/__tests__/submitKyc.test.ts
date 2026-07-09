@@ -90,11 +90,30 @@ describe("submitKyc", () => {
         }),
       }),
     );
-    expect(mockInvalidate).toHaveBeenCalledWith("employees:*");
-    expect(mockCacheDelete).toHaveBeenCalledWith("employee:u1");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:employees:*");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:employee:u1");
+    expect(mockCacheDelete).toHaveBeenCalledWith(
+      "t:t1:employee-details:john",
+    );
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),
+    );
+  });
+
+  it("invalidates the resolved user's cache keys when called with only username (the api-gateway editKyc call shape)", async () => {
+    mockFindUnique.mockResolvedValue(user);
+    const cb = makeCallback();
+    // No userId in the request — mirrors editKyc's grpcCall(..., { username, ...kycFields })
+    await submitKyc(makeCall({ username: "john", panNo: "ABCDE1234F" }), cb);
+
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:employee:u1");
+    expect(mockCacheDelete).toHaveBeenCalledWith(
+      "t:t1:employee-details:john",
+    );
+    // The old bug deleted "employee:undefined" — assert that never happens.
+    expect(mockCacheDelete).not.toHaveBeenCalledWith(
+      expect.stringContaining("undefined"),
     );
   });
 

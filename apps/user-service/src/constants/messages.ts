@@ -1,6 +1,8 @@
 export const MESSAGES = {
   USER_NOT_FOUND: "User not found",
   USER_DELETED: "User deleted successfully",
+  USER_HAS_HISTORICAL_RECORDS:
+    "Cannot permanently delete a user with existing attendance, leave, or payroll records.",
   USER_FETCHED: "User fetched",
   USERS_FETCHED: "Users fetched",
   USER_UPDATED: "User updated",

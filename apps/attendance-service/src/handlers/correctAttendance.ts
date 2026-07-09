@@ -5,13 +5,14 @@ import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import {
+  getAttendanceSettings,
+  resolveShift,
+  calcWorkingHours,
+  getUnpaidBreakMinutes,
+} from "../utils/attendanceSettings";
 
 dayjs.extend(utc);
-
-function calcWorkingHours(timeIn: Date, timeOut: Date): number {
-  const diffMs = dayjs(timeOut).diff(dayjs(timeIn));
-  return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-}
 
 export const correctAttendance = async (
   call: ServerUnaryCall<any, any>,
@@ -29,9 +30,10 @@ export const correctAttendance = async (
 
     const targetDate = date ? dayjs(date) : dayjs();
     const dateStart = targetDate.utc().startOf("day").toDate();
+    const tenantId = getTenantId();
 
     const existingRecord = await prisma.attendanceRecord.findFirst({
-      where: { tenantId: getTenantId(), userId, date: dateStart },
+      where: { tenantId, userId, date: dateStart },
     });
 
     const dateStr = targetDate.format("YYYY-MM-DD");
@@ -50,9 +52,33 @@ export const correctAttendance = async (
     const effectiveTimeOut = updateData.timeOut ?? existingRecord?.timeOut;
 
     if (effectiveTimeIn && effectiveTimeOut) {
-      const hours = calcWorkingHours(effectiveTimeIn, effectiveTimeOut);
+      // Same half-day threshold resolution as check-in/check-out — a
+      // correction must not disagree with the live punch flow on what
+      // counts as a full vs. half day for this employee.
+      const cfg = tenantId ? await getAttendanceSettings(tenantId) : null;
+      const user = tenantId
+        ? await prisma.user.findUnique({
+            where: { id: userId },
+            select: { shiftId: true },
+          })
+        : null;
+      const shiftOverride =
+        tenantId && user
+          ? await resolveShift(tenantId, userId, (user as any)?.shiftId ?? null)
+          : null;
+      const effectiveHalfDayMinHours =
+        shiftOverride?.halfDayMinHours ?? cfg?.halfDayMinHours ?? 4;
+
+      const unpaidBreakMinutes = existingRecord
+        ? await getUnpaidBreakMinutes(existingRecord.id, effectiveTimeOut)
+        : 0;
+      const hours = calcWorkingHours(
+        effectiveTimeIn,
+        effectiveTimeOut,
+        unpaidBreakMinutes,
+      );
       updateData.workingHours = hours;
-      updateData.status = hours < 4 ? "Half Day" : "Present";
+      updateData.status = hours < effectiveHalfDayMinHours ? "Half Day" : "Present";
     }
 
     let record;

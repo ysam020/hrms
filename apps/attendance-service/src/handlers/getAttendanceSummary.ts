@@ -53,6 +53,9 @@ export const getAttendanceSummary = async (
 
     const records = await prisma.attendanceRecord.findMany({
       where: {
+        // See getAttendance.ts for why tenantId is included here even
+        // though business models already live in a per-tenant DB.
+        tenantId: getTenantId(),
         userId,
         date: {
           gte: monthStart.toDate(),

@@ -30,6 +30,12 @@ import { assets } from "@web/assets/data/companyAssets";
 import Button from "@web/shared/components/Button";
 import downloadSalarySlip from "@web/shared/utils/downloadSalarySlip";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import {
+  computeSalaryComponents,
+  CODE_TO_KEY,
+  type SalaryComponentDef,
+  type PtSlab,
+} from "@web/shared/utils/salaryCalc";
 
 // Lazy load components
 const UnAuthorisedRoute = lazy(
@@ -52,7 +58,12 @@ function ViewDetails() {
     return `${year}-${month}`;
   });
   const [isDownloading, setIsDownloading] = useState(false);
-  const [salaryComponents, setSalaryComponents] = useState<any[]>([]);
+  const [salaryComponents, setSalaryComponents] = useState<
+    SalaryComponentDef[]
+  >([]);
+  const [ptSlabs, setPtSlabs] = useState<PtSlab[]>([]);
+  const [isEditingSalary, setIsEditingSalary] = useState(false);
+  const [savingSalary, setSavingSalary] = useState(false);
 
   // Fetch employee data using custom hook
   const { data, loading, error, refetch } = useFetchData(
@@ -76,15 +87,6 @@ function ViewDetails() {
       pf_no: "",
       uan_no: "",
       esic_no: "",
-      salary: 0,
-      salaryStructure: {
-        basicPay: 0,
-        hra: 0,
-        conveyance: 0,
-        pf: 0,
-        esi: 0,
-        pt: 0,
-      },
       reasonForTermination: "",
       dateOfTermination: "",
       dateOfAbscond: "",
@@ -123,29 +125,131 @@ function ViewDetails() {
       }
     },
   });
-  const handleGrossSalaryChange = (value) => {
-    formik.setFieldValue("salary", value ?? 0);
+  // Separate formik + save action for the Salary Structure card — it writes
+  // through UPDATE_SALARY (salary-service's SalaryStructure, same endpoint
+  // EditSalaryStructure.tsx uses) instead of EDIT_EMPLOYEE_DETAILS, so
+  // User.salary* has exactly one writer instead of two independently
+  // drifting ones.
+  const salaryFormik = useFormik({
+    initialValues: {
+      basicPay: 0,
+      hra: 0,
+      conveyance: 0,
+      pf: 0,
+      esi: 0,
+      pt: 0,
+    },
+    onSubmit: async (values) => {
+      setSavingSalary(true);
+      try {
+        const now = new Date();
+        const res = await apiClient.put(API_ENDPOINTS.UPDATE_SALARY, {
+          userId: data?.id,
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          salaryStructure: values,
+        });
+        setAlert({
+          open: true,
+          message: res.data.message,
+          severity: "success",
+        });
+        setIsEditingSalary(false);
+        refetch();
+      } catch (err: any) {
+        setAlert({
+          open: true,
+          message:
+            err.message === "Network Error"
+              ? "Network Error, your details will be submitted when you are back online"
+              : err.response?.data?.message || "Something went wrong",
+          severity: "error",
+        });
+      } finally {
+        setSavingSalary(false);
+      }
+    },
+  });
 
-    if (value && formik.values.salaryStructure.basicPay) {
-      const esiAmount = Math.round(value * 0.0075);
-      formik.setFieldValue(`salaryStructure.esi`, esiAmount);
+  // Locked (auto-derived) component keys for the currently-configured
+  // tenant components — recomputed whenever basic pay or the earnings that
+  // feed gross salary change while editing.
+  const derivedGross =
+    Number(salaryFormik.values.basicPay || 0) +
+    Number(salaryFormik.values.hra || 0) +
+    Number(salaryFormik.values.conveyance || 0);
+  const { locked: lockedSalaryKeys } = computeSalaryComponents({
+    basicPay: Number(salaryFormik.values.basicPay || 0),
+    grossSalary: derivedGross,
+    components: salaryComponents,
+    ptSlabs,
+    workState: data?.workState ?? null,
+  });
+
+  useEffect(() => {
+    if (!isEditingSalary) return;
+    const { values: derived } = computeSalaryComponents({
+      basicPay: Number(salaryFormik.values.basicPay || 0),
+      grossSalary: derivedGross,
+      components: salaryComponents,
+      ptSlabs,
+      workState: formik.values.workState,
+    });
+    for (const [key, value] of Object.entries(derived)) {
+      if (salaryFormik.values[key as keyof typeof salaryFormik.values] !== value) {
+        salaryFormik.setFieldValue(key, value);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isEditingSalary,
+    salaryFormik.values.basicPay,
+    salaryFormik.values.hra,
+    salaryFormik.values.conveyance,
+    salaryComponents,
+    ptSlabs,
+  ]);
+
+  const handleAmountChange = (
+    componentKey: string,
+    value: number | null | undefined,
+  ) => {
+    salaryFormik.setFieldValue(componentKey, value ?? 0);
   };
 
-  const handleAmountChange = (componentKey, value) => {
-    formik.setFieldValue(`salaryStructure.${componentKey}`, value ?? null);
+  const handleEditSalaryClick = () => {
+    salaryFormik.setValues({
+      basicPay:
+        data?.salaryStructure?.basicPay != null
+          ? Number(data.salaryStructure.basicPay)
+          : 0,
+      hra:
+        data?.salaryStructure?.hra != null
+          ? Number(data.salaryStructure.hra)
+          : 0,
+      conveyance:
+        data?.salaryStructure?.conveyance != null
+          ? Number(data.salaryStructure.conveyance)
+          : 0,
+      pf:
+        data?.salaryStructure?.pf != null
+          ? Number(data.salaryStructure.pf)
+          : 0,
+      esi:
+        data?.salaryStructure?.esi != null
+          ? Number(data.salaryStructure.esi)
+          : 0,
+      pt:
+        data?.salaryStructure?.pt != null
+          ? Number(data.salaryStructure.pt)
+          : 0,
+    });
+    setIsEditingSalary(true);
+  };
 
-    if (componentKey === "basicPay" && value) {
-      const pfAmount = Math.round(value * 0.12);
-      formik.setFieldValue(`salaryStructure.pf`, pfAmount);
-
-      if (Number(formik.values.salary) > 0) {
-        const esiAmount = Math.round(Number(formik.values.salary) * 0.0075);
-        formik.setFieldValue(`salaryStructure.esi`, esiAmount);
-      }
-
-      formik.setFieldValue(`salaryStructure.pt`, 200);
-    }
+  const handleCancelSalaryEdit = () => {
+    salaryFormik.resetForm();
+    setIsEditingSalary(false);
   };
 
   const handleEditClick = () => {
@@ -160,33 +264,6 @@ function ViewDetails() {
       pf_no: data?.pf_no || "",
       uan_no: data?.uan_no || "",
       esic_no: data?.esic_no || "",
-      salary: data?.salary != null ? Number(data.salary) : 0,
-      salaryStructure: {
-        basicPay:
-          data?.salaryStructure?.basicPay != null
-            ? Number(data.salaryStructure.basicPay)
-            : 0,
-        hra:
-          data?.salaryStructure?.hra != null
-            ? Number(data.salaryStructure.hra)
-            : 0,
-        conveyance:
-          data?.salaryStructure?.conveyance != null
-            ? Number(data.salaryStructure.conveyance)
-            : 0,
-        pf:
-          data?.salaryStructure?.pf != null
-            ? Number(data.salaryStructure.pf)
-            : 0,
-        esi:
-          data?.salaryStructure?.esi != null
-            ? Number(data.salaryStructure.esi)
-            : 0,
-        pt:
-          data?.salaryStructure?.pt != null
-            ? Number(data.salaryStructure.pt)
-            : 0,
-      },
       reasonForTermination: data?.reasonForTermination || "",
       dateOfTermination: data?.dateOfTermination || "",
       dateOfAbscond: data?.dateOfAbscond || "",
@@ -221,17 +298,21 @@ function ViewDetails() {
       : null;
   };
 
-  // Load salary components
+  // Load the tenant's configured salary components + PT slabs (seeded with
+  // defaults matching the old hardcoded rates on first read — see
+  // listSalaryComponents in the api-gateway).
   useEffect(() => {
     let isMounted = true;
 
     async function loadSalaryComponents() {
       try {
-        const { salaryComponents: components } =
-          await import("@web/assets/data/salaryComponents");
-
+        const [componentsRes, slabsRes] = await Promise.all([
+          apiClient.get(API_ENDPOINTS.LIST_SALARY_COMPONENTS),
+          apiClient.get(API_ENDPOINTS.LIST_PT_SLABS),
+        ]);
         if (isMounted) {
-          setSalaryComponents(components);
+          setSalaryComponents(componentsRes.data?.data ?? []);
+          setPtSlabs(slabsRes.data?.data ?? []);
         }
       } catch (error) {
         console.error("Error loading salary components:", error);
@@ -417,48 +498,18 @@ function ViewDetails() {
 
                 <Grid container spacing={1.5}>
                   <Grid size={{ xs: 12, sm: 3 }}>
-                    {isEditing ? (
-                      <>
-                        <InputNumber
-                          value={Number(formik.values.salary)}
-                          onValueChange={(e) =>
-                            handleGrossSalaryChange(e.value)
-                          }
-                          onBlur={() => formik.setFieldTouched("salary", true)}
-                          placeholder="Enter amount"
-                          min={0}
-                          minFractionDigits={0}
-                          maxFractionDigits={2}
-                          inputStyle={{
-                            padding: "6px 8px",
-                            fontSize: "0.875rem",
-                            width: "100%",
-                          }}
-                        />
-                        {getFieldError("salary") && (
-                          <Typography
-                            variant="caption"
-                            color="error"
-                            sx={{ display: "block", mt: 0.5 }}
-                          >
-                            {getFieldError("salary")}
-                          </Typography>
-                        )}
-                      </>
-                    ) : (
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ mb: 0.5, display: "block" }}
-                        >
-                          Gross Salary
-                        </Typography>
-                        <Typography variant="body2">
-                          {data?.salary || "--"}
-                        </Typography>
-                      </Box>
-                    )}
+                    <Box>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ mb: 0.5, display: "block" }}
+                      >
+                        Gross Salary
+                      </Typography>
+                      <Typography variant="body2">
+                        {data?.salary || "--"}
+                      </Typography>
+                    </Box>
                   </Grid>
                   <Grid size={{ xs: 12, sm: 3 }}>
                     {isEditing ? (
@@ -587,79 +638,94 @@ function ViewDetails() {
             {/* Salary Structure */}
             <Grid size={12}>
               <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <Business sx={{ fontSize: 18, color: "text.secondary" }} />
-                  <Typography variant="subtitle2" fontWeight="500">
-                    Salary Structure
-                  </Typography>
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  mb={1}
+                >
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Business sx={{ fontSize: 18, color: "text.secondary" }} />
+                    <Typography variant="subtitle2" fontWeight="500">
+                      Salary Structure
+                    </Typography>
+                  </Box>
+                  {!isEditingSalary ? (
+                    <Button
+                      onClick={handleEditSalaryClick}
+                      style={{ marginTop: 0 }}
+                    >
+                      Edit
+                    </Button>
+                  ) : (
+                    <Box display="flex" gap={1}>
+                      <Button
+                        onClick={salaryFormik.handleSubmit}
+                        disabled={savingSalary}
+                        style={{ marginTop: 0 }}
+                      >
+                        {savingSalary ? "Saving..." : "Save"}
+                      </Button>
+                      <Button
+                        onClick={handleCancelSalaryEdit}
+                        style={{ marginTop: 0 }}
+                      >
+                        Cancel
+                      </Button>
+                    </Box>
+                  )}
                 </Box>
                 <Box
                   sx={{
-                    boxShadow: isEditing ? 1 : "0 4px 12px rgba(0, 0, 0, 0.1)",
+                    boxShadow: isEditingSalary
+                      ? 1
+                      : "0 4px 12px rgba(0, 0, 0, 0.1)",
                     borderRadius: 2,
                   }}
                 >
                   <DataList
                     ariaLabel="Salary structure"
                     variant="rows"
-                    data={salaryComponents}
-                    getRowId={(component: any) => component.key}
+                    data={salaryComponents.filter((c) => CODE_TO_KEY[c.code])}
+                    getRowId={(component: SalaryComponentDef) => component.id}
                     columns={[
                       {
-                        key: "label",
+                        key: "name",
                         label: "Component",
                         primary: true,
-                        render: (component: any) => component.label,
+                        render: (component: SalaryComponentDef) =>
+                          component.name,
                       },
                       {
                         key: "amount",
                         label: "Amount",
-                        render: (component: any) =>
-                          isEditing ? (
-                            <Box>
-                              <InputNumber
-                                value={
-                                  formik.values.salaryStructure[component.key]
-                                }
-                                onValueChange={(e) =>
-                                  handleAmountChange(component.key, e.value)
-                                }
-                                onBlur={() =>
-                                  formik.setFieldTouched(
-                                    `salaryStructure.${component.key}`,
-                                    true,
-                                  )
-                                }
-                                placeholder="0.00"
-                                min={0}
-                                minFractionDigits={0}
-                                maxFractionDigits={2}
-                                inputStyle={{
-                                  padding: "6px 8px",
-                                  fontSize: "0.875rem",
-                                  width: "120px",
-                                }}
-                                disabled={["pf", "esi", "pt"].includes(
-                                  component.key,
-                                )}
-                              />
-                              {getFieldError(
-                                `salaryStructure.${component.key}`,
-                              ) && (
-                                <Typography
-                                  variant="caption"
-                                  color="error"
-                                  sx={{ display: "block", mt: 0.5 }}
-                                >
-                                  {getFieldError(
-                                    `salaryStructure.${component.key}`,
-                                  )}
-                                </Typography>
-                              )}
-                            </Box>
+                        render: (component: SalaryComponentDef) => {
+                          const key = CODE_TO_KEY[component.code];
+                          return isEditingSalary ? (
+                            <InputNumber
+                              value={
+                                salaryFormik.values[
+                                  key as keyof typeof salaryFormik.values
+                                ]
+                              }
+                              onValueChange={(e) =>
+                                handleAmountChange(key, e.value)
+                              }
+                              placeholder="0.00"
+                              min={0}
+                              minFractionDigits={0}
+                              maxFractionDigits={2}
+                              inputStyle={{
+                                padding: "6px 8px",
+                                fontSize: "0.875rem",
+                                width: "120px",
+                              }}
+                              disabled={lockedSalaryKeys.has(key)}
+                            />
                           ) : (
-                            (data?.salaryStructure?.[component.key] ?? "--")
-                          ),
+                            (data?.salaryStructure?.[key] ?? "--")
+                          );
+                        },
                       },
                     ]}
                   />

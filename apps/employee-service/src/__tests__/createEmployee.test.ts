@@ -10,10 +10,12 @@ jest.mock("@hrms/db", () => {
       create: jest.fn(),
     },
   };
+  const { Prisma } = jest.requireActual("@prisma/client");
   return {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    Prisma,
   };
 });
 
@@ -119,6 +121,23 @@ describe("createEmployee", () => {
         first_name: null,
         last_name: null,
       }),
+    });
+  });
+
+  it("returns ALREADY_EXISTS when create hits a unique-constraint violation not caught by the pre-check (cross-tenant username collision or concurrent create race)", async () => {
+    const { Prisma } = jest.requireActual("@prisma/client");
+    mockUserFindUnique.mockResolvedValue(null);
+    mockUserCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "5.0.0",
+      }),
+    );
+    const cb = makeCallback();
+    await createEmployee(makeCall({ username: "john" }), cb);
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.EMPLOYEE_USERNAME_EXISTS,
+      status: status.ALREADY_EXISTS,
     });
   });
 

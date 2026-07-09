@@ -3,8 +3,49 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { instantiateApproval, cancelApproval } from "@hrms/approval-engine";
+import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
 import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
+
+async function notifyCancellationRequested(
+  tenantId: string,
+  requestedByUserId: string,
+  leave: { userId: string; approvedById: string | null; from: Date; to: Date },
+): Promise<void> {
+  const [requester, hrUsers, approver] = await Promise.all([
+    (prisma as any).user.findUnique({
+      where: { id: leave.userId },
+      select: { username: true },
+    }),
+    (prisma as any).user.findMany({
+      where: { tenantId, department: "HUMAN RESOURCES" },
+      select: { id: true, username: true },
+    }),
+    leave.approvedById
+      ? (prisma as any).user.findUnique({
+          where: { id: leave.approvedById },
+          select: { id: true, username: true },
+        })
+      : null,
+  ]);
+
+  const targets = approver ? [...hrUsers, approver] : hrUsers;
+  const uniqueIds = [...new Set(targets.map((u: any) => u.id))];
+  const uniqueUsernames = [...new Set(targets.map((u: any) => u.username))];
+  if (uniqueUsernames.length === 0) return;
+
+  const fromStr = leave.from.toISOString().split("T")[0];
+  const toStr = leave.to.toISOString().split("T")[0];
+
+  await getNotificationQueue().add("leaveCancellationRequested", {
+    title: "Leave",
+    message: `${requester?.username || requestedByUserId} has requested to cancel their approved leave from ${fromStr} to ${toStr}.`,
+    recipients: uniqueIds,
+    pushTargets: uniqueUsernames,
+    eventType: "leave_notification",
+    priority: "medium",
+  });
+}
 
 export const cancelLeave = async (
   call: ServerUnaryCall<any, any>,
@@ -93,6 +134,14 @@ export const cancelLeave = async (
       await instantiateApproval(tenantId, "leave", id, leave.userId, {
         isCancellation: true,
       });
+      notifyCancellationRequested(tenantId, userId || leave.userId, {
+        userId: leave.userId,
+        approvedById: leave.approvedById,
+        from: leave.from,
+        to: leave.to,
+      }).catch((err) =>
+        logger.warn("[cancelLeave] Notification enqueue failed:", { err }),
+      );
       await cacheManager.invalidatePattern("leaves:*");
       return callback(null, {
         message: MESSAGES.LEAVE_CANCELLATION_REQUESTED,
@@ -102,7 +151,7 @@ export const cancelLeave = async (
     }
 
     return callback(null, {
-      message: MESSAGES.ONLY_PENDING_CAN_BE_CANCELLED,
+      message: MESSAGES.CANNOT_CANCEL_IN_CURRENT_STATE,
       status: status.FAILED_PRECONDITION,
     });
   } catch (err) {

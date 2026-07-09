@@ -8,7 +8,19 @@ jest.mock("@hrms/db", () => {
   const _db = {
     leaveApplication: {
       findUnique: jest.fn(),
-      update: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    tenantSettings: {
+      findFirst: jest.fn(),
+    },
+    leaveBalance: {
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    compOffCredit: {
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
     },
   };
   return {
@@ -19,7 +31,11 @@ jest.mock("@hrms/db", () => {
 });
 
 jest.mock("@hrms/cache", () => ({
-  cacheManager: { invalidatePattern: jest.fn() },
+  cacheManager: {
+    invalidatePattern: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
+  },
 }));
 
 jest.mock("@hrms/queue", () => ({
@@ -36,13 +52,18 @@ const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
 const mockFindUnique = prisma.leaveApplication.findUnique as jest.Mock;
-const mockUpdate = prisma.leaveApplication.update as jest.Mock;
+const mockFindUniqueOrThrow = (prisma as any).leaveApplication
+  .findUniqueOrThrow as jest.Mock;
+const mockUpdateMany = (prisma as any).leaveApplication
+  .updateMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 
 describe("approveLeave", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockInvalidate.mockResolvedValue(undefined);
+    // Happy-path default: the conditional transition succeeds.
+    mockUpdateMany.mockResolvedValue({ count: 1 });
   });
 
   it("returns INVALID_ARGUMENT when id is missing", async () => {
@@ -72,7 +93,7 @@ describe("approveLeave", () => {
       message: MESSAGES.ONLY_PENDING_CAN_BE_APPROVED,
       status: status.FAILED_PRECONDITION,
     });
-    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("returns FAILED_PRECONDITION for Rejected leave", async () => {
@@ -85,6 +106,20 @@ describe("approveLeave", () => {
     });
   });
 
+  it("returns FAILED_PRECONDITION when a concurrent approval already won the race", async () => {
+    // First read sees "Pending", but the conditional update matches nothing
+    // because another request flipped the status a moment earlier.
+    mockFindUnique.mockResolvedValue({ id: "leave-1", status: "Pending" });
+    mockUpdateMany.mockResolvedValue({ count: 0 });
+    const cb = makeCallback();
+    await approveLeave(makeCall({ id: "leave-1" }), cb);
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.ONLY_PENDING_CAN_BE_APPROVED,
+      status: status.FAILED_PRECONDITION,
+    });
+    expect(mockFindUniqueOrThrow).not.toHaveBeenCalled();
+  });
+
   it("approves leave and returns updated record on happy path", async () => {
     const pending = { id: "leave-1", status: "Pending", userId: "john-id" };
     const approved = {
@@ -94,7 +129,7 @@ describe("approveLeave", () => {
       approvedById: "manager-id",
     };
     mockFindUnique.mockResolvedValue(pending);
-    mockUpdate.mockResolvedValue(approved);
+    mockFindUniqueOrThrow.mockResolvedValue(approved);
 
     const cb = makeCallback();
     await approveLeave(
@@ -102,8 +137,8 @@ describe("approveLeave", () => {
       cb,
     );
 
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: "leave-1" },
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: "leave-1", status: "Pending" },
       data: expect.objectContaining({
         status: "Approved",
         approvedById: "manager-id",
@@ -122,7 +157,10 @@ describe("approveLeave", () => {
 
   it("invalidates leave cache after approval", async () => {
     mockFindUnique.mockResolvedValue({ id: "leave-1", status: "Pending" });
-    mockUpdate.mockResolvedValue({ id: "leave-1", status: "Approved" });
+    mockFindUniqueOrThrow.mockResolvedValue({
+      id: "leave-1",
+      status: "Approved",
+    });
 
     await approveLeave(makeCall({ id: "leave-1" }), makeCallback());
 

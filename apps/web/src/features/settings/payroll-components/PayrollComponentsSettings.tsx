@@ -374,10 +374,12 @@ export default function PayrollComponentsSettings() {
           color="text.secondary"
           sx={{ maxWidth: 640 }}
         >
-          Standard components (Basic, HRA, Conveyance, PF, ESI, PT) run every
-          payroll automatically. Add custom components, state-wise Professional
-          Tax slabs, or additional pay cycles here — nothing configured yet
-          keeps every run behaving exactly as it does today.
+          Basic, HRA, Conveyance, PF, ESI, and PT are pre-configured below with
+          the standard rates (PF 12% of basic, ESI 1.75% of gross, PT ₹200) —
+          edit them to change how every payslip is calculated. State-wise
+          Professional Tax slabs override the flat PT rate once configured.
+          Additional custom components can be added here, but aren't applied
+          to payroll calculations yet.
         </Typography>
       </Box>
 

@@ -58,7 +58,35 @@ async function processEmployee(
     existing.map((r) => dayjs.utc(r.date).format("YYYY-MM-DD")),
   );
 
-  const missingDates = allDates.filter((d) => !existingDates.has(d));
+  // A date already covered by a real leave application (applied by the
+  // employee, however it was decided) is NOT a reconciliation gap — only
+  // Rejected/Cancelled applications leave the date genuinely unaccounted
+  // for. Without this check, every properly-approved leave day (which
+  // correctly has no AttendanceRecord) would get a second, duplicate
+  // system-generated leave stacked on top of it here, double-debiting the
+  // balance for a day that was already paid for once on approval.
+  const existingLeaves = await prisma.leaveApplication.findMany({
+    where: {
+      userId,
+      status: { notIn: ["Rejected", "Cancelled"] },
+      from: { lte: endDate },
+      to: { gte: startDate },
+    },
+    select: { from: true, to: true },
+  });
+  const leaveCoveredDates = new Set<string>();
+  for (const leave of existingLeaves) {
+    let d = dayjs.utc(leave.from).startOf("day");
+    const leaveEnd = dayjs.utc(leave.to).startOf("day");
+    while (!d.isAfter(leaveEnd)) {
+      leaveCoveredDates.add(d.format("YYYY-MM-DD"));
+      d = d.add(1, "day");
+    }
+  }
+
+  const missingDates = allDates.filter(
+    (d) => !existingDates.has(d) && !leaveCoveredDates.has(d),
+  );
   if (missingDates.length === 0) return;
 
   const startYear = start.year();
