@@ -486,6 +486,7 @@ describe("attendanceInsights", () => {
     const emp = call.data.employeeRiskAssessment[0];
     expect(emp.userId).toBe("bob-id");
     expect(emp.riskLevel).toBe("High");
+    expect(emp.department).toBe("HR");
   });
 
   it("assigns Low risk level for perfect attendance with full hours", async () => {
@@ -509,6 +510,74 @@ describe("attendanceInsights", () => {
     const call = mockApiResponse.mock.calls[0][2];
     const emp = call.data.employeeRiskAssessment[0];
     expect(emp.riskLevel).toBe("Low");
+  });
+
+  it("includes the employee's display name in employeeRiskAssessment, not just userId", async () => {
+    mockRecordFindMany.mockResolvedValue([
+      {
+        userId: "dave-id",
+        status: "Present",
+        isCorrected: false,
+        workingHours: 8,
+        timeIn: "09:00",
+        date: new Date("2024-03-01"),
+      },
+    ]);
+    mockUserFindMany.mockResolvedValue([
+      {
+        id: "dave-id",
+        department: "Engineering",
+        username: "dave",
+        first_name: "Dave",
+        last_name: "Smith",
+      },
+    ]);
+
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
+
+    const call = mockApiResponse.mock.calls[0][2];
+    const emp = call.data.employeeRiskAssessment[0];
+    expect(emp.username).toBe("dave");
+    expect(emp.employeeName).toBe("Dave Smith");
+    expect(emp.department).toBe("Engineering");
+  });
+
+  it("resolves department/name for a userId not in the currently-active employee list (e.g. someone who left mid-period)", async () => {
+    mockRecordFindMany.mockResolvedValue([
+      {
+        userId: "former-employee-id",
+        status: "Present",
+        isCorrected: false,
+        workingHours: 8,
+        timeIn: "09:00",
+        date: new Date("2024-03-01"),
+      },
+    ]);
+    // Simulates prisma.user.findMany({ where: { id: { in: [...] } } }) still
+    // finding the user by id even though they're no longer "Active" —
+    // unlike the old `where: { employeeStatus: "Active" }` query, which
+    // would have returned nothing for them.
+    mockUserFindMany.mockResolvedValue([
+      {
+        id: "former-employee-id",
+        department: "Sales",
+        username: "exemployee",
+        first_name: "Former",
+        last_name: "Employee",
+      },
+    ]);
+
+    const res = makeRes();
+    await attendanceInsights(makeReq({ query: {} }), res);
+
+    const call = mockApiResponse.mock.calls[0][2];
+    const emp = call.data.employeeRiskAssessment[0];
+    expect(emp.department).toBe("Sales");
+    expect(emp.employeeName).toBe("Former Employee");
+    expect(call.data.teamPerformance.map((t: any) => t.department)).toContain(
+      "Sales",
+    );
   });
 
   it("groups records by department for teamPerformance", async () => {
