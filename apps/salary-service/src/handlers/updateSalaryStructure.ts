@@ -2,6 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import { deriveFromComponents, toWireSalaryStructure } from "@hrms/common";
 
 export const updateSalaryStructure = async (
   call: ServerUnaryCall<any, any>,
@@ -18,6 +19,7 @@ export const updateSalaryStructure = async (
       esi,
       pt,
       deductions,
+      components,
     } = call.request;
 
     if (!id) {
@@ -35,32 +37,45 @@ export const updateSalaryStructure = async (
       });
     }
 
-    const basic =
-      basicPay !== undefined ? parseFloat(basicPay) : (existing.basicPay ?? 0);
-    const hraAmt = hra !== undefined ? parseFloat(hra) : (existing.hra ?? 0);
-    const conv =
-      conveyance !== undefined
-        ? parseFloat(conveyance)
-        : (existing.conveyance ?? 0);
-    const inc =
-      incentive !== undefined
-        ? parseFloat(incentive)
-        : (existing.incentive ?? 0);
-    const pfAmt = pf !== undefined ? parseFloat(pf) : (existing.pf ?? 0);
-    const esiAmt = esi !== undefined ? parseFloat(esi) : (existing.esi ?? 0);
-    const ptAmt = pt !== undefined ? parseFloat(pt) : (existing.pt ?? 0);
+    let salaryData: Record<string, unknown>;
 
-    const deductAmt =
-      deductions !== undefined
-        ? parseFloat(deductions)
-        : (existing.deductions ?? 0);
+    if (components?.length) {
+      const { legacy, grossEarnings, totalDeductions } =
+        deriveFromComponents(components);
+      salaryData = {
+        ...legacy,
+        grossEarnings,
+        grossSalary: grossEarnings,
+        netPayable: grossEarnings - totalDeductions,
+        componentBreakdown: components,
+      };
+    } else {
+      const basic =
+        basicPay !== undefined
+          ? parseFloat(basicPay)
+          : (existing.basicPay ?? 0);
+      const hraAmt = hra !== undefined ? parseFloat(hra) : (existing.hra ?? 0);
+      const conv =
+        conveyance !== undefined
+          ? parseFloat(conveyance)
+          : (existing.conveyance ?? 0);
+      const inc =
+        incentive !== undefined
+          ? parseFloat(incentive)
+          : (existing.incentive ?? 0);
+      const pfAmt = pf !== undefined ? parseFloat(pf) : (existing.pf ?? 0);
+      const esiAmt = esi !== undefined ? parseFloat(esi) : (existing.esi ?? 0);
+      const ptAmt = pt !== undefined ? parseFloat(pt) : (existing.pt ?? 0);
 
-    const grossEarnings = basic + hraAmt + conv + inc;
-    const netPayable = grossEarnings - (pfAmt + esiAmt + ptAmt + deductAmt);
+      const deductAmt =
+        deductions !== undefined
+          ? parseFloat(deductions)
+          : (existing.deductions ?? 0);
 
-    const updated = await prisma.salaryStructure.update({
-      where: { id },
-      data: {
+      const grossEarnings = basic + hraAmt + conv + inc;
+      const netPayable = grossEarnings - (pfAmt + esiAmt + ptAmt + deductAmt);
+
+      salaryData = {
         basicPay: basic,
         hra: hraAmt,
         conveyance: conv,
@@ -72,13 +87,18 @@ export const updateSalaryStructure = async (
         grossEarnings,
         grossSalary: grossEarnings,
         netPayable,
-      },
+      };
+    }
+
+    const updated = await prisma.salaryStructure.update({
+      where: { id },
+      data: salaryData as any,
     });
 
     return callback(null, {
       message: MESSAGES.SALARY_STRUCTURE_UPDATED,
       status: status.OK,
-      data: updated,
+      data: toWireSalaryStructure(updated),
     });
   } catch (err) {
     logger.error("UpdateSalaryStructure error:", { err });

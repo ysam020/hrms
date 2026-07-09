@@ -10,14 +10,20 @@ export const getLeaves = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { userId, status: leaveStatus, page = 1, limit = 10 } = call.request;
+    const {
+      userId,
+      status: leaveStatus,
+      futureOnly,
+      page = 1,
+      limit = 10,
+    } = call.request;
 
     const pageNum = parseInt(String(page)) || 1;
     const limitNum = parseInt(String(limit)) || 10;
     const skip = (pageNum - 1) * limitNum;
 
     const tenantId = getTenantId() ?? "global";
-    const cacheKey = `t:${tenantId}:leaves:${userId || ""}:${leaveStatus || "all"}:p${pageNum}:l${limitNum}`;
+    const cacheKey = `t:${tenantId}:leaves:${userId || ""}:${leaveStatus || "all"}:${futureOnly ? "future" : "all"}:p${pageNum}:l${limitNum}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
@@ -25,6 +31,9 @@ export const getLeaves = async (
     if (userId) where.userId = userId;
     if (leaveStatus && leaveStatus.toLowerCase() !== "all")
       where.status = leaveStatus;
+    if (futureOnly) {
+      where.to = { gte: new Date(new Date().toDateString()) };
+    }
 
     const [leaves, total] = await Promise.all([
       prisma.leaveApplication.findMany({ where, skip, take: limitNum }),

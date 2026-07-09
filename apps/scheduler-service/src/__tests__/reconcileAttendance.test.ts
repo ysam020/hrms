@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
-import { prisma } from "@hrms/db";
+import { prisma, getClientForDb, runWithTenant } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { reconcileAttendance } from "../jobs/reconcileAttendance";
 
@@ -9,6 +9,7 @@ dayjs.extend(utc);
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findMany: jest.fn(), findUnique: jest.fn() },
+    tenant: { findMany: jest.fn() },
     attendanceRecord: { findMany: jest.fn(), createMany: jest.fn() },
     leaveApplication: { findMany: jest.fn(), createMany: jest.fn() },
     leaveBalance: {
@@ -17,10 +18,12 @@ jest.mock("@hrms/db", () => {
       create: jest.fn(),
     },
     holiday: { findMany: jest.fn() },
+    tenantSettings: { findFirst: jest.fn() },
   };
   return {
     prisma: _db,
     prismaWithTenant: _db,
+    getClientForDb: jest.fn().mockReturnValue({}),
     getTenantId: jest.fn().mockReturnValue("t1"),
     runWithTenant: jest
       .fn()
@@ -39,6 +42,7 @@ jest.mock("@hrms/logger", () => ({
 }));
 
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
+const mockTenantFindMany = (prisma as any).tenant.findMany as jest.Mock;
 const mockAttendanceFindMany = (prisma as any).attendanceRecord
   .findMany as jest.Mock;
 const mockAttendanceCreateMany = (prisma as any).attendanceRecord
@@ -50,12 +54,20 @@ const mockLeaveFindMany = (prisma as any).leaveApplication
 const mockLbFindFirst = (prisma as any).leaveBalance.findFirst as jest.Mock;
 const mockLbUpsert = (prisma as any).leaveBalance.upsert as jest.Mock;
 const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
+const mockTenantSettingsFindFirst = (prisma as any).tenantSettings
+  .findFirst as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
+const mockGetClientForDb = getClientForDb as jest.Mock;
+const mockRunWithTenant = runWithTenant as jest.Mock;
 
 describe("reconcileAttendance", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    mockRunWithTenant.mockImplementation(
+      (_tenantId: string, _client: any, fn: () => any) => fn(),
+    );
+    mockTenantFindMany.mockResolvedValue([{ id: "t1", dbName: "tenant_t1" }]);
     mockAttendanceFindMany.mockResolvedValue([]);
     mockAttendanceCreateMany.mockResolvedValue({ count: 0 });
     mockLeaveCreateMany.mockResolvedValue({ count: 0 });
@@ -67,6 +79,7 @@ describe("reconcileAttendance", () => {
     });
     mockLbUpsert.mockResolvedValue(undefined);
     mockHolidayFindMany.mockResolvedValue([]);
+    mockTenantSettingsFindFirst.mockResolvedValue(null);
     mockInvalidate.mockResolvedValue(undefined);
   });
 
@@ -222,5 +235,104 @@ describe("reconcileAttendance", () => {
     jest.setSystemTime(new Date(2024, 2, 15, 12, 0, 0));
     mockUserFindMany.mockRejectedValue(new Error("DB error"));
     await expect(reconcileAttendance()).rejects.toThrow("DB error");
+  });
+
+  it("routes to the employee's tenant-specific DB client instead of the shared default", async () => {
+    jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0));
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
+    mockTenantFindMany.mockResolvedValue([{ id: "t1", dbName: "tenant_t1" }]);
+    const tenantClient = { marker: "tenant-t1-client" };
+    mockGetClientForDb.mockReturnValue(tenantClient);
+
+    await reconcileAttendance();
+
+    expect(mockGetClientForDb).toHaveBeenCalledWith("tenant_t1");
+    expect(mockRunWithTenant).toHaveBeenCalledWith(
+      "t1",
+      tenantClient,
+      expect.any(Function),
+    );
+  });
+
+  it("passes null (shared default DB) for a tenant with no dedicated dbName", async () => {
+    jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0));
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t2" }]);
+    mockTenantFindMany.mockResolvedValue([{ id: "t2", dbName: null }]);
+
+    await reconcileAttendance();
+
+    expect(mockGetClientForDb).not.toHaveBeenCalled();
+    expect(mockRunWithTenant).toHaveBeenCalledWith(
+      "t2",
+      null,
+      expect.any(Function),
+    );
+  });
+
+  it("stamps tenantId on every system-generated AttendanceRecord", async () => {
+    jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0)); // March 5 - process March 1-4
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
+    mockAttendanceFindMany.mockResolvedValue([]);
+    mockHolidayFindMany.mockResolvedValue([
+      { holidays: [{ date: "2024-03-01" }] },
+    ]);
+
+    await reconcileAttendance();
+
+    const created = mockAttendanceCreateMany.mock.calls[0][0].data as any[];
+    expect(created.length).toBeGreaterThan(0);
+    for (const record of created) {
+      expect(record.tenantId).toBe("t1");
+    }
+  });
+
+  it("marks a weekend as a paid Week Off, not an unpaid Leave, by default (Mon-Fri work week)", async () => {
+    jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0)); // March 5 - process March 1-4
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
+    mockAttendanceFindMany.mockResolvedValue([]);
+    mockTenantSettingsFindFirst.mockResolvedValue(null); // no custom settings — defaults to Mon-Fri
+
+    await reconcileAttendance();
+
+    const created = mockAttendanceCreateMany.mock.calls[0][0].data as any[];
+    // March 2, 2024 is a Saturday.
+    const saturday = created.find(
+      (r: any) => dayjs.utc(r.date).format("YYYY-MM-DD") === "2024-03-02",
+    );
+    expect(saturday?.status).toBe("Week Off");
+  });
+
+  it("honors a tenant's custom work-week pattern instead of hardcoding Sat/Sun as off", async () => {
+    jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0)); // March 5 - process March 1-4
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
+    mockAttendanceFindMany.mockResolvedValue([]);
+    // Tenant works Mon-Sat (Saturday is a working day, only Sunday is off).
+    mockTenantSettingsFindFirst.mockResolvedValue({
+      workWeekPattern: { type: "mon_sat", workingDays: [1, 2, 3, 4, 5, 6] },
+    });
+    mockLbFindFirst.mockResolvedValue({
+      accumulatedPLBeforeCurrentMonth: 0,
+      balances: [
+        {
+          month: 3,
+          year: 2024,
+          earnedPL: 10,
+          usedPL: 0,
+          usedLWP: 0,
+          remainingPL: 10,
+        },
+      ],
+    });
+
+    await reconcileAttendance();
+
+    const created = mockAttendanceCreateMany.mock.calls[0][0].data as any[];
+    // March 2, 2024 is a Saturday — a working day under mon_sat, so it
+    // should NOT be tagged "Week Off" (it falls through to the regular
+    // leave-gap path instead).
+    const saturday = created.find(
+      (r: any) => dayjs.utc(r.date).format("YYYY-MM-DD") === "2024-03-02",
+    );
+    expect(saturday?.status).not.toBe("Week Off");
   });
 });

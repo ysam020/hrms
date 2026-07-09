@@ -65,7 +65,9 @@ export const approveLeave = async (
       where: { id },
     });
 
-    await cacheManager.invalidatePattern("leaves:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:leaves:*`,
+    );
 
     // Debit the balance — no-op unless this user/leave-type is already
     // balance-tracked (see leaveBalanceHelpers.ts). Comp-off draws down
@@ -76,10 +78,7 @@ export const approveLeave = async (
     const leavePolicies = tenantId
       ? (await getLeaveSettings(tenantId))?.leavePolicies
       : undefined;
-    if (
-      tenantId &&
-      isCompOffLeaveType(updatedLeave.leaveType, leavePolicies)
-    ) {
+    if (tenantId && isCompOffLeaveType(updatedLeave.leaveType, leavePolicies)) {
       await consumeCompOffCredits(
         tenantId,
         updatedLeave.userId,

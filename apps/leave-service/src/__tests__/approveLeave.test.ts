@@ -54,8 +54,7 @@ const makeCallback = () => jest.fn();
 const mockFindUnique = prisma.leaveApplication.findUnique as jest.Mock;
 const mockFindUniqueOrThrow = (prisma as any).leaveApplication
   .findUniqueOrThrow as jest.Mock;
-const mockUpdateMany = (prisma as any).leaveApplication
-  .updateMany as jest.Mock;
+const mockUpdateMany = (prisma as any).leaveApplication.updateMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 
 describe("approveLeave", () => {
@@ -164,7 +163,7 @@ describe("approveLeave", () => {
 
     await approveLeave(makeCall({ id: "leave-1" }), makeCallback());
 
-    expect(mockInvalidate).toHaveBeenCalledWith("leaves:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:leaves:*");
   });
 
   it("returns INTERNAL on database error", async () => {

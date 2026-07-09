@@ -121,10 +121,9 @@ describe("LoginPage", () => {
     expect(screen.getByTestId("logo-dark")).toBeInTheDocument();
   });
 
-  it("navigates to /careers when 'View Open Positions' is clicked", () => {
+  it("does not render a 'View Open Positions' link — the tenant-agnostic login screen can't construct a valid careers URL", () => {
     renderLoginPage();
-    fireEvent.click(screen.getByText("View Open Positions"));
-    expect(mockNavigate).toHaveBeenCalledWith("/careers");
+    expect(screen.queryByText("View Open Positions")).not.toBeInTheDocument();
   });
 
   it("redirects to Google OAuth when Google button is clicked", () => {

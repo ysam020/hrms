@@ -104,15 +104,15 @@ describe("App – unauthenticated routing", () => {
     );
   });
 
-  it("renders CareersPage at /careers without authentication", async () => {
-    renderApp("/careers");
+  it("renders CareersPage at /careers/:slug without authentication", async () => {
+    renderApp("/careers/acme-co");
     await waitFor(() =>
       expect(screen.getByTestId("careers-page")).toBeInTheDocument(),
     );
   });
 
-  it("renders JobApplicationPage at /careers/apply/:id without auth", async () => {
-    renderApp("/careers/apply/abc123");
+  it("renders JobApplicationPage at /careers/:slug/apply/:id without auth", async () => {
+    renderApp("/careers/acme-co/apply/abc123");
     await waitFor(() =>
       expect(screen.getByTestId("job-application-page")).toBeInTheDocument(),
     );

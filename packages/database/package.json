@@ -24,6 +24,8 @@
     "prisma": "^5.22.0"
   },
   "devDependencies": {
+    "@faker-js/faker": "^9.3.0",
+    "@hrms/common": "workspace:*",
     "@hrms/logger": "workspace:*",
     "@hrms/typescript-config": "workspace:*",
     "@types/node": "^22.8.7",

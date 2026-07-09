@@ -2,6 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import { toWireSalaryStructure } from "@hrms/common";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
@@ -88,6 +89,7 @@ export const getPayslip = async (
         late = 0,
         halfDay = 0,
         holiday = 0,
+        weekOff = 0,
         wfh = 0,
         absentDays = 0;
       for (const r of records) {
@@ -96,6 +98,8 @@ export const getPayslip = async (
         else if (s === "late") late++;
         else if (s === "half day") halfDay++;
         else if (s === "holiday") holiday++;
+        // Weekly offs (e.g. Sat/Sun) are non-working but still paid days.
+        else if (s === "week off") weekOff++;
         else if (s === "wfh") wfh++;
         else if (s === "absent") absentDays++;
       }
@@ -113,7 +117,7 @@ export const getPayslip = async (
 
       // Weighted paid days — same formula used by initiatePayrollRun.
       const paidDays = Math.min(
-        present + late + halfDay * 0.5 + holiday + wfh + paidLeaves,
+        present + late + halfDay * 0.5 + holiday + weekOff + wfh + paidLeaves,
         totalMonthDays,
       );
 
@@ -124,6 +128,7 @@ export const getPayslip = async (
         presentDays: present + late, // physical presence (backward-compat field)
         halfDays: halfDay,
         holidayDays: holiday,
+        weekOffDays: weekOff,
         wfhDays: wfh,
         paidLeaves,
         paidDays,
@@ -139,7 +144,7 @@ export const getPayslip = async (
           ...employee,
           joining_date: employee.joining_date?.toISOString() ?? null,
         },
-        salaryStructure,
+        salaryStructure: toWireSalaryStructure(salaryStructure),
         attendanceSummary,
       },
     });

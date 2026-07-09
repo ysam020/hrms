@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true };
 
@@ -18,10 +18,12 @@ vi.mock("react-router-dom", async () => {
 
 import CareersPage from "@web/pages/CareersPage";
 
-const renderPage = () =>
+const renderPage = (slug = "acme-co") =>
   render(
-    <MemoryRouter future={routerFuture}>
-      <CareersPage />
+    <MemoryRouter future={routerFuture} initialEntries={[`/careers/${slug}`]}>
+      <Routes>
+        <Route path="/careers/:slug" element={<CareersPage />} />
+      </Routes>
     </MemoryRouter>,
   );
 
@@ -233,13 +235,13 @@ describe("CareersPage – navigation", () => {
     expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 
-  it("navigates to /careers/apply/:id when 'Apply Now' is clicked", async () => {
+  it("navigates to /careers/:slug/apply/:id when 'Apply Now' is clicked", async () => {
     renderPage();
     await waitFor(() =>
       expect(screen.getByText("Apply Now")).toBeInTheDocument(),
     );
 
     await userEvent.click(screen.getByText("Apply Now"));
-    expect(mockNavigate).toHaveBeenCalledWith("/careers/apply/job1");
+    expect(mockNavigate).toHaveBeenCalledWith("/careers/acme-co/apply/job1");
   });
 });

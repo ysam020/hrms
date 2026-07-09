@@ -9,6 +9,13 @@ message GetSalaryRequest {
   int32 month = 3;
 }
 
+message ComponentAmount {
+  string code = 1;
+  string name = 2;
+  string type = 3; // "earning" | "deduction"
+  double amount = 4;
+}
+
 message CreateSalaryRequest {
   string userId = 1;
   double basicPay = 2;
@@ -21,6 +28,7 @@ message CreateSalaryRequest {
   double deductions = 9;
   int32 month = 10;
   int32 year = 11;
+  repeated ComponentAmount components = 12;
 }
 
 message UpdateSalaryRequest {
@@ -33,6 +41,7 @@ message UpdateSalaryRequest {
   double esi = 7;
   double pt = 8;
   double deductions = 9;
+  repeated ComponentAmount components = 10;
 }
 
 message ProcessPayrollRequest {
@@ -59,6 +68,7 @@ message SalaryStructure {
   double grossEarnings = 13;
   double grossSalary = 14;
   double netPayable = 15;
+  repeated ComponentAmount components = 16;
 }
 
 message Employee {

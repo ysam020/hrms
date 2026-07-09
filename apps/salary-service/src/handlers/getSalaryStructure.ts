@@ -2,6 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import { toWireSalaryStructure } from "@hrms/common";
 
 export const getSalaryStructure = async (
   call: ServerUnaryCall<any, any>,
@@ -36,7 +37,7 @@ export const getSalaryStructure = async (
     return callback(null, {
       message: MESSAGES.SALARY_STRUCTURE_FETCHED,
       status: status.OK,
-      data: salaryStructure,
+      data: toWireSalaryStructure(salaryStructure),
     });
   } catch (err) {
     logger.error("GetSalaryStructure error:", { err });

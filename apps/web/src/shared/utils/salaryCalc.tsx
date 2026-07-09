@@ -30,6 +30,77 @@ export const CODE_TO_KEY: Record<string, string> = {
   PT: "pt",
 };
 
+// Pseudo-components standing in for the old freeform incentive/deductions
+// fields, which aren't part of SalaryComponentDefinition. Appended after the
+// tenant's real components so they always sort last.
+export const PSEUDO_COMPONENTS: SalaryComponentDef[] = [
+  {
+    id: "pseudo-incentive",
+    code: "INCENTIVE",
+    name: "Incentive",
+    type: "earning",
+    calcType: "fixed",
+    isStatutory: false,
+    displayOrder: 1000,
+  },
+  {
+    id: "pseudo-other-deductions",
+    code: "OTHER_DEDUCTIONS",
+    name: "Deductions",
+    type: "deduction",
+    calcType: "fixed",
+    isStatutory: false,
+    displayOrder: 1001,
+  },
+];
+
+/** Active tenant components (sorted) + the incentive/deductions pseudo-rows. */
+export function getMergedComponents(
+  tenantComponents: SalaryComponentDef[],
+): SalaryComponentDef[] {
+  return [
+    ...tenantComponents
+      .filter((c) => c.code !== "INCENTIVE" && c.code !== "OTHER_DEDUCTIONS")
+      .slice()
+      .sort((a, b) => a.displayOrder - b.displayOrder),
+    ...PSEUDO_COMPONENTS,
+  ];
+}
+
+const KEY_TO_CODE: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.entries(CODE_TO_KEY).map(([code, key]) => [key, code]),
+  ),
+  incentive: "INCENTIVE",
+  deductions: "OTHER_DEDUCTIONS",
+};
+
+/**
+ * Converts a legacy fixed-column salary structure (basicPay/hra/.../
+ * incentive/deductions) into a code-keyed values map — used as the fallback
+ * when an employee's SalaryStructure row predates componentBreakdown.
+ */
+export function legacyFieldsToComponentValues(
+  data: Record<string, unknown> | null | undefined,
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  if (!data) return result;
+  for (const [key, code] of Object.entries(KEY_TO_CODE)) {
+    if (data[key] != null) result[code] = Number(data[key]) || 0;
+  }
+  return result;
+}
+
+/** Converts a componentBreakdown wire array into a code-keyed values map. */
+export function componentsArrayToValues(
+  components: { code: string; amount: number | string }[] | null | undefined,
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  if (!components) return result;
+  for (const c of components) result[c.code] = Number(c.amount) || 0;
+  return result;
+}
+
 interface ComputeArgs {
   basicPay: number;
   grossSalary: number;
@@ -41,7 +112,7 @@ interface ComputeArgs {
 interface ComputeResult {
   /** Derived values for components that are computed rather than manually entered. */
   values: Record<string, number>;
-  /** Keys (from CODE_TO_KEY) whose input should be disabled — they're auto-derived. */
+  /** Component codes whose input should be disabled — they're auto-derived. */
   locked: Set<string>;
 }
 
@@ -72,6 +143,10 @@ function findPtSlab(
  * from basic or gross pay per its percentOf. Everything else — including
  * Basic/HRA/Conveyance by default — stays manual entry, matching prior
  * behavior exactly for tenants who haven't customized rates.
+ *
+ * Keyed by `component.code` directly (not remapped through CODE_TO_KEY), so
+ * custom/non-standard components a tenant defines get a slot too instead of
+ * being silently dropped.
  */
 export function computeSalaryComponents({
   basicPay,
@@ -84,23 +159,65 @@ export function computeSalaryComponents({
   const locked = new Set<string>();
 
   for (const c of components) {
-    const key = CODE_TO_KEY[c.code];
-    if (!key) continue; // custom/non-standard component — not yet applied to payroll
-
     if (c.code === "PT" && c.calcType === "fixed") {
       const slab = findPtSlab(ptSlabs, workState, grossSalary);
-      values[key] = slab ? slab.monthlyPT : (c.percentValue ?? 0);
-      locked.add(key);
+      values[c.code] = slab ? slab.monthlyPT : (c.percentValue ?? 0);
+      locked.add(c.code);
       continue;
     }
 
     if (c.calcType === "percent_of_basic") {
       const base = c.percentOf === "gross" ? grossSalary : basicPay;
-      values[key] = Math.round(base * ((c.percentValue ?? 0) / 100));
-      locked.add(key);
+      values[c.code] = Math.round(base * ((c.percentValue ?? 0) / 100));
+      locked.add(c.code);
     }
     // calcType "fixed" (non-PT) or "formula" (not yet supported): manual entry.
   }
 
   return { values, locked };
+}
+
+/**
+ * Redistributes a newly-typed target gross salary across the currently
+ * unlocked earning components, preserving their existing relative ratios —
+ * backs the editable Gross Salary field in the Employee/Salary modules. If
+ * nothing is set yet (fresh structure, sum = 0), puts 100% into the first
+ * earning component (by displayOrder) and leaves the rest at 0 for HR to
+ * split manually, same pattern the old attendance-based default used.
+ *
+ * Locked earning components (e.g. a tenant-configured percent_of_basic
+ * allowance) are left untouched here — they're recomputed separately by
+ * computeSalaryComponents off the resulting Basic/gross, so the actual
+ * gross may drift slightly from `newGross` in that (rare) configuration.
+ */
+export function redistributeGross(
+  newGross: number,
+  components: SalaryComponentDef[],
+  currentValues: Record<string, number>,
+  lockedKeys: Set<string>,
+): Record<string, number> {
+  const earningCodes = components
+    .filter((c) => c.type === "earning" && !lockedKeys.has(c.code))
+    .map((c) => c.code);
+
+  const result: Record<string, number> = { ...currentValues };
+  if (earningCodes.length === 0) return result;
+
+  const currentSum = earningCodes.reduce(
+    (sum, code) => sum + (currentValues[code] ?? 0),
+    0,
+  );
+
+  if (currentSum > 0) {
+    const scale = newGross / currentSum;
+    for (const code of earningCodes) {
+      result[code] = Math.round((currentValues[code] ?? 0) * scale);
+    }
+  } else {
+    earningCodes.forEach((code, i) => {
+      result[code] = i === 0 ? Math.round(newGross) : 0;
+    });
+  }
+
+  return result;
 }

@@ -104,7 +104,7 @@ describe("getSalaryStructure", () => {
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.SALARY_STRUCTURE_FETCHED,
       status: status.OK,
-      data: structure,
+      data: { ...structure, components: [] },
     });
   });
 

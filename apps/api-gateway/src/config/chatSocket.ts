@@ -26,13 +26,22 @@ export function setupChatSocket(
     // Per-connection cache of roomId → participants[] to avoid repeated DB hits
     const roomParticipantsCache = new Map<string, string[]>();
 
+    // Tenant-scoped queries (unlike REST requests) get no automatic
+    // AsyncLocalStorage context, so every DB call here must be run through
+    // this helper or it silently falls back to the wrong (master) DB.
+    const tenantClient = tenantId && dbName ? getClientForDb(dbName) : null;
+    const withTenant = <T>(fn: () => Promise<T>): Promise<T> =>
+      tenantId ? runWithTenant(tenantId, tenantClient, fn) : fn();
+
     const getParticipants = async (roomId: string): Promise<string[]> => {
       if (roomParticipantsCache.has(roomId))
         return roomParticipantsCache.get(roomId)!;
-      const room = await prisma.chatRoom.findUnique({
-        where: { id: roomId },
-        select: { participants: true },
-      });
+      const room = await withTenant(() =>
+        prisma.chatRoom.findUnique({
+          where: { id: roomId },
+          select: { participants: true },
+        }),
+      );
       const participants = room?.participants ?? [];
       roomParticipantsCache.set(roomId, participants);
       return participants;
@@ -104,20 +113,18 @@ export function setupChatSocket(
                 isDeleted: false,
               },
             });
-          const tenantClient =
-            tenantId && dbName ? getClientForDb(dbName) : null;
-          const message = tenantId
-            ? await runWithTenant(tenantId, tenantClient, createMessage)
-            : await createMessage();
+          const message = await withTenant(createMessage);
 
           // Update room's lastMessage pointer and lastActivity timestamp
-          await prisma.chatRoom.update({
-            where: { id: roomId },
-            data: {
-              lastMessageId: message.id,
-              lastActivity: message.createdAt,
-            },
-          });
+          await withTenant(() =>
+            prisma.chatRoom.update({
+              where: { id: roomId },
+              data: {
+                lastMessageId: message.id,
+                lastActivity: message.createdAt,
+              },
+            }),
+          );
 
           const msgObj = {
             ...message,
@@ -194,22 +201,26 @@ export function setupChatSocket(
     // Mark room messages as read and notify other participants
     socket.on("chat:read", async ({ roomId }: { roomId: string }) => {
       try {
-        const unread = await prisma.message.findMany({
-          where: {
-            chatRoomId: roomId,
-            isDeleted: false,
-            NOT: [{ senderId: userId }, { readBy: { has: userId } }],
-          },
-          select: { id: true },
-        });
+        const unread = await withTenant(() =>
+          prisma.message.findMany({
+            where: {
+              chatRoomId: roomId,
+              isDeleted: false,
+              NOT: [{ senderId: userId }, { readBy: { has: userId } }],
+            },
+            select: { id: true },
+          }),
+        );
 
         if (unread.length > 0) {
-          await Promise.all(
-            unread.map((m: any) =>
-              prisma.message.update({
-                where: { id: m.id },
-                data: { readBy: { push: userId } },
-              }),
+          await withTenant(() =>
+            Promise.all(
+              unread.map((m: any) =>
+                prisma.message.update({
+                  where: { id: m.id },
+                  data: { readBy: { push: userId } },
+                }),
+              ),
             ),
           );
         }

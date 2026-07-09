@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
@@ -41,7 +41,9 @@ export const rejectLeave = async (
       data: { status: "Rejected" },
     });
 
-    await cacheManager.invalidatePattern("leaves:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:leaves:*`,
+    );
 
     getNotificationQueue()
       .add("leaveRejected", {

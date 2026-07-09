@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate, requireSuperUser } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
+import { resolvePublicTenant } from "../middleware/resolvePublicTenant";
 import * as h from "../handlers/recruitment";
 import { submitResignationSchema } from "../schemas";
 
@@ -26,9 +27,17 @@ recruitmentRouter.delete(
   requireSuperUser,
   h.deleteJobOpening,
 );
-recruitmentRouter.get("/public/careers", h.publicCareers);
+recruitmentRouter.get(
+  "/public/careers/:slug",
+  resolvePublicTenant,
+  h.publicCareers,
+);
 recruitmentRouter.get("/get-job-titles", h.getJobTitles);
-recruitmentRouter.post("/apply-for-job", h.applyForJob);
+recruitmentRouter.post(
+  "/apply-for-job/:slug",
+  resolvePublicTenant,
+  h.applyForJob,
+);
 recruitmentRouter.get(
   "/view-applications/:id",
   authenticate,

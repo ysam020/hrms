@@ -144,12 +144,14 @@ export async function getProfile(req: Request, res: Response) {
       });
 
     let tenantName: string | null = null;
+    let tenantSlug: string | null = null;
     if (user?.tenantId) {
       const tenant = await prisma.tenant.findUnique({
         where: { id: user.tenantId },
-        select: { name: true },
+        select: { name: true, slug: true },
       });
       tenantName = tenant?.name ?? null;
+      tenantSlug = tenant?.slug ?? null;
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -157,6 +159,7 @@ export async function getProfile(req: Request, res: Response) {
         user: {
           ...profile,
           tenantName,
+          tenantSlug,
           tenantRole: user?.tenantRole ?? null,
         },
       },

@@ -20,6 +20,18 @@ export const applyForJob = async (
       });
     }
 
+    // getTenantId() is populated by resolvePublicTenant (api-gateway) from
+    // the careers-link slug — guard instead of asserting non-null, since a
+    // missing context would otherwise silently write the literal string
+    // "undefined" into tenantId below.
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      return callback(null, {
+        message: MESSAGES.TENANT_REQUIRED,
+        status: status.FAILED_PRECONDITION,
+      });
+    }
+
     const jobOpening = await prisma.jobOpening.findUnique({
       where: { id: jobTitleId },
     });
@@ -42,7 +54,7 @@ export const applyForJob = async (
 
     const application = await prisma.jobApplication.create({
       data: {
-        tenantId: getTenantId()!,
+        tenantId,
         jobTitleId,
         name,
         email,

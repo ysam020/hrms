@@ -240,6 +240,7 @@ export async function attendanceCorrection(req: Request, res: Response) {
 
 export async function getAttendanceSummary(req: Request, res: Response) {
   try {
+    const { user } = req as AuthRequest;
     const userId = String(req.params.userId);
     const yearNum = parseInt(String(req.params.year));
     const monthNum = parseInt(String(req.params.month));
@@ -255,16 +256,28 @@ export async function getAttendanceSummary(req: Request, res: Response) {
     const startDate = monthStart.toDate();
     const endDate = monthStart.date(endDay).endOf("day").toDate();
 
-    const [records, leaveBalance] = await Promise.all([
-      prisma.attendanceRecord.findMany({
-        where: { userId, date: { gte: startDate, lte: endDate } },
-        select: { date: true, status: true, isCorrected: true },
-      }),
-      prisma.leaveBalance.findFirst({
-        where: { userId },
-        select: { balances: true },
-      }),
-    ]);
+    const [records, leaveBalance, tenantSettings, holidayRecords] =
+      await Promise.all([
+        prisma.attendanceRecord.findMany({
+          where: { userId, date: { gte: startDate, lte: endDate } },
+          select: { date: true, status: true, isCorrected: true },
+        }),
+        prisma.leaveBalance.findFirst({
+          where: { userId },
+          select: { balances: true },
+        }),
+        user?.tenantId
+          ? getActiveSettings(user.tenantId)
+          : Promise.resolve(null),
+        (prisma as any).holiday.findMany({ where: { year: yearNum } }),
+      ]);
+    const workingDays: number[] = (tenantSettings as any)?.workWeekPattern
+      ?.workingDays ?? [1, 2, 3, 4, 5];
+    const holidayDateKeys = new Set<string>(
+      (holidayRecords as any[]).flatMap((r) =>
+        (Array.isArray(r.holidays) ? r.holidays : []).map((h: any) => h.date),
+      ),
+    );
 
     const recordMap = new Map<string, string>();
     let correctionsUsed = 0;
@@ -275,17 +288,30 @@ export async function getAttendanceSummary(req: Request, res: Response) {
     }
 
     let presents = 0,
+      late = 0,
       halfDays = 0,
       leaves = 0,
       weekOffs = 0,
-      holidays = 0;
+      holidays = 0,
+      wfh = 0;
     for (let day = 1; day <= endDay; day++) {
       const dateStr = monthStart.date(day).format("YYYY-MM-DD");
       const s = recordMap.get(dateStr) || "";
       if (s === "Present") presents++;
+      else if (s === "Late") late++;
       else if (s === "Half Day") halfDays++;
       else if (s === "Week Off") weekOffs++;
       else if (s === "Holiday") holidays++;
+      else if (s === "WFH") wfh++;
+      // No record for this date at all — if it's a configured holiday or
+      // not a working day per the tenant's work-week pattern, it's an
+      // implicit (unbackfilled) day off, not an unaccounted leave. Only
+      // reconcileAttendance.ts writes an explicit "Holiday"/"Week Off"
+      // record, and only once its nightly run catches up, so this covers
+      // the gap until then.
+      else if (!s && holidayDateKeys.has(dateStr)) holidays++;
+      else if (!s && !workingDays.includes(monthStart.date(day).day()))
+        weekOffs++;
       else leaves++;
     }
 
@@ -315,10 +341,12 @@ export async function getAttendanceSummary(req: Request, res: Response) {
       message: "Attendance summary fetched",
       data: {
         presents,
+        late,
         halfDays,
         leaves,
         weekOffs,
         holidays,
+        wfh,
         paidLeaves: usedPL,
         unpaidLeaves: usedLWP,
         totalLeaves: usedPL + usedLWP,

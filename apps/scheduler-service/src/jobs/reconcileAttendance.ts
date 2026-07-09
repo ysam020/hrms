@@ -1,4 +1,10 @@
-import { prisma, runWithTenant, getTenantId } from "@hrms/db";
+import {
+  prisma,
+  prismaWithTenant,
+  getClientForDb,
+  runWithTenant,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getLeaveConfig } from "../config";
@@ -22,13 +28,35 @@ async function getHolidaysInRange(
 ): Promise<Set<string>> {
   const holidays = new Set<string>();
   for (let year = startYear; year <= endYear; year++) {
-    const yearHolidays = await prisma.holiday.findMany({ where: { year } });
+    const yearHolidays = await (prismaWithTenant as any).holiday.findMany({
+      where: { year },
+    });
     for (const record of yearHolidays) {
       const list = (record.holidays as Array<{ date: string }>) ?? [];
       list.forEach((h) => holidays.add(h.date));
     }
   }
   return holidays;
+}
+
+/**
+ * Working days of the week (0=Sun..6=Sat) from the tenant's active
+ * TenantSettings.workWeekPattern, defaulting to Mon-Fri when the tenant
+ * hasn't configured one yet — mirrors SETTINGS_DEFAULTS.workWeekPattern in
+ * apps/api-gateway/src/handlers/general.ts (duplicated here since
+ * scheduler-service can't import across app boundaries).
+ */
+async function getWorkingDays(tenantId: string): Promise<number[]> {
+  const settings = await (prismaWithTenant as any).tenantSettings.findFirst({
+    where: { tenantId, effectiveFrom: { lte: new Date() } },
+    orderBy: { effectiveFrom: "desc" },
+    select: { workWeekPattern: true },
+  });
+  const pattern = settings?.workWeekPattern as
+    | { workingDays?: number[] }
+    | null
+    | undefined;
+  return pattern?.workingDays ?? [1, 2, 3, 4, 5];
 }
 
 async function processEmployee(
@@ -39,6 +67,7 @@ async function processEmployee(
   targetYear: number,
 ): Promise<void> {
   const leaveConfig = getLeaveConfig();
+  const tenantId = getTenantId()!;
 
   const start = dayjs.utc(startDate).startOf("day");
   const end = dayjs.utc(endDate).startOf("day");
@@ -50,12 +79,12 @@ async function processEmployee(
     cur = cur.add(1, "day");
   }
 
-  const existing = await prisma.attendanceRecord.findMany({
+  const existing = await (prismaWithTenant as any).attendanceRecord.findMany({
     where: { userId, date: { gte: startDate, lte: endDate } },
     select: { date: true },
   });
   const existingDates = new Set(
-    existing.map((r) => dayjs.utc(r.date).format("YYYY-MM-DD")),
+    existing.map((r: any) => dayjs.utc(r.date).format("YYYY-MM-DD")),
   );
 
   // A date already covered by a real leave application (applied by the
@@ -65,7 +94,9 @@ async function processEmployee(
   // correctly has no AttendanceRecord) would get a second, duplicate
   // system-generated leave stacked on top of it here, double-debiting the
   // balance for a day that was already paid for once on approval.
-  const existingLeaves = await prisma.leaveApplication.findMany({
+  const existingLeaves = await (
+    prismaWithTenant as any
+  ).leaveApplication.findMany({
     where: {
       userId,
       status: { notIn: ["Rejected", "Cancelled"] },
@@ -91,9 +122,12 @@ async function processEmployee(
 
   const startYear = start.year();
   const endYear = end.year();
-  const holidays = await getHolidaysInRange(startYear, endYear);
+  const [holidays, workingDays] = await Promise.all([
+    getHolidaysInRange(startYear, endYear),
+    getWorkingDays(tenantId),
+  ]);
 
-  let lb = await prisma.leaveBalance.findFirst({
+  let lb = await (prismaWithTenant as any).leaveBalance.findFirst({
     where: { tenantId: getTenantId(), userId },
   });
   const balances: BalanceEntry[] =
@@ -105,7 +139,7 @@ async function processEmployee(
   );
   if (!targetBalance) {
     if (!lb) {
-      lb = await prisma.leaveBalance.create({
+      lb = await (prismaWithTenant as any).leaveBalance.create({
         data: {
           tenantId: getTenantId()!,
           userId,
@@ -134,7 +168,7 @@ async function processEmployee(
       holidayDates.push(date);
     } else {
       const dow = dayjs.utc(date).day();
-      if (dow === 0 || dow === 6) {
+      if (!workingDays.includes(dow)) {
         weekOffDates.push(date);
       } else {
         regularDates.push(date);
@@ -180,6 +214,7 @@ async function processEmployee(
 
   const attendanceRecords = [
     ...holidayDates.map((date) => ({
+      tenantId,
       userId,
       date: dayjs.utc(date).startOf("day").toDate(),
       workingHours: 0,
@@ -187,6 +222,7 @@ async function processEmployee(
       isCorrected: false,
     })),
     ...weekOffDates.map((date) => ({
+      tenantId,
       userId,
       date: dayjs.utc(date).startOf("day").toDate(),
       workingHours: 0,
@@ -194,6 +230,7 @@ async function processEmployee(
       isCorrected: false,
     })),
     ...regularDates.map((date) => ({
+      tenantId,
       userId,
       date: dayjs.utc(date).startOf("day").toDate(),
       workingHours: 0,
@@ -203,7 +240,7 @@ async function processEmployee(
   ];
 
   if (attendanceRecords.length > 0) {
-    await (prisma.attendanceRecord.createMany as any)({
+    await (prismaWithTenant as any).attendanceRecord.createMany({
       data: attendanceRecords,
       skipDuplicates: true,
     });
@@ -252,8 +289,7 @@ async function processEmployee(
   }
 
   if (leaveApplications.length > 0) {
-    const tenantId = getTenantId()!;
-    await prisma.leaveApplication.createMany({
+    await (prismaWithTenant as any).leaveApplication.createMany({
       data: leaveApplications.map((la) => ({ ...la, tenantId })),
     });
   }
@@ -266,8 +302,7 @@ async function processEmployee(
         : 0),
   );
 
-  const tenantId = getTenantId()!;
-  await prisma.leaveBalance.upsert({
+  await (prismaWithTenant as any).leaveBalance.upsert({
     where: { tenantId_userId: { tenantId, userId } },
     update: {
       accumulatedPLBeforeCurrentMonth: newAccumulated,
@@ -315,12 +350,23 @@ export async function reconcileAttendance(): Promise<void> {
       select: { id: true, tenantId: true },
     });
 
+    // Resolve each tenant's dedicated physical DB (if any) up front, so
+    // every business-model query inside processEmployee — via
+    // prismaWithTenant — is routed to the tenant's own database instead of
+    // silently falling back to the shared default one.
+    const tenants = await prisma.tenant.findMany({
+      select: { id: true, dbName: true },
+    });
+    const dbNameByTenant = new Map(tenants.map((t) => [t.id, t.dbName]));
+
     let processed = 0;
     let errors = 0;
     for (const emp of employees) {
       if (!emp.tenantId) continue;
       try {
-        await runWithTenant(emp.tenantId, null, () =>
+        const dbName = dbNameByTenant.get(emp.tenantId);
+        const tenantClient = dbName ? getClientForDb(dbName) : null;
+        await runWithTenant(emp.tenantId, tenantClient, () =>
           processEmployee(emp.id, startDate, endDate, targetMonth, targetYear),
         );
         processed++;

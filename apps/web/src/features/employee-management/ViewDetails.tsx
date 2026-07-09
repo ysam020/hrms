@@ -8,7 +8,14 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid2";
 import CircularProgress from "@mui/material/CircularProgress";
-import { useEffect, useState, useContext, lazy, Suspense } from "react";
+import {
+  useEffect,
+  useState,
+  useContext,
+  useMemo,
+  lazy,
+  Suspense,
+} from "react";
 import { useFormik } from "formik";
 import Edit from "@mui/icons-material/Edit";
 import Assignment from "@mui/icons-material/Assignment";
@@ -32,7 +39,10 @@ import downloadSalarySlip from "@web/shared/utils/downloadSalarySlip";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import {
   computeSalaryComponents,
-  CODE_TO_KEY,
+  redistributeGross,
+  getMergedComponents,
+  componentsArrayToValues,
+  legacyFieldsToComponentValues,
   type SalaryComponentDef,
   type PtSlab,
 } from "@web/shared/utils/salaryCalc";
@@ -130,24 +140,36 @@ function ViewDetails() {
   // EditSalaryStructure.tsx uses) instead of EDIT_EMPLOYEE_DETAILS, so
   // User.salary* has exactly one writer instead of two independently
   // drifting ones.
+  const mergedComponents = useMemo(
+    () => getMergedComponents(salaryComponents),
+    [salaryComponents],
+  );
+
+  const salaryStructureValues: Record<string, number> = data?.salaryStructure
+    ?.components?.length
+    ? componentsArrayToValues(data.salaryStructure.components)
+    : legacyFieldsToComponentValues(data?.salaryStructure);
+
   const salaryFormik = useFormik({
     initialValues: {
-      basicPay: 0,
-      hra: 0,
-      conveyance: 0,
-      pf: 0,
-      esi: 0,
-      pt: 0,
+      grossSalary: 0,
+      components: {} as Record<string, number>,
     },
     onSubmit: async (values) => {
       setSavingSalary(true);
       try {
         const now = new Date();
+        const components = mergedComponents.map((c) => ({
+          code: c.code,
+          name: c.name,
+          type: c.type,
+          amount: values.components[c.code] ?? 0,
+        }));
         const res = await apiClient.put(API_ENDPOINTS.UPDATE_SALARY, {
           userId: data?.id,
           year: now.getFullYear(),
           month: now.getMonth() + 1,
-          salaryStructure: values,
+          salaryStructure: { components },
         });
         setAlert({
           open: true,
@@ -171,17 +193,15 @@ function ViewDetails() {
     },
   });
 
-  // Locked (auto-derived) component keys for the currently-configured
-  // tenant components — recomputed whenever basic pay or the earnings that
-  // feed gross salary change while editing.
-  const derivedGross =
-    Number(salaryFormik.values.basicPay || 0) +
-    Number(salaryFormik.values.hra || 0) +
-    Number(salaryFormik.values.conveyance || 0);
+  const basicPay = salaryFormik.values.components.BASIC ?? 0;
+
+  // Locked (auto-derived) component codes for the currently-configured
+  // tenant components — PF/ESI/PT (and any percent_of_basic component)
+  // recompute automatically off Basic/gross while editing.
   const { locked: lockedSalaryKeys } = computeSalaryComponents({
-    basicPay: Number(salaryFormik.values.basicPay || 0),
-    grossSalary: derivedGross,
-    components: salaryComponents,
+    basicPay,
+    grossSalary: salaryFormik.values.grossSalary,
+    components: mergedComponents,
     ptSlabs,
     workState: data?.workState ?? null,
   });
@@ -189,24 +209,23 @@ function ViewDetails() {
   useEffect(() => {
     if (!isEditingSalary) return;
     const { values: derived } = computeSalaryComponents({
-      basicPay: Number(salaryFormik.values.basicPay || 0),
-      grossSalary: derivedGross,
-      components: salaryComponents,
+      basicPay,
+      grossSalary: salaryFormik.values.grossSalary,
+      components: mergedComponents,
       ptSlabs,
       workState: formik.values.workState,
     });
-    for (const [key, value] of Object.entries(derived)) {
-      if (salaryFormik.values[key as keyof typeof salaryFormik.values] !== value) {
-        salaryFormik.setFieldValue(key, value);
+    for (const [code, value] of Object.entries(derived)) {
+      if (salaryFormik.values.components[code] !== value) {
+        salaryFormik.setFieldValue(`components.${code}`, value);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isEditingSalary,
-    salaryFormik.values.basicPay,
-    salaryFormik.values.hra,
-    salaryFormik.values.conveyance,
-    salaryComponents,
+    basicPay,
+    salaryFormik.values.grossSalary,
+    mergedComponents,
     ptSlabs,
   ]);
 
@@ -214,36 +233,33 @@ function ViewDetails() {
     componentKey: string,
     value: number | null | undefined,
   ) => {
-    salaryFormik.setFieldValue(componentKey, value ?? 0);
+    salaryFormik.setFieldValue(`components.${componentKey}`, value ?? 0);
+  };
+
+  const handleGrossChange = (value: number | null | undefined) => {
+    const newGross = value ?? 0;
+    const rescaled = redistributeGross(
+      newGross,
+      mergedComponents,
+      salaryFormik.values.components,
+      lockedSalaryKeys,
+    );
+    salaryFormik.setValues({
+      grossSalary: newGross,
+      components: rescaled,
+    });
   };
 
   const handleEditSalaryClick = () => {
-    salaryFormik.setValues({
-      basicPay:
-        data?.salaryStructure?.basicPay != null
-          ? Number(data.salaryStructure.basicPay)
-          : 0,
-      hra:
-        data?.salaryStructure?.hra != null
-          ? Number(data.salaryStructure.hra)
-          : 0,
-      conveyance:
-        data?.salaryStructure?.conveyance != null
-          ? Number(data.salaryStructure.conveyance)
-          : 0,
-      pf:
-        data?.salaryStructure?.pf != null
-          ? Number(data.salaryStructure.pf)
-          : 0,
-      esi:
-        data?.salaryStructure?.esi != null
-          ? Number(data.salaryStructure.esi)
-          : 0,
-      pt:
-        data?.salaryStructure?.pt != null
-          ? Number(data.salaryStructure.pt)
-          : 0,
-    });
+    const raw = data?.salaryStructure;
+    const values = raw?.components?.length
+      ? componentsArrayToValues(raw.components)
+      : legacyFieldsToComponentValues(raw);
+    let earnings = 0;
+    for (const c of mergedComponents) {
+      if (c.type === "earning") earnings += values[c.code] ?? 0;
+    }
+    salaryFormik.setValues({ grossSalary: earnings, components: values });
     setIsEditingSalary(true);
   };
 
@@ -675,6 +691,38 @@ function ViewDetails() {
                     </Box>
                   )}
                 </Box>
+                {isEditingSalary && (
+                  <Box sx={{ mb: 1.5 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mb: 0.5, display: "block" }}
+                    >
+                      Gross Salary
+                    </Typography>
+                    <InputNumber
+                      value={salaryFormik.values.grossSalary}
+                      onValueChange={(e) => handleGrossChange(e.value)}
+                      placeholder="0.00"
+                      min={0}
+                      minFractionDigits={0}
+                      maxFractionDigits={2}
+                      inputStyle={{
+                        padding: "6px 8px",
+                        fontSize: "0.875rem",
+                        width: "160px",
+                      }}
+                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mt: 0.5 }}
+                    >
+                      Changing this proportionally redistributes the earning
+                      components below.
+                    </Typography>
+                  </Box>
+                )}
                 <Box
                   sx={{
                     boxShadow: isEditingSalary
@@ -686,8 +734,8 @@ function ViewDetails() {
                   <DataList
                     ariaLabel="Salary structure"
                     variant="rows"
-                    data={salaryComponents.filter((c) => CODE_TO_KEY[c.code])}
-                    getRowId={(component: SalaryComponentDef) => component.id}
+                    data={mergedComponents}
+                    getRowId={(component: SalaryComponentDef) => component.code}
                     columns={[
                       {
                         key: "name",
@@ -699,17 +747,16 @@ function ViewDetails() {
                       {
                         key: "amount",
                         label: "Amount",
-                        render: (component: SalaryComponentDef) => {
-                          const key = CODE_TO_KEY[component.code];
-                          return isEditingSalary ? (
+                        render: (component: SalaryComponentDef) =>
+                          isEditingSalary ? (
                             <InputNumber
                               value={
-                                salaryFormik.values[
-                                  key as keyof typeof salaryFormik.values
-                                ]
+                                salaryFormik.values.components[
+                                  component.code
+                                ] ?? 0
                               }
                               onValueChange={(e) =>
-                                handleAmountChange(key, e.value)
+                                handleAmountChange(component.code, e.value)
                               }
                               placeholder="0.00"
                               min={0}
@@ -720,12 +767,11 @@ function ViewDetails() {
                                 fontSize: "0.875rem",
                                 width: "120px",
                               }}
-                              disabled={lockedSalaryKeys.has(key)}
+                              disabled={lockedSalaryKeys.has(component.code)}
                             />
                           ) : (
-                            (data?.salaryStructure?.[key] ?? "--")
-                          );
-                        },
+                            (salaryStructureValues[component.code] ?? "--")
+                          ),
                       },
                     ]}
                   />

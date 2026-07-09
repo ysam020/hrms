@@ -7,6 +7,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@faker-js/faker": "^9.3.0",
     "@hrms/cache": "workspace:*",
     "@hrms/common": "workspace:*",
     "@hrms/db": "workspace:*",

@@ -17,6 +17,8 @@ jest.mock("@hrms/db", () => {
     leaveBalance: { findFirst: jest.fn().mockResolvedValue(null) },
     payrollRun: { findFirst: jest.fn().mockResolvedValue(null) },
     payrollLineItem: { findFirst: jest.fn().mockResolvedValue(null) },
+    tenantSettings: { findFirst: jest.fn().mockResolvedValue(null) },
+    holiday: { findMany: jest.fn().mockResolvedValue([]) },
   };
   return {
     prisma: _db,
@@ -36,10 +38,20 @@ jest.mock("@hrms/common", () => ({
     FORBIDDEN: 403,
     INTERNAL_SERVER_ERROR: 500,
   },
+  deriveFromComponents: jest.fn(),
 }));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+    invalidatePattern: jest.fn(),
+  },
 }));
 
 import { grpcCall } from "../grpc/clients";

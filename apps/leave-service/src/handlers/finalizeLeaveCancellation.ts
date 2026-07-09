@@ -94,7 +94,9 @@ export const finalizeLeaveCancellation = async (
       }
     }
 
-    await cacheManager.invalidatePattern("leaves:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:leaves:*`,
+    );
 
     getNotificationQueue()
       .add(approved ? "leaveCancelled" : "leaveCancellationRejected", {

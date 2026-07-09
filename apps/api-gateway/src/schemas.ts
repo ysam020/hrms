@@ -94,7 +94,10 @@ export const addLeaveSchema = z
     sick_leave: z.boolean().optional(),
     medicalCertificate: z.string().max(2048).optional(),
     unit: z.enum(["full_day", "half_day", "short_leave"]).default("full_day"),
-    session: z.enum(["first_half", "second_half"]).optional(),
+    session: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.enum(["first_half", "second_half"]).optional(),
+    ),
     shortLeaveHours: z.number().min(0.5).max(7).optional(),
   })
   .refine((v) => v.unit !== "half_day" || !!v.session, {
@@ -115,7 +118,7 @@ export const updateLeaveStatusSchema = z.object({
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 export const startConversationSchema = z.object({
-  recipientUsername: z.string().min(1).max(64),
+  recipientUserId: z.string().min(1).max(64),
 });
 
 // ── Employee ──────────────────────────────────────────────────────────────────
