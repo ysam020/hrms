@@ -123,6 +123,7 @@ export async function getEmployeeDetails(req: Request, res: Response) {
         salaryPf: true,
         salaryEsi: true,
         salaryPt: true,
+        salaryComponentBreakdown: true,
         reasonForTermination: true,
         dateOfTermination: true,
         dateOfAbscond: true,
@@ -150,6 +151,7 @@ export async function getEmployeeDetails(req: Request, res: Response) {
         pf: user.salaryPf,
         esi: user.salaryEsi,
         pt: user.salaryPt,
+        components: user.salaryComponentBreakdown ?? [],
       },
     };
 
@@ -329,7 +331,10 @@ export async function viewAllKycs(req: Request, res: Response) {
         message: "Internal Server Error",
       });
     }
-    const match: any = { employeeStatus: "Active", tenantId: { $oid: tenantId } };
+    const match: any = {
+      employeeStatus: "Active",
+      tenantId: { $oid: tenantId },
+    };
     if (req.query.search) {
       // Escape special regex characters to prevent ReDoS
       const escaped = String(req.query.search).replace(

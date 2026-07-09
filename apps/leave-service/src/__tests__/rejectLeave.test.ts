@@ -93,7 +93,7 @@ describe("rejectLeave", () => {
     mockFindUnique.mockResolvedValue(pendingLeave);
     const cb = makeCallback();
     await rejectLeave(makeCall({ id: "leave-1" }), cb);
-    expect(mockInvalidate).toHaveBeenCalledWith("leaves:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:leaves:*");
   });
 
   it("returns INTERNAL on database error", async () => {

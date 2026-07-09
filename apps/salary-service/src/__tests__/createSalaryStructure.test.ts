@@ -198,7 +198,7 @@ describe("createSalaryStructure", () => {
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.SALARY_STRUCTURE_CREATED,
       status: status.OK,
-      data: structure,
+      data: { ...structure, components: [] },
     });
   });
 

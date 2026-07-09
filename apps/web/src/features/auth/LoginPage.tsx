@@ -16,7 +16,6 @@ import CheckCircle from "@mui/icons-material/CheckCircle";
 import People from "@mui/icons-material/People";
 import Shield from "@mui/icons-material/Shield";
 import Analytics from "@mui/icons-material/Analytics";
-import WorkOutline from "@mui/icons-material/WorkOutline";
 import KeyIcon from "@mui/icons-material/Key";
 
 import "@web/styles/login.scss";
@@ -421,34 +420,6 @@ function LoginPage() {
               Protected by enterprise-grade security
             </Typography>
           </div>
-
-          {/* Careers link */}
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<WorkOutline />}
-            onClick={() => navigate("/careers")}
-            sx={{
-              mt: 3,
-              py: 1.3,
-              borderRadius: "8px",
-              borderColor: "var(--text-input-border)",
-              color: "var(--text-color)",
-              fontWeight: 500,
-              fontSize: "13px",
-              textTransform: "none",
-              letterSpacing: 0.2,
-              gap: 0.5,
-              "& .MuiButton-startIcon": { mr: 1 },
-              "&:hover": {
-                borderColor: "var(--link-color)",
-                color: "var(--link-color)",
-                backgroundColor: "var(--card-background-primary)",
-              },
-            }}
-          >
-            View Open Positions
-          </Button>
         </motion.div>
       </Grid>
     </Grid>

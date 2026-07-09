@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid2";
@@ -24,20 +24,27 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 
 function CareersPage() {
   const navigate = useNavigate();
+  const { slug } = useParams();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    if (!slug) {
+      setLoading(false);
+      return;
+    }
     apiClient
-      .get(API_ENDPOINTS.GET_ALL_JOB_OPENINGS, { params: { status: "Active" } })
+      .get(API_ENDPOINTS.GET_ALL_JOB_OPENINGS(slug), {
+        params: { status: "Active" },
+      })
       .then((res) => {
         const data = res.data?.data ?? res.data ?? [];
         setJobs(Array.isArray(data) ? data : []);
       })
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [slug]);
 
   const filtered = jobs.filter(
     (job) =>
@@ -123,7 +130,7 @@ function CareersPage() {
               return (
                 <Grid size={12} key={jobId}>
                   <Box
-                    onClick={() => navigate(`/careers/apply/${jobId}`)}
+                    onClick={() => navigate(`/careers/${slug}/apply/${jobId}`)}
                     sx={{
                       p: 3,
                       borderRadius: 2,
@@ -170,7 +177,7 @@ function CareersPage() {
                         endIcon={<ArrowForward sx={{ fontSize: 15 }} />}
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/careers/apply/${jobId}`);
+                          navigate(`/careers/${slug}/apply/${jobId}`);
                         }}
                         sx={{
                           textTransform: "none",

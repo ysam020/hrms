@@ -1,4 +1,4 @@
-import { prisma } from "./index";
+import { prisma } from "./prismaClient";
 import { getTenantId, getTenantClient } from "./tenantContext";
 
 // READ operations that accept a `where` clause.

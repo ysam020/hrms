@@ -24,10 +24,18 @@ import DataList from "@web/shared/components/DataList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import {
   computeSalaryComponents,
-  CODE_TO_KEY,
+  redistributeGross,
+  getMergedComponents,
+  componentsArrayToValues,
+  legacyFieldsToComponentValues,
   type SalaryComponentDef,
   type PtSlab,
 } from "@web/shared/utils/salaryCalc";
+
+interface FormValues {
+  grossSalary: number;
+  components: Record<string, number>;
+}
 
 function ViewEditSalaryStructure() {
   const [isEditing, setIsEditing] = useState(false);
@@ -59,7 +67,10 @@ function ViewEditSalaryStructure() {
   );
 
   const grossSalary = parseFloat(userData?.salary) || 0;
-  const fixedStructure = userData?.salaryStructure || {};
+  const fixedStructure: Record<string, number> = userData?.salaryStructure
+    ?.components?.length
+    ? componentsArrayToValues(userData.salaryStructure.components)
+    : legacyFieldsToComponentValues(userData?.salaryStructure);
   const workState = userData?.workState ?? null;
 
   const [salaryComponents, setSalaryComponents] = useState<
@@ -91,68 +102,36 @@ function ViewEditSalaryStructure() {
     };
   }, []);
 
-  // Filter salary components — the six standard, tenant-configured ones plus
-  // incentive/deductions, which aren't part of SalaryComponentDefinition.
-  const getFilteredSalaryComponents = () => {
-    const standardComponents = salaryComponents
-      .filter((c) => CODE_TO_KEY[c.code])
-      .map((c) => ({ key: CODE_TO_KEY[c.code], label: c.name }));
-    const additionalComponents = [
-      { key: "incentive", label: "Incentive" },
-      { key: "deductions", label: "Deductions" },
-    ];
+  // Tenant-configured components + the incentive/deductions pseudo-rows —
+  // every active component gets an editable row, not just the 6 standard ones.
+  const mergedComponents = useMemo(
+    () => getMergedComponents(salaryComponents),
+    [salaryComponents],
+  );
 
-    return [...standardComponents, ...additionalComponents];
-  };
-
-  const formik = useFormik({
+  const formik = useFormik<FormValues>({
     initialValues: {
-      salaryStructure: {
-        basicPay: 0,
-        hra: 0,
-        conveyance: 0,
-        incentive: 0,
-        pf: 0,
-        esi: 0,
-        pt: 0,
-        deductions: 0,
-      },
+      grossSalary: 0,
+      components: {},
     },
     onSubmit: async (values) => {
-      const salaryValues = values.salaryStructure;
-      const basicPay = salaryValues.basicPay;
-      const hra = salaryValues.hra;
-      const conveyance = salaryValues.conveyance;
-      const incentive = salaryValues.incentive;
-      const deductions = salaryValues.deductions;
-      const pf = salaryValues.pf;
-      const pt = salaryValues.pt;
-      const esi = salaryValues.esi;
-
-      const calculatedGrossEarnings = basicPay + hra + conveyance + incentive;
-      const calculatedNetPayable =
-        calculatedGrossEarnings - pf - pt - esi - deductions;
+      const components = mergedComponents.map((c) => ({
+        code: c.code,
+        name: c.name,
+        type: c.type,
+        amount: values.components[c.code] ?? 0,
+      }));
 
       const year = date.split("-")[0];
       const month = date.split("-")[1];
 
-      const submissionData = {
-        ...values,
-        salaryStructure: {
-          ...values.salaryStructure,
-          grossEarnings: parseFloat(calculatedGrossEarnings.toFixed(2)),
-          netPayable: parseFloat(calculatedNetPayable.toFixed(2)),
-        },
-        userId,
-        year,
-        month,
-      };
-
       try {
-        const res = await apiClient.post(
-          API_ENDPOINTS.UPDATE_SALARY,
-          submissionData,
-        );
+        const res = await apiClient.post(API_ENDPOINTS.UPDATE_SALARY, {
+          userId,
+          year,
+          month,
+          salaryStructure: { components },
+        });
         setAlert({
           open: true,
           message: res.data.message,
@@ -160,7 +139,7 @@ function ViewEditSalaryStructure() {
         });
 
         // Update current salary data and exit edit mode
-        setCurrentSalaryData(submissionData.salaryStructure);
+        setCurrentSalaryData(componentsArrayToValues(components));
         setIsEditing(false);
       } catch (error) {
         setAlert({
@@ -172,26 +151,55 @@ function ViewEditSalaryStructure() {
     },
   });
 
+  const basicPay = formik.values.components.BASIC ?? 0;
+
+  // Locked (auto-derived) component codes for the currently-configured
+  // tenant components — PF/ESI/PT (and any percent_of_basic component)
+  // recompute automatically off Basic/gross while editing.
+  const { locked: lockedKeys } = computeSalaryComponents({
+    basicPay,
+    grossSalary: formik.values.grossSalary,
+    components: mergedComponents,
+    ptSlabs,
+    workState,
+  });
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const { values: derived } = computeSalaryComponents({
+      basicPay,
+      grossSalary: formik.values.grossSalary,
+      components: mergedComponents,
+      ptSlabs,
+      workState,
+    });
+    for (const [code, value] of Object.entries(derived)) {
+      if (formik.values.components[code] !== value) {
+        formik.setFieldValue(`components.${code}`, value);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isEditing,
+    basicPay,
+    formik.values.grossSalary,
+    mergedComponents,
+    ptSlabs,
+  ]);
+
   // Calculate Gross Earnings and Net Payable
   const { grossEarnings, netPayable } = useMemo(() => {
     if (isEditing) {
-      const values = formik.values.salaryStructure;
-
-      const basicPay = values.basicPay;
-      const hra = values.hra;
-      const conveyance = values.conveyance;
-      const incentive = values.incentive;
-      const deductions = values.deductions;
-      const pf = values.pf;
-      const pt = values.pt;
-      const esi = values.esi;
-
-      const grossEarnings = basicPay + hra + conveyance + incentive;
-      const netPayable = grossEarnings - pf - pt - esi - deductions;
-
+      let earnings = 0;
+      let deductions = 0;
+      for (const c of mergedComponents) {
+        const amt = formik.values.components[c.code] ?? 0;
+        if (c.type === "earning") earnings += amt;
+        else deductions += amt;
+      }
       return {
-        grossEarnings: parseFloat(grossEarnings.toFixed(2)),
-        netPayable: parseFloat(netPayable.toFixed(2)),
+        grossEarnings: parseFloat(earnings.toFixed(2)),
+        netPayable: parseFloat((earnings - deductions).toFixed(2)),
       };
     } else {
       // In view mode, use current salary data
@@ -200,7 +208,12 @@ function ViewEditSalaryStructure() {
         netPayable: currentSalaryData?.netPayable || 0,
       };
     }
-  }, [formik.values.salaryStructure, isEditing, currentSalaryData]);
+  }, [
+    formik.values.components,
+    isEditing,
+    currentSalaryData,
+    mergedComponents,
+  ]);
 
   // Function to get existing salary data for the selected month/year
   const getExistingSalaryData = async () => {
@@ -224,9 +237,12 @@ function ViewEditSalaryStructure() {
   };
 
   // Function to calculate salary based on attendance
-  const calculateSalaryFromAttendance = async () => {
+  const calculateSalaryFromAttendance = async (): Promise<Record<
+    string,
+    number
+  > | null> => {
     try {
-      if (!grossSalary) return;
+      if (!grossSalary) return null;
       const [year, month] = date.split("-");
       const res = await apiClient(
         API_ENDPOINTS.GET_ATTENDANCE_SUMMARY(
@@ -235,13 +251,18 @@ function ViewEditSalaryStructure() {
           Number(month),
         ),
       );
-      const attendance = res.data;
+      const attendance = res.data.data;
 
       const totalMonthDays = new Date(Number(year), Number(month), 0).getDate();
+      // Same formula as initiatePayrollRun/generateSalarySlip: present + late
+      // + halfDays×0.5 + holidays + week offs + WFH + paid leaves.
       const paidDays =
         (attendance.presents || 0) +
+        (attendance.late || 0) +
         0.5 * (attendance.halfDays || 0) +
         (attendance.holidays || 0) +
+        (attendance.weekOffs || 0) +
+        (attendance.wfh || 0) +
         (attendance.paidLeaves || 0);
 
       const perDaySalary = grossSalary / totalMonthDays;
@@ -251,38 +272,20 @@ function ViewEditSalaryStructure() {
       // else derives from — so we start from a 50% suggestion the admin can
       // adjust, same as before. HRA/Conveyance start blank (there's no real
       // "rate" for them; the old 50%-of-basic split was arbitrary, not a
-      // configured value). PF/ESI/PT are then derived from the tenant's
-      // configured components/PT slabs instead of a separate hardcoded
-      // formula, so this screen always agrees with the employee module.
-      const basicPay = parseFloat((proRataGross * 0.5).toFixed(2));
-      const hra = 0;
-      const conveyance = 0;
+      // configured value). PF/ESI/PT (and any other tenant-derived
+      // component) come from the tenant's configured components/PT slabs
+      // instead of a separate hardcoded formula.
+      const basic = parseFloat((proRataGross * 0.5).toFixed(2));
 
       const { values: derived } = computeSalaryComponents({
-        basicPay,
+        basicPay: basic,
         grossSalary: proRataGross,
-        components: salaryComponents,
+        components: mergedComponents,
         ptSlabs,
         workState,
       });
-      const pf = derived.pf ?? 0;
-      const esi = derived.esi ?? 0;
-      const pt = derived.pt ?? 0;
 
-      const calculatedStructure = {
-        basicPay,
-        hra,
-        conveyance,
-        incentive: 0,
-        deductions: 0,
-        pf,
-        pt,
-        esi,
-        grossEarnings: basicPay + hra + conveyance,
-        netPayable: basicPay + hra + conveyance - pf - pt - esi,
-      };
-
-      return calculatedStructure;
+      return { BASIC: basic, HRA: 0, CONVEYANCE: 0, ...derived };
     } catch (err) {
       console.error("Error calculating salary from attendance:", err);
       return null;
@@ -292,31 +295,27 @@ function ViewEditSalaryStructure() {
   const handleEditClick = async () => {
     // Load current month's salary data into formik
     const existingData = await getExistingSalaryData();
-    let salaryData;
+    let salaryValues: Record<string, number> | null;
 
     if (
       existingData &&
       (existingData.basicPay !== undefined || existingData.salaryStructure)
     ) {
-      salaryData = existingData.salaryStructure || existingData;
+      const raw = existingData.salaryStructure || existingData;
+      salaryValues = raw.components?.length
+        ? componentsArrayToValues(raw.components)
+        : legacyFieldsToComponentValues(raw);
     } else {
       // Calculate from attendance if no existing data
-      salaryData = await calculateSalaryFromAttendance();
+      salaryValues = await calculateSalaryFromAttendance();
     }
 
-    if (salaryData) {
-      formik.setValues({
-        salaryStructure: {
-          basicPay: salaryData.basicPay ?? 0,
-          hra: salaryData.hra ?? 0,
-          conveyance: salaryData.conveyance ?? 0,
-          incentive: salaryData.incentive ?? 0,
-          pf: salaryData.pf ?? 0,
-          esi: salaryData.esi ?? 0,
-          pt: salaryData.pt ?? 0,
-          deductions: salaryData.deductions ?? 0,
-        },
-      });
+    if (salaryValues) {
+      let earnings = 0;
+      for (const c of mergedComponents) {
+        if (c.type === "earning") earnings += salaryValues[c.code] ?? 0;
+      }
+      formik.setValues({ grossSalary: earnings, components: salaryValues });
     }
 
     setIsEditing(true);
@@ -327,8 +326,26 @@ function ViewEditSalaryStructure() {
     setIsEditing(false);
   };
 
-  const handleAmountChange = (componentKey, value) => {
-    formik.setFieldValue(`salaryStructure.${componentKey}`, value ?? 0);
+  const handleAmountChange = (
+    componentKey: string,
+    value: number | null | undefined,
+  ) => {
+    formik.setFieldValue(`components.${componentKey}`, value ?? 0);
+  };
+
+  const handleGrossChange = (value: number | null | undefined) => {
+    const newGross = value ?? 0;
+    const rescaled = redistributeGross(
+      newGross,
+      mergedComponents,
+      formik.values.components,
+      lockedKeys,
+    );
+    formik.setValues({
+      ...formik.values,
+      grossSalary: newGross,
+      components: rescaled,
+    });
   };
 
   // Load salary data when date or grossSalary changes
@@ -347,13 +364,38 @@ function ViewEditSalaryStructure() {
           existingData &&
           (existingData.basicPay !== undefined || existingData.salaryStructure)
         ) {
-          const salaryData = existingData.salaryStructure || existingData;
-          setCurrentSalaryData(salaryData);
+          const raw = existingData.salaryStructure || existingData;
+          const values = raw.components?.length
+            ? componentsArrayToValues(raw.components)
+            : legacyFieldsToComponentValues(raw);
+          let earnings = 0;
+          let deductions = 0;
+          for (const c of mergedComponents) {
+            const amt = values[c.code] ?? 0;
+            if (c.type === "earning") earnings += amt;
+            else deductions += amt;
+          }
+          setCurrentSalaryData({
+            ...values,
+            grossEarnings: earnings,
+            netPayable: earnings - deductions,
+          });
         } else {
           // Calculate from attendance if no existing data
-          const calculatedData = await calculateSalaryFromAttendance();
-          if (calculatedData) {
-            setCurrentSalaryData(calculatedData);
+          const calculatedValues = await calculateSalaryFromAttendance();
+          if (calculatedValues) {
+            let earnings = 0;
+            let deductions = 0;
+            for (const c of mergedComponents) {
+              const amt = calculatedValues[c.code] ?? 0;
+              if (c.type === "earning") earnings += amt;
+              else deductions += amt;
+            }
+            setCurrentSalaryData({
+              ...calculatedValues,
+              grossEarnings: earnings,
+              netPayable: earnings - deductions,
+            });
           }
         }
       } catch (error) {
@@ -366,7 +408,8 @@ function ViewEditSalaryStructure() {
     return () => {
       isMounted = false;
     };
-  }, [date, grossSalary, userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, grossSalary, userId, mergedComponents]);
 
   if (loading) {
     return (
@@ -382,8 +425,6 @@ function ViewEditSalaryStructure() {
       </Box>
     );
   }
-
-  const updatedSalaryComponents = getFilteredSalaryComponents();
 
   return (
     <Card sx={{ maxWidth: 1000, mx: "auto", boxShadow: 2 }}>
@@ -406,13 +447,15 @@ function ViewEditSalaryStructure() {
             </Typography>
           </Box>
           <Box display="flex" gap={1} alignItems="center">
-            <Chip
-              icon={<AccountBalance />}
-              label={`Gross: ₹${grossSalary}`}
-              size="small"
-              color="primary"
-              clickable
-            />
+            {!isEditing && (
+              <Chip
+                icon={<AccountBalance />}
+                label={`Gross: ₹${grossSalary}`}
+                size="small"
+                color="primary"
+                clickable
+              />
+            )}
             <Chip
               icon={<TrendingUp />}
               label={`Net: ₹${netPayable}`}
@@ -479,6 +522,42 @@ function ViewEditSalaryStructure() {
               </Paper>
             </Grid>
 
+            {isEditing && (
+              <Grid size={12}>
+                <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
+                  <Box display="flex" alignItems="center" gap={1} mb={1}>
+                    <AccountBalance
+                      sx={{ fontSize: 18, color: "text.secondary" }}
+                    />
+                    <Typography variant="subtitle2" fontWeight="500">
+                      Gross Salary
+                    </Typography>
+                  </Box>
+                  <InputNumber
+                    value={formik.values.grossSalary}
+                    onValueChange={(e) => handleGrossChange(e.value)}
+                    placeholder="0.00"
+                    min={0}
+                    minFractionDigits={0}
+                    maxFractionDigits={2}
+                    inputStyle={{
+                      padding: "6px 8px",
+                      fontSize: "0.875rem",
+                      width: "160px",
+                    }}
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 0.5 }}
+                  >
+                    Changing this proportionally redistributes the earning
+                    components below.
+                  </Typography>
+                </Paper>
+              </Grid>
+            )}
+
             {/* Salary Structure Table */}
             <Grid size={12}>
               <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
@@ -494,36 +573,37 @@ function ViewEditSalaryStructure() {
                   <DataList
                     ariaLabel="Salary components"
                     variant="rows"
-                    data={updatedSalaryComponents}
-                    getRowId={(component: any) => component.key}
+                    data={mergedComponents}
+                    getRowId={(component: SalaryComponentDef) => component.code}
                     columns={[
                       {
                         key: "label",
                         label: "Component",
                         primary: true,
-                        render: (component: any) => component.label,
+                        render: (component: SalaryComponentDef) =>
+                          component.name,
                       },
                       {
                         key: "fixedRate",
                         label: "Fixed Rate",
-                        render: (component: any) =>
-                          fixedStructure?.[component.key] ?? "-",
+                        render: (component: SalaryComponentDef) =>
+                          fixedStructure?.[component.code] ?? "-",
                       },
                       {
                         key: "amount",
                         label: "Amount",
-                        render: (component: any) =>
+                        render: (component: SalaryComponentDef) =>
                           isEditing ? (
                             <InputNumber
                               value={
-                                formik.values.salaryStructure[component.key]
+                                formik.values.components[component.code] ?? 0
                               }
                               onValueChange={(e) =>
-                                handleAmountChange(component.key, e.value)
+                                handleAmountChange(component.code, e.value)
                               }
                               onBlur={() =>
                                 formik.setFieldTouched(
-                                  `salaryStructure.${component.key}`,
+                                  `components.${component.code}`,
                                   true,
                                 )
                               }
@@ -536,13 +616,14 @@ function ViewEditSalaryStructure() {
                                 fontSize: "0.875rem",
                                 width: "120px",
                               }}
+                              disabled={lockedKeys.has(component.code)}
                             />
                           ) : (
                             <Typography
                               variant="body2"
                               sx={{ fontSize: "0.875rem" }}
                             >
-                              ₹{currentSalaryData?.[component.key] || "0.00"}
+                              ₹{currentSalaryData?.[component.code] || "0.00"}
                             </Typography>
                           ),
                       },
@@ -561,9 +642,6 @@ function ViewEditSalaryStructure() {
                     borderRadius: 1,
                   }}
                 >
-                  <Typography variant="body2" fontWeight="600">
-                    Gross Salary: ₹{grossSalary}
-                  </Typography>
                   <Typography variant="body2" fontWeight="600">
                     Gross Earnings: ₹{grossEarnings}
                   </Typography>

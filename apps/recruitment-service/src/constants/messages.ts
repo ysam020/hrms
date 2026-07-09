@@ -1,5 +1,6 @@
 export const MESSAGES = {
   JOB_TITLE_ID_NAME_EMAIL_REQUIRED: "jobTitleId, name and email are required",
+  TENANT_REQUIRED: "This careers link is missing its organisation context.",
   JOB_NOT_FOUND_OR_CLOSED:
     "Job opening not found or not accepting applications",
   ALREADY_APPLIED: "You have already applied for this position",

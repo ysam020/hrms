@@ -57,6 +57,8 @@ message GetLeaveRequest {
   string status = 2;
   int32 page = 3;
   int32 limit = 4;
+  // When true, only includes leave applications whose "to" date is today or later.
+  bool future_only = 6;
 }
 
 message GetLeaveResponse {

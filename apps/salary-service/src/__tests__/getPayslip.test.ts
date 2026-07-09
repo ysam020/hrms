@@ -89,7 +89,10 @@ describe("getPayslip", () => {
     expect(response.status).toBe(0);
     expect(response.data.attendanceSummary).toBeNull();
     expect(response.data.employee).toEqual(employeeRow);
-    expect(response.data.salaryStructure).toEqual(salaryRow);
+    expect(response.data.salaryStructure).toEqual({
+      ...salaryRow,
+      components: [],
+    });
   });
 
   it("includes attendance summary when month and year provided", async () => {

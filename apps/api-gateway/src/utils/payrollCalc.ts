@@ -86,3 +86,36 @@ export function calcStatutoryDeductions(
     pt: calcProfessionalTax(gross, workState, slabsByState),
   };
 }
+
+/**
+ * Holiday/weekly-off pay does not depend on reconcileAttendance.ts having
+ * already backfilled an explicit "Holiday"/"Week Off" AttendanceRecord for
+ * every past non-working date — that only happens once the nightly job has
+ * caught up (or not at all in an environment where the scheduler isn't
+ * running). Any calendar date in the month with no AttendanceRecord at all
+ * is still an implicit, paid day off if it's either (a) in the tenant's
+ * configured Holiday calendar, or (b) not a working day per the tenant's
+ * workWeekPattern — so both are counted directly here from the calendar
+ * instead of requiring a pre-seeded record. Holiday takes precedence over
+ * weekly-off when a configured holiday happens to fall on a working day,
+ * matching reconcileAttendance.ts's own classification order.
+ */
+export function classifyImpliedNonWorkingDays(
+  year: number,
+  month: number, // 1-indexed
+  totalMonthDays: number,
+  workingDays: number[],
+  holidayDateKeys: Set<string>,
+  recordedDateKeys: Set<string>,
+): { impliedHolidays: number; impliedWeekOffs: number } {
+  let impliedHolidays = 0;
+  let impliedWeekOffs = 0;
+  for (let day = 1; day <= totalMonthDays; day++) {
+    const d = new Date(Date.UTC(year, month - 1, day));
+    const key = d.toISOString().slice(0, 10);
+    if (recordedDateKeys.has(key)) continue; // already has a real AttendanceRecord
+    if (holidayDateKeys.has(key)) impliedHolidays++;
+    else if (!workingDays.includes(d.getUTCDay())) impliedWeekOffs++;
+  }
+  return { impliedHolidays, impliedWeekOffs };
+}

@@ -18,6 +18,7 @@ jest.mock("@hrms/db", () => {
     user: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
     leaveBalance: { findFirst: jest.fn(), findMany: jest.fn() },
+    holiday: { findMany: jest.fn() },
   };
   return {
     prisma: _db,
@@ -43,6 +44,19 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+// attendance.ts imports getActiveSettings from ./tenantSettings, which
+// imports the real @hrms/cache (ioredis) at module load — without this
+// mock, a Redis connection attempt against a nonexistent local instance
+// hangs the whole test file.
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+    invalidatePattern: jest.fn(),
+  },
+}));
+
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 
@@ -54,6 +68,7 @@ const mockRecordFindMany = (prisma as any).attendanceRecord
   .findMany as jest.Mock;
 const mockLeaveBalanceFindFirst = (prisma as any).leaveBalance
   .findFirst as jest.Mock;
+const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: Record<string, any> = {}) =>
@@ -283,6 +298,7 @@ describe("getAttendanceSummary", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLeaveBalanceFindFirst.mockResolvedValue(null);
+    mockHolidayFindMany.mockResolvedValue([]);
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2024, 2, 15)); // March 15 — mid-month
   });

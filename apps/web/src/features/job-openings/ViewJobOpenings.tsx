@@ -33,6 +33,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonIcon from "@mui/icons-material/Person";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import dayjs from "dayjs";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
@@ -91,6 +92,20 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   };
 
   const isDetailsPopoverOpen = Boolean(detailsAnchorEl);
+
+  const careersUrl = user?.tenantSlug
+    ? `${window.location.origin}/careers/${user.tenantSlug}`
+    : null;
+
+  const handleCopyCareersLink = () => {
+    if (!careersUrl) return;
+    navigator.clipboard.writeText(careersUrl);
+    setAlert({
+      open: true,
+      message: "Careers link copied",
+      severity: "success",
+    });
+  };
 
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return "N/A";
@@ -293,6 +308,38 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   return (
     <div>
       <ErrorBoundary fallback={<ErrorFallback />}>
+        {careersUrl && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              mb: 2,
+              p: 1.5,
+              borderRadius: 1,
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor: "action.hover",
+            }}
+          >
+            <Typography variant="body2" color="text.secondary" noWrap>
+              Public careers page:
+            </Typography>
+            <Typography
+              variant="body2"
+              fontWeight={600}
+              sx={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}
+              noWrap
+            >
+              {careersUrl}
+            </Typography>
+            <Tooltip title="Copy link">
+              <IconButton size="small" onClick={handleCopyCareersLink}>
+                <ContentCopyIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
         <DataList
           ariaLabel="Job openings"
           data={memoizedData}

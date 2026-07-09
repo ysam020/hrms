@@ -23,6 +23,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
+import { ApprovalsBadgeContext } from "@web/app/providers/ApprovalsBadgeContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 dayjs.extend(relativeTime);
@@ -67,6 +68,7 @@ function initialsOf(name: string): string {
  */
 function ApprovalsInbox() {
   const { setAlert } = useContext(AlertContext);
+  const { refetchPendingApprovals } = useContext(ApprovalsBadgeContext);
   const { data, loading, refetch } = useFetchData<PendingApprovalItem[]>(
     API_ENDPOINTS.GET_PENDING_APPROVALS,
     "get",
@@ -105,6 +107,7 @@ function ApprovalsInbox() {
       });
       closeDialog();
       refetch();
+      refetchPendingApprovals();
     } catch (err: any) {
       setAlert({
         open: true,

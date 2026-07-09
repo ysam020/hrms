@@ -140,7 +140,8 @@ describe("cancelLeave", () => {
     });
     mockUserFindUnique.mockImplementation(({ where }: any) => {
       if (where.id === "john") return { username: "john" };
-      if (where.id === "manager-1") return { id: "manager-1", username: "manager1" };
+      if (where.id === "manager-1")
+        return { id: "manager-1", username: "manager1" };
       return null;
     });
     mockUserFindMany.mockResolvedValue([{ id: "hr-1", username: "hr1" }]);
@@ -280,7 +281,7 @@ describe("cancelLeave", () => {
       makeCallback(),
     );
 
-    expect(mockInvalidate).toHaveBeenCalledWith("leaves:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:leaves:*");
   });
 
   it("returns INTERNAL on database error", async () => {

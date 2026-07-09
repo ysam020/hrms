@@ -31,7 +31,13 @@ export type SchedulerJobName =
   | "checkSubscriptionExpiry"
   // New scheduler jobs
   | "checkTicketSla" // lazily mark helpdesk SLA as breached
-  | "retryFailedWebhooks"; // sweep for pending/failed webhook deliveries
+  | "retryFailedWebhooks" // sweep for pending/failed webhook deliveries
+  // Dev-only recurring demo-data seeders — no-op outside local dev, see
+  // apps/scheduler-service/src/utils/devSeedGuard.ts
+  | "seedDailyAttendance"
+  | "seedHrActivities"
+  | "seedJobOpenings"
+  | "seedPayroll";
 
 export interface SchedulerJobData {
   jobName: SchedulerJobName;

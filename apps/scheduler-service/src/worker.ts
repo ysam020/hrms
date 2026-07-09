@@ -17,6 +17,10 @@ import { checkSubscriptionExpiry } from "./jobs/checkSubscriptionExpiry";
 import { checkTicketSla } from "./jobs/checkTicketSla";
 import { retryFailedWebhooks } from "./jobs/retryFailedWebhooks";
 import { deliverWebhook } from "./jobs/deliverWebhook";
+import { seedDailyAttendance } from "./jobs/seedDailyAttendance";
+import { seedHrActivities } from "./jobs/seedHrActivities";
+import { seedJobOpenings } from "./jobs/seedJobOpenings";
+import { seedPayroll } from "./jobs/seedPayroll";
 
 // Typed handler map — TypeScript enforces every SchedulerJobName is handled.
 const jobHandlers: Record<SchedulerJobName, (data?: any) => Promise<void>> = {
@@ -30,6 +34,10 @@ const jobHandlers: Record<SchedulerJobName, (data?: any) => Promise<void>> = {
   checkSubscriptionExpiry,
   checkTicketSla,
   retryFailedWebhooks,
+  seedDailyAttendance,
+  seedHrActivities,
+  seedJobOpenings,
+  seedPayroll,
 };
 
 /** Cron / scheduler queue worker (serial, concurrency=1). */

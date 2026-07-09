@@ -171,7 +171,10 @@ export const applyLeave = async (
         // requiresProof — a custom type (e.g. Maternity) may need proof
         // without ever setting the legacy `sickLeave` flag.
         const { medicalCertificate } = call.request;
-        const matchedPolicy = findPolicy(leaveSettings.leavePolicies, leaveType);
+        const matchedPolicy = findPolicy(
+          leaveSettings.leavePolicies,
+          leaveType,
+        );
         const proofRequired =
           (sickLeave && leaveSettings.medicalCertRequired) ||
           matchedPolicy?.requiresProof;
@@ -291,7 +294,7 @@ export const applyLeave = async (
       },
     });
 
-    await cacheManager.invalidatePattern("leaves:*");
+    await cacheManager.invalidatePattern(`t:${tenantId ?? "global"}:leaves:*`);
 
     // Routes the approve/reject decision through the tenant's configured
     // Approval Chain (zero-config default: requester's reporting manager,

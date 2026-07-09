@@ -11,6 +11,8 @@ jest.mock("@hrms/db", () => {
     professionalTaxSlab: { findMany: jest.fn() },
     salaryComponentDefinition: { findMany: jest.fn() },
     salaryAdvance: { findMany: jest.fn() },
+    tenantSettings: { findFirst: jest.fn() },
+    holiday: { findMany: jest.fn() },
   };
   return {
     prisma: _db,
@@ -40,6 +42,19 @@ jest.mock("../utils/webhookEmitter", () => ({
   emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
+// payroll.ts imports getActiveSettings from ./tenantSettings, which imports
+// the real @hrms/cache (ioredis) at module load — without this mock, a
+// Redis connection attempt against a nonexistent local instance hangs the
+// whole test file.
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+    invalidatePattern: jest.fn(),
+  },
+}));
+
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockRunFindUnique = (prisma as any).payrollRun.findUnique as jest.Mock;
@@ -54,8 +69,10 @@ const mockPtSlabFindMany = (prisma as any).professionalTaxSlab
   .findMany as jest.Mock;
 const mockComponentFindMany = (prisma as any).salaryComponentDefinition
   .findMany as jest.Mock;
-const mockAdvanceFindMany = (prisma as any).salaryAdvance
-  .findMany as jest.Mock;
+const mockAdvanceFindMany = (prisma as any).salaryAdvance.findMany as jest.Mock;
+const mockTenantSettingsFindFirst = (prisma as any).tenantSettings
+  .findFirst as jest.Mock;
+const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
 
 const makeReq = (overrides: any = {}) =>
   ({
@@ -88,6 +105,8 @@ describe("initiatePayrollRun", () => {
     mockPtSlabFindMany.mockResolvedValue([]);
     mockComponentFindMany.mockResolvedValue([]);
     mockAdvanceFindMany.mockResolvedValue([]);
+    mockTenantSettingsFindFirst.mockResolvedValue(null);
+    mockHolidayFindMany.mockResolvedValue([]);
   });
 
   it("uses the employee's own configured Basic/HRA/Conveyance, prorated by attendance, instead of the fixed 50/25/25 split", async () => {
@@ -105,7 +124,11 @@ describe("initiatePayrollRun", () => {
     // Full attendance for the month — proration ratio effectively 1 once
     // capped, so the configured full-month values pass through unchanged.
     mockAttendanceFindMany.mockResolvedValue(
-      Array.from({ length: 31 }, () => ({ userId: "emp-1", status: "Present" })),
+      Array.from({ length: 31 }, (_, i) => ({
+        userId: "emp-1",
+        status: "Present",
+        date: new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, i + 1)),
+      })),
     );
 
     const res = makeRes();
@@ -139,7 +162,11 @@ describe("initiatePayrollRun", () => {
       },
     ]);
     mockAttendanceFindMany.mockResolvedValue(
-      Array.from({ length: 31 }, () => ({ userId: "emp-2", status: "Present" })),
+      Array.from({ length: 31 }, (_, i) => ({
+        userId: "emp-2",
+        status: "Present",
+        date: new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, i + 1)),
+      })),
     );
 
     const res = makeRes();
@@ -173,7 +200,11 @@ describe("initiatePayrollRun", () => {
       },
     ]);
     mockAttendanceFindMany.mockResolvedValue(
-      Array.from({ length: 31 }, () => ({ userId: "emp-3", status: "Present" })),
+      Array.from({ length: 31 }, (_, i) => ({
+        userId: "emp-3",
+        status: "Present",
+        date: new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, i + 1)),
+      })),
     );
     mockComponentFindMany.mockResolvedValue([
       { code: "PF", percentValue: 10 },
@@ -192,6 +223,90 @@ describe("initiatePayrollRun", () => {
           userId: "emp-3",
           pf: 1000, // 10% of basicPay (10000), not the 12% default
           esi: 200, // 1% of gross (20000), not the 1.75% default
+        }),
+      ]),
+    });
+  });
+
+  it("treats an unrecorded weekend date as an implicit paid Week Off, not an unpaid gap", async () => {
+    mockUserFindMany.mockResolvedValue([
+      {
+        id: "emp-4",
+        salary: 31000,
+        employmentType: "employee",
+        workState: null,
+        salaryBasicPay: null,
+        salaryHra: null,
+        salaryConveyance: null,
+      },
+    ]);
+    // Only mark the weekdays of January 2020 as Present — the weekend days
+    // are left with no AttendanceRecord at all, as if reconcileAttendance
+    // hasn't backfilled them with an explicit "Week Off" status yet.
+    const records: any[] = [];
+    for (let day = 1; day <= 31; day++) {
+      const d = new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, day));
+      if (d.getUTCDay() === 0 || d.getUTCDay() === 6) continue; // skip weekends
+      records.push({ userId: "emp-4", status: "Present", date: d });
+    }
+    mockAttendanceFindMany.mockResolvedValue(records);
+
+    const res = makeRes();
+    await initiatePayrollRun(
+      makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+      res,
+    );
+
+    expect(mockLineItemCreateMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          userId: "emp-4",
+          grossSalary: 31000, // full month — weekends implicitly paid
+        }),
+      ]),
+    });
+  });
+
+  it("treats an unrecorded date in the tenant's Holiday calendar as an implicit paid Holiday", async () => {
+    mockUserFindMany.mockResolvedValue([
+      {
+        id: "emp-5",
+        salary: 31000,
+        employmentType: "employee",
+        workState: null,
+        salaryBasicPay: null,
+        salaryHra: null,
+        salaryConveyance: null,
+      },
+    ]);
+    // Jan 15, 2020 is a Wednesday (a working day) — mark every other day as
+    // Present and leave it with no AttendanceRecord, as if
+    // reconcileAttendance hasn't backfilled the configured holiday yet.
+    const records: any[] = [];
+    for (let day = 1; day <= 31; day++) {
+      if (day === 15) continue;
+      records.push({
+        userId: "emp-5",
+        status: "Present",
+        date: new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, day)),
+      });
+    }
+    mockAttendanceFindMany.mockResolvedValue(records);
+    mockHolidayFindMany.mockResolvedValue([
+      { holidays: [{ date: "2020-01-15" }] },
+    ]);
+
+    const res = makeRes();
+    await initiatePayrollRun(
+      makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+      res,
+    );
+
+    expect(mockLineItemCreateMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          userId: "emp-5",
+          grossSalary: 31000, // full month — the unrecorded holiday is still paid
         }),
       ]),
     });

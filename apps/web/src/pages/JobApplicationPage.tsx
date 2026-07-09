@@ -34,7 +34,7 @@ const validationSchema = toFormikValidationSchema(
 
 function JobApplicationPage() {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { slug, id } = useParams();
   const [resumeFileName, setResumeFileName] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState("");
@@ -51,8 +51,12 @@ function JobApplicationPage() {
     validationSchema,
     onSubmit: async (values) => {
       setServerError("");
+      if (!slug) {
+        setServerError("This careers link is invalid.");
+        return;
+      }
       try {
-        await apiClient.post(API_ENDPOINTS.APPLY_FOR_JOB, values);
+        await apiClient.post(API_ENDPOINTS.APPLY_FOR_JOB(slug), values);
         setSubmitted(true);
       } catch (err) {
         setServerError(
@@ -97,7 +101,7 @@ function JobApplicationPage() {
         </Typography>
         <Button
           variant="outlined"
-          onClick={() => navigate("/careers", { replace: true })}
+          onClick={() => navigate(`/careers/${slug}`, { replace: true })}
           sx={{ mt: 2, textTransform: "none", borderRadius: "8px" }}
         >
           View More Openings

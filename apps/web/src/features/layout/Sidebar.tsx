@@ -18,6 +18,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
+import { ApprovalsBadgeContext } from "@web/app/providers/ApprovalsBadgeContext";
 
 const SpaceDashboardIcon = lazy(
   () => import("@mui/icons-material/SpaceDashboard"),
@@ -39,6 +40,11 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   const location = useLocation();
   const { user } = useContext(UserContext);
   const { totalUnread } = useContext(ChatUnreadContext);
+  const { pendingApprovalsCount } = useContext(ApprovalsBadgeContext);
+  const badgeCountByPath: Record<string, number> = {
+    "/chat": totalUnread,
+    "/approvals": pendingApprovalsCount,
+  };
   const navRefs = useRef<(HTMLElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ top: 0, opacity: 0 });
 
@@ -139,8 +145,12 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
               onClick={() => handleNavigation(item.path)}
             >
               <Suspense fallback={<div style={{ width: 24, height: 24 }} />}>
-                {item.path === "/chat" && totalUnread > 0 ? (
-                  <Badge badgeContent={totalUnread} color="error" max={99}>
+                {badgeCountByPath[item.path] > 0 ? (
+                  <Badge
+                    badgeContent={badgeCountByPath[item.path]}
+                    color="error"
+                    max={99}
+                  >
                     {item.icon}
                   </Badge>
                 ) : (

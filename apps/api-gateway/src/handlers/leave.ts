@@ -72,6 +72,7 @@ export async function getLeaveApplications(req: Request, res: Response) {
     const response = (await grpcCall(leaveClient, "getLeaves", {
       userId,
       status: req.query.status || "",
+      futureOnly: req.query.futureOnly === "true",
       ...parsePagination(req.query),
     })) as any;
 

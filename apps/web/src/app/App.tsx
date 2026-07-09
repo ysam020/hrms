@@ -39,6 +39,7 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { SocketProvider } from "@web/app/providers/SocketContext";
 import { ChatUnreadProvider } from "@web/app/providers/ChatUnreadContext";
+import { ApprovalsBadgeProvider } from "@web/app/providers/ApprovalsBadgeContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 const HomePage = lazy(() => import("@web/pages/HomePage"));
 const LoginPage = lazy(() => import("@web/features/auth/LoginPage"));
@@ -315,7 +316,7 @@ function App() {
                     }
                   />
                   <Route
-                    path="/careers"
+                    path="/careers/:slug"
                     element={
                       <ErrorBoundary FallbackComponent={ErrorFallback}>
                         <Suspense fallback={<Loading />}>
@@ -325,7 +326,7 @@ function App() {
                     }
                   />
                   <Route
-                    path="/careers/apply/:id"
+                    path="/careers/:slug/apply/:id"
                     element={
                       <ErrorBoundary FallbackComponent={ErrorFallback}>
                         <Suspense fallback={<Loading />}>
@@ -340,14 +341,16 @@ function App() {
                       user ? (
                         <SocketProvider>
                           <ChatUnreadProvider>
-                            <ErrorBoundary FallbackComponent={ErrorFallback}>
-                              <Suspense fallback={<Loading />}>
-                                <HomePage
-                                  showSidebar={showSidebar}
-                                  setShowSidebar={setShowSidebar}
-                                />
-                              </Suspense>
-                            </ErrorBoundary>
+                            <ApprovalsBadgeProvider>
+                              <ErrorBoundary FallbackComponent={ErrorFallback}>
+                                <Suspense fallback={<Loading />}>
+                                  <HomePage
+                                    showSidebar={showSidebar}
+                                    setShowSidebar={setShowSidebar}
+                                  />
+                                </Suspense>
+                              </ErrorBoundary>
+                            </ApprovalsBadgeProvider>
                           </ChatUnreadProvider>
                         </SocketProvider>
                       ) : pendingSetup ? (

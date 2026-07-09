@@ -104,7 +104,9 @@ export const cancelLeave = async (
           );
         }
       }
-      await cacheManager.invalidatePattern("leaves:*");
+      await cacheManager.invalidatePattern(
+        `t:${tenantId ?? "global"}:leaves:*`,
+      );
       return callback(null, {
         message: MESSAGES.LEAVE_CANCELLED,
         status: status.OK,
@@ -142,7 +144,9 @@ export const cancelLeave = async (
       }).catch((err) =>
         logger.warn("[cancelLeave] Notification enqueue failed:", { err }),
       );
-      await cacheManager.invalidatePattern("leaves:*");
+      await cacheManager.invalidatePattern(
+        `t:${tenantId ?? "global"}:leaves:*`,
+      );
       return callback(null, {
         message: MESSAGES.LEAVE_CANCELLATION_REQUESTED,
         status: status.OK,

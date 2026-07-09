@@ -56,6 +56,7 @@ export async function getUserData(req: Request, res: Response) {
         salaryPf: true,
         salaryEsi: true,
         salaryPt: true,
+        salaryComponentBreakdown: true,
         workState: true,
       },
     });
@@ -68,6 +69,7 @@ export async function getUserData(req: Request, res: Response) {
         pf: salaryData.salaryPf,
         esi: salaryData.salaryEsi,
         pt: salaryData.salaryPt,
+        components: salaryData.salaryComponentBreakdown ?? [],
       };
       snake.workState = salaryData.workState;
     }

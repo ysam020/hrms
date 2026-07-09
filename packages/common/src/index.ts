@@ -13,3 +13,8 @@ export {
 } from "./object";
 export { RESPONSE_STATUS, grpcToHttpStatus, apiResponse } from "./response";
 export { loadSecrets } from "./loadSecrets";
+export {
+  deriveFromComponents,
+  toWireSalaryStructure,
+  type ComponentAmountInput,
+} from "./salaryComponents";

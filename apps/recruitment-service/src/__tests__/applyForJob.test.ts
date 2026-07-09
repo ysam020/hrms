@@ -1,5 +1,5 @@
 import { status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prisma, getTenantId } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { applyForJob } from "../handlers/applyForJob";
 import { MESSAGES } from "../constants/messages";
@@ -91,6 +91,18 @@ describe("applyForJob", () => {
       message: MESSAGES.JOB_TITLE_ID_NAME_EMAIL_REQUIRED,
       status: status.INVALID_ARGUMENT,
     });
+  });
+
+  it("returns FAILED_PRECONDITION instead of writing a corrupted record when tenant context is missing (e.g. resolvePublicTenant didn't run)", async () => {
+    (getTenantId as jest.Mock).mockReturnValueOnce(null);
+    const cb = makeCallback();
+    await applyForJob(makeCall(validRequest), cb);
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.TENANT_REQUIRED,
+      status: status.FAILED_PRECONDITION,
+    });
+    expect(mockJobFindUnique).not.toHaveBeenCalled();
+    expect(mockAppCreate).not.toHaveBeenCalled();
   });
 
   it("returns NOT_FOUND when job opening does not exist", async () => {

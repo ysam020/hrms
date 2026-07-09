@@ -153,6 +153,10 @@ model User {
   salaryPf                    Float?
   salaryEsi                   Float?
   salaryPt                    Float?
+  // [{code, name, type, amount}] — full tenant-configured component snapshot,
+  // mirrors SalaryStructure.componentBreakdown. Null until the salary
+  // structure has been saved through the componentBreakdown-aware UI.
+  salaryComponentBreakdown    Json?
   reference_by                String?
   // Auth
   refreshToken                String?

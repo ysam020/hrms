@@ -2,17 +2,34 @@ import { Request, Response } from "express";
 import { salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  deriveFromComponents,
+} from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
+import { getActiveSettings } from "./tenantSettings";
+import { classifyImpliedNonWorkingDays } from "../utils/payrollCalc";
 import { jsPDF } from "jspdf";
 
 export async function updateSalary(req: Request, res: Response) {
   try {
+    const { user } = req as AuthRequest;
     const { userId, year, month, salaryStructure } = req.body;
-    const { basicPay, hra, conveyance, incentive, pf, esi, pt, deductions } =
-      salaryStructure;
+    const {
+      basicPay,
+      hra,
+      conveyance,
+      incentive,
+      pf,
+      esi,
+      pt,
+      deductions,
+      components,
+    } = salaryStructure;
     const yearInt = parseInt(year);
     const monthInt = parseInt(month);
     const flatFields = {
@@ -24,6 +41,7 @@ export async function updateSalary(req: Request, res: Response) {
       esi,
       pt,
       deductions,
+      components,
     };
 
     // Check if a record exists for this period
@@ -48,22 +66,51 @@ export async function updateSalary(req: Request, res: Response) {
     }
 
     // Keep User.salary in sync with the SalaryStructure so that salary-slip
-    // generation always has a reliable CTC source even before the first payroll run.
-    const fullGross =
-      (basicPay ?? 0) + (hra ?? 0) + (conveyance ?? 0) + (incentive ?? 0);
+    // generation and payroll-run proration always have a reliable CTC source
+    // even before the first payroll run.
+    let fullGross: number;
+    let syncFields: Record<string, unknown>;
+    if (components?.length) {
+      const { legacy, grossEarnings } = deriveFromComponents(components);
+      fullGross = grossEarnings;
+      syncFields = {
+        salaryBasicPay: legacy.basicPay,
+        salaryHra: legacy.hra,
+        salaryConveyance: legacy.conveyance,
+        salaryPf: legacy.pf,
+        salaryEsi: legacy.esi,
+        salaryPt: legacy.pt,
+        salaryComponentBreakdown: components,
+      };
+    } else {
+      fullGross =
+        (basicPay ?? 0) + (hra ?? 0) + (conveyance ?? 0) + (incentive ?? 0);
+      syncFields = {
+        salaryBasicPay: basicPay ?? undefined,
+        salaryHra: hra ?? undefined,
+        salaryConveyance: conveyance ?? undefined,
+        salaryPf: pf ?? undefined,
+        salaryEsi: esi ?? undefined,
+        salaryPt: pt ?? undefined,
+      };
+    }
+
     if (fullGross > 0 && typeof (prisma.user as any)?.update === "function") {
       await prisma.user.update({
         where: { id: userId },
         data: {
           salary: fullGross,
-          salaryBasicPay: basicPay ?? undefined,
-          salaryHra: hra ?? undefined,
-          salaryConveyance: conveyance ?? undefined,
-          salaryPf: pf ?? undefined,
-          salaryEsi: esi ?? undefined,
-          salaryPt: pt ?? undefined,
+          ...syncFields,
         },
       });
+    }
+
+    // Bust the cached employee-details payload so the Employee module reflects
+    // the new salary structure immediately instead of the previously cached one.
+    if (user?.tenantId) {
+      await cacheManager.invalidatePattern(
+        `t:${user.tenantId}:employee-details:*`,
+      );
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -163,38 +210,66 @@ export async function generateSalarySlip(req: Request, res: Response) {
 
     const totalMonthDays = new Date(year, month, 0).getDate(); // e.g. 30 for April
 
-    const [attRecords, lbRecord] = await Promise.all([
-      prisma.attendanceRecord.findMany({
-        where: {
-          tenantId,
-          userId: requestedUserId,
-          date: {
-            gte: new Date(year, month - 1, 1),
-            lte: new Date(year, month, 0, 23, 59, 59, 999),
+    const [attRecords, lbRecord, tenantSettings, holidayRecords] =
+      await Promise.all([
+        prisma.attendanceRecord.findMany({
+          where: {
+            tenantId,
+            userId: requestedUserId,
+            date: {
+              gte: new Date(year, month - 1, 1),
+              lte: new Date(year, month, 0, 23, 59, 59, 999),
+            },
           },
-        },
-        select: { status: true },
-      }),
-      prisma.leaveBalance.findFirst({
-        where: { tenantId, userId: requestedUserId },
-        select: { balances: true },
-      }),
-    ]);
+          select: { status: true, date: true },
+        }),
+        prisma.leaveBalance.findFirst({
+          where: { tenantId, userId: requestedUserId },
+          select: { balances: true },
+        }),
+        tenantId ? getActiveSettings(tenantId) : Promise.resolve(null),
+        (prisma as any).holiday.findMany({ where: { year } }),
+      ]);
+    const workingDays: number[] = (tenantSettings as any)?.workWeekPattern
+      ?.workingDays ?? [1, 2, 3, 4, 5];
+    const holidayDateKeys = new Set<string>(
+      (holidayRecords as any[]).flatMap((r) =>
+        (Array.isArray(r.holidays) ? r.holidays : []).map((h: any) => h.date),
+      ),
+    );
 
     // Count per-status attendance (case-insensitive to handle any capitalization).
     let attPresent = 0,
       attLate = 0,
       attHalfDay = 0,
       attHoliday = 0,
+      attWeekOff = 0,
       attWfh = 0;
+    const recordedDates = new Set<string>();
     for (const r of attRecords) {
+      recordedDates.add(new Date(r.date).toISOString().slice(0, 10));
       const s = (r.status ?? "").toLowerCase();
       if (s === "present") attPresent++;
       else if (s === "late") attLate++;
       else if (s === "half day") attHalfDay++;
       else if (s === "holiday") attHoliday++;
+      // Weekly offs (e.g. Sat/Sun) are non-working but still paid days.
+      else if (s === "week off") attWeekOff++;
       else if (s === "wfh") attWfh++;
     }
+    // Calendar-derived holidays/weekly offs — covers dates
+    // reconcileAttendance.ts hasn't (yet) backfilled with an explicit
+    // "Holiday"/"Week Off" record.
+    const { impliedHolidays, impliedWeekOffs } = classifyImpliedNonWorkingDays(
+      year,
+      month,
+      totalMonthDays,
+      workingDays,
+      holidayDateKeys,
+      recordedDates,
+    );
+    attHoliday += impliedHolidays;
+    attWeekOff += impliedWeekOffs;
 
     // Paid leaves from LeaveBalance.balances for this specific month.
     let paidLeaves = 0;
@@ -212,6 +287,7 @@ export async function generateSalarySlip(req: Request, res: Response) {
         attLate +
         attHalfDay * 0.5 +
         attHoliday +
+        attWeekOff +
         attWfh +
         paidLeaves,
       totalMonthDays,
@@ -234,51 +310,141 @@ export async function generateSalarySlip(req: Request, res: Response) {
         })
       : null;
 
-    let calcBasicPay: number,
-      calcHra: number,
-      calcConveyance: number,
-      calcPf: number,
-      calcEsi: number,
-      calcPt: number,
-      calcIncentive: number,
-      calcOtherDed: number;
+    // Tenant-configured components (including anything beyond the standard
+    // 6 codes) — disbursedLineItem.componentBreakdown is a direct Prisma
+    // read (already final, use as-is); salaryStructure.components is the
+    // gRPC-wire-aliased form of SalaryStructure.componentBreakdown (prorate
+    // by attendance for a preview payslip, same as the legacy path below).
+    const componentBreakdown: Array<{
+      code: string;
+      name?: string;
+      type: string;
+      amount: number;
+    }> | null =
+      (disbursedLineItem as any)?.componentBreakdown ??
+      (!disbursedLineItem ? (salaryStructure as any).components : null) ??
+      null;
 
-    if (disbursedLineItem) {
-      calcBasicPay = disbursedLineItem.basicPay ?? 0;
-      calcHra = disbursedLineItem.hra ?? 0;
-      calcConveyance = disbursedLineItem.conveyance ?? 0;
-      calcPf = disbursedLineItem.pf ?? 0;
-      calcEsi = disbursedLineItem.esi ?? 0;
-      calcPt = disbursedLineItem.pt ?? 0;
-      calcIncentive = 0;
-      calcOtherDed = disbursedLineItem.otherDeductions ?? 0;
+    let earningsRows: { label: string; value: number }[];
+    let deductionRows: { label: string; value: number }[];
+
+    if (componentBreakdown?.length) {
+      const prorationRatio = disbursedLineItem
+        ? 1
+        : totalMonthDays > 0
+          ? paidDays / totalMonthDays
+          : 1;
+      earningsRows = componentBreakdown
+        .filter((c) => c.type === "earning")
+        .map((c) => ({
+          label: c.name || c.code,
+          value: Math.round((c.amount ?? 0) * prorationRatio),
+        }));
+      deductionRows = componentBreakdown
+        .filter((c) => c.type === "deduction")
+        .map((c) => ({
+          label: c.name || c.code,
+          value: Math.round((c.amount ?? 0) * prorationRatio),
+        }));
     } else {
-      // No disbursed run yet for this month — prorate the already-stored,
-      // already-configured baseline salary structure by attendance instead
-      // of recomputing Basic/HRA/Conveyance/PF/ESI/PT from a separate
-      // hardcoded formula, so a preview payslip agrees with whatever was
-      // actually configured for this employee (via the employee module or
-      // the salary module).
-      const prorationRatio =
-        totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
-      calcBasicPay = Math.round(
-        (salaryStructure.basicPay ?? 0) * prorationRatio,
-      );
-      calcHra = Math.round((salaryStructure.hra ?? 0) * prorationRatio);
-      calcConveyance = Math.round(
-        (salaryStructure.conveyance ?? 0) * prorationRatio,
-      );
-      calcPf = Math.round((salaryStructure.pf ?? 0) * prorationRatio);
-      calcEsi = Math.round((salaryStructure.esi ?? 0) * prorationRatio);
-      calcPt = Math.round((salaryStructure.pt ?? 0) * prorationRatio);
-      calcIncentive = salaryStructure.incentive ?? 0;
-      calcOtherDed = salaryStructure.deductions ?? 0;
+      // Legacy fixed-column structure (componentBreakdown never saved for
+      // this employee) — exact original behavior.
+      let calcBasicPay: number,
+        calcHra: number,
+        calcConveyance: number,
+        calcPf: number,
+        calcEsi: number,
+        calcPt: number,
+        calcIncentive: number,
+        calcOtherDed: number;
+
+      if (disbursedLineItem) {
+        calcBasicPay = disbursedLineItem.basicPay ?? 0;
+        calcHra = disbursedLineItem.hra ?? 0;
+        calcConveyance = disbursedLineItem.conveyance ?? 0;
+        calcPf = disbursedLineItem.pf ?? 0;
+        calcEsi = disbursedLineItem.esi ?? 0;
+        calcPt = disbursedLineItem.pt ?? 0;
+        calcIncentive = 0;
+        calcOtherDed = disbursedLineItem.otherDeductions ?? 0;
+      } else {
+        // No disbursed run yet for this month — prorate the already-stored,
+        // already-configured baseline salary structure by attendance instead
+        // of recomputing Basic/HRA/Conveyance/PF/ESI/PT from a separate
+        // hardcoded formula, so a preview payslip agrees with whatever was
+        // actually configured for this employee (via the employee module or
+        // the salary module).
+        const prorationRatio =
+          totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
+        calcBasicPay = Math.round(
+          (salaryStructure.basicPay ?? 0) * prorationRatio,
+        );
+        calcHra = Math.round((salaryStructure.hra ?? 0) * prorationRatio);
+        calcConveyance = Math.round(
+          (salaryStructure.conveyance ?? 0) * prorationRatio,
+        );
+        calcPf = Math.round((salaryStructure.pf ?? 0) * prorationRatio);
+        calcEsi = Math.round((salaryStructure.esi ?? 0) * prorationRatio);
+        calcPt = Math.round((salaryStructure.pt ?? 0) * prorationRatio);
+        calcIncentive = salaryStructure.incentive ?? 0;
+        calcOtherDed = salaryStructure.deductions ?? 0;
+      }
+
+      earningsRows = [
+        { label: "Basic Pay", value: calcBasicPay },
+        { label: "HRA", value: calcHra },
+        { label: "Conveyance Allowance", value: calcConveyance },
+        { label: "Incentive", value: calcIncentive },
+      ];
+      deductionRows = [
+        { label: "Provident Fund (PF)", value: calcPf },
+        { label: "ESI", value: calcEsi },
+        { label: "Professional Tax (PT)", value: calcPt },
+        { label: "Other Deductions", value: calcOtherDed },
+      ];
     }
 
-    const calcGrossEarnings =
-      calcBasicPay + calcHra + calcConveyance + calcIncentive;
-    const calcTotalDed = calcPf + calcEsi + calcPt + calcOtherDed;
+    const calcGrossEarnings = earningsRows.reduce((s, r) => s + r.value, 0);
+    const calcTotalDed = deductionRows.reduce((s, r) => s + r.value, 0);
     const calcNetPayable = Math.max(0, calcGrossEarnings - calcTotalDed);
+
+    // ── Standard (unprorated) salary structure — the employee's configured
+    // monthly baseline, as opposed to earningsRows/deductionRows above which
+    // are this pay period's actual (possibly attendance-prorated) amounts.
+    const structureComponents = (salaryStructure as any).components as
+      | Array<{ code: string; name?: string; type: string; amount: number }>
+      | undefined;
+
+    let structureEarningsRows: { label: string; value: number }[];
+    let structureDeductionRows: { label: string; value: number }[];
+
+    if (structureComponents?.length) {
+      structureEarningsRows = structureComponents
+        .filter((c) => c.type === "earning")
+        .map((c) => ({ label: c.name || c.code, value: c.amount ?? 0 }));
+      structureDeductionRows = structureComponents
+        .filter((c) => c.type === "deduction")
+        .map((c) => ({ label: c.name || c.code, value: c.amount ?? 0 }));
+    } else {
+      structureEarningsRows = [
+        { label: "Basic Pay", value: salaryStructure.basicPay ?? 0 },
+        { label: "HRA", value: salaryStructure.hra ?? 0 },
+        {
+          label: "Conveyance Allowance",
+          value: salaryStructure.conveyance ?? 0,
+        },
+        { label: "Incentive", value: salaryStructure.incentive ?? 0 },
+      ];
+      structureDeductionRows = [
+        { label: "Provident Fund (PF)", value: salaryStructure.pf ?? 0 },
+        { label: "ESI", value: salaryStructure.esi ?? 0 },
+        { label: "Professional Tax (PT)", value: salaryStructure.pt ?? 0 },
+        { label: "Other Deductions", value: salaryStructure.deductions ?? 0 },
+      ];
+    }
+    const structureGrossSalary =
+      salaryStructure.grossSalary ??
+      structureEarningsRows.reduce((s, r) => s + r.value, 0);
 
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
@@ -430,6 +596,14 @@ export async function generateSalarySlip(req: Request, res: Response) {
     const rightX = marginX + halfW + colGap;
     const rowH = 10;
 
+    doc.setTextColor(...textMid);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("THIS MONTH'S PAYSLIP", leftX, curY);
+    curY += 5;
+
+    const tableTop = curY;
+
     // Column headers
     doc.setFillColor(...steel);
     doc.rect(leftX, curY, halfW, 8, "F");
@@ -444,20 +618,6 @@ export async function generateSalarySlip(req: Request, res: Response) {
     doc.text("AMOUNT", rightX + halfW - 4, curY + 5.5, { align: "right" });
 
     curY += 8;
-
-    const earningsRows = [
-      { label: "Basic Pay", value: calcBasicPay },
-      { label: "HRA", value: calcHra },
-      { label: "Conveyance Allowance", value: calcConveyance },
-      { label: "Incentive", value: calcIncentive },
-    ];
-
-    const deductionRows = [
-      { label: "Provident Fund (PF)", value: calcPf },
-      { label: "ESI", value: calcEsi },
-      { label: "Professional Tax (PT)", value: calcPt },
-      { label: "Other Deductions", value: calcOtherDed },
-    ];
 
     const maxRows = Math.max(earningsRows.length, deductionRows.length);
 
@@ -492,6 +652,13 @@ export async function generateSalarySlip(req: Request, res: Response) {
         });
       }
 
+      // Row separator — subtle horizontal rule under each row for a cleaner,
+      // more official grid look.
+      doc.setDrawColor(...powder);
+      doc.setLineWidth(0.2);
+      doc.line(leftX, curY + rowH, leftX + halfW, curY + rowH);
+      doc.line(rightX, curY + rowH, rightX + halfW, curY + rowH);
+
       curY += rowH;
     }
 
@@ -515,6 +682,14 @@ export async function generateSalarySlip(req: Request, res: Response) {
     });
 
     curY += 9;
+
+    // Outer border + column divider around the whole header+rows+totals block.
+    doc.setDrawColor(...steel);
+    doc.setLineWidth(0.5);
+    doc.rect(leftX, tableTop, contentW, curY - tableTop);
+    doc.setDrawColor(...powder);
+    doc.setLineWidth(0.3);
+    doc.line(rightX - colGap / 2, tableTop, rightX - colGap / 2, curY);
 
     // ─── Net payable banner ─────────────────────────────────────────────────────
     const netPayable = calcNetPayable;
@@ -549,12 +724,13 @@ export async function generateSalarySlip(req: Request, res: Response) {
     {
       curY += 8;
 
-      // 2-row grid: label row + value row, 5 columns.
+      // 2-row grid: label row + value row, 6 columns.
       // All values come from the tenant-scoped attendance queries above — authoritative.
       const attItems = [
         { label: "PRESENT", value: String(attPresent + attLate) },
         { label: "HALF DAYS", value: String(attHalfDay) },
         { label: "HOLIDAYS/WFH", value: String(attHoliday + attWfh) },
+        { label: "WEEK OFFS", value: String(attWeekOff) },
         { label: "PAID LEAVES", value: String(paidLeaves) },
         {
           label: `PAID / ${totalMonthDays} DAYS`,
@@ -589,6 +765,109 @@ export async function generateSalarySlip(req: Request, res: Response) {
       curY += boxH;
     }
 
+    // ─── Salary structure (standard monthly, before proration) ─────────────────
+    {
+      const structRowH = 7;
+      const maxStructRows = Math.max(
+        structureEarningsRows.length,
+        structureDeductionRows.length,
+      );
+      const neededHeight = 6 + 5 + 7 + maxStructRows * structRowH + 8 + 8;
+
+      // Leave headroom only for the solid footer bar (pageH-15..pageH) plus a
+      // small margin — the decorative corner polygons below only occupy the
+      // bottom-left 35mm, not the full content width.
+      if (curY + neededHeight > pageH - 20) {
+        doc.addPage();
+        curY = 20;
+      } else {
+        curY += 6;
+      }
+
+      doc.setTextColor(...textMid);
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("SALARY STRUCTURE — STANDARD MONTHLY", marginX, curY);
+      curY += 5;
+
+      const structTop = curY;
+
+      doc.setFillColor(...steel);
+      doc.rect(leftX, curY, halfW, 7, "F");
+      doc.setFillColor(...navyD);
+      doc.rect(rightX, curY, halfW, 7, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("EARNINGS", leftX + 4, curY + 5);
+      doc.text("AMOUNT", leftX + halfW - 4, curY + 5, { align: "right" });
+      doc.text("DEDUCTIONS", rightX + 4, curY + 5);
+      doc.text("AMOUNT", rightX + halfW - 4, curY + 5, { align: "right" });
+      curY += 7;
+
+      for (let i = 0; i < maxStructRows; i++) {
+        const textY = curY + 5;
+        if (i < structureEarningsRows.length) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(...textDark);
+          doc.text(structureEarningsRows[i].label, leftX + 4, textY);
+          doc.setFont("helvetica", "bold");
+          doc.text(
+            structureEarningsRows[i].value.toFixed(2),
+            leftX + halfW - 4,
+            textY,
+            { align: "right" },
+          );
+        }
+        if (i < structureDeductionRows.length) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(...textDark);
+          doc.text(structureDeductionRows[i].label, rightX + 4, textY);
+          doc.setFont("helvetica", "bold");
+          doc.text(
+            structureDeductionRows[i].value.toFixed(2),
+            rightX + halfW - 4,
+            textY,
+            { align: "right" },
+          );
+        }
+        curY += structRowH;
+      }
+
+      doc.setFillColor(...powder);
+      doc.rect(leftX, curY, contentW, 8, "F");
+      doc.setTextColor(...navyD);
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("Gross Salary (Monthly)", leftX + 4, curY + 5.5);
+      doc.text(
+        structureGrossSalary.toFixed(2),
+        leftX + contentW - 4,
+        curY + 5.5,
+        { align: "right" },
+      );
+      curY += 8;
+
+      doc.setDrawColor(...steel);
+      doc.setLineWidth(0.5);
+      doc.rect(leftX, structTop, contentW, curY - structTop);
+      doc.setDrawColor(...powder);
+      doc.setLineWidth(0.3);
+      doc.line(rightX - colGap / 2, structTop, rightX - colGap / 2, curY);
+
+      doc.setTextColor(...textLight);
+      doc.setFontSize(6.5);
+      doc.setFont("helvetica", "italic");
+      doc.text(
+        "This is the configured monthly structure, before proration for the attendance/leave shown above.",
+        marginX,
+        curY + 4,
+      );
+      curY += 8;
+    }
+
     // ─── Footer bar ─────────────────────────────────────────────────────────────
     fillPoly(
       [
@@ -612,6 +891,21 @@ export async function generateSalarySlip(req: Request, res: Response) {
     doc.rect(0, pageH - 13, pageW, 13, "F");
     doc.setFillColor(...steel);
     doc.rect(0, pageH - 15, pageW, 2, "F");
+
+    doc.setTextColor(...powder);
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      "This is a system-generated payslip and does not require a signature.",
+      marginX,
+      pageH - 6,
+    );
+    doc.text(
+      `Generated on ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`,
+      pageW - marginX,
+      pageH - 6,
+      { align: "right" },
+    );
 
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
     res.setHeader("Content-Type", "application/pdf");

@@ -72,8 +72,7 @@ const mockSettingsFindFirst = (prisma as any).tenantSettings
   .findFirst as jest.Mock;
 const mockBalanceFindFirst = (prisma as any).leaveBalance
   .findFirst as jest.Mock;
-const mockCompOffFindMany = (prisma as any).compOffCredit
-  .findMany as jest.Mock;
+const mockCompOffFindMany = (prisma as any).compOffCredit.findMany as jest.Mock;
 const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
 
 const validRequest = {
@@ -268,7 +267,7 @@ describe("applyLeave", () => {
 
     await applyLeave(makeCall(validRequest), makeCallback());
 
-    expect(mockInvalidate).toHaveBeenCalledWith("leaves:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:leaves:*");
   });
 
   it("returns INTERNAL on database error", async () => {
@@ -349,9 +348,7 @@ describe("applyLeave", () => {
       await applyLeave(makeCall(validRequest), makeCallback());
 
       expect(mockCreate).toHaveBeenCalled();
-      const { instantiateApproval } = jest.requireMock(
-        "@hrms/approval-engine",
-      );
+      const { instantiateApproval } = jest.requireMock("@hrms/approval-engine");
       expect(instantiateApproval).toHaveBeenCalledWith(
         "t1",
         "leave",
@@ -371,10 +368,7 @@ describe("applyLeave", () => {
       mockCompOffFindMany.mockResolvedValue([{ earnedDays: 1 }]);
       const cb = makeCallback();
       // validRequest = 3 working days, only 1 comp-off credit available.
-      await applyLeave(
-        makeCall({ ...validRequest, leaveType: "CO" }),
-        cb,
-      );
+      await applyLeave(makeCall({ ...validRequest, leaveType: "CO" }), cb);
       expect(cb).toHaveBeenCalledWith(
         null,
         expect.objectContaining({ status: status.FAILED_PRECONDITION }),
