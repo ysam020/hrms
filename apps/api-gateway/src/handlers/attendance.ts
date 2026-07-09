@@ -388,28 +388,46 @@ export async function attendanceInsights(req: Request, res: Response) {
         startDate = today.startOf("month").toDate();
     }
 
-    const [records, users] = await Promise.all([
-      prisma.attendanceRecord.findMany({
-        where: { date: { gte: startDate, lte: endDate } },
-        select: {
-          userId: true,
-          date: true,
-          status: true,
-          workingHours: true,
-          isCorrected: true,
-          timeIn: true,
-        },
-      }),
-      prisma.user.findMany({
-        where: { employeeStatus: "Active" },
-        select: { id: true, department: true },
-      }),
-    ]);
+    const records = await prisma.attendanceRecord.findMany({
+      where: { date: { gte: startDate, lte: endDate } },
+      select: {
+        userId: true,
+        date: true,
+        status: true,
+        workingHours: true,
+        isCorrected: true,
+        timeIn: true,
+      },
+    });
+
+    // Look up every user actually referenced by a record in this period —
+    // not just currently-active employees — so someone who left mid-period
+    // still resolves to their real name/department instead of "Unknown".
+    const recordUserIds = [...new Set(records.map((r: any) => r.userId))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: recordUserIds } },
+      select: {
+        id: true,
+        department: true,
+        username: true,
+        first_name: true,
+        last_name: true,
+      },
+    });
 
     const userDeptMap = new Map<string, string>(
       users.map(
         (u: any) => [u.id, u.department || "Unknown"] as [string, string],
       ),
+    );
+    const userInfoMap = new Map<string, { username: string; name: string }>(
+      users.map((u: any) => {
+        const name =
+          [u.first_name, u.last_name].filter(Boolean).join(" ") ||
+          u.username ||
+          "Unknown";
+        return [u.id, { username: u.username || "", name }];
+      }),
     );
 
     const total = records.length;
@@ -497,8 +515,12 @@ export async function attendanceInsights(req: Request, res: Response) {
               Math.max(0, 8 - avgHours) * 2.5) *
               10,
           ) / 10;
+        const info = userInfoMap.get(userId);
         return {
           userId,
+          username: info?.username || "",
+          employeeName: info?.name || "Unknown",
+          department: userDeptMap.get(userId) || "Unknown",
           attendanceRate,
           avgWorkingHours: avgHours,
           correctionFrequency: corrFreq,

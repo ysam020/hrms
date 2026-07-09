@@ -332,17 +332,28 @@ function AttendanceInsights() {
             ariaLabel="Employee risk assessment"
             variant="rows"
             data={(insights.employeeRiskAssessment || []).slice(0, 10)}
-            getRowId={(employee: any) => employee.username}
+            getRowId={(employee: any) => employee.userId || employee.username}
             emptyMessage="No risk assessment data available"
             columns={[
               {
-                key: "username",
+                key: "employeeName",
                 label: "Employee",
                 primary: true,
                 render: (employee: any) => (
                   <Box display="flex" alignItems="center" gap={0.5}>
                     <PersonOutline fontSize="small" />
-                    {employee.username}
+                    <Box>
+                      <Typography variant="body2">
+                        {employee.employeeName ||
+                          employee.username ||
+                          "Unknown"}
+                      </Typography>
+                      {employee.department && (
+                        <Typography variant="caption" color="textSecondary">
+                          {employee.department}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
                 ),
               },
