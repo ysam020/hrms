@@ -6,19 +6,15 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import { Calendar } from "primereact/calendar";
+import { Dropdown } from "primereact/dropdown";
 import dayjs from "dayjs";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -34,7 +30,17 @@ import CheckIcon from "@mui/icons-material/Check";
 import CancelIcon from "@mui/icons-material/Cancel";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AddIcon from "@mui/icons-material/Add";
+import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Draft", value: "draft" },
+  { label: "Processing", value: "processing" },
+  { label: "Approved", value: "approved" },
+  { label: "Disbursed", value: "disbursed" },
+  { label: "Cancelled", value: "cancelled" },
+];
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string }> = {
   draft: { color: "#64748b", bg: "rgba(100,116,139,0.15)" },
@@ -65,7 +71,6 @@ function StatusChip({ status }: { status: string }) {
 
 function PayrollRuns() {
   const { setAlert } = useContext(AlertContext);
-  const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
   const [openInitiate, setOpenInitiate] = useState(false);
 
@@ -84,6 +89,7 @@ function PayrollRuns() {
   const [submitting, setSubmitting] = useState(false);
   const searchRef = useRef("");
   const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isHr =
@@ -93,7 +99,13 @@ function PayrollRuns() {
   const fetchRuns = useCallback(
     async ({ page, limit }) => {
       try {
-        const res = await apiClient(API_ENDPOINTS.PAYROLL_RUNS(page, limit));
+        const params =
+          statusFilter && statusFilter !== "All"
+            ? `&status=${statusFilter}`
+            : "";
+        const res = await apiClient(
+          API_ENDPOINTS.PAYROLL_RUNS(page, limit, params),
+        );
         return {
           data: res.data.data?.runs || res.data.data || [],
           totalCount: res.data.data?.total || 0,
@@ -109,7 +121,7 @@ function PayrollRuns() {
         throw err;
       }
     },
-    [setAlert],
+    [statusFilter, setAlert],
   );
 
   const {
@@ -121,7 +133,10 @@ function PayrollRuns() {
     handlePageSizeChange,
     refresh,
     resetPagination,
-  } = useServerPagination(fetchRuns, { initialPageSize: 10 });
+  } = useServerPagination(fetchRuns, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
 
   const handleGlobalFilterChange = useCallback(
     (value: string) => {
@@ -180,209 +195,157 @@ function PayrollRuns() {
     }
   }, [form, refresh, setAlert]);
 
-  const iconBtn = (color: string, bg: string, hoverBg: string) => ({
-    width: 28,
-    height: 28,
-    borderRadius: "6px",
-    color: theme === "light" ? color : color,
-    backgroundColor: bg,
-    "&:hover": { backgroundColor: hoverBg },
-  });
+  const money = (v: number | null | undefined) =>
+    v != null ? `₹${Number(v).toLocaleString("en-IN")}` : "—";
 
   const columns = useMemo(
     () => [
       {
-        accessorKey: "month",
-        header: "Period",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-            {dayjs(
-              new Date(
-                cell.row.original.year,
-                (cell.row.original.month ?? 1) - 1,
-              ),
-            ).format("MMMM YYYY")}
-          </Typography>
+        key: "month",
+        label: "Period",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) =>
+          dayjs(new Date(row.year, (row.month ?? 1) - 1)).format("MMMM YYYY"),
+      },
+      {
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => <StatusChip status={row.status} />,
+      },
+      {
+        key: "employeeCount",
+        label: "Employees",
+        render: (row: any) => row.employeeCount ?? "—",
+      },
+      {
+        key: "totalGross",
+        label: "Total Gross",
+        render: (row: any) => money(row.totalGross),
+      },
+      {
+        key: "totalNet",
+        label: "Total Net",
+        render: (row: any) => (
+          <Box component="span" sx={{ color: "success.main", fontWeight: 500 }}>
+            {money(row.totalNet)}
+          </Box>
         ),
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 120,
-        Cell: ({ cell }: any) => <StatusChip status={cell.getValue()} />,
+        key: "createdAt",
+        label: "Initiated On",
+        render: (row: any) =>
+          row.createdAt ? dayjs(row.createdAt).format("DD MMM YYYY") : "—",
       },
-      {
-        accessorKey: "employeeCount",
-        header: "Employees",
-        size: 110,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() ?? "—"}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "totalGross",
-        header: "Total Gross",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
-              : "—"}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "totalNet",
-        header: "Total Net",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography
-            variant="body2"
-            fontSize="0.8rem"
-            fontWeight={500}
-            color="success.main"
-          >
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
-              : "—"}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "createdAt",
-        header: "Initiated On",
-        size: 140,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()
-              ? dayjs(cell.getValue()).format("DD MMM YYYY")
-              : "—"}
-          </Typography>
-        ),
-      },
-      ...(isHr
-        ? [
-            {
-              accessorKey: "actions",
-              header: "Actions",
-              size: 160,
-              enableSorting: false,
-              Cell: ({ cell }: any) => {
-                const row = cell.row.original;
-                return (
-                  <Box sx={{ display: "flex", gap: 0.5 }}>
-                    {row.status === "draft" && (
-                      <Tooltip title="Submit for Approval">
-                        <IconButton
-                          size="small"
-                          sx={iconBtn(
-                            "#6366f1",
-                            "rgba(99,102,241,0.12)",
-                            "rgba(99,102,241,0.2)",
-                          )}
-                          onClick={() => handleAction(row.id, "processing")}
-                        >
-                          <PlayArrowIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {row.status === "processing" && (
-                      <Tooltip title="Approve">
-                        <IconButton
-                          size="small"
-                          sx={iconBtn(
-                            "#059669",
-                            "rgba(5,150,105,0.12)",
-                            "rgba(5,150,105,0.2)",
-                          )}
-                          onClick={() => handleAction(row.id, "approved")}
-                        >
-                          <CheckIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {row.status === "approved" && (
-                      <Tooltip title="Mark Disbursed">
-                        <IconButton
-                          size="small"
-                          sx={iconBtn(
-                            "#6366f1",
-                            "rgba(99,102,241,0.12)",
-                            "rgba(99,102,241,0.2)",
-                          )}
-                          onClick={() => handleAction(row.id, "disbursed")}
-                        >
-                          <CheckIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {["draft", "processing"].includes(row.status) && (
-                      <Tooltip title="Cancel">
-                        <IconButton
-                          size="small"
-                          sx={iconBtn(
-                            "#dc2626",
-                            "rgba(220,38,38,0.12)",
-                            "rgba(220,38,38,0.2)",
-                          )}
-                          onClick={() => handleAction(row.id, "cancelled")}
-                        >
-                          <CancelIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Box>
-                );
-              },
-            },
-          ]
-        : []),
     ],
-    [isHr, handleAction, theme],
+    [],
+  );
+
+  const rowActions = useCallback(
+    (row: any) => {
+      if (!isHr) return [];
+      const actions: any[] = [];
+      if (row.status === "draft") {
+        actions.push({
+          icon: <PlayArrowIcon sx={{ fontSize: 16 }} />,
+          label: "Submit for Approval",
+          color: "primary" as const,
+          onClick: () => handleAction(row.id, "processing"),
+        });
+      }
+      if (row.status === "processing") {
+        actions.push({
+          icon: <CheckIcon sx={{ fontSize: 16 }} />,
+          label: "Approve",
+          color: "success" as const,
+          onClick: () => handleAction(row.id, "approved"),
+        });
+      }
+      if (row.status === "approved") {
+        actions.push({
+          icon: <CheckIcon sx={{ fontSize: 16 }} />,
+          label: "Mark Disbursed",
+          color: "primary" as const,
+          onClick: () => handleAction(row.id, "disbursed"),
+        });
+      }
+      if (["draft", "processing"].includes(row.status)) {
+        actions.push({
+          icon: <CancelIcon sx={{ fontSize: 16 }} />,
+          label: "Cancel",
+          color: "error" as const,
+          onClick: () => handleAction(row.id, "cancelled"),
+        });
+      }
+      return actions;
+    },
+    [isHr, handleAction],
   );
 
   const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: { ...tableConfig.table.state, isLoading: loading, globalFilter },
-    onGlobalFilterChange: handleGlobalFilterChange,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-        <Box sx={{ flex: 1 }} />
-        {isHr && (
-          <Tooltip title="Initiate Payroll Run">
-            <span>
-              <IconButton
-                color="primary"
-                size="small"
-                onClick={() => setOpenInitiate(true)}
-                aria-label="Initiate payroll run"
-              >
-                <AddIcon sx={{ fontSize: 20 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
-        )}
-      </Box>
-    ),
-  });
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Payroll runs"
+        data={memoizedData}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No payroll runs found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search…",
+        }}
+        toolbarActions={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 130 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "130px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+            {isHr && (
+              <Tooltip title="Initiate Payroll Run">
+                <span>
+                  <IconButton
+                    color="primary"
+                    size="small"
+                    onClick={() => setOpenInitiate(true)}
+                    aria-label="Initiate payroll run"
+                  >
+                    <AddIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+          </Box>
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50],
+        }}
+      />
 
       <Dialog
         open={openInitiate}

@@ -1,20 +1,12 @@
 import { memo, useCallback, useContext, useMemo } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import dayjs from "dayjs";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -121,34 +113,16 @@ function SavedReports() {
     [refresh, setAlert],
   );
 
-  const iconBtn = (color: string, bg: string) => ({
-    width: 28,
-    height: 28,
-    borderRadius: "6px",
-    color,
-    backgroundColor: bg,
-    "&:hover": { backgroundColor: bg.replace("0.12", "0.22") },
-  });
-
   const columns = useMemo(
     () => [
+      { key: "name", label: "Report Name", primary: true, hideLabel: true },
       {
-        accessorKey: "name",
-        header: "Report Name",
-        size: 200,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem" fontWeight={600}>
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "entity",
-        header: "Entity",
-        size: 120,
-        Cell: ({ cell }: any) => (
+        key: "entity",
+        label: "Entity",
+        hideLabel: true,
+        render: (row: any) => (
           <Chip
-            label={cell.getValue()}
+            label={row.entity}
             size="small"
             sx={{
               backgroundColor: "rgba(99,102,241,0.12)",
@@ -162,99 +136,70 @@ function SavedReports() {
         ),
       },
       {
-        accessorKey: "description",
-        header: "Description",
-        size: 220,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem" color="text.secondary">
-            {cell.getValue() ?? "—"}
-          </Typography>
-        ),
+        key: "description",
+        label: "Description",
+        render: (row: any) => row.description ?? "—",
       },
       {
-        accessorKey: "lastRunAt",
-        header: "Last Run",
-        size: 140,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()
-              ? dayjs(cell.getValue()).format("DD MMM YYYY")
-              : "Never"}
-          </Typography>
-        ),
+        key: "lastRunAt",
+        label: "Last Run",
+        render: (row: any) =>
+          row.lastRunAt ? dayjs(row.lastRunAt).format("DD MMM YYYY") : "Never",
       },
       {
-        accessorKey: "createdAt",
-        header: "Created",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {dayjs(cell.getValue()).format("DD MMM YYYY")}
-          </Typography>
-        ),
+        key: "createdAt",
+        label: "Created",
+        render: (row: any) => dayjs(row.createdAt).format("DD MMM YYYY"),
+      },
+    ],
+    [],
+  );
+
+  const rowActions = useCallback(
+    (row: any) => [
+      {
+        icon: <PlayArrowIcon sx={{ fontSize: 16 }} />,
+        label: "Run report",
+        color: "success" as const,
+        onClick: () => handleRun(row.id, row.name),
       },
       {
-        accessorKey: "savedReportActions",
-        header: "Actions",
-        size: 120,
-        enableSorting: false,
-        Cell: ({ cell }: any) => {
-          const row = cell.row.original;
-          return (
-            <Box sx={{ display: "flex", gap: 0.5 }}>
-              <Tooltip title="Run report">
-                <IconButton
-                  size="small"
-                  sx={iconBtn("#059669", "rgba(5,150,105,0.12)")}
-                  onClick={() => handleRun(row.id, row.name)}
-                >
-                  <PlayArrowIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Download CSV">
-                <IconButton
-                  size="small"
-                  sx={iconBtn("#6366f1", "rgba(99,102,241,0.12)")}
-                  onClick={() => handleDownload(row.id, row.name)}
-                >
-                  <DownloadIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Delete report">
-                <IconButton
-                  size="small"
-                  sx={iconBtn("#dc2626", "rgba(220,38,38,0.12)")}
-                  onClick={() => handleDelete(row.id)}
-                >
-                  <DeleteIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          );
-        },
+        icon: <DownloadIcon sx={{ fontSize: 16 }} />,
+        label: "Download CSV",
+        color: "primary" as const,
+        onClick: () => handleDownload(row.id, row.name),
+      },
+      {
+        icon: <DeleteIcon sx={{ fontSize: 16 }} />,
+        label: "Delete report",
+        color: "error" as const,
+        onClick: () => handleDelete(row.id),
       },
     ],
     [handleRun, handleDownload, handleDelete],
   );
 
   const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    state: { ...tableConfig.table.state, isLoading: loading },
-  });
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Saved reports"
+        data={memoizedData}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No saved reports found"
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50],
+        }}
+      />
     </ErrorBoundary>
   );
 }

@@ -44,31 +44,6 @@ export const addHrActivitySchema = z.object({
 
 export const editHrActivitySchema = addHrActivitySchema.partial();
 
-export const createRuleSchema = z.object({
-  name: z.string().min(1).max(256),
-  category: z.string().min(1).max(64),
-  description: z.string().max(2000).optional(),
-  priority: z.number().int().min(0).max(100).optional(),
-  status: z.enum(["draft", "active", "inactive"]).optional(),
-  tags: z.array(z.string().max(64)).max(20).optional(),
-  conditions: z.array(z.record(z.unknown())).optional(),
-  conditionLogic: z.enum(["AND", "OR"]).optional(),
-  actions: z.array(z.record(z.unknown())).optional(),
-  effectiveFrom: z.string().max(64).optional(),
-  effectiveTo: z.string().max(64).optional(),
-});
-
-export const updateRuleSchema = createRuleSchema.partial();
-
-export const updateRuleStatusSchema = z.object({
-  status: z.enum(["draft", "active", "inactive"]),
-});
-
-export const testRuleSchema = z.object({
-  rule: z.record(z.unknown()),
-  testData: z.record(z.unknown()),
-});
-
 export const createOrUpdatePolicySchema = z.object({
   policyType: z.string().min(1).max(128),
   policyName: z.string().max(256).optional(),
@@ -110,18 +85,31 @@ const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD");
 
-export const addLeaveSchema = z.object({
-  from: isoDate,
-  to: isoDate,
-  leaveType: z.string().min(1).max(64),
-  reason: z.string().max(1000).optional(),
-  sick_leave: z.boolean().optional(),
-  medicalCertificate: z.string().max(2048).optional(),
-});
+export const addLeaveSchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    leaveType: z.string().min(1).max(64),
+    reason: z.string().max(1000).optional(),
+    sick_leave: z.boolean().optional(),
+    medicalCertificate: z.string().max(2048).optional(),
+    unit: z.enum(["full_day", "half_day", "short_leave"]).default("full_day"),
+    session: z.enum(["first_half", "second_half"]).optional(),
+    shortLeaveHours: z.number().min(0.5).max(7).optional(),
+  })
+  .refine((v) => v.unit !== "half_day" || !!v.session, {
+    message: "session is required for a half-day leave",
+    path: ["session"],
+  })
+  .refine((v) => v.unit !== "short_leave" || !!v.shortLeaveHours, {
+    message: "shortLeaveHours is required for short leave",
+    path: ["shortLeaveHours"],
+  });
 
 export const updateLeaveStatusSchema = z.object({
   leaveId: z.string().min(1),
   action: z.enum(["approve", "reject", "cancel"]),
+  reason: z.string().max(500).optional(),
 });
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
@@ -154,6 +142,14 @@ export const editEmployeeDetailsSchema = z.object({
   dateOfTermination: z.string().optional(),
   dateOfAbscond: z.string().optional(),
   wfh: z.boolean().optional(),
+  // Previously missing from this schema entirely — the handler reads them,
+  // but zod strips unrecognized keys by default, so WFH home-location edits
+  // (and therefore WFH geofencing) were silently no-ops until this fix.
+  wfhHomeLatitude: z.number().min(-90).max(90).nullable().optional(),
+  wfhHomeLongitude: z.number().min(-180).max(180).nullable().optional(),
+  wfhHomeName: z.string().max(500).nullable().optional(),
+  employmentType: z.enum(["employee", "contractor"]).optional(),
+  workState: z.string().max(60).nullable().optional(),
 });
 
 export const completeKycSchema = z.object({
@@ -430,6 +426,340 @@ export const runReportSchema = z.object({
     .optional(),
   limit: z.number().int().min(1).max(10_000).default(1000),
   format: z.enum(["json", "csv"]).default("json"),
+});
+
+// ── Approval Chains ──────────────────────────────────────────────────────────
+
+export const approvalChainStepSchema = z.object({
+  approverType: z.enum([
+    "reporting_manager",
+    "specific_user",
+    "role",
+    "team_leader",
+  ]),
+  approverUserId: z.string().min(1).optional(),
+  approverRole: z
+    .enum(["owner", "admin", "hr", "manager", "employee"])
+    .optional(),
+});
+
+export const createApprovalChainSchema = z.object({
+  module: z.enum(["leave", "resignation", "wfh", "salary_advance", "overtime"]),
+  name: z.string().min(1).max(120),
+  conditionField: z.string().max(60).optional(),
+  conditionOp: z.enum(["gte", "lte", "eq", "in"]).optional(),
+  conditionValue: z.any().optional(),
+  priority: z.number().int().min(0).max(100).default(0),
+  steps: z.array(approvalChainStepSchema).min(1).max(10),
+});
+
+export const updateApprovalChainSchema = createApprovalChainSchema
+  .partial()
+  .extend({
+    isActive: z.boolean().optional(),
+  });
+
+export const createApprovalDelegateSchema = z.object({
+  delegateId: z.string().min(1),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  module: z
+    .enum(["leave", "resignation", "wfh", "salary_advance", "overtime"])
+    .optional(),
+  note: z.string().max(500).optional(),
+});
+
+export const actOnApprovalSchema = z.object({
+  decision: z.enum(["approved", "rejected"]),
+  comment: z.string().max(1000).optional(),
+  // Module-specific extra decision fields (e.g. resignation's lastWorkingDay,
+  // buyoutAmount) — validated per-module inside the side effect, not here.
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+// ── Branches & Shifts ────────────────────────────────────────────────────────
+
+export const createBranchSchema = z.object({
+  name: z.string().min(1).max(120),
+  address: z.string().max(500).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  geofenceRadiusMeters: z.number().int().min(50).max(5000).optional(),
+});
+
+export const updateBranchSchema = createBranchSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+export const createShiftSchema = z.object({
+  name: z.string().min(1).max(120),
+  startHour: z.number().int().min(0).max(23),
+  startMinute: z.number().int().min(0).max(59),
+  endHour: z.number().int().min(0).max(23),
+  endMinute: z.number().int().min(0).max(59),
+  lateGracePeriodMinutes: z.number().int().min(0).max(240).default(30),
+  fullDayMinHours: z.number().min(0.5).max(24).default(8),
+  halfDayMinHours: z.number().min(0.5).max(24).default(4),
+});
+
+export const updateShiftSchema = createShiftSchema.partial().extend({
+  isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export const startBreakSchema = z.object({
+  breakType: z.enum(["lunch", "short_break", "other"]).default("lunch"),
+  isPaid: z.boolean().default(false),
+});
+
+export const requestOvertimeSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  plannedHours: z.number().min(0.5).max(12),
+  reason: z.string().max(500).optional(),
+});
+
+export const assignShiftSchema = z
+  .object({
+    userIds: z.array(z.string().min(1)).max(500).optional(),
+    teamIds: z.array(z.string().min(1)).max(100).optional(),
+  })
+  .refine((v) => (v.userIds?.length ?? 0) + (v.teamIds?.length ?? 0) > 0, {
+    message: "Provide at least one userId or teamId.",
+  });
+
+// ── Comp-off credits ─────────────────────────────────────────────────────────
+
+export const createCompOffCreditSchema = z.object({
+  userId: z.string().min(1),
+  sourceDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  earnedDays: z.number().min(0.5).max(3).default(1),
+  expiresOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
+    .optional(),
+});
+
+// ── Leave policy ──────────────────────────────────────────────────────────────
+
+export const updateLeavePolicySchema = z.object({
+  leavePolicies: z.array(z.record(z.any())).max(30),
+});
+
+export const requestLeaveCancellationSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+// ── Notice period policy ─────────────────────────────────────────────────────
+
+export const createNoticePeriodPolicySchema = z.object({
+  minTenureMonths: z.number().int().min(0).default(0),
+  maxTenureMonths: z.number().int().min(0).optional(),
+  designation: z.string().max(120).optional(),
+  department: z.string().max(120).optional(),
+  noticePeriodDays: z.number().int().min(0).max(180),
+  isProbationPolicy: z.boolean().default(false),
+  priority: z.number().int().min(0).max(100).default(0),
+});
+
+export const updateNoticePeriodPolicySchema =
+  createNoticePeriodPolicySchema.partial();
+
+// ── Exit interview template ──────────────────────────────────────────────────
+
+export const exitInterviewQuestionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).max(300),
+  type: z.enum(["rating", "text", "boolean"]),
+  required: z.boolean().default(false),
+});
+
+export const updateExitInterviewTemplateSchema = z.object({
+  questions: z.array(exitInterviewQuestionSchema).max(30),
+});
+
+export const submitExitInterviewResponseSchema = z.object({
+  answers: z
+    .array(z.object({ questionId: z.string().min(1), value: z.any() }))
+    .max(30),
+});
+
+// ── Exit checklist ────────────────────────────────────────────────────────────
+
+export const createExitChecklistItemSchema = z.object({
+  label: z.string().min(1).max(200),
+  owningRole: z.enum(["IT", "Finance", "HR", "Admin", "Manager"]),
+  isRequired: z.boolean().default(true),
+  order: z.number().int().min(0).default(0),
+});
+
+export const updateExitChecklistItemSchema = createExitChecklistItemSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+export const updateExitChecklistStatusSchema = z.object({
+  isComplete: z.boolean(),
+  notes: z.string().max(500).optional(),
+});
+
+// ── Resignation extensions ───────────────────────────────────────────────────
+
+// resignationDate/lastDate stay optional here to match the existing minimal
+// submission form (today it only collects `reason`) — the handler defaults
+// resignationDate to now() server-side. Only the new exitType field is
+// actually enforced.
+export const submitResignationSchema = z.object({
+  resignationDate: z.string().optional(),
+  lastDate: z.string().optional(),
+  reason: z.string().max(2000).optional(),
+  overallJobSatisfaction: z.union([z.string(), z.number()]).optional(),
+  suggestions: z.string().max(2000).optional(),
+  exitType: z
+    .enum(["voluntary", "termination", "absconding", "mutual"])
+    .default("voluntary"),
+});
+
+export const renegotiateNoticeSchema = z.object({
+  newLastWorkingDay: z.string().min(1),
+  reason: z.string().max(500).optional(),
+});
+
+// ── Interview pipeline templates ────────────────────────────────────────────────
+
+export const interviewPipelineStageSchema = z.object({
+  order: z.number().int().min(1),
+  name: z.string().min(1).max(120),
+  interviewerRole: z.string().max(60).optional(),
+  outcomeOptions: z
+    .array(z.string())
+    .min(1)
+    .max(10)
+    .default(["pass", "fail", "hold"]),
+  isBgvStage: z.boolean().default(false),
+  bgvVendor: z.string().max(120).optional(),
+});
+
+export const createInterviewPipelineTemplateSchema = z.object({
+  name: z.string().min(1).max(160),
+  stages: z.array(interviewPipelineStageSchema).min(1).max(15),
+  isDefault: z.boolean().default(false),
+});
+
+export const updateInterviewPipelineTemplateSchema =
+  createInterviewPipelineTemplateSchema
+    .partial()
+    .extend({ isActive: z.boolean().optional() });
+
+export const advanceApplicationStageSchema = z.object({
+  stageName: z.string().min(1).max(120),
+  stageOrder: z.number().int().min(0),
+  outcome: z.enum(["pass", "fail", "hold", "pending"]).optional(),
+  interviewerId: z.string().optional(),
+  scorecards: z
+    .array(
+      z.object({
+        interviewerId: z.string(),
+        score: z.number().optional(),
+        notes: z.string().max(2000).optional(),
+      }),
+    )
+    .max(10)
+    .optional(),
+  bgvVendor: z.string().max(120).optional(),
+  bgvResult: z.enum(["clear", "flagged", "pending"]).optional(),
+  scheduledAt: z.string().optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+export const bulkAdvanceStageSchema = z.object({
+  applicationIds: z.array(z.string().min(1)).min(1).max(200),
+  stageName: z.string().min(1).max(120),
+  stageOrder: z.number().int().min(0),
+  outcome: z.enum(["pass", "fail", "hold", "pending"]).optional(),
+});
+
+export const createOfferSchema = z.object({
+  designation: z.string().max(160).optional(),
+  department: z.string().max(160).optional(),
+  offeredCTC: z.number().min(0).optional(),
+  joiningDate: z.string().optional(),
+  candidateNote: z.string().max(2000).optional(),
+  internalNote: z.string().max(2000).optional(),
+});
+
+export const updateOfferStatusSchema = z.object({
+  status: z.enum([
+    "Draft",
+    "Sent",
+    "Negotiating",
+    "Accepted",
+    "Declined",
+    "Withdrawn",
+    "Expired",
+  ]),
+});
+
+// ── Payroll components ───────────────────────────────────────────────────────
+
+export const createSalaryComponentSchema = z.object({
+  name: z.string().min(1).max(120),
+  code: z.string().min(1).max(60),
+  type: z.enum(["earning", "deduction"]),
+  isTaxable: z.boolean().default(true),
+  calcType: z.enum(["fixed", "percent_of_basic", "formula"]).default("fixed"),
+  percentOf: z.string().max(60).optional(),
+  percentValue: z.number().min(0).optional(),
+  displayOrder: z.number().int().min(0).default(0),
+});
+
+export const updateSalaryComponentSchema = createSalaryComponentSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+export const createPtSlabSchema = z.object({
+  state: z.string().min(1).max(60),
+  minGross: z.number().min(0),
+  maxGross: z.number().min(0).optional(),
+  monthlyPT: z.number().min(0),
+});
+
+export const updatePtSlabSchema = createPtSlabSchema.partial();
+
+export const createPayCycleSchema = z.object({
+  name: z.string().min(1).max(120),
+  frequency: z.enum(["monthly", "biweekly", "weekly"]).default("monthly"),
+  payDay: z.number().int().min(1).max(31),
+  isDefault: z.boolean().default(false),
+});
+
+export const updatePayCycleSchema = createPayCycleSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+// ── Org structure ────────────────────────────────────────────────────────────
+
+export const createDepartmentSchema = z.object({
+  name: z.string().min(1).max(160),
+  headUserId: z.string().optional(),
+});
+export const updateDepartmentSchema = createDepartmentSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+export const createDesignationSchema = z.object({
+  name: z.string().min(1).max(160),
+  departmentId: z.string().optional(),
+  level: z.number().int().min(0).optional(),
+});
+export const updateDesignationSchema = createDesignationSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+// ── Onboarding checklist ─────────────────────────────────────────────────────
+
+export const updateOnboardingChecklistItemSchema = z.object({
+  status: z.enum(["completed", "skipped"]),
 });
 
 export const saveReportSchema = z.object({

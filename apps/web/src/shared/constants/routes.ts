@@ -1,7 +1,6 @@
 export const ROUTES = {
   DASHBOARD: "/",
   PROFILE: "/profile/*",
-  RULES: "/rules",
   CALENDAR: "/calendar",
   ANALYTICS: "/analytics/*",
   PERMISSIONS: "/permissions/*",

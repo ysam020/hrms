@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
 
 export const getLeaves = async (
   call: ServerUnaryCall<any, any>,
@@ -30,21 +31,7 @@ export const getLeaves = async (
       prisma.leaveApplication.count({ where }),
     ]);
 
-    const data = leaves.map((l) => ({
-      id: l.id,
-      userId: l.userId,
-      leaveType: l.leaveType,
-      from: l.from?.toISOString() || "",
-      to: l.to?.toISOString() || "",
-      days: l.days ?? 0,
-      reason: l.reason || "",
-      status: l.status || "",
-      approvedById: l.approvedById || "",
-      appliedOn: l.appliedOn?.toISOString() || "",
-      sickLeave: l.sickLeave || false,
-      medicalCertificate: l.medicalCertificate || "",
-      approvedOn: l.approvedOn?.toISOString() || "",
-    }));
+    const data = leaves.map((l) => toLeaveApplicationProto(l));
 
     const response = {
       message: MESSAGES.LEAVE_APPLICATIONS_FETCHED,

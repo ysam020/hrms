@@ -110,11 +110,14 @@ describe("approveLeave", () => {
         approvedOn: expect.any(Date),
       }),
     });
-    expect(cb).toHaveBeenCalledWith(null, {
-      message: MESSAGES.LEAVE_APPROVED,
-      status: status.OK,
-      data: approved,
-    });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        message: MESSAGES.LEAVE_APPROVED,
+        status: status.OK,
+        data: expect.objectContaining(approved),
+      }),
+    );
   });
 
   it("invalidates leave cache after approval", async () => {

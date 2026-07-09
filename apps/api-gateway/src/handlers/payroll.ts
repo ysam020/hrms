@@ -21,6 +21,10 @@ import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
+import {
+  calcStatutoryDeductions,
+  groupSlabsByState,
+} from "../utils/payrollCalc";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -230,7 +234,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     // components are re-derived from attendance-based pro-rata gross below.
     const employees = await prisma.user.findMany({
       where: { employeeStatus: "Active" },
-      select: { id: true, salary: true },
+      select: { id: true, salary: true, employmentType: true, workState: true },
     });
 
     if (employees.length === 0) {
@@ -300,13 +304,15 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       paidLeaveByUser.set(lb.userId, mb?.usedPL ?? 0);
     }
 
-    // Professional Tax slab (approximate; adjust per state rules as needed).
-    const calcPt = (gross: number): number => {
-      if (gross < 6000) return 0;
-      if (gross < 9000) return 80;
-      if (gross < 12000) return 150;
-      return 200;
-    };
+    // Professional Tax — state-wise slabs when the tenant has configured them
+    // (Settings → Payroll Components), falling back to the flat approximate
+    // slab for states/tenants that haven't. See utils/payrollCalc.ts.
+    const ptSlabs = tenantId
+      ? await (prisma as any).professionalTaxSlab.findMany({
+          where: { tenantId },
+        })
+      : [];
+    const ptSlabsByState = groupSlabsByState(ptSlabs);
 
     // Fetch pending salary advances eligible for deduction this month.
     const advances = await prisma.salaryAdvance.findMany({
@@ -370,10 +376,15 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       const hra = Math.round(gross * 0.25);
       const conveyance = Math.round(gross * 0.25);
 
-      // Statutory deductions.
-      const pf = Math.round(basicPay * 0.12);
-      const esi = gross <= 21000 ? Math.round(gross * 0.0175) : 0;
-      const pt = calcPt(gross);
+      // Statutory deductions — see utils/payrollCalc.ts for the contractor
+      // exemption and state-wise PT slab lookup.
+      const { pf, esi, pt } = calcStatutoryDeductions(
+        gross,
+        basicPay,
+        emp.employmentType,
+        emp.workState,
+        ptSlabsByState,
+      );
 
       const adv = advanceMap.get(emp.id);
       const advanceDeduction = adv ? Math.min(adv.emi, adv.remaining) : 0;

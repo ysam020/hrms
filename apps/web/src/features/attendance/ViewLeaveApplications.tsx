@@ -7,10 +7,6 @@ import {
   useState,
 } from "react";
 import dayjs from "dayjs";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Download from "@mui/icons-material/Download";
@@ -20,7 +16,7 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import Chip from "@mui/material/Chip";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -347,263 +343,163 @@ function ViewLeaveApplications() {
   const columns = useMemo(
     () => [
       {
-        accessorKey: "username",
-        header: "Username",
-        size: 160,
-        Cell: ({ cell }) => (
+        key: "username",
+        label: "Username",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Person
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
             <Typography variant="body2" fontSize="0.8rem">
-              {cell.getValue()}
+              {row.username}
             </Typography>
           </Box>
         ),
       },
       {
-        accessorKey: "from",
-        header: "From",
-        size: 110,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()
-              ? dayjs(cell.getValue() as string).format("DD MMM YYYY")
-              : "—"}
-          </Typography>
-        ),
+        key: "from",
+        label: "From",
+        render: (row: any) =>
+          row.from ? dayjs(row.from).format("DD MMM YYYY") : "—",
       },
       {
-        accessorKey: "to",
-        header: "To",
-        size: 110,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()
-              ? dayjs(cell.getValue() as string).format("DD MMM YYYY")
-              : "—"}
-          </Typography>
-        ),
+        key: "to",
+        label: "To",
+        render: (row: any) =>
+          row.to ? dayjs(row.to).format("DD MMM YYYY") : "—",
       },
+      { key: "reason", label: "Reason" },
       {
-        accessorKey: "reason",
-        header: "Reason",
-        size: 200,
-        Cell: ({ cell }) => (
-          <Typography
-            variant="body2"
-            fontSize="0.8rem"
-            sx={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              opacity: 0.85,
-            }}
-          >
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        size: 100,
-        Cell: ({ cell }) => getStatusChip(cell.getValue()),
-      },
-      {
-        accessorKey: "approve",
-        header: "Action",
-        size: 120,
-        Cell: ({ cell }) => {
-          const canTakeAction =
-            canManageLeave &&
-            (user?.isSuperUser || cell.row.original.userId !== user?.id);
-
-          if (!canTakeAction) {
-            return (
-              <Typography
-                variant="caption"
-                fontSize="0.7rem"
-                sx={{ color: "text.disabled", fontStyle: "italic" }}
-              >
-                —
-              </Typography>
-            );
-          }
-
-          return (
-            <Box sx={{ display: "flex", gap: 0.5 }}>
-              <Tooltip title="Approve">
-                <IconButton
-                  size="small"
-                  aria-label={`Approve leave for ${cell.row.original.username}`}
-                  onClick={() =>
-                    handleLeaveActionClick(
-                      cell.row.original.id || cell.row.original._id,
-                      cell.row.original.username,
-                      "Approve",
-                    )
-                  }
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: theme === "light" ? "#059669" : "#34d399",
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(16, 185, 129, 0.22)"
-                        : "rgba(52, 211, 153, 0.25)",
-                    "&:hover": {
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(16, 185, 129, 0.3)"
-                          : "rgba(52, 211, 153, 0.35)",
-                    },
-                  }}
-                >
-                  <CheckIcon sx={{ fontSize: 16 }} aria-hidden="true" />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="Reject">
-                <IconButton
-                  size="small"
-                  aria-label={`Reject leave for ${cell.row.original.username}`}
-                  onClick={() =>
-                    handleLeaveActionClick(
-                      cell.row.original.id || cell.row.original._id,
-                      cell.row.original.username,
-                      "Reject",
-                    )
-                  }
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "6px",
-                    color: theme === "light" ? "#dc2626" : "#f87171",
-                    backgroundColor:
-                      theme === "light"
-                        ? "rgba(239, 68, 68, 0.32)"
-                        : "rgba(248, 113, 113, 0.35)",
-                    "&:hover": {
-                      backgroundColor:
-                        theme === "light"
-                          ? "rgba(239, 68, 68, 0.4)"
-                          : "rgba(248, 113, 113, 0.45)",
-                    },
-                  }}
-                >
-                  <CloseIcon sx={{ fontSize: 16 }} aria-hidden="true" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          );
-        },
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => getStatusChip(row.status),
       },
     ],
-
-    [user, handleLeaveActionClick, theme, canManageLeave],
+    [],
   );
 
-  const memoizedData = useMemo(() => data, [data]);
-
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50, 100],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: {
-      ...tableConfig.table.state,
-      globalFilter,
+  const rowActions = useCallback(
+    (row: any) => {
+      const canTakeAction =
+        canManageLeave && (user?.isSuperUser || row.userId !== user?.id);
+      if (!canTakeAction) return [];
+      return [
+        {
+          icon: <CheckIcon sx={{ fontSize: 16 }} aria-hidden="true" />,
+          label: `Approve leave for ${row.username}`,
+          color: "success" as const,
+          onClick: () =>
+            handleLeaveActionClick(row.id || row._id, row.username, "Approve"),
+        },
+        {
+          icon: <CloseIcon sx={{ fontSize: 16 }} aria-hidden="true" />,
+          label: `Reject leave for ${row.username}`,
+          color: "error" as const,
+          onClick: () =>
+            handleLeaveActionClick(row.id || row._id, row.username, "Reject"),
+        },
+      ];
     },
-    onGlobalFilterChange: handleGlobalFilterChange,
-    renderTopToolbarCustomActions: () => (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 2,
-          width: "100%",
-          flexWrap: "wrap",
-        }}
-      >
-        {/* Status Filter */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <FilterList
-            sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-          />
-          <Typography variant="body2" fontSize="0.8rem" color="text.secondary">
-            Status:
-          </Typography>
-        </Box>
-        <Box sx={{ minWidth: 120 }}>
-          <Dropdown
-            value={statusFilter}
-            onChange={handleStatusFilterChange}
-            options={statusOptions}
-            placeholder="Select Status"
-            className="w-full"
-            style={{ minWidth: "120px" }}
-            appendTo={() => document.querySelector("#root .App") as HTMLElement}
-          />
-        </Box>
-
-        {/* Future Only Toggle */}
-        <FormControlLabel
-          control={
-            <Switch
-              checked={showFutureOnly}
-              onChange={handleFutureOnlyToggle}
-              color="primary"
-              size="small"
-            />
-          }
-          label={
-            <Typography
-              variant="body2"
-              fontSize="0.8rem"
-              color="text.secondary"
-            >
-              Future leaves only
-            </Typography>
-          }
-          sx={{ margin: 0 }}
-        />
-
-        {/* Spacer */}
-        <Box sx={{ flex: 1 }} />
-
-        {/* Download Button */}
-        <Tooltip title="Download Excel">
-          <span>
-            <IconButton
-              onClick={handleDownloadExcel}
-              disabled={!data || data.length === 0 || loading}
-              color="primary"
-              size="small"
-              aria-label="Download leave applications as Excel"
-            >
-              <Download sx={{ fontSize: 20 }} aria-hidden="true" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Box>
-    ),
-  });
+    [user, handleLeaveActionClick, canManageLeave],
+  );
 
   return (
     <div>
       <ErrorBoundary fallback={<ErrorFallback />}>
-        <MaterialReactTable table={table} />
+        <DataList
+          ariaLabel="Leave applications"
+          data={data || []}
+          columns={columns}
+          actions={rowActions}
+          loading={loading}
+          emptyMessage="No leave applications found"
+          search={{
+            value: globalFilter,
+            onChange: handleGlobalFilterChange,
+            placeholder: "Search employees…",
+          }}
+          toolbarActions={
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                flexWrap: "wrap",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <FilterList
+                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+                />
+                <Typography
+                  variant="body2"
+                  fontSize="0.8rem"
+                  color="text.secondary"
+                >
+                  Status:
+                </Typography>
+              </Box>
+              <Box sx={{ minWidth: 120 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={handleStatusFilterChange}
+                  options={statusOptions}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "120px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showFutureOnly}
+                    onChange={handleFutureOnlyToggle}
+                    color="primary"
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography
+                    variant="body2"
+                    fontSize="0.8rem"
+                    color="text.secondary"
+                  >
+                    Future leaves only
+                  </Typography>
+                }
+                sx={{ margin: 0 }}
+              />
+              <Tooltip title="Download Excel">
+                <span>
+                  <IconButton
+                    onClick={handleDownloadExcel}
+                    disabled={!data || data.length === 0 || loading}
+                    color="primary"
+                    size="small"
+                    aria-label="Download leave applications as Excel"
+                  >
+                    <Download sx={{ fontSize: 20 }} aria-hidden="true" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+          }
+          pagination={{
+            page: pagination.pageIndex,
+            pageSize: pagination.pageSize,
+            totalCount,
+            onPageChange: (page) =>
+              handlePaginationChange({ ...pagination, pageIndex: page }),
+            onPageSizeChange: handlePageSizeChange,
+            pageSizeOptions: [5, 10, 25, 50, 100],
+          }}
+        />
       </ErrorBoundary>
 
       <ConfirmationDialog

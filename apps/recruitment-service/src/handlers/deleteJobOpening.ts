@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import { toJobOpeningProto } from "./jobOpeningSerializer";
 
 export const deleteJobOpening = async (
   call: ServerUnaryCall<any, any>,
@@ -48,7 +49,7 @@ export const deleteJobOpening = async (
     return callback(null, {
       message: MESSAGES.JOB_OPENING_DELETED,
       status: status.OK,
-      data: deleted,
+      data: toJobOpeningProto(deleted),
     });
   } catch (err) {
     logger.error("DeleteJobOpening error:", { err });

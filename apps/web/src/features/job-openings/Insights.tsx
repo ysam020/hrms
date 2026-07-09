@@ -8,14 +8,8 @@ import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
-import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import LinearProgress from "@mui/material/LinearProgress";
+import DataList from "@web/shared/components/DataList";
 
 import Work from "@mui/icons-material/Work";
 import People from "@mui/icons-material/People";
@@ -295,52 +289,32 @@ const JobOpeningsInsights = () => {
             </Box>
             <Divider sx={{ mb: 1.5 }} />
 
-            <TableContainer
-              component={Paper}
-              elevation={0}
-              sx={{ maxHeight: 350 }}
-            >
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>
-                      <strong>Job Title</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Applications</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Hired</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Hiring Rate</strong>
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {insights.topPerformingJobs.slice(0, 8).map((job, index) => (
-                    <TableRow key={index} hover>
-                      <TableCell>{job.jobTitle}</TableCell>
-                      <TableCell align="center">
-                        {job.totalApplications}
-                      </TableCell>
-                      <TableCell align="center">{job.hired}</TableCell>
-                      <TableCell align="center">
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            color: getStatusColor(job.hiringRate),
-                            fontWeight: 500,
-                          }}
-                        >
-                          {job.hiringRate}%
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <DataList
+              ariaLabel="Top performing jobs"
+              variant="rows"
+              data={insights.topPerformingJobs.slice(0, 8)}
+              getRowId={(job: any) => job.jobTitle}
+              columns={[
+                { key: "jobTitle", label: "Job Title", primary: true },
+                { key: "totalApplications", label: "Applications" },
+                { key: "hired", label: "Hired" },
+                {
+                  key: "hiringRate",
+                  label: "Hiring Rate",
+                  render: (job: any) => (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: getStatusColor(job.hiringRate),
+                        fontWeight: 500,
+                      }}
+                    >
+                      {job.hiringRate}%
+                    </Typography>
+                  ),
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       )}
@@ -546,53 +520,29 @@ const JobOpeningsInsights = () => {
             </Box>
             <Divider sx={{ mb: 1.5 }} />
 
-            <TableContainer
-              component={Paper}
-              elevation={0}
-              sx={{ maxHeight: 250 }}
-            >
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>
-                      <strong>Manager</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Total Jobs</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Active Jobs</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Total Hired</strong>
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {insights.hiringManagers.topPerformers.map(
-                    (manager, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>{manager.name}</TableCell>
-                        <TableCell align="center">
-                          {manager.totalJobs}
-                        </TableCell>
-                        <TableCell align="center">
-                          {manager.activeJobs}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#4caf50", fontWeight: 500 }}
-                          >
-                            {manager.totalHired}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <DataList
+              ariaLabel="Hiring manager performance"
+              variant="rows"
+              data={insights.hiringManagers.topPerformers}
+              getRowId={(manager: any) => manager.name}
+              columns={[
+                { key: "name", label: "Manager", primary: true },
+                { key: "totalJobs", label: "Total Jobs" },
+                { key: "activeJobs", label: "Active Jobs" },
+                {
+                  key: "totalHired",
+                  label: "Total Hired",
+                  render: (manager: any) => (
+                    <Typography
+                      variant="body2"
+                      sx={{ color: "#4caf50", fontWeight: 500 }}
+                    >
+                      {manager.totalHired}
+                    </Typography>
+                  ),
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       )}

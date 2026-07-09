@@ -119,12 +119,6 @@ const PERM_DEFS = [
   ["Policy", "create"],
   ["Policy", "update"],
   ["Policy", "delete"],
-
-  // Rules (scopeless)
-  ["Rules", "view"],
-  ["Rules", "add"],
-  ["Rules", "edit"],
-  ["Rules", "delete"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }

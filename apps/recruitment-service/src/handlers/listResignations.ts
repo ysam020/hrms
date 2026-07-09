@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
+import { toResignationProto } from "./resignationSerializer";
 
 export const listResignations = async (
   call: ServerUnaryCall<any, any>,
@@ -39,16 +40,7 @@ export const listResignations = async (
     const response = {
       message: MESSAGES.RESIGNATIONS_FETCHED,
       status: status.OK,
-      data: resignations.map((r) => ({
-        id: r.id,
-        userId: r.userId ?? "",
-        reason: r.reason ?? "",
-        rejectionReason: r.rejectionReason ?? "",
-        resignationDate: r.resignationDate?.toISOString() ?? "",
-        submittedOn: r.submittedOn?.toISOString() ?? "",
-        lastWorkingDate: r.lastWorkingDay?.toISOString() ?? "",
-        status: r.status ?? "",
-      })),
+      data: resignations.map((r) => toResignationProto(r)),
       totalCount,
       page: pageNum,
       limit: limitNum,

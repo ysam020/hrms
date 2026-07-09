@@ -1,4 +1,4 @@
-import { useContext, useState, useRef, memo } from "react";
+import { useContext, useState, useRef, useEffect, useMemo, memo } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
@@ -8,6 +8,7 @@ import Chip from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
+import TextField from "@mui/material/TextField";
 import CalendarToday from "@mui/icons-material/CalendarToday";
 import EventNote from "@mui/icons-material/EventNote";
 import Info from "@mui/icons-material/Info";
@@ -43,6 +44,45 @@ function LeaveApplication() {
   // Extract available paid leaves from the fetched data
   const availablePaidLeaves = paidLeavesData?.remainingPaidLeaves || 0;
 
+  // Leave types come from the org's configured policy — customLeaveTypes and
+  // leavePolicies (Settings → Organisation Settings → Leave) — so a
+  // configured type like "Comp Off" or "Maternity" actually shows up here,
+  // not just PL/LWP.
+  const { data: orgSettingsData } = useFetchData(
+    API_ENDPOINTS.GET_ORG_SETTINGS,
+    "get",
+    [user],
+    null,
+    null,
+  );
+  const leaveTypeOptions = useMemo(() => {
+    const active = orgSettingsData?.active;
+    const seen = new Map<string, string>();
+    const add = (value?: string, label?: string) => {
+      if (!value) return;
+      const key = value.trim().toUpperCase();
+      if (!key || seen.has(key)) return;
+      seen.set(key, label?.trim() || key);
+    };
+    add("PL", "Paid Leave");
+    add("SL", "Sick Leave");
+    add("CL", "Casual Leave");
+    // Maternity Leave is a statutory entitlement in India (Maternity Benefit
+    // Act) — always offered, not gated behind the tenant configuring it.
+    // Paternity is a common policy default alongside it.
+    add("MATERNITY", "Maternity Leave");
+    add("PATERNITY", "Paternity Leave");
+    (active?.customLeaveTypes ?? []).forEach((t: any) => add(t.key, t.name));
+    (active?.leavePolicies ?? []).forEach((p: any) =>
+      add(p.key, p.isCompOff ? `${p.name} (Comp Off)` : p.name),
+    );
+    add("LWP", "Leave Without Pay");
+    return Array.from(seen.entries()).map(([value, label]) => ({
+      label,
+      value,
+    }));
+  }, [orgSettingsData]);
+
   const formik = useFormik({
     initialValues: {
       from: "",
@@ -51,11 +91,20 @@ function LeaveApplication() {
       leaveType: "",
       sick_leave: false,
       medicalCertificate: "",
+      unit: "full_day",
+      session: "",
+      shortLeaveHours: "",
     },
     validationSchema,
     onSubmit: async (values) => {
       try {
-        const res = await apiClient.post(API_ENDPOINTS.ADD_LEAVE, values);
+        const payload = {
+          ...values,
+          shortLeaveHours: values.shortLeaveHours
+            ? Number(values.shortLeaveHours)
+            : undefined,
+        };
+        const res = await apiClient.post(API_ENDPOINTS.ADD_LEAVE, payload);
         setAlert({
           open: true,
           message: res.data.message,
@@ -75,6 +124,15 @@ function LeaveApplication() {
       }
     },
   });
+
+  // Half-day and short leave only ever span a single day — keep "to" in
+  // lockstep with "from" so the backend's single-day validation always holds.
+  useEffect(() => {
+    if (formik.values.unit !== "full_day" && formik.values.from) {
+      formik.setFieldValue("to", formik.values.from);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formik.values.unit, formik.values.from]);
 
   const handleSickLeaveChange = (event) => {
     const checked = event.target.checked;
@@ -126,7 +184,19 @@ function LeaveApplication() {
                   </Typography>
                 </Box>
                 <Grid container spacing={1.5}>
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <DropdownWrapper
+                      name="unit"
+                      options={[
+                        { label: "Full day", value: "full_day" },
+                        { label: "Half day", value: "half_day" },
+                        { label: "Short leave (hours)", value: "short_leave" },
+                      ]}
+                      placeholder="Unit"
+                      formik={formik}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <FormikInputWrapper
                       type="date"
                       name="from"
@@ -140,20 +210,65 @@ function LeaveApplication() {
                       }}
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormikInputWrapper
-                      type="date"
-                      name="to"
-                      placeholder="End Date"
-                      formik={formik}
-                      inputProps={{
-                        minDate: new Date(),
-                        dateFormat: "dd/mm/yy",
-                        showIcon: true,
-                        showButtonBar: true,
-                      }}
-                    />
-                  </Grid>
+                  {formik.values.unit === "full_day" ? (
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <FormikInputWrapper
+                        type="date"
+                        name="to"
+                        placeholder="End Date"
+                        formik={formik}
+                        inputProps={{
+                          minDate: new Date(),
+                          dateFormat: "dd/mm/yy",
+                          showIcon: true,
+                          showButtonBar: true,
+                        }}
+                      />
+                    </Grid>
+                  ) : (
+                    <Grid
+                      size={{ xs: 12, sm: 4 }}
+                      sx={{ display: "flex", alignItems: "center" }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        Same day as Start Date
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {formik.values.unit === "half_day" && (
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <DropdownWrapper
+                        name="session"
+                        options={[
+                          { label: "First half", value: "first_half" },
+                          { label: "Second half", value: "second_half" },
+                        ]}
+                        placeholder="Which half?"
+                        formik={formik}
+                      />
+                    </Grid>
+                  )}
+                  {formik.values.unit === "short_leave" && (
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        type="number"
+                        size="small"
+                        fullWidth
+                        label="Hours"
+                        slotProps={{
+                          htmlInput: { min: 0.5, max: 7, step: 0.5 },
+                        }}
+                        value={formik.values.shortLeaveHours}
+                        onChange={(e) =>
+                          formik.setFieldValue(
+                            "shortLeaveHours",
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </Grid>
+                  )}
                 </Grid>
               </Paper>
             </Grid>
@@ -192,10 +307,7 @@ function LeaveApplication() {
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <DropdownWrapper
                       name="leaveType"
-                      options={[
-                        { label: "PL", value: "PL" },
-                        { label: "LWP", value: "LWP" },
-                      ]}
+                      options={leaveTypeOptions}
                       placeholder="Leave Type"
                       formik={formik}
                     />

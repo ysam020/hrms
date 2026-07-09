@@ -6,12 +6,9 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import { useNavigate } from "react-router-dom";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import { Dropdown } from "primereact/dropdown";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
@@ -22,7 +19,15 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Person from "@mui/icons-material/Person";
+import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Pending", value: "Pending" },
+  { label: "Approved", value: "Approved" },
+  { label: "Rejected", value: "Rejected" },
+];
 
 function ViewKycList() {
   const { setAlert } = useContext(AlertContext);
@@ -32,15 +37,17 @@ function ViewKycList() {
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   const fetchKycData = useCallback(
     async ({ page, limit }) => {
       try {
         const search = searchRef.current;
-        const baseUrl = API_ENDPOINTS.VIEW_ALL_KYCS(page, limit);
-        const url = search
-          ? `${baseUrl}&search=${encodeURIComponent(search)}`
-          : baseUrl;
+        let params = search ? `&search=${encodeURIComponent(search)}` : "";
+        if (statusFilter && statusFilter !== "All") {
+          params += `&status=${statusFilter}`;
+        }
+        const url = API_ENDPOINTS.VIEW_ALL_KYCS(page, limit, params);
         const response = await apiClient(url);
 
         return {
@@ -61,7 +68,7 @@ function ViewKycList() {
         throw err;
       }
     },
-    [setAlert],
+    [statusFilter, setAlert],
   );
 
   const {
@@ -74,6 +81,7 @@ function ViewKycList() {
     resetPagination,
   } = useServerPagination(fetchKycData, {
     initialPageSize: 10,
+    deps: [statusFilter],
   });
 
   const handleGlobalFilterChange = useCallback(
@@ -143,118 +151,82 @@ function ViewKycList() {
     );
   };
 
-  // Memoize Columns
   const columns = useMemo(
     () => [
       {
-        accessorKey: "first_name",
-        header: "First Name",
-        size: 170,
-        Cell: ({ cell }) => (
+        key: "first_name",
+        label: "First Name",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Person
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
             <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {cell.getValue()}
+              {row.first_name} {row.middle_name || ""} {row.last_name}
             </Typography>
           </Box>
         ),
       },
+      { key: "department", label: "Department" },
+      { key: "designation", label: "Designation" },
+      { key: "employeeStatus", label: "Status" },
       {
-        accessorKey: "middle_name",
-        header: "Middle Name",
-        size: 170,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() || "—"}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "last_name",
-        header: "Last Name",
-        size: 170,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "department",
-        header: "Department",
-        size: 220,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "designation",
-        header: "Designation",
-        size: 220,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "employeeStatus",
-        header: "Status",
-        size: 120,
-        Cell: ({ cell }) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "kyc_approval",
-        header: "KYC Approval",
-        size: 130,
-        Cell: ({ cell }) => getKycApprovalChip(cell.getValue()),
+        key: "kyc_approval",
+        label: "KYC Approval",
+        hideLabel: true,
+        render: (row: any) => getKycApprovalChip(row.kyc_approval),
       },
     ],
-
     [theme],
-  );
-
-  // Configure table with server-side pagination
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50, 100],
-  });
-
-  const table = useMaterialReactTable(
-    useMemo(
-      () => ({
-        ...tableConfig.table,
-        manualFiltering: true,
-        state: {
-          ...tableConfig.table.state,
-          globalFilter,
-        },
-        onGlobalFilterChange: handleGlobalFilterChange,
-        muiTableBodyRowProps: ({ row }) => ({
-          onClick: () => navigate(`/view-kyc/${row.original.username}`),
-          style: { cursor: "pointer" },
-        }),
-      }),
-      [tableConfig.table, navigate, globalFilter, handleGlobalFilterChange],
-    ),
   );
 
   return (
     <div>
       <ErrorBoundary fallback={<ErrorFallback />}>
-        <MaterialReactTable table={table} />
+        <DataList
+          ariaLabel="Employee KYC records"
+          data={memoizedData || []}
+          columns={columns}
+          loading={loading}
+          emptyMessage="No KYC records found"
+          onRowClick={(row: any) => navigate(`/view-kyc/${row.username}`)}
+          search={{
+            value: globalFilter,
+            onChange: handleGlobalFilterChange,
+            placeholder: "Search employees…",
+          }}
+          toolbarActions={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 130 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "130px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+          }
+          pagination={{
+            page: pagination.pageIndex,
+            pageSize: pagination.pageSize,
+            totalCount,
+            onPageChange: (page) =>
+              handlePaginationChange({ ...pagination, pageIndex: page }),
+            onPageSizeChange: handlePageSizeChange,
+            pageSizeOptions: [5, 10, 25, 50, 100],
+          }}
+        />
       </ErrorBoundary>
     </div>
   );

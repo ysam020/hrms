@@ -77,6 +77,10 @@ async function buildTenant(
     billing?: string;
     razorpaySubscriptionId: string;
     razorpayPaymentId?: string;
+    workWeekPattern?: {
+      type: "mon_fri" | "mon_sat" | "custom";
+      workingDays: number[];
+    };
   },
   res: Response,
 ) {
@@ -87,6 +91,7 @@ async function buildTenant(
     billing,
     razorpaySubscriptionId,
     razorpayPaymentId,
+    workWeekPattern,
   } = params;
 
   // Idempotency: if a tenant was already created for this subscription (e.g.
@@ -190,12 +195,40 @@ async function buildTenant(
         ],
       });
       // Seed the initial TenantSettings version so services always have a DB record.
+      // workWeekPattern defaults to Mon-Fri if the signup step was skipped —
+      // never blocks tenant creation.
       await (tenantClient as any).tenantSettings.create({
         data: {
           tenantId: tenant.id,
           effectiveFrom: now,
           createdBy: userId,
           note: "Initial defaults",
+          workWeekPattern: workWeekPattern ?? {
+            type: "mon_fri",
+            workingDays: [1, 2, 3, 4, 5],
+          },
+          // Maternity Leave is a statutory entitlement in India (Maternity
+          // Benefit Act, 26 weeks) — seeded so it shows up as a real,
+          // editable policy in Settings rather than only existing as a bare
+          // dropdown option. Paternity is a common accompanying default.
+          leavePolicies: [
+            {
+              key: "MATERNITY",
+              name: "Maternity Leave",
+              daysPerYear: 182,
+              isStatutory: true,
+              requiresProof: true,
+              onExhaustion: "manager_override",
+            },
+            {
+              key: "PATERNITY",
+              name: "Paternity Leave",
+              daysPerYear: 15,
+              isStatutory: false,
+              requiresProof: false,
+              onExhaustion: "manager_override",
+            },
+          ],
         },
       });
     } catch (error: unknown) {
@@ -252,6 +285,7 @@ export async function createTenant(req: AuthRequest, res: Response) {
       razorpayPaymentId,
       razorpaySubscriptionId,
       razorpaySignature,
+      workWeekPattern,
     } = req.body as {
       name?: string;
       industry?: string;
@@ -260,6 +294,10 @@ export async function createTenant(req: AuthRequest, res: Response) {
       razorpayPaymentId?: string;
       razorpaySubscriptionId?: string;
       razorpaySignature?: string;
+      workWeekPattern?: {
+        type: "mon_fri" | "mon_sat" | "custom";
+        workingDays: number[];
+      };
     };
 
     if (!name?.trim()) {
@@ -293,6 +331,7 @@ export async function createTenant(req: AuthRequest, res: Response) {
         billing,
         razorpaySubscriptionId,
         razorpayPaymentId,
+        workWeekPattern,
       },
       res,
     );
@@ -307,10 +346,14 @@ export async function createTenant(req: AuthRequest, res: Response) {
 export async function completePendingSetup(req: AuthRequest, res: Response) {
   const { userId } = req.user!;
   try {
-    const { name, industry, companySize } = req.body as {
+    const { name, industry, companySize, workWeekPattern } = req.body as {
       name?: string;
       industry?: string;
       companySize?: string;
+      workWeekPattern?: {
+        type: "mon_fri" | "mon_sat" | "custom";
+        workingDays: number[];
+      };
     };
     if (!name?.trim()) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
@@ -356,6 +399,7 @@ export async function completePendingSetup(req: AuthRequest, res: Response) {
         billing: pending.billing,
         razorpaySubscriptionId: pending.subscriptionId,
         razorpayPaymentId: verifiedPayment?.id,
+        workWeekPattern,
       },
       res,
     );

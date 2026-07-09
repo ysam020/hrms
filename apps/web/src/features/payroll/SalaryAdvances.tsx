@@ -1,16 +1,12 @@
 import { memo, useCallback, useContext, useMemo, useState } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import dayjs from "dayjs";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import { Dropdown } from "primereact/dropdown";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -26,7 +22,17 @@ import Tooltip from "@mui/material/Tooltip";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
+import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Pending", value: "Pending" },
+  { label: "Approved", value: "Approved" },
+  { label: "Rejected", value: "Rejected" },
+  { label: "Repaying", value: "Repaying" },
+  { label: "Repaid", value: "Repaid" },
+];
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   pending: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
@@ -57,11 +63,11 @@ function StatusChip({ status }: { status: string }) {
 
 function SalaryAdvances() {
   const { setAlert } = useContext(AlertContext);
-  const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
   const [openRequest, setOpenRequest] = useState(false);
   const [form, setForm] = useState({ amount: "", emiMonths: 3, reason: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("All");
 
   const isHr =
     user?.role?.some((r: string) => ["owner", "admin", "hr"].includes(r)) ||
@@ -70,7 +76,13 @@ function SalaryAdvances() {
   const fetchAdvances = useCallback(
     async ({ page, limit }) => {
       try {
-        const res = await apiClient(API_ENDPOINTS.SALARY_ADVANCES(page, limit));
+        const params =
+          statusFilter && statusFilter !== "All"
+            ? `&status=${statusFilter}`
+            : "";
+        const res = await apiClient(
+          API_ENDPOINTS.SALARY_ADVANCES(page, limit, params),
+        );
         return {
           data: res.data.data?.advances || res.data.data || [],
           totalCount: res.data.data?.total || 0,
@@ -86,7 +98,7 @@ function SalaryAdvances() {
         throw err;
       }
     },
-    [setAlert],
+    [statusFilter, setAlert],
   );
 
   const {
@@ -97,7 +109,10 @@ function SalaryAdvances() {
     handlePaginationChange,
     handlePageSizeChange,
     refresh,
-  } = useServerPagination(fetchAdvances, { initialPageSize: 10 });
+  } = useServerPagination(fetchAdvances, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
 
   const handleAction = useCallback(
     async (advanceId: string, status: string) => {
@@ -150,176 +165,139 @@ function SalaryAdvances() {
     }
   }, [form, refresh, setAlert]);
 
-  const iconBtn = (color: string, bg: string, hoverBg: string) => ({
-    width: 28,
-    height: 28,
-    borderRadius: "6px",
-    color,
-    backgroundColor: bg,
-    "&:hover": { backgroundColor: hoverBg },
-  });
-
   const columns = useMemo(
     () => [
       {
-        accessorKey: "userId",
-        header: "Employee",
-        size: 160,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-            {cell.row.original.user?.first_name
-              ? `${cell.row.original.user.first_name} ${cell.row.original.user.last_name}`
-              : cell.getValue()}
-          </Typography>
-        ),
+        key: "userId",
+        label: "Employee",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) =>
+          row.user?.first_name
+            ? `${row.user.first_name} ${row.user.last_name}`
+            : row.userId,
       },
       {
-        accessorKey: "amount",
-        header: "Amount",
-        size: 120,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            ₹{Number(cell.getValue()).toLocaleString("en-IN")}
-          </Typography>
-        ),
+        key: "amount",
+        label: "Amount",
+        render: (row: any) => `₹${Number(row.amount).toLocaleString("en-IN")}`,
+      },
+      { key: "emiMonths", label: "EMI Months" },
+      {
+        key: "paidMonths",
+        label: "Paid",
+        render: (row: any) => row.paidMonths ?? 0,
       },
       {
-        accessorKey: "emiMonths",
-        header: "EMI Months",
-        size: 110,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "paidMonths",
-        header: "Paid",
-        size: 90,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() ?? 0}
-          </Typography>
-        ),
-      },
-      {
-        accessorKey: "remainingAmount",
-        header: "Remaining",
-        size: 120,
-        Cell: ({ cell }: any) => (
-          <Typography
-            variant="body2"
-            fontSize="0.8rem"
-            color={
-              Number(cell.getValue()) > 0 ? "warning.main" : "text.secondary"
-            }
+        key: "remainingAmount",
+        label: "Remaining",
+        render: (row: any) => (
+          <Box
+            component="span"
+            sx={{
+              color:
+                Number(row.remainingAmount) > 0
+                  ? "warning.main"
+                  : "text.secondary",
+            }}
           >
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
+            {row.remainingAmount != null
+              ? `₹${Number(row.remainingAmount).toLocaleString("en-IN")}`
               : "—"}
-          </Typography>
+          </Box>
         ),
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 110,
-        Cell: ({ cell }: any) => <StatusChip status={cell.getValue()} />,
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => <StatusChip status={row.status} />,
       },
       {
-        accessorKey: "createdAt",
-        header: "Requested",
-        size: 130,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {dayjs(cell.getValue()).format("DD MMM YYYY")}
-          </Typography>
-        ),
+        key: "createdAt",
+        label: "Requested",
+        render: (row: any) => dayjs(row.createdAt).format("DD MMM YYYY"),
       },
-      ...(isHr
-        ? [
-            {
-              accessorKey: "hrActions",
-              header: "Actions",
-              size: 120,
-              enableSorting: false,
-              Cell: ({ cell }: any) => {
-                const row = cell.row.original;
-                if (row.status !== "pending") return null;
-                return (
-                  <Box sx={{ display: "flex", gap: 0.5 }}>
-                    <Tooltip title="Approve">
-                      <IconButton
-                        size="small"
-                        sx={iconBtn(
-                          "#059669",
-                          "rgba(5,150,105,0.12)",
-                          "rgba(5,150,105,0.2)",
-                        )}
-                        onClick={() => handleAction(row.id, "approved")}
-                      >
-                        <CheckIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Reject">
-                      <IconButton
-                        size="small"
-                        sx={iconBtn(
-                          "#dc2626",
-                          "rgba(220,38,38,0.12)",
-                          "rgba(220,38,38,0.2)",
-                        )}
-                        onClick={() => handleAction(row.id, "rejected")}
-                      >
-                        <CloseIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                );
-              },
-            },
-          ]
-        : []),
     ],
+    [],
+  );
+
+  const rowActions = useCallback(
+    (row: any) => {
+      if (!isHr || row.status !== "pending") return [];
+      return [
+        {
+          icon: <CheckIcon sx={{ fontSize: 16 }} />,
+          label: "Approve",
+          color: "success" as const,
+          onClick: () => handleAction(row.id, "approved"),
+        },
+        {
+          icon: <CloseIcon sx={{ fontSize: 16 }} />,
+          label: "Reject",
+          color: "error" as const,
+          onClick: () => handleAction(row.id, "rejected"),
+        },
+      ];
+    },
     [isHr, handleAction],
   );
 
   const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    state: { ...tableConfig.table.state, isLoading: loading },
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title="Request Salary Advance">
-          <span>
-            <IconButton
-              color="primary"
-              size="small"
-              onClick={() => setOpenRequest(true)}
-              aria-label="Request salary advance"
-            >
-              <AddIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Box>
-    ),
-  });
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Salary advances"
+        data={memoizedData}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No salary advances found"
+        toolbarActions={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 130 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "130px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+            <Tooltip title="Request Salary Advance">
+              <span>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => setOpenRequest(true)}
+                  aria-label="Request salary advance"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50],
+        }}
+      />
 
       <Dialog
         open={openRequest}

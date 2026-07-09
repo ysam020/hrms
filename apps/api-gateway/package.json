@@ -10,6 +10,7 @@
     "@aws-sdk/client-s3": "^3.1019.0",
     "@aws-sdk/s3-request-presigner": "^3.1019.0",
     "@grpc/grpc-js": "^1.12.3",
+    "@hrms/approval-engine": "workspace:*",
     "@hrms/cache": "workspace:*",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.56.0",

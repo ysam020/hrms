@@ -45,13 +45,16 @@ describe("getLeaveById", () => {
   });
 
   it("returns leave application on success", async () => {
-    const leave = { id: "leave-1", username: "john", status: "Pending" };
+    const leave = { id: "leave-1", userId: "john", status: "Pending" };
     mockFindUnique.mockResolvedValue(leave);
     const cb = makeCallback();
     await getLeaveById(makeCall({ id: "leave-1" }), cb);
     expect(cb).toHaveBeenCalledWith(
       null,
-      expect.objectContaining({ status: 0, data: leave }),
+      expect.objectContaining({
+        status: 0,
+        data: expect.objectContaining(leave),
+      }),
     );
   });
 

@@ -122,6 +122,13 @@ function useMuiTheme(theme) {
                   ? "0 4px 12px rgba(0, 0, 0, 0.15)"
                   : "0 4px 12px rgba(0, 0, 0, 0.4)",
             },
+            // The global MuiSvgIcon override below pins every icon to a fixed
+            // grey by default, which breaks a button icon's natural
+            // currentColor inheritance (e.g. a white icon on a contained
+            // button). Restore inheritance specifically for button icons.
+            "& .MuiSvgIcon-root": {
+              color: "inherit",
+            },
           },
           containedPrimary: {
             backgroundColor: theme === "light" ? "#111b21" : "#0c3f61",
@@ -129,10 +136,6 @@ function useMuiTheme(theme) {
             "&:hover": {
               backgroundColor: theme === "light" ? "#0f1a1f" : "#0a3555",
             },
-          },
-          startIcon: {
-            margin: 0,
-            marginRight: "8px",
           },
         },
       },
@@ -240,12 +243,21 @@ function useMuiTheme(theme) {
         },
       },
 
-      // Modal Components
-      MuiModal: {
+      // Backdrop Components — dims/blurs real dialogs, but must stay
+      // transparent for Popover/Menu/Select/Autocomplete, which render an
+      // "invisible" backdrop purely to catch outside clicks. Styling this on
+      // MuiModal (rather than MuiBackdrop's own root/invisible slots) would
+      // unconditionally override that transparency and dim the whole page
+      // behind every open dropdown.
+      MuiBackdrop: {
         styleOverrides: {
-          backdrop: {
+          root: {
             backgroundColor: "rgba(0, 0, 0, 0.5)",
             backdropFilter: "blur(4px)",
+          },
+          invisible: {
+            backgroundColor: "transparent",
+            backdropFilter: "none",
           },
         },
       },

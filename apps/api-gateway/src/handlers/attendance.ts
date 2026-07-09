@@ -6,6 +6,7 @@ import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
+import { getActiveSettings } from "./tenantSettings";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -197,10 +198,31 @@ export async function attendanceCorrection(req: Request, res: Response) {
       });
 
     const requestingUserIsSuperUser = await isSuperUser(user!.userId);
+    const isPrivileged =
+      requestingUserIsSuperUser ||
+      ["owner", "admin", "hr"].includes(user!.tenantRole ?? "");
     if (!requestingUserIsSuperUser && user!.userId !== targetUserId)
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
+
+    // Regularization backdating window — HR/admin/superusers are exempt, so
+    // they can always fix an old record; everyone else is bounded by the
+    // tenant's configured window (default 3 days, matching today's behavior
+    // for tenants that never touch this setting).
+    if (!isPrivileged && date && user!.tenantId) {
+      const settings = await getActiveSettings(user!.tenantId);
+      const windowDays = settings?.regularizationBackdateWindowDays ?? 3;
+      const oldestAllowed = dayjs
+        .utc()
+        .subtract(windowDays, "day")
+        .startOf("day");
+      if (dayjs.utc(date).isBefore(oldestAllowed)) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `Attendance can only be corrected up to ${windowDays} day(s) back. Ask an admin or HR for older corrections.`,
+        });
+      }
+    }
 
     const response = (await grpcCall(attendanceClient, "correctAttendance", {
       userId: targetUserId,

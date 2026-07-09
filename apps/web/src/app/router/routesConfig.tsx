@@ -16,6 +16,9 @@ const Helpdesk = lazy(() => import("@web/features/helpdesk/Helpdesk"));
 const TicketDetail = lazy(() => import("@web/features/helpdesk/TicketDetail"));
 const Webhooks = lazy(() => import("@web/features/webhooks/Webhooks"));
 const Reports = lazy(() => import("@web/features/reports/Reports"));
+const ApprovalsInbox = lazy(
+  () => import("@web/features/approvals/ApprovalsInbox"),
+);
 
 const Permissions = lazy(
   () => import("@web/features/layout/permissions/Permissions"),
@@ -71,7 +74,6 @@ const Attendance = lazy(() => import("@web/features/attendance/Attendance"));
 const Resignation = lazy(() => import("@web/features/resignation/Resignation"));
 
 // Rules
-const RuleManager = lazy(() => import("@web/features/rules/RuleManager"));
 
 // Chat
 const Chat = lazy(() => import("@web/features/chat/Chat"));
@@ -102,13 +104,6 @@ const routesConfig = () => {
       element: <Profile />,
       allowedModules: [],
       name: "Profile",
-      category: null,
-    },
-    {
-      path: "/rules",
-      element: <RuleManager />,
-      allowedModules: [],
-      name: "Rule Management",
       category: null,
     },
     {
@@ -317,6 +312,13 @@ const routesConfig = () => {
       element: <WFH />,
       allowedModules: ["WFH Requests"],
       name: "WFH Requests",
+      category: "HR & Management",
+    },
+    {
+      path: "/approvals",
+      element: <ApprovalsInbox />,
+      allowedModules: [],
+      name: "Pending Approvals",
       category: "HR & Management",
     },
     {

@@ -17,6 +17,9 @@ message JobOpening {
   string status = 13;
   string created_by = 14;
   string created_on = 15;
+  string pipeline_template_id = 16; // "" = tenant default template
+  string visibility = 17;           // internal | external (default) | both
+  repeated string branch_ids = 18;  // multi-location vacancies
 }
 
 message JobApplication {
@@ -44,6 +47,13 @@ message Resignation {
   string submitted_on = 9;
   string rejection_reason = 10;
   string last_date = 11;
+  // voluntary | termination | absconding | mutual
+  string exit_type = 12;
+  int32 notice_period_days = 13;
+  bool notice_period_waived = 14;
+  float buyout_amount = 15;
+  string relieved_from_duty_on = 16;
+  bool rehire_eligible = 17;
 }
 
 message ListResignationsRequest {
@@ -74,6 +84,10 @@ message CreateJobRequest {
   int32 number_of_vacancies = 8;
   string job_status = 9;
   string created_by = 10;
+  string id = 11; // set on update
+  string pipeline_template_id = 12;
+  string visibility = 13;
+  repeated string branch_ids = 14;
 }
 
 message JobResponse {
@@ -140,6 +154,12 @@ message UpdateStatusRequest {
   string id = 1;
   string status = 2;
   string remarks = 3;
+  // Resignation-specific optional fields — ignored by UpdateApplicationStatus.
+  string last_working_day = 4;
+  string rejection_reason = 5;
+  bool notice_period_waived = 6;
+  float buyout_amount = 7;
+  string relieved_from_duty_on = 8;
 }
 
 message SubmitResignationRequest {
@@ -149,6 +169,20 @@ message SubmitResignationRequest {
   string resignationDate = 4;
   float overallJobSatisfaction = 5;
   string suggestions = 6;
+  // voluntary (default) | termination | absconding | mutual
+  string exit_type = 7;
+}
+
+message WithdrawResignationRequest {
+  string id = 1;
+  string user_id = 2;
+}
+
+// GetMyResignation's handler reads userId, not id — IdRequest only declares
+// `id`, so that field was always silently dropped over the wire. Dedicated
+// message fixes it.
+message GetMyResignationRequest {
+  string user_id = 1;
 }
 
 message ResignationResponse {
@@ -182,8 +216,10 @@ service RecruitmentService {
   rpc ApproveResignation (UpdateStatusRequest) returns (BasicResponse);
   // Rejects a pending resignation request.
   rpc RejectResignation (UpdateStatusRequest) returns (BasicResponse);
+  // Withdraws the caller's own still-pending resignation request.
+  rpc WithdrawResignation (WithdrawResignationRequest) returns (BasicResponse);
   // Returns the current user's own resignation request.
-  rpc GetMyResignation (IdRequest) returns (ResignationResponse);
+  rpc GetMyResignation (GetMyResignationRequest) returns (ResignationResponse);
   // Returns all resignations with pagination and optional filters.
   rpc ListResignations (ListResignationsRequest) returns (ListResignationsResponse);
 }

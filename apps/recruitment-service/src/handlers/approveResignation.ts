@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import { toResignationProto } from "./resignationSerializer";
 
 export const approveResignation = async (
   call: ServerUnaryCall<any, any>,
@@ -11,6 +12,11 @@ export const approveResignation = async (
 ) => {
   try {
     const { id, lastWorkingDay, comments } = call.request;
+    const noticePeriodWaived: boolean | undefined =
+      call.request.noticePeriodWaived;
+    const buyoutAmount: number | undefined = call.request.buyoutAmount;
+    const relievedFromDutyOn: string | undefined =
+      call.request.relievedFromDutyOn;
 
     if (!id) {
       return callback(null, {
@@ -39,9 +45,17 @@ export const approveResignation = async (
       data: {
         status: "Approved",
         approvedOn: new Date(),
-        lastWorkingDay: lastWorkingDay ? new Date(lastWorkingDay) : null,
+        // Only overwrite lastWorkingDay when HR explicitly counters it —
+        // otherwise keep whatever was resolved at submission (notice-period
+        // default, or the employee's own proposed date).
+        ...(lastWorkingDay ? { lastWorkingDay: new Date(lastWorkingDay) } : {}),
         comments: comments || null,
         lastUpdatedOn: new Date(),
+        ...(noticePeriodWaived !== undefined ? { noticePeriodWaived } : {}),
+        ...(buyoutAmount !== undefined ? { buyoutAmount } : {}),
+        ...(relievedFromDutyOn
+          ? { relievedFromDutyOn: new Date(relievedFromDutyOn) }
+          : {}),
       },
     });
 
@@ -65,7 +79,7 @@ export const approveResignation = async (
     return callback(null, {
       message: MESSAGES.RESIGNATION_APPROVED,
       status: status.OK,
-      data: updatedResignation,
+      data: toResignationProto(updatedResignation),
     });
   } catch (err) {
     logger.error("ApproveResignation error:", { err });

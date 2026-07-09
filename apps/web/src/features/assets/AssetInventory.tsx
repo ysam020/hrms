@@ -7,13 +7,9 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
 import dayjs from "dayjs";
 import { Calendar } from "primereact/calendar";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
+import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
@@ -298,182 +294,127 @@ function AssetInventory() {
     [refresh, setAlert],
   );
 
-  const iconBtn = (color: string, bg: string) => ({
-    width: 28,
-    height: 28,
-    borderRadius: "6px",
-    color,
-    backgroundColor: bg,
-    "&:hover": { backgroundColor: bg.replace("0.12", "0.22") },
-  });
-
   const conditionOptions = ["Excellent", "Good", "Fair", "Damaged"];
 
   const columns = useMemo(
     () => [
       {
-        accessorKey: "assetCode",
-        header: "Asset Code",
-        size: 130,
-        Cell: ({ cell }: any) => (
+        key: "assetCode",
+        label: "Asset Code",
+        primary: true,
+        hideLabel: true,
+        render: (row: any) => (
           <Typography
             variant="body2"
             fontSize="0.8rem"
             fontWeight={600}
             sx={{ fontFamily: "monospace" }}
           >
-            {cell.getValue()}
+            {row.assetCode}
           </Typography>
         ),
       },
+      { key: "name", label: "Name" },
+      { key: "category", label: "Category" },
       {
-        accessorKey: "name",
-        header: "Name",
-        size: 180,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
+        key: "status",
+        label: "Status",
+        hideLabel: true,
+        render: (row: any) => <StatusChip status={row.status} />,
       },
       {
-        accessorKey: "category",
-        header: "Category",
-        size: 120,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue()}
-          </Typography>
-        ),
+        key: "assignedToUser",
+        label: "Assigned To",
+        render: (row: any) =>
+          row.assignedToUser
+            ? `${row.assignedToUser.first_name} ${row.assignedToUser.last_name}`
+            : "—",
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 120,
-        Cell: ({ cell }: any) => <StatusChip status={cell.getValue()} />,
+        key: "purchaseCost",
+        label: "Cost",
+        render: (row: any) =>
+          row.purchaseCost != null
+            ? `₹${Number(row.purchaseCost).toLocaleString("en-IN")}`
+            : "—",
       },
-      {
-        accessorKey: "assignedToUser",
-        header: "Assigned To",
-        size: 160,
-        Cell: ({ cell }: any) => {
-          const u = cell.getValue();
-          return (
-            <Typography variant="body2" fontSize="0.8rem">
-              {u ? `${u.first_name} ${u.last_name}` : "—"}
-            </Typography>
-          );
-        },
-      },
-      {
-        accessorKey: "purchaseCost",
-        header: "Cost",
-        size: 110,
-        Cell: ({ cell }: any) => (
-          <Typography variant="body2" fontSize="0.8rem">
-            {cell.getValue() != null
-              ? `₹${Number(cell.getValue()).toLocaleString("en-IN")}`
-              : "—"}
-          </Typography>
-        ),
-      },
-      ...(isHr
-        ? [
-            {
-              accessorKey: "assetActions",
-              header: "Actions",
-              size: 140,
-              enableSorting: false,
-              Cell: ({ cell }: any) => {
-                const row = cell.row.original;
-                return (
-                  <Box sx={{ display: "flex", gap: 0.5 }}>
-                    {row.status === "available" && (
-                      <Tooltip title="Assign">
-                        <IconButton
-                          size="small"
-                          sx={iconBtn("#6366f1", "rgba(99,102,241,0.12)")}
-                          onClick={() =>
-                            setOpenAssign({ id: row.id, code: row.assetCode })
-                          }
-                        >
-                          <PersonAddIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {row.status === "assigned" && (
-                      <Tooltip title="Return">
-                        <IconButton
-                          size="small"
-                          sx={iconBtn("#d97706", "rgba(217,119,6,0.12)")}
-                          onClick={() =>
-                            setOpenReturn({ id: row.id, code: row.assetCode })
-                          }
-                        >
-                          <UndoIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {["available", "maintenance"].includes(row.status) && (
-                      <Tooltip title="Retire">
-                        <IconButton
-                          size="small"
-                          sx={iconBtn("#dc2626", "rgba(220,38,38,0.12)")}
-                          onClick={() => handleRetire(row.id)}
-                        >
-                          <BlockIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Box>
-                );
-              },
-            },
-          ]
-        : []),
     ],
+    [],
+  );
+
+  const rowActions = useCallback(
+    (row: any) => {
+      if (!isHr) return [];
+      const actions: any[] = [];
+      if (row.status === "available") {
+        actions.push({
+          icon: <PersonAddIcon sx={{ fontSize: 16 }} />,
+          label: "Assign",
+          color: "primary" as const,
+          onClick: () => setOpenAssign({ id: row.id, code: row.assetCode }),
+        });
+      }
+      if (row.status === "assigned") {
+        actions.push({
+          icon: <UndoIcon sx={{ fontSize: 16 }} />,
+          label: "Return",
+          color: "warning" as const,
+          onClick: () => setOpenReturn({ id: row.id, code: row.assetCode }),
+        });
+      }
+      if (["available", "maintenance"].includes(row.status)) {
+        actions.push({
+          icon: <BlockIcon sx={{ fontSize: 16 }} />,
+          label: "Retire",
+          color: "error" as const,
+          onClick: () => handleRetire(row.id),
+        });
+      }
+      return actions;
+    },
     [isHr, handleRetire],
   );
 
-  const memoizedData = useMemo(() => data || [], [data]);
-  const tableConfig = useTableConfig(memoizedData, columns, loading, {
-    enableServerSidePagination: true,
-    totalRowCount: totalCount,
-    onPaginationChange: handlePaginationChange,
-    onPageSizeChange: handlePageSizeChange,
-    initialPagination: pagination,
-    pageSizeOptions: [5, 10, 25, 50],
-  });
-
-  const table = useMaterialReactTable({
-    ...tableConfig.table,
-    manualFiltering: true,
-    state: { ...tableConfig.table.state, isLoading: loading, globalFilter },
-    onGlobalFilterChange: handleGlobalFilterChange,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
-        <Box sx={{ flex: 1 }} />
-        {isHr && (
-          <Tooltip title="Add Asset">
-            <span>
-              <IconButton
-                color="primary"
-                size="small"
-                onClick={() => setOpenCreate(true)}
-                aria-label="Add asset"
-              >
-                <AddIcon sx={{ fontSize: 20 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
-        )}
-      </Box>
-    ),
-  });
-
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Assets"
+        data={data || []}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No assets found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search assets…",
+        }}
+        toolbarActions={
+          isHr ? (
+            <Tooltip title="Add Asset">
+              <span>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => setOpenCreate(true)}
+                  aria-label="Add asset"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : undefined
+        }
+        pagination={{
+          page: pagination.pageIndex,
+          pageSize: pagination.pageSize,
+          totalCount,
+          onPageChange: (page) =>
+            handlePaginationChange({ ...pagination, pageIndex: page }),
+          onPageSizeChange: handlePageSizeChange,
+          pageSizeOptions: [5, 10, 25, 50],
+        }}
+      />
 
       {/* Create Asset Dialog */}
       <Dialog

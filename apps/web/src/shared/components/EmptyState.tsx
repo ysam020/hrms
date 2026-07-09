@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 type EmptyStateProps = {
   message?: string;
   icon?: React.ReactElement;
+  /** @deprecated Colors now derive from the active MUI theme automatically; this prop is a no-op. */
   theme?: "light" | "dark";
   sx?: object;
   dashed?: boolean;
@@ -14,28 +15,9 @@ type EmptyStateProps = {
 function EmptyState({
   message = "No data available",
   icon,
-  theme = "light",
   sx = {},
   dashed = false,
 }: EmptyStateProps) {
-  const getEmptyStateStyles = () => {
-    return {
-      textAlign: "center",
-      py: 3,
-      px: 2,
-      backgroundColor: theme === "light" ? "#f9f9f9" : "#111b21",
-      borderRadius: 1,
-      border: dashed
-        ? `1px dashed ${
-            theme === "light" ? "#ccc" : "rgba(255, 255, 255, 0.12)"
-          }`
-        : `1px solid ${
-            theme === "light" ? "#e0e0e0" : "rgba(255, 255, 255, 0.12)"
-          }`,
-      ...sx,
-    };
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -44,13 +26,34 @@ function EmptyState({
     >
       {/* role="status" + aria-live ensure screen readers announce empty-state
           changes when data loads/clears without a full page navigation. */}
-      <Box role="status" aria-live="polite" sx={getEmptyStateStyles()}>
+      <Box
+        role="status"
+        aria-live="polite"
+        sx={{
+          textAlign: "center",
+          py: 3,
+          px: 2,
+          bgcolor: "action.hover",
+          borderRadius: 1.5,
+          border: dashed ? "1px dashed" : "1px solid",
+          borderColor: "divider",
+          ...sx,
+        }}
+      >
         {icon && (
-          <Box aria-hidden="true" sx={{ mb: 1, color: "text.secondary" }}>
+          <Box
+            aria-hidden="true"
+            sx={{
+              mb: 1,
+              color: "text.secondary",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
             {icon}
           </Box>
         )}
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
           {message}
         </Typography>
       </Box>

@@ -2,12 +2,6 @@ import React from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import LinearProgress from "@mui/material/LinearProgress";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -15,6 +9,7 @@ import Alert from "@mui/material/Alert";
 
 import useFetchData from "@web/shared/hooks/useFetchData";
 import LoadingState from "@web/shared/components/LoadingState";
+import DataList from "@web/shared/components/DataList";
 
 const HiringManagerTable = ({ theme }) => {
   const { data, loading } = useFetchData(
@@ -62,92 +57,61 @@ const HiringManagerTable = ({ theme }) => {
           Success rate based on closed positions
         </Typography>
 
-        <TableContainer sx={{ maxHeight: 400, mt: 2 }}>
-          <Table stickyHeader size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <Typography variant="body2" fontWeight={600}>
-                    Manager
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2" fontWeight={600}>
-                    Total Jobs
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2" fontWeight={600}>
-                    Active
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2" fontWeight={600}>
-                    Closed
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2" fontWeight={600}>
-                    Success Rate
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.map((manager, index) => (
-                <TableRow key={index} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>
-                      {manager.hiringManager || "Unknown"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Chip
-                      label={manager.totalJobs}
-                      size="small"
-                      variant="outlined"
-                      color="primary"
+        <Box sx={{ mt: 2 }}>
+          <DataList
+            ariaLabel="Hiring manager performance"
+            variant="rows"
+            data={data}
+            getRowId={(m: any) => m.hiringManager}
+            columns={[
+              {
+                key: "hiringManager",
+                label: "Manager",
+                primary: true,
+                render: (m: any) => m.hiringManager || "Unknown",
+              },
+              {
+                key: "totalJobs",
+                label: "Total Jobs",
+                render: (m: any) => (
+                  <Chip
+                    label={m.totalJobs}
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                  />
+                ),
+              },
+              { key: "activeJobs", label: "Active" },
+              {
+                key: "closedJobs",
+                label: "Closed",
+                render: (m: any) => (
+                  <Box component="span" sx={{ color: "success.main" }}>
+                    {m.closedJobs}
+                  </Box>
+                ),
+              },
+              {
+                key: "successRate",
+                label: "Success Rate",
+                render: (m: any) => (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={m.successRate}
+                      color={getSuccessColor(m.successRate)}
+                      sx={{ width: 60, height: 6, borderRadius: 1 }}
                     />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body2">
-                      {manager.activeJobs}
+                    <Typography variant="body2" fontWeight={600}>
+                      {m.successRate.toFixed(0)}%
                     </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body2" color="success.main">
-                      {manager.closedJobs}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "flex-end",
-                        gap: 1,
-                      }}
-                    >
-                      <LinearProgress
-                        variant="determinate"
-                        value={manager.successRate}
-                        color={getSuccessColor(manager.successRate)}
-                        sx={{
-                          width: 60,
-                          height: 6,
-                          borderRadius: 1,
-                        }}
-                      />
-                      <Typography variant="body2" fontWeight={600}>
-                        {manager.successRate.toFixed(0)}%
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                  </Box>
+                ),
+              },
+            ]}
+          />
+        </Box>
       </CardContent>
     </Card>
   );

@@ -10,8 +10,24 @@ x-backend-service: &backend-service
   volumes:
     - ./packages/certificates:/app/packages/certificates:ro
   restart: on-failure
+  depends_on:
+    redis:
+      condition: service_healthy
 
 services:
+  redis:
+    container_name: hrms-prod-redis
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   api-gateway:
     container_name: hrms-prod-api-gateway
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/api-gateway:${TAG_NAME:-latest}
@@ -97,3 +113,6 @@ services:
     volumes:
       - ./packages/certificates:/app/packages/certificates:ro
     restart: on-failure
+
+volumes:
+  redis-data:

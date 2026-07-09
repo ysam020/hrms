@@ -12,6 +12,8 @@ export const employeeManagementSchema = z
     reasonForTermination: z.string().optional(),
     dateOfTermination: z.string().optional(),
     dateOfAbscond: z.string().optional(),
+    employmentType: z.enum(["employee", "contractor"]).optional(),
+    workState: z.string().nullable().optional(),
     salary: z.number().min(0, "Gross salary must be a positive number"),
     salaryStructure: z
       .object({

@@ -7,12 +7,7 @@ import Grid from "@mui/material/Grid";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import Divider from "@mui/material/Divider";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
+import DataList from "@web/shared/components/DataList";
 
 import People from "@mui/icons-material/People";
 import Home from "@mui/icons-material/Home";
@@ -251,79 +246,32 @@ const EmployeeInsights = () => {
           </Box>
           <Divider sx={{ mb: 1.5 }} />
 
-          <TableContainer>
-            <Table size="small" aria-label="Department breakdown">
-              <TableHead>
-                <TableRow>
-                  <TableCell>
-                    <strong>Department</strong>
-                  </TableCell>
-                  <TableCell align="center">
-                    <strong>Total</strong>
-                  </TableCell>
-                  <TableCell align="center">
-                    <strong>Active Rate</strong>
-                  </TableCell>
-                  <TableCell align="center">
-                    <strong>WFH Rate</strong>
-                  </TableCell>
-                  <TableCell align="center">
-                    <strong>PF Rate</strong>
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {insights.departmentBreakdown?.map((dept, index) => (
-                  <TableRow key={index} hover>
-                    <TableCell>{dept.department}</TableCell>
-                    <TableCell align="center">{dept.count}</TableCell>
-                    <TableCell align="center">
-                      <Box
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Typography variant="body2" sx={{ mr: 1 }}>
-                          {dept.activeRate}%
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Typography variant="body2" sx={{ mr: 1 }}>
-                          {dept.wfhRate}%
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Typography variant="body2" sx={{ mr: 1 }}>
-                          {dept.pfRate}%
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                )) || []}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          {(!insights.departmentBreakdown ||
-            insights.departmentBreakdown.length === 0) && (
-            <Box textAlign="center" py={2}>
-              <Typography variant="body2" color="textSecondary">
-                No department data available
-              </Typography>
-            </Box>
-          )}
+          <DataList
+            ariaLabel="Department breakdown"
+            variant="rows"
+            data={insights.departmentBreakdown || []}
+            getRowId={(dept: any) => dept.department}
+            emptyMessage="No department data available"
+            columns={[
+              { key: "department", label: "Department", primary: true },
+              { key: "count", label: "Total" },
+              {
+                key: "activeRate",
+                label: "Active Rate",
+                render: (dept: any) => `${dept.activeRate}%`,
+              },
+              {
+                key: "wfhRate",
+                label: "WFH Rate",
+                render: (dept: any) => `${dept.wfhRate}%`,
+              },
+              {
+                key: "pfRate",
+                label: "PF Rate",
+                render: (dept: any) => `${dept.pfRate}%`,
+              },
+            ]}
+          />
         </CardContent>
       </Card>
 
@@ -339,37 +287,26 @@ const EmployeeInsights = () => {
             </Box>
             <Divider sx={{ mb: 1.5 }} />
 
-            <TableContainer>
-              <Table size="small" aria-label="Employee status summary">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>
-                      <strong>Status</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Count</strong>
-                    </TableCell>
-                    <TableCell align="center">
-                      <strong>Percentage</strong>
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {insights.statusBreakdown.map((status, index) => (
-                    <TableRow key={index} hover>
-                      <TableCell>{status.status}</TableCell>
-                      <TableCell align="center">{status.count}</TableCell>
-                      <TableCell align="center">
-                        {totalEmployees > 0
-                          ? ((status.count / totalEmployees) * 100).toFixed(1)
-                          : 0}
-                        %
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <DataList
+              ariaLabel="Employee status summary"
+              variant="rows"
+              data={insights.statusBreakdown}
+              getRowId={(status: any) => status.status}
+              columns={[
+                { key: "status", label: "Status", primary: true },
+                { key: "count", label: "Count" },
+                {
+                  key: "percentage",
+                  label: "Percentage",
+                  render: (status: any) =>
+                    `${
+                      totalEmployees > 0
+                        ? ((status.count / totalEmployees) * 100).toFixed(1)
+                        : 0
+                    }%`,
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       )}

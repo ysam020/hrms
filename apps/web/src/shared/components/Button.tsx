@@ -144,7 +144,6 @@ function Button({
       "sans-serif",
     ].join(","),
     textTransform: "none",
-    marginTop: "10px",
     ...style,
   };
 

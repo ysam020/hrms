@@ -3,14 +3,8 @@ import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import AddIcon from "@mui/icons-material/Add";
 import CreateRoleModal from "./CreateRoleModal";
-import {
-  MaterialReactTable,
-  useMaterialReactTable,
-} from "material-react-table";
-import useTableConfig from "@web/shared/hooks/useTableConfig";
-import { getTableColumns } from "@web/shared/utils/table/getTableColumns";
+import DataList from "@web/shared/components/DataList";
 import IconButton from "@mui/material/IconButton";
-import Skeleton from "@mui/material/Skeleton";
 import Avatar from "@mui/material/Avatar";
 import AvatarGroup from "@mui/material/AvatarGroup";
 import Popover from "@mui/material/Popover";
@@ -19,6 +13,7 @@ import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import RolePermissionsModal from "./RolePermissionsModal";
 import DeleteIcon from "@mui/icons-material/Delete";
+import LockPersonIcon from "@mui/icons-material/LockPerson";
 import CloseIcon from "@mui/icons-material/Close";
 import PeopleIcon from "@mui/icons-material/People";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -146,37 +141,26 @@ function ManageRoles() {
     }
   }, [memberDeleteDialog, refetch, handlePopoverClose, setAlert]);
 
-  const baseColumns = useMemo(
+  const columns = useMemo(
     () => [
-      { accessorKey: "name", header: "Name of Role" },
+      { key: "name", label: "Name of Role", primary: true, hideLabel: true },
       {
-        accessorKey: "assignedTo",
-        header: "Assigned To",
-        Cell: ({ cell }) => {
-          const users = cell.row.original.assignedTo;
-
+        key: "assignedTo",
+        label: "Assigned To",
+        render: (row: any) => {
+          const users = row.assignedTo;
           if (!Array.isArray(users) || users.length === 0)
             return "No users assigned";
-
           return (
             <AvatarGroup
               spacing="medium"
               total={users.length}
               onClick={(e) =>
-                handleAvatarGroupClick(
-                  e,
-                  users,
-                  cell.row.original._id,
-                  cell.row.original.name,
-                )
+                handleAvatarGroupClick(e, users, row._id, row.name)
               }
               sx={{
                 cursor: "pointer",
-                "& .MuiAvatar-root": {
-                  width: 28,
-                  height: 28,
-                  fontSize: 12,
-                },
+                "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 12 },
               }}
             >
               {users.map((user) => (
@@ -191,88 +175,46 @@ function ManageRoles() {
           );
         },
       },
-      {
-        accessorKey: "manage",
-        header: "Manage",
-        Cell: ({ cell }) => {
-          if (loading) {
-            return (
-              <div style={{ display: "flex", gap: "10px" }}>
-                <Skeleton width={150} height={30} />
-                <Skeleton width={70} height={30} />
-              </div>
-            );
-          }
-
-          return (
-            <>
-              <span
-                className="link approve-link"
-                onClick={() =>
-                  handleOpenRolePermissions(
-                    cell.row.original._id,
-                    cell.row.original.name,
-                  )
-                }
-              >
-                Manage Permissions
-              </span>
-              <span
-                className="link reject-link"
-                onClick={() =>
-                  handleRoleDeleteClick(
-                    cell.row.original._id,
-                    cell.row.original.name,
-                  )
-                }
-              >
-                Delete
-              </span>
-            </>
-          );
-        },
-      },
     ],
-    [loading, handleOpenRolePermissions, handleRoleDeleteClick],
+    [],
   );
 
-  const columns = useMemo(() => {
-    if (!baseColumns || !Array.isArray(baseColumns)) {
-      return [];
-    }
-    return getTableColumns(baseColumns);
-  }, [baseColumns]);
-
-  const { table: baseConfig } = useTableConfig(roles || [], columns, loading);
-
-  const table = useMaterialReactTable(
-    useMemo(
-      () => ({
-        ...baseConfig,
-        renderTopToolbarCustomActions: () => (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              width: "100%",
-            }}
-          >
-            <IconButton
-              onClick={handleOpenCreateRole}
-              aria-label="Create new role"
-            >
-              <AddIcon aria-hidden="true" />
-            </IconButton>
-          </div>
-        ),
-      }),
-      [baseConfig, handleOpenCreateRole],
-    ),
+  const rowActions = useCallback(
+    (row: any) => [
+      {
+        icon: <LockPersonIcon fontSize="small" />,
+        label: "Manage Permissions",
+        color: "primary" as const,
+        onClick: () => handleOpenRolePermissions(row._id, row.name),
+      },
+      {
+        icon: <DeleteIcon fontSize="small" />,
+        label: "Delete role",
+        color: "error" as const,
+        onClick: () => handleRoleDeleteClick(row._id, row.name),
+      },
+    ],
+    [handleOpenRolePermissions, handleRoleDeleteClick],
   );
 
   return (
     <div>
-      <MaterialReactTable table={table} />
+      <DataList
+        ariaLabel="Roles"
+        data={roles || []}
+        columns={columns}
+        actions={rowActions}
+        loading={loading}
+        emptyMessage="No roles found"
+        toolbarActions={
+          <IconButton
+            onClick={handleOpenCreateRole}
+            aria-label="Create new role"
+          >
+            <AddIcon aria-hidden="true" />
+          </IconButton>
+        }
+      />
       <CreateRoleModal
         open={openCreateRole}
         handleClose={handleCloseCreateRole}

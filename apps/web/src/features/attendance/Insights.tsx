@@ -7,16 +7,10 @@ import Grid from "@mui/material/Grid";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
-import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Container from "@mui/material/Container";
+import DataList from "@web/shared/components/DataList";
 
 import Assessment from "@mui/icons-material/Assessment";
 import Schedule from "@mui/icons-material/Schedule";
@@ -334,105 +328,101 @@ function AttendanceInsights() {
               Top employees by risk score
             </Typography>
           </Box>
-          <TableContainer component={Paper} elevation={0}>
-            <Table size="small" sx={{ "& .MuiTableCell-root": { py: 0.5 } }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Employee</TableCell>
-                  <TableCell>Risk Level</TableCell>
-                  <TableCell align="right">Attendance Rate</TableCell>
-                  <TableCell align="right">Avg Hours</TableCell>
-                  <TableCell align="right">Corrections</TableCell>
-                  <TableCell align="right">Risk Score</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {insights.employeeRiskAssessment &&
-                insights.employeeRiskAssessment.length > 0 ? (
-                  insights.employeeRiskAssessment
-                    .slice(0, 10)
-                    .map((employee, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Box display="flex" alignItems="center" gap={0.5}>
-                            <PersonOutline fontSize="small" />
-                            {employee.username}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Box display="flex" alignItems="center" gap={0.5}>
-                            {getRiskLevelIcon(employee.riskLevel)}
-                            <Chip
-                              label={employee.riskLevel}
-                              size="small"
-                              sx={{
-                                backgroundColor: getRiskLevelColor(
-                                  employee.riskLevel,
-                                ),
-                                color: "white",
-                                fontSize: "0.7rem",
-                                height: 20,
-                              }}
-                            />
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box>
-                            <Typography variant="body2">
-                              {employee.attendanceRate || 0}%
-                            </Typography>
-                            <LinearProgress
-                              variant="determinate"
-                              value={employee.attendanceRate || 0}
-                              sx={{
-                                mt: 0.25,
-                                height: 3,
-                                borderRadius: 2,
-                                backgroundColor: "#e0e0e0",
-                                "& .MuiLinearProgress-bar": {
-                                  backgroundColor: getProgressColor(
-                                    employee.attendanceRate || 0,
-                                  ),
-                                },
-                              }}
-                            />
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          {employee.avgWorkingHours || 0}h
-                        </TableCell>
-                        <TableCell align="right">
-                          {employee.correctionFrequency || 0}%
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography
-                            variant="body2"
-                            color={
-                              (employee.riskScore || 0) > 30
-                                ? "error"
-                                : (employee.riskScore || 0) > 15
-                                  ? "warning.main"
-                                  : "success.main"
-                            }
-                            fontWeight={600}
-                          >
-                            {(employee.riskScore || 0).toFixed(1)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      <Typography variant="body2" color="textSecondary">
-                        No risk assessment data available
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <DataList
+            ariaLabel="Employee risk assessment"
+            variant="rows"
+            data={(insights.employeeRiskAssessment || []).slice(0, 10)}
+            getRowId={(employee: any) => employee.username}
+            emptyMessage="No risk assessment data available"
+            columns={[
+              {
+                key: "username",
+                label: "Employee",
+                primary: true,
+                render: (employee: any) => (
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    <PersonOutline fontSize="small" />
+                    {employee.username}
+                  </Box>
+                ),
+              },
+              {
+                key: "riskLevel",
+                label: "Risk Level",
+                render: (employee: any) => (
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    {getRiskLevelIcon(employee.riskLevel)}
+                    <Chip
+                      label={employee.riskLevel}
+                      size="small"
+                      sx={{
+                        backgroundColor: getRiskLevelColor(employee.riskLevel),
+                        color: "white",
+                        fontSize: "0.7rem",
+                        height: 20,
+                      }}
+                    />
+                  </Box>
+                ),
+              },
+              {
+                key: "attendanceRate",
+                label: "Attendance Rate",
+                render: (employee: any) => (
+                  <Box sx={{ minWidth: 80 }}>
+                    <Typography variant="body2">
+                      {employee.attendanceRate || 0}%
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={employee.attendanceRate || 0}
+                      sx={{
+                        mt: 0.25,
+                        height: 3,
+                        borderRadius: 2,
+                        backgroundColor: "#e0e0e0",
+                        "& .MuiLinearProgress-bar": {
+                          backgroundColor: getProgressColor(
+                            employee.attendanceRate || 0,
+                          ),
+                        },
+                      }}
+                    />
+                  </Box>
+                ),
+              },
+              {
+                key: "avgWorkingHours",
+                label: "Avg Hours",
+                render: (employee: any) => `${employee.avgWorkingHours || 0}h`,
+              },
+              {
+                key: "correctionFrequency",
+                label: "Corrections",
+                render: (employee: any) =>
+                  `${employee.correctionFrequency || 0}%`,
+              },
+              {
+                key: "riskScore",
+                label: "Risk Score",
+                render: (employee: any) => (
+                  <Typography
+                    variant="body2"
+                    color={
+                      (employee.riskScore || 0) > 30
+                        ? "error"
+                        : (employee.riskScore || 0) > 15
+                          ? "warning.main"
+                          : "success.main"
+                    }
+                    fontWeight={600}
+                  >
+                    {(employee.riskScore || 0).toFixed(1)}
+                  </Typography>
+                ),
+              },
+            ]}
+          />
         </CardContent>
       </Card>
 
@@ -443,62 +433,66 @@ function AttendanceInsights() {
             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
               Team Performance by Department
             </Typography>
-            <TableContainer component={Paper} elevation={0}>
-              <Table size="small" sx={{ "& .MuiTableCell-root": { py: 0.5 } }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Department</TableCell>
-                    <TableCell align="right">Employees</TableCell>
-                    <TableCell align="right">Attendance Rate</TableCell>
-                    <TableCell align="right">Avg Working Hours</TableCell>
-                    <TableCell align="right">Correction Rate</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {insights.teamPerformance.map((team, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <Box display="flex" alignItems="center" gap={0.5}>
-                          <Work fontSize="small" />
-                          {team.department}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
-                        {team.employeeCount || 0}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box>
-                          <Typography variant="body2">
-                            {team.attendanceRate || 0}%
-                          </Typography>
-                          <LinearProgress
-                            variant="determinate"
-                            value={team.attendanceRate || 0}
-                            sx={{
-                              mt: 0.25,
-                              height: 3,
-                              borderRadius: 2,
-                              backgroundColor: "#e0e0e0",
-                              "& .MuiLinearProgress-bar": {
-                                backgroundColor: getProgressColor(
-                                  team.attendanceRate || 0,
-                                ),
-                              },
-                            }}
-                          />
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
-                        {team.avgWorkingHours || 0}h
-                      </TableCell>
-                      <TableCell align="right">
-                        {team.correctionRate || 0}%
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <DataList
+              ariaLabel="Team performance by department"
+              variant="rows"
+              data={insights.teamPerformance}
+              getRowId={(team: any) => team.department}
+              columns={[
+                {
+                  key: "department",
+                  label: "Department",
+                  primary: true,
+                  render: (team: any) => (
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <Work fontSize="small" />
+                      {team.department}
+                    </Box>
+                  ),
+                },
+                {
+                  key: "employeeCount",
+                  label: "Employees",
+                  render: (team: any) => team.employeeCount || 0,
+                },
+                {
+                  key: "attendanceRate",
+                  label: "Attendance Rate",
+                  render: (team: any) => (
+                    <Box sx={{ minWidth: 80 }}>
+                      <Typography variant="body2">
+                        {team.attendanceRate || 0}%
+                      </Typography>
+                      <LinearProgress
+                        variant="determinate"
+                        value={team.attendanceRate || 0}
+                        sx={{
+                          mt: 0.25,
+                          height: 3,
+                          borderRadius: 2,
+                          backgroundColor: "#e0e0e0",
+                          "& .MuiLinearProgress-bar": {
+                            backgroundColor: getProgressColor(
+                              team.attendanceRate || 0,
+                            ),
+                          },
+                        }}
+                      />
+                    </Box>
+                  ),
+                },
+                {
+                  key: "avgWorkingHours",
+                  label: "Avg Working Hours",
+                  render: (team: any) => `${team.avgWorkingHours || 0}h`,
+                },
+                {
+                  key: "correctionRate",
+                  label: "Correction Rate",
+                  render: (team: any) => `${team.correctionRate || 0}%`,
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       )}

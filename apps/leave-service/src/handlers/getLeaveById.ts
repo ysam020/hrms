@@ -2,6 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
 
 export const getLeaveById = async (
   call: ServerUnaryCall<any, any>,
@@ -29,7 +30,7 @@ export const getLeaveById = async (
     return callback(null, {
       message: MESSAGES.LEAVE_APPLICATIONS_FETCHED,
       status: status.OK,
-      data: leave,
+      data: toLeaveApplicationProto(leave),
     });
   } catch (err) {
     logger.error("GetLeaveById error:", { err });

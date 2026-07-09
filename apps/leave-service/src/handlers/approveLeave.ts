@@ -1,9 +1,15 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import {
+  adjustBalance,
+  isCompOffLeaveType,
+  consumeCompOffCredits,
+} from "./leaveBalanceHelpers";
+import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
 
 export const approveLeave = async (
   call: ServerUnaryCall<any, any>,
@@ -46,6 +52,32 @@ export const approveLeave = async (
 
     await cacheManager.invalidatePattern("leaves:*");
 
+    // Debit the balance — no-op unless this user/leave-type is already
+    // balance-tracked (see leaveBalanceHelpers.ts). Comp-off draws down
+    // CompOffCredit records instead of the balances JSON.
+    const tenantId = getTenantId();
+    if (tenantId && isCompOffLeaveType(updatedLeave.leaveType)) {
+      await consumeCompOffCredits(
+        tenantId,
+        updatedLeave.userId,
+        updatedLeave.days,
+        updatedLeave.id,
+      ).catch((err) =>
+        logger.warn("[approveLeave] Comp-off credit consumption failed:", {
+          err,
+        }),
+      );
+    } else if (tenantId) {
+      await adjustBalance(
+        tenantId,
+        updatedLeave.userId,
+        updatedLeave.leaveType,
+        -updatedLeave.days,
+      ).catch((err) =>
+        logger.warn("[approveLeave] Balance debit failed:", { err }),
+      );
+    }
+
     getNotificationQueue()
       .add("leaveApproved", {
         title: "Leave",
@@ -61,7 +93,7 @@ export const approveLeave = async (
     return callback(null, {
       message: MESSAGES.LEAVE_APPROVED,
       status: status.OK,
-      data: updatedLeave,
+      data: toLeaveApplicationProto(updatedLeave),
     });
   } catch (err) {
     logger.error("ApproveLeave error:", { err });

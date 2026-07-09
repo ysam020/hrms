@@ -2,6 +2,7 @@ import { status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { cancelLeave } from "../handlers/cancelLeave";
+import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
 
 jest.mock("@hrms/db", () => {
@@ -9,6 +10,9 @@ jest.mock("@hrms/db", () => {
     leaveApplication: {
       findUnique: jest.fn(),
       update: jest.fn(),
+    },
+    approvalInstance: {
+      findFirst: jest.fn().mockResolvedValue(null),
     },
   };
   return {
@@ -20,6 +24,15 @@ jest.mock("@hrms/db", () => {
 
 jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },
+}));
+
+jest.mock("@hrms/approval-engine", () => ({
+  instantiateApproval: jest.fn().mockResolvedValue({
+    instanceId: "inst-1",
+    firstApproverId: "manager-1",
+    usedDefaultChain: true,
+  }),
+  cancelApproval: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -58,18 +71,37 @@ describe("cancelLeave", () => {
     });
   });
 
-  it("returns FAILED_PRECONDITION when leave is already Approved", async () => {
+  it("requests cancellation (via Approval Chain) when leave is already Approved", async () => {
     mockFindUnique.mockResolvedValue({
       id: "leave-1",
       status: "Approved",
       userId: "john",
     });
+    const requested = { id: "leave-1", status: "Cancellation Requested" };
+    mockUpdate.mockResolvedValue(requested);
+
     const cb = makeCallback();
     await cancelLeave(makeCall({ id: "leave-1", userId: "john" }), cb);
-    expect(cb).toHaveBeenCalledWith(null, {
-      message: MESSAGES.ONLY_PENDING_CAN_BE_CANCELLED,
-      status: status.FAILED_PRECONDITION,
+
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "leave-1" },
+      data: { status: "Cancellation Requested", cancellationReason: null },
     });
+    expect(instantiateApproval).toHaveBeenCalledWith(
+      "t1",
+      "leave",
+      "leave-1",
+      "john",
+      { isCancellation: true },
+    );
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        message: MESSAGES.LEAVE_CANCELLATION_REQUESTED,
+        status: status.OK,
+        data: expect.objectContaining(requested),
+      }),
+    );
   });
 
   it("returns FAILED_PRECONDITION when leave is Rejected", async () => {
@@ -114,13 +146,49 @@ describe("cancelLeave", () => {
 
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "leave-1" },
-      data: { status: "Cancelled" },
+      data: expect.objectContaining({
+        status: "Cancelled",
+        cancelledBy: "john",
+        cancellationReason: null,
+        cancelledOn: expect.any(Date),
+      }),
     });
-    expect(cb).toHaveBeenCalledWith(null, {
-      message: MESSAGES.LEAVE_CANCELLED,
-      status: status.OK,
-      data: cancelled,
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        message: MESSAGES.LEAVE_CANCELLED,
+        status: status.OK,
+        data: expect.objectContaining(cancelled),
+      }),
+    );
+  });
+
+  it("cancels the apply-time approval instance when the leave is still Pending", async () => {
+    const { cancelApproval } = jest.requireMock("@hrms/approval-engine");
+    (prisma as any).approvalInstance.findFirst.mockResolvedValue({
+      id: "inst-1",
     });
+    mockFindUnique.mockResolvedValue({
+      id: "leave-1",
+      status: "Pending",
+      userId: "john",
+    });
+    mockUpdate.mockResolvedValue({ id: "leave-1", status: "Cancelled" });
+
+    await cancelLeave(
+      makeCall({ id: "leave-1", userId: "john" }),
+      makeCallback(),
+    );
+
+    expect((prisma as any).approvalInstance.findFirst).toHaveBeenCalledWith({
+      where: {
+        tenantId: "t1",
+        module: "leave",
+        entityId: "leave-1",
+        status: "pending",
+      },
+    });
+    expect(cancelApproval).toHaveBeenCalledWith("inst-1");
   });
 
   it("allows cancellation when userId is not provided (no ownership check)", async () => {
