@@ -294,6 +294,17 @@ describe("generalHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("invalidates the same tenant-scoped cache key getHolidays reads, so a new holiday shows up immediately", async () => {
+      mockHolidayFindFirst.mockResolvedValue(null);
+      mockHolidayCreate.mockResolvedValue({});
+      const res = makeRes();
+      await addHoliday(
+        makeReq({ body: { name: "Independence Day", date: "2024-08-15" } }),
+        res,
+      );
+      expect(cacheManager.delete).toHaveBeenCalledWith("t:t1:holiday:2024");
+    });
   });
 
   describe("deleteHoliday", () => {
@@ -360,6 +371,17 @@ describe("generalHandlers", () => {
         RESPONSE_STATUS.SUCCESS,
         expect.any(Object),
       );
+    });
+
+    it("invalidates the same tenant-scoped cache key getHolidays reads, so a deletion shows up immediately", async () => {
+      mockHolidayFindFirst.mockResolvedValue({
+        id: "h1",
+        holidays: [{ date: "2024-03-15", name: "Holiday" }],
+      });
+      mockHolidayUpdate.mockResolvedValue({});
+      const res = makeRes();
+      await deleteHoliday(makeReq({ body: { date: "2024-03-15" } }), res);
+      expect(cacheManager.delete).toHaveBeenCalledWith("t:t1:holiday:2024");
     });
   });
 

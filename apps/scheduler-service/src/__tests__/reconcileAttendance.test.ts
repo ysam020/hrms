@@ -154,8 +154,8 @@ describe("reconcileAttendance", () => {
       return Promise.resolve(dates);
     });
     await reconcileAttendance();
-    expect(mockInvalidate).toHaveBeenCalledWith("attendance:*");
-    expect(mockInvalidate).toHaveBeenCalledWith("leaves:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:attendance:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:leaves:*");
   });
 
   it("marks holidays correctly", async () => {

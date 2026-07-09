@@ -103,7 +103,7 @@ describe("updateApplicationStatus", () => {
       where: { id: "app-1" },
       data: { status: "Shortlisted" },
     });
-    expect(mockInvalidate).toHaveBeenCalledWith("applications:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:applications:*");
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),
@@ -122,7 +122,7 @@ describe("updateApplicationStatus", () => {
       where: { id: "j-1" },
       data: { candidatesHired: { increment: 1 } },
     });
-    expect(mockInvalidate).toHaveBeenCalledWith("jobOpenings:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:jobOpenings:*");
   });
 
   it("returns INTERNAL on database error", async () => {

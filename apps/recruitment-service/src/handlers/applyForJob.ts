@@ -66,7 +66,7 @@ export const applyForJob = async (
       },
     });
 
-    await cacheManager.invalidatePattern("applications:*");
+    await cacheManager.invalidatePattern(`t:${tenantId}:applications:*`);
 
     // Enqueue resume scoring (fire-and-forget — worker updates DB asynchronously)
     getResumeParsingQueue()

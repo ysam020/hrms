@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
@@ -42,10 +42,11 @@ export const updateApplicationStatus = async (
       });
     }
 
-    await cacheManager.invalidatePattern("applications:*");
+    const tenantId = getTenantId();
+    await cacheManager.invalidatePattern(`t:${tenantId}:applications:*`);
     // Hiring also changes job openings counts
     if (applicationStatus === "Hired")
-      await cacheManager.invalidatePattern("jobOpenings:*");
+      await cacheManager.invalidatePattern(`t:${tenantId}:jobOpenings:*`);
 
     // Notify HR (fire-and-forget)
     prisma.user

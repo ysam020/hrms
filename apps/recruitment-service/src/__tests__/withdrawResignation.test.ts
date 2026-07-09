@@ -121,7 +121,7 @@ describe("withdrawResignation", () => {
         data: expect.objectContaining({ id: "res-1", status: "Withdrawn" }),
       }),
     );
-    expect(mockInvalidate).toHaveBeenCalledWith("resignations:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:resignations:*");
   });
 
   it("returns INTERNAL on database error", async () => {

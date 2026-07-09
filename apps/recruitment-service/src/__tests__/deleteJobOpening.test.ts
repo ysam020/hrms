@@ -77,7 +77,7 @@ describe("deleteJobOpening", () => {
       where: { id: "j-1" },
       data: expect.objectContaining({ status: "Deleted", deletedBy: "admin" }),
     });
-    expect(mockInvalidate).toHaveBeenCalledWith("jobOpenings:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:jobOpenings:*");
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),

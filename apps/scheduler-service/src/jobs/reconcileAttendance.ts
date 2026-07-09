@@ -361,6 +361,7 @@ export async function reconcileAttendance(): Promise<void> {
 
     let processed = 0;
     let errors = 0;
+    const touchedTenants = new Set<string>();
     for (const emp of employees) {
       if (!emp.tenantId) continue;
       try {
@@ -370,6 +371,7 @@ export async function reconcileAttendance(): Promise<void> {
           processEmployee(emp.id, startDate, endDate, targetMonth, targetYear),
         );
         processed++;
+        touchedTenants.add(emp.tenantId);
       } catch (err) {
         errors++;
         logger.error(`reconcileAttendance: error processing ${emp.id}`, {
@@ -378,13 +380,18 @@ export async function reconcileAttendance(): Promise<void> {
       }
     }
 
-    if (processed > 0) {
-      await Promise.all([
-        cacheManager.invalidatePattern("attendance:*"),
-        cacheManager.invalidatePattern("todayAttendance:*"),
-        cacheManager.invalidatePattern("attendanceSummary:*"),
-        cacheManager.invalidatePattern("leaves:*"),
-      ]);
+    // Cache keys are tenant-scoped (`t:${tenantId}:attendance:*` etc.) — a
+    // global pattern with no tenant prefix matches nothing, so each tenant
+    // actually touched above must be invalidated individually.
+    if (touchedTenants.size > 0) {
+      await Promise.all(
+        [...touchedTenants].flatMap((tenantId) => [
+          cacheManager.invalidatePattern(`t:${tenantId}:attendance:*`),
+          cacheManager.invalidatePattern(`t:${tenantId}:todayAttendance:*`),
+          cacheManager.invalidatePattern(`t:${tenantId}:attendanceSummary:*`),
+          cacheManager.invalidatePattern(`t:${tenantId}:leaves:*`),
+        ]),
+      );
     }
 
     logger.info(

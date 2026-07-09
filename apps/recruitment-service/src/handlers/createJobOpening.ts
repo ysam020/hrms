@@ -54,7 +54,7 @@ export const createJobOpening = async (
       },
     });
 
-    await cacheManager.invalidatePattern("jobOpenings:*");
+    await cacheManager.invalidatePattern(`t:${getTenantId()}:jobOpenings:*`);
     return callback(null, {
       message: MESSAGES.JOB_OPENING_CREATED,
       status: status.OK,

@@ -78,7 +78,8 @@ export const correctAttendance = async (
         unpaidBreakMinutes,
       );
       updateData.workingHours = hours;
-      updateData.status = hours < effectiveHalfDayMinHours ? "Half Day" : "Present";
+      updateData.status =
+        hours < effectiveHalfDayMinHours ? "Half Day" : "Present";
     }
 
     let record;
@@ -104,9 +105,11 @@ export const correctAttendance = async (
     }
 
     await Promise.all([
-      cacheManager.invalidatePattern(`attendance:${userId}:*`),
-      cacheManager.delete(`todayAttendance:${userId}`),
-      cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
+      cacheManager.invalidatePattern(`t:${tenantId}:attendance:${userId}:*`),
+      cacheManager.delete(`t:${tenantId}:todayAttendance:${userId}`),
+      cacheManager.invalidatePattern(
+        `t:${tenantId}:attendanceSummary:${userId}:*`,
+      ),
     ]);
     return callback(null, {
       message: MESSAGES.ATTENDANCE_CORRECTED,

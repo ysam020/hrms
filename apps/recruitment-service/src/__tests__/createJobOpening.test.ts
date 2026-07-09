@@ -220,7 +220,7 @@ describe("createJobOpening", () => {
 
     await createJobOpening(makeCall(validRequest), makeCallback());
 
-    expect(mockInvalidate).toHaveBeenCalledWith("jobOpenings:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:jobOpenings:*");
   });
 
   it("returns INTERNAL on database error", async () => {

@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -45,7 +45,7 @@ export const deleteJobOpening = async (
       },
     });
 
-    await cacheManager.invalidatePattern("jobOpenings:*");
+    await cacheManager.invalidatePattern(`t:${getTenantId()}:jobOpenings:*`);
     return callback(null, {
       message: MESSAGES.JOB_OPENING_DELETED,
       status: status.OK,
