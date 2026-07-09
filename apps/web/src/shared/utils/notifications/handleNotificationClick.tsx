@@ -4,6 +4,9 @@ export const handleNotificationClick = (title, navigate) => {
     case "Resignation":
       navigate("/resignation-process");
       break;
+    case "Leave":
+      navigate("/attendance/view-leave-applications");
+      break;
     default:
       break;
   }

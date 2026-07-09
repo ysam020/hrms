@@ -23,11 +23,16 @@ import { InputNumber } from "primereact/inputnumber";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import { useParams } from "react-router-dom";
-import { salaryComponents } from "@web/assets/data/salaryComponents";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { Calendar } from "primereact/calendar";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import {
+  computeSalaryComponents,
+  CODE_TO_KEY,
+  type SalaryComponentDef,
+  type PtSlab,
+} from "@web/shared/utils/salaryCalc";
 
 function ViewEditSalaryStructure() {
   const [isEditing, setIsEditing] = useState(false);
@@ -60,15 +65,49 @@ function ViewEditSalaryStructure() {
 
   const grossSalary = parseFloat(userData?.salary) || 0;
   const fixedStructure = userData?.salaryStructure || {};
+  const workState = userData?.workState ?? null;
 
-  // Filter salary components
+  const [salaryComponents, setSalaryComponents] = useState<
+    SalaryComponentDef[]
+  >([]);
+  const [ptSlabs, setPtSlabs] = useState<PtSlab[]>([]);
+
+  // Load the tenant's configured salary components + PT slabs (seeded with
+  // defaults matching the old hardcoded rates on first read).
+  useEffect(() => {
+    let isMounted = true;
+    async function loadComponents() {
+      try {
+        const [componentsRes, slabsRes] = await Promise.all([
+          apiClient.get(API_ENDPOINTS.LIST_SALARY_COMPONENTS),
+          apiClient.get(API_ENDPOINTS.LIST_PT_SLABS),
+        ]);
+        if (isMounted) {
+          setSalaryComponents(componentsRes.data?.data ?? []);
+          setPtSlabs(slabsRes.data?.data ?? []);
+        }
+      } catch (error) {
+        console.error("Error loading salary components:", error);
+      }
+    }
+    loadComponents();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Filter salary components — the six standard, tenant-configured ones plus
+  // incentive/deductions, which aren't part of SalaryComponentDefinition.
   const getFilteredSalaryComponents = () => {
+    const standardComponents = salaryComponents
+      .filter((c) => CODE_TO_KEY[c.code])
+      .map((c) => ({ key: CODE_TO_KEY[c.code], label: c.name }));
     const additionalComponents = [
       { key: "incentive", label: "Incentive" },
       { key: "deductions", label: "Deductions" },
     ];
 
-    return [...salaryComponents, ...additionalComponents];
+    return [...standardComponents, ...additionalComponents];
   };
 
   const formik = useFormik({
@@ -213,30 +252,27 @@ function ViewEditSalaryStructure() {
       const perDaySalary = grossSalary / totalMonthDays;
       const proRataGross = parseFloat((perDaySalary * paidDays).toFixed(2));
 
+      // Basic pay has no tenant-configured rate — it's the base everything
+      // else derives from — so we start from a 50% suggestion the admin can
+      // adjust, same as before. HRA/Conveyance start blank (there's no real
+      // "rate" for them; the old 50%-of-basic split was arbitrary, not a
+      // configured value). PF/ESI/PT are then derived from the tenant's
+      // configured components/PT slabs instead of a separate hardcoded
+      // formula, so this screen always agrees with the employee module.
       const basicPay = parseFloat((proRataGross * 0.5).toFixed(2));
-      const hra = parseFloat((basicPay * 0.5).toFixed(2));
-      const conveyance = parseFloat((basicPay * 0.5).toFixed(2));
+      const hra = 0;
+      const conveyance = 0;
 
-      let pf = 0;
-      let pt = 0;
-      let esi = 0;
-
-      pf = parseFloat((basicPay * 0.12).toFixed(2));
-
-      if (proRataGross <= 5999) {
-        pt = 0;
-      } else if (proRataGross >= 6000 && proRataGross <= 8999) {
-        pt = 80;
-      } else if (proRataGross >= 9000 && proRataGross <= 11999) {
-        pt = 150;
-      } else if (proRataGross >= 12000) {
-        pt = 200;
-      }
-
-      esi =
-        proRataGross <= 21000
-          ? parseFloat((proRataGross * 0.0175).toFixed(2))
-          : 0;
+      const { values: derived } = computeSalaryComponents({
+        basicPay,
+        grossSalary: proRataGross,
+        components: salaryComponents,
+        ptSlabs,
+        workState,
+      });
+      const pf = derived.pf ?? 0;
+      const esi = derived.esi ?? 0;
+      const pt = derived.pt ?? 0;
 
       const calculatedStructure = {
         basicPay,

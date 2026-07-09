@@ -1,6 +1,7 @@
 import { status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
+import { getNotificationQueue } from "@hrms/queue";
 import { markAttendance } from "../handlers/markAttendance";
 import { MESSAGES } from "../constants/messages";
 
@@ -16,6 +17,30 @@ jest.mock("@hrms/db", () => {
     },
     user: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
+    team: {
+      findFirst: jest.fn(),
+    },
+    shift: {
+      findFirst: jest.fn(),
+    },
+    branch: {
+      findFirst: jest.fn(),
+    },
+    attendanceBreak: {
+      findMany: jest.fn(),
+    },
+    leaveApplication: {
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+    leaveBalance: {
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    compOffCredit: {
+      updateMany: jest.fn(),
     },
   };
   return {
@@ -34,6 +59,12 @@ jest.mock("@hrms/cache", () => ({
   },
 }));
 
+jest.mock("@hrms/queue", () => ({
+  getNotificationQueue: jest
+    .fn()
+    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+}));
+
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
@@ -50,6 +81,22 @@ const mockCacheGet = (cacheManager as any).get as jest.Mock;
 const mockCacheSet = (cacheManager as any).set as jest.Mock;
 const mockSettingsFindFirst = (prisma as any).tenantSettings
   .findFirst as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
+const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
+const mockTeamFindFirst = (prisma as any).team.findFirst as jest.Mock;
+const mockShiftFindFirst = (prisma as any).shift.findFirst as jest.Mock;
+const mockBreakFindMany = (prisma as any).attendanceBreak
+  .findMany as jest.Mock;
+const mockLeaveFindFirst = (prisma as any).leaveApplication
+  .findFirst as jest.Mock;
+const mockLeaveUpdate = (prisma as any).leaveApplication.update as jest.Mock;
+const mockLeaveBalanceFindFirst = (prisma as any).leaveBalance
+  .findFirst as jest.Mock;
+const mockLeaveBalanceUpdateMany = (prisma as any).leaveBalance
+  .updateMany as jest.Mock;
+const mockCompOffUpdateMany = (prisma as any).compOffCredit
+  .updateMany as jest.Mock;
+const mockNotificationAdd = getNotificationQueue().add as jest.Mock;
 
 const DEFAULT_ATTENDANCE_SETTINGS = {
   workStartHour: 9,
@@ -73,6 +120,30 @@ describe("markAttendance", () => {
     // Return valid attendance settings so the handler proceeds past the
     // FAILED_PRECONDITION guard on every test that doesn't override this.
     mockSettingsFindFirst.mockResolvedValue(DEFAULT_ATTENDANCE_SETTINGS);
+    // No branch/shift/attendanceMode overrides by default — every existing
+    // test exercises the zero-config tenant-default path.
+    mockUserFindUnique.mockResolvedValue({
+      wfh: false,
+      wfhHomeLatitude: null,
+      wfhHomeLongitude: null,
+      wfhHomeName: null,
+      branchId: null,
+      shiftId: null,
+      attendanceMode: "office",
+    });
+    mockTeamFindFirst.mockResolvedValue(null);
+    mockShiftFindFirst.mockResolvedValue(null);
+    // No breaks by default — every existing test exercises the
+    // no-unpaid-break path (working hours = raw timeOut - timeIn).
+    mockBreakFindMany.mockResolvedValue([]);
+    // No pending/approved leave for today by default.
+    mockLeaveFindFirst.mockResolvedValue(null);
+    mockLeaveUpdate.mockResolvedValue({ id: "leave-1", status: "Cancelled" });
+    mockLeaveBalanceFindFirst.mockResolvedValue(null);
+    mockLeaveBalanceUpdateMany.mockResolvedValue({ count: 1 });
+    mockCompOffUpdateMany.mockResolvedValue({ count: 1 });
+    mockUserFindMany.mockResolvedValue([]);
+    mockNotificationAdd.mockResolvedValue(undefined);
   });
 
   it("returns INVALID_ARGUMENT when userId or type is missing", async () => {
@@ -106,6 +177,109 @@ describe("markAttendance", () => {
         message: MESSAGES.ALREADY_CHECKED_IN,
         status: status.ALREADY_EXISTS,
       });
+    });
+
+    it("auto-withdraws a pending full-day leave on check-in without touching the balance", async () => {
+      mockFindFirst.mockResolvedValue(null);
+      mockLeaveFindFirst.mockResolvedValue({
+        id: "leave-1",
+        status: "Pending",
+        unit: "full_day",
+        leaveType: "PL",
+        days: 1,
+      });
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+      const cb = makeCallback();
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+
+      expect(mockLeaveUpdate).toHaveBeenCalledWith({
+        where: { id: "leave-1" },
+        data: expect.objectContaining({ status: "Cancelled" }),
+      });
+      expect(mockLeaveBalanceFindFirst).not.toHaveBeenCalled();
+      expect(mockLeaveBalanceUpdateMany).not.toHaveBeenCalled();
+      expect(mockCompOffUpdateMany).not.toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({
+          message: expect.stringContaining("automatically withdrawn"),
+          status: status.OK,
+        }),
+      );
+    });
+
+    it("auto-cancels an approved full-day leave on check-in and restores the balance", async () => {
+      mockFindFirst.mockResolvedValue(null);
+      mockLeaveFindFirst.mockResolvedValue({
+        id: "leave-1",
+        status: "Approved",
+        unit: "full_day",
+        leaveType: "PL",
+        days: 1,
+        approvedById: "mgr-1",
+      });
+      mockLeaveBalanceFindFirst.mockResolvedValue({
+        id: "bal-1",
+        userId: "john",
+        balances: { PL: 5 },
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+      const cb = makeCallback();
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+
+      expect(mockLeaveUpdate).toHaveBeenCalledWith({
+        where: { id: "leave-1" },
+        data: expect.objectContaining({ status: "Cancelled" }),
+      });
+      expect(mockLeaveBalanceUpdateMany).toHaveBeenCalledWith({
+        where: { id: "bal-1", updatedAt: new Date("2024-01-01T00:00:00.000Z") },
+        data: { balances: { PL: 6 } },
+      });
+      expect(mockCompOffUpdateMany).not.toHaveBeenCalled();
+      expect(mockNotificationAdd).toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({
+          message: expect.stringContaining("automatically cancelled"),
+          status: status.OK,
+        }),
+      );
+    });
+
+    it("restores comp-off credits instead of the balance when an approved comp-off leave is auto-cancelled", async () => {
+      mockFindFirst.mockResolvedValue(null);
+      mockLeaveFindFirst.mockResolvedValue({
+        id: "leave-1",
+        status: "Approved",
+        unit: "full_day",
+        leaveType: "COMP_OFF",
+        days: 1,
+      });
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+      const cb = makeCallback();
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+
+      expect(mockCompOffUpdateMany).toHaveBeenCalledWith({
+        where: { usedInLeaveApplicationId: "leave-1", status: "used" },
+        data: { status: "available", usedInLeaveApplicationId: null },
+      });
+      expect(mockLeaveBalanceFindFirst).not.toHaveBeenCalled();
+      expect(mockCreate).toHaveBeenCalled();
+    });
+
+    it("allows check-in when the employee only has a half-day leave for today", async () => {
+      mockFindFirst.mockResolvedValue(null);
+      // findFirst is filtered by unit: "full_day" in the real query, so a
+      // half-day leave never matches — the mock reflects that by resolving null.
+      mockLeaveFindFirst.mockResolvedValue(null);
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+      const cb = makeCallback();
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+      expect(mockCreate).toHaveBeenCalled();
+      expect(mockLeaveUpdate).not.toHaveBeenCalled();
     });
 
     it("creates new record when no existing record", async () => {
@@ -147,6 +321,73 @@ describe("markAttendance", () => {
         }),
       );
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it("uses the employee's assigned shift start time instead of the tenant default", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        wfh: false,
+        wfhHomeLatitude: null,
+        wfhHomeLongitude: null,
+        wfhHomeName: null,
+        branchId: null,
+        shiftId: "shift-1",
+        attendanceMode: "office",
+      });
+      mockShiftFindFirst.mockResolvedValue({
+        id: "shift-1",
+        startHour: 12,
+        startMinute: 0,
+        lateGracePeriodMinutes: 15,
+        halfDayMinHours: 4,
+      });
+      jest.useFakeTimers();
+      // 10:00 local is "Late" under the tenant default (9:00 + 30min grace)
+      // but well within the assigned Night Shift's 12:00 start.
+      jest.setSystemTime(new Date(2024, 2, 4, 10, 0, 0));
+
+      mockFindFirst.mockResolvedValue(null);
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+
+      const cb = makeCallback();
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: "Present" }),
+        }),
+      );
+      jest.useRealTimers();
+    });
+
+    it("skips the geofence check entirely for field/remote employees", async () => {
+      mockSettingsFindFirst.mockResolvedValue({
+        ...DEFAULT_ATTENDANCE_SETTINGS,
+        geofencingEnabled: true,
+        officeLatitude: 12.9716,
+        officeLongitude: 77.5946,
+      });
+      mockUserFindUnique.mockResolvedValue({
+        wfh: false,
+        wfhHomeLatitude: null,
+        wfhHomeLongitude: null,
+        wfhHomeName: null,
+        branchId: null,
+        shiftId: null,
+        attendanceMode: "field",
+      });
+      mockFindFirst.mockResolvedValue(null);
+      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
+
+      const cb = makeCallback();
+      // No latitude/longitude in the request — would fail the geofence
+      // precondition for an "office" employee, but a field employee should
+      // check in successfully anyway.
+      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
+
+      expect(cb).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ status: status.OK }),
+      );
     });
 
     it("includes (late) in message when checking in after 9:30", async () => {
@@ -279,6 +520,35 @@ describe("markAttendance", () => {
 
       const updateCall = mockUpdate.mock.calls[0][0];
       expect(updateCall.data.status).toBe("Late");
+
+      jest.useRealTimers();
+    });
+
+    it("subtracts unpaid break time from working hours and half-day status", async () => {
+      jest.useFakeTimers();
+      const checkOutTime = new Date(2024, 2, 4, 17, 0, 0); // local 17:00
+      jest.setSystemTime(checkOutTime);
+
+      mockFindFirst.mockResolvedValue({
+        id: "rec-1",
+        timeIn: new Date(2024, 2, 4, 8, 0, 0).toISOString(), // 9h raw
+        timeOut: null,
+        status: "Present",
+      });
+      // 5 unpaid hours (e.g. forgot to log back in) → 4h net, right at the
+      // half-day boundary rather than the inflated 9h raw diff.
+      mockBreakFindMany.mockResolvedValue([
+        { isPaid: false, durationMinutes: 300, startTime: new Date(), endTime: new Date() },
+      ]);
+      mockUpdate.mockResolvedValue({ id: "rec-1", status: "Half Day" });
+
+      await markAttendance(
+        makeCall({ userId: "john", type: "CHECK_OUT" }),
+        makeCallback(),
+      );
+
+      const updateCall = mockUpdate.mock.calls[0][0];
+      expect(updateCall.data.workingHours).toBe(4);
 
       jest.useRealTimers();
     });

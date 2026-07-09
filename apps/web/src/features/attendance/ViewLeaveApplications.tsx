@@ -117,6 +117,18 @@ function ViewLeaveApplications() {
         icon: "pi pi-times-circle",
         color: "#F44336",
       },
+      {
+        label: "Cancellation Requested",
+        value: "Cancellation Requested",
+        icon: "pi pi-exclamation-circle",
+        color: "#8B5CF6",
+      },
+      {
+        label: "Cancelled",
+        value: "Cancelled",
+        icon: "pi pi-ban",
+        color: "#9E9E9E",
+      },
     ],
     [],
   );
@@ -320,6 +332,22 @@ function ViewLeaveApplications() {
             ? "rgba(239, 68, 68, 0.15)"
             : "rgba(248, 113, 113, 0.2)",
         label: "Rejected",
+      },
+      "Cancellation Requested": {
+        color: theme === "light" ? "#7c3aed" : "#a78bfa",
+        bg:
+          theme === "light"
+            ? "rgba(139, 92, 246, 0.15)"
+            : "rgba(167, 139, 250, 0.2)",
+        label: "Cancellation Requested",
+      },
+      Cancelled: {
+        color: theme === "light" ? "#6b7280" : "#9ca3af",
+        bg:
+          theme === "light"
+            ? "rgba(107, 114, 128, 0.15)"
+            : "rgba(156, 163, 175, 0.2)",
+        label: "Cancelled",
       },
     };
 

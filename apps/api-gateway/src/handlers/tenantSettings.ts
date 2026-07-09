@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
+import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
@@ -9,23 +10,28 @@ import { isSuperUser } from "../utils/user";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Fields returned to the client – omits internal Prisma fields. */
-function toPublic(s: any) {
+export function toPublic(s: any) {
   return {
     id: s.id,
     effectiveFrom: s.effectiveFrom,
     note: s.note ?? null,
+    // Work week
+    workWeekPattern: s.workWeekPattern ?? SETTINGS_DEFAULTS.workWeekPattern,
     // Leave
     paidLeavesPerYear: s.paidLeavesPerYear,
     sickLeavesPerYear: s.sickLeavesPerYear,
     casualLeavesPerYear: s.casualLeavesPerYear,
     medicalCertRequired: s.medicalCertRequired,
     customLeaveTypes: s.customLeaveTypes ?? [],
+    leavePolicies: s.leavePolicies ?? [],
     // Attendance
     workStartHour: s.workStartHour,
     workStartMinute: s.workStartMinute,
     lateGracePeriodMinutes: s.lateGracePeriodMinutes,
     fullDayMinHours: s.fullDayMinHours,
     halfDayMinHours: s.halfDayMinHours,
+    regularizationBackdateWindowDays: s.regularizationBackdateWindowDays ?? 3,
+    overtimePreApprovalRequired: s.overtimePreApprovalRequired ?? false,
     // Geofencing
     geofencingEnabled: s.geofencingEnabled ?? false,
     officeLatitude: s.officeLatitude ?? null,
@@ -40,16 +46,23 @@ function toPublic(s: any) {
 
 /** Schema defaults — mirrors Prisma field defaults; used only when no DB record exists yet. */
 export const SETTINGS_DEFAULTS = {
+  workWeekPattern: { type: "mon_fri", workingDays: [1, 2, 3, 4, 5] } as {
+    type: "mon_fri" | "mon_sat" | "custom";
+    workingDays: number[];
+  },
   paidLeavesPerYear: 12,
   sickLeavesPerYear: 12,
   casualLeavesPerYear: 6,
   medicalCertRequired: false,
   customLeaveTypes: [] as any[],
+  leavePolicies: [] as any[],
   workStartHour: 9,
   workStartMinute: 0,
   lateGracePeriodMinutes: 30,
   fullDayMinHours: 8,
   halfDayMinHours: 4,
+  regularizationBackdateWindowDays: 3,
+  overtimePreApprovalRequired: false,
   probationPeriodDays: 90,
   noticePeriodDays: 30,
   // Geofencing
@@ -66,7 +79,7 @@ export const SETTINGS_DEFAULTS = {
  * Returns the currently *active* settings row:
  *   latest version where effectiveFrom ≤ now
  */
-async function getActiveSettings(tenantId: string) {
+export async function getActiveSettings(tenantId: string) {
   return (prisma as any).tenantSettings.findFirst({
     where: { tenantId, effectiveFrom: { lte: new Date() } },
     orderBy: { effectiveFrom: "desc" },
@@ -81,6 +94,102 @@ async function getPendingSettings(tenantId: string) {
     where: { tenantId, effectiveFrom: { gt: new Date() } },
     orderBy: { effectiveFrom: "asc" },
   });
+}
+
+/**
+ * Merges a validated partial patch onto the current active settings snapshot
+ * and writes it as a new immutable version (or overwrites a same-`effectiveFrom`
+ * row from a double-submit). Shared by the full org-settings save flow and any
+ * narrower, single-section save flow (e.g. leave policy) that only wants to
+ * patch its own fields without resubmitting the whole form.
+ */
+export async function writeVersionedSettings(
+  tenantId: string,
+  userId: string,
+  validated: Record<string, any>,
+  effectiveFrom: Date,
+  note?: string,
+): Promise<{ settings: ReturnType<typeof toPublic>; message: string }> {
+  const currentActive = await getActiveSettings(tenantId);
+  const base = currentActive
+    ? {
+        workWeekPattern:
+          currentActive.workWeekPattern ?? SETTINGS_DEFAULTS.workWeekPattern,
+        paidLeavesPerYear: currentActive.paidLeavesPerYear,
+        sickLeavesPerYear: currentActive.sickLeavesPerYear,
+        casualLeavesPerYear: currentActive.casualLeavesPerYear,
+        medicalCertRequired: currentActive.medicalCertRequired,
+        customLeaveTypes: currentActive.customLeaveTypes,
+        leavePolicies:
+          currentActive.leavePolicies ?? SETTINGS_DEFAULTS.leavePolicies,
+        workStartHour: currentActive.workStartHour,
+        workStartMinute: currentActive.workStartMinute,
+        lateGracePeriodMinutes: currentActive.lateGracePeriodMinutes,
+        fullDayMinHours: currentActive.fullDayMinHours,
+        halfDayMinHours: currentActive.halfDayMinHours,
+        regularizationBackdateWindowDays:
+          currentActive.regularizationBackdateWindowDays ??
+          SETTINGS_DEFAULTS.regularizationBackdateWindowDays,
+        overtimePreApprovalRequired:
+          currentActive.overtimePreApprovalRequired ??
+          SETTINGS_DEFAULTS.overtimePreApprovalRequired,
+        probationPeriodDays: currentActive.probationPeriodDays,
+        noticePeriodDays: currentActive.noticePeriodDays,
+        geofencingEnabled: currentActive.geofencingEnabled ?? false,
+        officeLatitude: currentActive.officeLatitude ?? null,
+        officeLongitude: currentActive.officeLongitude ?? null,
+        officeName: currentActive.officeName ?? null,
+        geofenceRadiusMeters: currentActive.geofenceRadiusMeters ?? 200,
+      }
+    : SETTINGS_DEFAULTS;
+
+  const merged = { ...base, ...validated };
+
+  // Check whether a version with the same effectiveFrom already exists for
+  // this tenant (e.g. admin clicks Save twice in quick succession).
+  const existing = await (prisma as any).tenantSettings.findFirst({
+    where: { tenantId, effectiveFrom },
+  });
+  const row = existing
+    ? await (prisma as any).tenantSettings.update({
+        where: { id: existing.id },
+        data: { ...merged, note: note ?? null, createdBy: userId },
+      })
+    : await (prisma as any).tenantSettings.create({
+        data: {
+          tenantId,
+          effectiveFrom,
+          ...merged,
+          note: note ?? null,
+          createdBy: userId,
+        },
+      });
+
+  // Every leave-service/attendance-service settings read is cached (up to 15
+  // min TTL). Only a row that's already active can change what those
+  // services should be resolving right now — a future-dated (pending) write
+  // doesn't need this, since nothing has cached it as "active" yet. Redis is
+  // shared across services, so deleting the key here is visible to them
+  // immediately; each service's own short-lived (5 min) in-process L1 cache
+  // is the only remaining staleness window.
+  if (effectiveFrom <= new Date()) {
+    await Promise.all([
+      cacheManager.delete(`tenantSettings:attendance:${tenantId}`),
+      cacheManager.delete(`tenantSettings:leave:${tenantId}`),
+    ]).catch((err) =>
+      logger.warn("[writeVersionedSettings] Cache invalidation failed:", {
+        err,
+      }),
+    );
+  }
+
+  return {
+    settings: toPublic(row),
+    message:
+      effectiveFrom <= new Date()
+        ? "Settings applied immediately."
+        : `Settings scheduled for ${effectiveFrom.toISOString().slice(0, 10)}.`,
+  };
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -179,6 +288,23 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
       }
     };
 
+    if (body.workWeekPattern !== undefined) {
+      const wp = body.workWeekPattern;
+      if (
+        !wp ||
+        !["mon_fri", "mon_sat", "custom"].includes(wp.type) ||
+        !Array.isArray(wp.workingDays) ||
+        wp.workingDays.some(
+          (d: unknown) => typeof d !== "number" || d < 0 || d > 6,
+        )
+      ) {
+        throw new Error(
+          'workWeekPattern must be { type: "mon_fri"|"mon_sat"|"custom", workingDays: number[] (0-6) }.',
+        );
+      }
+      validated.workWeekPattern = wp;
+    }
+
     intField("paidLeavesPerYear");
     intField("sickLeavesPerYear");
     intField("casualLeavesPerYear");
@@ -188,6 +314,11 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
       if (!Array.isArray(body.customLeaveTypes))
         throw new Error("customLeaveTypes must be an array.");
       validated.customLeaveTypes = body.customLeaveTypes;
+    }
+    if (body.leavePolicies !== undefined) {
+      if (!Array.isArray(body.leavePolicies))
+        throw new Error("leavePolicies must be an array.");
+      validated.leavePolicies = body.leavePolicies;
     }
 
     if (body.workStartHour !== undefined) {
@@ -205,6 +336,11 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
       validated.fullDayMinHours = Math.max(0.5, Number(body.fullDayMinHours));
     if (body.halfDayMinHours !== undefined)
       validated.halfDayMinHours = Math.max(0.5, Number(body.halfDayMinHours));
+    intField("regularizationBackdateWindowDays");
+    if (body.overtimePreApprovalRequired !== undefined)
+      validated.overtimePreApprovalRequired = Boolean(
+        body.overtimePreApprovalRequired,
+      );
     intField("probationPeriodDays");
     intField("noticePeriodDays");
 
@@ -225,69 +361,16 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
         Number(body.geofenceRadiusMeters),
       );
 
-    // Merge validated fields onto the current active settings so the new
-    // version is a complete snapshot, not a sparse patch.
-    const currentActive = await getActiveSettings(tenantId);
-    const base = currentActive
-      ? {
-          paidLeavesPerYear: currentActive.paidLeavesPerYear,
-          sickLeavesPerYear: currentActive.sickLeavesPerYear,
-          casualLeavesPerYear: currentActive.casualLeavesPerYear,
-          medicalCertRequired: currentActive.medicalCertRequired,
-          customLeaveTypes: currentActive.customLeaveTypes,
-          workStartHour: currentActive.workStartHour,
-          workStartMinute: currentActive.workStartMinute,
-          lateGracePeriodMinutes: currentActive.lateGracePeriodMinutes,
-          fullDayMinHours: currentActive.fullDayMinHours,
-          halfDayMinHours: currentActive.halfDayMinHours,
-          probationPeriodDays: currentActive.probationPeriodDays,
-          noticePeriodDays: currentActive.noticePeriodDays,
-          geofencingEnabled: currentActive.geofencingEnabled ?? false,
-          officeLatitude: currentActive.officeLatitude ?? null,
-          officeLongitude: currentActive.officeLongitude ?? null,
-          officeName: currentActive.officeName ?? null,
-          geofenceRadiusMeters: currentActive.geofenceRadiusMeters ?? 200,
-        }
-      : SETTINGS_DEFAULTS;
-
-    const merged = { ...base, ...validated };
-
-    // Check whether a version with the same effectiveFrom already exists for
-    // this tenant (e.g. admin clicks Save twice in quick succession).
-    const existing = await (prisma as any).tenantSettings.findFirst({
-      where: { tenantId, effectiveFrom },
-    });
-    if (existing) {
-      // Overwrite it instead of duplicating.
-      const updated = await (prisma as any).tenantSettings.update({
-        where: { id: existing.id },
-        data: { ...merged, note: note ?? null, createdBy: userId },
-      });
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-        data: { settings: toPublic(updated) },
-        message:
-          effectiveFrom <= new Date()
-            ? "Settings applied immediately."
-            : `Settings scheduled for ${effectiveFrom.toISOString().slice(0, 10)}.`,
-      });
-    }
-
-    const created = await (prisma as any).tenantSettings.create({
-      data: {
-        tenantId,
-        effectiveFrom,
-        ...merged,
-        note: note ?? null,
-        createdBy: userId,
-      },
-    });
-
-    const isImmediate = effectiveFrom <= new Date();
+    const { settings, message } = await writeVersionedSettings(
+      tenantId,
+      userId,
+      validated,
+      effectiveFrom,
+      note,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { settings: toPublic(created) },
-      message: isImmediate
-        ? "Settings applied immediately."
-        : `Settings scheduled for ${effectiveFrom.toISOString().slice(0, 10)}.`,
+      data: { settings },
+      message,
     });
   } catch (error: any) {
     if (error?.message && !error?.code) {

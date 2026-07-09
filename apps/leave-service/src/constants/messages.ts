@@ -10,8 +10,6 @@ export const MESSAGES = {
   LEAVE_APPLICATION_NOT_FOUND: "Leave application not found",
   LEAVE_APPROVED: "Leave approved successfully",
   LEAVE_REJECTED: "Leave rejected",
-  ONLY_PENDING_CAN_BE_CANCELLED:
-    "Only pending leave applications can be cancelled",
   ONLY_PENDING_CAN_BE_APPROVED:
     "Only pending leave applications can be approved",
   ONLY_PENDING_CAN_BE_REJECTED:
@@ -23,5 +21,15 @@ export const MESSAGES = {
   LEAVE_FETCHED: "Leave application fetched successfully",
   LEAVE_APPLICATIONS_FETCHED: "Leave applications fetched successfully",
   LEAVE_BALANCE_UPDATED: "Leave balance updated successfully",
+  INVALID_LEAVE_UNIT: "unit must be full_day, half_day, or short_leave",
+  HALF_DAY_SESSION_REQUIRED:
+    "session (first_half or second_half) is required for a half-day leave, and half-day leave must be a single day",
+  SHORT_LEAVE_HOURS_REQUIRED:
+    "shortLeaveHours is required for short leave, and short leave must be a single day",
+  ONLY_APPROVED_CAN_REQUEST_CANCELLATION:
+    "Only approved leave applications can have cancellation requested — pending applications can be cancelled directly",
+  LEAVE_CANCELLATION_REQUESTED: "Cancellation requested — awaiting approval",
+  CANNOT_CANCEL_IN_CURRENT_STATE:
+    "Only pending or approved leave applications can be cancelled",
   INTERNAL_SERVER_ERROR: "Internal server error",
 };

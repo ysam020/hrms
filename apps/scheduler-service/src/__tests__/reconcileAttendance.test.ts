@@ -1,12 +1,16 @@
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { reconcileAttendance } from "../jobs/reconcileAttendance";
+
+dayjs.extend(utc);
 
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findMany: jest.fn(), findUnique: jest.fn() },
     attendanceRecord: { findMany: jest.fn(), createMany: jest.fn() },
-    leaveApplication: { createMany: jest.fn() },
+    leaveApplication: { findMany: jest.fn(), createMany: jest.fn() },
     leaveBalance: {
       findFirst: jest.fn(),
       upsert: jest.fn(),
@@ -41,6 +45,8 @@ const mockAttendanceCreateMany = (prisma as any).attendanceRecord
   .createMany as jest.Mock;
 const mockLeaveCreateMany = (prisma as any).leaveApplication
   .createMany as jest.Mock;
+const mockLeaveFindMany = (prisma as any).leaveApplication
+  .findMany as jest.Mock;
 const mockLbFindFirst = (prisma as any).leaveBalance.findFirst as jest.Mock;
 const mockLbUpsert = (prisma as any).leaveBalance.upsert as jest.Mock;
 const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
@@ -53,6 +59,7 @@ describe("reconcileAttendance", () => {
     mockAttendanceFindMany.mockResolvedValue([]);
     mockAttendanceCreateMany.mockResolvedValue({ count: 0 });
     mockLeaveCreateMany.mockResolvedValue({ count: 0 });
+    mockLeaveFindMany.mockResolvedValue([]);
     mockLbFindFirst.mockResolvedValue({
       username: "john",
       accumulatedPLBeforeCurrentMonth: 0,
@@ -167,6 +174,48 @@ describe("reconcileAttendance", () => {
       (r: any) => r.status === "Holiday",
     );
     expect(holidayRecords.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not create a duplicate system-generated leave for a date already covered by a real leave application", async () => {
+    jest.setSystemTime(new Date(2024, 2, 5, 12, 0, 0)); // March 5 — process March 1-4
+    mockUserFindMany.mockResolvedValue([{ id: "u1", tenantId: "t1" }]);
+    // No AttendanceRecord for any of March 1-4 (as expected for approved leave days).
+    mockAttendanceFindMany.mockResolvedValue([]);
+    // March 1-2 already has a real, approved leave application.
+    mockLeaveFindMany.mockResolvedValue([
+      {
+        from: new Date(2024, 2, 1),
+        to: new Date(2024, 2, 2),
+      },
+    ]);
+    mockLbFindFirst.mockResolvedValue({
+      accumulatedPLBeforeCurrentMonth: 0,
+      balances: [
+        {
+          month: 3,
+          year: 2024,
+          earnedPL: 10,
+          usedPL: 0,
+          usedLWP: 0,
+          remainingPL: 10,
+        },
+      ],
+    });
+
+    await reconcileAttendance();
+
+    // Only March 4 (a Monday) is genuinely unaccounted for — March 1 (Fri)
+    // and March 2 (Sat) are covered by the real leave application, and
+    // March 3 (Sun) is a weekend. No system-generated leave should be
+    // created for March 1 or March 2.
+    if (mockLeaveCreateMany.mock.calls.length > 0) {
+      const created = mockLeaveCreateMany.mock.calls[0][0].data as any[];
+      const createdDates = created.map((l) =>
+        dayjs.utc(l.from).format("YYYY-MM-DD"),
+      );
+      expect(createdDates).not.toContain("2024-03-01");
+      expect(createdDates).not.toContain("2024-03-02");
+    }
   });
 
   it("throws on top-level database error", async () => {

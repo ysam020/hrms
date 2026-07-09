@@ -1,12 +1,11 @@
 import { employeeManagementSchema } from "@web/shared/schemas/employeeManagement";
 
 const baseData = {
-  salary: 50000,
   employeeStatus: "Active" as const,
 };
 
 describe("employeeManagementSchema", () => {
-  it("accepts active employee with salary only", () => {
+  it("accepts active employee with just a status", () => {
     const result = employeeManagementSchema.safeParse(baseData);
     expect(result.success).toBe(true);
   });
@@ -23,20 +22,11 @@ describe("employeeManagementSchema", () => {
   });
 
   it("defaults employeeStatus to Active when omitted", () => {
-    const result = employeeManagementSchema.safeParse({ salary: 40000 });
+    const result = employeeManagementSchema.safeParse({});
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.employeeStatus).toBe("Active");
     }
-  });
-
-  it("rejects negative salary", () => {
-    const result = employeeManagementSchema.safeParse({
-      ...baseData,
-      salary: -1000,
-    });
-    expect(result.success).toBe(false);
-    expect(JSON.stringify(result.error?.issues)).toContain("positive number");
   });
 
   describe("Terminated status", () => {
@@ -89,50 +79,6 @@ describe("employeeManagementSchema", () => {
         ...baseData,
         employeeStatus: "Absconded",
         dateOfAbscond: "2024-02-15",
-      });
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe("salaryStructure validation", () => {
-    it("accepts salary structure components that sum to less than gross salary", () => {
-      const result = employeeManagementSchema.safeParse({
-        salary: 50000,
-        employeeStatus: "Active",
-        salaryStructure: {
-          basicPay: 25000,
-          hra: 15000,
-          conveyance: 10000,
-          pf: 1800,
-          esi: 750,
-          pt: 200,
-        },
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it("rejects a salary structure component exceeding gross salary", () => {
-      const result = employeeManagementSchema.safeParse({
-        salary: 50000,
-        employeeStatus: "Active",
-        salaryStructure: {
-          basicPay: 60000,
-        },
-      });
-      expect(result.success).toBe(false);
-      expect(JSON.stringify(result.error?.issues)).toContain(
-        "cannot be greater than gross salary",
-      );
-    });
-
-    it("skips earnings total check when no earning components provided", () => {
-      const result = employeeManagementSchema.safeParse({
-        salary: 50000,
-        employeeStatus: "Active",
-        salaryStructure: {
-          pf: 1800,
-          esi: 750,
-        },
       });
       expect(result.success).toBe(true);
     });

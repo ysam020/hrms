@@ -35,7 +35,14 @@ export const getAttendance = async (
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
+    // tenantId in the where clause isn't required for isolation (business
+    // models already live in a per-tenant physical DB), but it lets this
+    // query be served by the existing @@unique([tenantId,userId,date]) /
+    // @@index([tenantId,date]) indexes instead of a collection scan, and
+    // guards against the (should-never-happen) fallback to the shared
+    // master-DB client if tenant-context resolution ever fails.
     const where: Record<string, any> = {};
+    if (getTenantId()) where.tenantId = getTenantId();
     if (userId) where.userId = userId;
     if (startDate || endDate) {
       where.date = {};

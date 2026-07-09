@@ -13,6 +13,10 @@ jest.mock("../grpc/clients", () => ({
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn() },
+    attendanceRecord: { findMany: jest.fn().mockResolvedValue([]) },
+    leaveBalance: { findFirst: jest.fn().mockResolvedValue(null) },
+    payrollRun: { findFirst: jest.fn().mockResolvedValue(null) },
+    payrollLineItem: { findFirst: jest.fn().mockResolvedValue(null) },
   };
   return {
     prisma: _db,
@@ -44,8 +48,13 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
+const mockPayrollRunFindFirst = (prisma as any).payrollRun
+  .findFirst as jest.Mock;
+const mockPayrollLineItemFindFirst = (prisma as any).payrollLineItem
+  .findFirst as jest.Mock;
 
-const makeRes = () => ({ json: jest.fn() }) as any;
+const makeRes = () =>
+  ({ json: jest.fn(), setHeader: jest.fn(), send: jest.fn() }) as any;
 const makeReq = (overrides: Record<string, any> = {}) =>
   ({
     user: { userId: "user-id-1" },
@@ -283,5 +292,74 @@ describe("generateSalarySlip", () => {
       RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
       expect.any(Object),
     );
+  });
+
+  const makePayslipResponse = () => ({
+    data: {
+      employee: { username: "emp-1", first_name: "Jane", last_name: "Doe" },
+      salaryStructure: {
+        basicPay: 25000,
+        hra: 15000,
+        conveyance: 10000,
+        pf: 3000,
+        esi: 750,
+        pt: 200,
+        incentive: 0,
+        deductions: 0,
+      },
+      attendanceSummary: null,
+    },
+  });
+
+  it("prorates the baseline SalaryStructure by attendance when no payroll run has disbursed this month yet", async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
+    mockGrpcCall.mockResolvedValue(makePayslipResponse());
+    mockPayrollRunFindFirst.mockResolvedValue(null);
+
+    const res = makeRes();
+    await generateSalarySlip(
+      makeReq({
+        params: { userId: "emp-1", year: "2024", month: "3" },
+        user: { userId: "user-id-1", tenantId: "t1", isSuperUser: true },
+      }),
+      res,
+    );
+
+    expect(mockPayrollRunFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId: "t1", month: 3, year: 2024, status: "disbursed" },
+      }),
+    );
+    expect(mockPayrollLineItemFindFirst).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalled();
+  });
+
+  it("uses the disbursed PayrollLineItem's stored values directly, without re-prorating, when a payroll run has already disbursed this month", async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
+    mockGrpcCall.mockResolvedValue(makePayslipResponse());
+    mockPayrollRunFindFirst.mockResolvedValue({ id: "run-1" });
+    mockPayrollLineItemFindFirst.mockResolvedValue({
+      basicPay: 12500,
+      hra: 7500,
+      conveyance: 5000,
+      pf: 1500,
+      esi: 375,
+      pt: 100,
+      otherDeductions: 0,
+    });
+
+    const res = makeRes();
+    await generateSalarySlip(
+      makeReq({
+        params: { userId: "emp-1", year: "2024", month: "3" },
+        user: { userId: "user-id-1", tenantId: "t1" },
+      }),
+      res,
+    );
+
+    expect(mockPayrollLineItemFindFirst).toHaveBeenCalledWith({
+      where: { payrollRunId: "run-1", userId: "emp-1" },
+    });
+    expect(res.send).toHaveBeenCalled();
   });
 });

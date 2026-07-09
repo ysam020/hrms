@@ -98,16 +98,17 @@ describe("updateEmployee", () => {
   });
 
   it("invalidates cache after update", async () => {
-    mockFindUnique.mockResolvedValue({ id: "emp-1" });
-    mockUpdate.mockResolvedValue({ id: "emp-1" });
+    mockFindUnique.mockResolvedValue({ id: "emp-1", username: "john" });
+    mockUpdate.mockResolvedValue({ id: "emp-1", username: "john" });
 
     await updateEmployee(
       makeCall({ id: "emp-1", designation: "Manager" }),
       makeCallback(),
     );
 
-    expect(mockInvalidate).toHaveBeenCalledWith("employees:*");
-    expect(mockDelete).toHaveBeenCalledWith("employee:emp-1");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:employees:*");
+    expect(mockDelete).toHaveBeenCalledWith("t:t1:employee:emp-1");
+    expect(mockDelete).toHaveBeenCalledWith("t:t1:employee-details:john");
   });
 
   it("skips undefined/null fields when building update data", async () => {

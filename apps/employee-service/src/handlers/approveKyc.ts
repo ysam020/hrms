@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
@@ -39,9 +39,11 @@ export const approveKyc = async (
       data: { kyc_approval: "Approved" },
     });
 
+    const tenantId = getTenantId() ?? "global";
     await Promise.all([
-      cacheManager.invalidatePattern("employees:*"),
-      cacheManager.delete(`employee:${employeeId}`),
+      cacheManager.invalidatePattern(`t:${tenantId}:employees:*`),
+      cacheManager.delete(`t:${tenantId}:employee:${employeeId}`),
+      cacheManager.delete(`t:${tenantId}:employee-details:${updatedUser.username}`),
     ]);
 
     // Notify employee (fire-and-forget)

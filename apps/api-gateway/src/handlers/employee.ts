@@ -18,8 +18,6 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       pf_no,
       uan_no,
       esic_no,
-      salary,
-      salaryStructure,
       reasonForTermination,
       dateOfTermination,
       dateOfAbscond,
@@ -54,7 +52,6 @@ export async function editEmployeeDetails(req: Request, res: Response) {
     if (wfhHomeLongitude !== undefined)
       updateData.wfhHomeLongitude = wfhHomeLongitude ?? null;
     if (wfhHomeName !== undefined) updateData.wfhHomeName = wfhHomeName ?? null;
-    if (salary !== undefined) updateData.salary = salary;
     if (reasonForTermination !== undefined)
       updateData.reasonForTermination = reasonForTermination;
     if (dateOfTermination !== undefined)
@@ -64,28 +61,17 @@ export async function editEmployeeDetails(req: Request, res: Response) {
     if (dateOfAbscond !== undefined)
       updateData.dateOfAbscond = dateOfAbscond ? new Date(dateOfAbscond) : null;
 
-    if (salaryStructure !== undefined) {
-      if (salaryStructure.basicPay != null)
-        updateData.salaryBasicPay = salaryStructure.basicPay;
-      if (salaryStructure.hra != null)
-        updateData.salaryHra = salaryStructure.hra;
-      if (salaryStructure.conveyance != null)
-        updateData.salaryConveyance = salaryStructure.conveyance;
-      if (salaryStructure.pf != null) updateData.salaryPf = salaryStructure.pf;
-      if (salaryStructure.esi != null)
-        updateData.salaryEsi = salaryStructure.esi;
-      if (salaryStructure.pt != null) updateData.salaryPt = salaryStructure.pt;
-    }
-
     await prisma.user.update({
       where: { id: targetUser.id },
       data: updateData,
     });
 
+    const tenantId = getTenantId() ?? "global";
     await Promise.all([
-      cacheManager.invalidatePattern("employees:*"),
-      cacheManager.delete(`employee:${targetUser.id}`),
-      cacheManager.delete(`employee-details:${username}`),
+      cacheManager.invalidatePattern(`t:${tenantId}:employees:*`),
+      cacheManager.delete(`t:${tenantId}:employee:${targetUser.id}`),
+      cacheManager.delete(`t:${tenantId}:employee-details:${username}`),
+      cacheManager.delete(`t:${tenantId}:dashboard:employee-insights`),
     ]);
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -330,8 +316,13 @@ export async function viewAllKycs(req: Request, res: Response) {
     const skip = (page - 1) * limit;
 
     const tenantId = getTenantId();
-    const match: any = { employeeStatus: "Active" };
-    if (tenantId) match.tenantId = { $oid: tenantId };
+    if (!tenantId) {
+      logger.error("view-all-kycs error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const match: any = { employeeStatus: "Active", tenantId: { $oid: tenantId } };
     if (req.query.search) {
       // Escape special regex characters to prevent ReDoS
       const escaped = String(req.query.search).replace(
@@ -400,11 +391,15 @@ export async function viewAllKycs(req: Request, res: Response) {
 export async function getKycInsights(_req: Request, res: Response) {
   try {
     const kycTenantId = getTenantId();
+    if (!kycTenantId) {
+      logger.error("get-kyc-insights error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
     const rows = (await prisma.user.aggregateRaw({
       pipeline: [
-        ...(kycTenantId
-          ? [{ $match: { tenantId: { $oid: kycTenantId } } }]
-          : []),
+        { $match: { tenantId: { $oid: kycTenantId } } },
         {
           $group: {
             _id: null,

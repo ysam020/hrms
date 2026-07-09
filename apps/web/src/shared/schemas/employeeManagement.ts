@@ -12,33 +12,8 @@ export const employeeManagementSchema = z
     reasonForTermination: z.string().optional(),
     dateOfTermination: z.string().optional(),
     dateOfAbscond: z.string().optional(),
-    salary: z.number().min(0, "Gross salary must be a positive number"),
-    salaryStructure: z
-      .object({
-        basicPay: z
-          .number()
-          .min(0, "Basic pay must be non-negative")
-          .nullable()
-          .optional(),
-        hra: z
-          .number()
-          .min(0, "HRA must be non-negative")
-          .nullable()
-          .optional(),
-        conveyance: z
-          .number()
-          .min(0, "Conveyance must be non-negative")
-          .nullable()
-          .optional(),
-        pf: z.number().min(0, "PF must be non-negative").nullable().optional(),
-        esi: z
-          .number()
-          .min(0, "ESI must be non-negative")
-          .nullable()
-          .optional(),
-        pt: z.number().min(0, "PT must be non-negative").nullable().optional(),
-      })
-      .optional(),
+    employmentType: z.enum(["employee", "contractor"]).optional(),
+    workState: z.string().nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.employeeStatus === "Terminated") {
@@ -63,26 +38,6 @@ export const employeeManagementSchema = z
         message: "Date of abscond is required",
         path: ["dateOfAbscond"],
       });
-    }
-    if (data.salaryStructure) {
-      const { salaryStructure, salary } = data;
-      const fieldLabels: Record<string, string> = {
-        basicPay: "Basic Pay",
-        hra: "HRA",
-        conveyance: "Conveyance",
-        pf: "PF",
-        esi: "ESI",
-        pt: "Professional Tax",
-      };
-      for (const [key, value] of Object.entries(salaryStructure)) {
-        if (value != null && Number(value) > salary) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `${fieldLabels[key] ?? key} cannot be greater than gross salary (₹${salary})`,
-            path: ["salaryStructure", key],
-          });
-        }
-      }
     }
   });
 

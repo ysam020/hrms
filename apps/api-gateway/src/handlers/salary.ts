@@ -47,6 +47,25 @@ export async function updateSalary(req: Request, res: Response) {
       });
     }
 
+    // Keep User.salary in sync with the SalaryStructure so that salary-slip
+    // generation always has a reliable CTC source even before the first payroll run.
+    const fullGross =
+      (basicPay ?? 0) + (hra ?? 0) + (conveyance ?? 0) + (incentive ?? 0);
+    if (fullGross > 0 && typeof (prisma.user as any)?.update === "function") {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          salary: fullGross,
+          salaryBasicPay: basicPay ?? undefined,
+          salaryHra: hra ?? undefined,
+          salaryConveyance: conveyance ?? undefined,
+          salaryPf: pf ?? undefined,
+          salaryEsi: esi ?? undefined,
+          salaryPt: pt ?? undefined,
+        },
+      });
+    }
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Salary updated successfully",
     });
@@ -132,6 +151,134 @@ export async function generateSalarySlip(req: Request, res: Response) {
       employee?.username ||
       "Employee";
     const monthLabel = `${MONTH_NAMES[(month - 1) % 12]} ${year}`;
+
+    // ── Attendance-based salary recalculation ──────────────────────────────────
+    // AttendanceRecord/LeaveBalance are business models — prismaWithTenant
+    // routes them to the tenant-specific physical DB when the tenant has
+    // one provisioned (Tenant.dbName), and falls back to the shared master
+    // DB otherwise. The explicit tenantId filter is a no-op in the former
+    // case (every row already belongs to this tenant) and required for
+    // correctness in the latter.
+    const tenantId = user!.tenantId;
+
+    const totalMonthDays = new Date(year, month, 0).getDate(); // e.g. 30 for April
+
+    const [attRecords, lbRecord] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: {
+          tenantId,
+          userId: requestedUserId,
+          date: {
+            gte: new Date(year, month - 1, 1),
+            lte: new Date(year, month, 0, 23, 59, 59, 999),
+          },
+        },
+        select: { status: true },
+      }),
+      prisma.leaveBalance.findFirst({
+        where: { tenantId, userId: requestedUserId },
+        select: { balances: true },
+      }),
+    ]);
+
+    // Count per-status attendance (case-insensitive to handle any capitalization).
+    let attPresent = 0,
+      attLate = 0,
+      attHalfDay = 0,
+      attHoliday = 0,
+      attWfh = 0;
+    for (const r of attRecords) {
+      const s = (r.status ?? "").toLowerCase();
+      if (s === "present") attPresent++;
+      else if (s === "late") attLate++;
+      else if (s === "half day") attHalfDay++;
+      else if (s === "holiday") attHoliday++;
+      else if (s === "wfh") attWfh++;
+    }
+
+    // Paid leaves from LeaveBalance.balances for this specific month.
+    let paidLeaves = 0;
+    if (lbRecord?.balances && Array.isArray(lbRecord.balances)) {
+      const mb = (lbRecord.balances as any[]).find(
+        (b: any) =>
+          String(b.year) === String(year) && String(b.month) === String(month),
+      );
+      paidLeaves = mb?.usedPL ?? 0;
+    }
+
+    // Weighted paid days — same formula as initiatePayrollRun.
+    const paidDays = Math.min(
+      attPresent +
+        attLate +
+        attHalfDay * 0.5 +
+        attHoliday +
+        attWfh +
+        paidLeaves,
+      totalMonthDays,
+    );
+
+    // If a real payroll run has already disbursed this exact month, its
+    // PayrollLineItem holds the final, already-prorated amount that was
+    // actually paid — use it as-is. Re-proportioning it again here (by the
+    // same attendance ratio initiatePayrollRun already applied) would
+    // silently under-report what the employee was actually paid.
+    const disbursedRun = tenantId
+      ? await prisma.payrollRun.findFirst({
+          where: { tenantId, month, year, status: "disbursed" },
+          select: { id: true },
+        })
+      : null;
+    const disbursedLineItem = disbursedRun
+      ? await prisma.payrollLineItem.findFirst({
+          where: { payrollRunId: disbursedRun.id, userId: requestedUserId },
+        })
+      : null;
+
+    let calcBasicPay: number,
+      calcHra: number,
+      calcConveyance: number,
+      calcPf: number,
+      calcEsi: number,
+      calcPt: number,
+      calcIncentive: number,
+      calcOtherDed: number;
+
+    if (disbursedLineItem) {
+      calcBasicPay = disbursedLineItem.basicPay ?? 0;
+      calcHra = disbursedLineItem.hra ?? 0;
+      calcConveyance = disbursedLineItem.conveyance ?? 0;
+      calcPf = disbursedLineItem.pf ?? 0;
+      calcEsi = disbursedLineItem.esi ?? 0;
+      calcPt = disbursedLineItem.pt ?? 0;
+      calcIncentive = 0;
+      calcOtherDed = disbursedLineItem.otherDeductions ?? 0;
+    } else {
+      // No disbursed run yet for this month — prorate the already-stored,
+      // already-configured baseline salary structure by attendance instead
+      // of recomputing Basic/HRA/Conveyance/PF/ESI/PT from a separate
+      // hardcoded formula, so a preview payslip agrees with whatever was
+      // actually configured for this employee (via the employee module or
+      // the salary module).
+      const prorationRatio =
+        totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
+      calcBasicPay = Math.round(
+        (salaryStructure.basicPay ?? 0) * prorationRatio,
+      );
+      calcHra = Math.round((salaryStructure.hra ?? 0) * prorationRatio);
+      calcConveyance = Math.round(
+        (salaryStructure.conveyance ?? 0) * prorationRatio,
+      );
+      calcPf = Math.round((salaryStructure.pf ?? 0) * prorationRatio);
+      calcEsi = Math.round((salaryStructure.esi ?? 0) * prorationRatio);
+      calcPt = Math.round((salaryStructure.pt ?? 0) * prorationRatio);
+      calcIncentive = salaryStructure.incentive ?? 0;
+      calcOtherDed = salaryStructure.deductions ?? 0;
+    }
+
+    const calcGrossEarnings =
+      calcBasicPay + calcHra + calcConveyance + calcIncentive;
+    const calcTotalDed = calcPf + calcEsi + calcPt + calcOtherDed;
+    const calcNetPayable = Math.max(0, calcGrossEarnings - calcTotalDed);
 
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
@@ -299,17 +446,17 @@ export async function generateSalarySlip(req: Request, res: Response) {
     curY += 8;
 
     const earningsRows = [
-      { label: "Basic Pay", value: salaryStructure.basicPay ?? 0 },
-      { label: "HRA", value: salaryStructure.hra ?? 0 },
-      { label: "Conveyance Allowance", value: salaryStructure.conveyance ?? 0 },
-      { label: "Incentive", value: salaryStructure.incentive ?? 0 },
+      { label: "Basic Pay", value: calcBasicPay },
+      { label: "HRA", value: calcHra },
+      { label: "Conveyance Allowance", value: calcConveyance },
+      { label: "Incentive", value: calcIncentive },
     ];
 
     const deductionRows = [
-      { label: "Provident Fund (PF)", value: salaryStructure.pf ?? 0 },
-      { label: "ESI", value: salaryStructure.esi ?? 0 },
-      { label: "Professional Tax (PT)", value: salaryStructure.pt ?? 0 },
-      { label: "Other Deductions", value: salaryStructure.deductions ?? 0 },
+      { label: "Provident Fund (PF)", value: calcPf },
+      { label: "ESI", value: calcEsi },
+      { label: "Professional Tax (PT)", value: calcPt },
+      { label: "Other Deductions", value: calcOtherDed },
     ];
 
     const maxRows = Math.max(earningsRows.length, deductionRows.length);
@@ -348,18 +495,9 @@ export async function generateSalarySlip(req: Request, res: Response) {
       curY += rowH;
     }
 
-    // Totals row
-    const grossEarnings =
-      salaryStructure.grossEarnings ??
-      (salaryStructure.basicPay ?? 0) +
-        (salaryStructure.hra ?? 0) +
-        (salaryStructure.conveyance ?? 0) +
-        (salaryStructure.incentive ?? 0);
-    const totalDeductions =
-      (salaryStructure.pf ?? 0) +
-      (salaryStructure.esi ?? 0) +
-      (salaryStructure.pt ?? 0) +
-      (salaryStructure.deductions ?? 0);
+    // Totals row — always use the attendance-derived values computed above.
+    const grossEarnings = calcGrossEarnings;
+    const totalDeductions = calcTotalDed;
 
     doc.setFillColor(...powder);
     doc.rect(leftX, curY, halfW, 9, "F");
@@ -379,8 +517,7 @@ export async function generateSalarySlip(req: Request, res: Response) {
     curY += 9;
 
     // ─── Net payable banner ─────────────────────────────────────────────────────
-    const netPayable =
-      salaryStructure.netPayable ?? grossEarnings - totalDeductions;
+    const netPayable = calcNetPayable;
     curY += 6;
 
     doc.setFillColor(...navyD);
@@ -409,58 +546,48 @@ export async function generateSalarySlip(req: Request, res: Response) {
     curY += 18;
 
     // ─── Attendance summary ─────────────────────────────────────────────────────
-    if (attendanceSummary) {
+    {
       curY += 8;
+
+      // 2-row grid: label row + value row, 5 columns.
+      // All values come from the tenant-scoped attendance queries above — authoritative.
+      const attItems = [
+        { label: "PRESENT", value: String(attPresent + attLate) },
+        { label: "HALF DAYS", value: String(attHalfDay) },
+        { label: "HOLIDAYS/WFH", value: String(attHoliday + attWfh) },
+        { label: "PAID LEAVES", value: String(paidLeaves) },
+        {
+          label: `PAID / ${totalMonthDays} DAYS`,
+          value: String(paidDays % 1 === 0 ? paidDays : paidDays.toFixed(1)),
+        },
+      ];
+
+      const boxH = 22;
       doc.setFillColor(245, 248, 253);
-      doc.rect(marginX, curY, contentW, 18, "F");
+      doc.rect(marginX, curY, contentW, boxH, "F");
       doc.setFillColor(...steel);
-      doc.rect(marginX, curY, 3, 18, "F");
+      doc.rect(marginX, curY, 3, boxH, "F");
 
       doc.setTextColor(...textMid);
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "bold");
       doc.text("ATTENDANCE SUMMARY", marginX + 7, curY + 6);
 
-      const attItems = [
-        {
-          label: "DAYS PRESENT",
-          value: String(attendanceSummary.presentDays ?? 0),
-        },
-        {
-          label: "DAYS ABSENT",
-          value: String(attendanceSummary.absentDays ?? 0),
-        },
-      ];
-      const attColW = (contentW - 3) / attItems.length;
+      const attColW = (contentW - 7) / attItems.length;
       attItems.forEach((item, i) => {
         const x = marginX + 7 + i * attColW;
         doc.setTextColor(...textLight);
-        doc.setFontSize(7);
+        doc.setFontSize(6.5);
         doc.setFont("helvetica", "normal");
-        doc.text(item.label, x, curY + 11);
+        doc.text(item.label, x, curY + 13);
         doc.setTextColor(...textDark);
-        doc.setFontSize(10);
+        doc.setFontSize(9.5);
         doc.setFont("helvetica", "bold");
-        doc.text(item.value, x, curY + 16);
+        doc.text(item.value, x, curY + 19);
       });
 
-      curY += 18;
+      curY += boxH;
     }
-
-    // ─── Signature section ──────────────────────────────────────────────────────
-    const sigY = pageH - 50;
-    doc.setDrawColor(...powder);
-    doc.setLineWidth(0.4);
-    doc.line(marginX, sigY, marginX + 55, sigY);
-    doc.line(pageW - marginX - 55, sigY, pageW - marginX, sigY);
-
-    doc.setTextColor(...textLight);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text("Employee Signature", marginX, sigY + 5);
-    doc.text("Authorized Signatory", pageW - marginX, sigY + 5, {
-      align: "right",
-    });
 
     // ─── Footer bar ─────────────────────────────────────────────────────────────
     fillPoly(
@@ -485,18 +612,6 @@ export async function generateSalarySlip(req: Request, res: Response) {
     doc.rect(0, pageH - 13, pageW, 13, "F");
     doc.setFillColor(...steel);
     doc.rect(0, pageH - 15, pageW, 2, "F");
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7.5);
-    doc.setFont("helvetica", "italic");
-    doc.text(
-      "This is a system-generated salary slip and does not require a signature.",
-      pageW / 2,
-      pageH - 5,
-      { align: "center" },
-    );
-    doc.setFont("helvetica", "normal");
-    doc.text("Confidential – For Internal Use Only", marginX, pageH - 5);
 
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
     res.setHeader("Content-Type", "application/pdf");

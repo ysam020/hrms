@@ -56,6 +56,7 @@ export async function getUserData(req: Request, res: Response) {
         salaryPf: true,
         salaryEsi: true,
         salaryPt: true,
+        workState: true,
       },
     });
     if (salaryData) {
@@ -68,6 +69,7 @@ export async function getUserData(req: Request, res: Response) {
         esi: salaryData.salaryEsi,
         pt: salaryData.salaryPt,
       };
+      snake.workState = salaryData.workState;
     }
 
     // Strip PII that only the owner or a superuser may see

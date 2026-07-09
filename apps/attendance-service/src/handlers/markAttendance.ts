@@ -5,70 +5,16 @@ import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import {
+  type AttendanceSettings,
+  getAttendanceSettings,
+  resolveShift,
+  calcWorkingHours,
+  getUnpaidBreakMinutes,
+} from "../utils/attendanceSettings";
+import { resolveLeaveConflictForCheckIn } from "../utils/leaveConflict";
 
 dayjs.extend(utc);
-
-// ─── Tenant-settings helpers ──────────────────────────────────────────────────
-
-const SETTINGS_CACHE_TTL = 900; // 15 min
-
-interface AttendanceSettings {
-  workStartHour: number;
-  workStartMinute: number;
-  lateGracePeriodMinutes: number;
-  halfDayMinHours: number;
-  // Geofencing
-  geofencingEnabled: boolean;
-  officeLatitude: number | null;
-  officeLongitude: number | null;
-  geofenceRadiusMeters: number;
-}
-
-/**
- * Fetches the currently *active* attendance settings from the DB.
- * Active = latest version where effectiveFrom ≤ now.
- * Cached for SETTINGS_CACHE_TTL seconds to keep hot paths fast.
- */
-async function getAttendanceSettings(
-  tenantId: string | null,
-): Promise<AttendanceSettings | null> {
-  if (!tenantId) return null;
-
-  const cacheKey = `tenantSettings:attendance:${tenantId}`;
-  const cached = await cacheManager.get(cacheKey);
-  if (cached) return cached as AttendanceSettings;
-
-  const settings = await (prisma as any).tenantSettings.findFirst({
-    where: { tenantId, effectiveFrom: { lte: new Date() } },
-    orderBy: { effectiveFrom: "desc" },
-    select: {
-      workStartHour: true,
-      workStartMinute: true,
-      lateGracePeriodMinutes: true,
-      halfDayMinHours: true,
-      geofencingEnabled: true,
-      officeLatitude: true,
-      officeLongitude: true,
-      geofenceRadiusMeters: true,
-    },
-  });
-
-  if (!settings) return null; // Tenant not yet configured — caller handles this.
-
-  const result: AttendanceSettings = {
-    workStartHour: settings.workStartHour,
-    workStartMinute: settings.workStartMinute,
-    lateGracePeriodMinutes: settings.lateGracePeriodMinutes,
-    halfDayMinHours: settings.halfDayMinHours,
-    geofencingEnabled: settings.geofencingEnabled ?? false,
-    officeLatitude: settings.officeLatitude ?? null,
-    officeLongitude: settings.officeLongitude ?? null,
-    geofenceRadiusMeters: settings.geofenceRadiusMeters ?? 200,
-  };
-
-  await cacheManager.set(cacheKey, result, "system", SETTINGS_CACHE_TTL);
-  return result;
-}
 
 // ─── Haversine distance ────────────────────────────────────────────────────────
 
@@ -99,11 +45,6 @@ function isLate(t: Date, cfg: AttendanceSettings): boolean {
     cfg.workStartHour * 60 + cfg.workStartMinute + cfg.lateGracePeriodMinutes;
   const actualMinute = d.hour() * 60 + d.minute();
   return actualMinute > lateMinute;
-}
-
-function calcWorkingHours(timeIn: Date, timeOut: Date): number {
-  const diffMs = dayjs(timeOut).diff(dayjs(timeIn));
-  return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 }
 
 export const markAttendance = async (
@@ -150,8 +91,26 @@ export const markAttendance = async (
         });
       }
 
+      // Look up the employee's WFH status, home location, branch, shift, and
+      // field/remote exemption once — used by both geofencing and shift resolution.
+      const employee = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          wfh: true,
+          wfhHomeLatitude: true,
+          wfhHomeLongitude: true,
+          wfhHomeName: true,
+          branchId: true,
+          shiftId: true,
+          attendanceMode: true,
+        },
+      });
+      const attendanceMode = (employee as any)?.attendanceMode ?? "office";
+
       // ── Geofencing check ────────────────────────────────────────────────────
-      if (cfg.geofencingEnabled) {
+      // Field/remote employees are exempt entirely — they can't check in from
+      // a fixed radius by definition.
+      if (cfg.geofencingEnabled && attendanceMode === "office") {
         const { latitude, longitude } = call.request;
         const lat = parseFloat(latitude);
         const lng = parseFloat(longitude);
@@ -164,19 +123,9 @@ export const markAttendance = async (
           });
         }
 
-        // Look up the employee's WFH status and home location
-        const employee = await prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            wfh: true,
-            wfhHomeLatitude: true,
-            wfhHomeLongitude: true,
-            wfhHomeName: true,
-          },
-        });
-
         let fenceLat: number | null = null;
         let fenceLng: number | null = null;
+        let fenceRadius = cfg.geofenceRadiusMeters;
         let fenceLabel = "office";
 
         if (employee?.wfh) {
@@ -185,6 +134,22 @@ export const markAttendance = async (
           fenceLabel = (employee as any).wfhHomeName
             ? `home (${(employee as any).wfhHomeName.split(",")[0]})`
             : "home";
+        } else if ((employee as any)?.branchId) {
+          const branch = await (prisma as any).branch.findFirst({
+            where: { id: (employee as any).branchId, isActive: true },
+          });
+          if (branch?.latitude != null && branch?.longitude != null) {
+            fenceLat = branch.latitude;
+            fenceLng = branch.longitude;
+            fenceRadius =
+              branch.geofenceRadiusMeters ?? cfg.geofenceRadiusMeters;
+            fenceLabel = branch.name;
+          } else {
+            // Branch exists but has no coordinates set — fall back to the
+            // tenant-wide legacy office fields rather than blocking outright.
+            fenceLat = cfg.officeLatitude;
+            fenceLng = cfg.officeLongitude;
+          }
         } else {
           fenceLat = cfg.officeLatitude;
           fenceLng = cfg.officeLongitude;
@@ -194,7 +159,7 @@ export const markAttendance = async (
           // Geofencing is on but no reference point saved yet — block and ask admin
           const hint = employee?.wfh
             ? "Ask your admin to set the employee's home location in Employee Management."
-            : "Ask your admin to set the office location in Organisation Settings → Attendance.";
+            : "Ask your admin to set the branch location in Settings → Branches & Shifts.";
           return callback(null, {
             message: `Geofencing is enabled but no ${fenceLabel} location is configured. ${hint}`,
             status: status.FAILED_PRECONDITION,
@@ -202,16 +167,37 @@ export const markAttendance = async (
         }
 
         const dist = haversineMeters(lat, lng, fenceLat, fenceLng);
-        if (dist > cfg.geofenceRadiusMeters) {
+        if (dist > fenceRadius) {
           return callback(null, {
-            message: `You are ${Math.round(dist)} m from the ${fenceLabel} (allowed: ${cfg.geofenceRadiusMeters} m). Move closer and try again.`,
+            message: `You are ${Math.round(dist)} m from the ${fenceLabel} (allowed: ${fenceRadius} m). Move closer and try again.`,
             status: status.PERMISSION_DENIED,
           });
         }
       }
       // ────────────────────────────────────────────────────────────────────────
 
-      const attendanceStatus = isLate(now, cfg) ? "Late" : "Present";
+      const shiftOverride = tenantId
+        ? await resolveShift(
+            tenantId,
+            userId,
+            (employee as any)?.shiftId ?? null,
+          )
+        : null;
+      const effectiveCfg = shiftOverride ? { ...cfg, ...shiftOverride } : cfg;
+
+      const attendanceStatus = isLate(now, effectiveCfg) ? "Late" : "Present";
+
+      // Everything that could still make check-in fail (geofencing, shift
+      // resolution) has already passed at this point — only now is it safe
+      // to resolve a same-day leave conflict. A Pending leave is simply
+      // withdrawn (it was never approved, so nothing to restore); an
+      // Approved leave is treated as a same-day self-service cancellation —
+      // the balance is credited back immediately rather than requiring a
+      // second manager approval, since a successful check-in is itself
+      // strong proof the employee is at work.
+      const leaveConflictNote = tenantId
+        ? await resolveLeaveConflictForCheckIn(tenantId, userId, todayStart)
+        : null;
 
       const record = existingRecord
         ? await prisma.attendanceRecord.update({
@@ -232,9 +218,10 @@ export const markAttendance = async (
         cacheManager.invalidatePattern(`attendance:${userId}:*`),
         cacheManager.delete(`todayAttendance:${userId}`),
         cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
+        cacheManager.invalidatePattern("leaves:*"),
       ]);
       return callback(null, {
-        message: `${MESSAGES.CHECKED_IN_SUCCESSFULLY}${attendanceStatus === "Late" ? " (late)" : ""}`,
+        message: `${MESSAGES.CHECKED_IN_SUCCESSFULLY}${attendanceStatus === "Late" ? " (late)" : ""}${leaveConflictNote ? ` — ${leaveConflictNote}` : ""}`,
         status: status.OK,
         data: record,
       });
@@ -254,8 +241,33 @@ export const markAttendance = async (
         });
       }
 
-      const workingHours = calcWorkingHours(existingRecord.timeIn, now);
-      const isHalfDay = workingHours < cfg.halfDayMinHours;
+      const userShift = tenantId
+        ? await prisma.user.findUnique({
+            where: { id: userId },
+            select: { shiftId: true },
+          })
+        : null;
+      const shiftOverride =
+        tenantId && userShift
+          ? await resolveShift(
+              tenantId,
+              userId,
+              (userShift as any)?.shiftId ?? null,
+            )
+          : null;
+      const effectiveHalfDayMinHours =
+        shiftOverride?.halfDayMinHours ?? cfg.halfDayMinHours;
+
+      const unpaidBreakMinutes = await getUnpaidBreakMinutes(
+        existingRecord.id,
+        now,
+      );
+      const workingHours = calcWorkingHours(
+        existingRecord.timeIn,
+        now,
+        unpaidBreakMinutes,
+      );
+      const isHalfDay = workingHours < effectiveHalfDayMinHours;
 
       const record = await prisma.attendanceRecord.update({
         where: { id: existingRecord.id },
