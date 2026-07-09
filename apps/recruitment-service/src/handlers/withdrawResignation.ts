@@ -79,7 +79,7 @@ export const withdrawResignation = async (
       }
     }
 
-    await cacheManager.invalidatePattern("resignations:*");
+    await cacheManager.invalidatePattern(`t:${tenantId}:resignations:*`);
 
     return callback(null, {
       message: MESSAGES.RESIGNATION_WITHDRAWN,

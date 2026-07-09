@@ -207,7 +207,7 @@ describe("applyForJob", () => {
 
     await applyForJob(makeCall(validRequest), makeCallback());
 
-    expect(mockInvalidate).toHaveBeenCalledWith("applications:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:applications:*");
   });
 
   it("returns INTERNAL on database error", async () => {

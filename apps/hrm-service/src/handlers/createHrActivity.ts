@@ -37,7 +37,7 @@ export const createHrActivity = async (
       },
     });
 
-    await cacheManager.invalidatePattern("hrActivities:*");
+    await cacheManager.invalidatePattern(`t:${getTenantId()}:hrActivities:*`);
 
     const displayDate = dayjs(activity.scheduledAt).format("YYYY-MM-DD");
     const displayTime = dayjs(activity.scheduledAt).format("HH:mm");

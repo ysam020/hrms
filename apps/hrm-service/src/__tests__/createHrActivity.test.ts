@@ -91,7 +91,7 @@ describe("createHrActivity", () => {
         }),
       }),
     );
-    expect(mockInvalidate).toHaveBeenCalledWith("hrActivities:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:hrActivities:*");
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),

@@ -77,7 +77,7 @@ describe("updateJobOpening", () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "j-1" } }),
     );
-    expect(mockInvalidate).toHaveBeenCalledWith("jobOpenings:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:jobOpenings:*");
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),

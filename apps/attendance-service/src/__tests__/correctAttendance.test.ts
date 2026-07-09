@@ -56,8 +56,7 @@ const mockSettingsFindFirst = (prisma as any).tenantSettings
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockTeamFindFirst = (prisma as any).team.findFirst as jest.Mock;
 const mockShiftFindFirst = (prisma as any).shift.findFirst as jest.Mock;
-const mockBreakFindMany = (prisma as any).attendanceBreak
-  .findMany as jest.Mock;
+const mockBreakFindMany = (prisma as any).attendanceBreak.findMany as jest.Mock;
 
 const DEFAULT_ATTENDANCE_SETTINGS = {
   workStartHour: 9,
@@ -228,7 +227,12 @@ describe("correctAttendance", () => {
       timeOut: null,
     });
     mockBreakFindMany.mockResolvedValue([
-      { isPaid: false, durationMinutes: 60, startTime: new Date(), endTime: new Date() },
+      {
+        isPaid: false,
+        durationMinutes: 60,
+        startTime: new Date(),
+        endTime: new Date(),
+      },
     ]);
     mockRecordUpdate.mockResolvedValue(baseRecord);
     const cb = makeCallback();
@@ -280,8 +284,8 @@ describe("correctAttendance", () => {
       }),
       cb,
     );
-    expect(mockInvalidate).toHaveBeenCalledWith("attendance:john:*");
-    expect(mockCacheDelete).toHaveBeenCalledWith("todayAttendance:john");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:attendance:john:*");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:todayAttendance:john");
   });
 
   it("returns INTERNAL on database error", async () => {

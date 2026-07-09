@@ -85,8 +85,7 @@ const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockTeamFindFirst = (prisma as any).team.findFirst as jest.Mock;
 const mockShiftFindFirst = (prisma as any).shift.findFirst as jest.Mock;
-const mockBreakFindMany = (prisma as any).attendanceBreak
-  .findMany as jest.Mock;
+const mockBreakFindMany = (prisma as any).attendanceBreak.findMany as jest.Mock;
 const mockLeaveFindFirst = (prisma as any).leaveApplication
   .findFirst as jest.Mock;
 const mockLeaveUpdate = (prisma as any).leaveApplication.update as jest.Mock;
@@ -432,9 +431,11 @@ describe("markAttendance", () => {
         makeCallback(),
       );
 
-      expect(mockInvalidate).toHaveBeenCalledWith("attendance:john:*");
-      expect(mockDelete).toHaveBeenCalledWith("todayAttendance:john");
-      expect(mockInvalidate).toHaveBeenCalledWith("attendanceSummary:john:*");
+      expect(mockInvalidate).toHaveBeenCalledWith("t:t1:attendance:john:*");
+      expect(mockDelete).toHaveBeenCalledWith("t:t1:todayAttendance:john");
+      expect(mockInvalidate).toHaveBeenCalledWith(
+        "t:t1:attendanceSummary:john:*",
+      );
     });
   });
 
@@ -538,7 +539,12 @@ describe("markAttendance", () => {
       // 5 unpaid hours (e.g. forgot to log back in) → 4h net, right at the
       // half-day boundary rather than the inflated 9h raw diff.
       mockBreakFindMany.mockResolvedValue([
-        { isPaid: false, durationMinutes: 300, startTime: new Date(), endTime: new Date() },
+        {
+          isPaid: false,
+          durationMinutes: 300,
+          startTime: new Date(),
+          endTime: new Date(),
+        },
       ]);
       mockUpdate.mockResolvedValue({ id: "rec-1", status: "Half Day" });
 
@@ -567,8 +573,8 @@ describe("markAttendance", () => {
         makeCallback(),
       );
 
-      expect(mockInvalidate).toHaveBeenCalledWith("attendance:john:*");
-      expect(mockDelete).toHaveBeenCalledWith("todayAttendance:john");
+      expect(mockInvalidate).toHaveBeenCalledWith("t:t1:attendance:john:*");
+      expect(mockDelete).toHaveBeenCalledWith("t:t1:todayAttendance:john");
     });
   });
 

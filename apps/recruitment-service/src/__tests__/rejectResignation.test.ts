@@ -89,7 +89,7 @@ describe("rejectResignation", () => {
         }),
       }),
     );
-    expect(mockInvalidate).toHaveBeenCalledWith("resignations:*");
+    expect(mockInvalidate).toHaveBeenCalledWith("t:t1:resignations:*");
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),

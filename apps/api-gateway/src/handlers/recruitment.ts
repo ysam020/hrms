@@ -721,6 +721,7 @@ export async function jobOpeningsInsights(_req: Request, res: Response) {
 }
 
 export async function scheduleInterview(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
     const {
       _id,
@@ -752,7 +753,9 @@ export async function scheduleInterview(req: Request, res: Response) {
       where: { id: _id },
       data: { interviews, status: `Round ${roundNumber} Scheduled` },
     });
-    await cacheManager.invalidatePattern("applications:*");
+    await cacheManager.invalidatePattern(
+      `t:${user?.tenantId ?? "global"}:applications:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview scheduled successfully",
     });
@@ -763,6 +766,7 @@ export async function scheduleInterview(req: Request, res: Response) {
 }
 
 export async function rescheduleInterview(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
     const {
       _id,
@@ -794,7 +798,9 @@ export async function rescheduleInterview(req: Request, res: Response) {
       where: { id: _id },
       data: { interviews, status: `Round ${roundNumber} Rescheduled` },
     });
-    await cacheManager.invalidatePattern("applications:*");
+    await cacheManager.invalidatePattern(
+      `t:${user?.tenantId ?? "global"}:applications:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview rescheduled successfully",
     });
@@ -805,6 +811,7 @@ export async function rescheduleInterview(req: Request, res: Response) {
 }
 
 export async function reassignInterviewer(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
     const { _id, interviewRound, interviewer } = req.body;
     const app = await prisma.jobApplication.findUnique({ where: { id: _id } });
@@ -827,7 +834,9 @@ export async function reassignInterviewer(req: Request, res: Response) {
       where: { id: _id },
       data: { interviews },
     });
-    await cacheManager.invalidatePattern("applications:*");
+    await cacheManager.invalidatePattern(
+      `t:${user?.tenantId ?? "global"}:applications:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interviewer reassigned successfully",
     });
@@ -863,6 +872,7 @@ export async function getInterviewerList(_req: Request, res: Response) {
 }
 
 export async function updateResignation(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
     const { status: updateType, value } = req.body;
     const resignation = await prisma.resignation.findUnique({
@@ -881,7 +891,9 @@ export async function updateResignation(req: Request, res: Response) {
       where: { id: String(req.params._id) },
       data: updateData,
     });
-    await cacheManager.invalidatePattern("resignations:*");
+    await cacheManager.invalidatePattern(
+      `t:${user?.tenantId ?? "global"}:resignations:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Resignation updated successfully",
       data: updated,
@@ -932,7 +944,9 @@ export async function addExitFeedback(req: Request, res: Response) {
         lastUpdatedOn: new Date(),
       },
     });
-    await cacheManager.invalidatePattern("resignations:*");
+    await cacheManager.invalidatePattern(
+      `t:${user?.tenantId ?? "global"}:resignations:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.CREATED, {
       message: "Exit feedback submitted successfully",
       data: updated,

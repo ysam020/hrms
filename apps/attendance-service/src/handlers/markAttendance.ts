@@ -215,10 +215,12 @@ export const markAttendance = async (
           });
 
       await Promise.all([
-        cacheManager.invalidatePattern(`attendance:${userId}:*`),
-        cacheManager.delete(`todayAttendance:${userId}`),
-        cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
-        cacheManager.invalidatePattern("leaves:*"),
+        cacheManager.invalidatePattern(`t:${tenantId}:attendance:${userId}:*`),
+        cacheManager.delete(`t:${tenantId}:todayAttendance:${userId}`),
+        cacheManager.invalidatePattern(
+          `t:${tenantId}:attendanceSummary:${userId}:*`,
+        ),
+        cacheManager.invalidatePattern(`t:${tenantId}:leaves:*`),
       ]);
       return callback(null, {
         message: `${MESSAGES.CHECKED_IN_SUCCESSFULLY}${attendanceStatus === "Late" ? " (late)" : ""}${leaveConflictNote ? ` — ${leaveConflictNote}` : ""}`,
@@ -279,9 +281,11 @@ export const markAttendance = async (
       });
 
       await Promise.all([
-        cacheManager.invalidatePattern(`attendance:${userId}:*`),
-        cacheManager.delete(`todayAttendance:${userId}`),
-        cacheManager.invalidatePattern(`attendanceSummary:${userId}:*`),
+        cacheManager.invalidatePattern(`t:${tenantId}:attendance:${userId}:*`),
+        cacheManager.delete(`t:${tenantId}:todayAttendance:${userId}`),
+        cacheManager.invalidatePattern(
+          `t:${tenantId}:attendanceSummary:${userId}:*`,
+        ),
       ]);
       return callback(null, {
         message: MESSAGES.CHECKED_OUT_SUCCESSFULLY,

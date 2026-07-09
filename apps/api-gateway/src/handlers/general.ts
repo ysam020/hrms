@@ -383,7 +383,7 @@ export async function addHoliday(req: Request, res: Response) {
       });
     }
 
-    await cacheManager.delete(`holiday:${year}`);
+    await cacheManager.delete(`t:${getTenantId() ?? "global"}:holiday:${year}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holiday added successfully",
     });
@@ -430,7 +430,7 @@ export async function deleteHoliday(req: Request, res: Response) {
       where: { id: record.id },
       data: { holidays: newList },
     });
-    await cacheManager.delete(`holiday:${year}`);
+    await cacheManager.delete(`t:${getTenantId() ?? "global"}:holiday:${year}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holiday deleted successfully",
     });
@@ -465,7 +465,9 @@ export async function addEvent(req: Request, res: Response) {
     };
     events.push(newEvent);
     await prisma.user.update({ where: { id: userId }, data: { events } });
-    await cacheManager.delete(`calendar:events:${userId}`);
+    await cacheManager.delete(
+      `t:${getTenantId() ?? "global"}:calendar:events:${userId}`,
+    );
     return apiResponse(res, RESPONSE_STATUS.CREATED, {
       message: "Event added successfully",
       data: newEvent,
@@ -517,7 +519,9 @@ export async function editCalendarEvent(req: Request, res: Response) {
       _id: events[idx]._id,
     };
     await prisma.user.update({ where: { id: userId }, data: { events } });
-    await cacheManager.delete(`calendar:events:${userId}`);
+    await cacheManager.delete(
+      `t:${getTenantId() ?? "global"}:calendar:events:${userId}`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Event updated successfully",
       data: events[idx],
@@ -556,7 +560,9 @@ export async function deleteCalendarEvent(req: Request, res: Response) {
       where: { id: userId },
       data: { events: newEvents },
     });
-    await cacheManager.delete(`calendar:events:${userId}`);
+    await cacheManager.delete(
+      `t:${getTenantId() ?? "global"}:calendar:events:${userId}`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Event deleted successfully",
     });

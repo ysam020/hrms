@@ -99,7 +99,7 @@ export const submitResignation = async (
       },
     });
 
-    await cacheManager.invalidatePattern("resignations:*");
+    await cacheManager.invalidatePattern(`t:${tenantId}:resignations:*`);
 
     // Routes the approve/reject decision through the tenant's configured
     // Approval Chain (zero-config default: requester's reporting manager,

@@ -118,7 +118,9 @@ export async function addHrActivity(req: Request, res: Response) {
       ...req.body,
       createdBy: user!.userId,
     });
-    await cacheManager.invalidatePattern("hrm:activities:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:hrm:activities:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     return handleError(res, error);
@@ -146,7 +148,9 @@ export async function editHrActivity(req: Request, res: Response) {
       id: req.params._id,
       updatedBy: user!.userId,
     });
-    await cacheManager.invalidatePattern("hrm:activities:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:hrm:activities:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     return handleError(res, error);
@@ -176,7 +180,9 @@ export async function deleteHrActivity(req: Request, res: Response) {
         deletedOn: new Date(),
       },
     });
-    await cacheManager.invalidatePattern("hrm:activities:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:hrm:activities:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "HR activity deleted successfully",
       status: 0,
@@ -263,7 +269,9 @@ export async function createOrUpdatePolicy(req: Request, res: Response) {
           lastUpdatedBy: user!.userId,
         },
       });
-      await cacheManager.invalidatePattern("hrm:policies:*");
+      await cacheManager.invalidatePattern(
+        `t:${getTenantId() ?? "global"}:hrm:policies:*`,
+      );
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         message: "Policy updated successfully",
         status: 0,
@@ -282,7 +290,9 @@ export async function createOrUpdatePolicy(req: Request, res: Response) {
         createdOn: new Date(),
       },
     });
-    await cacheManager.invalidatePattern("hrm:policies:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:hrm:policies:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Policy created successfully",
       status: 0,
@@ -644,7 +654,9 @@ export async function updatePolicy(req: Request, res: Response) {
         lastUpdatedBy: user?.userId || "",
       },
     });
-    await cacheManager.invalidatePattern("hrm:policies:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:hrm:policies:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Policy updated successfully",
       status: 0,
@@ -662,7 +674,9 @@ export async function deletePolicy(req: Request, res: Response) {
       where: { id: String(req.params.id) },
       data: { status: "Deleted" },
     });
-    await cacheManager.invalidatePattern("hrm:policies:*");
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:hrm:policies:*`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Policy deleted successfully",
       status: 0,
