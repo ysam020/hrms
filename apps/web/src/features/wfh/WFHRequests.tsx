@@ -19,7 +19,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -367,12 +367,16 @@ function WFHRequests() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenRequest(false)} size="small">
+          <Button
+            variant="ghost"
+            onClick={() => setOpenRequest(false)}
+            size="small"
+          >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={submitting || !form.date}
           >

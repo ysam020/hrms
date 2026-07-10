@@ -93,6 +93,25 @@ describe("approveResignation", () => {
     );
   });
 
+  it("persists the request's remarks field into the comments column", async () => {
+    // `remarks` is the real UpdateStatusRequest proto field — `comments`
+    // was never actually part of it, so nothing sent under that name ever
+    // reached the database.
+    mockFindUnique.mockResolvedValue(resignation);
+    const cb = makeCallback();
+    await approveResignation(
+      makeCall({ id: "res-1", remarks: "Approved with notice waived" }),
+      cb,
+    );
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          comments: "Approved with notice waived",
+        }),
+      }),
+    );
+  });
+
   it("returns INTERNAL on database error", async () => {
     mockFindUnique.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();

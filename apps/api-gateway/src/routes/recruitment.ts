@@ -7,6 +7,26 @@ import { submitResignationSchema } from "../schemas";
 
 export const recruitmentRouter: Router = Router();
 
+// Genuinely anonymous routes — a candidate has no JWT, so these must NOT
+// sit behind the authenticated recruitmentRouter (see publicRecruitmentRouter
+// below, mounted without the authenticate/requireTenant/subscription guard).
+export const publicRecruitmentRouter: Router = Router();
+publicRecruitmentRouter.get(
+  "/public/careers/:slug",
+  resolvePublicTenant,
+  h.publicCareers,
+);
+publicRecruitmentRouter.get(
+  "/public/careers/:slug/job/:id",
+  resolvePublicTenant,
+  h.publicJobOpening,
+);
+publicRecruitmentRouter.post(
+  "/apply-for-job/:slug",
+  resolvePublicTenant,
+  h.applyForJob,
+);
+
 recruitmentRouter.get("/view-job-openings", authenticate, h.viewJobOpenings);
 recruitmentRouter.get("/view-job-opening/:id", authenticate, h.viewJobOpening);
 recruitmentRouter.post(
@@ -27,17 +47,7 @@ recruitmentRouter.delete(
   requireSuperUser,
   h.deleteJobOpening,
 );
-recruitmentRouter.get(
-  "/public/careers/:slug",
-  resolvePublicTenant,
-  h.publicCareers,
-);
 recruitmentRouter.get("/get-job-titles", h.getJobTitles);
-recruitmentRouter.post(
-  "/apply-for-job/:slug",
-  resolvePublicTenant,
-  h.applyForJob,
-);
 recruitmentRouter.get(
   "/view-applications/:id",
   authenticate,

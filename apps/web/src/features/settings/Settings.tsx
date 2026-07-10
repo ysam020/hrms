@@ -13,7 +13,7 @@ import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import CompanyInfo from "@web/features/company-info/CompanyInfo";
 import OrgSettings from "@web/features/settings/OrgSettings";
-import BranchesShiftsSettings from "@web/features/settings/branches-shifts/BranchesShiftsSettings";
+import ShiftsSettings from "@web/features/settings/shifts/ShiftsSettings";
 import ExitPolicySettings from "@web/features/settings/exit-policy/ExitPolicySettings";
 import RecruitmentPipelineSettings from "@web/features/settings/recruitment-pipeline/RecruitmentPipelineSettings";
 import PayrollComponentsSettings from "@web/features/settings/payroll-components/PayrollComponentsSettings";
@@ -39,9 +39,9 @@ const BASE_TABS: SettingsTab[] = [
     component: <OrgSettings />,
   },
   {
-    label: "Branches & Shifts",
-    slug: "branches-shifts",
-    component: <BranchesShiftsSettings />,
+    label: "Shifts",
+    slug: "shifts",
+    component: <ShiftsSettings />,
   },
   {
     label: "Exit Policy",

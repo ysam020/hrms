@@ -10,18 +10,13 @@ import {
 const BottomDrawerContext = createContext<{
   isAnyOpen: boolean;
   setDrawerOpen: (isOpen: boolean) => void;
-  dockVisible: boolean;
-  setDockVisible: (v: boolean) => void;
 }>({
   isAnyOpen: false,
   setDrawerOpen: () => {},
-  dockVisible: false,
-  setDockVisible: () => {},
 });
 
 export function BottomDrawerProvider({ children }: { children: ReactNode }) {
   const [openCount, setOpenCount] = useState(0);
-  const [dockVisible, setDockVisible] = useState(false);
 
   const setDrawerOpen = useCallback((isOpen: boolean) => {
     setOpenCount((prev) => (isOpen ? prev + 1 : Math.max(0, prev - 1)));
@@ -31,10 +26,8 @@ export function BottomDrawerProvider({ children }: { children: ReactNode }) {
     () => ({
       isAnyOpen: openCount > 0,
       setDrawerOpen,
-      dockVisible,
-      setDockVisible,
     }),
-    [openCount, setDrawerOpen, dockVisible],
+    [openCount, setDrawerOpen],
   );
 
   return (

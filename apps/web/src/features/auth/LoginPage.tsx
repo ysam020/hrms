@@ -11,7 +11,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import Grid from "@mui/material/Grid2";
 import Typography from "@mui/material/Typography";
 import Divider from "@mui/material/Divider";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import People from "@mui/icons-material/People";
 import Shield from "@mui/icons-material/Shield";
@@ -240,10 +240,11 @@ function LoginPage() {
                 {/* Google Sign-In button */}
                 <Button
                   fullWidth
-                  variant="contained"
+                  variant="primary"
                   onClick={handleGoogleSignIn}
-                  sx={{
-                    py: 1.4,
+                  style={{
+                    paddingTop: 11.2,
+                    paddingBottom: 11.2,
                     borderRadius: "8px",
                     backgroundColor: "var(--card-background)",
                     color: "var(--text-color)",
@@ -253,13 +254,8 @@ function LoginPage() {
                     textTransform: "none",
                     letterSpacing: 0.25,
                     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-                    "& .MuiButton-startIcon": { marginRight: "12px" },
-                    "&:hover": {
-                      backgroundColor: "var(--card-background-primary)",
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
-                    },
                   }}
-                  startIcon={
+                  icon={
                     <svg
                       width="18"
                       height="18"
@@ -303,22 +299,18 @@ function LoginPage() {
                 {/* Security key / WebAuthn option */}
                 <Button
                   fullWidth
-                  variant="outlined"
-                  startIcon={<KeyIcon aria-hidden="true" />}
+                  variant="outline"
+                  icon={<KeyIcon aria-hidden="true" />}
                   onClick={() => setView(VIEW.WEBAUTHN)}
-                  sx={{
-                    py: 1.2,
+                  style={{
+                    paddingTop: 9.6,
+                    paddingBottom: 9.6,
                     borderRadius: "8px",
                     borderColor: "var(--text-input-border)",
                     color: "var(--text-color)",
                     fontWeight: 500,
                     fontSize: "13px",
                     textTransform: "none",
-                    "& .MuiButton-startIcon": { mr: 1.5 },
-                    "&:hover": {
-                      borderColor: "var(--link-color)",
-                      color: "var(--link-color)",
-                    },
                   }}
                 >
                   <span style={{ marginLeft: "5px" }}>
@@ -355,10 +347,11 @@ function LoginPage() {
 
                 <Button
                   fullWidth
-                  variant="contained"
+                  variant="primary"
                   onClick={handleGoogleSignIn}
-                  sx={{
-                    py: 1.4,
+                  style={{
+                    paddingTop: 11.2,
+                    paddingBottom: 11.2,
                     borderRadius: "8px",
                     backgroundColor: "var(--card-background)",
                     color: "var(--text-color)",
@@ -368,13 +361,8 @@ function LoginPage() {
                     textTransform: "none",
                     letterSpacing: 0.25,
                     boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-                    "& .MuiButton-startIcon": { mr: 1.5 },
-                    "&:hover": {
-                      backgroundColor: "var(--card-background-primary)",
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
-                    },
                   }}
-                  startIcon={
+                  icon={
                     <svg
                       width="18"
                       height="18"

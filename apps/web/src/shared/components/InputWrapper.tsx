@@ -94,7 +94,7 @@ const InputWrapper = ({
             hourFormat="12"
             placeholder={placeholder}
             className={hasError ? "p-invalid" : ""}
-            appendTo={"self"}
+            appendTo={() => document.querySelector("#root .App") as HTMLElement}
             inputId={name}
             aria-required={required}
             aria-invalid={!!hasError}

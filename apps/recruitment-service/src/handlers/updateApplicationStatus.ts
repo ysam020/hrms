@@ -1,16 +1,36 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
+import dayjs from "dayjs";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
 
+// Interview date/time is stored as a "YYYYMMDDTHHmmss" string (see
+// ScheduleInterviewModal.tsx). Returns null for missing/unparseable input.
+function parseInterviewTime(value: unknown): dayjs.Dayjs | null {
+  if (!value || typeof value !== "string") return null;
+  const parsed = dayjs(value, "YYYYMMDDTHHmmss");
+  return parsed.isValid() ? parsed : null;
+}
+
 export const updateApplicationStatus = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { id, applicationStatus } = call.request;
+    // The proto field is `status` — this local is renamed to avoid shadowing
+    // the imported grpc-js `status` enum used for response codes below.
+    const {
+      id,
+      status: applicationStatus,
+      remarks,
+      salary,
+      joiningDate,
+      referenceBy,
+      interviewRound,
+      interviewFeedback,
+    } = call.request;
 
     if (!id || !applicationStatus) {
       return callback(null, {
@@ -29,9 +49,109 @@ export const updateApplicationStatus = async (
       });
     }
 
+    // A candidate can only be hired once at least one round has actually
+    // been conducted AND formally Cleared — `cleared` is set below when a
+    // round is Cleared, independent of the top-level `status` string, which
+    // stops reflecting an earlier round's outcome as soon as a later round
+    // is scheduled.
+    if (applicationStatus === "Hired") {
+      const existingInterviews = Array.isArray(application.interviews)
+        ? (application.interviews as any[])
+        : [];
+      const hasClearedRound = existingInterviews.some(
+        (i: any) => i.interviewConducted === true && i.cleared === true,
+      );
+      if (!hasClearedRound) {
+        return callback(null, {
+          message:
+            "This candidate cannot be hired until at least one interview round has been Completed and Cleared.",
+          status: status.FAILED_PRECONDITION,
+        });
+      }
+    }
+
+    const updateData: Record<string, any> = { status: applicationStatus };
+    if (remarks) updateData.remarks = remarks;
+    if (applicationStatus === "Hired") {
+      if (salary) updateData.hireSalary = parseFloat(salary);
+      if (joiningDate) updateData.hireJoiningDate = new Date(joiningDate);
+      if (referenceBy) updateData.hireReferredBy = referenceBy;
+    }
+
+    // Mark the specific round conducted (e.g. "Round 2 Cleared") — addressed
+    // by roundNumber, not array position, since rounds are upserted in place
+    // by scheduleInterview/rescheduleInterview.
+    const isCompleting = applicationStatus.includes("Completed");
+    const isClearing = applicationStatus.includes("Cleared");
+    if (interviewRound && (isCompleting || isClearing)) {
+      const interviews = Array.isArray(application.interviews)
+        ? (application.interviews as any[])
+        : [];
+      const idx = interviews.findIndex(
+        (i: any) => i.roundNumber === interviewRound,
+      );
+      if (idx >= 0) {
+        const alreadyConducted = interviews[idx].interviewConducted === true;
+
+        // A round can only move Scheduled → Completed → Cleared, in that
+        // order. Re-marking an already-Completed round Completed again (or
+        // Clearing one that was never Completed) would silently accept a
+        // no-op that skips the actual interview, so both are rejected.
+        if (isCompleting && alreadyConducted) {
+          return callback(null, {
+            message: `Round ${interviewRound} has already been marked Completed. Mark it Cleared instead.`,
+            status: status.FAILED_PRECONDITION,
+          });
+        }
+        if (isClearing && !alreadyConducted) {
+          return callback(null, {
+            message: `Round ${interviewRound} must be marked Completed before it can be Cleared.`,
+            status: status.FAILED_PRECONDITION,
+          });
+        }
+
+        if (isCompleting) {
+          // A round can't be marked Completed before it has actually
+          // happened — reject the whole status change rather than silently
+          // updating the status string without flipping interviewConducted.
+          const scheduledEnd = parseInterviewTime(
+            interviews[idx].interviewEndTime,
+          );
+          if (scheduledEnd && dayjs().isBefore(scheduledEnd)) {
+            return callback(null, {
+              message: `Round ${interviewRound} is scheduled until ${scheduledEnd.format("DD MMM YYYY, HH:mm")} and cannot be marked Completed before then.`,
+              status: status.FAILED_PRECONDITION,
+            });
+          }
+          // Feedback is captured once, at Completion — the frontend already
+          // requires it here, this is the authoritative check. Clearing is
+          // a pure follow-up decision on an already-conducted round, so it
+          // neither re-collects nor overwrites this feedback.
+          if (!interviewFeedback || !String(interviewFeedback).trim()) {
+            return callback(null, {
+              message: `Interview feedback is required to mark Round ${interviewRound} as Completed.`,
+              status: status.INVALID_ARGUMENT,
+            });
+          }
+          interviews[idx] = {
+            ...interviews[idx],
+            interviewConducted: true,
+            feedback: interviewFeedback,
+          };
+          updateData.interviews = interviews;
+        } else if (isClearing) {
+          // Tracked per round (not just inferred from the top-level status
+          // string) so the Hiring guard above still sees this round as
+          // Cleared even after a later round starts and moves `status` on.
+          interviews[idx] = { ...interviews[idx], cleared: true };
+          updateData.interviews = interviews;
+        }
+      }
+    }
+
     const updatedApplication = await prisma.jobApplication.update({
       where: { id },
-      data: { status: applicationStatus },
+      data: updateData,
     });
 
     // If hired, increment candidatesHired on the job opening

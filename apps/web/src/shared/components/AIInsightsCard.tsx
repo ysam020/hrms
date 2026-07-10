@@ -3,8 +3,7 @@ import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
+import Button from "@web/shared/components/Button";
 import Divider from "@mui/material/Divider";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
@@ -257,22 +256,19 @@ export default function AIInsightsCard({
             </Typography>
           </Box>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={generate}
             disabled={loading}
-            startIcon={
-              loading ? (
-                <CircularProgress size={12} color="inherit" />
-              ) : (
-                <AutoAwesome sx={{ fontSize: "16px !important" }} />
-              )
-            }
-            sx={{
-              bgcolor: "#7c3aed",
-              "&:hover": { bgcolor: "#6d28d9" },
-              py: 0.4,
-              px: 1.5,
+            loading={loading}
+            loadingText="Analyzing..."
+            icon={<AutoAwesome style={{ fontSize: "16px" }} />}
+            style={{
+              backgroundColor: "#7c3aed",
+              paddingTop: 3.2,
+              paddingBottom: 3.2,
+              paddingLeft: 12,
+              paddingRight: 12,
               fontSize: "0.78rem",
               lineHeight: 1.5,
             }}
@@ -284,11 +280,7 @@ export default function AIInsightsCard({
                 marginLeft: "6px",
               }}
             >
-              {loading
-                ? "Analyzing..."
-                : insights
-                  ? "Regenerate"
-                  : "Generate Insights"}
+              {insights ? "Regenerate" : "Generate Insights"}
             </span>
           </Button>
         </Box>

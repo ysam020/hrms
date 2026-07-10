@@ -171,7 +171,7 @@ $transition-base: all 0.2s ease;
   background: transparent;
   font-family: inherit;
   color: var(--text-color);
-  height: var(--page-content-height);
+  height: 100%;
 
   // Toolbar
   .rbc-toolbar-compact {

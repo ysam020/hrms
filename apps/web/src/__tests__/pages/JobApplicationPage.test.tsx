@@ -5,10 +5,14 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true };
 
 const mockPost = vi.fn();
+const mockGet = vi.fn();
 const mockNavigate = vi.fn();
 
 vi.mock("@web/core/http/axiosConfig", () => ({
-  default: { post: (...args: any[]) => mockPost(...args) },
+  default: {
+    post: (...args: any[]) => mockPost(...args),
+    get: (...args: any[]) => mockGet(...args),
+  },
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -53,6 +57,7 @@ const fillRequiredFields = async () => {
 describe("JobApplicationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGet.mockResolvedValue({ data: { data: null } });
   });
 
   it("submits to the slug-scoped apply-for-job endpoint", async () => {
@@ -119,5 +124,44 @@ describe("JobApplicationPage", () => {
         screen.getByText("This careers link doesn't exist."),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("fetches and displays the job's details alongside the form", async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        data: {
+          jobTitle: "Backend Engineer",
+          hiringManager: "Alex Kim",
+          numberOfVacancies: 2,
+          experience: 3,
+          budget: [8, 12],
+          applicationDeadline: "2026-12-31T00:00:00.000Z",
+          jobDescription: "Build and maintain backend services.",
+          requiredSkills: "Node.js, PostgreSQL",
+        },
+      },
+    });
+    renderPage("acme-co", "job1");
+
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenCalledWith("/public/careers/acme-co/job/job1"),
+    );
+    expect(await screen.findByText("Backend Engineer")).toBeInTheDocument();
+    expect(
+      screen.getByText("Build and maintain backend services."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
+  });
+
+  it("shows a warning and still renders the form when the job can't be found", async () => {
+    mockGet.mockRejectedValue({
+      response: { data: { message: "This job opening could not be found." } },
+    });
+    renderPage("acme-co", "missing-job");
+
+    expect(
+      await screen.findByText("This job opening could not be found."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
   });
 });

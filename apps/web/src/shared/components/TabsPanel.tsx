@@ -51,9 +51,14 @@ function CustomTabPanel({
       hidden={value !== index}
       id={`simple-tabpanel-${index}`}
       aria-labelledby={`simple-tab-${index}`}
+      style={{ height: "100%" }}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && (
+        <Box sx={{ p: 3, height: "100%", boxSizing: "border-box" }}>
+          {children}
+        </Box>
+      )}
     </div>
   );
 }
@@ -128,14 +133,19 @@ function TabsPanel({ tabData, tabKey, basePath, ariaLabel }: TabsPanelProps) {
   };
 
   return (
-    <Box sx={{ width: "100%" }}>
+    <Box
+      sx={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <Box
         sx={{
+          flexShrink: 0,
           borderBottom: 1,
           borderColor: "divider",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
           backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
         }}
       >
@@ -159,7 +169,7 @@ function TabsPanel({ tabData, tabKey, basePath, ariaLabel }: TabsPanelProps) {
         </Tabs>
       </Box>
 
-      <Box>
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {tabData.map((tab, index) => (
           <CustomTabPanel value={value} index={index} key={index}>
             <Suspense

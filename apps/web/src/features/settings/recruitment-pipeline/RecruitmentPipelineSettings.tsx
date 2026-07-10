@@ -3,7 +3,7 @@ import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
@@ -266,9 +266,9 @@ export default function RecruitmentPipelineSettings() {
         </Box>
         {canEdit && (
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
-            startIcon={<AddCircleOutlineIcon />}
+            icon={<AddCircleOutlineIcon />}
             onClick={openAdd}
           >
             Add pipeline
@@ -313,9 +313,10 @@ export default function RecruitmentPipelineSettings() {
                   <Box>
                     {!t.isDefault && (
                       <Button
+                        variant="ghost"
                         size="small"
                         onClick={() => setDefault(t)}
-                        sx={{ mr: 1 }}
+                        style={{ marginRight: 8 }}
                       >
                         Set as default
                       </Button>
@@ -468,17 +469,18 @@ export default function RecruitmentPipelineSettings() {
             </Paper>
           ))}
           <Button
-            variant="outlined"
+            variant="outline"
             size="small"
-            startIcon={<AddCircleOutlineIcon />}
+            icon={<AddCircleOutlineIcon />}
             onClick={addStage}
-            sx={{ alignSelf: "flex-start" }}
+            style={{ alignSelf: "flex-start" }}
           >
             Add stage
           </Button>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
+            variant="ghost"
             size="small"
             onClick={() => setDialogOpen(false)}
             disabled={saving}
@@ -486,21 +488,17 @@ export default function RecruitmentPipelineSettings() {
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={save}
             disabled={
               saving || !name.trim() || stages.some((s) => !s.name.trim())
             }
-            startIcon={
-              saving ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
+            loading={saving}
+            loadingText="Saving…"
+            icon={<SaveIcon />}
           >
-            {saving ? "Saving…" : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>

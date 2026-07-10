@@ -5,7 +5,7 @@ import Paper from "@mui/material/Paper";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -378,8 +378,8 @@ export default function PayrollComponentsSettings() {
           the standard rates (PF 12% of basic, ESI 1.75% of gross, PT ₹200) —
           edit them to change how every payslip is calculated. State-wise
           Professional Tax slabs override the flat PT rate once configured.
-          Additional custom components can be added here, but aren't applied
-          to payroll calculations yet.
+          Additional custom components can be added here, but aren't applied to
+          payroll calculations yet.
         </Typography>
       </Box>
 
@@ -418,9 +418,9 @@ export default function PayrollComponentsSettings() {
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
               {canEdit && (
                 <Button
-                  variant="contained"
+                  variant="primary"
                   size="small"
-                  startIcon={<AddCircleOutlineIcon />}
+                  icon={<AddCircleOutlineIcon />}
                   onClick={openAddComponent}
                 >
                   Add component
@@ -510,9 +510,9 @@ export default function PayrollComponentsSettings() {
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
               {canEdit && (
                 <Button
-                  variant="contained"
+                  variant="primary"
                   size="small"
-                  startIcon={<AddCircleOutlineIcon />}
+                  icon={<AddCircleOutlineIcon />}
                   onClick={openAddSlab}
                 >
                   Add slab
@@ -572,9 +572,9 @@ export default function PayrollComponentsSettings() {
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
               {canEdit && (
                 <Button
-                  variant="contained"
+                  variant="primary"
                   size="small"
-                  startIcon={<AddCircleOutlineIcon />}
+                  icon={<AddCircleOutlineIcon />}
                   onClick={openAddCycle}
                 >
                   Add pay cycle
@@ -734,6 +734,7 @@ export default function PayrollComponentsSettings() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
+            variant="ghost"
             size="small"
             onClick={() => setComponentDialogOpen(false)}
             disabled={savingComponent}
@@ -741,7 +742,7 @@ export default function PayrollComponentsSettings() {
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={saveComponent}
             disabled={
@@ -749,15 +750,11 @@ export default function PayrollComponentsSettings() {
               !componentForm.name.trim() ||
               !componentForm.code.trim()
             }
-            startIcon={
-              savingComponent ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
+            loading={savingComponent}
+            loadingText="Saving…"
+            icon={<SaveIcon />}
           >
-            {savingComponent ? "Saving…" : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>
@@ -815,6 +812,7 @@ export default function PayrollComponentsSettings() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
+            variant="ghost"
             size="small"
             onClick={() => setSlabDialogOpen(false)}
             disabled={savingSlab}
@@ -822,19 +820,15 @@ export default function PayrollComponentsSettings() {
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={saveSlab}
             disabled={savingSlab || !slabForm.state.trim()}
-            startIcon={
-              savingSlab ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
+            loading={savingSlab}
+            loadingText="Saving…"
+            icon={<SaveIcon />}
           >
-            {savingSlab ? "Saving…" : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>
@@ -906,6 +900,7 @@ export default function PayrollComponentsSettings() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
+            variant="ghost"
             size="small"
             onClick={() => setCycleDialogOpen(false)}
             disabled={savingCycle}
@@ -913,19 +908,15 @@ export default function PayrollComponentsSettings() {
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={saveCycle}
             disabled={savingCycle || !cycleForm.name.trim()}
-            startIcon={
-              savingCycle ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
+            loading={savingCycle}
+            loadingText="Saving…"
+            icon={<SaveIcon />}
           >
-            {savingCycle ? "Saving…" : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>

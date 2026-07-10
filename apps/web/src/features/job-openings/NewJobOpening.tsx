@@ -1,35 +1,31 @@
-import { memo, useContext, useMemo } from "react";
+import { memo, useContext, useMemo, useState } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
-import Slider from "@mui/material/Slider";
 import Grid from "@mui/material/Grid2";
+import Alert from "@mui/material/Alert";
+import TextField from "@mui/material/TextField";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 import Work from "@mui/icons-material/Work";
 import Schedule from "@mui/icons-material/Schedule";
 import Description from "@mui/icons-material/Description";
 import AttachMoney from "@mui/icons-material/AttachMoney";
 import Add from "@mui/icons-material/Add";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useFormik } from "formik";
 import { jobOpeningValidationSchema as validationSchema } from "./schemas";
 import Button from "@web/shared/components/Button";
 import { AlertContext } from "@web/app/providers/AlertContext";
+import { UserContext } from "@web/app/providers/UserContext";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import { Dropdown } from "primereact/dropdown";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
-import { jobTitles } from "@web/assets/data/jobTitles";
 import { API_ENDPOINTS } from "@web/shared/constants";
-
-function valuetext(value) {
-  return `${value} LPA`;
-}
-
-const marks = [
-  { value: 2, label: "2 LPA" },
-  { value: 10, label: "10 LPA" },
-];
+import useJobTitleOptions from "./useJobTitleOptions";
 
 // Dropdown wrapper component
 const FormikDropdownWrapper = ({
@@ -61,6 +57,8 @@ const FormikDropdownWrapper = ({
 
 function NewJobOpenings({ onSaved }) {
   const { setAlert } = useContext(AlertContext);
+  const { user } = useContext(UserContext);
+  const [applyLink, setApplyLink] = useState("");
 
   // Fetch user names using custom hook
   const { data: usersData } = useFetchData(
@@ -70,6 +68,9 @@ function NewJobOpenings({ onSaved }) {
     null,
     null,
   );
+
+  const { options: jobTitleOptions, ensureJobTitleSaved } =
+    useJobTitleOptions();
 
   // Transform user data for dropdown
   const userList = useMemo(() => {
@@ -95,18 +96,26 @@ function NewJobOpenings({ onSaved }) {
       jobDescription: "",
       requiredSkills: "",
       experience: "",
-      budget: [2, 10],
+      budget: [0, 0],
       hiringManager: "",
     },
     validationSchema,
     onSubmit: async (values) => {
       try {
+        // Best-effort — see useJobTitleOptions for why failures are swallowed.
+        void ensureJobTitleSaved(values.jobTitle);
         const res = await apiClient.post(API_ENDPOINTS.ADD_JOB_OPENING, values);
         setAlert({
           open: true,
           message: res.data.message,
           severity: "success",
         });
+        const newJobId = res.data?.data?.id;
+        if (newJobId && user?.tenantSlug) {
+          setApplyLink(
+            `${window.location.origin}/careers/${user.tenantSlug}/apply/${newJobId}`,
+          );
+        }
         formik.resetForm();
         onSaved?.();
       } catch (error) {
@@ -122,9 +131,10 @@ function NewJobOpenings({ onSaved }) {
     },
   });
 
-  const handleSliderChange = (event, newValue) => {
-    formik.setFieldValue("budget", newValue);
-    formik.setFieldTouched("budget", true);
+  const handleCopyApplyLink = () => {
+    if (!applyLink) return;
+    navigator.clipboard.writeText(applyLink);
+    setAlert({ open: true, message: "Apply link copied", severity: "success" });
   };
 
   return (
@@ -137,6 +147,34 @@ function NewJobOpenings({ onSaved }) {
             New Job Opening
           </Typography>
         </Box>
+
+        {applyLink && (
+          <Alert
+            severity="success"
+            icon={false}
+            onClose={() => setApplyLink("")}
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="body2" fontWeight="600" mb={0.5}>
+              Job opening created. Share this link with candidates:
+            </Typography>
+            <Box display="flex" alignItems="center" gap={1}>
+              <TextField
+                value={applyLink}
+                size="small"
+                fullWidth
+                InputProps={{ readOnly: true }}
+                onFocus={(e) => e.target.select()}
+                sx={{ bgcolor: "background.paper" }}
+              />
+              <Tooltip title="Copy link">
+                <IconButton onClick={handleCopyApplyLink} size="small">
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Alert>
+        )}
 
         <form onSubmit={formik.handleSubmit}>
           <Grid container spacing={1}>
@@ -153,9 +191,13 @@ function NewJobOpenings({ onSaved }) {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormikDropdownWrapper
                       name="jobTitle"
-                      options={jobTitles}
+                      options={jobTitleOptions}
                       placeholder="Job Title"
                       formik={formik}
+                      inputProps={{
+                        editable: true,
+                        filterPlaceholder: "Search or type a new title...",
+                      }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
@@ -265,7 +307,7 @@ function NewJobOpenings({ onSaved }) {
                   </Typography>
                 </Box>
                 <Box sx={{ px: 2, py: 1 }}>
-                  <Box display="flex" alignItems="center" gap={2} mb={1}>
+                  <Box display="flex" alignItems="center" gap={2} mb={1.5}>
                     <Typography variant="body2" color="text.secondary">
                       Salary Range
                     </Typography>
@@ -273,26 +315,41 @@ function NewJobOpenings({ onSaved }) {
                       {formik.values.budget[0]} - {formik.values.budget[1]} LPA
                     </Typography>
                   </Box>
-                  <Slider
-                    value={formik.values.budget}
-                    onChange={handleSliderChange}
-                    onBlur={() => formik.setFieldTouched("budget", true)}
-                    valueLabelDisplay="auto"
-                    getAriaValueText={valuetext}
-                    marks={marks}
-                    min={2}
-                    max={10}
-                    step={0.1}
-                    sx={{
-                      color: "primary.main",
-                      "& .MuiSlider-thumb": {
-                        backgroundColor: "primary.main",
-                      },
-                      "& .MuiSlider-track": {
-                        backgroundColor: "primary.main",
-                      },
-                    }}
-                  />
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <TextField
+                      label="Min (LPA)"
+                      type="number"
+                      size="small"
+                      fullWidth
+                      value={formik.values.budget[0]}
+                      onChange={(e) =>
+                        formik.setFieldValue("budget", [
+                          e.target.value === "" ? 0 : Number(e.target.value),
+                          formik.values.budget[1],
+                        ])
+                      }
+                      onBlur={() => formik.setFieldTouched("budget", true)}
+                      inputProps={{ step: 0.1, min: 0 }}
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      to
+                    </Typography>
+                    <TextField
+                      label="Max (LPA)"
+                      type="number"
+                      size="small"
+                      fullWidth
+                      value={formik.values.budget[1]}
+                      onChange={(e) =>
+                        formik.setFieldValue("budget", [
+                          formik.values.budget[0],
+                          e.target.value === "" ? 0 : Number(e.target.value),
+                        ])
+                      }
+                      onBlur={() => formik.setFieldTouched("budget", true)}
+                      inputProps={{ step: 0.1, min: 0 }}
+                    />
+                  </Box>
                   {formik.touched.budget && formik.errors.budget && (
                     <Typography
                       variant="caption"

@@ -3,7 +3,7 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Box from "@mui/material/Box";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -302,16 +302,12 @@ export default function ExitManagementDialog({
             {tab === 1 && (
               <Box>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   size="small"
                   onClick={computeSettlement}
                   disabled={computingSettlement}
-                  startIcon={
-                    computingSettlement ? (
-                      <CircularProgress size={14} />
-                    ) : undefined
-                  }
-                  sx={{ mb: 2 }}
+                  loading={computingSettlement}
+                  style={{ marginBottom: 16 }}
                 >
                   {settlement ? "Recompute" : "Compute settlement"}
                 </Button>
@@ -377,7 +373,7 @@ export default function ExitManagementDialog({
                       {settlement.status === "draft" && (
                         <Button
                           size="small"
-                          variant="contained"
+                          variant="primary"
                           onClick={approveSettlement}
                         >
                           Approve settlement
@@ -410,7 +406,7 @@ export default function ExitManagementDialog({
                     sx={{ flex: 1, minWidth: 180 }}
                   />
                   <Button
-                    variant="contained"
+                    variant="primary"
                     size="small"
                     onClick={submitRenegotiation}
                     disabled={renegotiating || !newLastWorkingDay}
@@ -471,7 +467,9 @@ export default function ExitManagementDialog({
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Close</Button>
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
       </DialogActions>
     </Dialog>
   );

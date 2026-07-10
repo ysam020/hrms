@@ -22,6 +22,7 @@ import Tooltip from "@mui/material/Tooltip";
 import LogoDark from "@web/assets/data/LogoDark";
 import LogoLight from "@web/assets/data/LogoLight";
 import { useDashboardEdit } from "@web/app/providers/DashboardEditContext";
+import AppsPopover from "@web/features/layout/AppsPopover";
 
 const drawerWidth = 60;
 
@@ -91,6 +92,105 @@ function AppbarComponent({
   const handleMobileMenuItemClick = (item) => {
     item.onClick();
     setMobileMenuOpen(false);
+  };
+
+  const renderActionItem = (item, idx) => {
+    const isHovered = hoveredIndex === idx;
+
+    return (
+      <Tooltip key={idx} title={item.title} placement="bottom" arrow>
+        <Box
+          component="button"
+          aria-label={item.title}
+          onMouseEnter={() => setHoveredIndex(idx)}
+          onMouseLeave={() => setHoveredIndex(null)}
+          onClick={item.onClick}
+          sx={{
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "40px",
+            height: "44px",
+            borderRadius: "14px",
+            cursor: "pointer",
+            border: "none",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            background: isHovered
+              ? theme === "light"
+                ? item.danger
+                  ? "linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.12) 100%)"
+                  : "linear-gradient(135deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.08) 100%)"
+                : item.danger
+                  ? "linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.18) 100%)"
+                  : "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.12) 100%)"
+              : "transparent",
+            boxShadow: isHovered
+              ? theme === "light"
+                ? "0 4px 12px rgba(0, 0, 0, 0.08)"
+                : "0 4px 12px rgba(0, 0, 0, 0.3)"
+              : "none",
+          }}
+        >
+          {item.badge && (item.badgeCount ?? 0) > 0 ? (
+            <>
+              <i
+                className={`pi ${item.iconClass}`}
+                aria-hidden="true"
+                style={{
+                  fontSize: "16px",
+                  color: theme === "light" ? "#1f2937" : "#f3f4f6",
+                  transition: "all 0.2s ease",
+                }}
+              />
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: "1px",
+                  right: "6px",
+                  minWidth: "20px",
+                  height: "20px",
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                  color: "white",
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0 5px",
+                  boxShadow: "0 2px 8px rgba(239, 68, 68, 0.4)",
+                  border:
+                    "2px solid " +
+                    (theme === "light"
+                      ? "rgba(255, 255, 255, 0.85)"
+                      : "rgba(17, 27, 33, 0.85)"),
+                }}
+                aria-label={`${item.badgeCount ?? 0} ${item.title.toLowerCase()}`}
+              >
+                {item.badgeCount}
+              </Box>
+            </>
+          ) : (
+            <i
+              className={`pi ${item.iconClass}`}
+              aria-hidden="true"
+              style={{
+                fontSize: "16px",
+                color:
+                  item.danger && isHovered
+                    ? "#ef4444"
+                    : theme === "light"
+                      ? "#1f2937"
+                      : "#f3f4f6",
+                transition: "all 0.2s ease",
+              }}
+            />
+          )}
+        </Box>
+      </Tooltip>
+    );
   };
 
   return (
@@ -294,111 +394,20 @@ function AppbarComponent({
                 </>
               )}
 
-              {actionItems.map((item, idx) => {
-                const isHovered = hoveredIndex === idx;
+              {renderActionItem(actionItems[0], 0)}
 
-                return (
-                  <Tooltip
-                    key={idx}
-                    title={item.title}
-                    placement="bottom"
-                    arrow
-                  >
-                    <Box
-                      component="button"
-                      aria-label={item.title}
-                      onMouseEnter={() => setHoveredIndex(idx)}
-                      onMouseLeave={() => setHoveredIndex(null)}
-                      onClick={item.onClick}
-                      sx={{
-                        position: "relative",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "40px",
-                        height: "44px",
-                        borderRadius: "14px",
-                        cursor: "pointer",
-                        border: "none",
-                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                        background: isHovered
-                          ? theme === "light"
-                            ? item.danger
-                              ? "linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.12) 100%)"
-                              : "linear-gradient(135deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.08) 100%)"
-                            : item.danger
-                              ? "linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.18) 100%)"
-                              : "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.12) 100%)"
-                          : "transparent",
-                        boxShadow: isHovered
-                          ? theme === "light"
-                            ? "0 4px 12px rgba(0, 0, 0, 0.08)"
-                            : "0 4px 12px rgba(0, 0, 0, 0.3)"
-                          : "none",
-                      }}
-                    >
-                      {item.badge && (item.badgeCount ?? 0) > 0 ? (
-                        <>
-                          <i
-                            className={`pi ${item.iconClass}`}
-                            aria-hidden="true"
-                            style={{
-                              fontSize: "16px",
-                              color: theme === "light" ? "#1f2937" : "#f3f4f6",
-                              transition: "all 0.2s ease",
-                            }}
-                          />
-                          <Box
-                            sx={{
-                              position: "absolute",
-                              top: "1px",
-                              right: "6px",
-                              minWidth: "20px",
-                              height: "20px",
-                              borderRadius: "10px",
-                              background:
-                                "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
-                              color: "white",
-                              fontSize: "11px",
-                              fontWeight: "700",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: "0 5px",
-                              boxShadow: "0 2px 8px rgba(239, 68, 68, 0.4)",
-                              border:
-                                "2px solid " +
-                                (theme === "light"
-                                  ? "rgba(255, 255, 255, 0.85)"
-                                  : "rgba(17, 27, 33, 0.85)"),
-                            }}
-                            aria-label={`${
-                              item.badgeCount ?? 0
-                            } ${item.title.toLowerCase()}`}
-                          >
-                            {item.badgeCount}
-                          </Box>
-                        </>
-                      ) : (
-                        <i
-                          className={`pi ${item.iconClass}`}
-                          aria-hidden="true"
-                          style={{
-                            fontSize: "16px",
-                            color:
-                              item.danger && isHovered
-                                ? "#ef4444"
-                                : theme === "light"
-                                  ? "#1f2937"
-                                  : "#f3f4f6",
-                            transition: "all 0.2s ease",
-                          }}
-                        />
-                      )}
-                    </Box>
-                  </Tooltip>
-                );
-              })}
+              {/* Apps launcher, right of Search */}
+              <AppsPopover theme={theme} />
+
+              {actionItems
+                .slice(1)
+                .map((item, i) => renderActionItem(item, i + 1))}
+            </Box>
+
+            {/* Apps launcher, mobile-only — the desktop instance lives in
+                the action row above, right of Search */}
+            <Box sx={{ display: { xs: "flex", md: "none" } }}>
+              <AppsPopover theme={theme} />
             </Box>
 
             {/* Mobile hamburger menu - shown only on small screens */}

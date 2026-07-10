@@ -480,19 +480,7 @@ export const actOnApprovalSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
 });
 
-// ── Branches & Shifts ────────────────────────────────────────────────────────
-
-export const createBranchSchema = z.object({
-  name: z.string().min(1).max(120),
-  address: z.string().max(500).optional(),
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  geofenceRadiusMeters: z.number().int().min(50).max(5000).optional(),
-});
-
-export const updateBranchSchema = createBranchSchema.partial().extend({
-  isActive: z.boolean().optional(),
-});
+// ── Shifts ────────────────────────────────────────────────────────────────────
 
 export const createShiftSchema = z.object({
   name: z.string().min(1).max(120),

@@ -19,7 +19,6 @@ message JobOpening {
   string created_on = 15;
   string pipeline_template_id = 16; // "" = tenant default template
   string visibility = 17;           // internal | external (default) | both
-  repeated string branch_ids = 18;  // multi-location vacancies
 }
 
 message JobApplication {
@@ -87,7 +86,6 @@ message CreateJobRequest {
   string id = 11; // set on update
   string pipeline_template_id = 12;
   string visibility = 13;
-  repeated string branch_ids = 14;
 }
 
 message JobResponse {
@@ -160,6 +158,16 @@ message UpdateStatusRequest {
   bool notice_period_waived = 6;
   float buyout_amount = 7;
   string relieved_from_duty_on = 8;
+  // Hire-specific optional fields — only applied when status is "Hired".
+  string salary = 9;
+  string joining_date = 10;
+  string reference_by = 11;
+  // Set when this status update marks a specific interview round as
+  // conducted (e.g. "Round 2 Cleared") — 0 = not applicable.
+  int32 interview_round = 12;
+  // Required interviewer feedback when marking interview_round
+  // Completed/Cleared — stored on that round's interviews[] entry.
+  string interview_feedback = 13;
 }
 
 message SubmitResignationRequest {

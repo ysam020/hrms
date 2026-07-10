@@ -21,6 +21,7 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import Alert from "@mui/material/Alert";
 import Loading from "@web/shared/components/Loading";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import useLogout from "@web/shared/hooks/useLogout";
 import {
   setUnauthorizedHandler,
@@ -80,7 +81,13 @@ function App() {
     severity: "info",
   });
 
-  const handleLogout = useLogout(setUser);
+  const {
+    handleLogout,
+    confirmOpen: logoutConfirmOpen,
+    cancelLogout,
+    confirmLogout,
+    loggingOut,
+  } = useLogout(setUser);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -429,6 +436,18 @@ function App() {
                   </Suspense>
                 </ErrorBoundary>
               )}
+              <ConfirmationDialog
+                open={logoutConfirmOpen}
+                onClose={cancelLogout}
+                onConfirm={confirmLogout}
+                title="Log out"
+                message="Are you sure you want to log out?"
+                confirmText="Log out"
+                cancelText="Cancel"
+                loading={loggingOut}
+                variant="danger"
+                theme={theme}
+              />
             </div>
           </AlertContext.Provider>
         </UserContext.Provider>

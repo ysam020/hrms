@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import dayjs from "dayjs";
+import { recruitment } from "@hrms/proto";
 import { recruitmentClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma } from "@hrms/db";
@@ -9,6 +11,7 @@ import { handleError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { isSuperUser } from "../utils/user";
 import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
+import { getActiveSettings, SETTINGS_DEFAULTS } from "./tenantSettings";
 
 export async function viewJobOpenings(req: Request, res: Response) {
   try {
@@ -48,7 +51,6 @@ export async function addJobOpening(req: Request, res: Response) {
       createdBy,
       pipelineTemplateId,
       visibility,
-      branchIds,
     } = req.body;
     const response = await grpcCall(recruitmentClient, "createJobOpening", {
       jobTitle: jobTitle || "",
@@ -63,7 +65,6 @@ export async function addJobOpening(req: Request, res: Response) {
       createdBy: createdBy || "",
       pipelineTemplateId: pipelineTemplateId || "",
       visibility: visibility || "external",
-      branchIds: Array.isArray(branchIds) ? branchIds : [],
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -85,7 +86,6 @@ export async function editJobOpening(req: Request, res: Response) {
       jobStatus,
       pipelineTemplateId,
       visibility,
-      branchIds,
     } = req.body;
     const grpcPayload: Record<string, any> = {
       id: req.params._id,
@@ -101,7 +101,6 @@ export async function editJobOpening(req: Request, res: Response) {
     if (jobStatus) grpcPayload.jobStatus = jobStatus;
     if (pipelineTemplateId) grpcPayload.pipelineTemplateId = pipelineTemplateId;
     if (visibility) grpcPayload.visibility = visibility;
-    if (Array.isArray(branchIds)) grpcPayload.branchIds = branchIds;
     const response = await grpcCall(
       recruitmentClient,
       "updateJobOpening",
@@ -124,13 +123,35 @@ export async function deleteJobOpening(req: Request, res: Response) {
   }
 }
 
-export async function publicCareers(_req: Request, res: Response) {
+export async function publicCareers(req: Request, res: Response) {
   try {
+    // "Open" was never a real status value — job openings are stored with
+    // status "Active"/"Expired"/"Deleted" (see listJobOpenings.ts's status
+    // normalization) — so this always returned zero results. Default to
+    // "Active" but still honor an explicit ?status= from the caller.
     const response = await grpcCall(recruitmentClient, "listJobOpenings", {
       page: 1,
       limit: 100,
-      jobStatus: "Open",
+      jobStatus: (req.query.status as string) || "Active",
     });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
+export async function publicJobOpening(req: Request, res: Response) {
+  try {
+    const response: any = await grpcCall(recruitmentClient, "getJobOpening", {
+      id: req.params.id,
+    });
+    // Never expose a non-Active opening (expired/deleted) on the public
+    // apply page even if a stale/guessed link is used.
+    if (response?.data?.status && response.data.status !== "Active") {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "This job opening is no longer accepting applications.",
+      });
+    }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     return handleError(res, error);
@@ -208,15 +229,24 @@ export async function viewApplications(req: Request, res: Response) {
 
 export async function updateCandidateStatus(req: Request, res: Response) {
   try {
-    const { id, status, remarks } = req.body;
+    const { id, status, remarks, interviewRound, feedback } = req.body;
+    // fromPartial fills in every field the caller doesn't set (buyoutAmount,
+    // noticePeriodWaived, etc. — UpdateStatusRequest is shared with the
+    // resignation RPCs too) with its proto zero-value. Without it, an
+    // omitted field is `undefined` on the plain object, and the generated
+    // encoder's `!== 0`/`!== false` guard treats that as "set", then tries
+    // to write `undefined` as a float/bool and throws
+    // "Request message serialization failure: invalid float32: undefined".
     const response = await grpcCall(
       recruitmentClient,
       "updateApplicationStatus",
-      {
+      recruitment.UpdateStatusRequest.fromPartial({
         id: id || "",
         status: status || "",
         remarks: remarks || "",
-      },
+        interviewRound: interviewRound ? parseInt(String(interviewRound)) : 0,
+        interviewFeedback: feedback || "",
+      }),
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -226,15 +256,18 @@ export async function updateCandidateStatus(req: Request, res: Response) {
 
 export async function hireCandidate(req: Request, res: Response) {
   try {
-    const { id, remarks } = req.body;
+    const { id, remarks, salary, joining_date, reference_by } = req.body;
     const response = await grpcCall(
       recruitmentClient,
       "updateApplicationStatus",
-      {
+      recruitment.UpdateStatusRequest.fromPartial({
         id: id || "",
         status: "Hired",
         remarks: remarks || "",
-      },
+        salary: salary ? String(salary) : "",
+        joiningDate: joining_date || "",
+        referenceBy: reference_by || "",
+      }),
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -244,15 +277,17 @@ export async function hireCandidate(req: Request, res: Response) {
 
 export async function rejectApplication(req: Request, res: Response) {
   try {
-    const { id, remarks } = req.body;
+    // RejectModal.tsx submits this as "reason" (the form's user-facing
+    // label); "remarks" is accepted too for callers that use that name.
+    const { id, remarks, reason } = req.body;
     const response = await grpcCall(
       recruitmentClient,
       "updateApplicationStatus",
-      {
+      recruitment.UpdateStatusRequest.fromPartial({
         id: id || "",
         status: "Rejected",
-        remarks: remarks || "",
-      },
+        remarks: remarks || reason || "",
+      }),
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -580,9 +615,14 @@ export async function jobOpeningsInsights(_req: Request, res: Response) {
         j.applicationDeadline <= monthFromNow &&
         ["Active", "Open"].includes(j.status),
     ).length;
+    // "Closed"/"Hired" are not real JobOpening.status values (real ones:
+    // Active/Expired/Deleted) — a job whose deadline has passed but is
+    // already marked Expired/Deleted has already been handled and
+    // shouldn't be flagged as needing action.
     const overdueJobs = jobs.filter(
       (j) =>
-        j.applicationDeadline < now && !["Closed", "Hired"].includes(j.status),
+        j.applicationDeadline < now &&
+        !["Expired", "Deleted"].includes(j.status),
     ).length;
     const activeDaysToDeadline = jobs
       .filter(
@@ -720,13 +760,40 @@ export async function jobOpeningsInsights(_req: Request, res: Response) {
   }
 }
 
+// Schedule and reschedule both write to the same round slot — upserting by
+// roundNumber (instead of blindly appending) keeps `interviews.length`
+// equal to the number of distinct rounds, which JobApplications.tsx relies
+// on to compute "the next round to schedule". Appending on reschedule used
+// to inflate that count and permanently desync round numbers from array
+// position for the rest of the application's lifecycle.
+function upsertInterviewRound(
+  interviews: any[],
+  roundNumber: number,
+  entry: Record<string, any>,
+) {
+  const idx = interviews.findIndex((i: any) => i.roundNumber === roundNumber);
+  if (idx >= 0) {
+    interviews[idx] = { ...interviews[idx], ...entry, roundNumber };
+  } else {
+    interviews.push({ roundNumber, ...entry });
+  }
+  return interviews;
+}
+
+// Interview date/time is stored as a "YYYYMMDDTHHmmss" string (see
+// ScheduleInterviewModal.tsx). Returns null for missing/unparseable input.
+function parseInterviewTime(value: unknown): dayjs.Dayjs | null {
+  if (!value || typeof value !== "string") return null;
+  const parsed = dayjs(value, "YYYYMMDDTHHmmss");
+  return parsed.isValid() ? parsed : null;
+}
+
 export async function scheduleInterview(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const {
       _id,
       roundNumber = 1,
-      interviewDateTime,
       interviewStartTime,
       interviewEndTime,
       interviewer,
@@ -737,12 +804,45 @@ export async function scheduleInterview(req: Request, res: Response) {
         message: "Application not found",
       });
 
-    const interviews = Array.isArray(app.interviews)
+    if (user?.tenantId) {
+      const activeSettings = await getActiveSettings(user.tenantId);
+      const maxRounds =
+        activeSettings?.maxInterviewRounds ??
+        SETTINGS_DEFAULTS.maxInterviewRounds;
+      if (roundNumber > maxRounds) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `This tenant allows a maximum of ${maxRounds} interview round${maxRounds === 1 ? "" : "s"}.`,
+        });
+      }
+    }
+
+    const existingInterviews = Array.isArray(app.interviews)
       ? (app.interviews as any[])
       : [];
-    interviews.push({
-      roundNumber,
-      interviewDate: interviewDateTime,
+
+    // Each round must start strictly after the previous round's interview
+    // ends — otherwise Round 2 could be scheduled for a slot that overlaps
+    // or precedes Round 1's actual interview.
+    if (roundNumber > 1) {
+      const previousRound = existingInterviews.find(
+        (i: any) => i.roundNumber === roundNumber - 1,
+      );
+      const previousEnd = parseInterviewTime(previousRound?.interviewEndTime);
+      const newStart = parseInterviewTime(interviewStartTime);
+      if (previousEnd && newStart && !newStart.isAfter(previousEnd)) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `Round ${roundNumber} must be scheduled after Round ${roundNumber - 1}'s interview time (${previousEnd.format("DD MMM YYYY, HH:mm")}).`,
+        });
+      }
+    }
+
+    // Deliberately no separate interviewDate field — interviewStartTime is
+    // the single source of truth for this round's date. A previous
+    // interviewDate field (redundant with interviewStartTime) could drift
+    // out of sync whenever only one of the two got updated (e.g. a direct
+    // DB edit that only touched interviewStartTime/EndTime), which is
+    // exactly what happened and caused the UI to show mismatched dates.
+    const interviews = upsertInterviewRound(existingInterviews, roundNumber, {
       interviewStartTime,
       interviewEndTime,
       interviewer,
@@ -770,24 +870,54 @@ export async function rescheduleInterview(req: Request, res: Response) {
   try {
     const {
       _id,
-      roundNumber = 1,
-      interviewDateTime,
+      roundNumber,
       interviewStartTime,
       interviewEndTime,
       interviewer,
     } = req.body;
+    if (!roundNumber) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "roundNumber is required to reschedule an interview",
+      });
+    }
     const app = await prisma.jobApplication.findUnique({ where: { id: _id } });
     if (!app)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Application not found",
       });
 
-    const interviews = Array.isArray(app.interviews)
+    const existingInterviews = Array.isArray(app.interviews)
       ? (app.interviews as any[])
       : [];
-    interviews.push({
-      roundNumber,
-      interviewDate: interviewDateTime,
+    const existingRound = existingInterviews.find(
+      (i: any) => i.roundNumber === roundNumber,
+    );
+    // Defense in depth — the frontend already hides "Reschedule" once a
+    // round is marked conducted, but a direct API call could still hit
+    // this and silently flip an already-Completed/Cleared round back to
+    // interviewConducted: false.
+    if (existingRound?.interviewConducted) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Round ${roundNumber} has already been conducted and cannot be rescheduled.`,
+      });
+    }
+
+    // Same "must start after the previous round ends" rule as scheduling a
+    // new round applies here too.
+    if (roundNumber > 1) {
+      const previousRound = existingInterviews.find(
+        (i: any) => i.roundNumber === roundNumber - 1,
+      );
+      const previousEnd = parseInterviewTime(previousRound?.interviewEndTime);
+      const newStart = parseInterviewTime(interviewStartTime);
+      if (previousEnd && newStart && !newStart.isAfter(previousEnd)) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `Round ${roundNumber} must be scheduled after Round ${roundNumber - 1}'s interview time (${previousEnd.format("DD MMM YYYY, HH:mm")}).`,
+        });
+      }
+    }
+
+    const interviews = upsertInterviewRound(existingInterviews, roundNumber, {
       interviewStartTime,
       interviewEndTime,
       interviewer,
@@ -848,8 +978,16 @@ export async function reassignInterviewer(req: Request, res: Response) {
 
 export async function getInterviewerList(_req: Request, res: Response) {
   try {
+    // Scopeless permission strings are stored as exactly "Module:action"
+    // (see togglePermission.tsx) — superusers implicitly have every
+    // permission and aren't required to hold it explicitly.
     const users = await prisma.user.findMany({
-      where: { OR: [{ role: { has: "HR" } }, { role: { has: "Manager" } }] },
+      where: {
+        OR: [
+          { isSuperUser: true },
+          { permissions: { has: "JobOpenings:take_interview" } },
+        ],
+      },
       select: {
         id: true,
         username: true,

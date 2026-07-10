@@ -107,7 +107,7 @@ function RejectModal(props) {
 
       {/* Candidate Info */}
       <Box sx={{ p: 2.5, pb: 1.5 }}>
-        <Typography variant="h6" color="text.secondary" gutterBottom>
+        <Typography variant="body2" color="text.secondary" gutterBottom>
           Candidate Information
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -127,7 +127,7 @@ function RejectModal(props) {
       </Box>
 
       {/* Warning Alert */}
-      <Box sx={{ p: 2.5, pb: 0 }}>
+      <Box sx={{ px: 2.5, pt: 1, pb: 2 }}>
         <Alert severity="warning" sx={{ borderRadius: 2 }}>
           <Typography variant="body2">
             This action cannot be undone. The candidate will be notified of the
@@ -139,7 +139,7 @@ function RejectModal(props) {
       {/* Form */}
       <Box sx={{ p: 2.5, pt: 0 }}>
         <form onSubmit={formik.handleSubmit}>
-          <Stack spacing={2.5}>
+          <Stack spacing={1}>
             <FormikInputWrapper
               type="text"
               name="reason"

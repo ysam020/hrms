@@ -11,7 +11,9 @@ export const approveResignation = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { id, lastWorkingDay, comments } = call.request;
+    // `comments` isn't a real field on the UpdateStatusRequest proto — the
+    // actual field is `remarks` (see UpdateStatusRequest in recruitment.proto).
+    const { id, lastWorkingDay, remarks: comments } = call.request;
     const noticePeriodWaived: boolean | undefined =
       call.request.noticePeriodWaived;
     const buyoutAmount: number | undefined = call.request.buyoutAmount;

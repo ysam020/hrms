@@ -23,7 +23,6 @@ export const createJobOpening = async (
       createdBy,
       pipelineTemplateId,
       visibility,
-      branchIds,
     } = call.request;
 
     if (!jobTitle || !applicationDeadline) {
@@ -50,7 +49,6 @@ export const createJobOpening = async (
         createdBy: createdBy || "",
         pipelineTemplateId: pipelineTemplateId || null,
         visibility: visibility || "external",
-        branchIds: Array.isArray(branchIds) ? branchIds : [],
       },
     });
 

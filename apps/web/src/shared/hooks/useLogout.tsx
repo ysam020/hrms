@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient, {
   cancelAllPendingRequests,
@@ -7,6 +7,8 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 
 function useLogout(setUser) {
   const navigate = useNavigate();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Clear favicon notification dot
   const clearFaviconDot = () => {
@@ -37,7 +39,8 @@ function useLogout(setUser) {
     document.title = "HRMS";
   };
 
-  const handleLogout = useCallback(async () => {
+  const performLogout = useCallback(async () => {
+    setLoggingOut(true);
     try {
       const res = await apiClient(API_ENDPOINTS.LOGOUT, {
         withCredentials: true,
@@ -62,15 +65,30 @@ function useLogout(setUser) {
       if (theme) localStorage.setItem("theme", theme);
       setUser(null);
       navigate("/login", { replace: true });
+    } finally {
+      setLoggingOut(false);
+      setConfirmOpen(false);
     }
   }, [navigate, setUser]);
+
+  // Both the logout icon and the Cmd/Ctrl+Shift+L shortcut call this — it
+  // only opens the confirmation dialog; performLogout runs after the user
+  // explicitly confirms.
+  const handleLogout = useCallback(() => {
+    setConfirmOpen(true);
+  }, []);
+
+  const cancelLogout = useCallback(() => {
+    if (loggingOut) return;
+    setConfirmOpen(false);
+  }, [loggingOut]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&
-        event.key === "l"
+        event.key.toLowerCase() === "l"
       ) {
         event.preventDefault();
         handleLogout();
@@ -83,7 +101,13 @@ function useLogout(setUser) {
     };
   }, [handleLogout]);
 
-  return handleLogout;
+  return {
+    handleLogout,
+    confirmOpen,
+    cancelLogout,
+    confirmLogout: performLogout,
+    loggingOut,
+  };
 }
 
 export default useLogout;

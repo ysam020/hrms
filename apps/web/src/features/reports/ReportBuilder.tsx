@@ -12,7 +12,7 @@ import { ThemeContext } from "@web/app/providers/ThemeContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
 import Grid from "@mui/material/Grid";
@@ -432,39 +432,32 @@ function ReportBuilder() {
             <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
               <Button
                 size="small"
-                variant="contained"
-                startIcon={
-                  running ? (
-                    <CircularProgress size={14} color="inherit" />
-                  ) : (
-                    <PlayArrowIcon />
-                  )
-                }
+                variant="primary"
+                icon={<PlayArrowIcon />}
                 onClick={handleRun}
                 disabled={
                   running || loadingSchema || selectedColumns.length === 0
                 }
-                sx={{ borderRadius: "8px", textTransform: "none" }}
+                loading={running}
+                loadingText="Running…"
               >
-                {running ? "Running…" : "Run Report"}
+                Run Report
               </Button>
               {rows && (
                 <>
                   <Button
                     size="small"
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
+                    variant="outline"
+                    icon={<DownloadIcon />}
                     onClick={handleDownloadCSV}
-                    sx={{ borderRadius: "8px", textTransform: "none" }}
                   >
                     Download CSV
                   </Button>
                   <Button
                     size="small"
-                    variant="outlined"
-                    startIcon={<SaveIcon />}
+                    variant="outline"
+                    icon={<SaveIcon />}
                     onClick={() => setOpenSave(true)}
-                    sx={{ borderRadius: "8px", textTransform: "none" }}
                   >
                     Save Report
                   </Button>
@@ -612,17 +605,22 @@ function ReportBuilder() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenSave(false)} size="small">
+          <Button
+            variant="ghost"
+            onClick={() => setOpenSave(false)}
+            size="small"
+          >
             Cancel
           </Button>
           <Button
             onClick={handleSave}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={saving || !saveForm.name}
-            sx={{ borderRadius: "8px", textTransform: "none" }}
+            loading={saving}
+            loadingText="Saving…"
           >
-            {saving ? "Saving…" : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>

@@ -4,12 +4,11 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Switch from "@mui/material/Switch";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import CircularProgress from "@mui/material/CircularProgress";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -209,19 +208,17 @@ export default function ResignationDecisionDialog({
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} disabled={saving}>
+        <Button variant="ghost" onClick={onClose} disabled={saving}>
           Cancel
         </Button>
         <Button
-          variant="contained"
-          color={mode === "reject" ? "error" : "primary"}
+          variant={mode === "reject" ? "danger" : "primary"}
           onClick={submit}
           disabled={saving}
-          startIcon={
-            saving ? <CircularProgress size={16} color="inherit" /> : undefined
-          }
+          loading={saving}
+          loadingText="Saving…"
         >
-          {saving ? "Saving…" : mode === "approve" ? "Approve" : "Reject"}
+          {mode === "approve" ? "Approve" : "Reject"}
         </Button>
       </DialogActions>
     </Dialog>

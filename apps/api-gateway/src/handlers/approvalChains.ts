@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { recruitment } from "@hrms/proto";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
@@ -510,25 +511,35 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
     }
   },
   resignation: async ({ entityId, finalStatus, comment, metadata }) => {
+    // fromPartial fills in every field of the shared UpdateStatusRequest
+    // message with its proto zero-value — otherwise an omitted field is
+    // `undefined` on the plain object, and the generated encoder tries to
+    // write it as a float/bool anyway and throws "Request message
+    // serialization failure: invalid float32: undefined".
     if (finalStatus === "approved") {
-      await grpcCall(recruitmentClient, "approveResignation", {
-        id: entityId,
-        comments: comment || "",
-        lastWorkingDay: (metadata?.lastWorkingDay as string) || "",
-        ...(metadata?.noticePeriodWaived !== undefined && {
-          noticePeriodWaived: metadata.noticePeriodWaived,
+      await grpcCall(
+        recruitmentClient,
+        "approveResignation",
+        recruitment.UpdateStatusRequest.fromPartial({
+          id: entityId,
+          remarks: comment || "",
+          lastWorkingDay: (metadata?.lastWorkingDay as string) || "",
+          noticePeriodWaived:
+            (metadata?.noticePeriodWaived as boolean | undefined) ?? false,
+          buyoutAmount: (metadata?.buyoutAmount as number | undefined) ?? 0,
+          relievedFromDutyOn: (metadata?.relievedFromDutyOn as string) || "",
         }),
-        ...(metadata?.buyoutAmount !== undefined && {
-          buyoutAmount: metadata.buyoutAmount,
-        }),
-        relievedFromDutyOn: (metadata?.relievedFromDutyOn as string) || "",
-      });
+      );
     } else {
-      await grpcCall(recruitmentClient, "rejectResignation", {
-        id: entityId,
-        rejectionReason: (metadata?.rejectionReason as string) || "",
-        comments: comment || "",
-      });
+      await grpcCall(
+        recruitmentClient,
+        "rejectResignation",
+        recruitment.UpdateStatusRequest.fromPartial({
+          id: entityId,
+          rejectionReason: (metadata?.rejectionReason as string) || "",
+          remarks: comment || "",
+        }),
+      );
     }
   },
   // Overtime requests are REST + Prisma (no gRPC service), so this flips the

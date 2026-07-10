@@ -274,11 +274,30 @@ function ViewJobOpenings({ refreshKey = 0 }) {
     [],
   );
 
+  const handleCopyApplyLink = (row: any, e?: any) => {
+    e?.stopPropagation();
+    if (!user?.tenantSlug) return;
+    const link = `${window.location.origin}/careers/${user.tenantSlug}/apply/${row.id}`;
+    navigator.clipboard.writeText(link);
+    setAlert({
+      open: true,
+      message: `Apply link for "${row.jobTitle}" copied`,
+      severity: "success",
+    });
+  };
+
   const rowActions = useCallback(
     (row: any) => {
       const isDeleted = row.status === "Deleted" || row.status === "deleted";
       if (isDeleted) return [];
       const actions: any[] = [];
+      if (user?.tenantSlug) {
+        actions.push({
+          icon: <ContentCopyIcon sx={{ fontSize: 16 }} />,
+          label: `Copy apply link: ${row.jobTitle ?? ""}`,
+          onClick: (r: any, e: any) => handleCopyApplyLink(r, e),
+        });
+      }
       if (canEdit) {
         actions.push({
           icon: <EditIcon sx={{ fontSize: 16 }} />,
@@ -302,7 +321,7 @@ function ViewJobOpenings({ refreshKey = 0 }) {
       });
       return actions;
     },
-    [canEdit, canDelete],
+    [canEdit, canDelete, user?.tenantSlug],
   );
 
   return (

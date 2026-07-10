@@ -23,7 +23,7 @@ import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Alert from "@mui/material/Alert";
@@ -33,7 +33,6 @@ import StepLabel from "@mui/material/StepLabel";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import TuneIcon from "@mui/icons-material/Tune";
 import SettingsIcon from "@mui/icons-material/Settings";
-import BusinessIcon from "@mui/icons-material/Business";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import GavelIcon from "@mui/icons-material/Gavel";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
@@ -83,18 +82,6 @@ const STEPS: OnboardingStep[] = [
     skipLabel: "I'll do it later",
     route: "/settings?tab=org-settings",
     hint: "Organisation Settings is under Settings in the sidebar, anytime.",
-  },
-  {
-    key: "branches",
-    shortLabel: "Branches",
-    title: "Add your office locations",
-    description:
-      "Add every branch so attendance geofencing and shift assignment work correctly per site. Fully remote? Skip this one entirely.",
-    icon: <BusinessIcon sx={{ fontSize: 48, color: "primary.main" }} />,
-    actionLabel: "Add branches",
-    skipLabel: "Skip — we're remote",
-    route: "/settings?tab=branches-shifts",
-    hint: "Branches & Shifts is under Settings in the sidebar, anytime.",
   },
   {
     key: "leave_policy",
@@ -325,16 +312,11 @@ export default function OnboardingModals() {
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button
-            variant="text"
-            color="inherit"
-            onClick={handleSkip}
-            sx={{ color: "text.secondary" }}
-          >
+          <Button variant="ghost" onClick={handleSkip}>
             {currentStep.skipLabel}
           </Button>
           <Box sx={{ flex: 1 }} />
-          <Button variant="contained" onClick={handleAction}>
+          <Button variant="primary" onClick={handleAction}>
             {currentStep.actionLabel}
           </Button>
         </DialogActions>
@@ -361,7 +343,7 @@ export default function OnboardingModals() {
           </Alert>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button variant="contained" onClick={() => setHintOpen(false)}>
+          <Button variant="primary" onClick={() => setHintOpen(false)}>
             Got it
           </Button>
         </DialogActions>

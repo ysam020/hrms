@@ -30,7 +30,7 @@ function LocationConsentDrawer({
   }) => void;
 }) {
   const { theme } = useContext(ThemeContext);
-  const { setDrawerOpen, dockVisible } = useBottomDrawer();
+  const { setDrawerOpen } = useBottomDrawer();
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const muiTheme = useTheme();
 
@@ -130,7 +130,6 @@ function LocationConsentDrawer({
           backgroundColor: theme === "light" ? "#fff" : "#212e35",
           margin: "0 auto",
           width: "100%",
-          paddingBottom: dockVisible ? "72px" : 0,
         },
       }}
     >

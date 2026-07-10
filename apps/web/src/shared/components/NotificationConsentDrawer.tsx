@@ -26,7 +26,7 @@ function NotificationConsentDrawer({
   }) => void;
 }) {
   const { theme } = useContext(ThemeContext);
-  const { setDrawerOpen, dockVisible } = useBottomDrawer();
+  const { setDrawerOpen } = useBottomDrawer();
   useEffect(() => {
     setDrawerOpen(showConsentDrawer);
     return () => setDrawerOpen(false);
@@ -62,7 +62,6 @@ function NotificationConsentDrawer({
           borderTopRightRadius: 16,
           backgroundColor: theme === "light" ? "#fff" : "#212e35",
           margin: "0 auto",
-          paddingBottom: dockVisible ? "72px" : 0,
         },
       }}
     >

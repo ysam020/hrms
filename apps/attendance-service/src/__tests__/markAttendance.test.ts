@@ -25,9 +25,6 @@ jest.mock("@hrms/db", () => {
     shift: {
       findFirst: jest.fn(),
     },
-    branch: {
-      findFirst: jest.fn(),
-    },
     attendanceBreak: {
       findMany: jest.fn(),
     },
@@ -119,14 +116,13 @@ describe("markAttendance", () => {
     // Return valid attendance settings so the handler proceeds past the
     // FAILED_PRECONDITION guard on every test that doesn't override this.
     mockSettingsFindFirst.mockResolvedValue(DEFAULT_ATTENDANCE_SETTINGS);
-    // No branch/shift/attendanceMode overrides by default — every existing
+    // No shift/attendanceMode overrides by default — every existing
     // test exercises the zero-config tenant-default path.
     mockUserFindUnique.mockResolvedValue({
       wfh: false,
       wfhHomeLatitude: null,
       wfhHomeLongitude: null,
       wfhHomeName: null,
-      branchId: null,
       shiftId: null,
       attendanceMode: "office",
     });
@@ -328,7 +324,6 @@ describe("markAttendance", () => {
         wfhHomeLatitude: null,
         wfhHomeLongitude: null,
         wfhHomeName: null,
-        branchId: null,
         shiftId: "shift-1",
         attendanceMode: "office",
       });
@@ -370,7 +365,6 @@ describe("markAttendance", () => {
         wfhHomeLatitude: null,
         wfhHomeLongitude: null,
         wfhHomeName: null,
-        branchId: null,
         shiftId: null,
         attendanceMode: "field",
       });

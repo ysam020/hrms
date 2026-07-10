@@ -10,11 +10,13 @@ import Tickets from "./Tickets";
  * conflicts with the /:ticketId route used by TicketDetail. Since there is
  * currently only one tab, wrapping is unnecessary and causes routing issues.
  * The p:3 below matches the padding TabsPanel's CustomTabPanel would have
- * applied, so this page isn't flush against the viewport edge.
+ * applied, so this page isn't flush against the viewport edge. height:100%
+ * matches CustomTabPanel's own sizing too, so Tickets' DataList can fill it
+ * and scroll its rows internally instead of the whole page scrolling.
  */
 function Helpdesk() {
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, height: "100%", boxSizing: "border-box" }}>
       <Tickets />
     </Box>
   );

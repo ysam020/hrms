@@ -1,7 +1,7 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
@@ -44,22 +44,22 @@ function ErrorFallback({
       )}
       {resetErrorBoundary && (
         <Button
-          variant="outlined"
+          variant="outline"
           size="small"
-          startIcon={<RefreshIcon />}
+          icon={<RefreshIcon />}
           onClick={resetErrorBoundary}
-          sx={{ mt: 1, textTransform: "none" }}
+          style={{ marginTop: 8 }}
         >
           Try again
         </Button>
       )}
       {!resetErrorBoundary && (
         <Button
-          variant="outlined"
+          variant="outline"
           size="small"
-          startIcon={<RefreshIcon />}
+          icon={<RefreshIcon />}
           onClick={() => window.location.reload()}
-          sx={{ mt: 1, textTransform: "none" }}
+          style={{ marginTop: 8 }}
         >
           Reload page
         </Button>

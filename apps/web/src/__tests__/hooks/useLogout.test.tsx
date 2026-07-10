@@ -40,22 +40,58 @@ describe("useLogout", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns a function", () => {
+  it("returns handleLogout, confirmOpen, cancelLogout, confirmLogout, loggingOut", () => {
     const { result } = renderHook(() => useLogout(vi.fn()), { wrapper });
-    expect(typeof result.current).toBe("function");
+    expect(typeof result.current.handleLogout).toBe("function");
+    expect(typeof result.current.cancelLogout).toBe("function");
+    expect(typeof result.current.confirmLogout).toBe("function");
+    expect(result.current.confirmOpen).toBe(false);
+    expect(result.current.loggingOut).toBe(false);
   });
 
-  it("calls setUser(null) and navigates to /login on success", async () => {
+  it("handleLogout only opens the confirmation dialog, without logging out", () => {
+    const setUser = vi.fn();
+    const { result } = renderHook(() => useLogout(setUser), { wrapper });
+
+    act(() => {
+      result.current.handleLogout();
+    });
+
+    expect(result.current.confirmOpen).toBe(true);
+    expect(setUser).not.toHaveBeenCalled();
+    expect(mockApiClient).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("cancelLogout closes the dialog without logging out", () => {
+    const setUser = vi.fn();
+    const { result } = renderHook(() => useLogout(setUser), { wrapper });
+
+    act(() => {
+      result.current.handleLogout();
+    });
+    expect(result.current.confirmOpen).toBe(true);
+
+    act(() => {
+      result.current.cancelLogout();
+    });
+
+    expect(result.current.confirmOpen).toBe(false);
+    expect(setUser).not.toHaveBeenCalled();
+  });
+
+  it("confirmLogout calls setUser(null) and navigates to /login on success", async () => {
     mockApiClient.mockResolvedValue({ data: { success: true } });
     const setUser = vi.fn();
     const { result } = renderHook(() => useLogout(setUser), { wrapper });
 
     await act(async () => {
-      await result.current();
+      await result.current.confirmLogout();
     });
 
     expect(setUser).toHaveBeenCalledWith(null);
     expect(mockNavigate).toHaveBeenCalledWith("/login", { replace: true });
+    expect(result.current.confirmOpen).toBe(false);
   });
 
   it("calls cancelAllPendingRequests on successful logout", async () => {
@@ -63,7 +99,7 @@ describe("useLogout", () => {
     const { result } = renderHook(() => useLogout(vi.fn()), { wrapper });
 
     await act(async () => {
-      await result.current();
+      await result.current.confirmLogout();
     });
 
     expect(mockCancelAllPendingRequests).toHaveBeenCalledWith("logout");
@@ -74,7 +110,7 @@ describe("useLogout", () => {
     const { result } = renderHook(() => useLogout(vi.fn()), { wrapper });
 
     await act(async () => {
-      await result.current();
+      await result.current.confirmLogout();
     });
 
     expect(localStorage.getItem("theme")).toBe(JSON.stringify("dark"));
@@ -85,7 +121,7 @@ describe("useLogout", () => {
     const { result } = renderHook(() => useLogout(vi.fn()), { wrapper });
 
     await act(async () => {
-      await result.current();
+      await result.current.confirmLogout();
     });
 
     expect(localStorage.getItem("someOtherKey")).toBeNull();
@@ -97,7 +133,7 @@ describe("useLogout", () => {
     const { result } = renderHook(() => useLogout(setUser), { wrapper });
 
     await act(async () => {
-      await result.current();
+      await result.current.confirmLogout();
     });
 
     expect(setUser).toHaveBeenCalledWith(null);
@@ -109,7 +145,7 @@ describe("useLogout", () => {
     const { result } = renderHook(() => useLogout(vi.fn()), { wrapper });
 
     await act(async () => {
-      await result.current();
+      await result.current.confirmLogout();
     });
 
     expect(localStorage.getItem("theme")).toBe(JSON.stringify("dark"));
@@ -122,15 +158,14 @@ describe("useLogout", () => {
     expect(removeSpy).toHaveBeenCalledWith("keydown", expect.any(Function));
   });
 
-  it("triggers logout on Ctrl+Shift+L", async () => {
-    mockApiClient.mockResolvedValue({ data: { success: true } });
+  it("opens the confirmation dialog (without logging out) on Cmd/Ctrl+Shift+L", async () => {
     const setUser = vi.fn();
-    renderHook(() => useLogout(setUser), { wrapper });
+    const { result } = renderHook(() => useLogout(setUser), { wrapper });
 
     await act(async () => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", {
-          key: "l",
+          key: "L",
           ctrlKey: true,
           shiftKey: true,
           bubbles: true,
@@ -138,12 +173,39 @@ describe("useLogout", () => {
       );
     });
 
+    expect(result.current.confirmOpen).toBe(true);
+    expect(setUser).not.toHaveBeenCalled();
+    expect(mockApiClient).not.toHaveBeenCalled();
+  });
+
+  it("logs out once the shortcut-opened dialog is confirmed", async () => {
+    mockApiClient.mockResolvedValue({ data: { success: true } });
+    const setUser = vi.fn();
+    const { result } = renderHook(() => useLogout(setUser), { wrapper });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "L",
+          metaKey: true,
+          shiftKey: true,
+          bubbles: true,
+        }),
+      );
+    });
+    expect(result.current.confirmOpen).toBe(true);
+
+    await act(async () => {
+      await result.current.confirmLogout();
+    });
+
     expect(setUser).toHaveBeenCalledWith(null);
+    expect(mockNavigate).toHaveBeenCalledWith("/login", { replace: true });
   });
 
   it("does not trigger logout on unrelated keys", async () => {
     const setUser = vi.fn();
-    renderHook(() => useLogout(setUser), { wrapper });
+    const { result } = renderHook(() => useLogout(setUser), { wrapper });
 
     await act(async () => {
       window.dispatchEvent(
@@ -151,6 +213,7 @@ describe("useLogout", () => {
       );
     });
 
+    expect(result.current.confirmOpen).toBe(false);
     expect(setUser).not.toHaveBeenCalled();
   });
 });

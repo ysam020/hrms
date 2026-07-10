@@ -41,6 +41,8 @@ export function toPublic(s: any) {
     // HR
     probationPeriodDays: s.probationPeriodDays,
     noticePeriodDays: s.noticePeriodDays,
+    maxInterviewRounds:
+      s.maxInterviewRounds ?? SETTINGS_DEFAULTS.maxInterviewRounds,
   };
 }
 
@@ -65,6 +67,7 @@ export const SETTINGS_DEFAULTS = {
   overtimePreApprovalRequired: false,
   probationPeriodDays: 90,
   noticePeriodDays: 30,
+  maxInterviewRounds: 5,
   // Geofencing
   geofencingEnabled: false,
   officeLatitude: null as number | null,
@@ -135,6 +138,9 @@ export async function writeVersionedSettings(
           SETTINGS_DEFAULTS.overtimePreApprovalRequired,
         probationPeriodDays: currentActive.probationPeriodDays,
         noticePeriodDays: currentActive.noticePeriodDays,
+        maxInterviewRounds:
+          currentActive.maxInterviewRounds ??
+          SETTINGS_DEFAULTS.maxInterviewRounds,
         geofencingEnabled: currentActive.geofencingEnabled ?? false,
         officeLatitude: currentActive.officeLatitude ?? null,
         officeLongitude: currentActive.officeLongitude ?? null,
@@ -343,6 +349,7 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
       );
     intField("probationPeriodDays");
     intField("noticePeriodDays");
+    intField("maxInterviewRounds", 1);
 
     // Geofencing
     if (body.geofencingEnabled !== undefined)

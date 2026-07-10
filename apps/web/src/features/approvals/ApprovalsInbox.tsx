@@ -12,8 +12,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
+import Button from "@web/shared/components/Button";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
@@ -268,25 +267,17 @@ function ApprovalsInbox() {
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={closeDialog} disabled={saving}>
+          <Button variant="ghost" onClick={closeDialog} disabled={saving}>
             Cancel
           </Button>
           <Button
-            variant="contained"
-            color={decision?.mode === "approved" ? "primary" : "error"}
+            variant={decision?.mode === "approved" ? "primary" : "danger"}
             onClick={submitDecision}
             disabled={saving}
-            startIcon={
-              saving ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : undefined
-            }
+            loading={saving}
+            loadingText="Saving…"
           >
-            {saving
-              ? "Saving…"
-              : decision?.mode === "approved"
-                ? "Approve"
-                : "Reject"}
+            {decision?.mode === "approved" ? "Approve" : "Reject"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -27,7 +27,6 @@ import { ErrorBoundary } from "react-error-boundary";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import LoadingState from "@web/shared/components/LoadingState";
 import useSpotlightModal from "@web/shared/hooks/useSpotlightModal";
-import GlobalDock from "@web/features/dashboard/GlobalDock";
 import { BottomDrawerProvider } from "@web/app/providers/BottomDrawerContext";
 
 const ChatbotFab = lazy(() => import("@web/features/chatbot/Chatbot"));
@@ -88,6 +87,8 @@ function HomePage(props) {
       width: { md: `calc(100% - ${drawerWidth}px)` },
       backgroundColor: theme === "light" ? "#F9FAFB" : "#111B21",
       height: "100vh",
+      display: "flex",
+      flexDirection: "column",
       overflow: "hidden",
       padding: 0,
     }),
@@ -169,10 +170,27 @@ function HomePage(props) {
               <Box component="main" sx={mainBoxStyles}>
                 <Toolbar />
 
-                {/* Fixed-height scrollable viewport: 100vh - AppBar(64px) - Dock(72px) */}
+                {/* Floating viewport: fills whatever space remains below the
+                    AppBar/Toolbar spacer (flex:1 + minHeight:0, rather than
+                    a hardcoded calc(100vh - Npx), avoids depending on
+                    Toolbar's height, which varies by breakpoint) and frames
+                    every route the same way the chat page already did —
+                    fixed height, margin for breathing room, content that
+                    scrolls inside rather than the whole page. Transparent
+                    background — individual routes/components (Paper, cards,
+                    etc.) paint their own surfaces; a fill color here just
+                    added an unwanted second layer. Route content that
+                    manages its own internal pinned header/footer (TabsPanel,
+                    DataList, Chat, the calendar) fills this via height:100%
+                    and never triggers this box's own scroll; overflowY:auto
+                    here is a safety net for anything else. */}
                 <Box
                   sx={{
-                    height: "calc(100vh - 64px - 72px)",
+                    flex: 1,
+                    minHeight: 0,
+                    margin: "10px",
+                    borderRadius: "12px",
+                    backgroundColor: "transparent",
                     overflowY: "auto",
                     overflowX: "hidden",
                   }}
@@ -239,7 +257,6 @@ function HomePage(props) {
               setShowConsentDrawer={setShowConsentDrawer}
               setAlert={setAlert}
             />
-            <GlobalDock />
             <Suspense fallback={null}>
               <ErrorBoundary fallback={null}>
                 <ChatbotFab />

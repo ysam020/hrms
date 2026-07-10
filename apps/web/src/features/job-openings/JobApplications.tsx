@@ -117,23 +117,32 @@ const JobApplications = (props) => {
         },
       });
     }
-    list.push(
-      {
-        icon: <EventIcon sx={{ fontSize: 16 }} />,
-        label: `Schedule interview for ${row.name}`,
-        color: "primary" as const,
-        onClick: () =>
-          props.handleOpenInterviewModal({
-            ...row,
-            round: row.interviews?.length + 1 || 1,
-          }),
-      },
-      {
+    list.push({
+      icon: <EventIcon sx={{ fontSize: 16 }} />,
+      label: `Schedule interview for ${row.name}`,
+      color: "primary" as const,
+      // ScheduleInterviewModal computes the round number itself from
+      // row.interviews — passing it here got stale once a round was
+      // rescheduled (array length didn't track round count correctly).
+      onClick: () => props.handleOpenInterviewModal(row),
+    });
+    // Hiring requires at least one round to have been Completed and
+    // Cleared — mirrors the authoritative server-side guard in
+    // updateApplicationStatus.ts. Omitted entirely rather than shown
+    // disabled, since there's no useful next step from this row until a
+    // round is actually scheduled and cleared via Interview Details.
+    const hasClearedRound = (row.interviews || []).some(
+      (i: any) => i.interviewConducted && i.cleared,
+    );
+    if (hasClearedRound) {
+      list.push({
         icon: <CheckCircleIcon sx={{ fontSize: 16 }} />,
         label: `Hire ${row.name}`,
         color: "success" as const,
         onClick: () => props.handleOpenHiringModal(row),
-      },
+      });
+    }
+    list.push(
       {
         icon: <CancelIcon sx={{ fontSize: 16 }} />,
         label: `Reject ${row.name}`,
