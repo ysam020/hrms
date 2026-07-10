@@ -26,7 +26,6 @@ import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { Calendar } from "primereact/calendar";
 import { MultiSelect } from "primereact/multiselect";
 import { InputNumber } from "primereact/inputnumber";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
@@ -35,7 +34,6 @@ import DataList from "@web/shared/components/DataList";
 import { validationSchema } from "./schemas";
 import { assets } from "@web/assets/data/companyAssets";
 import Button from "@web/shared/components/Button";
-import downloadSalarySlip from "@web/shared/utils/downloadSalarySlip";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import {
   computeSalaryComponents,
@@ -60,14 +58,6 @@ function ViewDetails() {
   const [isEditing, setIsEditing] = useState(false);
   const { setAlert } = useContext(AlertContext);
 
-  const [date, setDate] = useState(() => {
-    const today = new Date();
-    today.setMonth(today.getMonth() - 1);
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    return `${year}-${month}`;
-  });
-  const [isDownloading, setIsDownloading] = useState(false);
   const [salaryComponents, setSalaryComponents] = useState<
     SalaryComponentDef[]
   >([]);
@@ -83,12 +73,6 @@ function ViewDetails() {
     null,
     "Error loading employee details",
   );
-
-  const maxSelectableDate = (() => {
-    const today = new Date();
-    today.setMonth(today.getMonth() - 1);
-    return new Date(today.getFullYear(), today.getMonth(), 1);
-  })();
 
   const formik = useFormik({
     initialValues: {
@@ -1067,59 +1051,6 @@ function ViewDetails() {
                 )}
               </Paper>
             </Grid>
-
-            {/* Download Salary Slip - Only show in view mode */}
-            {!isEditing && (
-              <Grid size={12}>
-                <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
-                  <Typography
-                    variant="subtitle2"
-                    fontWeight="500"
-                    sx={{ mb: 1 }}
-                  >
-                    Download Salary Slip
-                  </Typography>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <Calendar
-                      appendTo={() =>
-                        document.querySelector("#root .App") as HTMLElement
-                      }
-                      value={date ? new Date(date + "-01") : null}
-                      onChange={(e) => {
-                        if (e.value) {
-                          const year = e.value.getFullYear();
-                          const month = String(e.value.getMonth() + 1).padStart(
-                            2,
-                            "0",
-                          );
-                          setDate(`${year}-${month}`);
-                        } else {
-                          setDate("");
-                        }
-                      }}
-                      view="month"
-                      dateFormat="mm/yy"
-                      maxDate={maxSelectableDate}
-                      showIcon
-                    />
-                    <Button
-                      onClick={() =>
-                        downloadSalarySlip(
-                          date,
-                          username,
-                          setIsDownloading,
-                          setAlert,
-                        )
-                      }
-                      disabled={isDownloading}
-                      style={{ marginTop: 0 }}
-                    >
-                      {isDownloading ? "Downloading..." : "Download"}
-                    </Button>
-                  </Box>
-                </Paper>
-              </Grid>
-            )}
           </Grid>
         </form>
       </CardContent>
