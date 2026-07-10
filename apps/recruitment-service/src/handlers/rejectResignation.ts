@@ -11,7 +11,9 @@ export const rejectResignation = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { id, rejectionReason, comments } = call.request;
+    // `comments` isn't a real field on the UpdateStatusRequest proto — the
+    // actual field is `remarks` (see UpdateStatusRequest in recruitment.proto).
+    const { id, rejectionReason, remarks: comments } = call.request;
 
     if (!id) {
       return callback(null, {

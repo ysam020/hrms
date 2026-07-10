@@ -103,7 +103,6 @@ model User {
   // when set, else fall back to the string. See POST /org-structure/migrate-from-free-text.
   departmentId                 String?   @db.ObjectId
   designationId                String?   @db.ObjectId
-  branchId                    String?   @db.ObjectId
   // Resolution order for attendance: User.shiftId > Team.shiftId > TenantSettings defaults.
   shiftId                     String?   @db.ObjectId
   // office (default, geofenced) | field | remote — field/remote skip geofencing entirely.
@@ -335,11 +334,9 @@ model JobOpening {
 
   applications       JobApplication[]
 
-  // null = tenant default template. Multi-location vacancies + internal/
-  // external visibility gate.
+  // null = tenant default template. internal/external visibility gate.
   pipelineTemplateId String?   @db.ObjectId
   visibility         String    @default("external") // internal | external | both
-  branchIds          String[]  @db.ObjectId
 
   @@map("jobopenings")
 }
@@ -360,6 +357,11 @@ model JobApplication {
   status       String   @default("Applied")
   resumeScore  Float?
   aiNotes      String?
+  // Set when status transitions to Rejected/Hired etc. via updateApplicationStatus.
+  remarks         String?
+  hireSalary      Float?
+  hireJoiningDate DateTime?
+  hireReferredBy  String?
 
   // Set when an existing employee applies internally, rather than being
   // re-entered as an external candidate.
@@ -967,29 +969,7 @@ model ApprovalDelegate {
   @@map("approval_delegates")
 }
 
-// ─── Branches & Shifts ──────────────────────────────────────────────────────
-// A tenant with no Branch rows still works exactly as before: geofencing reads
-// straight from TenantSettings' single office lat/long. The first time a
-// tenant opens the Branches settings page, a "Head Office" Branch row is
-// auto-created from those legacy fields (see api-gateway handlers/branches.ts).
-
-model Branch {
-  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId             String   @db.ObjectId
-  name                 String
-  address              String?
-  latitude             Float?
-  longitude            Float?
-  geofenceRadiusMeters Int?     // null = fall back to TenantSettings.geofenceRadiusMeters
-  isHeadOffice         Boolean  @default(false)
-  isActive             Boolean  @default(true)
-  createdBy            String   @db.ObjectId
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  @@index([tenantId, isActive])
-  @@map("branches")
-}
+// ─── Shifts ─────────────────────────────────────────────────────────────────
 
 model Shift {
   id                     String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -1128,6 +1108,9 @@ model TenantSettings {
   // ── HR ─────────────────────────────────────────────────────────────────────
   probationPeriodDays    Int      @default(90)
   noticePeriodDays       Int      @default(30)
+  // How many interview rounds this tenant normally runs per candidate.
+  // scheduleInterview rejects going past it.
+  maxInterviewRounds     Int      @default(5)
 
   // ── Audit ──────────────────────────────────────────────────────────────────
   createdBy              String?  @db.ObjectId

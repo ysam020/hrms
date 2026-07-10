@@ -20,7 +20,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -531,12 +531,16 @@ function AssetInventory() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenCreate(false)} size="small">
+          <Button
+            variant="ghost"
+            onClick={() => setOpenCreate(false)}
+            size="small"
+          >
             Cancel
           </Button>
           <Button
             onClick={handleCreate}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={submitting || !createForm.name || !createForm.assetCode}
           >
@@ -625,6 +629,7 @@ function AssetInventory() {
         </DialogContent>
         <DialogActions>
           <Button
+            variant="ghost"
             onClick={() => {
               setOpenAssign(null);
               setAssignForm({ userId: "", conditionOut: "Good", notes: "" });
@@ -637,7 +642,7 @@ function AssetInventory() {
           </Button>
           <Button
             onClick={handleAssign}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={submitting || !assignForm.userId}
           >
@@ -691,12 +696,16 @@ function AssetInventory() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenReturn(null)} size="small">
+          <Button
+            variant="ghost"
+            onClick={() => setOpenReturn(null)}
+            size="small"
+          >
             Cancel
           </Button>
           <Button
             onClick={() => openReturn && handleReturn(openReturn.id)}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={submitting}
           >

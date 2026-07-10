@@ -2,7 +2,7 @@ import { memo, useContext, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
-import Slider from "@mui/material/Slider";
+import TextField from "@mui/material/TextField";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { useFormik } from "formik";
 import apiClient from "@web/core/http/axiosConfig";
@@ -14,23 +14,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import WorkIcon from "@mui/icons-material/Work";
 import Grid from "@mui/material/Grid2";
 import { Dropdown } from "primereact/dropdown";
-import { jobTitles } from "@web/assets/data/jobTitles";
 import { API_ENDPOINTS } from "@web/shared/constants";
-
-function valuetext(value) {
-  return `${value} LPA`;
-}
-
-const marks = [
-  {
-    value: 2,
-    label: "2 LPA",
-  },
-  {
-    value: 10,
-    label: "10 LPA",
-  },
-];
+import useJobTitleOptions from "./useJobTitleOptions";
 
 const FormikDropdownWrapper = ({
   name,
@@ -67,28 +52,48 @@ const FormikDropdownWrapper = ({
   );
 };
 
-const FormikSliderWrapper = ({ name, label, formik, sliderProps = {} }) => {
+const FormikBudgetRangeWrapper = ({ name, label, formik }) => {
   const hasError = formik.touched[name] && formik.errors[name];
-
-  const handleSliderChange = (event, newValue) => {
-    formik.setFieldValue(name, newValue);
-    formik.setFieldTouched(name, true);
-  };
+  const [min, max] = formik.values[name];
 
   return (
     <Box sx={{ width: "100%" }}>
       <Typography variant="body2" color="text.secondary" gutterBottom>
         {label}
       </Typography>
-      <Box sx={{ px: 1, py: 1, width: "100%" }}>
-        <Slider
-          value={formik.values[name]}
-          onChange={handleSliderChange}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <TextField
+          label="Min (LPA)"
+          type="number"
+          size="small"
+          fullWidth
+          value={min}
+          onChange={(e) =>
+            formik.setFieldValue(name, [
+              e.target.value === "" ? 0 : Number(e.target.value),
+              max,
+            ])
+          }
           onBlur={() => formik.setFieldTouched(name, true)}
-          valueLabelDisplay="auto"
-          getAriaValueText={valuetext}
-          sx={{ width: "100%" }}
-          {...sliderProps}
+          inputProps={{ step: 0.1, min: 0 }}
+        />
+        <Typography variant="body2" color="text.secondary">
+          to
+        </Typography>
+        <TextField
+          label="Max (LPA)"
+          type="number"
+          size="small"
+          fullWidth
+          value={max}
+          onChange={(e) =>
+            formik.setFieldValue(name, [
+              min,
+              e.target.value === "" ? 0 : Number(e.target.value),
+            ])
+          }
+          onBlur={() => formik.setFieldTouched(name, true)}
+          inputProps={{ step: 0.1, min: 0 }}
         />
       </Box>
       {hasError && (
@@ -106,6 +111,8 @@ const FormikSliderWrapper = ({ name, label, formik, sliderProps = {} }) => {
 
 function EditJobOpeningModal(props) {
   const { setAlert } = useContext(AlertContext);
+  const { options: jobTitleOptions, ensureJobTitleSaved } =
+    useJobTitleOptions();
   const {
     id: _id,
     jobPostingDate,
@@ -122,12 +129,15 @@ function EditJobOpeningModal(props) {
       jobDescription: "",
       requiredSkills: "",
       experience: "",
-      budget: [2, 10],
+      budget: [0, 0],
       hiringManager: "",
     },
     validationSchema,
     onSubmit: async (values) => {
       try {
+        // Best-effort — see useJobTitleOptions for why failures are swallowed.
+        void ensureJobTitleSaved(values.jobTitle);
+
         // Perform optimistic update
         const optimisticData = {
           ...values,
@@ -195,7 +205,7 @@ function EditJobOpeningModal(props) {
           props.jobData?.experience != null
             ? String(props.jobData.experience)
             : "",
-        budget: Array.isArray(budget) ? budget : [2, 10],
+        budget: Array.isArray(budget) ? budget : [0, 0],
         hiringManager: props.jobData?.hiringManager || "",
       });
     }
@@ -270,10 +280,13 @@ function EditJobOpeningModal(props) {
                 <Grid size={{ xs: 12, md: 6 }}>
                   <FormikDropdownWrapper
                     name="jobTitle"
-                    options={jobTitles}
+                    options={jobTitleOptions}
                     placeholder="Job Title"
                     formik={formik}
-                    inputProps={{ optionLabel: "name" }}
+                    inputProps={{
+                      editable: true,
+                      filterPlaceholder: "Search or type a new title...",
+                    }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
@@ -376,17 +389,10 @@ function EditJobOpeningModal(props) {
                   />
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <FormikSliderWrapper
+                  <FormikBudgetRangeWrapper
                     name="budget"
                     label="Salary Range (LPA)"
                     formik={formik}
-                    sliderProps={{
-                      getAriaValueText: valuetext,
-                      marks: marks,
-                      min: 2,
-                      max: 10,
-                      step: 0.1,
-                    }}
                   />
                 </Grid>
               </Grid>

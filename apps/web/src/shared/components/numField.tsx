@@ -3,7 +3,7 @@ import InputAdornment from "@mui/material/InputAdornment";
 
 /**
  * Shared small-number-input builder used across Settings pages (Organisation
- * Settings, Branches & Shifts, ...) so every numeric policy field looks and
+ * Settings, Shifts, ...) so every numeric policy field looks and
  * behaves the same way.
  */
 export function numField(

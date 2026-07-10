@@ -5,7 +5,7 @@ import { userRouter } from "./user";
 import { employeeRouter } from "./employee";
 import { attendanceRouter } from "./attendance";
 import { leaveRouter } from "./leave";
-import { recruitmentRouter } from "./recruitment";
+import { recruitmentRouter, publicRecruitmentRouter } from "./recruitment";
 import { hrmRouter } from "./hrm";
 import { salaryRouter } from "./salary";
 import { notificationRouter } from "./notification";
@@ -19,7 +19,6 @@ import { aiInsightsRouter } from "./ai-insights";
 import { paymentRouter } from "./payment";
 import { tenantSettingsRouter } from "./tenantSettings";
 import { approvalChainsRouter } from "./approvalChains";
-import { branchesRouter } from "./branches";
 import { shiftsRouter } from "./shifts";
 import { leavePolicyRouter } from "./leavePolicy";
 import { overtimeRouter } from "./overtime";
@@ -45,6 +44,13 @@ export const rootRouter: Router = Router();
 rootRouter.use(authLimiter, authRouter);
 rootRouter.use(defaultLimiter, tenantRouter);
 rootRouter.use(defaultLimiter, paymentRouter);
+
+// Anonymous careers-page routes — deliberately mounted with NO
+// authenticate/requireTenant/subscription guard. Tenant is resolved from the
+// :slug path param by resolvePublicTenant (see routes/recruitment.ts). Rate
+// limiting is already applied globally by path regex (PUBLIC_ROUTES_REGEX in
+// config/rateLimiters.ts), so no limiter is attached here.
+rootRouter.use(publicRecruitmentRouter);
 
 // All business routes require an active subscription.
 // authenticate + requireTenant run again here (idempotent) so this guard
@@ -73,7 +79,6 @@ rootRouter.use(...subscriptionGuard, chatbotRouter);
 rootRouter.use(...subscriptionGuard, aiInsightsRouter);
 rootRouter.use(...subscriptionGuard, tenantSettingsRouter);
 rootRouter.use(...subscriptionGuard, approvalChainsRouter);
-rootRouter.use(...subscriptionGuard, branchesRouter);
 rootRouter.use(...subscriptionGuard, shiftsRouter);
 rootRouter.use(...subscriptionGuard, leavePolicyRouter);
 rootRouter.use(...subscriptionGuard, overtimeRouter);

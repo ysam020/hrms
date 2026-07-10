@@ -5,7 +5,7 @@ import Paper from "@mui/material/Paper";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Alert from "@mui/material/Alert";
@@ -393,9 +393,9 @@ export default function ExitPolicySettings() {
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
               {canEdit && (
                 <Button
-                  variant="contained"
+                  variant="primary"
                   size="small"
-                  startIcon={<AddCircleOutlineIcon />}
+                  icon={<AddCircleOutlineIcon />}
                   onClick={openAddPolicy}
                 >
                   Add band
@@ -477,9 +477,9 @@ export default function ExitPolicySettings() {
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
               {canEdit && (
                 <Button
-                  variant="contained"
+                  variant="primary"
                   size="small"
-                  startIcon={<AddCircleOutlineIcon />}
+                  icon={<AddCircleOutlineIcon />}
                   onClick={openAddChecklistItem}
                 >
                   Add item
@@ -615,23 +615,18 @@ export default function ExitPolicySettings() {
             {canEdit && (
               <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   size="small"
-                  startIcon={<AddCircleOutlineIcon />}
+                  icon={<AddCircleOutlineIcon />}
                   onClick={addQuestion}
                 >
                   Add question
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="primary"
                   size="small"
-                  startIcon={
-                    savingQuestions ? (
-                      <CircularProgress size={14} color="inherit" />
-                    ) : (
-                      <SaveIcon />
-                    )
-                  }
+                  icon={<SaveIcon />}
+                  loading={savingQuestions}
                   onClick={saveQuestions}
                   disabled={savingQuestions}
                 >
@@ -728,6 +723,7 @@ export default function ExitPolicySettings() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
+            variant="ghost"
             size="small"
             onClick={() => setPolicyDialogOpen(false)}
             disabled={savingPolicy}
@@ -735,19 +731,15 @@ export default function ExitPolicySettings() {
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={savePolicy}
             disabled={savingPolicy || !policyForm.noticePeriodDays}
-            startIcon={
-              savingPolicy ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
+            icon={<SaveIcon />}
+            loading={savingPolicy}
+            loadingText="Saving…"
           >
-            {savingPolicy ? "Saving…" : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>
@@ -814,6 +806,7 @@ export default function ExitPolicySettings() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
+            variant="ghost"
             size="small"
             onClick={() => setChecklistDialogOpen(false)}
             disabled={savingChecklistItem}
@@ -821,19 +814,15 @@ export default function ExitPolicySettings() {
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={saveChecklistItem}
             disabled={savingChecklistItem || !checklistForm.label.trim()}
-            startIcon={
-              savingChecklistItem ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <SaveIcon />
-              )
-            }
+            icon={<SaveIcon />}
+            loading={savingChecklistItem}
+            loadingText="Saving…"
           >
-            {savingChecklistItem ? "Saving…" : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>

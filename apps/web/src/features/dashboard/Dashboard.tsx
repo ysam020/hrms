@@ -278,7 +278,6 @@ const RightPanel = memo(({ isDark }: { isDark: boolean }) => {
 
 // 10px mainBox paddingTop + 64px MUI Toolbar (AppBar default height on desktop)
 const APPBAR_OFFSET = 74;
-const DOCK_HEIGHT = 72;
 
 function DashboardInner() {
   const { theme } = useContext(ThemeContext);
@@ -357,9 +356,7 @@ function DashboardInner() {
       sx={{
         display: "flex",
         flexDirection: isMobile ? "column" : "row",
-        height: isMobile
-          ? "auto"
-          : `calc(100vh - ${APPBAR_OFFSET + DOCK_HEIGHT}px)`,
+        height: isMobile ? "auto" : `calc(100vh - ${APPBAR_OFFSET})`,
         overflow: isMobile ? "visible" : "hidden",
         bgcolor: isDark ? "#111B21" : "#F9FAFB",
       }}

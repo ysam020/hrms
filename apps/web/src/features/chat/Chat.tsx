@@ -24,7 +24,7 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import _Linkify from "react-linkify";
@@ -1192,12 +1192,10 @@ function Chat() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteTargetMsg(null)}>Cancel</Button>
-          <Button
-            onClick={handleDeleteMessage}
-            color="error"
-            variant="contained"
-          >
+          <Button variant="ghost" onClick={() => setDeleteTargetMsg(null)}>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteMessage} variant="danger">
             Delete
           </Button>
         </DialogActions>
@@ -1218,12 +1216,10 @@ function Chat() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConvConfirm(false)}>Cancel</Button>
-          <Button
-            onClick={handleDeleteConversation}
-            color="error"
-            variant="contained"
-          >
+          <Button variant="ghost" onClick={() => setDeleteConvConfirm(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteConversation} variant="danger">
             Delete
           </Button>
         </DialogActions>

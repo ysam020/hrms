@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useFormik } from "formik";
 import { z } from "zod";
@@ -6,15 +6,20 @@ import { toFormikValidationSchema } from "zod-formik-adapter";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import Divider from "@mui/material/Divider";
+import Chip from "@mui/material/Chip";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import People from "@mui/icons-material/People";
 import UploadFile from "@mui/icons-material/UploadFile";
 import CheckCircle from "@mui/icons-material/CheckCircle";
+import Group from "@mui/icons-material/Group";
+import Star from "@mui/icons-material/Star";
+import AttachMoney from "@mui/icons-material/AttachMoney";
+import CalendarToday from "@mui/icons-material/CalendarToday";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
@@ -32,12 +37,45 @@ const validationSchema = toFormikValidationSchema(
   }),
 );
 
+const formatBudgetRange = (budget: number[] | undefined) =>
+  budget?.[0] && budget?.[1] ? `${budget[0]}-${budget[1]} LPA` : null;
+
+const formatDeadline = (deadline: string | undefined) =>
+  deadline
+    ? new Date(deadline).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
+
 function JobApplicationPage() {
   const navigate = useNavigate();
   const { slug, id } = useParams();
   const [resumeFileName, setResumeFileName] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [job, setJob] = useState<any>(null);
+  const [jobLoading, setJobLoading] = useState(true);
+  const [jobError, setJobError] = useState("");
+
+  useEffect(() => {
+    if (!slug || !id) {
+      setJobLoading(false);
+      return;
+    }
+    apiClient
+      .get(API_ENDPOINTS.GET_PUBLIC_JOB_OPENING(slug, id))
+      .then((res) => {
+        setJob(res.data?.data ?? null);
+      })
+      .catch((err) => {
+        setJobError(
+          err.response?.data?.message ?? "This job opening could not be found.",
+        );
+      })
+      .finally(() => setJobLoading(false));
+  }, [slug, id]);
 
   const formik = useFormik({
     initialValues: {
@@ -100,9 +138,9 @@ function JobApplicationPage() {
           you soon.
         </Typography>
         <Button
-          variant="outlined"
+          variant="outline"
           onClick={() => navigate(`/careers/${slug}`, { replace: true })}
-          sx={{ mt: 2, textTransform: "none", borderRadius: "8px" }}
+          style={{ marginTop: 16, borderRadius: "8px" }}
         >
           View More Openings
         </Button>
@@ -113,7 +151,11 @@ function JobApplicationPage() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        // body has overflow:hidden globally for the authenticated app
+        // shell's internal scroll regions — this page needs its own
+        // scroll container since it isn't nested inside one.
+        height: "100vh",
+        overflowY: "auto",
         backgroundColor: "var(--card-background-primary, #f9fafb)",
         color: "var(--text-color, #111)",
       }}
@@ -143,10 +185,9 @@ function JobApplicationPage() {
         </Typography>
       </Box>
 
-      {/* Form */}
       <Box
         sx={{
-          maxWidth: 560,
+          maxWidth: 1100,
           mx: "auto",
           px: { xs: 2, md: 4 },
           py: { xs: 4, md: 6 },
@@ -154,159 +195,271 @@ function JobApplicationPage() {
       >
         <Box
           sx={{
-            backgroundColor: "var(--card-background-secondary, #fff)",
-            border: "1px solid var(--text-input-border, #e0e0e0)",
-            borderRadius: 2,
-            p: { xs: 3, md: 4 },
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            alignItems: "flex-start",
+            gap: 3,
           }}
         >
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Personal Details
-          </Typography>
-
-          {serverError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {serverError}
-            </Alert>
-          )}
-
-          <Box
-            component="form"
-            onSubmit={formik.handleSubmit}
-            sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
-          >
-            <TextField
-              fullWidth
-              id="name"
-              name="name"
-              label="Full Name"
-              size="small"
-              value={formik.values.name}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              error={formik.touched.name && Boolean(formik.errors.name)}
-              helperText={formik.touched.name && formik.errors.name}
-            />
-
-            <TextField
-              fullWidth
-              id="mobile"
-              name="mobile"
-              label="Mobile Number"
-              size="small"
-              inputProps={{ maxLength: 10 }}
-              value={formik.values.mobile}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              error={formik.touched.mobile && Boolean(formik.errors.mobile)}
-              helperText={formik.touched.mobile && formik.errors.mobile}
-            />
-
-            <TextField
-              fullWidth
-              id="email"
-              name="email"
-              label="Email Address"
-              size="small"
-              value={formik.values.email}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              error={formik.touched.email && Boolean(formik.errors.email)}
-              helperText={formik.touched.email && formik.errors.email}
-            />
-
-            <TextField
-              fullWidth
-              id="aadharNo"
-              name="aadharNo"
-              label="Aadhar Number"
-              size="small"
-              inputProps={{ maxLength: 12 }}
-              value={formik.values.aadharNo}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              error={formik.touched.aadharNo && Boolean(formik.errors.aadharNo)}
-              helperText={formik.touched.aadharNo && formik.errors.aadharNo}
-            />
-
-            <Divider sx={{ borderColor: "var(--text-input-border)" }} />
-
-            {/* Resume upload */}
-            <Box>
-              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                Resume <span style={{ color: "#f44336" }}>*</span>
-              </Typography>
+          {/* Job details */}
+          <Box sx={{ width: "100%", flex: 1, minWidth: 0 }}>
+            {jobLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : jobError ? (
+              <Alert severity="warning">{jobError}</Alert>
+            ) : job ? (
               <Box
-                component="label"
-                htmlFor="resume-upload"
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1.5,
-                  border: "1.5px dashed",
-                  borderColor:
-                    formik.touched.resume && formik.errors.resume
-                      ? "#f44336"
-                      : "var(--text-input-border, #ccc)",
-                  borderRadius: "8px",
-                  p: 2,
-                  cursor: "pointer",
-                  transition: "border-color 0.2s",
-                  "&:hover": {
-                    borderColor: "var(--link-color, #2196f3)",
-                  },
+                  backgroundColor: "var(--card-background-secondary, #fff)",
+                  border: "1px solid var(--text-input-border, #e0e0e0)",
+                  borderRadius: 2,
+                  p: { xs: 3, md: 4 },
+                  position: { md: "sticky" },
+                  top: { md: 24 },
                 }}
               >
-                <UploadFile sx={{ opacity: 0.5 }} />
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {resumeFileName || "Click to upload PDF"}
-                  </Typography>
-                  <Typography variant="caption" sx={{ opacity: 0.5 }}>
-                    PDF only
-                  </Typography>
-                </Box>
-                <input
-                  id="resume-upload"
-                  type="file"
-                  accept=".pdf"
-                  style={{ display: "none" }}
-                  onChange={handleFileChange}
-                />
-              </Box>
-              {formik.touched.resume && formik.errors.resume && (
                 <Typography
-                  variant="caption"
-                  sx={{ color: "#f44336", mt: 0.5, display: "block" }}
+                  variant="h6"
+                  sx={{ fontWeight: 700, textTransform: "capitalize" }}
                 >
-                  {formik.errors.resume}
+                  {job.jobTitle}
                 </Typography>
-              )}
-            </Box>
+                {job.hiringManager && (
+                  <Typography variant="caption" sx={{ opacity: 0.55 }}>
+                    Hiring Manager: {job.hiringManager}
+                  </Typography>
+                )}
 
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              disabled={formik.isSubmitting}
+                <Box
+                  sx={{ display: "flex", gap: 1, mt: 1.5, flexWrap: "wrap" }}
+                >
+                  {!!job.numberOfVacancies && (
+                    <Chip
+                      icon={<Group sx={{ fontSize: 13 }} />}
+                      label={`${job.numberOfVacancies} ${job.numberOfVacancies === 1 ? "vacancy" : "vacancies"}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: 11 }}
+                    />
+                  )}
+                  {job.experience != null && (
+                    <Chip
+                      icon={<Star sx={{ fontSize: 13 }} />}
+                      label={`${job.experience}+ yrs exp`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: 11 }}
+                    />
+                  )}
+                  {formatBudgetRange(job.budget) && (
+                    <Chip
+                      icon={<AttachMoney sx={{ fontSize: 13 }} />}
+                      label={formatBudgetRange(job.budget)}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: 11 }}
+                    />
+                  )}
+                  {formatDeadline(job.applicationDeadline) && (
+                    <Chip
+                      icon={<CalendarToday sx={{ fontSize: 12 }} />}
+                      label={`Apply by ${formatDeadline(job.applicationDeadline)}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: 11 }}
+                    />
+                  )}
+                </Box>
+
+                {job.jobDescription && (
+                  <>
+                    <Divider
+                      sx={{ my: 1.5, borderColor: "var(--text-input-border)" }}
+                    />
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        opacity: 0.8,
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {job.jobDescription}
+                    </Typography>
+                  </>
+                )}
+
+                {job.requiredSkills && (
+                  <Typography
+                    variant="caption"
+                    sx={{ display: "block", mt: 1.5, opacity: 0.6 }}
+                  >
+                    Skills: {job.requiredSkills}
+                  </Typography>
+                )}
+              </Box>
+            ) : null}
+          </Box>
+
+          {/* Form */}
+          <Box sx={{ width: "100%", flex: 1, minWidth: 0 }}>
+            <Box
               sx={{
-                mt: 1,
-                py: 1.4,
-                textTransform: "none",
-                fontWeight: 600,
-                borderRadius: "8px",
-                backgroundColor: "var(--btn-bg)",
-                color: "var(--btn-color)",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                "&:hover": { boxShadow: "0 4px 18px rgba(0,0,0,0.22)" },
+                backgroundColor: "var(--card-background-secondary, #fff)",
+                border: "1px solid var(--text-input-border, #e0e0e0)",
+                borderRadius: 2,
+                p: { xs: 3, md: 4 },
               }}
             >
-              {formik.isSubmitting ? (
-                <CircularProgress size={20} sx={{ color: "inherit" }} />
-              ) : (
-                "Submit Application"
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                Personal Details
+              </Typography>
+
+              {serverError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {serverError}
+                </Alert>
               )}
-            </Button>
+
+              <Box
+                component="form"
+                onSubmit={formik.handleSubmit}
+                sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
+              >
+                <TextField
+                  fullWidth
+                  id="name"
+                  name="name"
+                  label="Full Name"
+                  size="small"
+                  value={formik.values.name}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  error={formik.touched.name && Boolean(formik.errors.name)}
+                  helperText={formik.touched.name && formik.errors.name}
+                />
+
+                <TextField
+                  fullWidth
+                  id="mobile"
+                  name="mobile"
+                  label="Mobile Number"
+                  size="small"
+                  inputProps={{ maxLength: 10 }}
+                  value={formik.values.mobile}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  error={formik.touched.mobile && Boolean(formik.errors.mobile)}
+                  helperText={formik.touched.mobile && formik.errors.mobile}
+                />
+
+                <TextField
+                  fullWidth
+                  id="email"
+                  name="email"
+                  label="Email Address"
+                  size="small"
+                  value={formik.values.email}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  error={formik.touched.email && Boolean(formik.errors.email)}
+                  helperText={formik.touched.email && formik.errors.email}
+                />
+
+                <TextField
+                  fullWidth
+                  id="aadharNo"
+                  name="aadharNo"
+                  label="Aadhar Number"
+                  size="small"
+                  inputProps={{ maxLength: 12 }}
+                  value={formik.values.aadharNo}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  error={
+                    formik.touched.aadharNo && Boolean(formik.errors.aadharNo)
+                  }
+                  helperText={formik.touched.aadharNo && formik.errors.aadharNo}
+                />
+
+                <Divider sx={{ borderColor: "var(--text-input-border)" }} />
+
+                {/* Resume upload */}
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Resume <span style={{ color: "#f44336" }}>*</span>
+                  </Typography>
+                  <Box
+                    component="label"
+                    htmlFor="resume-upload"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      border: "1.5px dashed",
+                      borderColor:
+                        formik.touched.resume && formik.errors.resume
+                          ? "#f44336"
+                          : "var(--text-input-border, #ccc)",
+                      borderRadius: "8px",
+                      p: 2,
+                      cursor: "pointer",
+                      transition: "border-color 0.2s",
+                      "&:hover": {
+                        borderColor: "var(--link-color, #2196f3)",
+                      },
+                    }}
+                  >
+                    <UploadFile sx={{ opacity: 0.5 }} />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {resumeFileName || "Click to upload PDF"}
+                      </Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.5 }}>
+                        PDF only
+                      </Typography>
+                    </Box>
+                    <input
+                      id="resume-upload"
+                      type="file"
+                      accept=".pdf"
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+                  </Box>
+                  {formik.touched.resume && formik.errors.resume && (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#f44336", mt: 0.5, display: "block" }}
+                    >
+                      {formik.errors.resume}
+                    </Typography>
+                  )}
+                </Box>
+
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="primary"
+                  disabled={formik.isSubmitting}
+                  loading={formik.isSubmitting}
+                  style={{
+                    marginTop: 8,
+                    paddingTop: 11.2,
+                    paddingBottom: 11.2,
+                    fontWeight: 600,
+                    borderRadius: "8px",
+                    backgroundColor: "var(--btn-bg)",
+                    color: "var(--btn-color)",
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  Submit Application
+                </Button>
+              </Box>
+            </Box>
           </Box>
         </Box>
       </Box>

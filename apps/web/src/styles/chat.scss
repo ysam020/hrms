@@ -1,16 +1,14 @@
 @use "./constants.scss";
 
-// Chat root layout
+// Chat root layout. Sits directly inside HomePage's floating content card,
+// which already supplies the fixed height, margin, rounded corners and
+// shadow (consistent with every other route) — chat only needs to fill it.
 .chat-root {
   display: flex;
-  height: calc(var(--page-content-height) - 20px); // subtract top+bottom margin
+  height: 100%;
   overflow: hidden;
   font-family: inherit;
   border-radius: 12px;
-  margin: 10px;
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.12),
-    0 1px 4px rgba(0, 0, 0, 0.08);
 
   &.light {
     --chat-bg: #ffffff;

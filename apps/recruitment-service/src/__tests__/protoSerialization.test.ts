@@ -68,17 +68,15 @@ describe("JobOpening proto serialization", () => {
       createdOn: new Date("2024-01-01T00:00:00.000Z"),
       pipelineTemplateId: "pt1",
       visibility: "external",
-      branchIds: ["b1", "b2"],
     };
     const encoded = recruitment.JobOpening.encode(
       recruitment.JobOpening.fromPartial(toJobOpeningProto(row)),
     ).finish();
     const decoded = recruitment.JobOpening.decode(encoded);
     expect(decoded.id).toBe("j1");
-    expect(decoded.branchIds).toEqual(["b1", "b2"]);
   });
 
-  it("round-trips a row with branchIds/pipelineTemplateId unset (predates those columns)", () => {
+  it("round-trips a row with pipelineTemplateId unset (predates that column)", () => {
     const row = { id: "j2", jobTitle: "Engineer", status: "Active" };
     expect(() =>
       recruitment.JobOpening.encode(

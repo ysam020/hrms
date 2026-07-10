@@ -91,7 +91,7 @@ export const markAttendance = async (
         });
       }
 
-      // Look up the employee's WFH status, home location, branch, shift, and
+      // Look up the employee's WFH status, home location, shift, and
       // field/remote exemption once — used by both geofencing and shift resolution.
       const employee = await prisma.user.findUnique({
         where: { id: userId },
@@ -100,7 +100,6 @@ export const markAttendance = async (
           wfhHomeLatitude: true,
           wfhHomeLongitude: true,
           wfhHomeName: true,
-          branchId: true,
           shiftId: true,
           attendanceMode: true,
         },
@@ -134,22 +133,6 @@ export const markAttendance = async (
           fenceLabel = (employee as any).wfhHomeName
             ? `home (${(employee as any).wfhHomeName.split(",")[0]})`
             : "home";
-        } else if ((employee as any)?.branchId) {
-          const branch = await (prisma as any).branch.findFirst({
-            where: { id: (employee as any).branchId, isActive: true },
-          });
-          if (branch?.latitude != null && branch?.longitude != null) {
-            fenceLat = branch.latitude;
-            fenceLng = branch.longitude;
-            fenceRadius =
-              branch.geofenceRadiusMeters ?? cfg.geofenceRadiusMeters;
-            fenceLabel = branch.name;
-          } else {
-            // Branch exists but has no coordinates set — fall back to the
-            // tenant-wide legacy office fields rather than blocking outright.
-            fenceLat = cfg.officeLatitude;
-            fenceLng = cfg.officeLongitude;
-          }
         } else {
           fenceLat = cfg.officeLatitude;
           fenceLng = cfg.officeLongitude;
@@ -159,7 +142,7 @@ export const markAttendance = async (
           // Geofencing is on but no reference point saved yet — block and ask admin
           const hint = employee?.wfh
             ? "Ask your admin to set the employee's home location in Employee Management."
-            : "Ask your admin to set the branch location in Settings → Branches & Shifts.";
+            : "Ask your admin to set the office location in Settings → Organisation Settings.";
           return callback(null, {
             message: `Geofencing is enabled but no ${fenceLabel} location is configured. ${hint}`,
             status: status.FAILED_PRECONDITION,

@@ -8,7 +8,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Divider from "@mui/material/Divider";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import WorkOutline from "@mui/icons-material/WorkOutline";
@@ -21,6 +21,18 @@ import Group from "@mui/icons-material/Group";
 import ArrowForward from "@mui/icons-material/ArrowForward";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
+
+const formatBudgetRange = (budget: number[] | undefined) =>
+  budget?.[0] && budget?.[1] ? `${budget[0]}-${budget[1]} LPA` : null;
+
+const formatDeadline = (deadline: string | undefined) =>
+  deadline
+    ? new Date(deadline).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
 
 function CareersPage() {
   const navigate = useNavigate();
@@ -56,7 +68,11 @@ function CareersPage() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        // body has overflow:hidden globally for the authenticated app
+        // shell's internal scroll regions — this page needs its own
+        // scroll container since it isn't nested inside one.
+        height: "100vh",
+        overflowY: "auto",
         backgroundColor: "var(--card-background-primary, #f9fafb)",
         color: "var(--text-color, #111)",
       }}
@@ -173,24 +189,21 @@ function CareersPage() {
                       </Box>
                       <Button
                         size="small"
-                        variant="contained"
-                        endIcon={<ArrowForward sx={{ fontSize: 15 }} />}
+                        variant="primary"
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/careers/${slug}/apply/${jobId}`);
                         }}
-                        sx={{
-                          textTransform: "none",
+                        style={{
                           fontWeight: 600,
                           borderRadius: "6px",
                           flexShrink: 0,
                           backgroundColor: "var(--btn-bg)",
                           color: "var(--btn-color)",
                           boxShadow: "none",
-                          "&:hover": { boxShadow: "none" },
                         }}
                       >
-                        Apply Now
+                        Apply Now <ArrowForward fontSize="small" />
                       </Button>
                     </Box>
 
@@ -222,19 +235,19 @@ function CareersPage() {
                           sx={{ fontSize: 11 }}
                         />
                       )}
-                      {job.budgetRange && (
+                      {formatBudgetRange(job.budget) && (
                         <Chip
                           icon={<AttachMoney sx={{ fontSize: 13 }} />}
-                          label={job.budgetRange}
+                          label={formatBudgetRange(job.budget)}
                           size="small"
                           variant="outlined"
                           sx={{ fontSize: 11 }}
                         />
                       )}
-                      {job.formattedDeadline && (
+                      {formatDeadline(job.applicationDeadline) && (
                         <Chip
                           icon={<CalendarToday sx={{ fontSize: 12 }} />}
-                          label={`Apply by ${job.formattedDeadline}`}
+                          label={`Apply by ${formatDeadline(job.applicationDeadline)}`}
                           size="small"
                           variant="outlined"
                           sx={{ fontSize: 11 }}

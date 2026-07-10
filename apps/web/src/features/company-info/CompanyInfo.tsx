@@ -10,7 +10,7 @@ import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Divider from "@mui/material/Divider";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
@@ -187,9 +187,9 @@ export default function CompanyInfo() {
         </Box>
         {canEdit && (
           <Button
-            variant="outlined"
+            variant="outline"
             size="small"
-            startIcon={<EditIcon />}
+            icon={<EditIcon />}
             onClick={openEdit}
           >
             Edit
@@ -310,6 +310,7 @@ export default function CompanyInfo() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
+            variant="ghost"
             size="small"
             onClick={() => setEditOpen(false)}
             disabled={saving}
@@ -317,12 +318,13 @@ export default function CompanyInfo() {
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={handleSave}
             disabled={saving}
+            loading={saving}
           >
-            {saving ? <CircularProgress size={16} color="inherit" /> : "Save"}
+            Save
           </Button>
         </DialogActions>
       </Dialog>

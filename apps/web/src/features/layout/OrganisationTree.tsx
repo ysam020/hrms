@@ -12,7 +12,7 @@ import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -726,14 +726,12 @@ const OrganisationTree = () => {
 
             <DialogActions sx={{ p: { xs: 1.5, sm: 2 }, pt: 0 }}>
               <Button
+                variant="ghost"
                 onClick={() => setSelectedEmployee(null)}
                 size="small"
-                sx={{
+                style={{
                   color: theme.palette.text.secondary,
-                  fontSize: { xs: "0.85rem", sm: "0.875rem" },
-                  "&:hover": {
-                    backgroundColor: alpha(theme.palette.text.secondary, 0.08),
-                  },
+                  fontSize: "0.875rem",
                 }}
               >
                 Close

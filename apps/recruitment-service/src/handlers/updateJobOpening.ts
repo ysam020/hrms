@@ -28,7 +28,7 @@ export const updateJobOpening = async (
       });
     }
 
-    if (existing.status === "deleted") {
+    if (existing.status.toLowerCase() === "deleted") {
       return callback(null, {
         message: MESSAGES.CANNOT_UPDATE_DELETED_JOB,
         status: status.FAILED_PRECONDITION,
@@ -42,14 +42,13 @@ export const updateJobOpening = async (
     const allowedFields = [
       "jobTitle",
       "department",
-      "description",
-      "requirements",
+      "jobDescription",
+      "requiredSkills",
+      "numberOfVacancies",
       "experience",
       "hiringManager",
       "applicationDeadline",
       "budget",
-      "location",
-      "jobType",
       "jobStatus",
       "pipelineTemplateId",
       "visibility",
@@ -67,10 +66,6 @@ export const updateJobOpening = async (
         }
       }
     }
-    if (Array.isArray(updateData.branchIds)) {
-      cleanedData.branchIds = updateData.branchIds;
-    }
-
     const updatedJobOpening = await prisma.jobOpening.update({
       where: { id },
       data: cleanedData,

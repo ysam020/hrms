@@ -1,5 +1,4 @@
 import { prisma } from "@hrms/db";
-import { cacheManager } from "@hrms/cache";
 import { listApplications } from "../handlers/listApplications";
 
 jest.mock("@hrms/db", () => {
@@ -13,18 +12,12 @@ jest.mock("@hrms/db", () => {
   };
 });
 
-jest.mock("@hrms/cache", () => ({
-  cacheManager: { get: jest.fn(), set: jest.fn() },
-}));
-
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
 const mockFindMany = (prisma as any).jobApplication.findMany as jest.Mock;
 const mockCount = (prisma as any).jobApplication.count as jest.Mock;
-const mockCacheGet = cacheManager.get as jest.Mock;
-const mockCacheSet = cacheManager.set as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
@@ -32,19 +25,17 @@ const makeCallback = () => jest.fn();
 describe("listApplications", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCacheGet.mockResolvedValue(null);
-    mockCacheSet.mockResolvedValue(undefined);
     mockFindMany.mockResolvedValue([{ id: "app-1", name: "John Doe" }]);
     mockCount.mockResolvedValue(1);
   });
 
-  it("returns cached result on cache hit", async () => {
-    const cached = { status: 0, data: [] };
-    mockCacheGet.mockResolvedValue(cached);
+  // Deliberately uncached (see handler comment) — always reads live so
+  // interview scheduling validation never operates on stale data.
+  it("always reads live from the database, never from a cache", async () => {
     const cb = makeCallback();
     await listApplications(makeCall({}), cb);
-    expect(mockFindMany).not.toHaveBeenCalled();
-    expect(cb).toHaveBeenCalledWith(null, cached);
+    await listApplications(makeCall({}), cb);
+    expect(mockFindMany).toHaveBeenCalledTimes(2);
   });
 
   it("lists applications with default pagination", async () => {

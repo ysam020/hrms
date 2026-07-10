@@ -30,15 +30,6 @@ $pending-text: #504811;
 }
 
 :root {
-  --appbar-height: 64px;
-  --dock-height: 72px;
-  --content-padding-top: 10px;
-  /* Full usable height below the AppBar and above the Dock, minus top padding */
-  --page-content-height: calc(
-    100vh - var(--appbar-height) - var(--dock-height) - var(
-        --content-padding-top
-      )
-  );
   --box-shadow: 20px 50px 50px 4px rgba(0, 0, 0, 0.05);
   --btn-color: #fff;
 }

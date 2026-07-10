@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useContext, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -6,7 +6,10 @@ import Stack from "@mui/material/Stack";
 import Paper from "@mui/material/Paper";
 import Container from "@mui/material/Container";
 import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 import Work from "@mui/icons-material/Work";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import JobDetails from "./JobDetails";
 import JobApplications from "./JobApplications";
 import ScheduleInterviewModal from "./ScheduleInterviewModal";
@@ -16,11 +19,15 @@ import RejectModal from "./RejectModal";
 import InfoModal from "./InfoModal";
 import TabsPanel from "@web/shared/components/TabsPanel";
 import CircularProgress from "@mui/material/CircularProgress";
+import { AlertContext } from "@web/app/providers/AlertContext";
+import { UserContext } from "@web/app/providers/UserContext";
 
 function ViewIndividualJob() {
   const { _id } = useParams();
+  const { setAlert } = useContext(AlertContext);
+  const { user } = useContext(UserContext);
   const [statusFilter, setStatusFilter] = useState("All");
-  const [applicantData, setApplicantData] = useState({});
+  const [applicantData, setApplicantData] = useState<any>({});
   const [openInterviewModal, setOpenInterviewModal] = useState(false);
   const [openHiringModal, setOpenHiringModal] = useState(false);
   const [openRejectModal, setOpenRejectModal] = useState(false);
@@ -45,6 +52,21 @@ function ViewIndividualJob() {
     null,
     null,
   );
+
+  // applicantData is a one-time snapshot taken when a modal is opened — it
+  // never updates on its own. getJobApplications() refetches jobApplications
+  // after every status change, but a modal left open (or reopened for the
+  // same candidate) kept showing that stale snapshot since its reference
+  // never changed, so InfoModal's sync effect never re-ran. Re-derive from
+  // the latest fetched row whenever one matches, falling back to the
+  // snapshot (e.g. if the row briefly drops out of the current status filter).
+  const liveApplicantData = useMemo(() => {
+    if (!applicantData?.id) return applicantData;
+    const fresh = (jobApplications || []).find(
+      (a: any) => a.id === applicantData.id,
+    );
+    return fresh ? { ...applicantData, ...fresh } : applicantData;
+  }, [jobApplications, applicantData]);
 
   const handleOpenInterviewModal = (data) => {
     setApplicantData(data);
@@ -73,6 +95,13 @@ function ViewIndividualJob() {
   const getJobApplications = () => {
     refetchApplications();
     refetchJob();
+  };
+
+  const handleCopyApplyLink = () => {
+    if (!user?.tenantSlug || !_id) return;
+    const link = `${window.location.origin}/careers/${user.tenantSlug}/apply/${_id}`;
+    navigator.clipboard.writeText(link);
+    setAlert({ open: true, message: "Apply link copied", severity: "success" });
   };
 
   if (loadingJob) {
@@ -167,6 +196,18 @@ function ViewIndividualJob() {
                 />
               </Stack>
             </Box>
+            {user?.tenantSlug && (
+              <Tooltip title="Copy public apply link">
+                <IconButton
+                  onClick={handleCopyApplyLink}
+                  size="small"
+                  sx={{ color: "inherit" }}
+                  aria-label="Copy public apply link"
+                >
+                  <ContentCopyIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Tooltip>
+            )}
           </Stack>
         </Box>
 
@@ -180,13 +221,13 @@ function ViewIndividualJob() {
         open={openInterviewModal}
         handleClose={handleCloseInterviewModal}
         getJobApplications={getJobApplications}
-        applicantData={applicantData}
+        applicantData={liveApplicantData}
         _id={_id}
       />
       <HiringModal
         open={openHiringModal}
         handleClose={handleCloseHiringModal}
-        applicantData={applicantData}
+        applicantData={liveApplicantData}
         _id={_id}
         jobTitle={data?.jobTitle}
         getJobApplications={getJobApplications}
@@ -195,7 +236,7 @@ function ViewIndividualJob() {
         open={openRejectModal}
         handleClose={handleCloseRejectModal}
         _id={_id}
-        applicantData={applicantData}
+        applicantData={liveApplicantData}
         jobTitle={data?.jobTitle}
         getJobApplications={getJobApplications}
       />
@@ -204,7 +245,7 @@ function ViewIndividualJob() {
         handleClose={handleCloseInfoModal}
         jobTitle={data?.jobTitle}
         _id={_id}
-        applicantData={applicantData}
+        applicantData={liveApplicantData}
         getJobApplications={getJobApplications}
       />
     </Container>

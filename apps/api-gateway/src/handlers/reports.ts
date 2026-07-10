@@ -33,11 +33,15 @@ type EntityAllowlist = {
   select: Record<string, boolean>;
   filterFields: Set<string>;
   model: keyof typeof prisma;
+  // Field used to order results when the request doesn't specify a sort.
+  // Must exist on the underlying Prisma model.
+  defaultSort: string;
 };
 
 const ENTITY_CONFIG: Record<string, EntityAllowlist> = {
   employee: {
     model: "user" as any,
+    defaultSort: "createdAt",
     select: {
       id: true,
       username: true,
@@ -68,6 +72,7 @@ const ENTITY_CONFIG: Record<string, EntityAllowlist> = {
   },
   attendance: {
     model: "attendanceRecord" as any,
+    defaultSort: "date",
     select: {
       id: true,
       userId: true,
@@ -82,6 +87,7 @@ const ENTITY_CONFIG: Record<string, EntityAllowlist> = {
   },
   leave: {
     model: "leaveApplication" as any,
+    defaultSort: "appliedOn",
     select: {
       id: true,
       userId: true,
@@ -99,6 +105,7 @@ const ENTITY_CONFIG: Record<string, EntityAllowlist> = {
   },
   salary: {
     model: "salaryStructure" as any,
+    defaultSort: "createdAt",
     select: {
       id: true,
       userId: true,
@@ -118,6 +125,7 @@ const ENTITY_CONFIG: Record<string, EntityAllowlist> = {
   },
   recruitment: {
     model: "jobApplication" as any,
+    defaultSort: "id",
     select: {
       id: true,
       name: true,
@@ -130,6 +138,7 @@ const ENTITY_CONFIG: Record<string, EntityAllowlist> = {
   },
   payroll: {
     model: "payrollRun" as any,
+    defaultSort: "createdAt",
     select: {
       id: true,
       month: true,
@@ -274,7 +283,7 @@ async function executeReport(config: {
   const orderBy =
     sort && entityConfig.filterFields.has(sort.field)
       ? { [sort.field]: sort.direction }
-      : { createdAt: "desc" };
+      : { [entityConfig.defaultSort]: "desc" };
 
   const rows = await model.findMany({
     where,

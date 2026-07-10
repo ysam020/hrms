@@ -1,7 +1,7 @@
 import { memo, useContext } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Stack from "@mui/material/Stack";
 import WarningIcon from "@mui/icons-material/Warning";
 import CustomModal from "@web/shared/components/Modal";
@@ -76,28 +76,10 @@ function BroadcastModal(props) {
 
         {/* Action Buttons */}
         <Stack direction="row" spacing={2} sx={{ justifyContent: "flex-end" }}>
-          <Button
-            variant="outlined"
-            onClick={handleLogout}
-            sx={{
-              textTransform: "none",
-              fontWeight: 500,
-            }}
-          >
+          <Button variant="outline" onClick={handleLogout}>
             Logout All Sessions
           </Button>
-          <Button
-            variant="contained"
-            onClick={props.handleUseInThisTab}
-            sx={{
-              textTransform: "none",
-              fontWeight: 500,
-              bgcolor: "primary.main",
-              "&:hover": {
-                bgcolor: "primary.dark",
-              },
-            }}
-          >
+          <Button variant="primary" onClick={props.handleUseInThisTab}>
             Continue Here
           </Button>
         </Stack>

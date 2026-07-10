@@ -10,7 +10,7 @@ import Grid from "@mui/material/Grid2";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
@@ -573,21 +573,19 @@ export default function OrgSetupPage() {
               {tenants.map((t) => (
                 <Button
                   key={t.id}
-                  variant="outlined"
+                  variant="outline"
                   fullWidth
                   disabled={loading}
                   onClick={() => handleSelectTenant(t.id)}
-                  sx={{
+                  style={{
                     justifyContent: "space-between",
-                    py: 1.5,
-                    px: 2,
+                    paddingTop: 12,
+                    paddingBottom: 12,
+                    paddingLeft: 16,
+                    paddingRight: 16,
                     borderRadius: "8px",
                     borderColor: "var(--text-input-border)",
                     color: "var(--text-color)",
-                    "&:hover": {
-                      borderColor: "var(--link-color)",
-                      bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
-                    },
                   }}
                 >
                   <Box sx={{ textAlign: "left" }}>
@@ -669,14 +667,15 @@ export default function OrgSetupPage() {
               </Box>
 
               <Button
-                variant="contained"
+                variant="primary"
                 fullWidth
                 size="large"
                 disabled={!orgName.trim()}
                 onClick={() => setStep(1)}
-                sx={{
+                style={{
                   borderRadius: "8px",
-                  py: 1.4,
+                  paddingTop: 11.2,
+                  paddingBottom: 11.2,
                   fontWeight: 600,
                   textTransform: "none",
                   fontSize: 15,
@@ -830,43 +829,37 @@ export default function OrgSetupPage() {
 
               <Box sx={{ display: "flex", gap: 1.5 }}>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   fullWidth
                   onClick={() => setStep(0)}
                   disabled={loading}
-                  sx={{
+                  style={{
                     borderRadius: "8px",
                     borderColor: "var(--text-input-border)",
                     color: "var(--text-color)",
                     textTransform: "none",
                     fontWeight: 500,
-                    "&:hover": {
-                      borderColor: "var(--link-color)",
-                      color: "var(--link-color)",
-                    },
                   }}
                 >
                   Back
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="primary"
                   fullWidth
                   size="large"
                   disabled={loading}
                   onClick={handlePayAndCreate}
-                  sx={{
+                  loading={loading}
+                  style={{
                     borderRadius: "8px",
-                    py: 1.4,
+                    paddingTop: 11.2,
+                    paddingBottom: 11.2,
                     textTransform: "none",
                     fontWeight: 600,
                     fontSize: 14,
                   }}
                 >
-                  {loading ? (
-                    <CircularProgress size={22} color="inherit" />
-                  ) : (
-                    `Pay ${price.display} & Continue`
-                  )}
+                  {`Pay ${price.display} & Continue`}
                 </Button>
               </Box>
             </>
@@ -922,7 +915,7 @@ export default function OrgSetupPage() {
               />
               <Box sx={{ display: "flex", gap: 1.5 }}>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   fullWidth
                   disabled={loading}
                   onClick={async () => {
@@ -934,7 +927,7 @@ export default function OrgSetupPage() {
                       severity: "success",
                     });
                   }}
-                  sx={{
+                  style={{
                     borderRadius: "8px",
                     borderColor: "var(--text-input-border)",
                     color: "var(--text-color)",
@@ -945,10 +938,11 @@ export default function OrgSetupPage() {
                   Skip
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="primary"
                   fullWidth
                   size="large"
                   disabled={loading}
+                  loading={loading}
                   onClick={async () => {
                     setLoading(true);
                     try {
@@ -969,19 +963,16 @@ export default function OrgSetupPage() {
                       severity: "success",
                     });
                   }}
-                  sx={{
+                  style={{
                     borderRadius: "8px",
-                    py: 1.4,
+                    paddingTop: 11.2,
+                    paddingBottom: 11.2,
                     textTransform: "none",
                     fontWeight: 600,
                     fontSize: 14,
                   }}
                 >
-                  {loading ? (
-                    <CircularProgress size={22} color="inherit" />
-                  ) : (
-                    "Save & Continue"
-                  )}
+                  Save & Continue
                 </Button>
               </Box>
             </>

@@ -57,17 +57,7 @@ function randomSalaryFor(designation: string): number {
 async function seedOrgStructure(
   tenantId: string,
   createdBy: string,
-): Promise<{ branchId: string; shiftId: string }> {
-  const branch = await (prismaWithTenant as any).branch.create({
-    data: {
-      tenantId,
-      name: `${faker.location.city()} HQ`,
-      address: faker.location.streetAddress(),
-      isHeadOffice: true,
-      createdBy,
-    },
-  });
-
+): Promise<{ shiftId: string }> {
   const shift = await (prismaWithTenant as any).shift.create({
     data: {
       tenantId,
@@ -98,14 +88,13 @@ async function seedOrgStructure(
     }
   }
 
-  return { branchId: branch.id, shiftId: shift.id };
+  return { shiftId: shift.id };
 }
 
 // ─── Employees (+ KYC fields, which live directly on User) ────────────────
 
 async function seedEmployees(
   tenantId: string,
-  branchId: string,
   shiftId: string,
 ): Promise<SeededEmployee[]> {
   const employees: SeededEmployee[] = [];
@@ -132,7 +121,6 @@ async function seedEmployees(
           .slice(0, 10),
         department,
         designation,
-        branchId,
         shiftId,
         employeeStatus: "Active",
         employmentType: "employee",
@@ -526,14 +514,11 @@ async function seedTenant(tenant: {
     });
 
     if (employees.length < SEEDED_EMPLOYEE_THRESHOLD) {
-      // Branch/Shift/Department/Designation.createdBy are @db.ObjectId — no
+      // Shift/Department/Designation.createdBy are @db.ObjectId — no
       // "system user" exists yet at this point (employees are created next),
       // so use the tenant's own id, which is already a valid ObjectId.
-      const { branchId, shiftId } = await seedOrgStructure(
-        tenant.id,
-        tenant.id,
-      );
-      employees = await seedEmployees(tenant.id, branchId, shiftId);
+      const { shiftId } = await seedOrgStructure(tenant.id, tenant.id);
+      employees = await seedEmployees(tenant.id, shiftId);
 
       await seedJobOpenings(tenant.id, employees[0].username);
       await seedAssets(tenant.id, employees[0].id, employees);

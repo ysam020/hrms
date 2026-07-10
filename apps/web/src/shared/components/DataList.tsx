@@ -376,7 +376,12 @@ function DataList<T>({
     <Box
       role="region"
       aria-labelledby={headingId}
-      sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.25,
+        height: "100%",
+      }}
     >
       <Typography id={headingId} sx={{ position: "absolute", left: -9999 }}>
         {ariaLabel}
@@ -385,6 +390,7 @@ function DataList<T>({
       {hasToolbar && (
         <Box
           sx={{
+            flexShrink: 0,
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
@@ -428,30 +434,33 @@ function DataList<T>({
         </Box>
       )}
 
-      {variant === "cards" ? (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
-          {body}
-        </Box>
-      ) : (
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 1.5,
-            borderColor: "divider",
-            boxShadow: (t) =>
-              t.palette.mode === "light"
-                ? "0 1px 2px rgba(15, 23, 42, 0.04)"
-                : "0 1px 3px rgba(0, 0, 0, 0.35)",
-            overflow: "hidden",
-          }}
-        >
-          {body}
-        </Paper>
-      )}
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        {variant === "cards" ? (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+            {body}
+          </Box>
+        ) : (
+          <Paper
+            variant="outlined"
+            sx={{
+              borderRadius: 1.5,
+              borderColor: "divider",
+              boxShadow: (t) =>
+                t.palette.mode === "light"
+                  ? "0 1px 2px rgba(15, 23, 42, 0.04)"
+                  : "0 1px 3px rgba(0, 0, 0, 0.35)",
+              overflow: "hidden",
+            }}
+          >
+            {body}
+          </Paper>
+        )}
+      </Box>
 
       {pagination && data.length > 0 && (
         <Box
           sx={{
+            flexShrink: 0,
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",

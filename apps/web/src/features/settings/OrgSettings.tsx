@@ -17,7 +17,7 @@ import Grid from "@mui/material/Grid2";
 import TextField from "@mui/material/TextField";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Divider from "@mui/material/Divider";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
@@ -133,6 +133,7 @@ interface SettingsSnapshot {
   overtimePreApprovalRequired: boolean;
   probationPeriodDays: number;
   noticePeriodDays: number;
+  maxInterviewRounds: number;
   // Geofencing
   geofencingEnabled: boolean;
   officeLatitude: number | null;
@@ -161,6 +162,7 @@ const SCHEMA_DEFAULTS: SettingsSnapshot = {
   overtimePreApprovalRequired: false,
   probationPeriodDays: 90,
   noticePeriodDays: 30,
+  maxInterviewRounds: 5,
   // Geofencing
   geofencingEnabled: false,
   officeLatitude: null,
@@ -410,9 +412,9 @@ function LeaveSection({
             </Grid>
             <Grid size={{ xs: 4, sm: 2 }}>
               <Button
-                variant="outlined"
+                variant="outline"
                 size="small"
-                startIcon={<AddCircleOutlineIcon />}
+                icon={<AddCircleOutlineIcon />}
                 onClick={addCustomType}
                 disabled={!newType.name.trim() || !newType.key.trim()}
                 fullWidth
@@ -589,11 +591,11 @@ function LeavePolicyEditor({
 
       {!readOnly && (
         <Button
-          variant="outlined"
+          variant="outline"
           size="small"
-          startIcon={<AddCircleOutlineIcon />}
+          icon={<AddCircleOutlineIcon />}
           onClick={openAdd}
-          sx={{ mt: 1 }}
+          style={{ marginTop: 8 }}
         >
           Add advanced policy
         </Button>
@@ -868,17 +870,21 @@ function LeavePolicyEditor({
           </FormControl>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button size="small" onClick={() => setDialogOpen(false)}>
+          <Button
+            variant="ghost"
+            size="small"
+            onClick={() => setDialogOpen(false)}
+          >
             Cancel
           </Button>
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
             onClick={save}
             disabled={
               !draft.name.trim() || !draft.key.trim() || !draft.daysPerYear
             }
-            startIcon={<SaveIcon />}
+            icon={<SaveIcon />}
           >
             {editingIndex === null ? "Add" : "Update"}
           </Button>
@@ -993,7 +999,7 @@ function AttendanceSection({
       <Alert severity="info" sx={{ mt: 3 }}>
         These are your organisation's default working hours. Teams that don't
         work these hours (night shift, factory floor, ...) can be assigned a
-        custom shift under Settings → Branches &amp; Shifts.
+        custom shift under Settings → Shifts.
       </Alert>
 
       <Divider sx={{ my: 3 }} />
@@ -1221,6 +1227,20 @@ function HrSection({
             },
           )}
         </Grid>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          {numField(
+            "Max interview rounds",
+            settings.maxInterviewRounds,
+            (v) => onChange({ maxInterviewRounds: Math.max(1, v) }),
+            {
+              min: 1,
+              suffix: "rounds",
+              helperText:
+                "How many interview rounds this tenant runs per candidate",
+              disabled: readOnly,
+            },
+          )}
+        </Grid>
       </Grid>
     </Box>
   );
@@ -1372,23 +1392,24 @@ function SaveDialog({
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button size="small" onClick={onCancel} disabled={saving}>
+        <Button
+          variant="ghost"
+          size="small"
+          onClick={onCancel}
+          disabled={saving}
+        >
           Cancel
         </Button>
         <Button
-          variant="contained"
+          variant="primary"
           size="small"
           onClick={handleConfirm}
           disabled={saving || (preset === "custom" && !custom)}
-          startIcon={
-            saving ? (
-              <CircularProgress size={16} color="inherit" />
-            ) : (
-              <SaveIcon />
-            )
-          }
+          icon={<SaveIcon />}
+          loading={saving}
+          loadingText="Saving…"
         >
-          {saving ? "Saving…" : "Save"}
+          Save
         </Button>
       </DialogActions>
     </Dialog>
@@ -1553,9 +1574,9 @@ export default function OrgSettings() {
         </Box>
         {canEdit && (
           <Button
-            variant="contained"
+            variant="primary"
             size="small"
-            startIcon={<SaveIcon />}
+            icon={<SaveIcon />}
             onClick={() => setDialogOpen(true)}
             disabled={!dirty}
           >
@@ -1582,15 +1603,10 @@ export default function OrgSettings() {
               action={
                 canEdit ? (
                   <Button
+                    variant="ghost"
                     size="small"
-                    color="inherit"
-                    startIcon={
-                      cancelling === p.id ? (
-                        <CircularProgress size={12} color="inherit" />
-                      ) : (
-                        <CancelIcon fontSize="small" />
-                      )
-                    }
+                    icon={<CancelIcon fontSize="small" />}
+                    loading={cancelling === p.id}
                     disabled={cancelling === p.id}
                     onClick={() => handleCancelPending(p.id!)}
                   >

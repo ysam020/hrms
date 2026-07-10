@@ -1,9 +1,17 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
+// Deliberately uncached. This feeds interview.interviewDate/Start/EndTime,
+// which scheduleInterview/rescheduleInterview client-side validation and
+// the "round can be marked Completed/Cleared after..." gate both depend on
+// being correct *right now* — cacheManager.get() also warms a same-process
+// in-memory copy (~5 min TTL) on every read, which a `redis-cli` flush
+// can't touch, so out-of-band DB edits could leave this looking fresh in
+// Redis but still stale in the running process. Application lists are
+// low-traffic (HR viewing one job's candidates), so the read-latency cost
+// of skipping the cache here is negligible next to that staleness risk.
 export const listApplications = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
@@ -19,11 +27,6 @@ export const listApplications = async (
     const pageNum = parseInt(String(page)) || 1;
     const limitNum = parseInt(String(limit)) || 10;
     const skip = (pageNum - 1) * limitNum;
-
-    const tenantId = getTenantId() ?? "global";
-    const cacheKey = `t:${tenantId}:applications:${jobTitleId || ""}:${applicationStatus || "all"}:p${pageNum}:l${limitNum}`;
-    const cached = await cacheManager.get(cacheKey);
-    if (cached) return callback(null, cached);
 
     const where: Record<string, any> = {};
     if (jobTitleId) where.jobTitleId = jobTitleId;
@@ -61,7 +64,6 @@ export const listApplications = async (
       limit: limitNum,
       totalPages: Math.ceil(total / limitNum),
     };
-    await cacheManager.set(cacheKey, response, "recruitment");
     return callback(null, response);
   } catch (err) {
     logger.error("ListApplications error:", { err });

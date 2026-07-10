@@ -5,7 +5,7 @@ import { ThemeContext } from "@web/app/providers/ThemeContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -199,10 +199,10 @@ function WebhookEndpoints() {
         </Typography>
         <Button
           size="small"
-          startIcon={<AddIcon />}
-          variant="contained"
+          icon={<AddIcon />}
+          variant="primary"
           onClick={() => setOpenCreate(true)}
-          sx={{
+          style={{
             borderRadius: "8px",
             textTransform: "none",
             fontSize: "0.8rem",
@@ -467,29 +467,33 @@ function WebhookEndpoints() {
         <DialogActions>
           {newSecret ? (
             <Button
-              variant="contained"
+              variant="primary"
               size="small"
-              startIcon={<CheckCircleIcon />}
+              icon={<CheckCircleIcon />}
               onClick={() => {
                 setNewSecret(null);
                 setOpenCreate(false);
                 setForm({ url: "", events: [] });
               }}
-              sx={{ borderRadius: "8px", textTransform: "none" }}
+              style={{ borderRadius: "8px", textTransform: "none" }}
             >
               Done — I've saved the secret
             </Button>
           ) : (
             <>
-              <Button onClick={() => setOpenCreate(false)} size="small">
+              <Button
+                variant="ghost"
+                onClick={() => setOpenCreate(false)}
+                size="small"
+              >
                 Cancel
               </Button>
               <Button
                 onClick={handleCreate}
-                variant="contained"
+                variant="primary"
                 size="small"
                 disabled={submitting || !form.url || form.events.length === 0}
-                sx={{ borderRadius: "8px", textTransform: "none" }}
+                style={{ borderRadius: "8px", textTransform: "none" }}
               >
                 {submitting ? "Creating…" : "Create Endpoint"}
               </Button>

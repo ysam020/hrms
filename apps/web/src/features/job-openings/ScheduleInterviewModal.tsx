@@ -1,11 +1,9 @@
-import { memo, useContext, useState } from "react";
+import { memo, useContext } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Checkbox from "@mui/material/Checkbox";
 import Alert from "@mui/material/Alert";
 import dayjs from "dayjs";
 import { useFormik } from "formik";
@@ -23,7 +21,14 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import UserAutoComplete from "@web/shared/components/UserAutoComplete";
 import { Calendar } from "primereact/calendar";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import useFetchData from "@web/shared/hooks/useFetchData";
 
+// This modal only ever schedules the NEXT new round. Rescheduling an
+// existing (not-yet-conducted) round is a per-round action in InfoModal,
+// next to Reassign — folding both into one dual-mode modal here made it
+// impossible to tell "which round" a reschedule should target once more
+// than one round existed, which corrupted already-conducted rounds and
+// blocked legitimate reschedules behind the "previous round cleared" gate.
 function ScheduleInterviewModal({
   open,
   handleClose,
@@ -32,12 +37,52 @@ function ScheduleInterviewModal({
   _id,
 }) {
   const { setAlert } = useContext(AlertContext);
-  const [mode, setMode] = useState("schedule");
-  const { name, email, round, status } = applicantData || {};
+  const { name, email, status } = applicantData || {};
 
-  // Round N (N>1) can only be scheduled after round N-1 is cleared
+  const { data: orgSettings } = useFetchData(
+    API_ENDPOINTS.GET_ORG_SETTINGS,
+    "get",
+    [],
+    null,
+    null,
+  );
+  const maxInterviewRounds = orgSettings?.active?.maxInterviewRounds ?? 5;
+
+  // Only users with the JobOpenings:take_interview permission (or
+  // superusers) show up as candidates for "Select Interviewer". An empty
+  // userList makes UserAutoComplete fall back to an unrestricted
+  // server-side search across all users, so this list must only ever be
+  // passed once it has actually loaded — see the loading guard below.
+  const { data: interviewersData, loading: interviewersLoading } = useFetchData<
+    any[]
+  >(API_ENDPOINTS.GET_INTERVIEWER_LIST, "get", [], null, null);
+  const interviewerUsernames = (interviewersData || [])
+    .map((u: any) => u.username)
+    .filter(Boolean);
+
+  // Rounds are addressed by roundNumber, not array position — interviews
+  // are upserted in place (see api-gateway's upsertInterviewRound), so
+  // interviews.length always equals the number of distinct rounds so far.
+  const interviews = applicantData?.interviews || [];
+  const interviewsCount = interviews.length;
+  const roundNumber = interviewsCount + 1;
+  const previousRound = interviews[interviewsCount - 1];
+
+  // A new round (N>1) can only be scheduled after round N-1 is cleared.
   const prevRoundCleared =
-    !round || round <= 1 || status === `Round ${round - 1} Cleared`;
+    roundNumber <= 1 || status === `Round ${roundNumber - 1} Cleared`;
+  const roundLimitReached = roundNumber > maxInterviewRounds;
+
+  // Must start strictly after the previous round's interview ends, not
+  // just "now" — e.g. Round 1 at 3–4 PM today means Round 2 can't be
+  // scheduled for earlier today even though "now" already allows it.
+  const previousRoundEnd =
+    previousRound?.interviewEndTime &&
+    dayjs(previousRound.interviewEndTime, "YYYYMMDDTHHmmss").toDate();
+  const minScheduleDate =
+    previousRoundEnd && previousRoundEnd > new Date()
+      ? previousRoundEnd
+      : new Date();
 
   const validationSchema = toFormikValidationSchema(
     z.object({
@@ -61,31 +106,15 @@ function ScheduleInterviewModal({
       const formatDate = (date) => dayjs(date).format("YYYYMMDDTHHmmss");
 
       try {
-        let res;
-        if (mode === "schedule") {
-          res = await apiClient.put(API_ENDPOINTS.SCHEDULE_INTERVIEW, {
-            email,
-            name,
-            interviewer: values.username,
-            interviewDateTime: startDate,
-            interviewStartTime: formatDate(startDate),
-            interviewEndTime: formatDate(endDate),
-            roundNumber: round,
-            _id: applicantData.id,
-          });
-        } else if (mode === "reschedule") {
-          res = await apiClient.put(API_ENDPOINTS.RESCHEDULE_INTERVIEW, {
-            email,
-            name,
-            interviewer: values.username,
-            interviewDateTime: startDate,
-            interviewStartTime: formatDate(startDate),
-            interviewEndTime: formatDate(endDate),
-            _id: applicantData.id,
-          });
-        } else {
-          throw new Error("Invalid mode");
-        }
+        const res = await apiClient.put(API_ENDPOINTS.SCHEDULE_INTERVIEW, {
+          email,
+          name,
+          interviewer: values.username,
+          interviewStartTime: formatDate(startDate),
+          interviewEndTime: formatDate(endDate),
+          roundNumber,
+          _id: applicantData.id,
+        });
 
         handleClose();
         getJobApplications && getJobApplications();
@@ -135,7 +164,7 @@ function ScheduleInterviewModal({
             sx={{
               width: 40,
               height: 40,
-              bgcolor: mode === "reschedule" ? "warning.main" : "info.main",
+              bgcolor: "info.main",
               color: "white",
             }}
           >
@@ -147,11 +176,11 @@ function ScheduleInterviewModal({
               fontWeight={600}
               sx={{ fontSize: "1.1rem" }}
             >
-              {mode === "reschedule" ? "Reschedule" : "Schedule"} Interview
+              Schedule Interview
             </Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               <Typography variant="caption" color="text.secondary">
-                Round {round || 1} Interview
+                Round {roundNumber} Interview
               </Typography>
             </Box>
           </Box>
@@ -179,167 +208,155 @@ function ScheduleInterviewModal({
         </Stack>
       </Box>
 
-      {/* Block scheduling if previous round not cleared */}
-      {!prevRoundCleared ? (
+      {/* Block scheduling past the tenant's configured round limit */}
+      {roundLimitReached ? (
         <Box sx={{ p: 2 }}>
           <Alert severity="warning" sx={{ borderRadius: 2 }}>
             <Typography variant="body2">
-              Round {(round || 1) - 1} must be <strong>Cleared</strong> before
-              scheduling Round {round}. Current status:{" "}
+              This tenant allows a maximum of{" "}
+              <strong>{maxInterviewRounds}</strong> interview round
+              {maxInterviewRounds === 1 ? "" : "s"}. Adjust it under Settings →
+              HR if this candidate needs another round.
+            </Typography>
+          </Alert>
+        </Box>
+      ) : !prevRoundCleared ? (
+        <Box sx={{ p: 2 }}>
+          <Alert severity="warning" sx={{ borderRadius: 2 }}>
+            <Typography variant="body2">
+              Round {roundNumber - 1} must be <strong>Cleared</strong> before
+              scheduling Round {roundNumber}. Current status:{" "}
               <strong>{status || "—"}</strong>
             </Typography>
           </Alert>
         </Box>
       ) : (
-        <>
-          {/* Mode Toggle */}
-          <Box sx={{ p: 1.5, pb: 0 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={mode === "reschedule"}
-                  onChange={(e) => {
-                    const newMode = e.target.checked
-                      ? "reschedule"
-                      : "schedule";
-                    setMode(newMode);
-                  }}
-                  sx={{
-                    color: "primary.main",
-                    "&.Mui-checked": {
-                      color: "warning.main",
-                    },
-                  }}
-                />
-              }
-              label={
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography variant="body2" fontWeight={500}>
-                    Reschedule existing interview
-                  </Typography>
-                  {mode === "reschedule" && (
-                    <Chip
-                      label="Reschedule Mode"
-                      size="small"
-                      color="warning"
-                      variant="outlined"
-                    />
-                  )}
-                </Box>
-              }
-            />
-
-            {mode === "reschedule" && (
-              <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
-                <Typography variant="body2">
-                  You are rescheduling an existing interview. The candidate will
-                  be notified of the change.
+        <Box sx={{ p: 1.5 }}>
+          <form onSubmit={formik.handleSubmit}>
+            <Stack spacing={1}>
+              {/* Interviewer Selection */}
+              <Box>
+                <Typography
+                  variant="h6"
+                  color="text.secondary"
+                  gutterBottom
+                  sx={{ mb: 1 }}
+                >
+                  <PersonIcon
+                    sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                  />
+                  Select Interviewer
                 </Typography>
-              </Alert>
-            )}
-          </Box>
-
-          {/* Form */}
-          <Box sx={{ p: 1.5 }}>
-            <form onSubmit={formik.handleSubmit}>
-              <Stack spacing={1}>
-                {/* Interviewer Selection */}
-                <Box>
-                  <Typography
-                    variant="h6"
-                    color="text.secondary"
-                    gutterBottom
-                    sx={{ mb: 1 }}
-                  >
-                    <PersonIcon
-                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                    />
-                    Select Interviewer
+                {interviewersLoading ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Loading eligible interviewers…
                   </Typography>
+                ) : interviewerUsernames.length === 0 ? (
+                  <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                    No users currently have interview-taking permission. Grant
+                    "Take Interview" under Settings → Permissions.
+                  </Alert>
+                ) : (
                   <UserAutoComplete
                     formik={formik}
+                    userList={interviewerUsernames}
                     placeholder="Choose interviewer from the list"
                   />
-                  {formik.touched.username && formik.errors.username && (
-                    <Typography
-                      variant="caption"
-                      color="error"
-                      sx={{ mt: 0.5, display: "block" }}
-                    >
-                      {formik.errors.username}
-                    </Typography>
-                  )}
-                </Box>
-
-                {/* Date and Time Selection */}
-                <Box>
+                )}
+                {formik.touched.username && formik.errors.username && (
                   <Typography
-                    variant="h6"
-                    color="text.secondary"
-                    gutterBottom
-                    sx={{ mb: 1 }}
+                    variant="caption"
+                    color="error"
+                    sx={{ mt: 0.5, display: "block" }}
                   >
-                    <CalendarTodayIcon
-                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                    />
-                    Interview Date & Time
+                    {formik.errors.username}
                   </Typography>
-                  <Calendar
-                    value={formik.values.dateTime}
-                    onChange={(e) => formik.setFieldValue("dateTime", e.value)}
-                    showTime
-                    hourFormat="24"
-                    dateFormat="dd/mm/yy"
-                    appendTo="self"
-                    minDate={new Date()}
-                    disabledDays={[0]} // Disable Sundays
-                    timeOnly={false}
-                    showButtonBar
-                    stepMinute={15}
-                    style={{ width: "100%" }}
-                    placeholder="Select interview date and time"
-                  />
-                  {formik.touched.dateTime && formik.errors.dateTime && (
-                    <Typography
-                      variant="caption"
-                      color="error"
-                      sx={{ mt: 0.5, display: "block" }}
-                    >
-                      {formik.errors.dateTime}
-                    </Typography>
-                  )}
+                )}
+              </Box>
 
-                  {/* Time Info */}
-                  <Box
-                    sx={{
-                      mt: 1.5,
-                      p: 1.5,
-                      bgcolor: "action.hover",
-                      borderRadius: 1,
-                    }}
+              {/* Date and Time Selection */}
+              <Box>
+                <Typography
+                  variant="h6"
+                  color="text.secondary"
+                  gutterBottom
+                  sx={{ mb: 1 }}
+                >
+                  <CalendarTodayIcon
+                    sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                  />
+                  Interview Date & Time
+                </Typography>
+                <Calendar
+                  value={formik.values.dateTime}
+                  onChange={(e) => formik.setFieldValue("dateTime", e.value)}
+                  showTime
+                  hourFormat="24"
+                  dateFormat="dd/mm/yy"
+                  // appendTo="self" gets clipped by the modal Paper's
+                  // overflow:auto (see InputWrapper.tsx's date Calendar
+                  // for the same established fix) — portal to the app
+                  // root instead so the popup isn't bounded by it.
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                  minDate={minScheduleDate}
+                  disabledDays={[0]} // Disable Sundays
+                  timeOnly={false}
+                  showButtonBar
+                  stepMinute={15}
+                  style={{ width: "100%" }}
+                  placeholder="Select interview date and time"
+                />
+                {formik.touched.dateTime && formik.errors.dateTime && (
+                  <Typography
+                    variant="caption"
+                    color="error"
+                    sx={{ mt: 0.5, display: "block" }}
                   >
+                    {formik.errors.dateTime}
+                  </Typography>
+                )}
+
+                {/* Time Info */}
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1.5,
+                    bgcolor: "action.hover",
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
+                    <AccessTimeIcon sx={{ fontSize: 14 }} />
+                    Interview duration: 1 hour • Sundays are disabled •
+                    15-minute intervals
+                  </Typography>
+                  {previousRoundEnd && previousRoundEnd > new Date() && (
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                      sx={{ display: "block", mt: 0.5 }}
                     >
-                      <AccessTimeIcon sx={{ fontSize: 14 }} />
-                      Interview duration: 1 hour • Sundays are disabled •
-                      15-minute intervals
+                      Must be after Round {roundNumber - 1}'s interview ends (
+                      {dayjs(previousRoundEnd).format("DD MMM YYYY, HH:mm")})
                     </Typography>
-                  </Box>
+                  )}
                 </Box>
+              </Box>
 
-                <Box sx={{ mt: 0 }}>
-                  <Button type="submit" disabled={formik.isSubmitting}>
-                    {mode === "reschedule" ? "Reschedule" : "Schedule"}{" "}
-                    Interview
-                  </Button>
-                </Box>
-              </Stack>
-            </form>
-          </Box>
-        </>
+              <Box sx={{ mt: 0 }}>
+                <Button type="submit" disabled={formik.isSubmitting}>
+                  Schedule Interview
+                </Button>
+              </Box>
+            </Stack>
+          </form>
+        </Box>
       )}
     </CustomModal>
   );

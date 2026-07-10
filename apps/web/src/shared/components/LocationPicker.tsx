@@ -21,10 +21,9 @@
 import { useContext, useEffect, useId, useRef, useState } from "react";
 import type React from "react";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import CircularProgress from "@mui/material/CircularProgress";
 import InputAdornment from "@mui/material/InputAdornment";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import SearchIcon from "@mui/icons-material/Search";
@@ -340,27 +339,23 @@ export default function LocationPicker({
             }}
           />
           <Button
-            variant="outlined"
+            variant="outline"
             size="small"
             onClick={handleSearch}
             disabled={searching || !searchQuery.trim()}
-            sx={{ minWidth: 80, flexShrink: 0 }}
+            loading={searching}
+            style={{ minWidth: 80, flexShrink: 0 }}
           >
-            {searching ? <CircularProgress size={16} /> : "Search"}
+            Search
           </Button>
           <Button
-            variant="outlined"
+            variant="outline"
             size="small"
             onClick={handleUseCurrentLocation}
             disabled={locating}
-            startIcon={
-              locating ? (
-                <CircularProgress size={14} />
-              ) : (
-                <MyLocationIcon fontSize="small" />
-              )
-            }
-            sx={{ flexShrink: 0 }}
+            loading={locating}
+            icon={<MyLocationIcon fontSize="small" />}
+            style={{ flexShrink: 0 }}
           >
             My location
           </Button>

@@ -57,7 +57,7 @@ describe("updateJobOpening", () => {
     );
   });
 
-  it("returns FAILED_PRECONDITION for deleted job opening", async () => {
+  it("returns FAILED_PRECONDITION for a deleted job opening (lowercase status)", async () => {
     mockFindUnique.mockResolvedValue({ ...jobRow, status: "deleted" });
     const cb = makeCallback();
     await updateJobOpening(makeCall({ id: "j-1" }), cb);
@@ -65,6 +65,37 @@ describe("updateJobOpening", () => {
       null,
       expect.objectContaining({ status: 9 }),
     );
+  });
+
+  it("returns FAILED_PRECONDITION for a deleted job opening (real 'Deleted' status)", async () => {
+    // deleteJobOpening.ts always writes status: "Deleted" — this guard must
+    // catch the real stored value, not just a lowercase variant.
+    mockFindUnique.mockResolvedValue({ ...jobRow, status: "Deleted" });
+    const cb = makeCallback();
+    await updateJobOpening(makeCall({ id: "j-1" }), cb);
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 9 }),
+    );
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("persists jobDescription, requiredSkills, and numberOfVacancies", async () => {
+    mockFindUnique.mockResolvedValue(jobRow);
+    const cb = makeCallback();
+    await updateJobOpening(
+      makeCall({
+        id: "j-1",
+        jobDescription: "Build things",
+        requiredSkills: "TypeScript, React",
+        numberOfVacancies: 3,
+      }),
+      cb,
+    );
+    const updateData = mockUpdate.mock.calls[0][0].data;
+    expect(updateData.jobDescription).toBe("Build things");
+    expect(updateData.requiredSkills).toBe("TypeScript, React");
+    expect(updateData.numberOfVacancies).toBe(3);
   });
 
   it("updates job opening and invalidates cache", async () => {

@@ -19,7 +19,7 @@ import { ThemeContext } from "@web/app/providers/ThemeContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -394,12 +394,16 @@ function Tickets() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenCreate(false)} size="small">
+          <Button
+            variant="ghost"
+            onClick={() => setOpenCreate(false)}
+            size="small"
+          >
             Cancel
           </Button>
           <Button
             onClick={handleCreate}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={submitting || !form.title || !form.description}
           >

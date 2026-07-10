@@ -5,7 +5,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
@@ -464,10 +464,10 @@ export default function Subscription() {
             {!isExpired && tenant.subscriptionStatus !== "expired" && (
               <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
                 <Button
-                  variant="outlined"
-                  color="error"
+                  variant="outline"
                   size="small"
                   onClick={() => setCancelOpen(true)}
+                  style={{ color: "#dc3545", border: "2px solid #dc3545" }}
                 >
                   Cancel Subscription
                 </Button>
@@ -597,17 +597,14 @@ export default function Subscription() {
               </Box>
 
               <Button
-                variant="contained"
+                variant="primary"
                 fullWidth
                 size="large"
                 disabled={renewing}
                 onClick={handleRenew}
+                loading={renewing}
               >
-                {renewing ? (
-                  <CircularProgress size={22} color="inherit" />
-                ) : (
-                  `Pay ${price.display} & Renew`
-                )}
+                {`Pay ${price.display} & Renew`}
               </Button>
             </Paper>
           )}
@@ -634,20 +631,20 @@ export default function Subscription() {
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setCancelOpen(false)} disabled={cancelling}>
+          <Button
+            variant="ghost"
+            onClick={() => setCancelOpen(false)}
+            disabled={cancelling}
+          >
             Keep Subscription
           </Button>
           <Button
-            variant="contained"
-            color="error"
+            variant="danger"
             onClick={handleCancel}
             disabled={cancelling}
+            loading={cancelling}
           >
-            {cancelling ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : (
-              "Cancel Subscription"
-            )}
+            Cancel Subscription
           </Button>
         </DialogActions>
       </Dialog>

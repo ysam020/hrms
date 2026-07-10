@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Chip from "@mui/material/Chip";
 import BusinessIcon from "@mui/icons-material/Business";
@@ -111,11 +111,11 @@ export default function InvitePage() {
             </Box>
 
             <Button
-              variant="contained"
+              variant="primary"
               fullWidth
               size="large"
               onClick={handleAccept}
-              sx={{ mt: 1 }}
+              style={{ marginTop: 8 }}
             >
               Accept with Google
             </Button>

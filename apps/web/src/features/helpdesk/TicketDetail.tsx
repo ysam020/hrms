@@ -9,7 +9,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -127,10 +127,11 @@ function TicketDetail() {
   return (
     <Box sx={{ p: 2, maxWidth: 900, mx: "auto" }}>
       <Button
-        startIcon={<ArrowBackIcon />}
+        variant="ghost"
+        icon={<ArrowBackIcon />}
         size="small"
         onClick={() => navigate("/helpdesk")}
-        sx={{ mb: 2, textTransform: "none" }}
+        style={{ marginBottom: 16 }}
       >
         Back to Tickets
       </Button>
@@ -262,10 +263,9 @@ function TicketDetail() {
             </TextField>
             <Button
               size="small"
-              variant="contained"
+              variant="primary"
               onClick={handleStatusUpdate}
               disabled={submitting || editStatus === ticket.status}
-              sx={{ borderRadius: "8px", textTransform: "none" }}
             >
               Update
             </Button>
@@ -400,11 +400,11 @@ function TicketDetail() {
                 />
               )}
               <Button
-                variant="contained"
+                variant="primary"
                 size="small"
                 onClick={handleAddComment}
                 disabled={submitting || !comment.trim()}
-                sx={{ borderRadius: "8px", textTransform: "none", ml: "auto" }}
+                style={{ marginLeft: "auto" }}
               >
                 {submitting ? "Adding…" : "Add Comment"}
               </Button>

@@ -19,7 +19,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
-import Button from "@mui/material/Button";
+import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -572,6 +572,7 @@ function AssetIssues() {
         </DialogContent>
         <DialogActions>
           <Button
+            variant="ghost"
             onClick={() => {
               setOpenReport(false);
               setReportForm({
@@ -588,7 +589,7 @@ function AssetIssues() {
           </Button>
           <Button
             onClick={handleReport}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={
               submitting ||
@@ -646,6 +647,7 @@ function AssetIssues() {
         </DialogContent>
         <DialogActions>
           <Button
+            variant="ghost"
             onClick={() => {
               setActionDialog(null);
               setActionNotes("");
@@ -656,7 +658,7 @@ function AssetIssues() {
           </Button>
           <Button
             onClick={handleAction}
-            variant="contained"
+            variant="primary"
             size="small"
             disabled={actioning}
           >

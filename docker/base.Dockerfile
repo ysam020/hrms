@@ -52,6 +52,12 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 ENV AWS_SHARED_CREDENTIALS_FILE=/app/.aws/credentials
 ENV AWS_CONFIG_FILE=/app/.aws/config
+# Interview/attendance times are stored as naive "YYYYMMDDTHHmmss" strings
+# with no timezone marker (see recruitment-service's parseInterviewTime) —
+# every comparison against the server's own clock only lines up if the
+# container's local time matches the tenant's. node:20-alpine defaults to
+# UTC otherwise, which silently shifts every such deadline by the offset.
+ENV TZ=Asia/Kolkata
 USER nodejs
 
 WORKDIR /app

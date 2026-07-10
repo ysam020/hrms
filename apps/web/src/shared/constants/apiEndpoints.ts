@@ -88,6 +88,8 @@ const JOB_OPENINGS = {
   VIEW_JOB_OPENINGS: "/view-job-openings",
   DELETE_JOB_OPENING: (id: string | number) => `/delete-job-opening/${id}`,
   GET_ALL_JOB_OPENINGS: (slug: string) => `/public/careers/${slug}`,
+  GET_PUBLIC_JOB_OPENING: (slug: string, id: string) =>
+    `/public/careers/${slug}/job/${id}`,
   GET_JOB_TITLES: "/get-job-titles",
   APPLY_FOR_JOB: (slug: string) => `/apply-for-job/${slug}`,
   HIRE_CANDIDATE: "/hire-candidate",
@@ -96,7 +98,10 @@ const JOB_OPENINGS = {
   SCHEDULE_INTERVIEW: "/schedule-interview",
   RESCHEDULE_INTERVIEW: "/reschedule-interview",
   REASSIGN_INTERVIEWER: "/reassign-interviewer",
+  GET_INTERVIEWER_LIST: "/get-interviewer-list",
   JOB_OPENINGS_INSIGHTS: "/job-openings-insights",
+  LIST_DESIGNATIONS: "/designations",
+  CREATE_DESIGNATION: "/designations",
 };
 
 const RESIGNATION = {
@@ -248,11 +253,7 @@ const ORG_SETTINGS = {
   CANCEL_PENDING_ORG_SETTINGS: (id: string) => `/tenant-settings/pending/${id}`,
 };
 
-const BRANCHES_SHIFTS = {
-  LIST_BRANCHES: "/branches",
-  CREATE_BRANCH: "/branches",
-  UPDATE_BRANCH: (id: string) => `/branches/${id}`,
-  DELETE_BRANCH: (id: string) => `/branches/${id}`,
+const SHIFTS = {
   LIST_SHIFTS: "/shifts",
   CREATE_SHIFT: "/shifts",
   UPDATE_SHIFT: (id: string) => `/shifts/${id}`,
@@ -376,7 +377,7 @@ export const API_ENDPOINTS = {
   ...AI_INSIGHTS,
   ...DEVELOPER,
   ...ORG_SETTINGS,
-  ...BRANCHES_SHIFTS,
+  ...SHIFTS,
   ...EXIT_POLICY,
   ...RECRUITMENT_PIPELINE,
   ...PAYROLL_COMPONENTS,
