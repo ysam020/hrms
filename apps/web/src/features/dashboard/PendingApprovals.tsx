@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -7,22 +7,96 @@ import Avatar from "@mui/material/Avatar";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 import { useNavigate } from "react-router-dom";
-import { useDashboard } from "@web/app/providers/DashboardContext";
+import useFetchData from "@web/shared/hooks/useFetchData";
+import useSocketEvent from "@web/shared/hooks/useSocketEvent";
+import { API_ENDPOINTS } from "@web/shared/constants";
 
+dayjs.extend(relativeTime);
+
+interface PendingApprovalItem {
+  instanceId: string;
+  module: string;
+  username?: string;
+  requestedByName: string;
+  createdAt: string;
+  summary: string;
+}
+
+const MODULE_LABELS: Record<string, string> = {
+  leave: "Leave",
+  resignation: "Resignation",
+  overtime: "Overtime",
+  wfh: "WFH",
+  salary_advance: "Salary Advance",
+  kyc: "KYC",
+};
+
+function initialsOf(name: string): string {
+  return name
+    .split(/[.\s]+/)
+    .map((p) => p[0]?.toUpperCase())
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("");
+}
+
+// Merges two sources: GET /approvals/pending (the chain-engine-backed
+// modules — leave, resignation, overtime, wfh, salary advance) and GET
+// /kyc-approvals/pending (KYC submissions awaiting approval, and KYC
+// edit-access requests, neither of which are chain-engine instances since
+// several people can be eligible to act on either — see submitKyc.ts /
+// allowKycEdit.ts). KYC items live-update via socket instead of polling:
+// kyc-submitted/kyc-edit-requested add one, kyc-edit-allowed/
+// kyc-edit-resolved remove one (the latter fires for every OTHER eligible
+// approver the moment one of them acts, so a stale, already-handled item
+// never lingers in someone else's list).
 function PendingApprovals() {
   const navigate = useNavigate();
-  const { data, loading } = useDashboard();
-  const items = Array.isArray(data.pendingLeaves) ? data.pendingLeaves : [];
-  const isLoading = loading.pendingLeaves;
+  const {
+    data: approvals,
+    loading: loadingApprovals,
+    refetch: refetchApprovals,
+  } = useFetchData<PendingApprovalItem[]>(
+    API_ENDPOINTS.GET_PENDING_APPROVALS,
+    "get",
+    [],
+  );
+  const {
+    data: kycRequests,
+    loading: loadingKyc,
+    refetch: refetchKyc,
+  } = useFetchData<PendingApprovalItem[]>(
+    API_ENDPOINTS.GET_PENDING_KYC_APPROVALS,
+    "get",
+    [],
+  );
 
-  // Map leave type codes to readable labels
-  const leaveTypeLabel = (type) => {
-    if (!type) return "Leave";
-    if (type === "PL" || type === "pl") return "Paid Leave";
-    if (type === "LWP" || type === "lwp") return "Unpaid (LWP)";
-    return type;
-  };
+  // Every event that can add or resolve a pending item — leave applied,
+  // resignation submitted, KYC edit requested/allowed/resolved, etc. —
+  // already goes through notificationWorker.ts, which emits the generic
+  // "notification" socket event to the relevant recipients (the same
+  // channel the bell/toast system relies on). Reusing it here means this
+  // widget updates live with no polling and no dedicated push event per
+  // module.
+  const refetchBoth = useCallback(() => {
+    refetchApprovals?.();
+    refetchKyc?.();
+  }, [refetchApprovals, refetchKyc]);
+  useSocketEvent("notification", refetchBoth);
+
+  const isLoading = loadingApprovals || loadingKyc;
+  // Each source list is already sorted newest-first server-side, but
+  // merging the two doesn't interleave them by date on its own.
+  const items = [
+    ...(Array.isArray(approvals) ? approvals : []),
+    ...(Array.isArray(kycRequests) ? kycRequests : []),
+  ].sort(
+    (a, b) =>
+      new Date(b.createdAt ?? 0).getTime() -
+      new Date(a.createdAt ?? 0).getTime(),
+  );
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -104,33 +178,26 @@ function PendingApprovals() {
           </Box>
         ) : (
           items.slice(0, 5).map((item, i) => {
-            const displayName = item.username || item.userId || "?";
-            const initials = displayName
-              .split(".")
-              .map((p) => p[0]?.toUpperCase())
-              .join("")
-              .slice(0, 2);
-
-            const from = item.from || item.startDate || "";
-            const to = item.to || item.endDate || "";
-            const days =
-              from && to
-                ? dayjs(to).diff(dayjs(from), "day") + 1
-                : item.days || item.totalDays;
+            const displayName = item.requestedByName || "?";
+            const initials = initialsOf(displayName);
+            const targetPath =
+              item.module === "kyc" && item.username
+                ? `/view-kyc/${item.username}`
+                : "/approvals";
 
             return (
               <Box
-                key={i}
-                onClick={() => navigate("/attendance")}
+                key={item.instanceId ?? i}
+                onClick={() => navigate(targetPath)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    navigate("/attendance");
+                    navigate(targetPath);
                   }
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Pending leave approval for ${displayName}`}
+                aria-label={`Pending approval: ${item.summary}`}
                 sx={{
                   px: 1.5,
                   py: 0.8,
@@ -169,26 +236,22 @@ function PendingApprovals() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {displayName}
+                    {item.summary || displayName}
                   </Typography>
                   <Typography
                     variant="caption"
                     sx={{ color: "text.secondary", fontSize: "0.67rem" }}
                   >
-                    {from ? dayjs(from).format("DD MMM") : ""}
-                    {to && from !== to
-                      ? ` – ${dayjs(to).format("DD MMM")}`
-                      : ""}
-                    {days ? ` · ${days}d` : ""}
-                    {item.leaveType
-                      ? ` · ${leaveTypeLabel(item.leaveType)}`
+                    {displayName}
+                    {item.createdAt
+                      ? ` · ${dayjs(item.createdAt).fromNow()}`
                       : ""}
                   </Typography>
                 </Box>
 
                 <Chip
                   size="small"
-                  label="Pending"
+                  label={MODULE_LABELS[item.module] ?? item.module ?? "Pending"}
                   color="warning"
                   variant="outlined"
                   sx={{

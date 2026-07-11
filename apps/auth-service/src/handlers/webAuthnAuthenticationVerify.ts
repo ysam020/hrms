@@ -112,9 +112,42 @@ export const webAuthnAuthenticationVerify = async (
     });
 
     // Resolve tenant membership for token
-    const membership = await prisma.tenantMembership.findFirst({
+    let membership = await prisma.tenantMembership.findFirst({
       where: { userId: user.id },
     });
+
+    if (!membership && user.tenantId) {
+      // User.tenantId is stamped but the membership row is missing
+      // (e.g. left behind by a raw data migration) — self-heal instead
+      // of sending an already-onboarded user back to org setup.
+      const staleTenant = await prisma.tenant.findUnique({
+        where: { id: user.tenantId },
+      });
+      if (staleTenant?.isActive) {
+        const inferredRole = user.isSuperUser ? "owner" : "employee";
+        membership = await prisma.tenantMembership.create({
+          data: {
+            tenantId: staleTenant.id,
+            userId: user.id,
+            role: inferredRole,
+          },
+        });
+        logger.warn(
+          "Self-healed missing TenantMembership for user with stamped tenantId",
+          { userId: user.id, tenantId: staleTenant.id, role: inferredRole },
+        );
+      } else {
+        logger.warn(
+          "User.tenantId points at a missing/inactive tenant — clearing stale reference",
+          { userId: user.id, tenantId: user.tenantId },
+        );
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { tenantId: null },
+        });
+      }
+    }
+
     const tenantRecord = membership
       ? await prisma.tenant.findUnique({
           where: { id: membership.tenantId },

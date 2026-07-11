@@ -456,6 +456,15 @@ export async function listPendingApprovals(req: AuthRequest, res: Response) {
       };
     });
 
+    // Latest first — the underlying step/instance queries have no inherent
+    // recency order (Mongo natural order, not guaranteed to be creation
+    // order), so this needs to be explicit.
+    data.sort(
+      (a, b) =>
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime(),
+    );
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (error: unknown) {
     logger.error("listPendingApprovals error:", { error });

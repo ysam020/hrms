@@ -27,6 +27,8 @@ const STATUS_OPTIONS = [
   { label: "Pending", value: "Pending" },
   { label: "Approved", value: "Approved" },
   { label: "Rejected", value: "Rejected" },
+  { label: "Revision Requested", value: "Revision Requested" },
+  { label: "Edit Requested", value: "Edit Requested" },
 ];
 
 function ViewKycList() {
@@ -45,7 +47,7 @@ function ViewKycList() {
         const search = searchRef.current;
         let params = search ? `&search=${encodeURIComponent(search)}` : "";
         if (statusFilter && statusFilter !== "All") {
-          params += `&status=${statusFilter}`;
+          params += `&status=${encodeURIComponent(statusFilter)}`;
         }
         const url = API_ENDPOINTS.VIEW_ALL_KYCS(page, limit, params);
         const response = await apiClient(url);
@@ -125,6 +127,22 @@ function ViewKycList() {
             ? "rgba(251, 191, 36, 0.15)"
             : "rgba(251, 191, 36, 0.2)",
         label: "Pending",
+      },
+      "revision requested": {
+        color: theme === "light" ? "#9333ea" : "#c084fc",
+        bg:
+          theme === "light"
+            ? "rgba(147, 51, 234, 0.12)"
+            : "rgba(192, 132, 252, 0.2)",
+        label: "Revision Requested",
+      },
+      "edit requested": {
+        color: theme === "light" ? "#0284c7" : "#38bdf8",
+        bg:
+          theme === "light"
+            ? "rgba(2, 132, 199, 0.12)"
+            : "rgba(56, 189, 248, 0.2)",
+        label: "Edit Requested",
       },
     };
 

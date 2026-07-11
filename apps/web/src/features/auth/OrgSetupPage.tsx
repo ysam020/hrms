@@ -159,7 +159,7 @@ export default function OrgSetupPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setAlert } = useContext(AlertContext);
-  const { setUser, user } = useContext(UserContext);
+  const { setUser, user, handleLogout } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
 
   const [step, setStep] = useState<number>(
@@ -509,6 +509,12 @@ export default function OrgSetupPage() {
           className="login-right-col-inner-container"
           style={{ maxHeight: "90vh", overflowY: "auto" }}
         >
+          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+            <Button variant="ghost" size="small" onClick={handleLogout}>
+              Log out
+            </Button>
+          </Box>
+
           {/* Logo */}
           <div className="logo-section">
             <div className="logo-container">

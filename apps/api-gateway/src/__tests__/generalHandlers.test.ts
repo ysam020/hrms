@@ -11,6 +11,7 @@ import {
   editCalendarEvent,
   deleteCalendarEvent,
   getPresignedUrl,
+  getFileViewUrl,
 } from "../handlers/general";
 
 jest.mock("@hrms/db", () => {
@@ -44,6 +45,7 @@ jest.mock("@hrms/common", () => ({
     SUCCESS: 200,
     CREATED: 201,
     BAD_REQUEST: 400,
+    FORBIDDEN: 403,
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
   },
@@ -65,11 +67,13 @@ jest.mock("@hrms/cache", () => ({
 jest.mock("../config/s3", () => ({
   s3Client: {},
   S3_BUCKET: "test-bucket",
+  S3_REGION: "test-region",
   s3FileUrl: jest.fn((key: string) => `https://s3.example.com/${key}`),
 }));
 
 jest.mock("@aws-sdk/client-s3", () => ({
   PutObjectCommand: jest.fn().mockImplementation((opts: any) => opts),
+  GetObjectCommand: jest.fn().mockImplementation((opts: any) => opts),
 }));
 
 jest.mock("@aws-sdk/s3-request-presigner", () => ({
@@ -810,6 +814,152 @@ describe("generalHandlers", () => {
             folder: "employees",
             username: "alice",
           },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("getFileViewUrl", () => {
+    const kycUrl =
+      "https://test-bucket.s3.test-region.amazonaws.com/employee_kyc/aadhar_photo_front/alice/photo_1.jpg";
+
+    it("returns BAD_REQUEST when fileUrl is missing", async () => {
+      const res = makeRes();
+      await getFileViewUrl(makeReq({ body: {} }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST when fileUrl doesn't belong to this bucket", async () => {
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({ body: { fileUrl: "https://evil.example.com/secret" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
+    it("returns FORBIDDEN for a key outside employee_kyc/", async () => {
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({
+          body: {
+            fileUrl:
+              "https://test-bucket.s3.test-region.amazonaws.com/other-folder/alice/file.jpg",
+          },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+    });
+
+    it("returns FORBIDDEN for a path-traversal attempt", async () => {
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({
+          body: {
+            fileUrl: `https://test-bucket.s3.test-region.amazonaws.com/employee_kyc/../secrets/file.jpg`,
+          },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+    });
+
+    it("allows the file's owner to view it", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        username: "alice",
+        isSuperUser: false,
+      });
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({
+          user: { userId: "alice-id", tenantRole: "employee" },
+          body: { fileUrl: kycUrl },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: expect.objectContaining({ url: expect.any(String) }),
+        }),
+      );
+    });
+
+    it("allows a privileged HR user to view someone else's KYC file", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        username: "hr-bob",
+        isSuperUser: false,
+      });
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({
+          user: { userId: "hr-id", tenantRole: "hr" },
+          body: { fileUrl: kycUrl },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns FORBIDDEN when a non-owner, non-privileged caller tries to view someone else's file", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        username: "mallory",
+        isSuperUser: false,
+      });
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({
+          user: { userId: "mallory-id", tenantRole: "employee" },
+          body: { fileUrl: kycUrl },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on S3 error", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        username: "alice",
+        isSuperUser: false,
+      });
+      mockGetSignedUrl.mockRejectedValueOnce(new Error("S3 error"));
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({
+          user: { userId: "alice-id", tenantRole: "employee" },
+          body: { fileUrl: kycUrl },
         }),
         res,
       );

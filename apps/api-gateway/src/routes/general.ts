@@ -26,3 +26,4 @@ generalRouter.delete(
   h.deleteCalendarEvent,
 );
 generalRouter.post("/upload/presigned-url", authenticate, h.getPresignedUrl);
+generalRouter.post("/upload/view-url", authenticate, h.getFileViewUrl);

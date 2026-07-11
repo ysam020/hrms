@@ -7,9 +7,9 @@ import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { randomBytes } from "crypto";
 import path from "path";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3Client, S3_BUCKET, s3FileUrl } from "../config/s3";
+import { s3Client, S3_BUCKET, S3_REGION, s3FileUrl } from "../config/s3";
 import { NOTIFICATION_PRUNE_LIMIT } from "../constants";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -626,6 +626,70 @@ export async function getPresignedUrl(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("presigned-url error:", { error });
+    return handleError(res, error);
+  }
+}
+
+const S3_URL_PREFIX = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/`;
+
+/**
+ * POST /upload/view-url
+ * The bucket has no public read access (uploads include sensitive KYC
+ * documents — aadhar, PAN, bank proofs), so the raw fileUrl saved on an
+ * employee record 403s if loaded directly. Every preview/view goes through
+ * here for a short-lived signed GET URL instead.
+ */
+export async function getFileViewUrl(req: AuthRequest, res: Response) {
+  try {
+    const { fileUrl } = req.body as { fileUrl?: string };
+    if (
+      !fileUrl ||
+      typeof fileUrl !== "string" ||
+      !fileUrl.startsWith(S3_URL_PREFIX)
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "A valid fileUrl is required",
+      });
+    }
+
+    const key = decodeURIComponent(fileUrl.slice(S3_URL_PREFIX.length));
+    // Restrict this endpoint to KYC uploads only, and reject any traversal
+    // attempt — an unrestricted key would let any authenticated caller read
+    // arbitrary objects in the bucket via a crafted fileUrl.
+    if (!key.startsWith("employee_kyc/") || key.includes("..")) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Not allowed",
+      });
+    }
+
+    // employee_kyc/{field}/{username}/{file} or employee_kyc/{username}/{file}
+    const segments = key.split("/");
+    const ownerUsername = segments.length >= 4 ? segments[2] : segments[1];
+
+    const { userId, tenantRole } = req.user!;
+    const caller = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true, isSuperUser: true },
+    });
+    const isOwner = !!caller && caller.username === ownerUsername;
+    const isPrivileged =
+      caller?.isSuperUser ||
+      ["owner", "admin", "hr"].includes(tenantRole ?? "");
+    if (!isOwner && !isPrivileged) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You don't have permission to view this file.",
+      });
+    }
+
+    const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+    const url = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Pre-signed view URL generated",
+      data: { url },
+    });
+  } catch (error: unknown) {
+    logger.error("file-view-url error:", { error });
     return handleError(res, error);
   }
 }

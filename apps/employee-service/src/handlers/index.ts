@@ -6,7 +6,9 @@ import { listEmployees } from "./listEmployees";
 import { submitKyc } from "./submitKyc";
 import { getKycStatus } from "./getKycStatus";
 import { approveKyc } from "./approveKyc";
-import { rejectKyc } from "./rejectKyc";
+import { requestKycRevision } from "./requestKycRevision";
+import { requestKycEditAccess } from "./requestKycEditAccess";
+import { allowKycEdit } from "./allowKycEdit";
 
 export const handlers = {
   GetEmployee: getEmployee,
@@ -17,5 +19,7 @@ export const handlers = {
   SubmitKyc: submitKyc,
   GetKycStatus: getKycStatus,
   ApproveKyc: approveKyc,
-  RejectKyc: rejectKyc,
+  RequestKycRevision: requestKycRevision,
+  RequestKycEditAccess: requestKycEditAccess,
+  AllowKycEdit: allowKycEdit,
 };

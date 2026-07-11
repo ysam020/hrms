@@ -102,6 +102,13 @@ describe("listUsers", () => {
     expect(user.role).toBe("HR");
   });
 
+  it('includes educationCertificates as an array — a `repeated` proto field that throws "is not iterable" during response serialization if left undefined', async () => {
+    const cb = makeCallback();
+    await listUsers(makeCall({}), cb);
+    const user = cb.mock.calls[0][1].data[0];
+    expect(Array.isArray(user.educationCertificates)).toBe(true);
+  });
+
   it("computes correct totalPages", async () => {
     mockCount.mockResolvedValue(25);
     const cb = makeCallback();

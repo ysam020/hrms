@@ -9,11 +9,7 @@ import {
 import { UserContext } from "./UserContext";
 import { useApiClient } from "@web/shared/hooks/useApiClient";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
-
-// Approval-chain resolution has no dedicated push event (unlike chat's
-// socket-driven unread counts), so the badge is kept fresh by polling plus
-// an explicit refetch from ApprovalsInbox right after an approve/reject.
-const POLL_INTERVAL_MS = 60_000;
+import useSocketEvent from "@web/shared/hooks/useSocketEvent";
 
 export const ApprovalsBadgeContext = createContext<{
   pendingApprovalsCount: number;
@@ -28,20 +24,39 @@ export function ApprovalsBadgeProvider({ children }: { children: ReactNode }) {
   const fetchPendingCount = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const res = await api.get(API_ENDPOINTS.GET_PENDING_APPROVALS);
-      const items = res.data?.data;
-      setPendingApprovalsCount(Array.isArray(items) ? items.length : 0);
+      // KYC submissions/edit-access requests aren't chain-engine instances
+      // (see submitKyc.ts / allowKycEdit.ts), so they're a separate
+      // endpoint — same split the dashboard's PendingApprovals widget
+      // merges, kept in sync here so the sidebar badge count actually
+      // matches what that widget shows.
+      const [approvalsRes, kycRes] = await Promise.all([
+        api.get(API_ENDPOINTS.GET_PENDING_APPROVALS),
+        api.get(API_ENDPOINTS.GET_PENDING_KYC_APPROVALS),
+      ]);
+      const approvals = approvalsRes.data?.data;
+      const kycRequests = kycRes.data?.data;
+      const approvalsCount = Array.isArray(approvals) ? approvals.length : 0;
+      const kycCount = Array.isArray(kycRequests) ? kycRequests.length : 0;
+      setPendingApprovalsCount(approvalsCount + kycCount);
     } catch {
-      // silent — badge just keeps its last known count until the next poll
+      // silent — badge just keeps its last known count until the next event
     }
   }, [user?.id, api]);
 
   useEffect(() => {
     if (!user?.id) return;
     fetchPendingCount();
-    const intervalId = setInterval(fetchPendingCount, POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
   }, [user?.id, fetchPendingCount]);
+
+  // Every event that can add or resolve a pending approval — leave applied,
+  // resignation submitted, KYC edit requested/allowed, etc. — already goes
+  // through notificationWorker.ts, which emits the generic "notification"
+  // socket event to the relevant recipients (the same channel the bell/toast
+  // system already relies on, see useNotifications.tsx). Reusing it here
+  // means the badge updates live with no dedicated push event of its own and
+  // no polling — the count is only ever as stale as the last relevant
+  // notification this user actually received.
+  useSocketEvent("notification", fetchPendingCount);
 
   return (
     <ApprovalsBadgeContext.Provider

@@ -42,10 +42,6 @@
       "persistent": true
     },
 
-    "db:seed": {
-      "cache": false
-    },
-
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["src/**/*.ts", "src/__tests__/**/*.ts", "jest.config.*"],

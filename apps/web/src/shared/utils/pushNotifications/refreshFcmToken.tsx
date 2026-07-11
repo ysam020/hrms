@@ -8,15 +8,17 @@ export const refreshFcmToken = async (
   fcmTokens: any[] = [],
 ) => {
   try {
-    const { getToken, messaging } = await getFirebaseMessaging();
     const permissionStatus = await navigator.permissions.query({
       name: "notifications",
     });
 
     if (permissionStatus.state === "granted") {
-      const currentToken = await getToken(messaging, {
-        vapidKey: import.meta.env.VITE_VAPID_KEY,
-      });
+      // getFirebaseMessaging() already registers the service worker and
+      // derives the token with the correct serviceWorkerRegistration — a
+      // second, differently-configured getToken() call here (missing
+      // serviceWorkerRegistration) used to silently produce a token that
+      // didn't match what the service worker was actually subscribed with.
+      const { token: currentToken } = await getFirebaseMessaging();
 
       if (currentToken) {
         const { deviceFingerprint, deviceInfo } =

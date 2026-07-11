@@ -19,6 +19,8 @@ export function startNotificationWorker(): Worker {
         eventType = "general",
         sendPushNotification = true,
         priority = "medium",
+        socketEvent,
+        socketPayload,
       } = job.data;
 
       // Resolve DB recipients: prefer explicit user IDs, else resolve from usernames
@@ -60,23 +62,30 @@ export function startNotificationWorker(): Worker {
         include: { recipients: true },
       });
 
-      // Deliver via WebSocket to connected clients through the API gateway
+      // Deliver via WebSocket to connected clients through the API gateway.
+      // sendToUser()/the socket registry are keyed by userId, not username —
+      // resolvedRecipients above already is that userId list (either passed
+      // directly as `recipients`, or resolved from pushTargets/targetUser),
+      // so reuse it here instead of re-deriving anything from usernames.
       const wsPublisher = getNotificationPublisher();
-      const wsTargets =
-        pushTargets.length > 0
-          ? pushTargets
-          : targetUser
-            ? Array.isArray(targetUser)
-              ? targetUser
-              : [targetUser]
-            : null;
 
-      if (wsTargets) {
+      if (resolvedRecipients.length > 0) {
         await Promise.all(
-          wsTargets.map((username) =>
-            wsPublisher.sendToUser(username, "notification", notification),
+          resolvedRecipients.map((userId) =>
+            wsPublisher.sendToUser(userId, "notification", notification),
           ),
         );
+        if (socketEvent) {
+          await Promise.all(
+            resolvedRecipients.map((userId) =>
+              wsPublisher.sendToUser(
+                userId,
+                socketEvent,
+                socketPayload ?? notification,
+              ),
+            ),
+          );
+        }
       } else {
         await wsPublisher.sendNotification(notification);
       }

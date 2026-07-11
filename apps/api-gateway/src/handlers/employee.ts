@@ -221,6 +221,35 @@ export async function employeeInsights(_req: Request, res: Response) {
   }
 }
 
+/**
+ * Owners/admins/HR and superusers can always manage KYC for anyone; anyone
+ * else needs the specific granular BasicKYCDetails permission for the
+ * action, matching the "module:action:scope" strings the permissions editor
+ * writes (see apps/web/.../PermissionBitmask.tsx) — checked directly against
+ * the stored string array rather than via a scope-unaware substring match.
+ */
+// Once a KYC has been decided (Approved) or is mid-review (Edit Requested,
+// awaiting HR's grant), it's not directly editable — the employee must go
+// through requestKycEditAccess and have HR allowKycEdit it back to Pending
+// first. "Rejected" is a legacy terminal status (the reject action itself
+// has been removed) with no further path.
+const UNEDITABLE_KYC_STATUSES = ["Approved", "Rejected", "Edit Requested"];
+
+async function canManageKyc(
+  req: AuthRequest,
+  action: "edit_kyc" | "approve_kyc" | "request_kyc_revision",
+): Promise<boolean> {
+  const { userId, tenantRole } = req.user!;
+  if (["owner", "admin", "hr"].includes(tenantRole ?? "")) return true;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isSuperUser: true, permissions: true },
+  });
+  if (user?.isSuperUser) return true;
+  const permissions = (user?.permissions as string[]) ?? [];
+  return permissions.includes(`BasicKYCDetails:${action}:all`);
+}
+
 function toKycGrpcPayload(body: Record<string, any>) {
   return {
     employeePhoto: body.employee_photo,
@@ -268,7 +297,7 @@ export async function completeKyc(req: Request, res: Response) {
   }
 }
 
-export async function editKyc(req: Request, res: Response) {
+export async function editKyc(req: AuthRequest, res: Response) {
   try {
     const { username } = req.body;
     if (!username) {
@@ -276,8 +305,48 @@ export async function editKyc(req: Request, res: Response) {
         message: "username is required",
       });
     }
+    const targetUser = await prisma.user.findUnique({
+      where: { username },
+      select: { id: true, kyc_approval: true, kyc_edit_window: true },
+    });
+    if (!targetUser) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Employee not found",
+      });
+    }
+    // A granted edit-access request allows exactly one edit — submitKyc
+    // flips kyc_edit_window to "closed" the moment that edit lands, so a
+    // still-Pending record can be uneditable again without ever leaving
+    // the Pending status (which onboarding relies on staying editable).
+    const editWindowClosed =
+      targetUser.kyc_approval === "Pending" &&
+      targetUser.kyc_edit_window === "closed";
+    if (
+      UNEDITABLE_KYC_STATUSES.includes(targetUser.kyc_approval ?? "") ||
+      editWindowClosed
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          targetUser.kyc_approval === "Edit Requested"
+            ? "Waiting for approver..."
+            : editWindowClosed
+              ? "You've already made your allowed edit. Request edit access again to make further changes."
+              : "This KYC has already been finalized. Request edit access to make changes.",
+      });
+    }
+    const isSelf = targetUser.id === req.user!.userId;
+    if (!isSelf && !(await canManageKyc(req, "edit_kyc"))) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You can only edit your own KYC details.",
+      });
+    }
     const response = await grpcCall(employeeClient, "submitKyc", {
-      username,
+      // Passing userId (like completeKyc always does) is the signal
+      // submitKyc uses to tell "the employee is resubmitting their own KYC"
+      // apart from "HR is correcting a field on someone else's record" — the
+      // latter must not silently discard an existing Revision Requested
+      // decision. See submitKyc.ts's shouldResetToPending.
+      ...(isSelf ? { userId: targetUser.id } : { username }),
       ...toKycGrpcPayload(req.body),
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
@@ -287,9 +356,9 @@ export async function editKyc(req: Request, res: Response) {
   }
 }
 
-export async function kycApproval(req: Request, res: Response) {
+export async function kycApproval(req: AuthRequest, res: Response) {
   try {
-    const { username, kyc_approval } = req.body;
+    const { username, kyc_approval, field_issues } = req.body;
     if (!username)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "username is required",
@@ -298,6 +367,19 @@ export async function kycApproval(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "kyc_approval is required",
       });
+    if (!["Approved", "Revision Requested"].includes(kyc_approval)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: 'kyc_approval must be "Approved" or "Revision Requested"',
+      });
+    }
+
+    const isApproval = kyc_approval === "Approved";
+    const action = isApproval ? "approve_kyc" : "request_kyc_revision";
+    if (!(await canManageKyc(req, action))) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: `You don't have permission to ${action.replace(/_/g, " ")}.`,
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { username },
@@ -308,13 +390,166 @@ export async function kycApproval(req: Request, res: Response) {
         message: "User not found",
       });
 
-    const method = kyc_approval === "Approved" ? "approveKyc" : "rejectKyc";
-    const response = await grpcCall(employeeClient, method, {
+    if (!isApproval) {
+      const response = await grpcCall(employeeClient, "requestKycRevision", {
+        employeeId: user.id,
+        fieldIssuesJson: JSON.stringify(field_issues ?? {}),
+      });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    }
+
+    const response = await grpcCall(employeeClient, "approveKyc", {
       employeeId: user.id,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
     logger.error("kycApproval error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/** POST /request-kyc-edit-access — self-only: ask HR to reopen an approved KYC. */
+export async function requestKycEditAccess(req: AuthRequest, res: Response) {
+  try {
+    const { reason } = req.body;
+    const response = await grpcCall(employeeClient, "requestKycEditAccess", {
+      userId: req.user!.userId,
+      reason,
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: unknown) {
+    logger.error("requestKycEditAccess error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/** PUT /allow-kyc-edit — HR grants a pending edit-access request. */
+export async function allowKycEdit(req: AuthRequest, res: Response) {
+  try {
+    const { username } = req.body;
+    if (!username) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "username is required",
+      });
+    }
+    if (!(await canManageKyc(req, "request_kyc_revision"))) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You don't have permission to allow KYC edits.",
+      });
+    }
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (!user)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "User not found",
+      });
+
+    const response = await grpcCall(employeeClient, "allowKycEdit", {
+      employeeId: user.id,
+      actorUserId: req.user!.userId,
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: unknown) {
+    logger.error("allowKycEdit error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * GET /kyc-approvals/pending — feeds the dashboard's Pending Approvals
+ * widget, the sidebar badge, and the /approvals inbox, alongside
+ * GET /approvals/pending. Two independent categories, each gated by its own
+ * permission (a caller can hold one without the other):
+ *  - "Pending": a fresh/resubmitted KYC awaiting approve_kyc's decision
+ *    (see submitKyc.ts).
+ *  - "Edit Requested": an already-Approved KYC's edit-access request
+ *    awaiting request_kyc_revision's grant (see allowKycEdit.ts).
+ * Neither is modeled through the approval-chain engine (any of several
+ * eligible approvers can act, not a single resolved approver per step), so
+ * this stays a lightweight, purpose-built query rather than a chain
+ * instance. A caller with neither permission gets an empty list rather
+ * than 403, since every logged-in user's dashboard/badge/inbox calls this
+ * unconditionally.
+ */
+export async function listPendingKycActions(req: AuthRequest, res: Response) {
+  try {
+    const [canApprove, canGrantEdit] = await Promise.all([
+      canManageKyc(req, "approve_kyc"),
+      canManageKyc(req, "request_kyc_revision"),
+    ]);
+    if (!canApprove && !canGrantEdit) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
+    }
+
+    const [pendingSubmissions, editRequests] = await Promise.all([
+      canApprove
+        ? prisma.user.findMany({
+            where: { kyc_approval: "Pending" },
+            select: {
+              id: true,
+              username: true,
+              first_name: true,
+              last_name: true,
+              kyc_date: true,
+            },
+            orderBy: { kyc_date: "desc" },
+          })
+        : Promise.resolve([]),
+      canGrantEdit
+        ? prisma.user.findMany({
+            where: { kyc_approval: "Edit Requested" },
+            select: {
+              id: true,
+              username: true,
+              first_name: true,
+              last_name: true,
+              kyc_edit_request_reason: true,
+              kyc_edit_requested_at: true,
+            },
+            orderBy: { kyc_edit_requested_at: "desc" },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const data = [
+      ...pendingSubmissions.map((u) => ({
+        instanceId: `kyc:${u.id}`,
+        module: "kyc",
+        kycAction: "approve" as const,
+        username: u.username,
+        requestedByName:
+          [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username,
+        createdAt: u.kyc_date,
+        summary: `${u.username} submitted their KYC form for approval`,
+      })),
+      ...editRequests.map((u) => ({
+        instanceId: `kyc:${u.id}`,
+        module: "kyc",
+        kycAction: "allow_edit" as const,
+        username: u.username,
+        requestedByName:
+          [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username,
+        createdAt: u.kyc_edit_requested_at,
+        summary: `${u.username} requested to edit their approved KYC${
+          u.kyc_edit_request_reason ? `: ${u.kyc_edit_request_reason}` : ""
+        }`,
+      })),
+    ];
+
+    // Latest first — each category is independently sorted above, but
+    // concatenating "Pending" submissions and "Edit Requested" items
+    // doesn't interleave the two by date on its own.
+    data.sort(
+      (a, b) =>
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime(),
+    );
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
+  } catch (error: unknown) {
+    logger.error("listPendingKycActions error:", { error });
     return handleError(res, error);
   }
 }

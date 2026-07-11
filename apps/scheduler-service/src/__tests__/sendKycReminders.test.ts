@@ -4,6 +4,7 @@ import { sendKycReminders } from "../jobs/sendKycReminders";
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findMany: jest.fn() },
+    tenant: { findMany: jest.fn() },
   };
   return {
     prisma: _db,
@@ -23,15 +24,9 @@ jest.mock("@hrms/logger", () => ({
 import { sendEmail } from "@hrms/common";
 
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
+const mockTenantFindMany = prisma.tenant.findMany as jest.Mock;
 const mockSendEmail = sendEmail as jest.Mock;
 
-const hrUser = {
-  username: "hr1",
-  email: null,
-  first_name: "HR",
-  middle_name: null,
-  last_name: "Team",
-};
 const missingUser = {
   username: "john",
   email: "john@example.com",
@@ -54,9 +49,30 @@ const pendingUser = {
   last_name: "Lee",
 };
 
+// Per tenant, processTenantKycReminders queries in this order:
+// missing, rejected, pending, hrUsers.
+function mockTenantQueries({
+  missing = [],
+  rejected = [],
+  pending = [],
+  hrUsers = [],
+}: {
+  missing?: any[];
+  rejected?: any[];
+  pending?: any[];
+  hrUsers?: any[];
+}) {
+  mockUserFindMany
+    .mockResolvedValueOnce(missing)
+    .mockResolvedValueOnce(rejected)
+    .mockResolvedValueOnce(pending)
+    .mockResolvedValueOnce(hrUsers);
+}
+
 describe("sendKycReminders", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockTenantFindMany.mockResolvedValue([{ id: "t1" }]);
     process.env.HR_EMAIL = "hr@company.com";
     process.env.EMAIL_FROM = "noreply@company.com";
   });
@@ -67,20 +83,18 @@ describe("sendKycReminders", () => {
   });
 
   it("sends no emails when all KYC lists are empty", async () => {
-    mockUserFindMany.mockResolvedValue([]);
+    mockTenantQueries({});
     await sendKycReminders();
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
   it("sends employee + HR email for each missing-KYC user", async () => {
-    mockUserFindMany
-      .mockResolvedValueOnce([missingUser]) // missing
-      .mockResolvedValueOnce([]) // rejected
-      .mockResolvedValueOnce([]); // pending
+    mockTenantQueries({ missing: [missingUser] });
 
     await sendKycReminders();
 
-    // 2 emails: one to employee, one to HR
+    // 2 emails: one to employee, one to HR (falls back to HR_EMAIL since
+    // this tenant has no HUMAN RESOURCES-department users configured)
     expect(mockSendEmail).toHaveBeenCalledTimes(2);
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: "john@example.com" }),
@@ -91,10 +105,7 @@ describe("sendKycReminders", () => {
   });
 
   it("sends employee + HR email for each rejected-KYC user", async () => {
-    mockUserFindMany
-      .mockResolvedValueOnce([]) // missing
-      .mockResolvedValueOnce([rejectedUser]) // rejected
-      .mockResolvedValueOnce([]); // pending
+    mockTenantQueries({ rejected: [rejectedUser] });
 
     await sendKycReminders();
 
@@ -108,10 +119,7 @@ describe("sendKycReminders", () => {
   });
 
   it("sends only HR email for pending-KYC users (not employee)", async () => {
-    mockUserFindMany
-      .mockResolvedValueOnce([]) // missing
-      .mockResolvedValueOnce([]) // rejected
-      .mockResolvedValueOnce([pendingUser]); // pending
+    mockTenantQueries({ pending: [pendingUser] });
 
     await sendKycReminders();
 
@@ -123,10 +131,7 @@ describe("sendKycReminders", () => {
 
   it("skips employee email when user has no email address", async () => {
     const noEmailUser = { ...missingUser, email: null };
-    mockUserFindMany
-      .mockResolvedValueOnce([noEmailUser])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    mockTenantQueries({ missing: [noEmailUser] });
 
     await sendKycReminders();
 
@@ -137,14 +142,11 @@ describe("sendKycReminders", () => {
     );
   });
 
-  it("skips HR emails when HR_EMAIL is not configured", async () => {
+  it("skips HR emails when no tenant HR users exist and HR_EMAIL is not configured", async () => {
     delete process.env.HR_EMAIL;
     delete process.env.DEV_EMAIL;
 
-    mockUserFindMany
-      .mockResolvedValueOnce([missingUser])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    mockTenantQueries({ missing: [missingUser] });
 
     await sendKycReminders();
 
@@ -155,14 +157,11 @@ describe("sendKycReminders", () => {
     );
   });
 
-  it("falls back to DEV_EMAIL when HR_EMAIL is not set", async () => {
+  it("falls back to DEV_EMAIL when HR_EMAIL is not set and no tenant HR users exist", async () => {
     delete process.env.HR_EMAIL;
     process.env.DEV_EMAIL = "dev@company.com";
 
-    mockUserFindMany
-      .mockResolvedValueOnce([missingUser])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    mockTenantQueries({ missing: [missingUser] });
 
     await sendKycReminders();
 
@@ -173,16 +172,72 @@ describe("sendKycReminders", () => {
     delete process.env.DEV_EMAIL;
   });
 
+  it("emails each of the tenant's own HR users instead of the global fallback when HR users exist", async () => {
+    mockTenantQueries({
+      missing: [missingUser],
+      hrUsers: [{ email: "hr-a@tenant.com" }, { email: "hr-b@tenant.com" }],
+    });
+
+    await sendKycReminders();
+
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr-a@tenant.com" }),
+    );
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr-b@tenant.com" }),
+    );
+    expect(mockSendEmail).not.toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr@company.com" }),
+    );
+  });
+
+  it("scopes each tenant's queries by that tenant's id and keeps tenants' HR alerts separate", async () => {
+    mockTenantFindMany.mockResolvedValue([{ id: "t1" }, { id: "t2" }]);
+    mockUserFindMany
+      // tenant t1
+      .mockResolvedValueOnce([missingUser])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ email: "hr-t1@tenant.com" }])
+      // tenant t2
+      .mockResolvedValueOnce([rejectedUser])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ email: "hr-t2@tenant.com" }]);
+
+    await sendKycReminders();
+
+    // Each user.findMany call for a KYC-status query must be scoped to a
+    // single tenant, not pooled across all tenants.
+    const statusCalls = mockUserFindMany.mock.calls.filter(
+      ([args]) => "kyc_approval" in args.where || "OR" in args.where,
+    );
+    for (const [args] of statusCalls) {
+      expect(typeof args.where.tenantId).toBe("string");
+    }
+
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr-t1@tenant.com" }),
+    );
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr-t2@tenant.com" }),
+    );
+    // t1's missing-user alert never goes to t2's HR inbox and vice versa.
+    expect(mockSendEmail).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "hr-t2@tenant.com",
+        html: expect.stringContaining("john"),
+      }),
+    );
+  });
+
   it("continues processing other users when one email fails", async () => {
     const user2 = {
       ...missingUser,
       username: "alice",
       email: "alice@example.com",
     };
-    mockUserFindMany
-      .mockResolvedValueOnce([missingUser, user2])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    mockTenantQueries({ missing: [missingUser, user2] });
 
     // First call throws, rest succeed
     mockSendEmail
@@ -194,8 +249,28 @@ describe("sendKycReminders", () => {
     expect(mockSendEmail.mock.calls.length).toBeGreaterThan(1);
   });
 
-  it("throws when the database call fails", async () => {
-    mockUserFindMany.mockRejectedValue(new Error("DB error"));
+  it("continues processing other tenants when one tenant's queries fail", async () => {
+    mockTenantFindMany.mockResolvedValue([{ id: "t1" }, { id: "t2" }]);
+    mockUserFindMany
+      // tenant t1 fails entirely
+      .mockRejectedValueOnce(new Error("DB error"))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      // tenant t2 succeeds
+      .mockResolvedValueOnce([missingUser])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await expect(sendKycReminders()).resolves.toBeUndefined();
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "john@example.com" }),
+    );
+  });
+
+  it("throws when fetching the tenant list fails", async () => {
+    mockTenantFindMany.mockRejectedValue(new Error("DB error"));
     await expect(sendKycReminders()).rejects.toThrow("DB error");
   });
 });

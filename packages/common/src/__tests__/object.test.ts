@@ -145,6 +145,18 @@ describe("camelToSnake", () => {
     });
   });
 
+  it("inserts an underscore before a trailing digit (e.g. address line 1/2 fields)", () => {
+    expect(
+      camelToSnake({
+        communicationAddressLine1: "Flat 4B",
+        permanentAddressLine2: "Sector 9",
+      }),
+    ).toEqual({
+      communication_address_line_1: "Flat 4B",
+      permanent_address_line_2: "Sector 9",
+    });
+  });
+
   it("leaves already snake_case keys unchanged", () => {
     expect(camelToSnake({ id: 1, name: "Alice" })).toEqual({
       id: 1,

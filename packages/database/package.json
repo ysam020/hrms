@@ -16,7 +16,6 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "tsx src/seed.ts",
     "build": "tsc -b"
   },
   "dependencies": {
@@ -24,7 +23,6 @@
     "prisma": "^5.22.0"
   },
   "devDependencies": {
-    "@faker-js/faker": "^9.3.0",
     "@hrms/common": "workspace:*",
     "@hrms/logger": "workspace:*",
     "@hrms/typescript-config": "workspace:*",

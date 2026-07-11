@@ -183,9 +183,6 @@ pnpm db:generate
 # Prisma: open visual data browser
 pnpm db:studio
 
-# Prisma: seed sample data
-pnpm db:seed
-
 # Full rebuild from scratch
 pnpm setup:project
 ```

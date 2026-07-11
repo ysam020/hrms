@@ -1,9 +1,14 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  getTenantId,
+  canonicalizeEmail,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
+import { getKycApprovers } from "../utils/kycApprovers";
 
 export const submitKyc = async (
   call: ServerUnaryCall<any, any>,
@@ -67,7 +72,10 @@ export const submitKyc = async (
         ...(bloodGroup && { blood_group: bloodGroup }),
         ...(qualification && { qualification }),
         ...(mobile && { mobile }),
-        ...(email && { email }),
+        // Normalized the same way as Google OAuth login — otherwise a
+        // retyped Gmail address (e.g. a different dot placement) can drift
+        // from what login matches against, stranding the account.
+        ...(email && { email: canonicalizeEmail(email) }),
         ...(officialEmail && { official_email: officialEmail }),
         ...(permanentAddressLine1 && {
           permanent_address_line_1: permanentAddressLine1,
@@ -115,7 +123,20 @@ export const submitKyc = async (
         ...(bankName && { bank_name: bankName }),
         ...(ifscCode && { ifsc_code: ifscCode }),
         kyc_date: new Date(),
-        kyc_approval: "Pending",
+        // Reset to Pending when the employee is (re)submitting their own KYC
+        // (signalled by userId, same as a fresh completeKyc call) or when
+        // there's no prior decision to preserve. An HR-side correction via
+        // editKyc (keyed by username only, on a record that's already been
+        // Approved/Rejected) must not silently discard that decision.
+        ...((userId || !user.kyc_approval) && { kyc_approval: "Pending" }),
+        // A self-submit consumes an open edit window (granted by
+        // allowKycEdit) — re-locking the record until HR reviews it again.
+        // Any other self-submit (fresh onboarding, or resubmitting after a
+        // Revision Requested) recomputes this to null so a long-past reopen
+        // can never leave a stale lock behind.
+        ...(userId && {
+          kyc_edit_window: user.kyc_edit_window === "open" ? "closed" : null,
+        }),
       },
     });
 
@@ -124,33 +145,53 @@ export const submitKyc = async (
       cacheManager.invalidatePattern(`t:${tenantId}:employees:*`),
       cacheManager.delete(`t:${tenantId}:employee:${user.id}`),
       cacheManager.delete(`t:${tenantId}:employee-details:${user.username}`),
+      // /get-user-data/:username (used by the KYC form's edit-prefill and the
+      // HR detail/approval page) reads through user-service's GetUser RPC,
+      // which caches under this key — keyed by whatever the gateway passed
+      // as userId, which for that route is always the username. Without
+      // this, a submit/edit here would leave that page showing stale data
+      // until the cache's own TTL expires.
+      cacheManager.delete(`t:${tenantId}:user:v6:${user.id}`),
+      cacheManager.delete(`t:${tenantId}:user:v6:${user.username}`),
     ]);
 
-    // Notify HR (fire-and-forget)
-    prisma.user
-      .findMany({
-        where: { department: "HUMAN RESOURCES" },
-        select: { id: true, username: true },
-      })
-      .then((hrUsers) => {
-        if (hrUsers.length === 0) return;
-        return getNotificationQueue().add("kycSubmitted", {
-          title: "KYC",
-          message: `${user.username} filled out their KYC form`,
-          recipients: hrUsers.map((u) => u.id),
-          pushTargets: hrUsers.map((u) => u.username),
-          eventType: "kyc_notification",
-          priority: "medium",
-        });
-      })
-      .catch((err) =>
-        logger.error("[submitKyc] Notification enqueue failed:", { err }),
-      );
+    // Notify everyone who can approve this KYC (fire-and-forget) — only
+    // when this call actually left the record in "Pending" (a fresh
+    // submission or resubmission awaiting review). An HR-side correction
+    // via editKyc on an already-decided record (keyed by username only, no
+    // reset — see the kyc_approval reset comment above) must not spam
+    // approvers who have nothing new to review.
+    if (updatedUser.kyc_approval === "Pending") {
+      getKycApprovers(tenantId, "approve_kyc")
+        .then((approvers) => {
+          if (approvers.length === 0) return;
+          return getNotificationQueue().add("kycSubmitted", {
+            title: "KYC",
+            message: `${user.username} filled out their KYC form`,
+            recipients: approvers.map((u) => u.id),
+            pushTargets: approvers.map((u) => u.username),
+            eventType: "kyc_notification",
+            priority: "medium",
+            sendPushNotification: true,
+            // Live-refresh signal for the Pending Approvals widget/badge/
+            // inbox — mirrors kyc-edit-requested in requestKycEditAccess.ts.
+            socketEvent: "kyc-submitted",
+            socketPayload: {
+              userId: user.id,
+              username: user.username,
+              submittedAt: updatedUser.kyc_date,
+            },
+          });
+        })
+        .catch((err) =>
+          logger.error("[submitKyc] Notification enqueue failed:", { err }),
+        );
+    }
 
     return callback(null, {
       message: MESSAGES.KYC_SUBMITTED,
       status: status.OK,
-      data: updatedUser,
+      kycStatus: updatedUser.kyc_approval,
     });
   } catch (err) {
     logger.error("SubmitKyc error:", { err });

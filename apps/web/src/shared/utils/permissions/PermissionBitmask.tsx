@@ -41,7 +41,7 @@ const PERM_DEFS = [
   ["BasicKYCDetails", "view_kyc", "self", "all"],
   ["BasicKYCDetails", "edit_kyc", "all"],
   ["BasicKYCDetails", "approve_kyc", "all"],
-  ["BasicKYCDetails", "reject_kyc", "all"],
+  ["BasicKYCDetails", "request_kyc_revision", "all"],
 
   // JobOpenings (scopeless)
   ["JobOpenings", "view_job_openings"],

@@ -22,7 +22,6 @@
     "db:push": "turbo run db:push",
     "db:migrate": "turbo run db:migrate",
     "db:studio": "turbo run db:studio",
-    "db:seed": "turbo run db:seed",
     "format": "prettier --write . && eslint --fix --no-config-lookup --config ./eslint.config.js \"**/*.{js,jsx,ts,tsx}\"",
     "prepare": "husky",
     "postinstall": "pnpm db:generate",

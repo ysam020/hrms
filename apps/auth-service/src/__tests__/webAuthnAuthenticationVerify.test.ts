@@ -4,7 +4,7 @@ import { webAuthnAuthenticationVerify } from "../handlers/webAuthnAuthentication
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-    tenantMembership: { findFirst: jest.fn() },
+    tenantMembership: { findFirst: jest.fn(), create: jest.fn() },
     tenant: { findUnique: jest.fn() },
   };
   return {
@@ -45,6 +45,8 @@ const mockFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUpdate = prisma.user.update as jest.Mock;
 const mockMembershipFindFirst = (prisma as any).tenantMembership
   .findFirst as jest.Mock;
+const mockMembershipCreate = (prisma as any).tenantMembership
+  .create as jest.Mock;
 const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
@@ -148,6 +150,59 @@ describe("webAuthnAuthenticationVerify", () => {
       null,
       expect.objectContaining({ status: 0, accessToken: "access-token" }),
     );
+  });
+
+  it("self-heals a missing TenantMembership when user.tenantId is already stamped", async () => {
+    mockFindUnique.mockResolvedValue({ ...user, tenantId: "t1" });
+    mockRedisGet.mockResolvedValue("test-challenge");
+    mockVerify.mockResolvedValue({
+      verified: true,
+      authenticationInfo: { newCounter: 1 },
+    });
+    mockMembershipFindFirst.mockResolvedValue(null); // membership row missing
+    mockTenantFindUnique.mockResolvedValue({
+      id: "t1",
+      isActive: true,
+      dbName: "db-t1",
+    });
+    mockMembershipCreate.mockResolvedValue({
+      tenantId: "t1",
+      userId: "u1",
+      role: "employee",
+    });
+    const cb = makeCallback();
+    await webAuthnAuthenticationVerify(
+      makeCall({ userId: "u1", credential }),
+      cb,
+    );
+    expect(mockMembershipCreate).toHaveBeenCalledWith({
+      data: { tenantId: "t1", userId: "u1", role: "employee" },
+    });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 0, accessToken: "access-token" }),
+    );
+  });
+
+  it("clears a stale user.tenantId that points at a deleted/inactive tenant", async () => {
+    mockFindUnique.mockResolvedValue({ ...user, tenantId: "gone" });
+    mockRedisGet.mockResolvedValue("test-challenge");
+    mockVerify.mockResolvedValue({
+      verified: true,
+      authenticationInfo: { newCounter: 1 },
+    });
+    mockMembershipFindFirst.mockResolvedValue(null);
+    mockTenantFindUnique.mockResolvedValueOnce(null);
+    const cb = makeCallback();
+    await webAuthnAuthenticationVerify(
+      makeCall({ userId: "u1", credential }),
+      cb,
+    );
+    expect(mockMembershipCreate).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { tenantId: null },
+    });
   });
 
   it("returns INTERNAL on error", async () => {

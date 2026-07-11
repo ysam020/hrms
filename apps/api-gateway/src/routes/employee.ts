@@ -5,6 +5,7 @@ import {
   editEmployeeDetailsSchema,
   completeKycSchema,
   kycApprovalSchema,
+  requestKycEditAccessSchema,
 } from "../schemas";
 import * as h from "../handlers/employee";
 
@@ -38,7 +39,6 @@ employeeRouter.put(
 employeeRouter.post(
   "/kyc-approval",
   authenticate,
-  requireSuperUser,
   validate(kycApprovalSchema),
   h.kycApproval,
 );
@@ -53,4 +53,16 @@ employeeRouter.get(
   authenticate,
   requireSuperUser,
   h.getKycInsights,
+);
+employeeRouter.post(
+  "/request-kyc-edit-access",
+  authenticate,
+  validate(requestKycEditAccessSchema),
+  h.requestKycEditAccess,
+);
+employeeRouter.put("/allow-kyc-edit", authenticate, h.allowKycEdit);
+employeeRouter.get(
+  "/kyc-approvals/pending",
+  authenticate,
+  h.listPendingKycActions,
 );

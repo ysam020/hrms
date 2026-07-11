@@ -10,6 +10,7 @@ const InputWrapper = ({
   inputProps = {},
   label,
   required = false,
+  revisionNote,
 
   multiline: _multiline,
 
@@ -25,6 +26,7 @@ const InputWrapper = ({
   inputProps?: {};
   label?: any;
   required?: boolean;
+  revisionNote?: string;
   multiline?: boolean;
   rows?: number;
 }) => {
@@ -147,6 +149,11 @@ const InputWrapper = ({
       {hasError && (
         <small id={`${name}-error`} className="p-error" role="alert">
           {formik.errors[name]}
+        </small>
+      )}
+      {!hasError && revisionNote && (
+        <small style={{ display: "block", color: "#b45309" }} role="alert">
+          ⚠ {revisionNote}
         </small>
       )}
     </div>

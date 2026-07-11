@@ -76,111 +76,160 @@ const subjectMap: Record<string, Record<string, string>> = {
   },
 };
 
-export async function sendKycReminders(): Promise<void> {
-  try {
-    const hrEmail = process.env.HR_EMAIL || process.env.DEV_EMAIL;
-    const emailFrom = process.env.EMAIL_FROM;
+const KYC_USER_SELECT = {
+  username: true,
+  email: true,
+  first_name: true,
+  middle_name: true,
+  last_name: true,
+} as const;
 
-    const [missingUsers, rejectedUsers, pendingUsers] = await Promise.all([
+async function notifyHr(
+  recipients: string[],
+  subject: string,
+  html: string,
+  emailFrom: string | undefined,
+  logContext: string,
+): Promise<void> {
+  await Promise.all(
+    recipients.map((to) =>
+      sendEmail({ to, subject, html, from: emailFrom }).catch((e: unknown) =>
+        logger.warn(`KYC HR email failed for ${logContext}`, { e }),
+      ),
+    ),
+  );
+}
+
+/**
+ * Runs the missing/rejected/pending sweep for a single tenant. HR recipients
+ * are resolved per-tenant (that tenant's own "HUMAN RESOURCES" department
+ * users) — falling back to the platform-wide HR_EMAIL/DEV_EMAIL only when a
+ * tenant has no HR users configured, rather than using that single address
+ * for every tenant's alerts.
+ */
+async function processTenantKycReminders(
+  tenantId: string,
+  emailFrom: string | undefined,
+): Promise<{ missing: number; rejected: number; pending: number }> {
+  const [missingUsers, rejectedUsers, pendingUsers, hrUsers] =
+    await Promise.all([
       prisma.user.findMany({
-        where: { OR: [{ kyc_approval: null }, { kyc_approval: "" }] },
-        select: {
-          username: true,
-          email: true,
-          first_name: true,
-          middle_name: true,
-          last_name: true,
+        where: {
+          tenantId,
+          OR: [{ kyc_approval: null }, { kyc_approval: "" }],
         },
+        select: KYC_USER_SELECT,
       }),
       prisma.user.findMany({
-        where: { kyc_approval: "Rejected" },
-        select: {
-          username: true,
-          email: true,
-          first_name: true,
-          middle_name: true,
-          last_name: true,
-        },
+        where: { tenantId, kyc_approval: "Rejected" },
+        select: KYC_USER_SELECT,
       }),
       prisma.user.findMany({
-        where: { kyc_approval: "Pending" },
-        select: {
-          username: true,
-          email: true,
-          first_name: true,
-          middle_name: true,
-          last_name: true,
-        },
+        where: { tenantId, kyc_approval: "Pending" },
+        select: KYC_USER_SELECT,
+      }),
+      prisma.user.findMany({
+        where: { tenantId, department: "HUMAN RESOURCES" },
+        select: { email: true },
       }),
     ]);
 
-    // Missing KYC - notify employee + HR
-    for (const user of missingUsers) {
-      const fullName = getFullName(user);
-      if (user.email) {
-        await sendEmail({
-          to: user.email,
-          subject: subjectMap.employee.missing,
-          html: kycReminderHtml(fullName, "missing", "employee"),
-          from: emailFrom,
-        }).catch((e: unknown) =>
-          logger.warn(`KYC email to ${user.email} failed`, { e }),
-        );
-      }
-      if (hrEmail) {
-        await sendEmail({
-          to: hrEmail,
-          subject: `${subjectMap.hr.missing} - ${fullName} (${user.username})`,
-          html: kycReminderHtml(fullName, "missing", "hr", user.username),
-          from: emailFrom,
-        }).catch((e: unknown) =>
-          logger.warn(`KYC HR email failed for ${user.username}`, { e }),
-        );
-      }
-    }
+  const fallbackHrEmail = process.env.HR_EMAIL || process.env.DEV_EMAIL;
+  const hrRecipients = hrUsers
+    .map((u) => u.email)
+    .filter((e): e is string => !!e);
+  if (hrRecipients.length === 0 && fallbackHrEmail) {
+    hrRecipients.push(fallbackHrEmail);
+  }
 
-    // Rejected KYC - notify employee + HR
-    for (const user of rejectedUsers) {
-      const fullName = getFullName(user);
-      if (user.email) {
-        await sendEmail({
-          to: user.email,
-          subject: subjectMap.employee.rejected,
-          html: kycReminderHtml(fullName, "rejected", "employee"),
-          from: emailFrom,
-        }).catch((e: unknown) =>
-          logger.warn(`KYC email to ${user.email} failed`, { e }),
-        );
-      }
-      if (hrEmail) {
-        await sendEmail({
-          to: hrEmail,
-          subject: `${subjectMap.hr.rejected} - ${fullName} (${user.username})`,
-          html: kycReminderHtml(fullName, "rejected", "hr", user.username),
-          from: emailFrom,
-        }).catch((e: unknown) =>
-          logger.warn(`KYC HR email failed for ${user.username}`, { e }),
-        );
-      }
+  // Missing KYC - notify employee + HR
+  for (const user of missingUsers) {
+    const fullName = getFullName(user);
+    if (user.email) {
+      await sendEmail({
+        to: user.email,
+        subject: subjectMap.employee.missing,
+        html: kycReminderHtml(fullName, "missing", "employee"),
+        from: emailFrom,
+      }).catch((e: unknown) =>
+        logger.warn(`KYC email to ${user.email} failed`, { e }),
+      );
     }
+    await notifyHr(
+      hrRecipients,
+      `${subjectMap.hr.missing} - ${fullName} (${user.username})`,
+      kycReminderHtml(fullName, "missing", "hr", user.username),
+      emailFrom,
+      user.username,
+    );
+  }
 
-    // Pending KYC - notify HR only
-    for (const user of pendingUsers) {
-      const fullName = getFullName(user);
-      if (hrEmail) {
-        await sendEmail({
-          to: hrEmail,
-          subject: `${subjectMap.hr.pending} - ${fullName} (${user.username})`,
-          html: kycReminderHtml(fullName, "pending", "hr", user.username),
-          from: emailFrom,
-        }).catch((e: unknown) =>
-          logger.warn(`KYC HR email failed for ${user.username}`, { e }),
+  // Rejected KYC - notify employee + HR
+  for (const user of rejectedUsers) {
+    const fullName = getFullName(user);
+    if (user.email) {
+      await sendEmail({
+        to: user.email,
+        subject: subjectMap.employee.rejected,
+        html: kycReminderHtml(fullName, "rejected", "employee"),
+        from: emailFrom,
+      }).catch((e: unknown) =>
+        logger.warn(`KYC email to ${user.email} failed`, { e }),
+      );
+    }
+    await notifyHr(
+      hrRecipients,
+      `${subjectMap.hr.rejected} - ${fullName} (${user.username})`,
+      kycReminderHtml(fullName, "rejected", "hr", user.username),
+      emailFrom,
+      user.username,
+    );
+  }
+
+  // Pending KYC - notify HR only
+  for (const user of pendingUsers) {
+    const fullName = getFullName(user);
+    await notifyHr(
+      hrRecipients,
+      `${subjectMap.hr.pending} - ${fullName} (${user.username})`,
+      kycReminderHtml(fullName, "pending", "hr", user.username),
+      emailFrom,
+      user.username,
+    );
+  }
+
+  return {
+    missing: missingUsers.length,
+    rejected: rejectedUsers.length,
+    pending: pendingUsers.length,
+  };
+}
+
+export async function sendKycReminders(): Promise<void> {
+  try {
+    const emailFrom = process.env.EMAIL_FROM;
+    const tenants = await prisma.tenant.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+
+    let errors = 0;
+    for (const tenant of tenants) {
+      try {
+        const counts = await processTenantKycReminders(tenant.id, emailFrom);
+        logger.info(
+          `sendKycReminders[tenant ${tenant.id}]: processed missing=${counts.missing} rejected=${counts.rejected} pending=${counts.pending}`,
         );
+      } catch (err) {
+        errors++;
+        logger.error(`sendKycReminders: error processing tenant ${tenant.id}`, {
+          err,
+        });
       }
     }
 
     logger.info(
-      `sendKycReminders: processed missing=${missingUsers.length} rejected=${rejectedUsers.length} pending=${pendingUsers.length}`,
+      `sendKycReminders: processed ${tenants.length} tenants (${errors} errors)`,
     );
   } catch (error) {
     logger.error("Error in KYC reminder job:", { error });

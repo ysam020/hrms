@@ -1,4 +1,6 @@
-import { useContext, useState } from "react";
+import { useCallback, useContext, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import useSocketEvent from "@web/shared/hooks/useSocketEvent";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -17,6 +19,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import InboxIcon from "@mui/icons-material/Inbox";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import useFetchData from "@web/shared/hooks/useFetchData";
@@ -27,7 +30,7 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 
 dayjs.extend(relativeTime);
 
-interface PendingApprovalItem {
+interface ChainApprovalItem {
   instanceId: string;
   module: string;
   entityId: string;
@@ -39,12 +42,28 @@ interface PendingApprovalItem {
   detail: Record<string, unknown>;
 }
 
+interface KycApprovalItem {
+  instanceId: string;
+  module: "kyc";
+  kycAction: "approve" | "allow_edit";
+  username: string;
+  requestedByName: string;
+  createdAt: string;
+  summary: string;
+}
+
+type PendingApprovalItem = ChainApprovalItem | KycApprovalItem;
+
+const isKycItem = (item: PendingApprovalItem): item is KycApprovalItem =>
+  item.module === "kyc";
+
 const MODULE_LABELS: Record<string, string> = {
   leave: "Leave",
   resignation: "Resignation",
   overtime: "Overtime",
   wfh: "WFH",
   salary_advance: "Salary Advance",
+  kyc: "KYC",
 };
 
 function initialsOf(name: string): string {
@@ -66,6 +85,7 @@ function initialsOf(name: string): string {
  * unless they're a superuser — this page is that missing surface.
  */
 function ApprovalsInbox() {
+  const navigate = useNavigate();
   const { setAlert } = useContext(AlertContext);
   const { refetchPendingApprovals } = useContext(ApprovalsBadgeContext);
   const { data, loading, refetch } = useFetchData<PendingApprovalItem[]>(
@@ -73,7 +93,33 @@ function ApprovalsInbox() {
     "get",
     [],
   );
-  const items = Array.isArray(data) ? data : [];
+  const {
+    data: kycData,
+    loading: loadingKyc,
+    refetch: refetchKyc,
+  } = useFetchData<PendingApprovalItem[]>(
+    API_ENDPOINTS.GET_PENDING_KYC_APPROVALS,
+    "get",
+    [],
+  );
+  // Each source list is already sorted newest-first server-side, but
+  // merging the two doesn't interleave them by date on its own.
+  const items = [
+    ...(Array.isArray(data) ? data : []),
+    ...(Array.isArray(kycData) ? kycData : []),
+  ].sort(
+    (a, b) =>
+      new Date(b.createdAt ?? 0).getTime() -
+      new Date(a.createdAt ?? 0).getTime(),
+  );
+
+  // Live-refresh instead of polling — see ApprovalsBadgeContext for why the
+  // generic "notification" event is the right signal to reuse here.
+  const refetchBoth = useCallback(() => {
+    refetch?.();
+    refetchKyc?.();
+  }, [refetch, refetchKyc]);
+  useSocketEvent("notification", refetchBoth);
 
   const [decision, setDecision] = useState<{
     instanceId: string;
@@ -125,12 +171,12 @@ function ApprovalsInbox() {
         <Typography variant="h6" fontWeight={700}>
           Pending Approvals
         </Typography>
-        {!loading && items.length > 0 && (
+        {!loading && !loadingKyc && items.length > 0 && (
           <Chip size="small" label={items.length} color="warning" />
         )}
       </Box>
 
-      {loading ? (
+      {loading || loadingKyc ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           {[...Array(3)].map((_, i) => (
             <Paper key={i} variant="outlined" sx={{ p: 2 }}>
@@ -159,92 +205,146 @@ function ApprovalsInbox() {
         </Paper>
       ) : (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-          {items.map((item) => (
-            <Paper
-              key={item.instanceId}
-              variant="outlined"
-              sx={{
-                p: 2,
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 1.5,
-              }}
-            >
-              <Avatar sx={{ width: 36, height: 36, fontSize: "0.85rem" }}>
-                {initialsOf(item.requestedByName || "?")}
-              </Avatar>
+          {items.map((item) =>
+            isKycItem(item) ? (
+              // KYC actions (approve / request-revision-with-field-issues /
+              // allow-edit) have different payloads per action and already
+              // have a proper UI on the KYC detail page — click through
+              // instead of duplicating that here.
+              <Paper
+                key={item.instanceId}
+                variant="outlined"
+                onClick={() => navigate(`/view-kyc/${item.username}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/view-kyc/${item.username}`);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Review ${item.summary}`}
+                sx={{
+                  p: 2,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 1.5,
+                  cursor: "pointer",
+                  "&:hover": { bgcolor: "action.hover" },
+                }}
+              >
+                <Avatar sx={{ width: 36, height: 36, fontSize: "0.85rem" }}>
+                  {initialsOf(item.requestedByName || "?")}
+                </Avatar>
 
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    mb: 0.25,
-                  }}
-                >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Chip
                     size="small"
                     label={MODULE_LABELS[item.module] ?? item.module}
                     variant="outlined"
-                    sx={{ height: 20, fontSize: "0.7rem" }}
+                    sx={{ height: 20, fontSize: "0.7rem", mb: 0.25 }}
                   />
-                  {item.stepOrder > 1 && (
+                  <Typography variant="body2" fontWeight={600}>
+                    {item.summary}
+                  </Typography>
+                  {item.createdAt && (
+                    <Typography variant="caption" color="text.secondary">
+                      {dayjs(item.createdAt).fromNow()}
+                    </Typography>
+                  )}
+                </Box>
+
+                <ChevronRightIcon
+                  sx={{ color: "text.secondary", flexShrink: 0 }}
+                />
+              </Paper>
+            ) : (
+              <Paper
+                key={item.instanceId}
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 1.5,
+                }}
+              >
+                <Avatar sx={{ width: 36, height: 36, fontSize: "0.85rem" }}>
+                  {initialsOf(item.requestedByName || "?")}
+                </Avatar>
+
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      mb: 0.25,
+                    }}
+                  >
                     <Chip
                       size="small"
-                      label={`Step ${item.stepOrder}`}
-                      color="info"
+                      label={MODULE_LABELS[item.module] ?? item.module}
                       variant="outlined"
                       sx={{ height: 20, fontSize: "0.7rem" }}
                     />
+                    {item.stepOrder > 1 && (
+                      <Chip
+                        size="small"
+                        label={`Step ${item.stepOrder}`}
+                        color="info"
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: "0.7rem" }}
+                      />
+                    )}
+                  </Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    {item.summary}
+                  </Typography>
+                  {item.createdAt && (
+                    <Typography variant="caption" color="text.secondary">
+                      {dayjs(item.createdAt).fromNow()}
+                    </Typography>
                   )}
                 </Box>
-                <Typography variant="body2" fontWeight={600}>
-                  {item.summary}
-                </Typography>
-                {item.createdAt && (
-                  <Typography variant="caption" color="text.secondary">
-                    {dayjs(item.createdAt).fromNow()}
-                  </Typography>
-                )}
-              </Box>
 
-              <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
-                <Tooltip title="Approve">
-                  <IconButton
-                    size="small"
-                    color="success"
-                    aria-label={`Approve ${item.summary}`}
-                    onClick={() =>
-                      setDecision({
-                        instanceId: item.instanceId,
-                        mode: "approved",
-                        summary: item.summary,
-                      })
-                    }
-                  >
-                    <CheckIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Reject">
-                  <IconButton
-                    size="small"
-                    color="error"
-                    aria-label={`Reject ${item.summary}`}
-                    onClick={() =>
-                      setDecision({
-                        instanceId: item.instanceId,
-                        mode: "rejected",
-                        summary: item.summary,
-                      })
-                    }
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            </Paper>
-          ))}
+                <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
+                  <Tooltip title="Approve">
+                    <IconButton
+                      size="small"
+                      color="success"
+                      aria-label={`Approve ${item.summary}`}
+                      onClick={() =>
+                        setDecision({
+                          instanceId: item.instanceId,
+                          mode: "approved",
+                          summary: item.summary,
+                        })
+                      }
+                    >
+                      <CheckIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Reject">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      aria-label={`Reject ${item.summary}`}
+                      onClick={() =>
+                        setDecision({
+                          instanceId: item.instanceId,
+                          mode: "rejected",
+                          summary: item.summary,
+                        })
+                      }
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Paper>
+            ),
+          )}
         </Box>
       )}
 

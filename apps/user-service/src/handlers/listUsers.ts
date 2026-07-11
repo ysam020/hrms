@@ -19,7 +19,12 @@ export const listUsers = async (
     const skip = (page - 1) * limit;
 
     const tenantId = getTenantId() ?? "global";
-    const cacheKey = `t:${tenantId}:users:${search}:${role}:${department}:p${page}:l${limit}`;
+    // v2: the mapped response was missing educationCertificates entirely —
+    // a `repeated string` field on the User proto message, which throws
+    // ("... is not iterable") during response serialization when it's
+    // undefined rather than an (empty) array. Versioning the key so any
+    // already-cached broken response isn't replayed post-fix.
+    const cacheKey = `t:${tenantId}:users:v2:${search}:${role}:${department}:p${page}:l${limit}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
@@ -74,6 +79,7 @@ export const listUsers = async (
         employeeStatus: u.employeeStatus ?? "",
         employeePhoto: u.employee_photo ?? "",
         createdAt: u.createdAt ? u.createdAt.toISOString() : "",
+        educationCertificates: [] as string[],
       })),
       total,
       page,

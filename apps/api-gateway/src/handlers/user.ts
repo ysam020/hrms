@@ -45,6 +45,18 @@ export async function getUserData(req: Request, res: Response) {
     snake.reasonForTermination = u.reasonForTermination;
     snake.dateOfAbscond = u.dateOfAbscond;
 
+    // kyc_revision_notes travels over gRPC as a JSON string (see
+    // user.proto's kycRevisionNotesJson) — surface it to the frontend as
+    // the parsed { [fieldName]: issueDescription } object it actually is.
+    delete snake.kyc_revision_notes_json;
+    try {
+      snake.kyc_revision_notes = u.kycRevisionNotesJson
+        ? JSON.parse(u.kycRevisionNotesJson)
+        : {};
+    } catch {
+      snake.kyc_revision_notes = {};
+    }
+
     // Append salary fields (not in the user service proto)
     const salaryData = await prisma.user.findFirst({
       where: { id: u.id },

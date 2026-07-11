@@ -18,3 +18,4 @@ export {
 } from "./tenantContext";
 export { prismaWithTenant } from "./prismaWithTenant";
 export { getClientForDb, closeAllTenantClients } from "./tenantClientPool";
+export { canonicalizeEmail } from "./email";
