@@ -1,19 +1,23 @@
-import React from "react";
+import React, { useContext } from "react";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function LoadingState({
   height = 400,
   message = undefined,
   size = "medium",
-  theme = "light",
+  theme = undefined,
 }: {
   height?: number;
   message?: any;
   size?: string;
   theme?: string;
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
+
   const getSpinnerSize = () => {
     switch (size) {
       case "small":

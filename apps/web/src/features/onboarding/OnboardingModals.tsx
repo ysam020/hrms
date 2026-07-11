@@ -104,8 +104,8 @@ const STEPS: OnboardingStep[] = [
     icon: <GavelIcon sx={{ fontSize: 48, color: "primary.main" }} />,
     actionLabel: "Set up exit policy",
     skipLabel: "I'll do it later",
-    route: "/settings?tab=exit-policy",
-    hint: "Exit Policy is under Settings in the sidebar, anytime.",
+    route: "/settings?tab=org-settings&subtab=exit-policy",
+    hint: "Exit Policy is under Settings → Organisation Settings, anytime.",
   },
   {
     key: "approvals",
@@ -128,8 +128,8 @@ const STEPS: OnboardingStep[] = [
     icon: <WorkIcon sx={{ fontSize: 48, color: "primary.main" }} />,
     actionLabel: "Set up pipeline",
     skipLabel: "Standard pipeline is fine",
-    route: "/settings?tab=recruitment-pipeline",
-    hint: "Recruitment Pipeline is under Settings in the sidebar, anytime.",
+    route: "/settings?tab=org-settings&subtab=recruitment-pipeline",
+    hint: "Recruitment Pipeline is under Settings → Organisation Settings, anytime.",
   },
   {
     key: "payroll_components",
@@ -140,8 +140,8 @@ const STEPS: OnboardingStep[] = [
     icon: <PaymentsIcon sx={{ fontSize: 48, color: "primary.main" }} />,
     actionLabel: "Review payroll setup",
     skipLabel: "Defaults are fine",
-    route: "/settings?tab=payroll-components",
-    hint: "Payroll Components is under Settings in the sidebar, anytime.",
+    route: "/settings?tab=org-settings&subtab=payroll-components",
+    hint: "Payroll Components is under Settings → Organisation Settings, anytime.",
   },
 ];
 

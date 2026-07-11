@@ -1,6 +1,5 @@
 import { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
-import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import Button from "@web/shared/components/Button";
@@ -237,7 +236,7 @@ export default function RecruitmentPipelineSettings() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
+    <Box>
       <Box
         sx={{
           mb: 3,
@@ -248,22 +247,17 @@ export default function RecruitmentPipelineSettings() {
           flexWrap: "wrap",
         }}
       >
-        <Box>
-          <Typography variant="h5" fontWeight={700}>
-            Recruitment Pipelines
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ maxWidth: 640 }}
-          >
-            Define how many interview rounds a job goes through, who owns each
-            one, and whether it includes a background-verification step. A
-            standard 3-round pipeline is ready to use — customize it, or add
-            more for roles with a different process (e.g. a single HR call for
-            interns).
-          </Typography>
-        </Box>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ maxWidth: 640 }}
+        >
+          Define how many interview rounds a job goes through, who owns each
+          one, and whether it includes a background-verification step. A
+          standard 3-round pipeline is ready to use — customize it, or add more
+          for roles with a different process (e.g. a single HR call for
+          interns).
+        </Typography>
         {canEdit && (
           <Button
             variant="primary"
@@ -511,6 +505,6 @@ export default function RecruitmentPipelineSettings() {
         message={`"${deleteTarget?.name}" will no longer be selectable for new job openings.`}
         variant="danger"
       />
-    </Container>
+    </Box>
   );
 }

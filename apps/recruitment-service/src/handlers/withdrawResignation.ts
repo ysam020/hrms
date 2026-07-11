@@ -4,7 +4,6 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { cancelApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
-import { toResignationProto } from "./resignationSerializer";
 
 /**
  * Employee-initiated withdrawal, before HR has made a decision. Distinct from
@@ -26,7 +25,14 @@ export const withdrawResignation = async (
       });
     }
 
-    const resignation = await prisma.resignation.findUnique({ where: { id } });
+    const tenantId = getTenantId();
+
+    // findFirst (not findUnique) so tenantId is enforced — tenants without a
+    // dedicated DB share the master DB, where `id` alone doesn't prevent
+    // acting on another tenant's resignation.
+    const resignation = await prisma.resignation.findFirst({
+      where: { id, tenantId },
+    });
     if (!resignation) {
       return callback(null, {
         message: MESSAGES.RESIGNATION_NOT_FOUND,
@@ -34,6 +40,10 @@ export const withdrawResignation = async (
       });
     }
 
+    // `userId` is the acting employee's own id for self-service withdrawals.
+    // The gateway (recruitment.ts withdrawResignation) omits it entirely when
+    // the caller is a privileged owner/admin/superuser withdrawing on an
+    // employee's behalf — that's the intentional override, not a bypass.
     if (userId && resignation.userId !== userId) {
       return callback(null, {
         message: MESSAGES.CANNOT_WITHDRAW_OTHERS_RESIGNATION,
@@ -48,7 +58,7 @@ export const withdrawResignation = async (
       });
     }
 
-    const updatedResignation = await prisma.resignation.update({
+    await prisma.resignation.update({
       where: { id },
       data: {
         status: "Withdrawn",
@@ -59,7 +69,6 @@ export const withdrawResignation = async (
 
     // Cancels the submit-time ApprovalInstance (see submitResignation.ts) so
     // it stops showing up as a pending approval for a withdrawn resignation.
-    const tenantId = getTenantId();
     if (tenantId) {
       const instance = await (prisma as any).approvalInstance.findFirst({
         where: {
@@ -81,10 +90,12 @@ export const withdrawResignation = async (
 
     await cacheManager.invalidatePattern(`t:${tenantId}:resignations:*`);
 
+    // WithdrawResignation's proto response is BasicResponse (message+status
+    // only, no `data` field) — a `data` value here would just be silently
+    // dropped by the encoder, so don't bother constructing one.
     return callback(null, {
       message: MESSAGES.RESIGNATION_WITHDRAWN,
       status: status.OK,
-      data: toResignationProto(updatedResignation),
     });
   } catch (err) {
     logger.error("WithdrawResignation error:", { err });

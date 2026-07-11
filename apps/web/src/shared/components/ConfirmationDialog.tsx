@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -8,6 +8,7 @@ import Button from "./Button";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import Box from "@mui/material/Box";
 import SlideUpTransition from "./SlideUpTransition";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function ConfirmationDialog({
   open,
@@ -19,7 +20,7 @@ function ConfirmationDialog({
   confirmText = "Confirm",
   cancelText = "Cancel",
   loading = false,
-  theme = "light",
+  theme = undefined,
   variant = "default",
 }: {
   open: boolean;
@@ -34,6 +35,8 @@ function ConfirmationDialog({
   theme?: "light" | "dark";
   variant?: "default" | "danger";
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
   const isDanger = variant === "danger";
 
   return (

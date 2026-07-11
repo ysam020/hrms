@@ -88,6 +88,11 @@ exitPolicyRouter.put(
   authenticate,
   extras.setRehireEligibility,
 );
+exitPolicyRouter.get(
+  "/resignations/:id/fnf-settlement",
+  authenticate,
+  extras.getFnfSettlement,
+);
 exitPolicyRouter.post(
   "/resignations/:id/fnf-settlement",
   authenticate,

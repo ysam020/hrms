@@ -8,9 +8,9 @@ import utc from "dayjs/plugin/utc";
 import {
   type AttendanceSettings,
   getAttendanceSettings,
-  resolveShift,
   calcWorkingHours,
   getUnpaidBreakMinutes,
+  resolveOvertimeHours,
 } from "../utils/attendanceSettings";
 import { resolveLeaveConflictForCheckIn } from "../utils/leaveConflict";
 
@@ -91,8 +91,8 @@ export const markAttendance = async (
         });
       }
 
-      // Look up the employee's WFH status, home location, shift, and
-      // field/remote exemption once — used by both geofencing and shift resolution.
+      // Look up the employee's WFH status, home location, and field/remote
+      // exemption once — used by geofencing below.
       const employee = await prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -100,7 +100,6 @@ export const markAttendance = async (
           wfhHomeLatitude: true,
           wfhHomeLongitude: true,
           wfhHomeName: true,
-          shiftId: true,
           attendanceMode: true,
         },
       });
@@ -159,16 +158,7 @@ export const markAttendance = async (
       }
       // ────────────────────────────────────────────────────────────────────────
 
-      const shiftOverride = tenantId
-        ? await resolveShift(
-            tenantId,
-            userId,
-            (employee as any)?.shiftId ?? null,
-          )
-        : null;
-      const effectiveCfg = shiftOverride ? { ...cfg, ...shiftOverride } : cfg;
-
-      const attendanceStatus = isLate(now, effectiveCfg) ? "Late" : "Present";
+      const attendanceStatus = isLate(now, cfg) ? "Late" : "Present";
 
       // Everything that could still make check-in fail (geofencing, shift
       // resolution) has already passed at this point — only now is it safe
@@ -226,23 +216,6 @@ export const markAttendance = async (
         });
       }
 
-      const userShift = tenantId
-        ? await prisma.user.findUnique({
-            where: { id: userId },
-            select: { shiftId: true },
-          })
-        : null;
-      const shiftOverride =
-        tenantId && userShift
-          ? await resolveShift(
-              tenantId,
-              userId,
-              (userShift as any)?.shiftId ?? null,
-            )
-          : null;
-      const effectiveHalfDayMinHours =
-        shiftOverride?.halfDayMinHours ?? cfg.halfDayMinHours;
-
       const unpaidBreakMinutes = await getUnpaidBreakMinutes(
         existingRecord.id,
         now,
@@ -252,13 +225,23 @@ export const markAttendance = async (
         now,
         unpaidBreakMinutes,
       );
-      const isHalfDay = workingHours < effectiveHalfDayMinHours;
+      const isHalfDay = workingHours < cfg.halfDayMinHours;
+      const overtimeHours = tenantId
+        ? await resolveOvertimeHours(
+            tenantId,
+            userId,
+            existingRecord.date,
+            workingHours,
+            cfg,
+          )
+        : 0;
 
       const record = await prisma.attendanceRecord.update({
         where: { id: existingRecord.id },
         data: {
           timeOut: now,
           workingHours,
+          overtimeHours,
           status: isHalfDay ? "Half Day" : existingRecord.status,
         },
       });

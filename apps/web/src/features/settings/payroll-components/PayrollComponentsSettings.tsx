@@ -1,6 +1,5 @@
 import { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
-import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -364,11 +363,8 @@ export default function PayrollComponentsSettings() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
+    <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" fontWeight={700}>
-          Payroll Components
-        </Typography>
         <Typography
           variant="body2"
           color="text.secondary"
@@ -945,6 +941,6 @@ export default function PayrollComponentsSettings() {
         message={`"${deleteCycleTarget?.name}" will no longer be assignable.`}
         variant="danger"
       />
-    </Container>
+    </Box>
   );
 }

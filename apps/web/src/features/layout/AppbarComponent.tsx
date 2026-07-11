@@ -30,7 +30,6 @@ function AppbarComponent({
   showSidebar,
   setMobileOpen,
   mobileOpen,
-  setRun,
   setOpenNotificationDrawer,
   setOpenActivityDrawer,
   handleOpen,
@@ -73,12 +72,6 @@ function AppbarComponent({
       onClick: () => setOpenNotificationDrawer(true),
       badge: true,
       badgeCount: notificationCount,
-    },
-    {
-      title: "Run tour",
-      iconClass: "pi-play-circle",
-      onClick: () => setRun(true),
-      badge: false,
     },
     {
       title: "Logout",

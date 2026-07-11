@@ -1,16 +1,17 @@
-import React from "react";
+import React, { useContext } from "react";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
 import Box from "@mui/material/Box";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function InfoCard({
   label,
   value,
   icon,
   accentColor = "#6C5DFC",
-  theme = "light",
+  theme = undefined,
   link,
   onClick,
 }: {
@@ -22,6 +23,9 @@ function InfoCard({
   link?: any;
   onClick?: any;
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
+
   const colors = {
     text: theme === "light" ? "#2e2e2e" : "#ffffff",
     secondary: theme === "light" ? "#666666" : "#cccccc",

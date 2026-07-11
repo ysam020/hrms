@@ -253,14 +253,6 @@ const ORG_SETTINGS = {
   CANCEL_PENDING_ORG_SETTINGS: (id: string) => `/tenant-settings/pending/${id}`,
 };
 
-const SHIFTS = {
-  LIST_SHIFTS: "/shifts",
-  CREATE_SHIFT: "/shifts",
-  UPDATE_SHIFT: (id: string) => `/shifts/${id}`,
-  DELETE_SHIFT: (id: string) => `/shifts/${id}`,
-  ASSIGN_SHIFT: (id: string) => `/shifts/${id}/assign`,
-};
-
 const PAYMENT = {
   CREATE_SUBSCRIPTION: "/payment/create-subscription",
   CANCEL_SUBSCRIPTION: "/payment/cancel-subscription",
@@ -377,7 +369,6 @@ export const API_ENDPOINTS = {
   ...AI_INSIGHTS,
   ...DEVELOPER,
   ...ORG_SETTINGS,
-  ...SHIFTS,
   ...EXIT_POLICY,
   ...RECRUITMENT_PIPELINE,
   ...PAYROLL_COMPONENTS,

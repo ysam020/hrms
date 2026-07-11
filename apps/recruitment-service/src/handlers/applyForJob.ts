@@ -52,6 +52,20 @@ export const applyForJob = async (
       });
     }
 
+    // Snapshot the pipeline template in effect right now — jobOpening's own
+    // configured template, else the tenant's default one, else none (the
+    // legacy free-form `interviews` flow). Snapshotting (not just following
+    // jobOpening.pipelineTemplateId live) means editing/deleting a template
+    // later doesn't retroactively change what stage an in-flight candidate
+    // is already partway through.
+    let pipelineTemplateId = jobOpening.pipelineTemplateId ?? null;
+    if (!pipelineTemplateId) {
+      const defaultTemplate = await prisma.interviewPipelineTemplate.findFirst({
+        where: { tenantId, isDefault: true, isActive: true },
+      });
+      pipelineTemplateId = defaultTemplate?.id ?? null;
+    }
+
     const application = await prisma.jobApplication.create({
       data: {
         tenantId,
@@ -63,6 +77,8 @@ export const applyForJob = async (
         reason: reason || null,
         aadharNo: aadharNo || null,
         status: "Applied",
+        pipelineTemplateId,
+        currentStageOrder: 0,
       },
     });
 

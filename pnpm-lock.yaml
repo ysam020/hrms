@@ -755,9 +755,6 @@ importers:
       react-grid-layout:
         specifier: ^1.4.4
         version: 1.5.3(react-dom@18.3.1)(react@18.3.1)
-      react-joyride:
-        specifier: ^2.9.3
-        version: 2.9.3(@types/react@18.3.28)(react-dom@18.3.1)(react@18.3.1)
       react-leaflet:
         specifier: ^4.2.1
         version: 4.2.1(leaflet@1.9.4)(react-dom@18.3.1)(react@18.3.1)
@@ -5433,20 +5430,6 @@ packages:
     resolution:
       {
         integrity: sha512-2xCRM9q9FlzGZCdgDMJwc0gyUkWFtkosy7Xxr6sFgQwn+wMNIWd7xIvYNauU1r64B5L5rsGKy/n9TKJ0aAFeqQ==,
-      }
-    dev: false
-
-  /@gilbarbara/deep-equal@0.1.2:
-    resolution:
-      {
-        integrity: sha512-jk+qzItoEb0D0xSSmrKDDzf9sheQj/BAPxlgNxgmOaA3mxpUa6ndJLYGZKsJnIVEQSD8zcTbyILz7I0HcnBCRA==,
-      }
-    dev: false
-
-  /@gilbarbara/deep-equal@0.3.1:
-    resolution:
-      {
-        integrity: sha512-I7xWjLs2YSVMc5gGx1Z3ZG1lgFpITPndpi8Ku55GeEIKpACCPQNS/OTqQbxgTCfq0Ncvcc+CrFov96itVh6Qvw==,
       }
     dev: false
 
@@ -13786,14 +13769,6 @@ packages:
         optional: true
     dev: true
 
-  /deep-diff@1.0.2:
-    resolution:
-      {
-        integrity: sha512-aWS3UIVH+NPGCD1kki+DCU9Dua032iSsO43LqQpcs4R3+dVv7tX0qBGjiVHJHjplsoUM2XRO/KB92glqc68awg==,
-      }
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
-    dev: false
-
   /deep-extend@0.6.0:
     resolution:
       {
@@ -13823,6 +13798,7 @@ packages:
         integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==,
       }
     engines: { node: ">=0.10.0" }
+    dev: true
 
   /defaults@1.0.4:
     resolution:
@@ -16631,20 +16607,6 @@ packages:
       }
     engines: { node: ">=8" }
     dev: true
-
-  /is-lite@0.8.2:
-    resolution:
-      {
-        integrity: sha512-JZfH47qTsslwaAsqbMI3Q6HNNjUuq6Cmzzww50TdP5Esb6e1y2sK2UAaZZuzfAzpoI2AkxoPQapZdlDuP6Vlsw==,
-      }
-    dev: false
-
-  /is-lite@1.2.1:
-    resolution:
-      {
-        integrity: sha512-pgF+L5bxC+10hLBgf6R2P4ZZUBOQIIacbdo8YvuCP8/JvsWxG7aZ9p10DYuLtifFci4l3VITphhMlMV4Y+urPw==,
-      }
-    dev: false
 
   /is-map@2.0.3:
     resolution:
@@ -19557,14 +19519,6 @@ packages:
       tslib: 2.8.1
     dev: true
 
-  /popper.js@1.16.1:
-    resolution:
-      {
-        integrity: sha512-Wb4p1J4zyFTbM+u6WuO4XstYx4Ky9Cewe4DWrel7B0w6VVICvPwdOpotjzcf6eD8TsckVnIMNONQyPIUFOUbCQ==,
-      }
-    deprecated: You can find the new Popper v2 at @popperjs/core, this package is dedicated to the legacy v1
-    dev: false
-
   /possible-typed-array-names@1.1.0:
     resolution:
       {
@@ -20124,24 +20078,6 @@ packages:
       }
     dev: false
 
-  /react-floater@0.7.9(react-dom@18.3.1)(react@18.3.1):
-    resolution:
-      {
-        integrity: sha512-NXqyp9o8FAXOATOEo0ZpyaQ2KPb4cmPMXGWkx377QtJkIXHlHRAGer7ai0r0C1kG5gf+KJ6Gy+gdNIiosvSicg==,
-      }
-    peerDependencies:
-      react: 15 - 18
-      react-dom: 15 - 18
-    dependencies:
-      deepmerge: 4.3.1
-      is-lite: 0.8.2
-      popper.js: 1.16.1
-      prop-types: 15.8.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      tree-changes: 0.9.3
-    dev: false
-
   /react-grid-layout@1.5.3(react-dom@18.3.1)(react@18.3.1):
     resolution:
       {
@@ -20159,19 +20095,6 @@ packages:
       react-draggable: 4.5.0(react-dom@18.3.1)(react@18.3.1)
       react-resizable: 3.1.3(react-dom@18.3.1)(react@18.3.1)
       resize-observer-polyfill: 1.5.1
-    dev: false
-
-  /react-innertext@1.1.5(@types/react@18.3.28)(react@18.3.1):
-    resolution:
-      {
-        integrity: sha512-PWAqdqhxhHIv80dT9znP2KvS+hfkbRovFp4zFYHFFlOoQLRiawIic81gKb3U1wEyJZgMwgs3JoLtwryASRWP3Q==,
-      }
-    peerDependencies:
-      "@types/react": ">=0.0.0 <=99"
-      react: ">=0.0.0 <=99"
-    dependencies:
-      "@types/react": 18.3.28
-      react: 18.3.1
     dev: false
 
   /react-is@16.13.1:
@@ -20200,32 +20123,6 @@ packages:
       {
         integrity: sha512-W+EWGn2v0ApPKgKKCy/7s7WHXkboGcsrXE+2joLyVxkbyVQfO3MUEaUQDHoSmb8TFFrSKYa9mw64WZHNHSDzYA==,
       }
-    dev: false
-
-  /react-joyride@2.9.3(@types/react@18.3.28)(react-dom@18.3.1)(react@18.3.1):
-    resolution:
-      {
-        integrity: sha512-1+Mg34XK5zaqJ63eeBhqdbk7dlGCFp36FXwsEvgpjqrtyywX2C6h9vr3jgxP0bGHCw8Ilsp/nRDzNVq6HJ3rNw==,
-      }
-    peerDependencies:
-      react: 15 - 18
-      react-dom: 15 - 18
-    dependencies:
-      "@gilbarbara/deep-equal": 0.3.1
-      deep-diff: 1.0.2
-      deepmerge: 4.3.1
-      is-lite: 1.2.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      react-floater: 0.7.9(react-dom@18.3.1)(react@18.3.1)
-      react-innertext: 1.1.5(@types/react@18.3.28)(react@18.3.1)
-      react-is: 16.13.1
-      scroll: 3.0.1
-      scrollparent: 2.1.0
-      tree-changes: 0.11.3
-      type-fest: 4.41.0
-    transitivePeerDependencies:
-      - "@types/react"
     dev: false
 
   /react-leaflet@4.2.1(leaflet@1.9.4)(react-dom@18.3.1)(react@18.3.1):
@@ -20932,20 +20829,6 @@ packages:
       }
     dependencies:
       loose-envify: 1.4.0
-
-  /scroll@3.0.1:
-    resolution:
-      {
-        integrity: sha512-pz7y517OVls1maEzlirKO5nPYle9AXsFzTMNJrRGmT951mzpIBy7sNHOg5o/0MQd/NqliCiWnAi0kZneMPFLcg==,
-      }
-    dev: false
-
-  /scrollparent@2.1.0:
-    resolution:
-      {
-        integrity: sha512-bnnvJL28/Rtz/kz2+4wpBjHzWoEzXhVg/TE8BeVGJHUqE8THNIRnDxDWMktwM+qahvlRdvlLdsQfYe+cuqfZeA==,
-      }
-    dev: false
 
   /seedrandom@2.4.3:
     resolution:
@@ -22340,26 +22223,6 @@ packages:
       punycode: 2.3.1
     dev: true
 
-  /tree-changes@0.11.3:
-    resolution:
-      {
-        integrity: sha512-r14mvDZ6tqz8PRQmlFKjhUVngu4VZ9d92ON3tp0EGpFBE6PAHOq8Bx8m8ahbNoGE3uI/npjYcJiqVydyOiYXag==,
-      }
-    dependencies:
-      "@gilbarbara/deep-equal": 0.3.1
-      is-lite: 1.2.1
-    dev: false
-
-  /tree-changes@0.9.3:
-    resolution:
-      {
-        integrity: sha512-vvvS+O6kEeGRzMglTKbc19ltLWNtmNt1cpBoSYLj/iEcPVvpJasemKOlxBrmZaCtDJoF+4bwv3m01UKYi8mukQ==,
-      }
-    dependencies:
-      "@gilbarbara/deep-equal": 0.1.2
-      is-lite: 0.8.2
-    dev: false
-
   /trim-newlines@3.0.1:
     resolution:
       {
@@ -22594,6 +22457,7 @@ packages:
         integrity: sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==,
       }
     engines: { node: ">=16" }
+    dev: true
 
   /type-is@1.6.18:
     resolution:

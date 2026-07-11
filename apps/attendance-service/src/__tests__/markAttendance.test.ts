@@ -19,12 +19,6 @@ jest.mock("@hrms/db", () => {
       findUnique: jest.fn(),
       findMany: jest.fn(),
     },
-    team: {
-      findFirst: jest.fn(),
-    },
-    shift: {
-      findFirst: jest.fn(),
-    },
     attendanceBreak: {
       findMany: jest.fn(),
     },
@@ -80,8 +74,6 @@ const mockSettingsFindFirst = (prisma as any).tenantSettings
   .findFirst as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
-const mockTeamFindFirst = (prisma as any).team.findFirst as jest.Mock;
-const mockShiftFindFirst = (prisma as any).shift.findFirst as jest.Mock;
 const mockBreakFindMany = (prisma as any).attendanceBreak.findMany as jest.Mock;
 const mockLeaveFindFirst = (prisma as any).leaveApplication
   .findFirst as jest.Mock;
@@ -116,18 +108,15 @@ describe("markAttendance", () => {
     // Return valid attendance settings so the handler proceeds past the
     // FAILED_PRECONDITION guard on every test that doesn't override this.
     mockSettingsFindFirst.mockResolvedValue(DEFAULT_ATTENDANCE_SETTINGS);
-    // No shift/attendanceMode overrides by default — every existing
+    // No attendanceMode overrides by default — every existing
     // test exercises the zero-config tenant-default path.
     mockUserFindUnique.mockResolvedValue({
       wfh: false,
       wfhHomeLatitude: null,
       wfhHomeLongitude: null,
       wfhHomeName: null,
-      shiftId: null,
       attendanceMode: "office",
     });
-    mockTeamFindFirst.mockResolvedValue(null);
-    mockShiftFindFirst.mockResolvedValue(null);
     // No breaks by default — every existing test exercises the
     // no-unpaid-break path (working hours = raw timeOut - timeIn).
     mockBreakFindMany.mockResolvedValue([]);
@@ -318,41 +307,6 @@ describe("markAttendance", () => {
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    it("uses the employee's assigned shift start time instead of the tenant default", async () => {
-      mockUserFindUnique.mockResolvedValue({
-        wfh: false,
-        wfhHomeLatitude: null,
-        wfhHomeLongitude: null,
-        wfhHomeName: null,
-        shiftId: "shift-1",
-        attendanceMode: "office",
-      });
-      mockShiftFindFirst.mockResolvedValue({
-        id: "shift-1",
-        startHour: 12,
-        startMinute: 0,
-        lateGracePeriodMinutes: 15,
-        halfDayMinHours: 4,
-      });
-      jest.useFakeTimers();
-      // 10:00 local is "Late" under the tenant default (9:00 + 30min grace)
-      // but well within the assigned Night Shift's 12:00 start.
-      jest.setSystemTime(new Date(2024, 2, 4, 10, 0, 0));
-
-      mockFindFirst.mockResolvedValue(null);
-      mockCreate.mockResolvedValue({ id: "rec-1", status: "Present" });
-
-      const cb = makeCallback();
-      await markAttendance(makeCall({ userId: "john", type: "CHECK_IN" }), cb);
-
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: "Present" }),
-        }),
-      );
-      jest.useRealTimers();
-    });
-
     it("skips the geofence check entirely for field/remote employees", async () => {
       mockSettingsFindFirst.mockResolvedValue({
         ...DEFAULT_ATTENDANCE_SETTINGS,
@@ -365,7 +319,6 @@ describe("markAttendance", () => {
         wfhHomeLatitude: null,
         wfhHomeLongitude: null,
         wfhHomeName: null,
-        shiftId: null,
         attendanceMode: "field",
       });
       mockFindFirst.mockResolvedValue(null);

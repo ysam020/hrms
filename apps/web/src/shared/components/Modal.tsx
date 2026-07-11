@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useContext } from "react";
 import Modal from "@mui/material/Modal";
 import Paper from "@mui/material/Paper";
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
 import { motion } from "framer-motion";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 /**
  * CustomModal — centered modal with blur backdrop and slide-up entry animation.
@@ -24,7 +25,7 @@ function CustomModal({
   backdropProps = {} as any,
   paperProps = {} as any,
   fadeTimeout = 200,
-  theme = "light",
+  theme = undefined,
   ...props
 }: {
   open: any;
@@ -33,6 +34,9 @@ function CustomModal({
   theme?: "light" | "dark";
   [key: string]: any;
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
+
   const defaultBackdropProps = {
     timeout: fadeTimeout,
     sx: {

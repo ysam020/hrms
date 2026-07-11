@@ -37,7 +37,6 @@ const OnboardingModals = lazy(
 const UnAuthorisedRoute = lazy(
   () => import("@web/app/router/UnAuthorisedRoute"),
 );
-const Tour = lazy(() => import("@web/features/layout/Tour"));
 const ActivityDrawer = lazy(() => import("@web/features/layout/AuditLogs"));
 const NotificationDrawer = lazy(
   () => import("@web/features/layout/NotificationDrawer"),
@@ -55,7 +54,6 @@ function HomePage(props) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [tabValue, setTabValue] = useState(0);
-  const [run, setRun] = useState(false);
   const [showConsentDrawer, setShowConsentDrawer] = useState(false);
   const { user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
@@ -133,11 +131,6 @@ function HomePage(props) {
       <DashboardEditProvider>
         <NotificationContext.Provider value={notificationContextValue}>
           <TabValueContext.Provider value={tabValueContextValue}>
-            <Suspense fallback={null}>
-              <ErrorBoundary fallback={<ErrorFallback />}>
-                <Tour run={run} setRun={setRun} />
-              </ErrorBoundary>
-            </Suspense>
             <Box
               sx={{
                 display: "flex",
@@ -150,7 +143,6 @@ function HomePage(props) {
                   mobileOpen={mobileOpen}
                   setMobileOpen={setMobileOpen}
                   showSidebar={props.showSidebar}
-                  setRun={setRun}
                   setOpenNotificationDrawer={setOpenNotificationDrawer}
                   setOpenActivityDrawer={setOpenActivityDrawer}
                   handleOpen={handleOpen}

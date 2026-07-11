@@ -150,26 +150,41 @@ export async function writeVersionedSettings(
     : SETTINGS_DEFAULTS;
 
   const merged = { ...base, ...validated };
+  const isImmediate = effectiveFrom <= new Date();
 
-  // Check whether a version with the same effectiveFrom already exists for
-  // this tenant (e.g. admin clicks Save twice in quick succession).
-  const existing = await (prisma as any).tenantSettings.findFirst({
-    where: { tenantId, effectiveFrom },
-  });
-  const row = existing
-    ? await (prisma as any).tenantSettings.update({
-        where: { id: existing.id },
-        data: { ...merged, note: note ?? null, createdBy: userId },
-      })
-    : await (prisma as any).tenantSettings.create({
-        data: {
-          tenantId,
-          effectiveFrom,
-          ...merged,
-          note: note ?? null,
-          createdBy: userId,
-        },
-      });
+  let row;
+  if (isImmediate && currentActive) {
+    // Immediate save with an active version already in place: update that
+    // row instead of minting a new version for every routine edit. The
+    // versioned-history mechanism is reserved for its actual purpose —
+    // forward-dated "schedule for later" changes — so this is the only
+    // branch that mutates a row in place rather than appending one.
+    row = await (prisma as any).tenantSettings.update({
+      where: { id: currentActive.id },
+      data: { ...merged, note: note ?? null, createdBy: userId },
+    });
+  } else {
+    // No active version yet, or this is a forward-dated scheduled change.
+    // Check whether a version with the same effectiveFrom already exists for
+    // this tenant (e.g. admin clicks Save twice in quick succession).
+    const existing = await (prisma as any).tenantSettings.findFirst({
+      where: { tenantId, effectiveFrom },
+    });
+    row = existing
+      ? await (prisma as any).tenantSettings.update({
+          where: { id: existing.id },
+          data: { ...merged, note: note ?? null, createdBy: userId },
+        })
+      : await (prisma as any).tenantSettings.create({
+          data: {
+            tenantId,
+            effectiveFrom,
+            ...merged,
+            note: note ?? null,
+            createdBy: userId,
+          },
+        });
+  }
 
   // Every leave-service/attendance-service settings read is cached (up to 15
   // min TTL). Only a row that's already active can change what those

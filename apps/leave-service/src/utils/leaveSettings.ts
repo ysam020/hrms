@@ -11,6 +11,12 @@ export interface LeaveSettings {
   customLeaveTypes: any[];
   leavePolicies: LeavePolicy[];
   workingDays: number[];
+  // Legacy flat quotas — superseded per-type by a matching leavePolicies
+  // entry's daysPerYear when configured; used as the seed value for a leave
+  // type's first numeric balances[] entry otherwise. See ensureTrackedBalance.
+  paidLeavesPerYear: number;
+  sickLeavesPerYear: number;
+  casualLeavesPerYear: number;
 }
 
 /**
@@ -37,6 +43,9 @@ export async function getLeaveSettings(
       customLeaveTypes: true,
       leavePolicies: true,
       workWeekPattern: true,
+      paidLeavesPerYear: true,
+      sickLeavesPerYear: true,
+      casualLeavesPerYear: true,
     },
   });
 
@@ -48,6 +57,9 @@ export async function getLeaveSettings(
     leavePolicies: (settings.leavePolicies as LeavePolicy[]) ?? [],
     workingDays:
       (settings.workWeekPattern as any)?.workingDays ?? DEFAULT_WORKING_DAYS,
+    paidLeavesPerYear: settings.paidLeavesPerYear ?? 12,
+    sickLeavesPerYear: settings.sickLeavesPerYear ?? 12,
+    casualLeavesPerYear: settings.casualLeavesPerYear ?? 6,
   };
   await cacheManager.set(cacheKey, result, "system", SETTINGS_CACHE_TTL);
   return result;

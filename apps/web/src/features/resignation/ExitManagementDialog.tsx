@@ -15,7 +15,6 @@ import TextField from "@mui/material/TextField";
 import Switch from "@mui/material/Switch";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
-import DataList from "@web/shared/components/DataList";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -81,12 +80,14 @@ export default function ExitManagementDialog({
     if (!resignationId) return;
     setLoading(true);
     try {
-      const [checklistRes, eventsRes] = await Promise.all([
+      const [checklistRes, eventsRes, settlementRes] = await Promise.all([
         apiClient.get(API_ENDPOINTS.GET_RESIGNATION_CHECKLIST(resignationId)),
         apiClient.get(API_ENDPOINTS.RESIGNATION_NOTICE_EVENTS(resignationId)),
+        apiClient.get(API_ENDPOINTS.COMPUTE_FNF_SETTLEMENT(resignationId)),
       ]);
       setChecklist(checklistRes.data?.data ?? []);
       setNoticeEvents(eventsRes.data?.data ?? []);
+      setSettlement(settlementRes.data?.data ?? null);
     } catch {
       // Non-critical for the first paint — user can retry via tab switch.
     } finally {
@@ -259,8 +260,9 @@ export default function ExitManagementDialog({
               <Box>
                 {checklist.length === 0 ? (
                   <Alert severity="info">
-                    No exit checklist configured — using the simple Assets
-                    Returned / FnF Done checkboxes in the table instead.
+                    No exit checklist configured yet. Add checklist items in
+                    Settings → Exit Policy to track offboarding steps like
+                    assets returned and FnF completion here.
                   </Alert>
                 ) : (
                   checklist.map((item) => (
@@ -302,38 +304,46 @@ export default function ExitManagementDialog({
             {tab === 1 && (
               <Box>
                 <Button
-                  variant="outline"
+                  variant="primary"
                   size="small"
                   onClick={computeSettlement}
                   disabled={computingSettlement}
                   loading={computingSettlement}
-                  style={{ marginBottom: 16 }}
+                  style={{ marginTop: 0, marginBottom: 16 }}
                 >
                   {settlement ? "Recompute" : "Compute settlement"}
                 </Button>
                 {settlement && (
                   <Box>
-                    <DataList
-                      ariaLabel="Final settlement line items"
-                      variant="rows"
-                      data={settlement.lineItems}
-                      getRowId={(li) => `${li.label}-${li.amount}`}
-                      columns={[
-                        {
-                          key: "label",
-                          label: "Line item",
-                          primary: true,
-                          hideLabel: true,
-                        },
-                        {
-                          key: "amount",
-                          label: "Amount",
-                          hideLabel: true,
-                          render: (li) =>
-                            `${li.type === "deduction" ? "-" : ""}₹${li.amount.toFixed(2)}`,
-                        },
-                      ]}
-                    />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 0.5,
+                      }}
+                    >
+                      {settlement.lineItems.map((li) => (
+                        <Box
+                          key={`${li.label}-${li.amount}`}
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            px: 2,
+                            py: 1,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1,
+                          }}
+                        >
+                          <Typography variant="body2">{li.label}</Typography>
+                          <Typography variant="body2">
+                            {li.type === "deduction" ? "-" : ""}₹
+                            {li.amount.toFixed(2)}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
                     <Box
                       sx={{
                         display: "flex",
@@ -410,6 +420,7 @@ export default function ExitManagementDialog({
                     size="small"
                     onClick={submitRenegotiation}
                     disabled={renegotiating || !newLastWorkingDay}
+                    style={{ marginTop: 0 }}
                   >
                     Update
                   </Button>
@@ -467,7 +478,12 @@ export default function ExitManagementDialog({
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button variant="ghost" onClick={onClose}>
+        <Button
+          variant="primary"
+          size="small"
+          onClick={onClose}
+          style={{ marginTop: 0 }}
+        >
           Close
         </Button>
       </DialogActions>

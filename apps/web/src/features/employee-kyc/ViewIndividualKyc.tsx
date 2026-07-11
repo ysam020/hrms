@@ -92,6 +92,7 @@ function ViewIndividualKyc() {
                       )}
                       {canRejectKyc && (
                         <Button
+                          variant="danger"
                           style={{ marginLeft: "10px" }}
                           onClick={() => handleKycApproval(false)}
                         >

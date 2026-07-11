@@ -464,10 +464,9 @@ export default function Subscription() {
             {!isExpired && tenant.subscriptionStatus !== "expired" && (
               <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
                 <Button
-                  variant="outline"
+                  variant="danger"
                   size="small"
                   onClick={() => setCancelOpen(true)}
-                  style={{ color: "#dc3545", border: "2px solid #dc3545" }}
                 >
                   Cancel Subscription
                 </Button>

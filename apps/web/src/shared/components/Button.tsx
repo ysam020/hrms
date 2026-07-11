@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useContext } from "react";
 import CircularProgress from "@mui/material/CircularProgress";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 type ButtonVariant =
   | "primary"
@@ -25,7 +26,7 @@ function Button({
   fullWidth = false,
   style = {},
   className = "",
-  theme = "light",
+  theme = undefined,
   ...props
 }: {
   [x: string]: any;
@@ -43,6 +44,9 @@ function Button({
   className?: string;
   theme?: "light" | "dark";
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
+
   const getVariantStyles = () => {
     const variants: Record<
       string,
@@ -58,33 +62,33 @@ function Button({
         color: "#fff",
       },
       secondary: {
-        backgroundColor: "#6c757d",
+        backgroundColor: "#565e64",
         color: "white",
       },
       accent: {
-        backgroundColor: "#6C5DFC",
+        backgroundColor: "#4c3fd4",
         color: "white",
       },
       danger: {
-        backgroundColor: "#dc3545",
+        backgroundColor: "#b02a37",
         color: "white",
       },
       warning: {
-        backgroundColor: "#ffc107",
+        backgroundColor: "#d39e00",
         color: "#212529",
       },
       success: {
-        backgroundColor: "#28a745",
+        backgroundColor: "#1e7e34",
         color: "white",
       },
       outline: {
         backgroundColor: "transparent",
-        color: theme === "light" ? "#111b21" : "#0c3f61",
-        border: `2px solid ${theme === "light" ? "#111b21" : "#0c3f61"}`,
+        color: theme === "light" ? "#111b21" : "#cacfd1",
+        border: `2px solid ${theme === "light" ? "#111b21" : "#cacfd1"}`,
       },
       ghost: {
         backgroundColor: "transparent",
-        color: theme === "light" ? "#111b21" : "#0c3f61",
+        color: theme === "light" ? "#111b21" : "#cacfd1",
         boxShadow: "none",
       },
     };

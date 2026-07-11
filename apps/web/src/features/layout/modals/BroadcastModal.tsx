@@ -76,7 +76,7 @@ function BroadcastModal(props) {
 
         {/* Action Buttons */}
         <Stack direction="row" spacing={2} sx={{ justifyContent: "flex-end" }}>
-          <Button variant="outline" onClick={handleLogout}>
+          <Button variant="danger" onClick={handleLogout}>
             Logout All Sessions
           </Button>
           <Button variant="primary" onClick={props.handleUseInThisTab}>

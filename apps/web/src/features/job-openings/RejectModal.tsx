@@ -147,7 +147,11 @@ function RejectModal(props) {
               formik={formik}
             />
 
-            <Button type="submit" disabled={formik.isSubmitting}>
+            <Button
+              type="submit"
+              variant="danger"
+              disabled={formik.isSubmitting}
+            >
               Reject Application
             </Button>
           </Stack>

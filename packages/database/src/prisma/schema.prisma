@@ -103,8 +103,6 @@ model User {
   // when set, else fall back to the string. See POST /org-structure/migrate-from-free-text.
   departmentId                 String?   @db.ObjectId
   designationId                String?   @db.ObjectId
-  // Resolution order for attendance: User.shiftId > Team.shiftId > TenantSettings defaults.
-  shiftId                     String?   @db.ObjectId
   // office (default, geofenced) | field | remote — field/remote skip geofencing entirely.
   attendanceMode              String    @default("office")
   // employee (default) | contractor — branches TDS logic (194J vs 192) in payroll.
@@ -187,6 +185,10 @@ model AttendanceRecord {
   timeIn       DateTime?
   timeOut      DateTime?
   workingHours Float?
+  // Hours beyond TenantSettings.fullDayMinHours — see resolveOvertimeHours.
+  // Only non-zero when overtimePreApprovalRequired is off, or an approved
+  // OvertimeRequest exists for this user+date.
+  overtimeHours Float?
   status       String?
   isCorrected  Boolean  @default(false)
   correctedBy  String?  @db.ObjectId
@@ -969,29 +971,6 @@ model ApprovalDelegate {
   @@map("approval_delegates")
 }
 
-// ─── Shifts ─────────────────────────────────────────────────────────────────
-
-model Shift {
-  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId               String   @db.ObjectId
-  name                   String   // "General", "Night Shift"
-  startHour              Int
-  startMinute            Int
-  endHour                Int
-  endMinute              Int
-  lateGracePeriodMinutes Int      @default(30)
-  fullDayMinHours        Float    @default(8)
-  halfDayMinHours        Float    @default(4)
-  isDefault              Boolean  @default(false)
-  isActive               Boolean  @default(true)
-  createdBy              String   @db.ObjectId
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-
-  @@index([tenantId, isActive])
-  @@map("shifts")
-}
-
 // ─── Org Structure ──────────────────────────────────────────────────────────
 // Optional promotion of User.department/designation (free-text) into real
 // entities with identity — a department head, a designation level/hierarchy.
@@ -1033,9 +1012,6 @@ model Team {
   teamName     String
   teamLeaderId String   @db.ObjectId
   members      String[] @db.ObjectId
-  // Team-level shift assignment — overrides TenantSettings defaults for
-  // members who don't have their own User.shiftId set.
-  shiftId      String?  @db.ObjectId
   // null = tenant default; same shape as TenantSettings.workWeekPattern.
   workWeekPatternOverride Json?
 

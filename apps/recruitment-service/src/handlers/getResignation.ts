@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 import { toResignationProto } from "./resignationSerializer";
@@ -18,7 +18,12 @@ export const getResignation = async (
       });
     }
 
-    const resignation = await prisma.resignation.findUnique({ where: { id } });
+    // findFirst (not findUnique) so tenantId is enforced in the query itself —
+    // tenants without a dedicated DB share the master DB, where `id` alone
+    // isn't enough to prevent reading another tenant's resignation.
+    const resignation = await prisma.resignation.findFirst({
+      where: { id, tenantId: getTenantId() },
+    });
 
     if (!resignation) {
       return callback(null, {

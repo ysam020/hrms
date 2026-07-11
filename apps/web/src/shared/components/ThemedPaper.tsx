@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useContext } from "react";
 import Paper from "@mui/material/Paper";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function ThemedPaper({
   children,
-  theme = "light",
+  theme = undefined,
   elevation = 1,
   hover = false,
   sx = {},
@@ -13,6 +14,9 @@ function ThemedPaper({
   children: any;
   [key: string]: any;
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
+
   const getThemedStyles = () => {
     const baseStyles: Record<string, any> = {
       backgroundColor: theme === "light" ? "#fff" : "#212e35",

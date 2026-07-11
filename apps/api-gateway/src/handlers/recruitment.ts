@@ -456,8 +456,11 @@ export async function rejectResignation(req: Request, res: Response) {
 export async function withdrawResignation(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const resignation = await prisma.resignation.findUnique({
-      where: { id: String(req.params._id) },
+    // findFirst (not findUnique) so tenantId is enforced — tenants without a
+    // dedicated DB share the master DB, where `id` alone doesn't prevent
+    // reading another tenant's resignation.
+    const resignation = await prisma.resignation.findFirst({
+      where: { id: String(req.params._id), tenantId: user?.tenantId },
       select: { userId: true },
     });
     if (!resignation)
@@ -474,11 +477,17 @@ export async function withdrawResignation(req: Request, res: Response) {
     // Was previously (incorrectly) calling rejectResignation with
     // status: "Withdrawn", which that handler silently ignored and always
     // recorded as "Rejected". WithdrawResignation is the real fix.
-    const response = await grpcCall(recruitmentClient, "withdrawResignation", {
+    //
+    // userId is omitted entirely for a superuser withdrawing on someone
+    // else's behalf — the gRPC handler's ownership check
+    // (resignation.userId !== userId) only runs when userId is present, so
+    // sending the superuser's own id here (as before) would always trip it
+    // and reject a withdrawal this route just authorized above.
+    const response = (await grpcCall(recruitmentClient, "withdrawResignation", {
       id: req.params._id,
-      userId: user!.userId,
-    });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+      ...(callerIsSuperUser ? {} : { userId: user!.userId }),
+    })) as any;
+    return apiResponse(res, grpcToHttpStatus(response.status), response);
   } catch (error: unknown) {
     return handleError(res, error);
   }
@@ -880,6 +889,19 @@ export async function rescheduleInterview(req: Request, res: Response) {
         message: "roundNumber is required to reschedule an interview",
       });
     }
+
+    if (user?.tenantId) {
+      const activeSettings = await getActiveSettings(user.tenantId);
+      const maxRounds =
+        activeSettings?.maxInterviewRounds ??
+        SETTINGS_DEFAULTS.maxInterviewRounds;
+      if (roundNumber > maxRounds) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `This tenant allows a maximum of ${maxRounds} interview round${maxRounds === 1 ? "" : "s"}.`,
+        });
+      }
+    }
+
     const app = await prisma.jobApplication.findUnique({ where: { id: _id } });
     if (!app)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
@@ -1013,8 +1035,11 @@ export async function updateResignation(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const { status: updateType, value } = req.body;
-    const resignation = await prisma.resignation.findUnique({
-      where: { id: String(req.params._id) },
+    // findFirst (not findUnique) so tenantId is enforced — tenants without a
+    // dedicated DB share the master DB, where `id` alone doesn't prevent
+    // acting on another tenant's resignation.
+    const resignation = await prisma.resignation.findFirst({
+      where: { id: String(req.params._id), tenantId: user?.tenantId },
     });
     if (!resignation)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
@@ -1024,6 +1049,10 @@ export async function updateResignation(req: Request, res: Response) {
     const updateData: any = { lastUpdatedOn: new Date() };
     if (updateType === "Assets Returned") updateData.assetsReturned = value;
     else if (updateType === "FnF Done") updateData.fnfDone = value;
+    else
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Unrecognized status "${updateType}" — expected "Assets Returned" or "FnF Done".`,
+      });
 
     const updated = await prisma.resignation.update({
       where: { id: String(req.params._id) },
@@ -1045,15 +1074,27 @@ export async function updateResignation(req: Request, res: Response) {
 export async function addExitFeedback(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
+    // tenantId scoped, and ordered so a rehired employee's most recent
+    // Approved resignation (not an older one) is the one feedback attaches to.
     const resignation = await prisma.resignation.findFirst({
-      where: { userId: user!.userId, status: "Approved" },
+      where: {
+        userId: user!.userId,
+        tenantId: user?.tenantId,
+        status: "Approved",
+      },
+      orderBy: { approvedOn: "desc" },
     });
     if (!resignation)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message:
           "You must have an approved resignation to submit exit feedback",
       });
-    if (resignation.overallJobSatisfaction > 0)
+    // qualityOfCommunication is only ever written here — unlike
+    // overallJobSatisfaction, which submitResignation also accepts at
+    // submission time, so it can't reliably signal "feedback already
+    // submitted" (an employee rating satisfaction when resigning would be
+    // permanently locked out of this endpoint otherwise).
+    if (resignation.qualityOfCommunication)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Exit feedback has already been submitted",
       });
@@ -1095,15 +1136,17 @@ export async function addExitFeedback(req: Request, res: Response) {
   }
 }
 
-export async function resignationInsights(_req: Request, res: Response) {
+export async function resignationInsights(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
+    const tenantId = user?.tenantId;
     const [total, submitted, approved, rejected, withdrawn] = await Promise.all(
       [
-        prisma.resignation.count(),
-        prisma.resignation.count({ where: { status: "Submitted" } }),
-        prisma.resignation.count({ where: { status: "Approved" } }),
-        prisma.resignation.count({ where: { status: "Rejected" } }),
-        prisma.resignation.count({ where: { status: "Withdrawn" } }),
+        prisma.resignation.count({ where: { tenantId } }),
+        prisma.resignation.count({ where: { tenantId, status: "Submitted" } }),
+        prisma.resignation.count({ where: { tenantId, status: "Approved" } }),
+        prisma.resignation.count({ where: { tenantId, status: "Rejected" } }),
+        prisma.resignation.count({ where: { tenantId, status: "Withdrawn" } }),
       ],
     );
 
@@ -1114,6 +1157,7 @@ export async function resignationInsights(_req: Request, res: Response) {
     const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const upcomingDepartures = await prisma.resignation.findMany({
       where: {
+        tenantId,
         status: "Approved",
         lastWorkingDay: { lte: nextMonth, gte: new Date() },
       },

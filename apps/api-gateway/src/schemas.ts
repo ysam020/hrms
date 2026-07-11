@@ -480,24 +480,6 @@ export const actOnApprovalSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
 });
 
-// ── Shifts ────────────────────────────────────────────────────────────────────
-
-export const createShiftSchema = z.object({
-  name: z.string().min(1).max(120),
-  startHour: z.number().int().min(0).max(23),
-  startMinute: z.number().int().min(0).max(59),
-  endHour: z.number().int().min(0).max(23),
-  endMinute: z.number().int().min(0).max(59),
-  lateGracePeriodMinutes: z.number().int().min(0).max(240).default(30),
-  fullDayMinHours: z.number().min(0.5).max(24).default(8),
-  halfDayMinHours: z.number().min(0.5).max(24).default(4),
-});
-
-export const updateShiftSchema = createShiftSchema.partial().extend({
-  isActive: z.boolean().optional(),
-  isDefault: z.boolean().optional(),
-});
-
 export const startBreakSchema = z.object({
   breakType: z.enum(["lunch", "short_break", "other"]).default("lunch"),
   isPaid: z.boolean().default(false),
@@ -508,15 +490,6 @@ export const requestOvertimeSchema = z.object({
   plannedHours: z.number().min(0.5).max(12),
   reason: z.string().max(500).optional(),
 });
-
-export const assignShiftSchema = z
-  .object({
-    userIds: z.array(z.string().min(1)).max(500).optional(),
-    teamIds: z.array(z.string().min(1)).max(100).optional(),
-  })
-  .refine((v) => (v.userIds?.length ?? 0) + (v.teamIds?.length ?? 0) > 0, {
-    message: "Provide at least one userId or teamId.",
-  });
 
 // ── Comp-off credits ─────────────────────────────────────────────────────────
 

@@ -68,13 +68,35 @@ export async function createCompOffCredit(req: AuthRequest, res: Response) {
   try {
     const { userId: createdBy } = req.user!;
     const { userId, sourceDate, earnedDays, expiresOn } = req.body;
+
+    // When HR doesn't set an explicit expiry, fall back to the tenant's
+    // configured comp-off policy (leavePolicies entry with isCompOff:true)
+    // — compOffExpiryDays after the worked date — instead of never expiring.
+    let resolvedExpiresOn: Date | null = expiresOn ? new Date(expiresOn) : null;
+    if (!resolvedExpiresOn) {
+      const settings = await (prisma as any).tenantSettings.findFirst({
+        where: { tenantId, effectiveFrom: { lte: new Date() } },
+        orderBy: { effectiveFrom: "desc" },
+        select: { leavePolicies: true },
+      });
+      const compOffPolicy = ((settings?.leavePolicies as any[]) ?? []).find(
+        (p) => p.isCompOff,
+      );
+      if (compOffPolicy?.compOffExpiryDays) {
+        resolvedExpiresOn = new Date(sourceDate);
+        resolvedExpiresOn.setDate(
+          resolvedExpiresOn.getDate() + compOffPolicy.compOffExpiryDays,
+        );
+      }
+    }
+
     const credit = await (prisma as any).compOffCredit.create({
       data: {
         tenantId,
         userId,
         sourceDate: new Date(sourceDate),
         earnedDays,
-        expiresOn: expiresOn ? new Date(expiresOn) : null,
+        expiresOn: resolvedExpiresOn,
         createdBy,
       },
     });

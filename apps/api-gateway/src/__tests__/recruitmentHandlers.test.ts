@@ -76,6 +76,11 @@ jest.mock("@hrms/common", () => ({
     FORBIDDEN: 403,
     INTERNAL_SERVER_ERROR: 500,
   },
+  // Real implementation (pure, no side effects) — handlers like
+  // withdrawResignation/addResignation map a gRPC response's own status
+  // field through this to pick the HTTP status, so tests need the real
+  // mapping rather than a stub that would just throw when called.
+  grpcToHttpStatus: jest.requireActual("@hrms/common").grpcToHttpStatus,
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -545,17 +550,65 @@ describe("recruitmentHandlers", () => {
     // Previously this called rejectResignation with status: "Withdrawn",
     // which that handler silently ignored and always recorded as
     // "Rejected" — withdrawResignation is the real, dedicated RPC.
-    mockResignFindUnique.mockResolvedValue({ userId: "user-1" });
+    mockResignFindFirst.mockResolvedValue({ userId: "user-1" });
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "withdrawResignation",
-      expect.objectContaining({ id: "res-1" }),
+      expect.objectContaining({ id: "res-1", userId: "user-1" }),
+    );
+  });
+
+  it("withdrawResignation omits userId for a privileged superuser override", async () => {
+    mockResignFindFirst.mockResolvedValue({ userId: "someone-else" });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
+    await withdrawResignation(makeReq({ params: { _id: "res-1" } }), makeRes());
+    const [, , payload] = mockGrpcCall.mock.calls[0];
+    expect(payload).toEqual({ id: "res-1" });
+    expect(payload).not.toHaveProperty("userId");
+  });
+
+  it("withdrawResignation maps a real success (status OK) to a 2xx response", async () => {
+    mockResignFindFirst.mockResolvedValue({ userId: "user-1" });
+    mockGrpcCall.mockResolvedValue({
+      message: "Resignation withdrawn",
+      status: 0, // GrpcStatus.OK
+    });
+    const res = makeRes();
+    await withdrawResignation(makeReq({ params: { _id: "res-1" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.objectContaining({ status: 0 }),
+    );
+  });
+
+  it("withdrawResignation does NOT report success when the gRPC call itself reports a failure (e.g. already Approved)", async () => {
+    // Regression test: the handler used to hardcode RESPONSE_STATUS.SUCCESS
+    // regardless of what the gRPC call actually returned, so a rejected
+    // withdrawal (e.g. "Only submitted resignations can be withdrawn") came
+    // back as HTTP 200 with success:true.
+    mockResignFindFirst.mockResolvedValue({ userId: "user-1" });
+    mockGrpcCall.mockResolvedValue({
+      message: "Only submitted resignations can be withdrawn",
+      status: 9, // GrpcStatus.FAILED_PRECONDITION
+    });
+    const res = makeRes();
+    await withdrawResignation(makeReq({ params: { _id: "res-1" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.BAD_REQUEST,
+      expect.objectContaining({ status: 9 }),
+    );
+    expect(mockApiResponse).not.toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.anything(),
     );
   });
 
   it("withdrawResignation returns INTERNAL on error", async () => {
-    mockResignFindUnique.mockResolvedValue({ userId: "user-1" });
+    mockResignFindFirst.mockResolvedValue({ userId: "user-1" });
     mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
     const res = makeRes();
     await withdrawResignation(makeReq({ params: { _id: "res-1" } }), res);
@@ -917,7 +970,7 @@ describe("recruitmentHandlers", () => {
 
   describe("updateResignation", () => {
     it("returns NOT_FOUND when resignation not found", async () => {
-      mockResignFindUnique.mockResolvedValue(null);
+      mockResignFindFirst.mockResolvedValue(null);
       const res = makeRes();
       await updateResignation(
         makeReq({ params: { _id: "res-99" }, body: {} }),
@@ -930,8 +983,23 @@ describe("recruitmentHandlers", () => {
       );
     });
 
+    it("scopes the lookup to the current tenant", async () => {
+      mockResignFindFirst.mockResolvedValue({ id: "res-1" });
+      mockResignUpdate.mockResolvedValue({ id: "res-1" });
+      await updateResignation(
+        makeReq({
+          params: { _id: "res-1" },
+          body: { status: "Assets Returned", value: true },
+        }),
+        makeRes(),
+      );
+      expect(mockResignFindFirst).toHaveBeenCalledWith({
+        where: { id: "res-1", tenantId: "t1" },
+      });
+    });
+
     it("updates assetsReturned field", async () => {
-      mockResignFindUnique.mockResolvedValue({ id: "res-1" });
+      mockResignFindFirst.mockResolvedValue({ id: "res-1" });
       mockResignUpdate.mockResolvedValue({ id: "res-1" });
       await updateResignation(
         makeReq({
@@ -948,7 +1016,7 @@ describe("recruitmentHandlers", () => {
     });
 
     it("updates fnfDone field when status is FnF Done", async () => {
-      mockResignFindUnique.mockResolvedValue({ id: "res-1" });
+      mockResignFindFirst.mockResolvedValue({ id: "res-1" });
       mockResignUpdate.mockResolvedValue({ id: "res-1" });
       await updateResignation(
         makeReq({
@@ -964,8 +1032,26 @@ describe("recruitmentHandlers", () => {
       );
     });
 
+    it("returns BAD_REQUEST and does not update for an unrecognized status value", async () => {
+      mockResignFindFirst.mockResolvedValue({ id: "res-1" });
+      const res = makeRes();
+      await updateResignation(
+        makeReq({
+          params: { _id: "res-1" },
+          body: { status: "Assetss Returned", value: true },
+        }),
+        res,
+      );
+      expect(mockResignUpdate).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
     it("returns INTERNAL on error", async () => {
-      mockResignFindUnique.mockRejectedValue(new Error("DB error"));
+      mockResignFindFirst.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await updateResignation(
         makeReq({ params: { _id: "res-1" }, body: {} }),
@@ -1187,7 +1273,7 @@ describe("recruitmentHandlers", () => {
       mockResignFindFirst.mockResolvedValue({
         id: "res-1",
         status: "Approved",
-        overallJobSatisfaction: 4,
+        qualityOfCommunication: "Good",
       });
       const res = makeRes();
       await addExitFeedback(makeReq({ body: {} }), res);
@@ -1197,6 +1283,23 @@ describe("recruitmentHandlers", () => {
         expect.objectContaining({
           message: expect.stringContaining("already been submitted"),
         }),
+      );
+    });
+
+    it("does not block on overallJobSatisfaction alone (set at submission time, not exit-feedback time)", async () => {
+      mockResignFindFirst.mockResolvedValue({
+        id: "res-1",
+        status: "Approved",
+        overallJobSatisfaction: 4,
+        qualityOfCommunication: null,
+      });
+      mockResignUpdate.mockResolvedValue({ id: "res-1" });
+      const res = makeRes();
+      await addExitFeedback(makeReq({ body: {} }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.CREATED,
+        expect.any(Object),
       );
     });
 
