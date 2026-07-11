@@ -45,6 +45,7 @@ vi.mock("@web/core/http/axiosConfig", () => ({
 // Socket / chat providers don't matter for routing tests
 vi.mock("@web/app/providers/SocketContext", () => ({
   SocketProvider: ({ children }: any) => <>{children}</>,
+  useSocket: () => ({ socketRef: { current: null }, connected: false }),
 }));
 vi.mock("@web/app/providers/ChatUnreadContext", () => ({
   ChatUnreadProvider: ({ children }: any) => <>{children}</>,

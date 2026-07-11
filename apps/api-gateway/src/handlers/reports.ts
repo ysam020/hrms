@@ -58,7 +58,7 @@ const ENTITY_CONFIG: Record<string, EntityAllowlist> = {
       dob: true,
       blood_group: true,
       qualification: true,
-      kycStatus: true,
+      kyc_approval: true,
       createdAt: true,
     },
     filterFields: new Set([

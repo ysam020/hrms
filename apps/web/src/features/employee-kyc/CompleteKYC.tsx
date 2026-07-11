@@ -3,6 +3,7 @@ import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
+import Alert from "@mui/material/Alert";
 import Paper from "@mui/material/Paper";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
@@ -101,7 +102,15 @@ function CompleteKYC(props) {
           message: res.data.message,
           severity: "success",
         });
-        formik.resetForm();
+        if (props.edit) {
+          // Editing an existing employee's KYC: keep showing what was just
+          // saved. formik.resetForm() reverts to the blank `initialValues`
+          // (never updated to the fetched data — only formik.values was, via
+          // setValues in the effect below), which wiped the whole form.
+          formik.resetForm({ values: formik.values });
+        } else {
+          formik.resetForm();
+        }
       } catch (error) {
         setAlert({
           open: true,
@@ -152,6 +161,40 @@ function CompleteKYC(props) {
     }
   }, [userData, loading]);
 
+  const revisionNotes: Record<string, string> =
+    userData?.kyc_revision_notes ?? {};
+  const needsRevision =
+    userData?.kyc_approval === "Revision Requested" &&
+    Object.keys(revisionNotes).length > 0;
+
+  // Editing is only reachable via this component with props.edit — the
+  // original self-onboarding "Complete KYC" flow (props.edit falsy) is
+  // unaffected, since a brand-new submission has no prior decision to
+  // protect.
+  const isLocked =
+    props.edit &&
+    ["Approved", "Rejected", "Edit Requested"].includes(userData?.kyc_approval);
+
+  if (!loading && isLocked) {
+    return (
+      <Card sx={{ maxWidth: 1000, mx: "auto", boxShadow: 2 }}>
+        <CardContent sx={{ p: 2 }}>
+          <Box display="flex" alignItems="center" gap={1} mb={2}>
+            <VerifiedUser color="primary" />
+            <Typography variant="h6" fontWeight="600">
+              Complete KYC
+            </Typography>
+          </Box>
+          <Alert severity="info">
+            {userData?.kyc_approval === "Edit Requested"
+              ? "An edit request is pending HR's approval. You'll be able to make changes once it's granted."
+              : "This KYC is already finalized and can't be edited directly. Request an update from the KYC details page to make changes."}
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card sx={{ maxWidth: 1000, mx: "auto", boxShadow: 2 }}>
       <CardContent sx={{ p: 2 }}>
@@ -162,6 +205,17 @@ function CompleteKYC(props) {
             Complete KYC
           </Typography>
         </Box>
+
+        {needsRevision && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2" fontWeight={600}>
+              HR requested a revision on the fields marked below
+            </Typography>
+            <Typography variant="body2">
+              Update them and resubmit — everything else stays as-is.
+            </Typography>
+          </Alert>
+        )}
 
         <form onSubmit={formik.handleSubmit}>
           <Grid container spacing={1}>
@@ -188,6 +242,7 @@ function CompleteKYC(props) {
                       setAlert={setAlert}
                       folderName="employee_kyc"
                       username={username || user.username}
+                      revisionNote={revisionNotes.employee_photo}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -196,6 +251,7 @@ function CompleteKYC(props) {
                       name="dob"
                       placeholder="Date of Birth"
                       formik={formik}
+                      revisionNote={revisionNotes.dob}
                       inputProps={{
                         showIcon: true,
                         showButtonBar: true,
@@ -210,6 +266,7 @@ function CompleteKYC(props) {
                       name="mobile"
                       placeholder="Mobile"
                       formik={formik}
+                      revisionNote={revisionNotes.mobile}
                       inputProps={{
                         keyfilter: "int",
                         maxLength: 10,
@@ -223,6 +280,7 @@ function CompleteKYC(props) {
                       name="email"
                       placeholder="Email"
                       formik={formik}
+                      revisionNote={revisionNotes.email}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -231,6 +289,7 @@ function CompleteKYC(props) {
                       name="official_email"
                       placeholder="Official Email"
                       formik={formik}
+                      revisionNote={revisionNotes.official_email}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -239,6 +298,7 @@ function CompleteKYC(props) {
                       name="blood_group"
                       placeholder="Blood Group"
                       formik={formik}
+                      revisionNote={revisionNotes.blood_group}
                     />
                   </Grid>
                   <Grid size={12}>
@@ -247,6 +307,7 @@ function CompleteKYC(props) {
                       name="qualification"
                       placeholder="Highest Qualification"
                       formik={formik}
+                      revisionNote={revisionNotes.qualification}
                     />
                   </Grid>
                 </Grid>
@@ -269,6 +330,7 @@ function CompleteKYC(props) {
                       name="permanent_address_line_1"
                       placeholder="Address Line 1"
                       formik={formik}
+                      revisionNote={revisionNotes.permanent_address_line_1}
                     />
                   </Grid>
                   <Grid size={12}>
@@ -277,6 +339,7 @@ function CompleteKYC(props) {
                       name="permanent_address_line_2"
                       placeholder="Address Line 2"
                       formik={formik}
+                      revisionNote={revisionNotes.permanent_address_line_2}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -285,6 +348,7 @@ function CompleteKYC(props) {
                       name="permanent_address_city"
                       placeholder="City"
                       formik={formik}
+                      revisionNote={revisionNotes.permanent_address_city}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -293,6 +357,7 @@ function CompleteKYC(props) {
                       options={states}
                       placeholder="State"
                       formik={formik}
+                      revisionNote={revisionNotes.permanent_address_state}
                       inputProps={{ optionLabel: "name" }}
                     />
                   </Grid>
@@ -302,6 +367,7 @@ function CompleteKYC(props) {
                       name="permanent_address_pincode"
                       placeholder="PIN Code"
                       formik={formik}
+                      revisionNote={revisionNotes.permanent_address_pincode}
                       inputProps={{
                         keyfilter: "int",
                         minLength: 6,
@@ -339,6 +405,7 @@ function CompleteKYC(props) {
                       name="communication_address_line_1"
                       placeholder="Address Line 1"
                       formik={formik}
+                      revisionNote={revisionNotes.communication_address_line_1}
                     />
                   </Grid>
                   <Grid size={12}>
@@ -347,6 +414,7 @@ function CompleteKYC(props) {
                       name="communication_address_line_2"
                       placeholder="Address Line 2"
                       formik={formik}
+                      revisionNote={revisionNotes.communication_address_line_2}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -355,6 +423,7 @@ function CompleteKYC(props) {
                       name="communication_address_city"
                       placeholder="City"
                       formik={formik}
+                      revisionNote={revisionNotes.communication_address_city}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -363,6 +432,7 @@ function CompleteKYC(props) {
                       options={states}
                       placeholder="State"
                       formik={formik}
+                      revisionNote={revisionNotes.communication_address_state}
                       inputProps={{ optionLabel: "name" }}
                     />
                   </Grid>
@@ -372,6 +442,7 @@ function CompleteKYC(props) {
                       name="communication_address_pincode"
                       placeholder="PIN Code"
                       formik={formik}
+                      revisionNote={revisionNotes.communication_address_pincode}
                       inputProps={{
                         keyfilter: "int",
                         minLength: 6,
@@ -399,6 +470,7 @@ function CompleteKYC(props) {
                       name="aadhar_no"
                       placeholder="AADHAR Number"
                       formik={formik}
+                      revisionNote={revisionNotes.aadhar_no}
                       inputProps={{
                         keyfilter: "int",
                         minLength: 12,
@@ -412,6 +484,7 @@ function CompleteKYC(props) {
                       name="pan_no"
                       placeholder="PAN Number"
                       formik={formik}
+                      revisionNote={revisionNotes.pan_no}
                       inputProps={{
                         minLength: 10,
                         maxLength: 10,
@@ -431,6 +504,7 @@ function CompleteKYC(props) {
                       setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
+                      revisionNote={revisionNotes.aadhar_photo_front}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -446,6 +520,7 @@ function CompleteKYC(props) {
                       setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
+                      revisionNote={revisionNotes.aadhar_photo_back}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -461,6 +536,7 @@ function CompleteKYC(props) {
                       setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
+                      revisionNote={revisionNotes.pan_photo}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -477,6 +553,7 @@ function CompleteKYC(props) {
                       setAlert={setAlert}
                       inputProps={{ multiple: true }}
                       username={username || user.username}
+                      revisionNote={revisionNotes.education_certificates}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -492,6 +569,7 @@ function CompleteKYC(props) {
                       setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
+                      revisionNote={revisionNotes.experience_certificate}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -507,6 +585,7 @@ function CompleteKYC(props) {
                       setFileSnackbar={onFileUploaded}
                       setAlert={setAlert}
                       username={username || user.username}
+                      revisionNote={revisionNotes.electricity_bill}
                     />
                   </Grid>
                 </Grid>
@@ -531,6 +610,7 @@ function CompleteKYC(props) {
                       name="bank_account_no"
                       placeholder="Bank Account Number"
                       formik={formik}
+                      revisionNote={revisionNotes.bank_account_no}
                       inputProps={{ keyfilter: "int" }}
                     />
                   </Grid>
@@ -540,6 +620,7 @@ function CompleteKYC(props) {
                       name="bank_name"
                       placeholder="Bank Name"
                       formik={formik}
+                      revisionNote={revisionNotes.bank_name}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
@@ -548,6 +629,7 @@ function CompleteKYC(props) {
                       name="ifsc_code"
                       placeholder="IFSC Code"
                       formik={formik}
+                      revisionNote={revisionNotes.ifsc_code}
                     />
                   </Grid>
                 </Grid>

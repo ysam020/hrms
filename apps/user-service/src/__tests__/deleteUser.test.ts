@@ -68,7 +68,7 @@ describe("deleteUser", () => {
     await deleteUser(makeCall({ userId: "u1" }), cb);
     expect(mockDelete).toHaveBeenCalledWith({ where: { id: "u1" } });
     expect(mockInvalidate).toHaveBeenCalledWith("t:t1:users:*");
-    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:u1");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:v6:u1");
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),

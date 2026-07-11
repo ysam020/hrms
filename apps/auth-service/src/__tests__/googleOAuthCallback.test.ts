@@ -21,6 +21,7 @@ jest.mock("@hrms/db", () => {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    canonicalizeEmail: jest.requireActual("@hrms/db").canonicalizeEmail,
   };
 });
 
@@ -43,6 +44,8 @@ const mockUserUpdate = (prisma as any).user.update as jest.Mock;
 const mockCount = (prisma as any).user.count as jest.Mock;
 const mockMembershipFindMany = (prisma as any).tenantMembership
   .findMany as jest.Mock;
+const mockMembershipCreate = (prisma as any).tenantMembership
+  .create as jest.Mock;
 const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
@@ -167,6 +170,80 @@ describe("googleOAuthCallback", () => {
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),
+    );
+  });
+
+  it("self-heals a missing TenantMembership when user.tenantId is already stamped", async () => {
+    mockTokenExchange();
+    mockProfileFetch();
+    mockFindFirst.mockResolvedValue({ ...activeUser, tenantId: "t1" });
+    mockMembershipFindMany.mockResolvedValue([]); // membership row missing
+    mockTenantFindUnique.mockResolvedValue({
+      id: "t1",
+      isActive: true,
+      dbName: "db-t1",
+    });
+    mockMembershipCreate.mockResolvedValue({
+      tenantId: "t1",
+      userId: "u1",
+      role: "employee",
+    });
+    const cb = makeCallback();
+    await googleOAuthCallback(makeCall({ code: "auth-code" }), cb);
+    expect(mockMembershipCreate).toHaveBeenCalledWith({
+      data: { tenantId: "t1", userId: "u1", role: "employee" },
+    });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        status: 0,
+        accessToken: "access-token",
+        refreshToken: "refresh-token",
+        needsTenantSetup: false,
+      }),
+    );
+  });
+
+  it("clears a stale user.tenantId that points at a deleted/inactive tenant", async () => {
+    mockTokenExchange();
+    mockProfileFetch();
+    mockFindFirst.mockResolvedValue({ ...activeUser, tenantId: "gone" });
+    mockMembershipFindMany.mockResolvedValue([]);
+    mockTenantFindUnique.mockResolvedValue(null);
+    const cb = makeCallback();
+    await googleOAuthCallback(makeCall({ code: "auth-code" }), cb);
+    expect(mockMembershipCreate).not.toHaveBeenCalled();
+    expect(mockUserUpdate).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { tenantId: null },
+    });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ needsTenantSetup: true }),
+    );
+  });
+
+  it("matches an existing user by Gmail dot-insensitive email instead of creating a duplicate", async () => {
+    mockTokenExchange();
+    mockProfileFetch(true, {
+      email: "sameer.y020@gmail.com", // dot in a different spot
+      name: "User Name",
+      picture: null,
+    });
+    mockFindFirst.mockResolvedValue({
+      ...activeUser,
+      email: "sameery020@gmail.com", // stored in canonical (dot-stripped) form
+      tenantId: "t1",
+    });
+    const cb = makeCallback();
+    await googleOAuthCallback(makeCall({ code: "auth-code" }), cb);
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { email: "sameery020@gmail.com" },
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 0, needsTenantSetup: false }),
     );
   });
 

@@ -37,7 +37,7 @@ COPY --from=pruner /app/out/full/ .
 RUN pnpm proto:gen
 RUN PATH="/app/node_modules/.bin:$PATH" pnpm db:generate
 RUN turbo build --filter=${PROJECT}
-RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm prune --prod --no-optional
+RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store pnpm prune --prod --no-optional --ignore-scripts
 RUN find . -path "*/src" -type d \
     ! -path "./node_modules/*" \
     ! -path "./.pnpm/*" \

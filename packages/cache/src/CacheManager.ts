@@ -1,5 +1,22 @@
+import type Redis from "ioredis";
 import { logger } from "@hrms/logger";
 import { getRedisClient } from "./client";
+
+// Each microservice is a separate Node.js process with its own CacheManager
+// instance and its own in-process memoryCache — delete()/invalidatePattern()
+// only ever cleared *this* process's memory plus the shared Redis key.
+// Without this, a write in one service (e.g. employee-service's KYC submit)
+// correctly cleared Redis, but another service's process (e.g. user-service,
+// serving GetUser) kept its own now-stale copy in memory for up to its full
+// TTL, since get() checks memoryCache before ever touching Redis. Every
+// instance subscribes to this channel so a delete/invalidate in one process
+// evicts the matching entries everywhere, not just in the process that
+// issued it.
+const INVALIDATION_CHANNEL = "hrms:cache:invalidate";
+
+type InvalidationMessage =
+  | { type: "del"; key: string }
+  | { type: "pattern"; pattern: string };
 
 const ENTITY_TTL: Record<string, number> = {
   attendance: 1800,
@@ -25,10 +42,59 @@ const DEFAULT_TTL = 3600;
 export class CacheManager {
   private memoryCache: Map<string, unknown>;
   private memoryTTL: Map<string, number>;
+  private subscriber: Redis | null = null;
 
   constructor() {
     this.memoryCache = new Map();
     this.memoryTTL = new Map();
+    this.subscribeToInvalidations();
+  }
+
+  private subscribeToInvalidations(): void {
+    try {
+      // Pub/sub needs its own connection — once a client issues SUBSCRIBE,
+      // ioredis (like Redis itself) restricts it to pub/sub commands only.
+      this.subscriber = getRedisClient().duplicate();
+      this.subscriber.on("error", (err) =>
+        logger.error("CacheManager subscriber error:", { err }),
+      );
+      this.subscriber.on("message", (_channel: string, message: string) => {
+        try {
+          const payload = JSON.parse(message) as InvalidationMessage;
+          if (payload.type === "del") {
+            this.evictMemory(payload.key);
+          } else {
+            this.evictMemoryPattern(payload.pattern);
+          }
+        } catch (err) {
+          logger.error("CacheManager invalidation message error:", { err });
+        }
+      });
+      this.subscriber
+        .subscribe(INVALIDATION_CHANNEL)
+        .catch((err) =>
+          logger.error("CacheManager subscribe failed:", { err }),
+        );
+    } catch (err) {
+      logger.error("CacheManager subscriber setup error:", { err });
+    }
+  }
+
+  private evictMemory(key: string): void {
+    this.memoryCache.delete(key);
+    this.memoryTTL.delete(key);
+  }
+
+  private evictMemoryPattern(pattern: string): void {
+    const prefix = pattern.endsWith(":*")
+      ? pattern.slice(0, -1)
+      : pattern.replace(/\*/g, "");
+    for (const key of this.memoryCache.keys()) {
+      if (key.startsWith(prefix) || this.matchesGlob(key, pattern)) {
+        this.memoryCache.delete(key);
+        this.memoryTTL.delete(key);
+      }
+    }
   }
 
   private getTTL(entityType?: string): number {
@@ -109,11 +175,16 @@ export class CacheManager {
   }
 
   async delete(key: string): Promise<void> {
+    this.evictMemory(key);
     try {
-      this.memoryCache.delete(key);
-      this.memoryTTL.delete(key);
       const redis = getRedisClient();
       await redis.del(key);
+      // Tell every other process's CacheManager to evict this key from its
+      // own memory too — see the comment on INVALIDATION_CHANNEL above.
+      await redis.publish(
+        INVALIDATION_CHANNEL,
+        JSON.stringify({ type: "del", key } satisfies InvalidationMessage),
+      );
     } catch (err) {
       logger.error("CacheManager.delete error:", { key, err });
     }
@@ -124,16 +195,9 @@ export class CacheManager {
    * Uses SCAN to avoid blocking Redis on large keyspaces.
    */
   async invalidatePattern(pattern: string): Promise<void> {
-    // Always evict memory entries first — independent of Redis availability.
-    const prefix = pattern.endsWith(":*")
-      ? pattern.slice(0, -1)
-      : pattern.replace(/\*/g, "");
-    for (const key of this.memoryCache.keys()) {
-      if (key.startsWith(prefix) || this.matchesGlob(key, pattern)) {
-        this.memoryCache.delete(key);
-        this.memoryTTL.delete(key);
-      }
-    }
+    // Always evict this process's memory entries first — independent of
+    // Redis availability.
+    this.evictMemoryPattern(pattern);
 
     // Best-effort Redis eviction (SCAN avoids blocking on large keyspaces).
     try {
@@ -152,6 +216,13 @@ export class CacheManager {
           await redis.del(...keys);
         }
       } while (cursor !== "0");
+      await redis.publish(
+        INVALIDATION_CHANNEL,
+        JSON.stringify({
+          type: "pattern",
+          pattern,
+        } satisfies InvalidationMessage),
+      );
     } catch (err) {
       logger.error("CacheManager.invalidatePattern error:", { pattern, err });
     }
@@ -199,7 +270,11 @@ let instance: CacheManager | null = null;
 export function getCacheManager(): CacheManager {
   if (!instance) {
     instance = new CacheManager();
-    setInterval(() => instance!.cleanup(), 300_000);
+    // unref() so this timer alone doesn't keep the process/event loop
+    // alive — matters for scripts, tests, and graceful shutdown, and is a
+    // no-op for a long-running service (which always has other work
+    // keeping it alive anyway).
+    setInterval(() => instance!.cleanup(), 300_000).unref();
   }
   return instance;
 }

@@ -8,6 +8,7 @@ function DropdownWrapper({
   formik,
   label,
   required = false,
+  revisionNote,
   inputProps = {},
 }: {
   name: string;
@@ -16,6 +17,7 @@ function DropdownWrapper({
   formik: any;
   label?: string;
   required?: boolean;
+  revisionNote?: string;
   inputProps?: any;
 }) {
   const hasError = formik.touched[name] && formik.errors[name];
@@ -61,6 +63,11 @@ function DropdownWrapper({
       {hasError && (
         <small id={errorId} className="p-error" role="alert">
           {formik.errors[name]}
+        </small>
+      )}
+      {!hasError && revisionNote && (
+        <small style={{ display: "block", color: "#b45309" }} role="alert">
+          ⚠ {revisionNote}
         </small>
       )}
     </div>

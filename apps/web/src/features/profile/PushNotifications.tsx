@@ -19,6 +19,7 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { generateDeviceFingerprint } from "@web/shared/utils/pushNotifications/deviceFingerprint";
+import { generateToken } from "@web/shared/utils/pushNotifications/generateFcmToken";
 import apiClient from "@web/core/http/axiosConfig";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
@@ -61,13 +62,15 @@ function PushNotifications() {
   const handleEnablePushNotifications = async () => {
     setLoading(true);
     try {
-      const { generateToken } =
-        await import("@web/shared/utils/pushNotifications/generateFcmToken");
-      const { deviceFingerprint, deviceInfo } = await (
-        await import("@web/shared/utils/pushNotifications/deviceFingerprint")
-      ).generateDeviceFingerprint();
+      // generateToken() calls Notification.requestPermission() as its first
+      // step — browsers can silently auto-deny a permission prompt that's
+      // no longer tied to the click that triggered it, so nothing here
+      // should await before that call. (Dynamic import()s used to sit in
+      // front of it, pushing the request several ticks past the click.)
       const token = await generateToken(setAlert);
       if (token) {
+        const { deviceFingerprint, deviceInfo } =
+          await generateDeviceFingerprint();
         setUser((prev) => {
           const existing = Array.isArray(prev.fcmTokens) ? prev.fcmTokens : [];
           const idx = existing.findIndex(
@@ -94,6 +97,11 @@ function PushNotifications() {
       }
     } catch (error) {
       console.error("Error enabling push notifications:", error);
+      setAlert({
+        open: true,
+        message: "Something went wrong enabling push notifications.",
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }

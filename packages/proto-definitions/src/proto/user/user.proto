@@ -44,6 +44,23 @@ message User {
   string date_of_termination = 38;
   string reason_for_termination = 39;
   string date_of_abscond = 40;
+  string qualification = 41;
+  string aadhar_photo_back = 42;
+  repeated string education_certificates = 43;
+  string experience_certificate = 44;
+  string electricity_bill = 45;
+  string kyc_approval = 46;
+  string kyc_date = 47;
+  // JSON-encoded { [fieldName]: issueDescription }, set when kyc_approval
+  // is "Revision Requested" — see RequestKycRevisionRequest in employee.proto.
+  string kyc_revision_notes_json = 48;
+  // Employee's stated reason for reopening an approved KYC, set when
+  // kyc_approval is "Edit Requested" — see RequestKycEditAccessRequest in
+  // employee.proto.
+  string kyc_edit_request_reason = 49;
+  // "open" | "closed" | "" — set by AllowKycEdit, closed by the next
+  // self-submit. See kyc_edit_window in schema.prisma / allowKycEdit.ts.
+  string kyc_edit_window = 50;
 }
 
 message GetUserRequest {

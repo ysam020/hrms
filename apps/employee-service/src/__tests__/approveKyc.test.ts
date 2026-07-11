@@ -17,10 +17,9 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn(), delete: jest.fn() },
 }));
 
+const mockQueueAdd = jest.fn().mockResolvedValue(undefined);
 jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({
-    add: jest.fn().mockResolvedValue(undefined),
-  })),
+  getNotificationQueue: jest.fn(() => ({ add: mockQueueAdd })),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -77,22 +76,29 @@ describe("approveKyc", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it("approves KYC and invalidates cache", async () => {
+  it("approves KYC, clears any earlier revision notes, and invalidates cache", async () => {
     mockFindUnique.mockResolvedValue(user);
     const cb = makeCallback();
     await approveKyc(makeCall({ employeeId: "u1" }), cb);
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "u1" },
-      data: { kyc_approval: "Approved" },
+      data: { kyc_approval: "Approved", kyc_revision_notes: null },
     });
     expect(mockInvalidate).toHaveBeenCalledWith("t:t1:employees:*");
     expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:employee:u1");
-    expect(mockCacheDelete).toHaveBeenCalledWith(
-      "t:t1:employee-details:john",
-    );
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:employee-details:john");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:v6:u1");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:v6:john");
     expect(cb).toHaveBeenCalledWith(
       null,
-      expect.objectContaining({ status: 0 }),
+      expect.objectContaining({ status: 0, kycStatus: "Approved" }),
+    );
+    expect(mockQueueAdd).toHaveBeenCalledWith(
+      "kycApproved",
+      expect.objectContaining({
+        targetUser: "john",
+        sendPushNotification: true,
+      }),
     );
   });
 

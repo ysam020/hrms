@@ -187,9 +187,26 @@ export const completeKycSchema = z.object({
   ifsc_code: z.string().max(16).optional(),
 });
 
-export const kycApprovalSchema = z.object({
-  username: z.string().min(1).max(64),
-  kyc_approval: z.enum(["Approved", "Rejected"]),
+export const kycApprovalSchema = z
+  .object({
+    username: z.string().min(1).max(64),
+    kyc_approval: z.enum(["Approved", "Revision Requested"]),
+    // { [fieldName]: issue description } — required when requesting a
+    // revision, ignored otherwise.
+    field_issues: z.record(z.string().min(1).max(500)).optional(),
+  })
+  .refine(
+    (data) =>
+      data.kyc_approval !== "Revision Requested" ||
+      (data.field_issues && Object.keys(data.field_issues).length > 0),
+    {
+      message: "field_issues is required when requesting a revision",
+      path: ["field_issues"],
+    },
+  );
+
+export const requestKycEditAccessSchema = z.object({
+  reason: z.string().min(1).max(500),
 });
 
 // ── Salary ────────────────────────────────────────────────────────────────────

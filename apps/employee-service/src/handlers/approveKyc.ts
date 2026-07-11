@@ -36,14 +36,22 @@ export const approveKyc = async (
 
     const updatedUser = await prisma.user.update({
       where: { id: employeeId },
-      data: { kyc_approval: "Approved" },
+      // Approving is a fresh, decisive call — any earlier per-field
+      // revision notes are no longer relevant.
+      data: { kyc_approval: "Approved", kyc_revision_notes: null },
     });
 
     const tenantId = getTenantId() ?? "global";
     await Promise.all([
       cacheManager.invalidatePattern(`t:${tenantId}:employees:*`),
       cacheManager.delete(`t:${tenantId}:employee:${employeeId}`),
-      cacheManager.delete(`t:${tenantId}:employee-details:${updatedUser.username}`),
+      cacheManager.delete(
+        `t:${tenantId}:employee-details:${updatedUser.username}`,
+      ),
+      // See submitKyc.ts — /get-user-data/:username reads through
+      // user-service's GetUser RPC cache, keyed separately from the above.
+      cacheManager.delete(`t:${tenantId}:user:v6:${employeeId}`),
+      cacheManager.delete(`t:${tenantId}:user:v6:${updatedUser.username}`),
     ]);
 
     // Notify employee (fire-and-forget)
@@ -54,6 +62,7 @@ export const approveKyc = async (
         targetUser: updatedUser.username,
         eventType: "kyc_notification",
         priority: "medium",
+        sendPushNotification: true,
       })
       .catch((err) =>
         logger.error("[approveKyc] Notification enqueue failed:", { err }),
@@ -62,7 +71,7 @@ export const approveKyc = async (
     return callback(null, {
       message: MESSAGES.KYC_APPROVED,
       status: status.OK,
-      data: updatedUser,
+      kycStatus: updatedUser.kyc_approval,
     });
   } catch (err) {
     logger.error("ApproveKyc error:", { err });

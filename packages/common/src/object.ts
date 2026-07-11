@@ -46,7 +46,14 @@ export function snakeToCamel(obj: Record<string, any>): Record<string, any> {
 export function camelToSnake(obj: Record<string, any>): Record<string, any> {
   return Object.fromEntries(
     Object.entries(obj).map(([key, value]) => [
-      key.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`),
+      key
+        .replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`)
+        // A trailing digit needs its own underscore boundary too (e.g.
+        // "addressLine1" -> "address_line1" from the rule above, but the
+        // real field name is "address_line_1") — without this, any
+        // camelCase key ending in a digit produces a key that doesn't match
+        // its snake_case counterpart and silently fails to merge.
+        .replace(/([a-zA-Z])(\d)/g, "$1_$2"),
       value,
     ]),
   );

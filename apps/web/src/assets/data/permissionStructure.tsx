@@ -34,7 +34,7 @@ export const permissionStructure = {
       view_kyc: ["self", "all"],
       edit_kyc: ["all"],
       approve_kyc: ["all"],
-      reject_kyc: ["all"],
+      request_kyc_revision: ["all"],
     },
   },
   JobOpenings: {

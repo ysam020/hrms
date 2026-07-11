@@ -141,7 +141,26 @@ model User {
   bank_name                   String?
   ifsc_code                   String?
   kyc_date                    DateTime?
+  // Pending | Approved | Revision Requested | Edit Requested
   kyc_approval                String?
+  // {field_name: issue description} — set when kyc_approval == "Revision
+  // Requested"; cleared when HR approves again (a resubmission alone does
+  // not clear it, so HR always sees what they originally flagged).
+  kyc_revision_notes          Json?
+  // Employee's own stated reason for wanting to edit an already-approved
+  // KYC (e.g. "bank account changed"); set when kyc_approval == "Edit
+  // Requested", cleared once HR allows editing (-> back to Pending) so it
+  // never lingers into an unrelated future request.
+  kyc_edit_request_reason     String?
+  kyc_edit_requested_at       DateTime?
+  // "open" | "closed" | null. allowKycEdit sets "open" — the one edit that
+  // reopen grants is allowed. submitKyc's self-submit path flips "open" to
+  // "closed" the moment that edit lands, re-locking the record (still
+  // kyc_approval "Pending") until HR reviews it again; any other
+  // self-submit (fresh onboarding, a Revision Requested resubmission)
+  // recomputes this to null, so the lock never outlives the reopen it
+  // belongs to. See allowKycEdit.ts / submitKyc.ts.
+  kyc_edit_window             String?
   // Salary (embedded in user)
   salary                      Float?
   salaryBasicPay              Float?

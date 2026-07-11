@@ -558,7 +558,6 @@ pnpm dev                # starts all services + monitoring stack
 pnpm build              # build all packages (topological order)
 pnpm format             # Prettier + ESLint --fix
 pnpm db:push            # push Prisma schema to MongoDB
-pnpm db:seed            # run database seed
 pnpm db:studio          # open Prisma Studio
 pnpm monitoring:stop    # stop Prometheus + Loki + Grafana stack
 ```

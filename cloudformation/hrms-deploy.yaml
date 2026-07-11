@@ -96,6 +96,33 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
+  # ─────────────────────────── S3: KYC/employee document uploads ───────────────────────────
+  # Bucket name and key layout are hardcoded in apps/api-gateway/src/config/s3.ts
+  # (S3_BUCKET) and consumed via presigned PUT/GET URLs — objects are private,
+  # never public, since this holds KYC documents/photos.
+  PraestoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: praesto
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [PUT, GET, HEAD]
+            AllowedOrigins:
+              - !Sub "https://${DomainName}"
+              - "https://*.amplifyapp.com"
+              - "https://localhost"
+            AllowedHeaders: ["*"]
+            MaxAge: 3000
+
   # ─────────────────────────── ECR repositories ───────────────────────────
   # One per backend service built by .github/workflows/build-and-push.yml.
   # `web` is not included — it's deployed to Amplify, not ECR/EC2.
@@ -258,6 +285,12 @@ Resources:
                 Effect: Allow
                 Action: s3:GetObject
                 Resource: !Sub "${DeployArtifactsBucket.Arn}/*"
+              - Sid: PraestoObjects
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub "${PraestoBucket.Arn}/*"
 
   HrmsInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -514,10 +547,10 @@ Resources:
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
             cd /opt/hrms
-            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml pull --quiet
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            docker image prune -af --filter "until=24h"
+            docker image prune -af
             DEPLOY_EOF
             chmod +x /opt/hrms/deploy.sh
 

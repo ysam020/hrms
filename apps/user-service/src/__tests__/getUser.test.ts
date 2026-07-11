@@ -78,6 +78,13 @@ const dbUser = {
   dateOfTermination: null,
   reasonForTermination: null,
   dateOfAbscond: null,
+  qualification: "B.Tech",
+  aadhar_photo_back: null,
+  education_certificates: ["degree.pdf"],
+  experience_certificate: null,
+  electricity_bill: null,
+  kyc_approval: "Pending",
+  kyc_date: "2024-01-01",
 };
 
 describe("getUser", () => {
@@ -155,6 +162,38 @@ describe("getUser", () => {
     expect(data.isSuperUser).toBe(false);
   });
 
+  it("includes qualification, aadharPhotoBack, education/experience/electricity docs, and kyc_approval/kyc_date — previously missing from GetUser, leaving the KYC edit form unable to prefill them", async () => {
+    mockFindFirst.mockResolvedValue(dbUser);
+
+    const cb = makeCallback();
+    await getUser(makeCall({ userId: "john" }), cb);
+
+    const data = cb.mock.calls[0][1].data;
+    expect(data.qualification).toBe("B.Tech");
+    expect(data.educationCertificates).toEqual(["degree.pdf"]);
+    expect(data.kycApproval).toBe("Pending");
+    expect(data.kycDate).toBe("2024-01-01");
+  });
+
+  it("serializes kyc_revision_notes as a JSON string, empty when absent", async () => {
+    mockFindFirst.mockResolvedValue({
+      ...dbUser,
+      kyc_revision_notes: { aadhar_no: "Blurry photo, please re-upload" },
+    });
+
+    const cb = makeCallback();
+    await getUser(makeCall({ userId: "john" }), cb);
+
+    expect(cb.mock.calls[0][1].data.kycRevisionNotesJson).toBe(
+      JSON.stringify({ aadhar_no: "Blurry photo, please re-upload" }),
+    );
+
+    mockFindFirst.mockResolvedValue({ ...dbUser, kyc_revision_notes: null });
+    const cb2 = makeCallback();
+    await getUser(makeCall({ userId: "john" }), cb2);
+    expect(cb2.mock.calls[0][1].data.kycRevisionNotesJson).toBe("");
+  });
+
   it("joins multiple roles with comma", async () => {
     mockFindFirst.mockResolvedValue({ ...dbUser, role: ["admin", "hr"] });
 
@@ -183,13 +222,39 @@ describe("getUser", () => {
     expect(data.dob).toBe("");
   });
 
+  it("converts real Date objects (dob, joining_date, kyc_date, etc.) to compact ISO strings, not Date.toString()'s verbose form", async () => {
+    // Prisma returns DateTime? columns as real Date instances. Passing one
+    // straight through into a `string` proto field used to serialize as
+    // "Sun Oct 10 1993 05:30:00 GMT+0530 (India Standard Time)" — which then
+    // failed the gateway's dob max(32) validation on write-back.
+    mockFindFirst.mockResolvedValue({
+      ...dbUser,
+      dob: new Date("1993-10-10T00:00:00.000Z"),
+      joining_date: new Date("2022-01-01T00:00:00.000Z"),
+      kyc_date: new Date("2024-01-01T00:00:00.000Z"),
+      dateOfTermination: new Date("2023-05-05T00:00:00.000Z"),
+      dateOfAbscond: null,
+    });
+
+    const cb = makeCallback();
+    await getUser(makeCall({ userId: "john" }), cb);
+
+    const data = cb.mock.calls[0][1].data;
+    expect(data.dob).toBe("1993-10-10T00:00:00.000Z");
+    expect(data.dob.length).toBeLessThanOrEqual(32);
+    expect(data.joiningDate).toBe("2022-01-01T00:00:00.000Z");
+    expect(data.kycDate).toBe("2024-01-01T00:00:00.000Z");
+    expect(data.dateOfTermination).toBe("2023-05-05T00:00:00.000Z");
+    expect(data.dateOfAbscond).toBe("");
+  });
+
   it("caches the response with user key", async () => {
     mockFindFirst.mockResolvedValue(dbUser);
 
     await getUser(makeCall({ userId: "john" }), makeCallback());
 
     expect(mockCacheSet).toHaveBeenCalledWith(
-      "t:t1:user:john",
+      "t:t1:user:v6:john",
       expect.objectContaining({ status: status.OK }),
       "user",
     );

@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prisma, canonicalizeEmail } from "@hrms/db";
 import { signAccessToken, signRefreshToken } from "../services/jwt";
 import { storeRefreshToken } from "../services/redis";
 import { logger } from "@hrms/logger";
@@ -133,7 +133,7 @@ export const googleOAuthCallback = async (
     }
 
     const profile = (await profileRes.json()) as any;
-    const email: string = profile.email;
+    const email: string = profile.email ? canonicalizeEmail(profile.email) : "";
 
     if (!email) {
       return callback(null, {
@@ -170,8 +170,8 @@ export const googleOAuthCallback = async (
       });
 
       if (invite) {
-        // Ensure the invite email matches (case-insensitive)
-        if (invite.email.toLowerCase() === email.toLowerCase()) {
+        // Ensure the invite email matches (case-insensitive, dot-insensitive for Gmail)
+        if (canonicalizeEmail(invite.email) === email) {
           resolvedTenantId = invite.tenantId;
           resolvedTenantRole = invite.role;
         } else {
@@ -287,6 +287,39 @@ export const googleOAuthCallback = async (
         where: { userId: user.id },
         take: 10,
       });
+
+      if (memberships.length === 0 && user.tenantId) {
+        // User.tenantId is stamped but the membership row is missing
+        // (e.g. left behind by a raw data migration) — self-heal instead
+        // of sending an already-onboarded user back to org setup.
+        const staleTenant = await prisma.tenant.findUnique({
+          where: { id: user.tenantId },
+        });
+        if (staleTenant?.isActive) {
+          const inferredRole = user.isSuperUser ? "owner" : "employee";
+          const healedMembership = await prisma.tenantMembership.create({
+            data: {
+              tenantId: staleTenant.id,
+              userId: user.id,
+              role: inferredRole,
+            },
+          });
+          logger.warn(
+            "Self-healed missing TenantMembership for user with stamped tenantId",
+            { userId: user.id, tenantId: staleTenant.id, role: inferredRole },
+          );
+          memberships.push(healedMembership);
+        } else {
+          logger.warn(
+            "User.tenantId points at a missing/inactive tenant — clearing stale reference",
+            { userId: user.id, tenantId: user.tenantId },
+          );
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { tenantId: null },
+          });
+        }
+      }
 
       if (memberships.length === 0) {
         // No tenant yet — issue a "pendingSetup" token

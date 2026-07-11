@@ -13,6 +13,8 @@ build
 **/build
 .turbo
 **/.turbo
+*.tsbuildinfo
+**/*.tsbuildinfo
 
 # Generated certs — never bake private keys into image layers
 # They are mounted as a volume at runtime via docker-compose.dev.yml

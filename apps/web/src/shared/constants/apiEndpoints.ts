@@ -58,6 +58,8 @@ const KYC = {
   KYC_APPROVAL: "/kyc-approval",
   VIEW_ALL_KYCS: (page: number, limit: number, params = "") =>
     `/view-all-kycs?page=${page}&limit=${limit}${params}`,
+  REQUEST_KYC_EDIT_ACCESS: "/request-kyc-edit-access",
+  ALLOW_KYC_EDIT: "/allow-kyc-edit",
 };
 
 const EMPLOYEE = {
@@ -206,6 +208,7 @@ const USER = {
 const UPLOAD = {
   UPLOAD_FILES: (query: string) => `/upload-file${query}`,
   UPLOAD_PRESIGNED_URL: "/upload/presigned-url",
+  UPLOAD_VIEW_URL: "/upload/view-url",
 };
 
 const CHAT = {
@@ -335,6 +338,7 @@ const WEBHOOKS = {
 const APPROVALS = {
   GET_PENDING_APPROVALS: "/approvals/pending",
   ACT_ON_APPROVAL: (instanceId: string) => `/approvals/${instanceId}/act`,
+  GET_PENDING_KYC_APPROVALS: "/kyc-approvals/pending",
 };
 
 const REPORTS = {

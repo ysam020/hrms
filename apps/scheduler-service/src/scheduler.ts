@@ -19,11 +19,6 @@ const JOB_SCHEDULES: JobSchedule[] = [
   // ── New feature jobs ────────────────────────────────────────────────────────
   { name: "checkTicketSla", pattern: "0 4 * * *" }, // 4:00 AM — bulk SLA sweep
   { name: "retryFailedWebhooks", pattern: "0 6 * * *" }, // 6:00 AM — stale delivery sweep
-  // ── Dev-only recurring demo-data seeders (no-op outside local dev) ─────────
-  { name: "seedDailyAttendance", pattern: "0 23 * * *" }, // 11:00 PM daily
-  { name: "seedHrActivities", pattern: "0 10 1,15 * *" }, // 1st & 15th, 10:00 AM
-  { name: "seedJobOpenings", pattern: "0 11 1,15 * *" }, // 1st & 15th, 11:00 AM
-  { name: "seedPayroll", pattern: "0 12 1 * *" }, // 1st of month, 12:00 PM
 ];
 
 export async function registerScheduledJobs(): Promise<void> {

@@ -8,6 +8,9 @@ import {
   kycApproval,
   viewAllKycs,
   getKycInsights,
+  requestKycEditAccess,
+  allowKycEdit,
+  listPendingKycActions,
 } from "../handlers/employee";
 
 jest.mock("../grpc/clients", () => ({
@@ -23,6 +26,7 @@ jest.mock("@hrms/db", () => {
       findUnique: jest.fn(),
       update: jest.fn(),
       aggregateRaw: jest.fn(),
+      findMany: jest.fn(),
     },
   };
   return {
@@ -43,6 +47,7 @@ jest.mock("@hrms/common", () => ({
   RESPONSE_STATUS: {
     SUCCESS: 200,
     BAD_REQUEST: 400,
+    FORBIDDEN: 403,
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
   },
@@ -74,6 +79,7 @@ const mockUserCount = (prisma as any).user.count as jest.Mock;
 const mockUserGroupBy = (prisma as any).user.groupBy as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserAggregateRaw = (prisma as any).user.aggregateRaw as jest.Mock;
+const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: any = {}) =>
@@ -351,11 +357,78 @@ describe("employeeHandlers", () => {
       );
     });
 
-    it("calls grpcCall submitKyc with username and mapped camelCase KYC fields", async () => {
+    it("returns NOT_FOUND when the target employee doesn't exist", async () => {
+      mockUserFindUnique.mockResolvedValue(null);
+      const res = makeRes();
+      await editKyc(makeReq({ body: { username: "ghost" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
+        expect.any(Object),
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+    });
+
+    it("returns FORBIDDEN when editing someone else's KYC without privilege or permission", async () => {
+      mockUserFindUnique
+        .mockResolvedValueOnce({ id: "someone-else" }) // target lookup
+        .mockResolvedValueOnce({ isSuperUser: false, permissions: [] }); // caller privilege lookup
+      const res = makeRes();
+      await editKyc(
+        makeReq({
+          user: { userId: "user-1", tenantRole: "employee" },
+          body: { username: "john_doe" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+    });
+
+    it("self-edit: passes userId (not username) so submitKyc knows not to reset an existing decision", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-1" });
       mockGrpcCall.mockResolvedValue({ message: "KYC updated" });
       const res = makeRes();
       await editKyc(
         makeReq({
+          user: { userId: "user-1", tenantRole: "employee" },
+          body: {
+            username: "john_doe",
+            bank_name: "HDFC",
+            ifsc_code: "HDFC0001",
+          },
+        }),
+        res,
+      );
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "submitKyc",
+        expect.objectContaining({
+          userId: "user-1",
+          bankName: "HDFC",
+          ifscCode: "HDFC0001",
+        }),
+      );
+      const [, , payload] = mockGrpcCall.mock.calls[0];
+      expect(payload.username).toBeUndefined();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("HR editing another employee: passes username (not userId), preserving prior approval decisions", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "someone-else" });
+      mockGrpcCall.mockResolvedValue({ message: "KYC updated" });
+      const res = makeRes();
+      await editKyc(
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
           body: {
             username: "john_doe",
             bank_name: "HDFC",
@@ -373,6 +446,8 @@ describe("employeeHandlers", () => {
           ifscCode: "HDFC0001",
         }),
       );
+      const [, , payload] = mockGrpcCall.mock.calls[0];
+      expect(payload.userId).toBeUndefined();
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
@@ -381,15 +456,103 @@ describe("employeeHandlers", () => {
     });
 
     it("returns INTERNAL_SERVER_ERROR on gRPC error", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "someone-else" });
       mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
       const res = makeRes();
-      await editKyc(makeReq({ body: { username: "john_doe" } }), res);
+      await editKyc(
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john_doe" },
+        }),
+        res,
+      );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });
+
+    it.each(["Approved", "Rejected", "Edit Requested"])(
+      "returns BAD_REQUEST when the target KYC is currently %s",
+      async (kyc_approval) => {
+        mockUserFindUnique.mockResolvedValue({ id: "user-1", kyc_approval });
+        const res = makeRes();
+        await editKyc(
+          makeReq({
+            user: { userId: "user-1", tenantRole: "employee" },
+            body: { username: "john_doe" },
+          }),
+          res,
+        );
+        expect(mockApiResponse).toHaveBeenCalledWith(
+          res,
+          RESPONSE_STATUS.BAD_REQUEST,
+          expect.any(Object),
+        );
+        expect(mockGrpcCall).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["Pending", "Revision Requested", null])(
+      "allows editing when the target KYC is currently %s",
+      async (kyc_approval) => {
+        mockUserFindUnique.mockResolvedValue({ id: "user-1", kyc_approval });
+        mockGrpcCall.mockResolvedValue({ message: "KYC updated" });
+        const res = makeRes();
+        await editKyc(
+          makeReq({
+            user: { userId: "user-1", tenantRole: "employee" },
+            body: { username: "john_doe" },
+          }),
+          res,
+        );
+        expect(mockGrpcCall).toHaveBeenCalled();
+      },
+    );
+
+    it("returns BAD_REQUEST when Pending but the one-time edit window has already closed", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: "user-1",
+        kyc_approval: "Pending",
+        kyc_edit_window: "closed",
+      });
+      const res = makeRes();
+      await editKyc(
+        makeReq({
+          user: { userId: "user-1", tenantRole: "employee" },
+          body: { username: "john_doe" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+    });
+
+    it.each(["open", null])(
+      "allows editing when Pending and the edit window is %s (not yet closed)",
+      async (kyc_edit_window) => {
+        mockUserFindUnique.mockResolvedValue({
+          id: "user-1",
+          kyc_approval: "Pending",
+          kyc_edit_window,
+        });
+        mockGrpcCall.mockResolvedValue({ message: "KYC updated" });
+        const res = makeRes();
+        await editKyc(
+          makeReq({
+            user: { userId: "user-1", tenantRole: "employee" },
+            body: { username: "john_doe" },
+          }),
+          res,
+        );
+        expect(mockGrpcCall).toHaveBeenCalled();
+      },
+    );
   });
 
   describe("kycApproval", () => {
@@ -417,7 +580,10 @@ describe("employeeHandlers", () => {
       mockUserFindUnique.mockResolvedValue(null);
       const res = makeRes();
       await kycApproval(
-        makeReq({ body: { username: "john", kyc_approval: "Approved" } }),
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john", kyc_approval: "Approved" },
+        }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -427,12 +593,41 @@ describe("employeeHandlers", () => {
       );
     });
 
-    it("calls approveKyc when kyc_approval is Approved", async () => {
-      mockUserFindUnique.mockResolvedValue({ id: "u1" });
+    it("returns FORBIDDEN when the caller isn't privileged and lacks the approve_kyc permission", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: [],
+      });
+      const res = makeRes();
+      await kycApproval(
+        makeReq({
+          user: { userId: "user-1", tenantRole: "employee" },
+          body: { username: "john", kyc_approval: "Approved" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+    });
+
+    it("allows a non-superuser role granted the approve_kyc permission", async () => {
+      mockUserFindUnique
+        .mockResolvedValueOnce({
+          isSuperUser: false,
+          permissions: ["BasicKYCDetails:approve_kyc:all"],
+        }) // caller privilege lookup
+        .mockResolvedValueOnce({ id: "u1" }); // target lookup
       mockGrpcCall.mockResolvedValue({ message: "Approved" });
       const res = makeRes();
       await kycApproval(
-        makeReq({ body: { username: "john", kyc_approval: "Approved" } }),
+        makeReq({
+          user: { userId: "manager-1", tenantRole: "manager" },
+          body: { username: "john", kyc_approval: "Approved" },
+        }),
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
@@ -447,26 +642,433 @@ describe("employeeHandlers", () => {
       );
     });
 
-    it("calls rejectKyc when kyc_approval is Rejected", async () => {
+    it("calls approveKyc when kyc_approval is Approved", async () => {
       mockUserFindUnique.mockResolvedValue({ id: "u1" });
-      mockGrpcCall.mockResolvedValue({ message: "Rejected" });
+      mockGrpcCall.mockResolvedValue({ message: "Approved" });
       const res = makeRes();
       await kycApproval(
-        makeReq({ body: { username: "john", kyc_approval: "Rejected" } }),
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john", kyc_approval: "Approved" },
+        }),
         res,
       );
       expect(mockGrpcCall).toHaveBeenCalledWith(
         expect.anything(),
-        "rejectKyc",
+        "approveKyc",
         { employeeId: "u1" },
       );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST for an unsupported kyc_approval value (e.g. the removed legacy Rejected)", async () => {
+      const res = makeRes();
+      await kycApproval(
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john", kyc_approval: "Rejected" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+    });
+
+    it("calls requestKycRevision with fieldIssuesJson when kyc_approval is Revision Requested", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "u1" });
+      mockGrpcCall.mockResolvedValue({ message: "Revision requested" });
+      const res = makeRes();
+      const field_issues = { aadhar_no: "Blurry photo" };
+      await kycApproval(
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: {
+            username: "john",
+            kyc_approval: "Revision Requested",
+            field_issues,
+          },
+        }),
+        res,
+      );
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "requestKycRevision",
+        { employeeId: "u1", fieldIssuesJson: JSON.stringify(field_issues) },
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns FORBIDDEN when the caller isn't privileged and lacks the request_kyc_revision permission", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: [],
+      });
+      const res = makeRes();
+      await kycApproval(
+        makeReq({
+          user: { userId: "user-1", tenantRole: "employee" },
+          body: {
+            username: "john",
+            kyc_approval: "Revision Requested",
+            field_issues: { aadhar_no: "Blurry photo" },
+          },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
     });
 
     it("returns INTERNAL_SERVER_ERROR on error", async () => {
       mockUserFindUnique.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await kycApproval(
-        makeReq({ body: { username: "john", kyc_approval: "Approved" } }),
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john", kyc_approval: "Approved" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("listPendingKycActions", () => {
+    it("returns an empty list without querying when the caller has neither permission", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: [],
+      });
+      const res = makeRes();
+      await listPendingKycActions(
+        makeReq({ user: { userId: "user-1", tenantRole: "employee" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        { data: [] },
+      );
+      expect(mockUserFindMany).not.toHaveBeenCalled();
+    });
+
+    it("returns only Pending submissions for a caller with approve_kyc but not request_kyc_revision", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: ["BasicKYCDetails:approve_kyc:all"],
+      });
+      mockUserFindMany.mockResolvedValue([
+        {
+          id: "u1",
+          username: "john",
+          first_name: "John",
+          last_name: "Doe",
+          kyc_date: new Date("2026-01-01"),
+        },
+      ]);
+      const res = makeRes();
+      await listPendingKycActions(
+        makeReq({ user: { userId: "user-1", tenantRole: "employee" } }),
+        res,
+      );
+      expect(mockUserFindMany).toHaveBeenCalledTimes(1);
+      expect(mockUserFindMany).toHaveBeenCalledWith({
+        where: { kyc_approval: "Pending" },
+        select: {
+          id: true,
+          username: true,
+          first_name: true,
+          last_name: true,
+          kyc_date: true,
+        },
+        orderBy: { kyc_date: "desc" },
+      });
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        {
+          data: [
+            expect.objectContaining({
+              instanceId: "kyc:u1",
+              module: "kyc",
+              kycAction: "approve",
+              username: "john",
+              requestedByName: "John Doe",
+              summary: "john submitted their KYC form for approval",
+            }),
+          ],
+        },
+      );
+    });
+
+    it("returns only Edit Requested items for a caller with request_kyc_revision but not approve_kyc", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: ["BasicKYCDetails:request_kyc_revision:all"],
+      });
+      mockUserFindMany.mockResolvedValue([
+        {
+          id: "u2",
+          username: "jane",
+          first_name: "Jane",
+          last_name: "Roe",
+          kyc_edit_request_reason: "Bank account changed",
+          kyc_edit_requested_at: new Date("2026-01-02"),
+        },
+      ]);
+      const res = makeRes();
+      await listPendingKycActions(
+        makeReq({ user: { userId: "user-1", tenantRole: "employee" } }),
+        res,
+      );
+      expect(mockUserFindMany).toHaveBeenCalledTimes(1);
+      expect(mockUserFindMany).toHaveBeenCalledWith({
+        where: { kyc_approval: "Edit Requested" },
+        select: {
+          id: true,
+          username: true,
+          first_name: true,
+          last_name: true,
+          kyc_edit_request_reason: true,
+          kyc_edit_requested_at: true,
+        },
+        orderBy: { kyc_edit_requested_at: "desc" },
+      });
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        {
+          data: [
+            expect.objectContaining({
+              instanceId: "kyc:u2",
+              module: "kyc",
+              kycAction: "allow_edit",
+              username: "jane",
+              requestedByName: "Jane Roe",
+              summary:
+                "jane requested to edit their approved KYC: Bank account changed",
+            }),
+          ],
+        },
+      );
+    });
+
+    it("merges both categories for a caller with both permissions, newest first regardless of category", async () => {
+      mockUserFindMany
+        .mockResolvedValueOnce([
+          {
+            id: "u1",
+            username: "john",
+            first_name: "",
+            last_name: "",
+            kyc_date: new Date("2026-01-01"),
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: "u2",
+            username: "jane",
+            first_name: "",
+            last_name: "",
+            kyc_edit_requested_at: new Date("2026-01-05"),
+          },
+        ]);
+      const res = makeRes();
+      await listPendingKycActions(
+        makeReq({ user: { userId: "hr-1", tenantRole: "hr" } }),
+        res,
+      );
+      expect(mockUserFindMany).toHaveBeenCalledTimes(2);
+      // jane's Edit Requested item is newer than john's Pending submission,
+      // so it must come first even though Pending items are queried first.
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        {
+          data: [
+            expect.objectContaining({
+              kycAction: "allow_edit",
+              username: "jane",
+            }),
+            expect.objectContaining({ kycAction: "approve", username: "john" }),
+          ],
+        },
+      );
+    });
+
+    it("returns an empty array when permitted but no matching users exist", async () => {
+      mockUserFindMany.mockResolvedValue([]);
+      const res = makeRes();
+      await listPendingKycActions(
+        makeReq({ user: { userId: "hr-1", tenantRole: "hr" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        { data: [] },
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on error", async () => {
+      mockUserFindMany.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await listPendingKycActions(
+        makeReq({ user: { userId: "hr-1", tenantRole: "hr" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("requestKycEditAccess", () => {
+    it("forwards the caller's own userId and reason to the RPC", async () => {
+      mockGrpcCall.mockResolvedValue({ message: "Edit access requested" });
+      const res = makeRes();
+      await requestKycEditAccess(
+        makeReq({
+          user: { userId: "user-1" },
+          body: { reason: "Bank account changed" },
+        }),
+        res,
+      );
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "requestKycEditAccess",
+        { userId: "user-1", reason: "Bank account changed" },
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on gRPC error", async () => {
+      mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+      const res = makeRes();
+      await requestKycEditAccess(
+        makeReq({
+          user: { userId: "user-1" },
+          body: { reason: "Bank account changed" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("allowKycEdit", () => {
+    it("returns BAD_REQUEST when username is missing", async () => {
+      const res = makeRes();
+      await allowKycEdit(
+        makeReq({ user: { userId: "hr-1", tenantRole: "hr" }, body: {} }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
+    it("returns FORBIDDEN when the caller isn't privileged and lacks the request_kyc_revision permission", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: [],
+      });
+      const res = makeRes();
+      await allowKycEdit(
+        makeReq({
+          user: { userId: "user-1", tenantRole: "employee" },
+          body: { username: "john" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+    });
+
+    it("returns NOT_FOUND when the user does not exist", async () => {
+      mockUserFindUnique.mockResolvedValue(null);
+      const res = makeRes();
+      await allowKycEdit(
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
+        expect.any(Object),
+      );
+    });
+
+    it("calls the allowKycEdit RPC with the resolved employeeId", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "u1" });
+      mockGrpcCall.mockResolvedValue({ message: "Editing allowed" });
+      const res = makeRes();
+      await allowKycEdit(
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john" },
+        }),
+        res,
+      );
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "allowKycEdit",
+        { employeeId: "u1", actorUserId: "hr-1" },
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns INTERNAL_SERVER_ERROR on error", async () => {
+      mockUserFindUnique.mockRejectedValue(new Error("DB error"));
+      const res = makeRes();
+      await allowKycEdit(
+        makeReq({
+          user: { userId: "hr-1", tenantRole: "hr" },
+          body: { username: "john" },
+        }),
         res,
       );
       expect(mockApiResponse).toHaveBeenCalledWith(

@@ -1,14 +1,19 @@
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { actOnStep } from "@hrms/approval-engine";
+import { actOnStep, getPendingApprovalsFor } from "@hrms/approval-engine";
 import { recruitment } from "@hrms/proto";
 import { grpcCall } from "../grpc/clients";
-import { actOnApprovalForEntity } from "../handlers/approvalChains";
+import {
+  actOnApprovalForEntity,
+  listPendingApprovals,
+} from "../handlers/approvalChains";
 
 jest.mock("@hrms/db", () => {
   const _db = {
-    approvalInstance: { findFirst: jest.fn() },
-    leaveApplication: { findUnique: jest.fn() },
-    overtimeRequest: { update: jest.fn() },
+    approvalInstance: { findFirst: jest.fn(), findMany: jest.fn() },
+    leaveApplication: { findUnique: jest.fn(), findMany: jest.fn() },
+    resignation: { findMany: jest.fn() },
+    overtimeRequest: { update: jest.fn(), findMany: jest.fn() },
+    user: { findMany: jest.fn() },
   };
   return { prismaWithTenant: _db };
 });
@@ -33,6 +38,16 @@ const mockLeaveFindUnique = (prisma as any).leaveApplication
   .findUnique as jest.Mock;
 const mockActOnStep = actOnStep as jest.Mock;
 const mockGrpcCall = grpcCall as jest.Mock;
+const mockApprovalInstanceFindMany = (prisma as any).approvalInstance
+  .findMany as jest.Mock;
+const mockLeaveFindMany = (prisma as any).leaveApplication
+  .findMany as jest.Mock;
+const mockResignationFindMany = (prisma as any).resignation
+  .findMany as jest.Mock;
+const mockOvertimeFindMany = (prisma as any).overtimeRequest
+  .findMany as jest.Mock;
+const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
+const mockGetPendingApprovalsFor = getPendingApprovalsFor as jest.Mock;
 
 describe("actOnApprovalForEntity", () => {
   beforeEach(() => {
@@ -330,5 +345,64 @@ describe("actOnApprovalForEntity", () => {
       );
       expectEncodesCleanly();
     });
+  });
+});
+
+describe("listPendingApprovals", () => {
+  const makeRes = () =>
+    ({
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    }) as any;
+  const makeReq = (overrides: any = {}) =>
+    ({
+      user: { userId: "u1", tenantId: "t1" },
+      query: {},
+      ...overrides,
+    }) as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLeaveFindMany.mockResolvedValue([]);
+    mockResignationFindMany.mockResolvedValue([]);
+    mockOvertimeFindMany.mockResolvedValue([]);
+    mockUserFindMany.mockResolvedValue([]);
+  });
+
+  it("orders items newest first, regardless of which module resolved first", async () => {
+    // leave is resolved before resignation by getPendingApprovalsFor, but
+    // the resignation instance is newer and must sort to the top.
+    mockGetPendingApprovalsFor.mockResolvedValue([
+      { instanceId: "i-leave", module: "leave", entityId: "l1", stepOrder: 1 },
+      {
+        instanceId: "i-res",
+        module: "resignation",
+        entityId: "r1",
+        stepOrder: 1,
+      },
+    ]);
+    mockApprovalInstanceFindMany.mockResolvedValue([
+      {
+        id: "i-leave",
+        module: "leave",
+        requestedBy: "u2",
+        createdAt: new Date("2026-01-01"),
+      },
+      {
+        id: "i-res",
+        module: "resignation",
+        requestedBy: "u3",
+        createdAt: new Date("2026-01-10"),
+      },
+    ]);
+
+    const res = makeRes();
+    await listPendingApprovals(makeReq(), res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.data.map((d: any) => d.instanceId)).toEqual([
+      "i-res",
+      "i-leave",
+    ]);
   });
 });

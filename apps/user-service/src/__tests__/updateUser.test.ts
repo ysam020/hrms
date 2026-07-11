@@ -121,7 +121,7 @@ describe("updateUser", () => {
     );
 
     expect(mockInvalidate).toHaveBeenCalledWith("t:t1:users:*");
-    expect(mockDelete).toHaveBeenCalledWith("t:t1:user:user-1");
+    expect(mockDelete).toHaveBeenCalledWith("t:t1:user:v6:user-1");
   });
 
   it("returns INTERNAL on database error", async () => {
