@@ -108,4 +108,53 @@ describe("writeVersionedSettings", () => {
     );
     expect(mockCreate).not.toHaveBeenCalled();
   });
+
+  it("updates the active row in place for an immediate save, instead of appending a new version", async () => {
+    const effectiveFrom = new Date(Date.now() - 1000);
+    mockSettingsFindFirst.mockReset();
+    // getActiveSettings() — an active row already exists.
+    mockSettingsFindFirst.mockResolvedValueOnce({
+      id: "active-1",
+      leavePolicies: [],
+    });
+    mockUpdate.mockResolvedValue({ id: "active-1", leavePolicies: [] });
+
+    await writeVersionedSettings(
+      "t1",
+      "admin-1",
+      { medicalCertRequired: true },
+      effectiveFrom,
+    );
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "active-1" } }),
+    );
+    expect(mockCreate).not.toHaveBeenCalled();
+    // Only the getActiveSettings lookup should run — no separate
+    // same-effectiveFrom check, since the active row is the target.
+    expect(mockSettingsFindFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it("still creates a new version for a forward-dated scheduled change even when an active version exists", async () => {
+    const effectiveFrom = new Date(Date.now() + 1000 * 60 * 60 * 24); // tomorrow
+    mockSettingsFindFirst.mockReset();
+    mockSettingsFindFirst
+      .mockResolvedValueOnce({ id: "active-1", leavePolicies: [] }) // getActiveSettings
+      .mockResolvedValueOnce(null); // no same-effectiveFrom row yet
+    mockCreate.mockResolvedValue({ id: "future-1", leavePolicies: [] });
+
+    await writeVersionedSettings(
+      "t1",
+      "admin-1",
+      { medicalCertRequired: true },
+      effectiveFrom,
+    );
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: "t1", effectiveFrom }),
+      }),
+    );
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
 });

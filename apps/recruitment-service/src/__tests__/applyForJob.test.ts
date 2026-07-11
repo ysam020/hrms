@@ -11,6 +11,7 @@ jest.mock("@hrms/db", () => {
       findFirst: jest.fn(),
       create: jest.fn(),
     },
+    interviewPipelineTemplate: { findFirst: jest.fn() },
     user: { findMany: jest.fn(), findFirst: jest.fn() },
   };
   return {
@@ -47,6 +48,8 @@ const mockAppFindFirst = (prisma as any).jobApplication.findFirst as jest.Mock;
 const mockAppCreate = (prisma as any).jobApplication.create as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockUserFindFirst = prisma.user.findFirst as jest.Mock;
+const mockPipelineTemplateFindFirst = (prisma as any).interviewPipelineTemplate
+  .findFirst as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
 
@@ -67,6 +70,7 @@ describe("applyForJob", () => {
     jest.clearAllMocks();
     mockInvalidate.mockResolvedValue(undefined);
     mockUserFindMany.mockResolvedValue([]);
+    mockPipelineTemplateFindFirst.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when jobTitleId, name, or email is missing", async () => {
@@ -208,6 +212,51 @@ describe("applyForJob", () => {
     await applyForJob(makeCall(validRequest), makeCallback());
 
     expect(mockInvalidate).toHaveBeenCalledWith("t:t1:applications:*");
+  });
+
+  it("snapshots the job opening's own pipelineTemplateId when set", async () => {
+    mockJobFindUnique.mockResolvedValue({
+      ...openJob,
+      pipelineTemplateId: "tpl-1",
+    });
+    mockAppFindFirst.mockResolvedValue(null);
+    mockAppCreate.mockResolvedValue({ id: "app-1" });
+
+    await applyForJob(makeCall(validRequest), makeCallback());
+
+    expect(mockPipelineTemplateFindFirst).not.toHaveBeenCalled();
+    expect(mockAppCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          pipelineTemplateId: "tpl-1",
+          currentStageOrder: 0,
+        }),
+      }),
+    );
+  });
+
+  it("falls back to the tenant's default pipeline template when the job opening has none", async () => {
+    mockJobFindUnique.mockResolvedValue(openJob); // no pipelineTemplateId
+    mockAppFindFirst.mockResolvedValue(null);
+    mockPipelineTemplateFindFirst.mockResolvedValue({ id: "default-tpl" });
+    mockAppCreate.mockResolvedValue({ id: "app-1" });
+
+    await applyForJob(makeCall(validRequest), makeCallback());
+
+    expect(mockPipelineTemplateFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: "t1",
+          isDefault: true,
+          isActive: true,
+        }),
+      }),
+    );
+    expect(mockAppCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ pipelineTemplateId: "default-tpl" }),
+      }),
+    );
   });
 
   it("returns INTERNAL on database error", async () => {

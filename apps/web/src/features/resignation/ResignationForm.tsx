@@ -7,7 +7,6 @@ import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid2";
 import ExitToApp from "@mui/icons-material/ExitToApp";
 import Comment from "@mui/icons-material/Comment";
-import CalendarToday from "@mui/icons-material/CalendarToday";
 import { useFormik } from "formik";
 import Button from "@web/shared/components/Button";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -15,7 +14,6 @@ import apiClient from "@web/core/http/axiosConfig";
 import { z } from "zod";
 import { toFormikValidationSchema } from "zod-formik-adapter";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
-import DropdownWrapper from "@web/shared/components/DropdownWrapper";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 const validationSchema = toFormikValidationSchema(
@@ -27,8 +25,6 @@ const validationSchema = toFormikValidationSchema(
         10,
         "Please provide a more detailed reason (at least 10 characters)",
       ),
-    exitType: z.enum(["voluntary", "mutual"]),
-    resignationDate: z.string().min(1, "Resignation date is required"),
   }),
 );
 
@@ -38,20 +34,11 @@ function ResignationForm() {
   const formik = useFormik({
     initialValues: {
       reason: "",
-      exitType: "voluntary",
-      resignationDate: new Date().toISOString().slice(0, 10),
-      lastDate: "",
     },
     validationSchema,
     onSubmit: async (values, { resetForm }) => {
       try {
-        const res = await apiClient.post(API_ENDPOINTS.ADD_RESIGNATION, {
-          ...values,
-          resignationDate: new Date(values.resignationDate).toISOString(),
-          lastDate: values.lastDate
-            ? new Date(values.lastDate).toISOString()
-            : undefined,
-        });
+        const res = await apiClient.post(API_ENDPOINTS.ADD_RESIGNATION, values);
         setAlert({
           open: true,
           message: res.data.message,
@@ -75,69 +62,25 @@ function ResignationForm() {
     <Card sx={{ maxWidth: 600, mx: "auto", boxShadow: 2 }}>
       <CardContent sx={{ p: 2 }}>
         {/* Header */}
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <ExitToApp color="primary" />
-          <Typography variant="h6" fontWeight="600">
-            Resignation Request
+        <Box mb={2}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <ExitToApp color="primary" />
+            <Typography variant="h6" fontWeight="600">
+              Resignation Request
+            </Typography>
+          </Box>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mt: 0.5 }}
+          >
+            Submitted today, with your last working day calculated automatically
+            from your organisation's standard notice period.
           </Typography>
         </Box>
 
         <form onSubmit={formik.handleSubmit}>
           <Grid container spacing={1}>
-            {/* Timing & Type */}
-            <Grid size={12}>
-              <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <CalendarToday
-                    sx={{ fontSize: 18, color: "text.secondary" }}
-                  />
-                  <Typography variant="subtitle2" fontWeight="500">
-                    Timing
-                  </Typography>
-                </Box>
-                <Grid container spacing={1.5}>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <FormikInputWrapper
-                      type="date"
-                      name="resignationDate"
-                      placeholder="Resignation date"
-                      formik={formik}
-                      inputProps={{ dateFormat: "dd/mm/yy", showIcon: true }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <FormikInputWrapper
-                      type="date"
-                      name="lastDate"
-                      placeholder="Proposed last day (optional)"
-                      formik={formik}
-                      inputProps={{ dateFormat: "dd/mm/yy", showIcon: true }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <DropdownWrapper
-                      name="exitType"
-                      options={[
-                        { label: "Resignation", value: "voluntary" },
-                        { label: "Mutual separation", value: "mutual" },
-                      ]}
-                      placeholder="Type"
-                      formik={formik}
-                    />
-                  </Grid>
-                </Grid>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mt: 1 }}
-                >
-                  Leave "last day" blank to use your organisation's standard
-                  notice period, calculated automatically from your resignation
-                  date.
-                </Typography>
-              </Paper>
-            </Grid>
-
             {/* Resignation Reason */}
             <Grid size={12}>
               <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>

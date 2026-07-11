@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -87,8 +88,14 @@ export async function updateExitInterviewTemplate(
     const { userId } = req.user!;
     const { questions } = req.body;
 
+    // Same tenantId+isActive+orderBy as getExitInterviewTemplate — if this
+    // ever picked a different row than what employees actually read (e.g.
+    // an older row that predates one auto-materialized by an employee's
+    // exit-interview submission), a save here could silently update a row
+    // nobody's reading, making the edit look like it "didn't take".
     const existing = await (prisma as any).exitInterviewTemplate.findFirst({
       where: { tenantId, isActive: true },
+      orderBy: { updatedAt: "desc" },
     });
     const template = existing
       ? await (prisma as any).exitInterviewTemplate.update({
@@ -135,12 +142,24 @@ export async function submitExitInterviewResponse(
       });
     }
 
-    const template = await (prisma as any).exitInterviewTemplate.findFirst({
+    // ExitInterviewResponse.templateId is @db.ObjectId — templates are
+    // opt-in tenant config (getExitInterviewTemplate falls back to
+    // DEFAULT_QUESTIONS in-memory when none exists), so most tenants have
+    // no template row yet. Materialize one from the defaults on first real
+    // use instead of writing the literal string "default", which Prisma
+    // rejects as a malformed ObjectId.
+    let template = await (prisma as any).exitInterviewTemplate.findFirst({
       where: { tenantId, isActive: true },
+      orderBy: { updatedAt: "desc" },
     });
+    if (!template) {
+      template = await (prisma as any).exitInterviewTemplate.create({
+        data: { tenantId, questions: DEFAULT_QUESTIONS, createdBy: userId },
+      });
+    }
 
     const existing = await (prisma as any).exitInterviewResponse.findFirst({
-      where: { resignationId },
+      where: { resignationId, tenantId },
     });
     const response = existing
       ? await (prisma as any).exitInterviewResponse.update({
@@ -151,7 +170,7 @@ export async function submitExitInterviewResponse(
           data: {
             tenantId,
             resignationId,
-            templateId: template?.id ?? "default",
+            templateId: template.id,
             answers,
           },
         });
@@ -160,6 +179,7 @@ export async function submitExitInterviewResponse(
       where: { id: resignationId },
       data: { feedbackSubmittedOn: new Date() },
     });
+    await cacheManager.invalidatePattern(`t:${tenantId}:resignations:*`);
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Exit interview submitted.",

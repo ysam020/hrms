@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
@@ -61,6 +62,12 @@ import WorkWeekPicker, {
   type WorkWeekValue,
 } from "@web/shared/components/WorkWeekPicker";
 import CalendarViewWeekIcon from "@mui/icons-material/CalendarViewWeek";
+import LogoutIcon from "@mui/icons-material/Logout";
+import PaymentsIcon from "@mui/icons-material/Payments";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import ExitPolicySettings from "@web/features/settings/exit-policy/ExitPolicySettings";
+import PayrollComponentsSettings from "@web/features/settings/payroll-components/PayrollComponentsSettings";
+import RecruitmentPipelineSettings from "@web/features/settings/recruitment-pipeline/RecruitmentPipelineSettings";
 
 const LocationPicker = lazy(
   () => import("@web/shared/components/LocationPicker"),
@@ -213,6 +220,56 @@ function TabPanel({
   index: number;
 }) {
   return value === index ? <Box sx={{ pt: 3 }}>{children}</Box> : null;
+}
+
+// ─── Sub-tabs ─────────────────────────────────────────────────────────────────
+// slug drives deep-linking (?subtab=...) — see OnboardingModals.tsx, which
+// links straight into a specific sub-tab (e.g. "Configure exit policy").
+
+const SUB_TABS = [
+  {
+    label: "Leave",
+    slug: "leave",
+    icon: <EventAvailableIcon fontSize="small" />,
+  },
+  {
+    label: "Attendance",
+    slug: "attendance",
+    icon: <AccessTimeIcon fontSize="small" />,
+  },
+  {
+    label: "HR Policy",
+    slug: "hr-policy",
+    icon: <BusinessCenterIcon fontSize="small" />,
+  },
+  {
+    label: "Work Week",
+    slug: "work-week",
+    icon: <CalendarViewWeekIcon fontSize="small" />,
+  },
+  {
+    label: "Exit Policy",
+    slug: "exit-policy",
+    icon: <LogoutIcon fontSize="small" />,
+  },
+  {
+    label: "Payroll Components",
+    slug: "payroll-components",
+    icon: <PaymentsIcon fontSize="small" />,
+  },
+  {
+    label: "Recruitment Pipeline",
+    slug: "recruitment-pipeline",
+    icon: <AccountTreeIcon fontSize="small" />,
+  },
+];
+
+const SUB_TAB_LS_KEY = "org_settings_subtab";
+
+function subTabSlugToIndex(slug: string | null): number {
+  if (!slug) return 0;
+  const idx = SUB_TABS.findIndex((t) => t.slug === slug);
+  return idx === -1 ? 0 : idx;
 }
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
@@ -996,12 +1053,6 @@ function AttendanceSection({
         </Grid>
       </Grid>
 
-      <Alert severity="info" sx={{ mt: 3 }}>
-        These are your organisation's default working hours. Teams that don't
-        work these hours (night shift, factory floor, ...) can be assigned a
-        custom shift under Settings → Shifts.
-      </Alert>
-
       <Divider sx={{ my: 3 }} />
 
       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -1421,8 +1472,20 @@ function SaveDialog({
 export default function OrgSettings() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const [tab, setTab] = useState(0);
+  // Derive the initial sub-tab from ?subtab= (deep links, e.g. from
+  // onboarding), falling back to whatever was last used, then "Leave".
+  const getInitialSubTab = (): number => {
+    const params = new URLSearchParams(location.search);
+    const slug = params.get("subtab");
+    if (slug) return subTabSlugToIndex(slug);
+    const saved = localStorage.getItem(SUB_TAB_LS_KEY);
+    return subTabSlugToIndex(saved);
+  };
+
+  const [tab, setTab] = useState(getInitialSubTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -1467,6 +1530,22 @@ export default function OrgSettings() {
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
+
+  // Sync sub-tab when the URL changes (back/forward navigation, or a new
+  // deep link while already on this page).
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const slug = params.get("subtab");
+    if (slug) setTab(subTabSlugToIndex(slug));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  function handleSubTabChange(_: unknown, newValue: number) {
+    const slug = SUB_TABS[newValue].slug;
+    setTab(newValue);
+    localStorage.setItem(SUB_TAB_LS_KEY, slug);
+    navigate(`/settings?tab=org-settings&subtab=${slug}`, { replace: true });
+  }
 
   // ── Draft handling ───────────────────────────────────────────────────────────
 
@@ -1533,13 +1612,6 @@ export default function OrgSettings() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const TABS = [
-    { label: "Leave", icon: <EventAvailableIcon fontSize="small" /> },
-    { label: "Attendance", icon: <AccessTimeIcon fontSize="small" /> },
-    { label: "HR Policy", icon: <BusinessCenterIcon fontSize="small" /> },
-    { label: "Work Week", icon: <CalendarViewWeekIcon fontSize="small" /> },
-  ];
-
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
       {/* Header */}
@@ -1603,7 +1675,7 @@ export default function OrgSettings() {
               action={
                 canEdit ? (
                   <Button
-                    variant="ghost"
+                    variant="danger"
                     size="small"
                     icon={<CancelIcon fontSize="small" />}
                     loading={cancelling === p.id}
@@ -1626,10 +1698,12 @@ export default function OrgSettings() {
       <Paper elevation={0} variant="outlined" sx={{ borderRadius: 2 }}>
         <Tabs
           value={tab}
-          onChange={(_, v) => setTab(v)}
+          onChange={handleSubTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
           sx={{ px: 2, borderBottom: 1, borderColor: "divider" }}
         >
-          {TABS.map((t, i) => (
+          {SUB_TABS.map((t, i) => (
             <Tab
               key={i}
               label={t.label}
@@ -1679,6 +1753,15 @@ export default function OrgSettings() {
                   onChange={handleChange}
                   readOnly={!canEdit}
                 />
+              </TabPanel>
+              <TabPanel value={tab} index={4}>
+                <ExitPolicySettings />
+              </TabPanel>
+              <TabPanel value={tab} index={5}>
+                <PayrollComponentsSettings />
+              </TabPanel>
+              <TabPanel value={tab} index={6}>
+                <RecruitmentPipelineSettings />
               </TabPanel>
             </>
           )}

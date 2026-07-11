@@ -4,7 +4,6 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getNotificationQueue } from "@hrms/queue";
 import { MESSAGES } from "../constants/messages";
-import { toResignationProto } from "./resignationSerializer";
 
 export const rejectResignation = async (
   call: ServerUnaryCall<any, any>,
@@ -22,7 +21,12 @@ export const rejectResignation = async (
       });
     }
 
-    const resignation = await prisma.resignation.findUnique({ where: { id } });
+    // findFirst (not findUnique) so tenantId is enforced — tenants without a
+    // dedicated DB share the master DB, where `id` alone doesn't prevent
+    // acting on another tenant's resignation.
+    const resignation = await prisma.resignation.findFirst({
+      where: { id, tenantId: getTenantId() },
+    });
     if (!resignation) {
       return callback(null, {
         message: MESSAGES.RESIGNATION_NOT_FOUND,
@@ -65,10 +69,12 @@ export const rejectResignation = async (
         }),
       );
 
+    // RejectResignation's proto response is BasicResponse (message+status
+    // only, no `data` field) — a `data` value here would just be silently
+    // dropped by the encoder, so don't bother constructing one.
     return callback(null, {
       message: MESSAGES.RESIGNATION_REJECTED,
       status: status.OK,
-      data: toResignationProto(updatedResignation),
     });
   } catch (err) {
     logger.error("RejectResignation error:", { err });

@@ -658,7 +658,9 @@ function AssetIssues() {
           </Button>
           <Button
             onClick={handleAction}
-            variant="primary"
+            variant={
+              actionDialog?.targetStatus === "rejected" ? "danger" : "primary"
+            }
             size="small"
             disabled={actioning}
           >

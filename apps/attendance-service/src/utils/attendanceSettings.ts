@@ -9,6 +9,8 @@ export interface AttendanceSettings {
   workStartMinute: number;
   lateGracePeriodMinutes: number;
   halfDayMinHours: number;
+  fullDayMinHours: number;
+  overtimePreApprovalRequired: boolean;
   // Geofencing
   geofencingEnabled: boolean;
   officeLatitude: number | null;
@@ -38,6 +40,8 @@ export async function getAttendanceSettings(
       workStartMinute: true,
       lateGracePeriodMinutes: true,
       halfDayMinHours: true,
+      fullDayMinHours: true,
+      overtimePreApprovalRequired: true,
       geofencingEnabled: true,
       officeLatitude: true,
       officeLongitude: true,
@@ -52,6 +56,8 @@ export async function getAttendanceSettings(
     workStartMinute: settings.workStartMinute,
     lateGracePeriodMinutes: settings.lateGracePeriodMinutes,
     halfDayMinHours: settings.halfDayMinHours,
+    fullDayMinHours: settings.fullDayMinHours ?? 8,
+    overtimePreApprovalRequired: settings.overtimePreApprovalRequired ?? false,
     geofencingEnabled: settings.geofencingEnabled ?? false,
     officeLatitude: settings.officeLatitude ?? null,
     officeLongitude: settings.officeLongitude ?? null,
@@ -69,44 +75,39 @@ export async function invalidateAttendanceSettingsCache(
   await cacheManager.delete(`tenantSettings:attendance:${tenantId}`);
 }
 
-// ─── Shift resolution ───────────────────────────────────────────────────────
-// Resolution order: User.shiftId > Team.shiftId > TenantSettings defaults.
-// A tenant with no Shift rows behaves exactly as before — every check-in
-// resolves straight to the tenant-wide cfg.
-
-export interface ShiftOverride {
-  workStartHour: number;
-  workStartMinute: number;
-  lateGracePeriodMinutes: number;
-  halfDayMinHours: number;
-}
-
-export async function resolveShift(
+// ─── Overtime ───────────────────────────────────────────────────────────────
+// Hours worked beyond fullDayMinHours are the overtime candidate for the day.
+// When overtimePreApprovalRequired is on, that candidate only counts if an
+// approved OvertimeRequest exists for this user+date — otherwise it's
+// dropped (the employee worked long, but nothing was pre-approved to pay it
+// out for). When the flag is off, the candidate is recognized unconditionally.
+export async function resolveOvertimeHours(
   tenantId: string,
   userId: string,
-  userShiftId: string | null,
-): Promise<ShiftOverride | null> {
-  let shiftId = userShiftId;
-  if (!shiftId) {
-    const team = await (prisma as any).team.findFirst({
-      where: { tenantId, members: { has: userId } },
-      select: { shiftId: true },
-    });
-    shiftId = team?.shiftId ?? null;
-  }
-  if (!shiftId) return null;
+  date: Date,
+  workingHours: number,
+  cfg: Pick<
+    AttendanceSettings,
+    "fullDayMinHours" | "overtimePreApprovalRequired"
+  >,
+): Promise<number> {
+  const candidate = Math.max(0, workingHours - cfg.fullDayMinHours);
+  if (candidate === 0) return 0;
+  if (!cfg.overtimePreApprovalRequired) return candidate;
 
-  const shift = await (prisma as any).shift.findFirst({
-    where: { id: shiftId, tenantId, isActive: true },
+  const dateStart = dayjs(date).startOf("day").toDate();
+  const dateEnd = dayjs(date).endOf("day").toDate();
+  const approved = await (prisma as any).overtimeRequest.findFirst({
+    where: {
+      tenantId,
+      userId,
+      date: { gte: dateStart, lte: dateEnd },
+      status: "Approved",
+    },
   });
-  if (!shift) return null;
-
-  return {
-    workStartHour: shift.startHour,
-    workStartMinute: shift.startMinute,
-    lateGracePeriodMinutes: shift.lateGracePeriodMinutes,
-    halfDayMinHours: shift.halfDayMinHours,
-  };
+  if (!approved) return 0;
+  // Never pay out more than what was actually approved.
+  return Math.min(candidate, approved.plannedHours);
 }
 
 // ─── Working hours ──────────────────────────────────────────────────────────

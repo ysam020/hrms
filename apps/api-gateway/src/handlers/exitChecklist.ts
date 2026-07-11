@@ -136,14 +136,31 @@ export async function getResignationChecklist(req: AuthRequest, res: Response) {
   const tenantId = requireTenantId(req, res);
   if (!tenantId) return;
   try {
+    const { userId } = req.user!;
     const { id: resignationId } = req.params as { id: string };
+
+    const resignation = await (prisma as any).resignation.findFirst({
+      where: { id: resignationId, tenantId },
+      select: { userId: true },
+    });
+    if (!resignation) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Resignation not found.",
+      });
+    }
+    if (resignation.userId !== userId && !(await isPrivileged(req))) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You can only view your own exit checklist.",
+      });
+    }
+
     const [defs, statuses] = await Promise.all([
       (prisma as any).exitChecklistItemDef.findMany({
         where: { tenantId, isActive: true },
         orderBy: { order: "asc" },
       }),
       (prisma as any).exitChecklistItemStatus.findMany({
-        where: { resignationId },
+        where: { resignationId, tenantId },
       }),
     ]);
     const statusByDef = new Map(statuses.map((s: any) => [s.itemDefId, s]));

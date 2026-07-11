@@ -39,8 +39,13 @@ export const submitResignation = async (
       });
     }
 
+    const tenantId = getTenantId()!;
+
+    // tenantId scoped — a user with memberships in multiple tenants must be
+    // free to have an active resignation in one tenant while resigning
+    // (separately) from another.
     const existing = await prisma.resignation.findFirst({
-      where: { userId, status: { in: ["Submitted", "Approved"] } },
+      where: { userId, tenantId, status: { in: ["Submitted", "Approved"] } },
     });
     if (existing) {
       return callback(null, {
@@ -49,7 +54,6 @@ export const submitResignation = async (
       });
     }
 
-    const tenantId = getTenantId()!;
     const resignedOn = dayjs(resignationDate).toDate();
 
     // Absconding has no notice period by definition; everything else resolves

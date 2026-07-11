@@ -16,12 +16,16 @@ export const listResignations = async (
     const limitNum = parseInt(String(limit)) || 10;
     const skip = (pageNum - 1) * limitNum;
 
-    const tenantId = getTenantId() ?? "global";
-    const cacheKey = `t:${tenantId}:resignations:${userId || ""}:${filterStatus || "all"}:p${pageNum}:l${limitNum}`;
+    const tenantId = getTenantId();
+    const cacheKey = `t:${tenantId ?? "global"}:resignations:${userId || ""}:${filterStatus || "all"}:p${pageNum}:l${limitNum}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
-    const where: any = {};
+    // tenantId always applied — without it, tenants sharing the fallback
+    // master DB (no dedicated Tenant.dbName) would see every other tenant's
+    // resignations mixed into this list. (tenantId is a nullable ObjectId
+    // column — never pass the "global" cache-key placeholder here.)
+    const where: any = { tenantId };
     if (userId) where.userId = userId;
     if (filterStatus) where.status = filterStatus;
 

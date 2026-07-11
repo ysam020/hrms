@@ -57,20 +57,7 @@ function randomSalaryFor(designation: string): number {
 async function seedOrgStructure(
   tenantId: string,
   createdBy: string,
-): Promise<{ shiftId: string }> {
-  const shift = await (prismaWithTenant as any).shift.create({
-    data: {
-      tenantId,
-      name: "General Shift",
-      startHour: 9,
-      startMinute: 0,
-      endHour: 18,
-      endMinute: 0,
-      isDefault: true,
-      createdBy,
-    },
-  });
-
+): Promise<void> {
   for (const name of DEPARTMENTS) {
     await (prismaWithTenant as any).department.upsert({
       where: { tenantId_name: { tenantId, name } },
@@ -87,16 +74,11 @@ async function seedOrgStructure(
       });
     }
   }
-
-  return { shiftId: shift.id };
 }
 
 // ─── Employees (+ KYC fields, which live directly on User) ────────────────
 
-async function seedEmployees(
-  tenantId: string,
-  shiftId: string,
-): Promise<SeededEmployee[]> {
+async function seedEmployees(tenantId: string): Promise<SeededEmployee[]> {
   const employees: SeededEmployee[] = [];
 
   for (let i = 0; i < EMPLOYEE_COUNT; i++) {
@@ -121,7 +103,6 @@ async function seedEmployees(
           .slice(0, 10),
         department,
         designation,
-        shiftId,
         employeeStatus: "Active",
         employmentType: "employee",
         role: ["employee"],
@@ -514,11 +495,11 @@ async function seedTenant(tenant: {
     });
 
     if (employees.length < SEEDED_EMPLOYEE_THRESHOLD) {
-      // Shift/Department/Designation.createdBy are @db.ObjectId — no
-      // "system user" exists yet at this point (employees are created next),
-      // so use the tenant's own id, which is already a valid ObjectId.
-      const { shiftId } = await seedOrgStructure(tenant.id, tenant.id);
-      employees = await seedEmployees(tenant.id, shiftId);
+      // Department/Designation.createdBy are @db.ObjectId — no "system
+      // user" exists yet at this point (employees are created next), so use
+      // the tenant's own id, which is already a valid ObjectId.
+      await seedOrgStructure(tenant.id, tenant.id);
+      employees = await seedEmployees(tenant.id);
 
       await seedJobOpenings(tenant.id, employees[0].username);
       await seedAssets(tenant.id, employees[0].id, employees);

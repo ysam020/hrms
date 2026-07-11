@@ -207,13 +207,46 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       });
     }
 
-    const { month, year, notes } = req.body as {
+    const {
+      month,
+      year,
+      notes,
+      payCycleId: requestedPayCycleId,
+    } = req.body as {
       month: number;
       year: number;
       notes?: string;
+      payCycleId?: string;
     };
 
     const tenantId = getTenantId();
+
+    // Resolve the pay cycle this run is for — the tenant's explicitly
+    // requested one, else its default active cycle. The run is stamped with
+    // it either way, but @@unique([tenantId, month, year]) on PayrollRun
+    // means true multi-cycle-per-month processing (a second, e.g. biweekly,
+    // run within the same calendar month) isn't supported yet — see the
+    // PayCycle model comment. Non-monthly cycles still get a run (so the
+    // setting isn't simply ignored), just one per calendar month like every
+    // other tenant, with a note flagging the mismatch.
+    let payCycleWarning: string | undefined;
+    let resolvedPayCycle: {
+      id: string;
+      frequency: string;
+      name: string;
+    } | null = null;
+    if (tenantId) {
+      resolvedPayCycle = requestedPayCycleId
+        ? await (prisma as any).payCycle.findFirst({
+            where: { id: requestedPayCycleId, tenantId, isActive: true },
+          })
+        : await (prisma as any).payCycle.findFirst({
+            where: { tenantId, isDefault: true, isActive: true },
+          });
+      if (resolvedPayCycle && resolvedPayCycle.frequency !== "monthly") {
+        payCycleWarning = `Pay cycle "${resolvedPayCycle.name}" is ${resolvedPayCycle.frequency}, but payroll runs are still processed one per calendar month — this run covers the full month, not a single ${resolvedPayCycle.frequency} period.`;
+      }
+    }
 
     // Guard: payroll can only be initiated for past months (never current or future).
     const now = new Date();
@@ -586,6 +619,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         totalDeductions,
         employeeCount: employees.length,
         notes: notes ?? null,
+        payCycleId: resolvedPayCycle?.id ?? undefined,
       },
     });
 
@@ -610,6 +644,8 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         totalGross,
         totalNet,
         totalDeductions,
+        payCycleId: resolvedPayCycle?.id ?? null,
+        ...(payCycleWarning ? { warning: payCycleWarning } : {}),
       },
     });
   } catch (error) {

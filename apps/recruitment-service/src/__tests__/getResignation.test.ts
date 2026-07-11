@@ -3,7 +3,7 @@ import { getResignation } from "../handlers/getResignation";
 
 jest.mock("@hrms/db", () => {
   const _db = {
-    resignation: { findUnique: jest.fn() },
+    resignation: { findFirst: jest.fn() },
   };
   return {
     prisma: _db,
@@ -16,7 +16,7 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-const mockFindUnique = (prisma as any).resignation.findUnique as jest.Mock;
+const mockFindFirst = (prisma as any).resignation.findFirst as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
@@ -33,11 +33,20 @@ describe("getResignation", () => {
       null,
       expect.objectContaining({ status: 3 }),
     );
-    expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(mockFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("scopes the lookup to the current tenant", async () => {
+    mockFindFirst.mockResolvedValue(resignation);
+    const cb = makeCallback();
+    await getResignation(makeCall({ id: "res-1" }), cb);
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { id: "res-1", tenantId: "t1" },
+    });
   });
 
   it("returns NOT_FOUND when resignation does not exist", async () => {
-    mockFindUnique.mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
     await getResignation(makeCall({ id: "res-99" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -47,7 +56,7 @@ describe("getResignation", () => {
   });
 
   it("returns resignation data on success", async () => {
-    mockFindUnique.mockResolvedValue(resignation);
+    mockFindFirst.mockResolvedValue(resignation);
     const cb = makeCallback();
     await getResignation(makeCall({ id: "res-1" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -64,7 +73,7 @@ describe("getResignation", () => {
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockFindUnique.mockRejectedValue(new Error("DB error"));
+    mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await getResignation(makeCall({ id: "res-1" }), cb);
     expect(cb).toHaveBeenCalledWith(

@@ -9,6 +9,7 @@ jest.mock("@hrms/db", () => {
     leaveBalance: {
       findMany: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     tenantSettings: {
       findFirst: jest.fn(),
@@ -32,6 +33,8 @@ const mockTenantFindMany = (prisma as any).tenant.findMany as jest.Mock;
 const mockFindMany = (prismaWithTenant as any).leaveBalance
   .findMany as jest.Mock;
 const mockUpdate = (prismaWithTenant as any).leaveBalance.update as jest.Mock;
+const mockUpdateMany = (prismaWithTenant as any).leaveBalance
+  .updateMany as jest.Mock;
 const mockSettingsFindFirst = (prismaWithTenant as any).tenantSettings
   .findFirst as jest.Mock;
 
@@ -41,6 +44,7 @@ describe("updateLeaveBalance", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUpdate.mockResolvedValue(undefined);
+    mockUpdateMany.mockResolvedValue({ count: 1 });
     mockTenantFindMany.mockResolvedValue(ONE_TENANT);
     // No leavePolicies configured by default — falls back to the global
     // env-var carry-forward cap, matching pre-existing behavior.
@@ -221,7 +225,11 @@ describe("updateLeaveBalance", () => {
     jest.setSystemTime(new Date(2024, 3, 1)); // April 1
     mockSettingsFindFirst.mockResolvedValue({
       leavePolicies: [
-        { key: "PL", name: "Paid Leave", carryForward: { enabled: true, maxDays: 5 } },
+        {
+          key: "PL",
+          name: "Paid Leave",
+          carryForward: { enabled: true, maxDays: 5 },
+        },
       ],
     });
     mockFindMany.mockResolvedValue([
@@ -278,5 +286,134 @@ describe("updateLeaveBalance", () => {
   it("does not throw when a single tenant's database call fails", async () => {
     mockFindMany.mockRejectedValue(new Error("DB error"));
     await expect(updateLeaveBalance()).resolves.toBeUndefined();
+  });
+
+  describe("monthly accrual", () => {
+    it("credits daysPerYear/12 onto a tracked flat-map balance", async () => {
+      mockSettingsFindFirst.mockResolvedValue({
+        leavePolicies: [
+          {
+            key: "SL",
+            name: "Sick Leave",
+            accrualMethod: "monthly",
+            daysPerYear: 12,
+          },
+        ],
+      });
+      mockFindMany.mockResolvedValue([
+        { id: "lb-1", updatedAt: new Date(), balances: { SL: 3 } },
+      ]);
+
+      await updateLeaveBalance();
+
+      expect(mockUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: "lb-1" }),
+          data: { balances: { SL: 4 } },
+        }),
+      );
+    });
+
+    it("caps accrual at daysPerYear", async () => {
+      mockSettingsFindFirst.mockResolvedValue({
+        leavePolicies: [
+          {
+            key: "SL",
+            name: "Sick Leave",
+            accrualMethod: "monthly",
+            daysPerYear: 12,
+          },
+        ],
+      });
+      mockFindMany.mockResolvedValue([
+        { id: "lb-1", updatedAt: new Date(), balances: { SL: 11.5 } },
+      ]);
+
+      await updateLeaveBalance();
+
+      expect(mockUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { balances: { SL: 12 } } }),
+      );
+    });
+
+    it("skips a flat-map row where the policy's type isn't tracked yet", async () => {
+      mockSettingsFindFirst.mockResolvedValue({
+        leavePolicies: [
+          {
+            key: "SL",
+            name: "Sick Leave",
+            accrualMethod: "monthly",
+            daysPerYear: 12,
+          },
+        ],
+      });
+      mockFindMany.mockResolvedValue([
+        { id: "lb-1", updatedAt: new Date(), balances: { PL: 8 } }, // no SL entry
+      ]);
+
+      await updateLeaveBalance();
+
+      expect(mockUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it("skips array-shaped rows entirely (they use PL carry-forward, not accrual)", async () => {
+      mockSettingsFindFirst.mockResolvedValue({
+        leavePolicies: [
+          {
+            key: "SL",
+            name: "Sick Leave",
+            accrualMethod: "monthly",
+            daysPerYear: 12,
+          },
+        ],
+      });
+      mockFindMany.mockResolvedValue([
+        {
+          id: "lb-1",
+          accumulatedPLBeforeCurrentMonth: 0,
+          balances: [{ year: 2024, month: 4, remainingPL: 3 }],
+        },
+      ]);
+
+      await updateLeaveBalance();
+
+      expect(mockUpdateMany).not.toHaveBeenCalled();
+      // Carry-forward still runs normally for this array-shaped row.
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "lb-1" } }),
+      );
+    });
+
+    it("does nothing when no leavePolicies use monthly accrual", async () => {
+      mockSettingsFindFirst.mockResolvedValue({
+        leavePolicies: [
+          {
+            key: "PL",
+            name: "Paid Leave",
+            accrualMethod: "lump_sum",
+            daysPerYear: 12,
+          },
+        ],
+      });
+      mockFindMany.mockResolvedValue([
+        { id: "lb-1", updatedAt: new Date(), balances: { PL: 8 } },
+      ]);
+
+      await updateLeaveBalance();
+
+      expect(mockUpdateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("flat-map balances safety (carry-forward step)", () => {
+    it("does not touch a flat-map-shaped row's balances via the array-based carry-forward step", async () => {
+      mockFindMany.mockResolvedValue([
+        { id: "lb-1", updatedAt: new Date(), balances: { PL: 8 } },
+      ]);
+
+      await updateLeaveBalance();
+
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
   });
 });

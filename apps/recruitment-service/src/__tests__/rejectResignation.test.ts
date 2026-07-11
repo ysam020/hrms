@@ -4,7 +4,7 @@ import { rejectResignation } from "../handlers/rejectResignation";
 
 jest.mock("@hrms/db", () => {
   const _db = {
-    resignation: { findUnique: jest.fn(), update: jest.fn() },
+    resignation: { findFirst: jest.fn(), update: jest.fn() },
   };
   return {
     prisma: _db,
@@ -27,7 +27,7 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-const mockFindUnique = (prisma as any).resignation.findUnique as jest.Mock;
+const mockFindFirst = (prisma as any).resignation.findFirst as jest.Mock;
 const mockUpdate = (prisma as any).resignation.update as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 
@@ -50,11 +50,20 @@ describe("rejectResignation", () => {
       null,
       expect.objectContaining({ status: 3 }),
     );
-    expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(mockFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("scopes the lookup to the current tenant", async () => {
+    mockFindFirst.mockResolvedValue(resignation);
+    const cb = makeCallback();
+    await rejectResignation(makeCall({ id: "res-1" }), cb);
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { id: "res-1", tenantId: "t1" },
+    });
   });
 
   it("returns NOT_FOUND when resignation does not exist", async () => {
-    mockFindUnique.mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
     await rejectResignation(makeCall({ id: "res-99" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -64,7 +73,7 @@ describe("rejectResignation", () => {
   });
 
   it("returns FAILED_PRECONDITION when resignation is not Submitted", async () => {
-    mockFindUnique.mockResolvedValue({ ...resignation, status: "Approved" });
+    mockFindFirst.mockResolvedValue({ ...resignation, status: "Approved" });
     const cb = makeCallback();
     await rejectResignation(makeCall({ id: "res-1" }), cb);
     expect(cb).toHaveBeenCalledWith(
@@ -74,7 +83,7 @@ describe("rejectResignation", () => {
   });
 
   it("rejects resignation and invalidates cache", async () => {
-    mockFindUnique.mockResolvedValue(resignation);
+    mockFindFirst.mockResolvedValue(resignation);
     const cb = makeCallback();
     await rejectResignation(
       makeCall({ id: "res-1", rejectionReason: "No valid reason" }),
@@ -100,7 +109,7 @@ describe("rejectResignation", () => {
     // `remarks` is the real UpdateStatusRequest proto field — `comments`
     // was never actually part of it, so nothing sent under that name ever
     // reached the database.
-    mockFindUnique.mockResolvedValue(resignation);
+    mockFindFirst.mockResolvedValue(resignation);
     const cb = makeCallback();
     await rejectResignation(
       makeCall({ id: "res-1", remarks: "Discussed with candidate" }),
@@ -115,8 +124,16 @@ describe("rejectResignation", () => {
     );
   });
 
+  it("does not send the resignation back on the wire (BasicResponse has no data field)", async () => {
+    mockFindFirst.mockResolvedValue(resignation);
+    const cb = makeCallback();
+    await rejectResignation(makeCall({ id: "res-1" }), cb);
+    const [, payload] = cb.mock.calls[0];
+    expect(payload).not.toHaveProperty("data");
+  });
+
   it("returns INTERNAL on database error", async () => {
-    mockFindUnique.mockRejectedValue(new Error("DB error"));
+    mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await rejectResignation(makeCall({ id: "res-1" }), cb);
     expect(cb).toHaveBeenCalledWith(

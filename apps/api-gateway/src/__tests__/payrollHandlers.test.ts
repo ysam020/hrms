@@ -11,6 +11,7 @@ jest.mock("@hrms/db", () => {
     professionalTaxSlab: { findMany: jest.fn() },
     salaryComponentDefinition: { findMany: jest.fn() },
     salaryAdvance: { findMany: jest.fn() },
+    payCycle: { findFirst: jest.fn() },
     tenantSettings: { findFirst: jest.fn() },
     holiday: { findMany: jest.fn() },
   };
@@ -73,6 +74,7 @@ const mockAdvanceFindMany = (prisma as any).salaryAdvance.findMany as jest.Mock;
 const mockTenantSettingsFindFirst = (prisma as any).tenantSettings
   .findFirst as jest.Mock;
 const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
+const mockPayCycleFindFirst = (prisma as any).payCycle.findFirst as jest.Mock;
 
 const makeReq = (overrides: any = {}) =>
   ({
@@ -107,6 +109,7 @@ describe("initiatePayrollRun", () => {
     mockAdvanceFindMany.mockResolvedValue([]);
     mockTenantSettingsFindFirst.mockResolvedValue(null);
     mockHolidayFindMany.mockResolvedValue([]);
+    mockPayCycleFindFirst.mockResolvedValue(null);
   });
 
   it("uses the employee's own configured Basic/HRA/Conveyance, prorated by attendance, instead of the fixed 50/25/25 split", async () => {
@@ -323,5 +326,110 @@ describe("initiatePayrollRun", () => {
       res,
     );
     expect(mockUserFindMany).not.toHaveBeenCalled();
+  });
+
+  describe("pay cycle", () => {
+    it("stamps the run with the tenant's default active pay cycle", async () => {
+      mockUserFindMany.mockResolvedValue([
+        { id: "emp-1", salary: 30000, employmentType: "employee" },
+      ]);
+      mockPayCycleFindFirst.mockResolvedValue({
+        id: "cycle-1",
+        frequency: "monthly",
+        name: "Standard Monthly",
+      });
+
+      await initiatePayrollRun(
+        makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+        makeRes(),
+      );
+
+      expect(mockPayCycleFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: "t1",
+            isDefault: true,
+            isActive: true,
+          }),
+        }),
+      );
+      expect(mockRunCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ payCycleId: "cycle-1" }),
+        }),
+      );
+    });
+
+    it("uses the explicitly requested payCycleId instead of the default when provided", async () => {
+      mockUserFindMany.mockResolvedValue([
+        { id: "emp-1", salary: 30000, employmentType: "employee" },
+      ]);
+      mockPayCycleFindFirst.mockResolvedValue({
+        id: "cycle-biweekly",
+        frequency: "biweekly",
+        name: "Biweekly",
+      });
+
+      await initiatePayrollRun(
+        makeReq({
+          body: {
+            month: PAST_MONTH,
+            year: PAST_YEAR,
+            payCycleId: "cycle-biweekly",
+          },
+        }),
+        makeRes(),
+      );
+
+      expect(mockPayCycleFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: "cycle-biweekly",
+            tenantId: "t1",
+          }),
+        }),
+      );
+    });
+
+    it("includes a warning in the response when the resolved cycle isn't monthly", async () => {
+      mockUserFindMany.mockResolvedValue([
+        { id: "emp-1", salary: 30000, employmentType: "employee" },
+      ]);
+      mockPayCycleFindFirst.mockResolvedValue({
+        id: "cycle-1",
+        frequency: "biweekly",
+        name: "Biweekly",
+      });
+      const res = makeRes();
+
+      await initiatePayrollRun(
+        makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+        res,
+      );
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            warning: expect.stringContaining("biweekly"),
+          }),
+        }),
+      );
+    });
+
+    it("does not include a warning when no pay cycle is configured", async () => {
+      mockUserFindMany.mockResolvedValue([
+        { id: "emp-1", salary: 30000, employmentType: "employee" },
+      ]);
+      const res = makeRes();
+
+      await initiatePayrollRun(
+        makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+        res,
+      );
+
+      const data = (res.json as jest.Mock).mock.calls[0][0].data;
+      expect(data.warning).toBeUndefined();
+      expect(data.payCycleId).toBeNull();
+    });
   });
 });

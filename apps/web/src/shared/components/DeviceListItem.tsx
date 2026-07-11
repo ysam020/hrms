@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -6,11 +6,12 @@ import DevicesIcon from "@mui/icons-material/Devices";
 import SmartphoneIcon from "@mui/icons-material/Smartphone";
 import ComputerIcon from "@mui/icons-material/Computer";
 import TabletIcon from "@mui/icons-material/Tablet";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function DeviceListItem({
   device,
   isCurrentDevice = false,
-  theme = "light",
+  theme = undefined,
   actions,
   onClick,
 }: {
@@ -20,6 +21,9 @@ function DeviceListItem({
   actions?: React.ReactNode;
   onClick?: () => void;
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
+
   const getDeviceIcon = (deviceType: string | undefined) => {
     switch (deviceType?.toLowerCase()) {
       case "mobile":

@@ -107,8 +107,8 @@
 }
 
 .btn {
-  color: var(--btn-color) !important;
-  background-color: var(--btn-bg) !important;
+  color: var(--btn-color);
+  background-color: var(--btn-bg);
   padding: 6px 10px;
   cursor: pointer;
   box-shadow: 0 0 20px 1px rgba(0, 0, 0, 0.3);
@@ -122,8 +122,8 @@
 
 .btn:hover,
 .btn:active {
-  background-color: var(--btn-bg) !important;
-  color: var(--btn-color) !important;
+  background-color: var(--btn-bg);
+  color: var(--btn-color);
 }
 
 .link {

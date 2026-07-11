@@ -19,7 +19,6 @@ import { ThemeContext } from "@web/app/providers/ThemeContext";
 import ViewFeedbackModal from "./ViewFeedbackModal";
 import ResignationDecisionDialog from "./ResignationDecisionDialog";
 import ExitManagementDialog from "./ExitManagementDialog";
-import Checkbox from "@mui/material/Checkbox";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -147,33 +146,6 @@ function ViewResignations() {
     [refresh, setAlert],
   );
 
-  const handleCheckboxChange = useCallback(
-    async ({ id, status, value }) => {
-      try {
-        const res = await apiClient.put(API_ENDPOINTS.UPDATE_RESIGNATION(id), {
-          status,
-          value,
-        });
-        refresh();
-        setAlert({
-          open: true,
-          message: res.data.message || `${status} updated`,
-          severity: "success",
-        });
-      } catch (err) {
-        setAlert({
-          open: true,
-          message:
-            err.message === "Network Error"
-              ? "Network Error, your changes will be saved once back online"
-              : err.response?.data?.message || "Update failed",
-          severity: "error",
-        });
-      }
-    },
-    [refresh, setAlert],
-  );
-
   const getStatusChip = useCallback(
     (status) => {
       const statusMap = {
@@ -234,14 +206,6 @@ function ViewResignations() {
     [theme],
   );
 
-  const canEditRow = useCallback(
-    (rowData: any) =>
-      (user?.isSuperUser || rowData.userId !== user.id) &&
-      rowData.status !== "Withdrawn" &&
-      rowData.status !== "Rejected",
-    [user],
-  );
-
   const columns = useMemo(
     () => [
       {
@@ -282,50 +246,8 @@ function ViewResignations() {
         hideLabel: true,
         render: (row: any) => getStatusChip(row.status),
       },
-      {
-        key: "assetsReturned",
-        label: "Assets Returned",
-        render: (row: any) =>
-          !canEditRow(row) ? (
-            "—"
-          ) : (
-            <Checkbox
-              checked={row.assetsReturned}
-              onChange={(e) =>
-                handleCheckboxChange({
-                  id: row.id,
-                  status: "Assets Returned",
-                  value: e.target.checked,
-                })
-              }
-              size="small"
-              sx={{ p: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}
-            />
-          ),
-      },
-      {
-        key: "fnfDone",
-        label: "FnF Done",
-        render: (row: any) =>
-          !canEditRow(row) ? (
-            "—"
-          ) : (
-            <Checkbox
-              checked={row.fnfDone}
-              onChange={(e) =>
-                handleCheckboxChange({
-                  id: row.id,
-                  status: "FnF Done",
-                  value: e.target.checked,
-                })
-              }
-              size="small"
-              sx={{ p: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}
-            />
-          ),
-      },
     ],
-    [canEditRow, handleCheckboxChange, getStatusChip],
+    [getStatusChip],
   );
 
   const actions = useCallback(
@@ -334,7 +256,7 @@ function ViewResignations() {
         !["Withdrawn", "Rejected", "Approved"].includes(rowData.status) &&
         (user?.isSuperUser || rowData.userId !== user.id);
       const canWithdraw =
-        !["Withdrawn"].includes(rowData.status) &&
+        rowData.status === "Submitted" &&
         (rowData.userId === user.id || user?.isSuperUser);
       const canManageExit =
         user?.isSuperUser &&

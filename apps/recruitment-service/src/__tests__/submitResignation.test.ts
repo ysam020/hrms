@@ -126,6 +126,7 @@ describe("submitResignation", () => {
     expect(mockResignationFindFirst).toHaveBeenCalledWith({
       where: {
         userId: "john",
+        tenantId: "t1",
         status: { in: ["Submitted", "Approved"] },
       },
     });

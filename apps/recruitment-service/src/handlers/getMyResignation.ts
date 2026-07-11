@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 import { toResignationProto } from "./resignationSerializer";
@@ -18,8 +18,10 @@ export const getMyResignation = async (
       });
     }
 
+    // tenantId scoped — a user with memberships in multiple tenants must
+    // only ever see the resignation they filed in the *current* tenant.
     const resignation = await prisma.resignation.findFirst({
-      where: { userId },
+      where: { userId, tenantId: getTenantId() },
       orderBy: { submittedOn: "desc" },
     });
 

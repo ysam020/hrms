@@ -87,7 +87,24 @@ export async function listNoticeEvents(req: AuthRequest, res: Response) {
   const tenantId = requireTenantId(req, res);
   if (!tenantId) return;
   try {
+    const { userId } = req.user!;
     const { id: resignationId } = req.params as { id: string };
+
+    const resignation = await (prisma as any).resignation.findFirst({
+      where: { id: resignationId, tenantId },
+      select: { userId: true },
+    });
+    if (!resignation) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Resignation not found.",
+      });
+    }
+    if (resignation.userId !== userId && !(await isPrivileged(req))) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You can only view your own notice-period history.",
+      });
+    }
+
     const events = await (prisma as any).resignationNoticeEvent.findMany({
       where: { tenantId, resignationId },
       orderBy: { createdAt: "asc" },
@@ -129,6 +146,29 @@ export async function setRehireEligibility(req: AuthRequest, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("setRehireEligibility error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/** GET /resignations/:id/fnf-settlement — the previously computed settlement, if any. */
+export async function getFnfSettlement(req: AuthRequest, res: Response) {
+  const tenantId = requireTenantId(req, res);
+  if (!tenantId) return;
+  if (!(await isPrivileged(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "Only owners, admins, and HR can view the settlement.",
+    });
+  }
+  try {
+    const { id: resignationId } = req.params as { id: string };
+    const settlement = await (prisma as any).fnfSettlement.findFirst({
+      where: { resignationId, tenantId },
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: settlement ?? null,
+    });
+  } catch (error: unknown) {
+    logger.error("getFnfSettlement error:", { error });
     return handleError(res, error);
   }
 }
@@ -285,6 +325,31 @@ export async function approveFnfSettlement(req: AuthRequest, res: Response) {
         message: "Settlement not found.",
       });
     }
+
+    // Required exit-checklist items (e.g. "Return laptop") must be cleared
+    // before FnF settlement is approved — this is the point in the exit flow
+    // where the tenant's configured ExitChecklistItemDef.isRequired flags
+    // actually get enforced, not just displayed.
+    const [requiredDefs, statuses] = await Promise.all([
+      (prisma as any).exitChecklistItemDef.findMany({
+        where: { tenantId, isActive: true, isRequired: true },
+        select: { id: true, label: true },
+      }),
+      (prisma as any).exitChecklistItemStatus.findMany({
+        where: { tenantId, resignationId, isComplete: true },
+        select: { itemDefId: true },
+      }),
+    ]);
+    const completedDefIds = new Set(statuses.map((s: any) => s.itemDefId));
+    const incomplete = requiredDefs.filter(
+      (def: any) => !completedDefIds.has(def.id),
+    );
+    if (incomplete.length > 0) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Cannot approve settlement — required exit checklist items not yet complete: ${incomplete.map((d: any) => d.label).join(", ")}.`,
+      });
+    }
+
     const updated = await (prisma as any).fnfSettlement.update({
       where: { id: settlement.id },
       data: { status: "approved", approvedBy: userId, approvedAt: new Date() },

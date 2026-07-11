@@ -40,7 +40,7 @@ export async function advanceApplicationStage(req: AuthRequest, res: Response) {
   try {
     const { userId } = req.user!;
     const { id: applicationId } = req.params as { id: string };
-    const {
+    let {
       stageName,
       stageOrder,
       outcome,
@@ -59,6 +59,41 @@ export async function advanceApplicationStage(req: AuthRequest, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Application not found.",
       });
+    }
+
+    // Validate against the pipeline template snapshotted at apply-time
+    // (applyForJob.ts) — without this, stageName/stageOrder/BGV requirement
+    // were whatever the caller happened to send, with nothing checking they
+    // matched what was actually configured for this job opening.
+    if (application.pipelineTemplateId) {
+      const template = await (
+        prisma as any
+      ).interviewPipelineTemplate.findFirst({
+        where: { id: application.pipelineTemplateId, tenantId },
+      });
+      const stages = Array.isArray(template?.stages) ? template.stages : [];
+      const configuredStage = stages.find((s: any) => s.order === stageOrder);
+      if (configuredStage) {
+        if (!stageName) {
+          stageName = configuredStage.name;
+        } else if (stageName !== configuredStage.name) {
+          return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+            message: `Stage ${stageOrder} of this candidate's pipeline is "${configuredStage.name}", not "${stageName}".`,
+          });
+        }
+        if (configuredStage.isBgvStage) {
+          if (!bgvVendor) {
+            return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+              message: `"${configuredStage.name}" is a background-verification stage — bgvVendor is required.`,
+            });
+          }
+          if (outcome && outcome !== "pending" && !bgvResult) {
+            return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+              message: `"${configuredStage.name}" is a background-verification stage — bgvResult is required to record an outcome.`,
+            });
+          }
+        }
+      }
     }
 
     const [event] = await Promise.all([

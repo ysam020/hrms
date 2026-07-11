@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -6,6 +6,7 @@ import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import SlideUpTransition from "./SlideUpTransition";
+import { ThemeContext } from "@web/app/providers/ThemeContext";
 
 function ThemedDialog({
   open,
@@ -13,7 +14,7 @@ function ThemedDialog({
   title,
   children,
   actions = undefined,
-  theme = "light",
+  theme = undefined,
   maxWidth = "sm" as any,
   fullWidth = true,
   showCloseButton = false,
@@ -25,6 +26,9 @@ function ThemedDialog({
   children: any;
   [key: string]: any;
 }) {
+  const appTheme = useContext(ThemeContext).theme;
+  theme = theme ?? appTheme ?? "light";
+
   const defaultPaperProps = {
     sx: {
       backgroundColor: theme === "light" ? "#ffffff" : "#212e35",

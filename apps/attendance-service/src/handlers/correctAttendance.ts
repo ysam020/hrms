@@ -7,9 +7,9 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import {
   getAttendanceSettings,
-  resolveShift,
   calcWorkingHours,
   getUnpaidBreakMinutes,
+  resolveOvertimeHours,
 } from "../utils/attendanceSettings";
 
 dayjs.extend(utc);
@@ -56,18 +56,7 @@ export const correctAttendance = async (
       // correction must not disagree with the live punch flow on what
       // counts as a full vs. half day for this employee.
       const cfg = tenantId ? await getAttendanceSettings(tenantId) : null;
-      const user = tenantId
-        ? await prisma.user.findUnique({
-            where: { id: userId },
-            select: { shiftId: true },
-          })
-        : null;
-      const shiftOverride =
-        tenantId && user
-          ? await resolveShift(tenantId, userId, (user as any)?.shiftId ?? null)
-          : null;
-      const effectiveHalfDayMinHours =
-        shiftOverride?.halfDayMinHours ?? cfg?.halfDayMinHours ?? 4;
+      const effectiveHalfDayMinHours = cfg?.halfDayMinHours ?? 4;
 
       const unpaidBreakMinutes = existingRecord
         ? await getUnpaidBreakMinutes(existingRecord.id, effectiveTimeOut)
@@ -80,6 +69,10 @@ export const correctAttendance = async (
       updateData.workingHours = hours;
       updateData.status =
         hours < effectiveHalfDayMinHours ? "Half Day" : "Present";
+      updateData.overtimeHours =
+        tenantId && cfg
+          ? await resolveOvertimeHours(tenantId, userId, dateStart, hours, cfg)
+          : 0;
     }
 
     let record;

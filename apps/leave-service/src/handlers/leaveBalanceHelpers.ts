@@ -61,6 +61,42 @@ export async function adjustBalance(
   );
 }
 
+/**
+ * Monthly accrual for leavePolicies with accrualMethod:"monthly" — credits
+ * `monthlyAmount` (typically daysPerYear/12) each time this runs, capped so
+ * the tracked balance never exceeds `annualCap`. Intended to be called once
+ * per calendar month by the scheduler job. No-ops if this leave type isn't
+ * already tracked for the user (call ensureTrackedBalance first to seed it).
+ */
+export async function accrueMonthlyLeave(
+  tenantId: string,
+  userId: string,
+  leaveType: string,
+  monthlyAmount: number,
+  annualCap: number,
+): Promise<void> {
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const row = await getBalanceRow(tenantId, userId);
+    if (!row) return;
+    const balances = { ...((row.balances as Record<string, number>) ?? {}) };
+    if (typeof balances[leaveType] !== "number") return;
+    balances[leaveType] = Math.min(
+      balances[leaveType] + monthlyAmount,
+      annualCap,
+    );
+
+    const result = await (prisma as any).leaveBalance.updateMany({
+      where: { id: row.id, updatedAt: row.updatedAt },
+      data: { balances },
+    });
+    if (result.count === 1) return;
+  }
+  throw new Error(
+    `accrueMonthlyLeave: too much contention on balance row for user ${userId} after ${MAX_ATTEMPTS} attempts`,
+  );
+}
+
 // ─── Comp-off credits ───────────────────────────────────────────────────────
 // A separate resource pool from `balances` — each CompOffCredit is a
 // transactional fact (a specific worked date), not a policy-level number.
@@ -153,6 +189,8 @@ export interface LeavePolicy {
   requiresProof?: boolean;
   isCompOff?: boolean;
   onExhaustion?: "reject" | "auto_lop" | "manager_override";
+  prorateByJoinDate?: boolean;
+  accrualMethod?: "lump_sum" | "monthly";
   [k: string]: unknown;
 }
 
@@ -165,4 +203,116 @@ export function findPolicy(
       p.key?.toLowerCase() === leaveType.toLowerCase() ||
       p.name?.toLowerCase() === leaveType.toLowerCase(),
   );
+}
+
+// ─── Quota resolution / seeding ─────────────────────────────────────────────
+// balances[] only has a numeric entry for a leave type once *something*
+// puts one there. Previously nothing ever did for the built-in PL/SL/CL
+// types (TenantSettings.paidLeavesPerYear etc. were configurable but never
+// read), so every tenant silently fell into the fail-open "not tracked" path
+// regardless of what they configured. ensureTrackedBalance is the seed point:
+// call it before relying on getTrackedRemaining so a leave type with a
+// resolvable quota (a matching leavePolicies entry, or a built-in PL/SL/CL
+// scalar) always gets a real starting balance on first use.
+
+export interface QuotaSettings {
+  leavePolicies: LeavePolicy[];
+  paidLeavesPerYear: number;
+  sickLeavesPerYear: number;
+  casualLeavesPerYear: number;
+}
+
+const BUILTIN_SCALAR_QUOTA: Record<
+  string,
+  keyof Omit<QuotaSettings, "leavePolicies">
+> = {
+  PL: "paidLeavesPerYear",
+  "PAID LEAVE": "paidLeavesPerYear",
+  SL: "sickLeavesPerYear",
+  "SICK LEAVE": "sickLeavesPerYear",
+  CL: "casualLeavesPerYear",
+  "CASUAL LEAVE": "casualLeavesPerYear",
+};
+
+/** The tenant's per-year quota for this leave type, or null if unconfigured anywhere. */
+export function resolveAnnualQuota(
+  leaveType: string,
+  settings: QuotaSettings,
+): number | null {
+  const policy = findPolicy(settings.leavePolicies, leaveType);
+  if (policy && typeof policy.daysPerYear === "number") {
+    return policy.daysPerYear;
+  }
+  const scalarKey = BUILTIN_SCALAR_QUOTA[leaveType.toUpperCase()];
+  return scalarKey ? settings[scalarKey] : null;
+}
+
+/**
+ * First-year proration: an employee joining partway through the year gets
+ * the quota scaled by however many months (inclusive of join month) remain
+ * in the calendar year, rather than the full annual amount. Only applies
+ * when the matching policy has prorateByJoinDate set and the employee's
+ * join date falls in the current calendar year.
+ */
+export function prorateAnnualQuota(
+  annualQuota: number,
+  joiningDate: Date | null | undefined,
+  prorate: boolean,
+): number {
+  if (!prorate || !joiningDate) return annualQuota;
+  const now = new Date();
+  if (joiningDate.getFullYear() !== now.getFullYear()) return annualQuota;
+  const monthsRemaining = 12 - joiningDate.getMonth();
+  return Math.round((annualQuota * monthsRemaining) / 12);
+}
+
+/**
+ * Ensures balances[leaveType] has a numeric entry, seeding it from the
+ * tenant's configured quota (leavePolicies.daysPerYear, else the built-in
+ * PL/SL/CL scalar) on first use. Returns the tracked remaining amount, or
+ * null if this leave type has no resolvable quota anywhere (stays fail-open,
+ * matching pre-existing behavior for genuinely unconfigured custom types).
+ */
+export async function ensureTrackedBalance(
+  tenantId: string,
+  userId: string,
+  leaveType: string,
+  settings: QuotaSettings,
+  joiningDate?: Date | null,
+): Promise<number | null> {
+  const row = await getBalanceRow(tenantId, userId);
+  const existing = row ? getTrackedRemaining(row.balances, leaveType) : null;
+  if (existing !== null) return existing;
+
+  const annualQuota = resolveAnnualQuota(leaveType, settings);
+  if (annualQuota === null) return null;
+
+  const policy = findPolicy(settings.leavePolicies, leaveType);
+  const seedAmount = prorateAnnualQuota(
+    annualQuota,
+    joiningDate,
+    !!policy?.prorateByJoinDate,
+  );
+
+  if (row) {
+    const balances = {
+      ...((row.balances as Record<string, number>) ?? {}),
+      [leaveType]: seedAmount,
+    };
+    const result = await (prisma as any).leaveBalance.updateMany({
+      where: { id: row.id, updatedAt: row.updatedAt },
+      data: { balances },
+    });
+    if (result.count !== 1) {
+      // Lost a seeding race to a concurrent request — whatever it wrote
+      // stands; read it back instead of overwriting.
+      const fresh = await getBalanceRow(tenantId, userId);
+      return getTrackedRemaining(fresh?.balances, leaveType);
+    }
+  } else {
+    await (prisma as any).leaveBalance.create({
+      data: { tenantId, userId, balances: { [leaveType]: seedAmount } },
+    });
+  }
+  return seedAmount;
 }

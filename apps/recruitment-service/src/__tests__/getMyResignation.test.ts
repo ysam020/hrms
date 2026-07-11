@@ -52,7 +52,7 @@ describe("getMyResignation", () => {
     await getMyResignation(makeCall({ userId: "john" }), cb);
     expect(mockFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: "john" },
+        where: { userId: "john", tenantId: "t1" },
         orderBy: { submittedOn: "desc" },
       }),
     );

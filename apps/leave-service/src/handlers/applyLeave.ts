@@ -8,8 +8,7 @@ import { MESSAGES } from "../constants/messages";
 import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
 import {
   findPolicy,
-  getBalanceRow,
-  getTrackedRemaining,
+  ensureTrackedBalance,
   isCompOffLeaveType,
   getAvailableCompOffDays,
   type LeavePolicy,
@@ -186,6 +185,66 @@ export const applyLeave = async (
             status: status.INVALID_ARGUMENT,
           });
         }
+
+        // 3. Blackout periods — date ranges where this leave type can't be
+        // taken at all (e.g. a year-end freeze).
+        const blackoutPeriods = matchedPolicy?.blackoutPeriods as
+          | { start: string; end: string; reason?: string }[]
+          | undefined;
+        if (blackoutPeriods?.length) {
+          const blackout = blackoutPeriods.find((b) => {
+            const bStart = dayjs.utc(b.start).startOf("day");
+            const bEnd = dayjs.utc(b.end).startOf("day");
+            return !startDay.isAfter(bEnd) && !endDay.isBefore(bStart);
+          });
+          if (blackout) {
+            return callback(null, {
+              message: `${matchedPolicy?.name || leaveType} cannot be taken between ${dayjs.utc(blackout.start).format("DD MMM YYYY")} and ${dayjs.utc(blackout.end).format("DD MMM YYYY")}${blackout.reason ? ` (${blackout.reason})` : ""}.`,
+              status: status.INVALID_ARGUMENT,
+            });
+          }
+        }
+
+        // 4. Team concurrent cap — no more than X% of the applicant's team
+        // may be on this leave type at the same time.
+        const capPercent = matchedPolicy?.teamConcurrentCapPercent as
+          | number
+          | undefined;
+        if (capPercent) {
+          const team = await prisma.team.findFirst({
+            where: { tenantId, members: { has: userId } },
+            select: { members: true },
+          });
+          if (team && team.members.length > 0) {
+            const teamLeaves = await prisma.leaveApplication.findMany({
+              where: {
+                userId: { in: team.members },
+                leaveType,
+                status: { in: ["Pending", "Approved"] },
+              },
+              select: { userId: true, from: true, to: true },
+            });
+            const concurrentUserIds = new Set(
+              teamLeaves
+                .filter((l) => {
+                  const lStart = dayjs.utc(l.from);
+                  const lEnd = dayjs.utc(l.to);
+                  return !startDay.isAfter(lEnd) && !endDay.isBefore(lStart);
+                })
+                .map((l) => l.userId),
+            );
+            const projectedCount =
+              concurrentUserIds.size + (concurrentUserIds.has(userId) ? 0 : 1);
+            const projectedPercent =
+              (projectedCount / team.members.length) * 100;
+            if (projectedPercent > capPercent) {
+              return callback(null, {
+                message: `Approving this would put ${projectedCount}/${team.members.length} of your team on ${matchedPolicy?.name || leaveType} at once, above the ${capPercent}% cap.`,
+                status: status.FAILED_PRECONDITION,
+              });
+            }
+          }
+        }
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -224,39 +283,56 @@ export const applyLeave = async (
     const fromDate = startDay.toDate();
     const toDate = endDay.toDate();
 
-    // ── Exhaustion enforcement — opt-in and fail-open. Only applies when the
-    // tenant has configured this leave type in leavePolicies AND already
-    // populated a numeric balance for it. Tenants who haven't touched either
-    // see identical behavior to today.
-    //   - onExhaustion="reject": blocks the application outright.
+    // ── Exhaustion enforcement — opt-in and fail-open for genuinely
+    // unconfigured leave types, but no longer for the common case: any type
+    // with a resolvable quota (a matching leavePolicies.daysPerYear, or a
+    // built-in PL/SL/CL scalar) gets its balance seeded on first use via
+    // ensureTrackedBalance, so the tenant's configured quotas are always the
+    // enforcement source once a quota exists — not just when a tenant has
+    // separately opted into leavePolicies.onExhaustion.
+    //   - onExhaustion="reject" (also the default when a quota resolves but
+    //     no policy/onExhaustion was explicitly configured): blocks the
+    //     application outright.
     //   - onExhaustion="auto_lop" / "manager_override": still allowed
-    //     through (as before), but the shortfall is now surfaced to the
-    //     approver via the approval-instance metadata + notification instead
-    //     of vanishing silently — "manager_override" means the approver
-    //     decides, which requires them to actually see it.
+    //     through, but the shortfall is surfaced to the approver via the
+    //     approval-instance metadata + notification instead of vanishing
+    //     silently — "manager_override" means the approver decides, which
+    //     requires them to actually see it.
     let exhaustionInfo: {
       onExhaustion: string;
       remaining: number;
       shortfallDays: number;
     } | null = null;
-    if (tenantId && leaveSettings) {
+    if (
+      tenantId &&
+      leaveSettings &&
+      !isCompOffLeaveType(leaveType, leaveSettings.leavePolicies)
+    ) {
       const policy = findPolicy(leaveSettings.leavePolicies, leaveType);
-      if (policy?.onExhaustion) {
-        const balanceRow = await getBalanceRow(tenantId, userId);
-        const remaining = getTrackedRemaining(balanceRow?.balances, leaveType);
-        if (remaining !== null && days > remaining) {
-          if (policy.onExhaustion === "reject") {
-            return callback(null, {
-              message: `Insufficient ${policy.name || leaveType} balance — ${remaining} day(s) remaining, ${days} requested.`,
-              status: status.FAILED_PRECONDITION,
-            });
-          }
-          exhaustionInfo = {
-            onExhaustion: policy.onExhaustion,
-            remaining,
-            shortfallDays: Math.round((days - remaining) * 100) / 100,
-          };
+      const applicant = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { joining_date: true },
+      });
+      const remaining = await ensureTrackedBalance(
+        tenantId,
+        userId,
+        leaveType,
+        leaveSettings,
+        applicant?.joining_date,
+      );
+      if (remaining !== null && days > remaining) {
+        const onExhaustion = policy?.onExhaustion ?? "reject";
+        if (onExhaustion === "reject") {
+          return callback(null, {
+            message: `Insufficient ${policy?.name || leaveType} balance — ${remaining} day(s) remaining, ${days} requested.`,
+            status: status.FAILED_PRECONDITION,
+          });
         }
+        exhaustionInfo = {
+          onExhaustion,
+          remaining,
+          shortfallDays: Math.round((days - remaining) * 100) / 100,
+        };
       }
     }
 

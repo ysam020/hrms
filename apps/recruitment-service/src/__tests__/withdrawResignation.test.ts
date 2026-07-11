@@ -7,7 +7,7 @@ import { MESSAGES } from "../constants/messages";
 jest.mock("@hrms/db", () => {
   const _db = {
     resignation: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
     approvalInstance: {
@@ -36,7 +36,7 @@ jest.mock("@hrms/logger", () => ({
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
-const mockFindUnique = (prisma as any).resignation.findUnique as jest.Mock;
+const mockFindFirst = (prisma as any).resignation.findFirst as jest.Mock;
 const mockUpdate = (prisma as any).resignation.update as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 
@@ -56,8 +56,22 @@ describe("withdrawResignation", () => {
     });
   });
 
+  it("scopes the lookup to the current tenant", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "res-1",
+      userId: "john",
+      status: "Submitted",
+    });
+    mockUpdate.mockResolvedValue({ id: "res-1", status: "Withdrawn" });
+    const cb = makeCallback();
+    await withdrawResignation(makeCall({ id: "res-1", userId: "john" }), cb);
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { id: "res-1", tenantId: "t1" },
+    });
+  });
+
   it("returns NOT_FOUND when resignation does not exist", async () => {
-    mockFindUnique.mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     const cb = makeCallback();
     await withdrawResignation(makeCall({ id: "res-1" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
@@ -67,7 +81,7 @@ describe("withdrawResignation", () => {
   });
 
   it("returns PERMISSION_DENIED when withdrawing another user's resignation", async () => {
-    mockFindUnique.mockResolvedValue({
+    mockFindFirst.mockResolvedValue({
       id: "res-1",
       userId: "john",
       status: "Submitted",
@@ -80,8 +94,25 @@ describe("withdrawResignation", () => {
     });
   });
 
+  it("allows a privileged override that omits userId entirely", async () => {
+    // Mirrors apps/api-gateway's withdrawResignation, which omits userId
+    // when the caller is a superuser withdrawing on someone else's behalf.
+    mockFindFirst.mockResolvedValue({
+      id: "res-1",
+      userId: "john",
+      status: "Submitted",
+    });
+    mockUpdate.mockResolvedValue({ id: "res-1", status: "Withdrawn" });
+    const cb = makeCallback();
+    await withdrawResignation(makeCall({ id: "res-1" }), cb);
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: status.OK }),
+    );
+  });
+
   it("returns FAILED_PRECONDITION when resignation is not Submitted", async () => {
-    mockFindUnique.mockResolvedValue({
+    mockFindFirst.mockResolvedValue({
       id: "res-1",
       userId: "john",
       status: "Approved",
@@ -95,7 +126,7 @@ describe("withdrawResignation", () => {
   });
 
   it("sets status to Withdrawn (not Rejected) and stamps withdrawnOn", async () => {
-    mockFindUnique.mockResolvedValue({
+    mockFindFirst.mockResolvedValue({
       id: "res-1",
       userId: "john",
       status: "Submitted",
@@ -113,19 +144,15 @@ describe("withdrawResignation", () => {
         withdrawnOn: expect.any(Date),
       }),
     });
-    expect(cb).toHaveBeenCalledWith(
-      null,
-      expect.objectContaining({
-        message: MESSAGES.RESIGNATION_WITHDRAWN,
-        status: status.OK,
-        data: expect.objectContaining({ id: "res-1", status: "Withdrawn" }),
-      }),
-    );
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.RESIGNATION_WITHDRAWN,
+      status: status.OK,
+    });
     expect(mockInvalidate).toHaveBeenCalledWith("t:t1:resignations:*");
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockFindUnique.mockRejectedValue(new Error("DB error"));
+    mockFindFirst.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await withdrawResignation(makeCall({ id: "res-1" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {

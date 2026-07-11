@@ -19,7 +19,7 @@ export async function updateSalary(req: Request, res: Response) {
   try {
     const { user } = req as AuthRequest;
     const { userId, year, month, salaryStructure } = req.body;
-    const {
+    let {
       basicPay,
       hra,
       conveyance,
@@ -30,6 +30,42 @@ export async function updateSalary(req: Request, res: Response) {
       deductions,
       components,
     } = salaryStructure;
+
+    // Auto-derive any tenant-configured percent-of-basic component (Settings
+    // → Payroll Components, calcType "percent_of_basic") that the caller
+    // didn't already supply an amount for — otherwise those rules exist only
+    // as config nobody ever applies, and HR has to hand-type every
+    // percentage-based component for every employee.
+    if (Array.isArray(components) && components.length > 0 && user?.tenantId) {
+      const basicComponent = components.find((c: any) => c.code === "BASIC");
+      const effectiveBasic =
+        parseFloat(String(basicComponent?.amount ?? basicPay ?? 0)) || 0;
+      if (effectiveBasic > 0) {
+        const percentDefs = await (
+          prisma as any
+        ).salaryComponentDefinition.findMany({
+          where: {
+            tenantId: user.tenantId,
+            calcType: "percent_of_basic",
+            isActive: true,
+          },
+        });
+        const presentCodes = new Set(components.map((c: any) => c.code));
+        for (const def of percentDefs) {
+          if (presentCodes.has(def.code)) continue; // caller already set it — don't override
+          if (def.percentValue == null) continue;
+          components = [
+            ...components,
+            {
+              code: def.code,
+              name: def.name,
+              type: def.type,
+              amount: Math.round((effectiveBasic * def.percentValue) / 100),
+            },
+          ];
+        }
+      }
+    }
     const yearInt = parseInt(year);
     const monthInt = parseInt(month);
     const flatFields = {

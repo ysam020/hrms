@@ -1,6 +1,5 @@
 import { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
-import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -123,17 +122,27 @@ export default function ExitPolicySettings() {
 
   const [savingQuestions, setSavingQuestions] = useState(false);
 
+  async function fetchPolicies() {
+    const res = await apiClient.get(API_ENDPOINTS.LIST_NOTICE_PERIOD_POLICIES);
+    setPolicies(res.data?.data ?? []);
+  }
+  async function fetchChecklist() {
+    const res = await apiClient.get(API_ENDPOINTS.LIST_EXIT_CHECKLIST_DEFS);
+    setChecklistDefs(res.data?.data ?? []);
+  }
+  async function fetchTemplate() {
+    const res = await apiClient.get(API_ENDPOINTS.GET_EXIT_INTERVIEW_TEMPLATE);
+    setQuestions(res.data?.data?.questions ?? []);
+  }
+
+  // Only used for the initial load — individual save/delete handlers below
+  // refetch just their own tab's slice, so editing questions on one tab
+  // doesn't get silently discarded by a save on another tab overwriting
+  // `questions` with whatever's still in the DB.
   async function fetchAll() {
     setLoading(true);
     try {
-      const [policiesRes, checklistRes, templateRes] = await Promise.all([
-        apiClient.get(API_ENDPOINTS.LIST_NOTICE_PERIOD_POLICIES),
-        apiClient.get(API_ENDPOINTS.LIST_EXIT_CHECKLIST_DEFS),
-        apiClient.get(API_ENDPOINTS.GET_EXIT_INTERVIEW_TEMPLATE),
-      ]);
-      setPolicies(policiesRes.data?.data ?? []);
-      setChecklistDefs(checklistRes.data?.data ?? []);
-      setQuestions(templateRes.data?.data?.questions ?? []);
+      await Promise.all([fetchPolicies(), fetchChecklist(), fetchTemplate()]);
     } catch (err: any) {
       setAlert({
         open: true,
@@ -204,7 +213,7 @@ export default function ExitPolicySettings() {
         severity: "success",
       });
       setPolicyDialogOpen(false);
-      await fetchAll();
+      await fetchPolicies();
     } catch (err: any) {
       setAlert({
         open: true,
@@ -223,7 +232,7 @@ export default function ExitPolicySettings() {
       );
       setAlert({ open: true, message: "Policy deleted.", severity: "info" });
       setDeletePolicyTarget(null);
-      await fetchAll();
+      await fetchPolicies();
     } catch (err: any) {
       setAlert({
         open: true,
@@ -270,7 +279,7 @@ export default function ExitPolicySettings() {
         severity: "success",
       });
       setChecklistDialogOpen(false);
-      await fetchAll();
+      await fetchChecklist();
     } catch (err: any) {
       setAlert({
         open: true,
@@ -289,7 +298,7 @@ export default function ExitPolicySettings() {
       );
       setAlert({ open: true, message: "Item removed.", severity: "info" });
       setDeleteChecklistTarget(null);
-      await fetchAll();
+      await fetchChecklist();
     } catch (err: any) {
       setAlert({
         open: true,
@@ -344,16 +353,13 @@ export default function ExitPolicySettings() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
+    <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" fontWeight={700}>
-          Exit Policy
-        </Typography>
         <Typography variant="body2" color="text.secondary">
           Notice period bands by tenure, the offboarding clearance checklist,
           and the exit interview questions employees see when they leave.
-          Nothing configured here yet? Every resignation uses the flat notice
-          period from Organisation Settings and a standard exit survey.
+          Nothing configured here yet? Every resignation defaults to 30 days'
+          notice and a standard exit survey.
         </Typography>
       </Box>
 
@@ -404,8 +410,10 @@ export default function ExitPolicySettings() {
             </Box>
             {policies.length === 0 ? (
               <Alert severity="info">
-                No tenure bands yet — every resignation uses the flat notice
-                period from Organisation Settings → HR Policy.
+                No tenure bands yet — every resignation defaults to 30 days'
+                notice. Add a band below with tenure/designation/department left
+                blank to set a different default for everyone, or add specific
+                bands to override it for particular groups.
               </Alert>
             ) : (
               <DataList
@@ -843,6 +851,6 @@ export default function ExitPolicySettings() {
         message={`"${deleteChecklistTarget?.label}" will no longer appear on new exit checklists.`}
         variant="danger"
       />
-    </Container>
+    </Box>
   );
 }
