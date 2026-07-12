@@ -317,6 +317,7 @@ export default function OrgSetupPage() {
             : "",
           email: user?.email ?? "",
         },
+        method: { card: false },
         theme: { color: "#1976d2" },
         handler: (response: {
           razorpay_payment_id: string;
@@ -734,11 +735,10 @@ export default function OrgSetupPage() {
                   color="warning.dark"
                   fontWeight={500}
                 >
-                  Test mode — use Razorpay test card{" "}
+                  Test mode — pay via UPI using{" "}
                   <Box component="span" fontFamily="monospace" fontWeight={700}>
-                    4111 1111 1111 1111
-                  </Box>{" "}
-                  · Any future date · Any CVV
+                    success@razorpay
+                  </Box>
                 </Typography>
               </Box>
 
