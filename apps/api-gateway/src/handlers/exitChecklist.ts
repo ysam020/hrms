@@ -17,10 +17,24 @@ function requireTenantId(req: AuthRequest, res: Response): string | null {
   return tenantId;
 }
 
+// Also gates updateResignationChecklistItem/getResignationChecklist below
+// (per-employee exit checklist progress, not just the item-definition
+// settings CRUD) — granting Organisation:edit_exit_policy therefore also
+// lets someone complete other employees' exit checklist items. Accepted
+// minor overlap, not worth splitting into two guards for now.
 async function isPrivileged(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   const superUser = await isSuperUser(userId);
-  return superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "");
+  if (superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "")) {
+    return true;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { permissions: true },
+  });
+  return (user?.permissions ?? []).includes(
+    "Organisation:edit_organisation_settings",
+  );
 }
 
 // ─── Checklist item definitions (tenant-level config) ──────────────────────────

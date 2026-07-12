@@ -38,9 +38,15 @@ function Teams() {
     name: "",
   });
   const [teamDeleteLoading, setTeamDeleteLoading] = useState(false);
-  const [memberDeleteDialog, setMemberDeleteDialog] = useState({
+  const [memberDeleteDialog, setMemberDeleteDialog] = useState<{
+    open: boolean;
+    userId: string | null;
+    displayName: string;
+    teamId: string | null;
+  }>({
     open: false,
-    username: null,
+    userId: null,
+    displayName: "",
     teamId: null,
   });
   const [memberDeleteLoading, setMemberDeleteLoading] = useState(false);
@@ -116,25 +122,38 @@ function Teams() {
     }
   }, [teamDeleteDialog.id, refetch, setAlert]);
 
-  const handleMemberDeleteClick = useCallback((username, teamId) => {
-    setMemberDeleteDialog({ open: true, username, teamId });
-  }, []);
+  const handleMemberDeleteClick = useCallback(
+    (userId: string, displayName: string, teamId: string) => {
+      setMemberDeleteDialog({ open: true, userId, displayName, teamId });
+    },
+    [],
+  );
 
   const handleMemberDeleteCancel = useCallback(() => {
-    setMemberDeleteDialog({ open: false, username: null, teamId: null });
+    setMemberDeleteDialog({
+      open: false,
+      userId: null,
+      displayName: "",
+      teamId: null,
+    });
   }, []);
 
   const handleMemberDeleteConfirm = useCallback(async () => {
     setMemberDeleteLoading(true);
-    setDeletingUser(memberDeleteDialog.username);
+    setDeletingUser(memberDeleteDialog.userId);
     try {
       await apiClient.post(API_ENDPOINTS.DELETE_USER_FROM_TEAM, {
-        username: memberDeleteDialog.username,
+        userId: memberDeleteDialog.userId,
         teamId: memberDeleteDialog.teamId,
       });
       refetch();
       handlePopoverClose();
-      setMemberDeleteDialog({ open: false, username: null, teamId: null });
+      setMemberDeleteDialog({
+        open: false,
+        userId: null,
+        displayName: "",
+        teamId: null,
+      });
     } catch (err) {
       setAlert({
         open: true,
@@ -153,7 +172,7 @@ function Teams() {
   const columns = useMemo(
     () => [
       {
-        key: "team_name",
+        key: "teamName",
         label: "Name of Team",
         primary: true,
         hideLabel: true,
@@ -162,7 +181,9 @@ function Teams() {
         key: "members",
         label: "Members",
         render: (row: any) => {
-          const members = row.members;
+          const members = row.membersInfo as
+            | { id: string; name: string; username: string }[]
+            | undefined;
           if (!Array.isArray(members) || members.length === 0)
             return "No members assigned";
           return (
@@ -174,7 +195,7 @@ function Teams() {
                   e,
                   members,
                   row._id,
-                  row.team_name,
+                  row.teamName,
                   row.teamLeaderId,
                 )
               }
@@ -183,8 +204,12 @@ function Teams() {
                 "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 12 },
               }}
             >
-              {members.map((user: string) => (
-                <Avatar key={user} alt={user} sx={{ width: 28, height: 28 }} />
+              {members.map((m) => (
+                <Avatar
+                  key={m.id}
+                  alt={m.name}
+                  sx={{ width: 28, height: 28 }}
+                />
               ))}
             </AvatarGroup>
           );
@@ -206,7 +231,7 @@ function Teams() {
         icon: <DeleteIcon fontSize="small" />,
         label: "Delete team",
         color: "error" as const,
-        onClick: () => handleTeamDeleteClick(row._id, row.team_name),
+        onClick: () => handleTeamDeleteClick(row._id, row.teamName),
       },
     ],
     [handleTeamDeleteClick, handleOpenAddTeamMembers],
@@ -323,11 +348,11 @@ function Teams() {
           {/* User List */}
           <Box sx={{ maxHeight: 280, overflow: "auto" }}>
             {popoverData.map((user) => {
-              const isTeamLeader = user === teamData?.leader;
+              const isTeamLeader = user.id === teamData?.leader;
 
               return (
                 <Box
-                  key={user}
+                  key={user.id}
                   sx={{
                     display: "flex",
                     alignItems: "center",
@@ -343,7 +368,7 @@ function Teams() {
                 >
                   <Box sx={{ position: "relative" }}>
                     <Avatar
-                      alt={user}
+                      alt={user.name}
                       sx={{
                         width: 36,
                         height: 36,
@@ -380,7 +405,7 @@ function Teams() {
                           color: isTeamLeader ? "#F57C00" : "inherit",
                         }}
                       >
-                        {user}
+                        {user.name}
                       </Typography>
                       {isTeamLeader && (
                         <StarIcon
@@ -406,10 +431,12 @@ function Teams() {
                     )}
                   </Box>
                   <IconButton
-                    onClick={() => handleMemberDeleteClick(user, teamData?.id)}
-                    disabled={deletingUser === user || isTeamLeader}
+                    onClick={() =>
+                      handleMemberDeleteClick(user.id, user.name, teamData?.id)
+                    }
+                    disabled={deletingUser === user.id || isTeamLeader}
                     size="small"
-                    aria-label={`Remove ${user} from team`}
+                    aria-label={`Remove ${user.name} from team`}
                     sx={{
                       color: isTeamLeader
                         ? "rgba(241, 92, 109, 0.3)"
@@ -441,7 +468,7 @@ function Teams() {
                         : "Remove from team"
                     }
                   >
-                    {deletingUser === user ? (
+                    {deletingUser === user.id ? (
                       <CircularProgress size={16} sx={{ color: "#F15C6D" }} />
                     ) : (
                       <DeleteIcon sx={{ fontSize: 16 }} />
@@ -486,7 +513,7 @@ function Teams() {
         onClose={handleMemberDeleteCancel}
         onConfirm={handleMemberDeleteConfirm}
         title="Remove Team Member"
-        message={`Are you sure you want to remove "${memberDeleteDialog.username}" from this team?`}
+        message={`Are you sure you want to remove "${memberDeleteDialog.displayName}" from this team?`}
         confirmText="Remove"
         cancelText="Cancel"
         loading={memberDeleteLoading}

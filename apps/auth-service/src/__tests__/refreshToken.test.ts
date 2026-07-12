@@ -11,7 +11,6 @@ jest.mock("../services/jwt", () => ({
 jest.mock("../services/redis", () => ({
   validateRefreshToken: jest.fn(),
   storeRefreshToken: jest.fn(),
-  revokeRefreshToken: jest.fn(),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -23,18 +22,13 @@ import {
   signAccessToken,
   signRefreshToken,
 } from "../services/jwt";
-import {
-  validateRefreshToken,
-  storeRefreshToken,
-  revokeRefreshToken,
-} from "../services/redis";
+import { validateRefreshToken, storeRefreshToken } from "../services/redis";
 
 const mockVerifyRefreshToken = verifyRefreshToken as jest.Mock;
 const mockSignAccessToken = signAccessToken as jest.Mock;
 const mockSignRefreshToken = signRefreshToken as jest.Mock;
 const mockValidateRefreshToken = validateRefreshToken as jest.Mock;
 const mockStoreRefreshToken = storeRefreshToken as jest.Mock;
-const mockRevokeRefreshToken = revokeRefreshToken as jest.Mock;
 
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
@@ -72,7 +66,6 @@ describe("refreshToken", () => {
       accessToken: "",
       refreshToken: "",
     });
-    expect(mockRevokeRefreshToken).not.toHaveBeenCalled();
   });
 
   it("rotates tokens and returns new pair on happy path", async () => {
@@ -81,7 +74,6 @@ describe("refreshToken", () => {
       ok: true,
       currentToken: "valid-token",
     });
-    mockRevokeRefreshToken.mockResolvedValue(undefined);
     mockSignAccessToken.mockReturnValue("new-access-token");
     mockSignRefreshToken.mockReturnValue("new-refresh-token");
     mockStoreRefreshToken.mockResolvedValue(undefined);
@@ -89,7 +81,6 @@ describe("refreshToken", () => {
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "valid-token" }), cb);
 
-    expect(mockRevokeRefreshToken).toHaveBeenCalledWith("user-1");
     expect(mockSignAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user-1" }),
     );
@@ -124,7 +115,6 @@ describe("refreshToken", () => {
     await refreshToken(makeCall({ refreshToken: "old-token" }), cb);
 
     // Must NOT rotate again
-    expect(mockRevokeRefreshToken).not.toHaveBeenCalled();
     expect(mockSignRefreshToken).not.toHaveBeenCalled();
     expect(mockStoreRefreshToken).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, {
@@ -141,7 +131,6 @@ describe("refreshToken", () => {
       ok: true,
       currentToken: "valid-token",
     });
-    mockRevokeRefreshToken.mockResolvedValue(undefined);
     mockSignAccessToken.mockReturnValue("at");
     mockSignRefreshToken.mockReturnValue("rt");
     mockStoreRefreshToken.mockResolvedValue(undefined);

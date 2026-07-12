@@ -6,7 +6,6 @@ import Typography from "@mui/material/Typography";
 import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
-import Collapse from "@mui/material/Collapse";
 import Dialog from "@mui/material/Dialog";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -20,9 +19,8 @@ import Alert from "@mui/material/Alert";
 import { useTheme } from "@mui/material";
 import { useMediaQuery } from "@mui/material";
 import { alpha } from "@mui/material";
+import type { Theme } from "@mui/material/styles";
 
-import ExpandMore from "@mui/icons-material/ExpandMore";
-import ExpandLess from "@mui/icons-material/ExpandLess";
 import Person from "@mui/icons-material/Person";
 import Business from "@mui/icons-material/Business";
 import Group from "@mui/icons-material/Group";
@@ -30,7 +28,6 @@ import TrendingUp from "@mui/icons-material/TrendingUp";
 import Close from "@mui/icons-material/Close";
 
 import apiClient from "@web/core/http/axiosConfig";
-import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 
 type Employee = {
   id: string;
@@ -44,357 +41,504 @@ type Employee = {
   children?: Employee[];
 };
 
+type OrgChartPerson = {
+  id: string;
+  name: string;
+  username: string;
+  designation: string | null;
+  employeePhoto: string | null;
+};
+
+type OrgChartTeam = {
+  _id: string;
+  teamName: string;
+  leader: OrgChartPerson;
+  members: OrgChartPerson[];
+};
+
+type OrgChartResponse = {
+  ceo: (OrgChartPerson & { designation: string; department: string }) | null;
+  teams: OrgChartTeam[];
+  // Active employees not yet on any team — e.g. a join request approved
+  // today but never assigned a department. Surfaced explicitly instead of
+  // silently dropped, so headcount matches the real active employee count.
+  unassigned: OrgChartPerson[];
+  // Every employee record regardless of status (active/resigned/
+  // terminated/absconded) — used only for the "Total Employees" stat card,
+  // the tree itself only ever shows active headcount.
+  totalEmployeeCount: number;
+  // Per-status counts backing the "Total Employees" breakdown.
+  employeeStatusBreakdown: {
+    active: number;
+    resigned: number;
+    terminated: number;
+    absconded: number;
+  };
+};
+
+type RoleConfig = {
+  color: string;
+  icon: string;
+  bgColor: string;
+  borderColor: string;
+};
+
+const toEmployee = (person: OrgChartPerson, department: string): Employee => {
+  const [first_name, ...rest] = person.name.split(" ");
+  return {
+    id: person.id,
+    first_name: first_name ?? person.name,
+    last_name: rest.join(" "),
+    username: person.username,
+    department,
+    designation: person.designation ?? "",
+    employeeStatus: "Active",
+    employee_photo: person.employeePhoto ?? "",
+  };
+};
+
+const getRoleConfig = (designation: string, theme: Theme): RoleConfig => {
+  const d = designation?.toUpperCase() ?? "";
+  if (d === "CEO") {
+    return {
+      color: theme.palette.secondary.main,
+      icon: "👑",
+      bgColor: alpha(theme.palette.secondary.main, 0.1),
+      borderColor: theme.palette.secondary.main,
+    };
+  }
+  if (d.includes("MANAGER")) {
+    return {
+      color: theme.palette.error.main,
+      icon: "🎯",
+      bgColor: alpha(theme.palette.error.main, 0.1),
+      borderColor: theme.palette.error.main,
+    };
+  }
+  if (d.includes("LEAD")) {
+    return {
+      color: theme.palette.primary.main,
+      icon: "⭐",
+      bgColor: alpha(theme.palette.primary.main, 0.1),
+      borderColor: theme.palette.primary.main,
+    };
+  }
+  if (d.includes("SENIOR")) {
+    return {
+      color: theme.palette.success.main,
+      icon: "🚀",
+      bgColor: alpha(theme.palette.success.main, 0.1),
+      borderColor: theme.palette.success.main,
+    };
+  }
+  return {
+    color: theme.palette.warning.main,
+    icon: "👨‍💻",
+    bgColor: alpha(theme.palette.warning.main, 0.1),
+    borderColor: theme.palette.warning.main,
+  };
+};
+
+// Classic CSS "family tree" connector pattern applied via descendant
+// selectors on one wrapper — every <ul>/<li> nested inside (however deep the
+// recursion) picks up the lines automatically, no per-node line math needed.
+const treeConnectorSx = (theme: Theme) => ({
+  "& ul": {
+    display: "flex",
+    justifyContent: "center",
+    m: 0,
+    p: 0,
+    pt: { xs: "24px", sm: "32px" },
+    position: "relative" as const,
+  },
+  "& li": {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    listStyle: "none",
+    position: "relative" as const,
+    px: { xs: "6px", sm: "10px" },
+    pt: { xs: "24px", sm: "32px" },
+  },
+  "& li::before, & li::after": {
+    content: '""',
+    position: "absolute" as const,
+    top: 0,
+    right: "50%",
+    width: "50%",
+    height: { xs: "24px", sm: "32px" },
+    borderTop: `2px solid ${theme.palette.divider}`,
+  },
+  "& li::after": {
+    right: "auto",
+    left: "50%",
+    borderLeft: `2px solid ${theme.palette.divider}`,
+  },
+  "& li:only-child::before, & li:only-child::after": {
+    display: "none",
+  },
+  "& li:only-child": {
+    pt: 0,
+  },
+  "& li:first-of-type::before, & li:last-of-type::after": {
+    borderTopColor: "transparent",
+  },
+  "& li:last-of-type::before": {
+    borderRight: `2px solid ${theme.palette.divider}`,
+    borderRadius: "0 6px 0 0",
+  },
+  "& li:first-of-type::after": {
+    borderRadius: "6px 0 0 0",
+  },
+  "& ul ul::before": {
+    content: '""',
+    position: "absolute" as const,
+    top: 0,
+    left: "50%",
+    width: 0,
+    height: { xs: "24px", sm: "32px" },
+    borderLeft: `2px solid ${theme.palette.divider}`,
+  },
+});
+
+const LARGE_TEAM_THRESHOLD = 8;
+
+const NodeCard = ({
+  employee,
+  depth,
+  theme,
+  onClick,
+}: {
+  employee: Employee;
+  depth: number;
+  theme: Theme;
+  onClick: () => void;
+}) => {
+  const config = getRoleConfig(employee.designation, theme);
+  const initials = `${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}`;
+  const solid = depth === 0;
+  const textColor = solid
+    ? theme.palette.getContrastText(config.color)
+    : theme.palette.text.primary;
+
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 1,
+        minWidth: depth === 0 ? 190 : depth === 1 ? 165 : 135,
+        px: depth === 0 ? 2.25 : 1.5,
+        py: depth === 0 ? 1.25 : 0.875,
+        borderRadius: 3,
+        border: `1.5px solid ${config.borderColor}`,
+        backgroundColor: solid
+          ? config.color
+          : alpha(config.color, depth === 1 ? 0.28 : 0.12),
+        boxShadow: theme.shadows[1],
+        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+        "&:hover": {
+          transform: "translateY(-2px)",
+          boxShadow: theme.shadows[4],
+        },
+      }}
+    >
+      <Avatar
+        src={employee.employee_photo || undefined}
+        sx={{
+          width: depth === 0 ? 38 : 30,
+          height: depth === 0 ? 38 : 30,
+          fontSize: "0.72rem",
+          fontWeight: 700,
+          backgroundColor: solid ? alpha("#fff", 0.25) : config.color,
+          color: solid
+            ? theme.palette.getContrastText(config.color)
+            : theme.palette.getContrastText(config.color),
+        }}
+      >
+        {initials}
+      </Avatar>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            fontWeight: 700,
+            fontSize: depth === 0 ? "0.88rem" : "0.78rem",
+            color: textColor,
+          }}
+        >
+          {employee.first_name} {employee.last_name}
+        </Typography>
+        <Typography
+          variant="caption"
+          noWrap
+          sx={{
+            display: "block",
+            fontSize: "0.66rem",
+            fontWeight: 600,
+            color: solid ? alpha(textColor, 0.85) : config.color,
+          }}
+        >
+          {config.icon} {employee.designation || employee.department}
+        </Typography>
+      </Box>
+    </Box>
+  );
+};
+
+const RosterGrid = ({
+  members,
+  theme,
+  onSelect,
+}: {
+  members: Employee[];
+  theme: Theme;
+  onSelect: (employee: Employee) => void;
+}) => (
+  <Paper
+    variant="outlined"
+    sx={{
+      p: 1.25,
+      borderRadius: 2,
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+      gap: 0.75,
+      maxWidth: 560,
+      backgroundColor: alpha(theme.palette.text.primary, 0.02),
+    }}
+  >
+    {members.map((member) => {
+      const config = getRoleConfig(member.designation, theme);
+      const initials = `${member.first_name?.[0] ?? ""}${member.last_name?.[0] ?? ""}`;
+      return (
+        <Box
+          key={member.username}
+          onClick={() => onSelect(member)}
+          sx={{
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 0.75,
+            p: 0.75,
+            borderRadius: 1.5,
+            border: `1px solid ${config.borderColor}`,
+            backgroundColor: alpha(config.color, 0.1),
+            transition: "background-color 0.15s ease",
+            "&:hover": { backgroundColor: alpha(config.color, 0.2) },
+          }}
+        >
+          <Avatar
+            src={member.employee_photo || undefined}
+            sx={{
+              width: 24,
+              height: 24,
+              fontSize: "0.6rem",
+              fontWeight: 700,
+              backgroundColor: config.color,
+            }}
+          >
+            {initials}
+          </Avatar>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{ fontWeight: 600, fontSize: "0.68rem" }}
+          >
+            {member.first_name} {member.last_name}
+          </Typography>
+        </Box>
+      );
+    })}
+  </Paper>
+);
+
+const OrgTreeNode = ({
+  employee,
+  depth,
+  theme,
+  onSelect,
+}: {
+  employee: Employee;
+  depth: number;
+  theme: Theme;
+  onSelect: (employee: Employee) => void;
+}) => {
+  const children = employee.children ?? [];
+  // Large teams (e.g. 33-person Engineering) would blow the tree out
+  // thousands of px wide if every member got its own connector line — fold
+  // them into one bordered roster grid under a single trunk line instead.
+  const useRoster = depth === 1 && children.length > LARGE_TEAM_THRESHOLD;
+
+  return (
+    <>
+      <NodeCard
+        employee={employee}
+        depth={depth}
+        theme={theme}
+        onClick={() => onSelect(employee)}
+      />
+      {children.length > 0 && (
+        <Box component="ul" sx={{ listStyle: "none" }}>
+          {useRoster ? (
+            <Box component="li" sx={{ listStyle: "none" }}>
+              <RosterGrid
+                members={children}
+                theme={theme}
+                onSelect={onSelect}
+              />
+            </Box>
+          ) : (
+            children.map((child) => (
+              <Box
+                component="li"
+                key={child.username}
+                sx={{ listStyle: "none" }}
+              >
+                <OrgTreeNode
+                  employee={child}
+                  depth={depth + 1}
+                  theme={theme}
+                  onSelect={onSelect}
+                />
+              </Box>
+            ))
+          )}
+        </Box>
+      )}
+    </>
+  );
+};
+
 const OrganisationTree = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
     null,
   );
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [orgChart, setOrgChart] = useState<OrgChartResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchEmployees = async () => {
+    const fetchOrgChart = async () => {
       try {
         setLoading(true);
-        const res = await apiClient.get(API_ENDPOINTS.GET_ALL_USERS());
-        const raw: any[] = res.data?.data ?? [];
-        const mapped: Employee[] = raw
-          .filter((u) => u.employeeStatus === "Active")
-          .map((u) => ({
-            id: u.id,
-            first_name: u.firstName || u.first_name || "",
-            last_name: u.lastName || u.last_name || "",
-            username: u.username || u.id,
-            department: u.department || "",
-            designation: u.designation || "",
-            employeeStatus: u.employeeStatus || "",
-            employee_photo: u.employeePhoto || u.employee_photo || "",
-          }));
-        setEmployees(mapped);
-        // Auto-expand the top node (CEO or first employee)
-        const root =
-          mapped.find((e) => e.designation?.toUpperCase() === "CEO") ??
-          mapped[0];
-        if (root) setExpandedNodes(new Set([root.username]));
+        // Built from the Team collection (see permissions.ts:getOrgChart) —
+        // not the full employee list. Previously this page fetched every
+        // user and tried to reconstruct a hierarchy client-side by matching
+        // designation substrings ("MANAGER"/"LEAD"/"CEO"), which silently
+        // broke whenever a department had zero or more than one manager.
+        // Teams already have exactly one leader each, so the tree just
+        // mirrors that directly.
+        const res = await apiClient.get("/get-org-chart");
+        const data: OrgChartResponse = res.data?.data ?? {
+          ceo: null,
+          teams: [],
+          unassigned: [],
+          totalEmployeeCount: 0,
+          employeeStatusBreakdown: {
+            active: 0,
+            resigned: 0,
+            terminated: 0,
+            absconded: 0,
+          },
+        };
+        setOrgChart(data);
       } catch {
-        setError("Failed to load employees. Please try again.");
+        setError("Failed to load the organization chart. Please try again.");
       } finally {
         setLoading(false);
       }
     };
-    fetchEmployees();
+    fetchOrgChart();
   }, []);
 
-  const getRoleConfig = (designation: string) => {
-    const d = designation?.toUpperCase() ?? "";
-    if (d === "CEO") {
-      return {
-        color: theme.palette.secondary.main,
-        icon: "👑",
-        bgColor: alpha(theme.palette.secondary.main, 0.1),
-        borderColor: theme.palette.secondary.main,
-      };
-    }
-    if (d.includes("MANAGER")) {
-      return {
-        color: theme.palette.error.main,
-        icon: "🎯",
-        bgColor: alpha(theme.palette.error.main, 0.1),
-        borderColor: theme.palette.error.main,
-      };
-    }
-    if (d.includes("LEAD")) {
-      return {
-        color: theme.palette.primary.main,
-        icon: "⭐",
-        bgColor: alpha(theme.palette.primary.main, 0.1),
-        borderColor: theme.palette.primary.main,
-      };
-    }
-    if (d.includes("SENIOR")) {
-      return {
-        color: theme.palette.success.main,
-        icon: "🚀",
-        bgColor: alpha(theme.palette.success.main, 0.1),
-        borderColor: theme.palette.success.main,
-      };
-    }
-    return {
-      color: theme.palette.warning.main,
-      icon: "👨‍💻",
-      bgColor: alpha(theme.palette.warning.main, 0.1),
-      borderColor: theme.palette.warning.main,
-    };
-  };
-
-  const toggleNode = (username: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(username)) next.delete(username);
-      else next.add(username);
-      return next;
-    });
-  };
-
-  const CompactEmployeeNode = ({
-    employee,
-    level = 0,
-  }: {
-    employee: Employee;
-    level?: number;
-  }) => {
-    const config = getRoleConfig(employee.designation);
-    const isExpanded = expandedNodes.has(employee.username);
-    const hasChildren = !!employee.children?.length;
-    const initials = `${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}`;
-
-    return (
-      <Box sx={{ mb: 0.5 }}>
-        <Card
-          onClick={() => setSelectedEmployee(employee)}
-          sx={{
-            cursor: "pointer",
-            ml: isMobile ? level * 1 : level * 2,
-            transition: "all 0.2s ease-in-out",
-            borderLeft: `3px solid ${config.borderColor}`,
-            backgroundColor: config.bgColor,
-            "&:hover": {
-              transform: "translateX(2px)",
-              boxShadow: theme.shadows[2],
-              backgroundColor: alpha(config.color, 0.15),
-            },
-          }}
-        >
-          <CardContent
-            sx={{
-              p: { xs: 0.75, sm: 1 },
-              "&:last-child": { pb: { xs: 0.75, sm: 1 } },
-            }}
-          >
-            <Grid container alignItems="center" spacing={{ xs: 0.75, sm: 1 }}>
-              <Grid item>
-                <Avatar
-                  src={employee.employee_photo || undefined}
-                  sx={{
-                    width: { xs: 32, sm: 28 },
-                    height: { xs: 32, sm: 28 },
-                    backgroundColor: config.color,
-                    color: theme.palette.getContrastText(config.color),
-                    fontSize: { xs: "0.75rem", sm: "0.7rem" },
-                    fontWeight: 600,
-                  }}
-                >
-                  {initials}
-                </Avatar>
-              </Grid>
-
-              <Grid item xs>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 600,
-                    color: theme.palette.text.primary,
-                    mb: 0.25,
-                    lineHeight: 1.2,
-                    fontSize: { xs: "0.8rem", sm: "0.875rem" },
-                  }}
-                >
-                  {employee.first_name} {employee.last_name}
-                </Typography>
-
-                <Box sx={{ display: "flex", alignItems: "center", mb: 0.25 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{ mr: 0.25, fontSize: { xs: "0.7rem", sm: "0.65rem" } }}
-                  >
-                    {config.icon}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: theme.palette.text.secondary,
-                      fontSize: { xs: "0.7rem", sm: "0.65rem" },
-                    }}
-                  >
-                    {isMobile && employee.designation.length > 20
-                      ? employee.designation.substring(0, 20) + "..."
-                      : employee.designation}
-                  </Typography>
-                </Box>
-
-                <Chip
-                  label={
-                    isMobile && employee.department.length > 15
-                      ? employee.department.substring(0, 15) + "..."
-                      : employee.department
-                  }
-                  size="small"
-                  sx={{
-                    height: { xs: 18, sm: 16 },
-                    fontSize: { xs: "0.6rem", sm: "0.55rem" },
-                    backgroundColor: alpha(config.color, 0.2),
-                    color: config.color,
-                    fontWeight: 500,
-                    "& .MuiChip-label": { px: { xs: 0.5, sm: 0.75 } },
-                  }}
-                />
-              </Grid>
-
-              {hasChildren && (
-                <Grid item>
-                  <IconButton
-                    size="small"
-                    aria-label={
-                      isExpanded
-                        ? `Collapse ${employee.username}'s reports`
-                        : `Expand ${employee.username}'s reports`
-                    }
-                    aria-expanded={isExpanded}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleNode(employee.username);
-                    }}
-                    sx={{
-                      color: config.color,
-                      backgroundColor: alpha(config.color, 0.1),
-                      width: { xs: 28, sm: 24 },
-                      height: { xs: 28, sm: 24 },
-                      "&:hover": { backgroundColor: alpha(config.color, 0.2) },
-                    }}
-                  >
-                    {isExpanded ? (
-                      <ExpandLess
-                        aria-hidden="true"
-                        sx={{ fontSize: { xs: "1.1rem", sm: "1rem" } }}
-                      />
-                    ) : (
-                      <ExpandMore
-                        aria-hidden="true"
-                        sx={{ fontSize: { xs: "1.1rem", sm: "1rem" } }}
-                      />
-                    )}
-                  </IconButton>
-                </Grid>
-              )}
-            </Grid>
-          </CardContent>
-        </Card>
-
-        {hasChildren && (
-          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-            <Box
-              sx={{
-                ml: { xs: 1, sm: 1.5 },
-                pl: { xs: 0.75, sm: 1 },
-                borderLeft: `1px dashed ${alpha(theme.palette.divider, 0.3)}`,
-                mt: 0.5,
-              }}
-            >
-              {employee.children!.map((child) => (
-                <CompactEmployeeNode
-                  key={child.username}
-                  employee={child}
-                  level={level + 1}
-                />
-              ))}
-            </Box>
-          </Collapse>
-        )}
-      </Box>
-    );
-  };
-
   const hierarchicalData = useMemo((): Employee | null => {
-    if (!employees.length) return null;
+    if (!orgChart) return null;
+    const { ceo, teams } = orgChart;
 
-    const ceo = employees.find((e) => e.designation?.toUpperCase() === "CEO");
-    const managers = employees.filter(
-      (e) =>
-        e.designation?.toUpperCase().includes("MANAGER") &&
-        e.designation?.toUpperCase() !== "CEO",
-    );
-    const root = ceo ?? managers[0] ?? employees[0];
-
-    const buildTeamStructure = (manager: Employee): Employee => {
-      const deptEmployees = employees.filter(
-        (e) =>
-          e.department === manager.department &&
-          e.username !== manager.username,
-      );
-      const leads = deptEmployees.filter((e) =>
-        e.designation?.toUpperCase().includes("LEAD"),
-      );
-      const others = deptEmployees.filter(
-        (e) => !e.designation?.toUpperCase().includes("LEAD"),
-      );
-
-      return {
-        ...manager,
-        children: [
-          ...leads.map((lead) => ({
-            ...lead,
-            children: others.filter((e) => e.department === lead.department),
-          })),
-          ...others.filter(
-            (e) => !leads.some((lead) => lead.department === e.department),
-          ),
-        ],
-      };
-    };
+    const buildTeam = (team: OrgChartTeam): Employee => ({
+      ...toEmployee(team.leader, team.teamName),
+      children: team.members.map((m) => toEmployee(m, team.teamName)),
+    });
 
     if (ceo) {
       return {
-        ...ceo,
-        children: managers.map(buildTeamStructure),
+        ...toEmployee(ceo, ceo.department || "Executive"),
+        designation: ceo.designation || "CEO",
+        children: teams.map(buildTeam),
       };
     }
 
-    // No CEO — group by department under a virtual root
+    // No CEO on record — fall back to the first team's leader as a virtual
+    // root so the rest of the org still renders instead of showing nothing.
+    const [firstTeam, ...restTeams] = teams;
+    if (!firstTeam) return null;
+    const rootTeam = buildTeam(firstTeam);
     return {
-      ...root,
-      children: managers.map(buildTeamStructure),
+      ...rootTeam,
+      children: [...(rootTeam.children ?? []), ...restTeams.map(buildTeam)],
     };
-  }, [employees]);
+  }, [orgChart]);
 
-  const stats = useMemo(
-    () => [
+  const stats = useMemo(() => {
+    const teams = orgChart?.teams ?? [];
+    const breakdown = orgChart?.employeeStatusBreakdown;
+    return [
       {
         label: "Total Employees",
-        value: employees.length,
+        value: orgChart?.totalEmployeeCount ?? 0,
         icon: <Person />,
         color: theme.palette.primary.main,
+        breakdown: breakdown
+          ? [
+              {
+                label: "Active",
+                value: breakdown.active,
+                color: theme.palette.success.main,
+              },
+              {
+                label: "Resigned",
+                value: breakdown.resigned,
+                color: theme.palette.warning.main,
+              },
+              {
+                label: "Terminated",
+                value: breakdown.terminated,
+                color: theme.palette.error.main,
+              },
+              {
+                label: "Absconded",
+                value: breakdown.absconded,
+                color: theme.palette.text.disabled,
+              },
+            ]
+          : undefined,
       },
       {
-        label: "Departments",
-        value: new Set(employees.map((e) => e.department).filter(Boolean)).size,
+        label: "Teams",
+        value: teams.length,
         icon: <Business />,
         color: theme.palette.secondary.main,
       },
       {
-        label: "Managers",
-        value: employees.filter(
-          (e) =>
-            e.designation?.toUpperCase().includes("MANAGER") ||
-            e.designation?.toUpperCase() === "CEO",
-        ).length,
+        label: "Team Leaders",
+        value: teams.length,
         icon: <Group />,
         color: theme.palette.error.main,
       },
       {
-        label: "Team Leads",
-        value: employees.filter((e) =>
-          e.designation?.toUpperCase().includes("LEAD"),
-        ).length,
+        label: "Largest Team",
+        value: teams.reduce((max, t) => Math.max(max, t.members.length), 0),
         icon: <TrendingUp />,
         color: theme.palette.warning.main,
       },
-    ],
-    [employees, theme.palette],
-  );
+    ];
+  }, [orgChart, theme.palette]);
 
   return (
     <Box
@@ -474,6 +618,47 @@ const OrganisationTree = () => {
                     </Typography>
                   </Grid>
                 </Grid>
+                {stat.breakdown && !loading && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: { xs: 0.5, sm: 0.75 },
+                      mt: { xs: 0.75, sm: 1 },
+                    }}
+                  >
+                    {stat.breakdown.map((item) => (
+                      <Box
+                        key={item.label}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.4,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            backgroundColor: item.color,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: { xs: "0.6rem", sm: "0.7rem" },
+                            color: theme.palette.text.secondary,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {item.value} {item.label}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -509,7 +694,7 @@ const OrganisationTree = () => {
             { role: "Senior", icon: "🚀", designation: "SENIOR" },
             { role: "Engineer", icon: "👨‍💻", designation: "ENGINEER" },
           ].map((item, index) => {
-            const config = getRoleConfig(item.designation);
+            const config = getRoleConfig(item.designation, theme);
             return (
               <Chip
                 key={index}
@@ -570,14 +755,74 @@ const OrganisationTree = () => {
         {!loading && !error && hierarchicalData && (
           <Box
             sx={{
-              maxHeight: { xs: "calc(100vh - 320px)", sm: "70vh" },
               overflow: "auto",
+              maxHeight: { xs: "calc(100vh - 320px)", sm: "75vh" },
+              pb: 1,
             }}
           >
-            <CompactEmployeeNode employee={hierarchicalData} />
+            <Box
+              sx={{
+                ...treeConnectorSx(theme),
+                display: "inline-block",
+                minWidth: "100%",
+              }}
+            >
+              <Box
+                component="ul"
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  listStyle: "none",
+                  m: 0,
+                  p: 0,
+                }}
+              >
+                <Box component="li" sx={{ listStyle: "none" }}>
+                  <OrgTreeNode
+                    employee={hierarchicalData}
+                    depth={0}
+                    theme={theme}
+                    onSelect={setSelectedEmployee}
+                  />
+                </Box>
+              </Box>
+            </Box>
           </Box>
         )}
       </Paper>
+
+      {/* Pending Team Assignment — active employees (e.g. freshly-approved
+          join requests) who haven't been put on a team yet. Shown separately
+          rather than dropped, so they don't silently disappear from headcount. */}
+      {!loading && !error && (orgChart?.unassigned.length ?? 0) > 0 && (
+        <Paper
+          elevation={1}
+          sx={{
+            p: { xs: 1.5, sm: 2 },
+            borderRadius: 1,
+            mt: { xs: 0.75, sm: 1 },
+          }}
+        >
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontWeight: 600,
+              mb: { xs: 1, sm: 1.5 },
+              fontSize: { xs: "1rem", sm: "1rem" },
+              color: theme.palette.warning.main,
+            }}
+          >
+            Pending Team Assignment ({orgChart?.unassigned.length})
+          </Typography>
+          <RosterGrid
+            members={(orgChart?.unassigned ?? []).map((p) =>
+              toEmployee(p, "Unassigned"),
+            )}
+            theme={theme}
+            onSelect={setSelectedEmployee}
+          />
+        </Paper>
+      )}
 
       {/* Employee Detail Dialog */}
       <Dialog
@@ -641,6 +886,7 @@ const OrganisationTree = () => {
                         mr: { xs: 1.25, sm: 1.5 },
                         backgroundColor: getRoleConfig(
                           selectedEmployee.designation,
+                          theme,
                         ).color,
                         fontSize: { xs: "1.1rem", sm: "1rem" },
                         fontWeight: 600,

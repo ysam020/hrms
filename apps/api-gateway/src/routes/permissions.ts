@@ -57,6 +57,7 @@ permissionsRouter.post(
   h.deleteUserRole,
 );
 permissionsRouter.get("/get-teams", authenticate, h.getTeams);
+permissionsRouter.get("/get-org-chart", authenticate, h.getOrgChart);
 permissionsRouter.post(
   "/create-team",
   authenticate,

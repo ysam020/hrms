@@ -88,7 +88,7 @@ export default function RecruitmentPipelineSettings() {
   const canEdit =
     user?.isSuperUser ||
     ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
-    user?.permissions?.some((p: string) => p.startsWith("OrgSettings:"));
+    user?.permissions?.includes("Organisation:edit_organisation_settings");
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<PipelineTemplate[]>([]);

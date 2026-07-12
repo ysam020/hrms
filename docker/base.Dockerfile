@@ -3,7 +3,20 @@ ARG PROJECT=api-gateway
 ARG PORT=9002
 
 FROM node:20-alpine AS slim
-RUN apk update && apk add --no-cache libc6-compat openssl protobuf protobuf-dev
+# Alpine's CDN mirror occasionally drops the TLS handshake mid-build in CI —
+# retry a few times before giving up, rather than failing the whole image
+# build on one transient network blip. Exits non-zero if every attempt
+# fails, so a genuine persistent failure still fails the build loudly.
+RUN set -e; \
+    for i in 1 2 3 4 5; do \
+      if apk update && apk add --no-cache libc6-compat openssl protobuf protobuf-dev; then \
+        exit 0; \
+      fi; \
+      echo "apk failed (attempt $i/5), retrying in 5s..."; \
+      sleep 5; \
+    done; \
+    echo "apk failed after 5 attempts" >&2; \
+    exit 1
 
 FROM slim AS base
 RUN npm install -g pnpm@8.15.6 turbo

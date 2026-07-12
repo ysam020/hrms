@@ -22,6 +22,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import Alert from "@mui/material/Alert";
 import Loading from "@web/shared/components/Loading";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
+import SubscriptionExpiredDialog from "@web/shared/components/SubscriptionExpiredDialog";
 import useLogout from "@web/shared/hooks/useLogout";
 import {
   setUnauthorizedHandler,
@@ -32,6 +33,7 @@ import useFullScreen from "@web/shared/hooks/useFullScreen";
 import useProfiler from "@web/shared/hooks/useProfiler";
 import useToggleSidebar from "@web/shared/hooks/useToggleSidebar";
 import useBroadcastApi from "@web/shared/hooks/useBroadcastApi";
+import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 import ThemeProvider from "@mui/material/styles/ThemeProvider";
 import useTheme from "@web/shared/hooks/useTheme";
 import useMuiTheme from "@web/shared/hooks/useMuiTheme";
@@ -65,9 +67,13 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const userRef = useRef(user);
+  userRef.current = user;
   const [booting, setBooting] = useState(true);
   const [pendingSetup, setPendingSetup] = useState(false);
   const [orgSetupPending, setOrgSetupPending] = useState(false);
+  const [subscriptionExpiredModalOpen, setSubscriptionExpiredModalOpen] =
+    useState(false);
   const { theme, toggleTheme } = useTheme();
   const muiTheme = useMuiTheme(theme);
   usePrimeReactTheme(theme);
@@ -99,7 +105,11 @@ function App() {
       setOrgSetupPending(false);
     });
     setPaymentRequiredHandler(() => {
-      navigate("/subscription");
+      if (hasSubscriptionAccess(userRef.current)) {
+        navigate("/subscription");
+      } else {
+        setSubscriptionExpiredModalOpen(true);
+      }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -108,7 +118,10 @@ function App() {
   // above) didn't, so a notification dot set before expiry could survive
   // indefinitely past the point where there's no one left to view it.
   useEffect(() => {
-    if (!user) clearFaviconDot();
+    if (!user) {
+      clearFaviconDot();
+      setSubscriptionExpiredModalOpen(false);
+    }
   }, [user]);
 
   // Re-validate session when the page is restored from bfcache (back-forward
@@ -451,6 +464,11 @@ function App() {
                   theme={theme}
                 />
               )}
+              <SubscriptionExpiredDialog
+                open={subscriptionExpiredModalOpen}
+                onLogout={handleLogout}
+                theme={theme}
+              />
             </div>
           </AlertContext.Provider>
         </UserContext.Provider>

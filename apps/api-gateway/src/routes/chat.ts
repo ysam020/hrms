@@ -30,4 +30,15 @@ chatRouter.delete(
   authenticate,
   h.deleteConversation,
 );
+chatRouter.post("/chat/messages/:messageId/pin", authenticate, h.pinMessage);
+chatRouter.delete(
+  "/chat/messages/:messageId/pin",
+  authenticate,
+  h.unpinMessage,
+);
+chatRouter.get(
+  "/chat/conversations/:roomId/pinned",
+  authenticate,
+  h.getPinnedMessages,
+);
 chatRouter.get("/og-preview", authenticate, h.ogPreview);

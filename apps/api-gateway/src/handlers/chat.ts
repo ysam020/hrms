@@ -53,6 +53,54 @@ function withId<
   return out;
 }
 
+const MAX_PINNED_MESSAGES = 5;
+
+// Populates each message's `replyTo` (currently just a raw replyToId on the
+// stored doc) with a lightweight preview of the message it replies to —
+// content/fileName/sender/isDeleted. Without this, the frontend reply
+// preview only ever worked for the sender's own optimistic render (it
+// already holds the full clicked message client-side); anyone loading
+// history or receiving the message in real time saw nothing useful.
+async function resolveReplyTo(messages: any[]): Promise<any[]> {
+  const replyIds = [
+    ...new Set(messages.map((m) => m.replyToId).filter(Boolean)),
+  ] as string[];
+
+  const withIds = messages.map(withId);
+  if (replyIds.length === 0) return withIds;
+
+  const replySources = await prisma.message.findMany({
+    where: { id: { in: replyIds } },
+    select: {
+      id: true,
+      content: true,
+      type: true,
+      fileName: true,
+      senderId: true,
+      isDeleted: true,
+    },
+  });
+  const replyMap = new Map(replySources.map((r: any) => [r.id, r]));
+
+  return withIds.map((m: any) => {
+    if (!m.replyTo) return m;
+    const src = replyMap.get(m.replyTo);
+    return {
+      ...m,
+      replyTo: src
+        ? {
+            _id: src.id,
+            content: src.isDeleted ? null : src.content,
+            type: src.type,
+            fileName: src.isDeleted ? null : src.fileName,
+            senderId: src.senderId,
+            isDeleted: src.isDeleted,
+          }
+        : null,
+    };
+  });
+}
+
 export async function getConversations(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
@@ -240,7 +288,7 @@ export async function getMessages(req: Request, res: Response) {
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Messages retrieved",
-      data: messages.reverse().map(withId),
+      data: await resolveReplyTo(messages.reverse()),
     });
   } catch (error: unknown) {
     logger.error("GET /chat/conversations/:roomId/messages error:", { error });
@@ -342,14 +390,28 @@ export async function deleteMessage(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Message not found",
       });
-    if (msg.senderId !== userId)
+
+    // Any participant of the room may delete a message — it deletes for
+    // both sides (no sender-only restriction, no "delete for me" variant).
+    const room = await prisma.chatRoom.findUnique({
+      where: { id: msg.chatRoomId },
+      select: { participants: true },
+    });
+    if (!room || !room.participants.includes(userId))
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
-        message: "Cannot delete another user's message",
+        message: "Forbidden",
       });
 
     const updated = await prisma.message.update({
       where: { id: messageId },
-      data: { isDeleted: true, content: null },
+      // A deleted message can't stay pinned — clear pin state too.
+      data: {
+        isDeleted: true,
+        content: null,
+        isPinned: false,
+        pinnedAt: null,
+        pinnedBy: null,
+      },
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -390,6 +452,129 @@ export async function deleteConversation(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("DELETE /chat/conversations/:roomId error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function pinMessage(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const userId = user!.userId;
+    const messageId = String(req.params.messageId);
+    const msg = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!msg)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Message not found",
+      });
+    if (msg.isDeleted)
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Cannot pin a deleted message",
+      });
+
+    const room = await prisma.chatRoom.findUnique({
+      where: { id: msg.chatRoomId },
+      select: { participants: true },
+    });
+    if (!room || !room.participants.includes(userId))
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+
+    if (msg.isPinned) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Already pinned",
+        data: withId(msg),
+      });
+    }
+
+    const pinnedCount = await prisma.message.count({
+      where: { chatRoomId: msg.chatRoomId, isPinned: true },
+    });
+    if (pinnedCount >= MAX_PINNED_MESSAGES)
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Cannot pin more than ${MAX_PINNED_MESSAGES} messages in a chat. Unpin one first.`,
+      });
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { isPinned: true, pinnedAt: new Date(), pinnedBy: userId },
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Message pinned",
+      data: withId(updated),
+    });
+  } catch (error: unknown) {
+    logger.error("POST /chat/messages/:messageId/pin error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function unpinMessage(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const userId = user!.userId;
+    const messageId = String(req.params.messageId);
+    const msg = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!msg)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Message not found",
+      });
+
+    const room = await prisma.chatRoom.findUnique({
+      where: { id: msg.chatRoomId },
+      select: { participants: true },
+    });
+    if (!room || !room.participants.includes(userId))
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { isPinned: false, pinnedAt: null, pinnedBy: null },
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Message unpinned",
+      data: withId(updated),
+    });
+  } catch (error: unknown) {
+    logger.error("DELETE /chat/messages/:messageId/pin error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function getPinnedMessages(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const userId = user!.userId;
+    const roomId = String(req.params.roomId);
+    const room = await prisma.chatRoom.findUnique({
+      where: { id: roomId },
+      select: { participants: true },
+    });
+    if (!room)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Conversation not found",
+      });
+    if (!room.participants.includes(userId))
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+
+    const pinned = await prisma.message.findMany({
+      where: { chatRoomId: roomId, isPinned: true },
+      orderBy: { pinnedAt: "desc" },
+      take: MAX_PINNED_MESSAGES,
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Pinned messages retrieved",
+      data: pinned.map(withId),
+    });
+  } catch (error: unknown) {
+    logger.error("GET /chat/conversations/:roomId/pinned error:", { error });
     return handleError(res, error);
   }
 }

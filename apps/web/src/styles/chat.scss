@@ -252,6 +252,46 @@
   }
 }
 
+// Pinned messages bar
+.chat-pinned-bar {
+  background: var(--chat-header-bg);
+  border-bottom: 1px solid var(--chat-border);
+  flex-shrink: 0;
+}
+
+.chat-pinned-bar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  cursor: pointer;
+  color: var(--chat-time-color);
+
+  &:hover {
+    background: var(--chat-hover-conv);
+  }
+}
+
+.chat-pinned-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px 6px 32px;
+  cursor: pointer;
+  border-top: 1px solid var(--chat-border);
+
+  &:hover {
+    background: var(--chat-hover-conv);
+  }
+}
+
+.chat-pinned-bar-item-content {
+  flex: 1;
+  overflow: hidden;
+  border-left: 3px solid #00a884;
+  padding-left: 8px;
+}
+
 // Messages area
 .chat-messages-area {
   flex: 1;
@@ -274,6 +314,11 @@
 
   &.theirs {
     flex-direction: row;
+  }
+
+  // Briefly flashes when jumped to via a reply preview or the pinned bar.
+  &.chat-msg-highlight .chat-bubble {
+    animation: chat-msg-flash 1.5s ease;
   }
 }
 
@@ -391,6 +436,12 @@
   margin-bottom: 4px;
   max-width: 100%;
   overflow: hidden;
+  cursor: pointer;
+  transition: background-color 0.15s;
+
+  &:hover {
+    background: var(--chat-hover-conv);
+  }
 }
 
 // Image in message
@@ -604,6 +655,17 @@
   30% {
     transform: translateY(-4px);
     opacity: 1;
+  }
+}
+
+@keyframes chat-msg-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+
+  25% {
+    box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.6);
   }
 }
 

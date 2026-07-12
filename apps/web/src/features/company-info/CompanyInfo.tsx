@@ -112,7 +112,7 @@ export default function CompanyInfo() {
   const canEdit =
     user?.isSuperUser ||
     ["owner", "admin"].includes(user?.tenantRole ?? "") ||
-    user?.permissions?.some((p: string) => p.startsWith("CompanyInfo:"));
+    user?.permissions?.includes("Organisation:edit_company_info");
 
   useEffect(() => {
     apiClient

@@ -242,7 +242,7 @@ function PushNotifications() {
     borderRadius: 1.5,
     border: "1px solid",
     borderColor: "divider",
-    p: { xs: 1.5, sm: 2 },
+    p: { xs: 2, sm: 3 },
   });
 
   const getThemedListItemStyles = (tokenObj) => {
@@ -355,7 +355,7 @@ function PushNotifications() {
                     flexDirection: { xs: "column", sm: "row" },
                     gap: { xs: 1, sm: 1 },
                     width: "100%",
-                    p: { xs: 1.5, sm: 0 },
+                    p: { xs: 1.5, sm: 2 },
                   }}
                 >
                   {/* Icon - Hidden on mobile, shown on tablet+ */}
@@ -488,9 +488,11 @@ function PushNotifications() {
                     <Box
                       sx={{
                         display: "flex",
-                        alignItems: { xs: "flex-start", sm: "center" },
+                        alignSelf: { xs: "flex-start", sm: "center" },
+                        alignItems: "center",
                         justifyContent: { xs: "flex-start", sm: "flex-end" },
                         mr: { xs: 0, sm: 2 },
+                        mt: 0,
                       }}
                     >
                       <Button

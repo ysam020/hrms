@@ -220,6 +220,9 @@ const CHAT = {
   UPLOAD_FILE: "/chat/upload",
   DELETE_MESSAGE: (messageId: string) => `/chat/messages/${messageId}`,
   DELETE_CONVERSATION: (roomId: string) => `/chat/conversations/${roomId}`,
+  PIN_MESSAGE: (messageId: string) => `/chat/messages/${messageId}/pin`,
+  GET_PINNED_MESSAGES: (roomId: string) =>
+    `/chat/conversations/${roomId}/pinned`,
   OG_PREVIEW: (url: string) => `/og-preview?url=${encodeURIComponent(url)}`,
 };
 

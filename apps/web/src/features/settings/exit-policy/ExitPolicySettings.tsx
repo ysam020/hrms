@@ -92,7 +92,7 @@ export default function ExitPolicySettings() {
   const canEdit =
     user?.isSuperUser ||
     ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
-    user?.permissions?.some((p: string) => p.startsWith("OrgSettings:"));
+    user?.permissions?.includes("Organisation:edit_organisation_settings");
 
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);

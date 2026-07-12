@@ -79,9 +79,6 @@ const PERM_DEFS = [
   ["ResignationProcess", "reject_resignation", "team", "all"],
   ["ResignationProcess", "update_resignation_status", "team", "all"],
 
-  // JoinRequests (scopeless)
-  ["JoinRequests", "approve"],
-
   // Permissions (mostly scopeless)
   ["Permissions", "create_role"],
   ["Permissions", "view_roles"],
@@ -122,6 +119,11 @@ const PERM_DEFS = [
   ["Policy", "create"],
   ["Policy", "update"],
   ["Policy", "delete"],
+
+  // Organisation (scopeless)
+  ["Organisation", "edit_company_info"],
+  ["Organisation", "edit_organisation_settings"],
+  ["Organisation", "approve_join_requests"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }
