@@ -311,19 +311,202 @@ export async function deleteUserRole(req: Request, res: Response) {
   }
 }
 
+// Shared by getTeams and getOrgChart — resolves the raw ObjectId strings
+// stored on Team.teamLeaderId/members into display-ready
+// {username, name, designation, employeePhoto} so neither the Teams admin
+// page nor the org chart has to show bare IDs.
+async function resolveUserNames(ids: string[]): Promise<
+  Map<
+    string,
+    {
+      username: string;
+      name: string;
+      designation: string | null;
+      employeePhoto: string | null;
+    }
+  >
+> {
+  const uniqueIds = [...new Set(ids)];
+  const users = await prisma.user.findMany({
+    where: { id: { in: uniqueIds } },
+    select: {
+      id: true,
+      username: true,
+      first_name: true,
+      last_name: true,
+      designation: true,
+      employee_photo: true,
+    },
+  });
+  return new Map(
+    users.map((u: any) => [
+      u.id,
+      {
+        username: u.username,
+        name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || u.username,
+        designation: u.designation ?? null,
+        employeePhoto: u.employee_photo ?? null,
+      },
+    ]),
+  );
+}
+
 export async function getTeams(_req: Request, res: Response) {
   try {
     const teams = await prisma.team.findMany();
+    const nameById = await resolveUserNames(
+      teams.flatMap((t: any) => [t.teamLeaderId, ...t.members]),
+    );
+    const describe = (id: string) =>
+      nameById.get(id) ?? {
+        username: id,
+        name: id,
+        designation: null,
+        employeePhoto: null,
+      };
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: teams.map((t: any) => ({
         _id: t.id,
         teamName: t.teamName,
         teamLeaderId: t.teamLeaderId,
+        teamLeaderName: describe(t.teamLeaderId).name,
         members: t.members,
+        membersInfo: t.members.map((id: string) => ({
+          id,
+          ...describe(id),
+        })),
       })),
     });
   } catch (error: unknown) {
     logger.error("get-teams error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// GET /api/v1/get-org-chart — CEO + every team (with resolved leader/member
+// names), for the Organization Tree page. Replaces the previous client-side
+// approach of grouping ALL employees by department/designation-substring
+// matching (fragile — broke silently whenever a department had 0 or 2+
+// "MANAGER"-titled people, and needlessly fetched the entire user list).
+export async function getOrgChart(_req: Request, res: Response) {
+  try {
+    const [ceo, teams, activeUsers, totalEmployeeCount, statusGroups] =
+      await Promise.all([
+        prisma.user.findFirst({
+          where: { designation: "CEO", employeeStatus: "Active" },
+          select: {
+            id: true,
+            username: true,
+            first_name: true,
+            last_name: true,
+            designation: true,
+            department: true,
+            employee_photo: true,
+          },
+        }),
+        prisma.team.findMany(),
+        // Needed to detect active employees who aren't in any team yet (e.g.
+        // just-approved join requests that haven't been onboarded with a
+        // department/designation) — otherwise they silently vanish from the
+        // chart with no indication they exist.
+        prisma.user.findMany({
+          where: { employeeStatus: "Active" },
+          select: {
+            id: true,
+            username: true,
+            first_name: true,
+            last_name: true,
+            designation: true,
+            department: true,
+            employee_photo: true,
+          },
+        }),
+        // "Total Employees" stat = every employee record regardless of status
+        // (active/resigned/terminated/absconded), unlike the tree itself which
+        // only ever shows active headcount.
+        prisma.user.count(),
+        // Breakdown backing the "Total Employees" stat card.
+        prisma.user.groupBy({
+          by: ["employeeStatus"],
+          _count: { id: true },
+        }),
+      ]);
+
+    const employeeStatusBreakdown = {
+      active: 0,
+      resigned: 0,
+      terminated: 0,
+      absconded: 0,
+    };
+    for (const group of statusGroups as any[]) {
+      const count = group._count.id;
+      if (group.employeeStatus === "Active")
+        employeeStatusBreakdown.active = count;
+      else if (group.employeeStatus === "Resigned")
+        employeeStatusBreakdown.resigned = count;
+      else if (group.employeeStatus === "Terminated")
+        employeeStatusBreakdown.terminated = count;
+      else if (group.employeeStatus === "Absconded")
+        employeeStatusBreakdown.absconded = count;
+    }
+
+    const nameById = await resolveUserNames(
+      teams.flatMap((t: any) => [t.teamLeaderId, ...t.members]),
+    );
+    const describe = (id: string) =>
+      nameById.get(id) ?? {
+        username: id,
+        name: id,
+        designation: null,
+        employeePhoto: null,
+      };
+
+    const assignedIds = new Set<string>(
+      teams.flatMap((t: any) => [t.teamLeaderId, ...t.members]),
+    );
+    if (ceo) assignedIds.add(ceo.id);
+
+    const unassigned = activeUsers
+      .filter((u: any) => !assignedIds.has(u.id))
+      .map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || u.username,
+        designation: u.designation ?? null,
+        employeePhoto: u.employee_photo ?? null,
+      }));
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: {
+        ceo: ceo
+          ? {
+              id: ceo.id,
+              username: ceo.username,
+              name:
+                `${ceo.first_name ?? ""} ${ceo.last_name ?? ""}`.trim() ||
+                ceo.username,
+              designation: ceo.designation,
+              department: ceo.department,
+              employeePhoto: ceo.employee_photo ?? null,
+            }
+          : null,
+        teams: teams.map((t: any) => ({
+          _id: t.id,
+          teamName: t.teamName,
+          leader: { id: t.teamLeaderId, ...describe(t.teamLeaderId) },
+          members: t.members.map((id: string) => ({
+            id,
+            ...describe(id),
+          })),
+        })),
+        unassigned,
+        totalEmployeeCount,
+        employeeStatusBreakdown,
+      },
+    });
+  } catch (error: unknown) {
+    logger.error("get-org-chart error:", { error });
     return handleError(res, error);
   }
 }

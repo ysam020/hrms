@@ -30,6 +30,7 @@ jest.mock("@hrms/db", () => {
     user: {
       count: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn(),
     },
     team: {
@@ -77,6 +78,7 @@ const mockUserCount = (prisma as any).user.count as jest.Mock;
 const mockUserFindFirst = (prisma as any).user.findFirst as jest.Mock;
 const mockUserUpdate = (prisma as any).user.update as jest.Mock;
 const mockTeamFindMany = (prisma as any).team.findMany as jest.Mock;
+const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockTeamFindFirst = (prisma as any).team.findFirst as jest.Mock;
 const mockTeamFindUnique = (prisma as any).team.findUnique as jest.Mock;
 const mockTeamCreate = (prisma as any).team.create as jest.Mock;
@@ -711,7 +713,17 @@ describe("permissionsHandlers", () => {
   describe("getTeams", () => {
     it("returns list of teams", async () => {
       mockTeamFindMany.mockResolvedValue([
-        { id: "t-1", teamName: "Alpha", teamLeader: "alice", members: [] },
+        { id: "t-1", teamName: "Alpha", teamLeaderId: "u-1", members: [] },
+      ]);
+      mockUserFindMany.mockResolvedValue([
+        {
+          id: "u-1",
+          username: "alice",
+          first_name: "Alice",
+          last_name: "Doe",
+          designation: "HR",
+          employee_photo: null,
+        },
       ]);
       const res = makeRes();
       await getTeams(makeReq(), res);

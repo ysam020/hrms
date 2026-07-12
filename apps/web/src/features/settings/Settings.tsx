@@ -15,6 +15,7 @@ import CompanyInfo from "@web/features/company-info/CompanyInfo";
 import OrgSettings from "@web/features/settings/OrgSettings";
 import Subscription from "@web/features/subscription/Subscription";
 import JoinRequests from "@web/features/settings/JoinRequests";
+import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -67,26 +68,21 @@ export default function Settings() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Owners and admins can always manage the subscription for their org.
-  // Superusers and explicit permission holders can also access it.
-  const hasSubscriptionAccess =
-    user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
-    user?.permissions?.some((p: string) => p.startsWith("Subscription:"));
+  const subscriptionAccess = hasSubscriptionAccess(user);
 
   // Separate from subscription access — owners/admins/superusers always see
-  // it, and anyone else needs the dedicated JoinRequests:approve permission
-  // (not the Subscription one) so it doesn't leak in for people who only
-  // have subscription access, or hide for people who only have this.
+  // it, and anyone else needs the dedicated Organisation:approve_join_requests
+  // permission (not the Subscription one) so it doesn't leak in for people
+  // who only have subscription access, or hide for people who only have this.
   const canApproveJoinRequests =
     user?.isSuperUser ||
     ["owner", "admin"].includes(user?.tenantRole ?? "") ||
-    user?.permissions?.some((p: string) => p.startsWith("JoinRequests:"));
+    user?.permissions?.includes("Organisation:approve_join_requests");
 
   const tabs: SettingsTab[] = [
     ...BASE_TABS,
     ...(canApproveJoinRequests ? [JOIN_REQUESTS_TAB] : []),
-    ...(hasSubscriptionAccess ? [SUBSCRIPTION_TAB] : []),
+    ...(subscriptionAccess ? [SUBSCRIPTION_TAB] : []),
   ];
 
   // Derive active tab from ?tab= query param; fall back to localStorage

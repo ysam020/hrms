@@ -1499,7 +1499,7 @@ export default function OrgSettings() {
   const canEdit =
     user?.isSuperUser ||
     ["owner", "admin"].includes(user?.tenantRole ?? "") ||
-    user?.permissions?.some((p: string) => p.startsWith("OrgSettings:"));
+    user?.permissions?.includes("Organisation:edit_organisation_settings");
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
 

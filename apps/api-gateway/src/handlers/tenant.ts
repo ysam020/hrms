@@ -652,9 +652,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
   });
   const canEdit =
     actor?.isSuperUser ||
-    (actor?.permissions ?? []).some((p: string) =>
-      p.startsWith("CompanyInfo:"),
-    );
+    (actor?.permissions ?? []).includes("Organisation:edit_company_info");
   if (!canEdit) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
       message: "You don't have permission to update the organisation profile.",
@@ -872,7 +870,7 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
     });
 
     // Fire-and-forget notification to the target tenant's owners/admins and
-    // anyone else holding the JoinRequests:approve permission.
+    // anyone else holding the Organisation:approve_join_requests permission.
     void (async () => {
       try {
         const [admins, permissionHolders] = await Promise.all([
@@ -881,7 +879,10 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
             select: { userId: true },
           }),
           prisma.user.findMany({
-            where: { tenantId, permissions: { has: "JoinRequests:approve:-" } },
+            where: {
+              tenantId,
+              permissions: { has: "Organisation:approve_join_requests" },
+            },
             select: { id: true },
           }),
         ]);
@@ -946,8 +947,9 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
 }
 
 // Mirrors canManageKyc in employee.ts: tenantRole owner/admin always pass;
-// anyone else needs isSuperUser or the explicit JoinRequests:approve
-// permission (req.user from the JWT doesn't carry either, hence the lookup).
+// anyone else needs isSuperUser or the explicit
+// Organisation:approve_join_requests permission (req.user from the JWT
+// doesn't carry either, hence the lookup).
 async function canApproveJoinRequests(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   if (["owner", "admin"].includes(tenantRole ?? "")) return true;
@@ -957,7 +959,7 @@ async function canApproveJoinRequests(req: AuthRequest): Promise<boolean> {
   });
   if (user?.isSuperUser) return true;
   const permissions = (user?.permissions as string[]) ?? [];
-  return permissions.includes("JoinRequests:approve:-");
+  return permissions.includes("Organisation:approve_join_requests");
 }
 
 // GET /api/v1/tenants/join-requests — list pending join requests for the caller's tenant

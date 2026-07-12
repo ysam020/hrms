@@ -34,6 +34,7 @@ const Linkify: ComponentType<any> = (_Linkify as any).default ?? _Linkify;
 import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { AlertContext } from "@web/app/providers/AlertContext";
 import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
 import useChat from "@web/shared/hooks/useChat";
 import apiClient from "@web/core/http/axiosConfig";
@@ -55,6 +56,12 @@ const DoneIcon = lazy(() => import("@mui/icons-material/Done"));
 const ArrowBackIcon = lazy(() => import("@mui/icons-material/ArrowBack"));
 const DeleteIcon = lazy(() => import("@mui/icons-material/Delete"));
 const MoreVertIcon = lazy(() => import("@mui/icons-material/MoreVert"));
+const PushPinIcon = lazy(() => import("@mui/icons-material/PushPin"));
+const PushPinOutlinedIcon = lazy(
+  () => import("@mui/icons-material/PushPinOutlined"),
+);
+const ExpandMoreIcon = lazy(() => import("@mui/icons-material/ExpandMore"));
+const ExpandLessIcon = lazy(() => import("@mui/icons-material/ExpandLess"));
 const EmojiEmotionsIcon = lazy(
   () => import("@mui/icons-material/EmojiEmotions"),
 );
@@ -257,22 +264,44 @@ function linkifyDecorator(href, text, key) {
   );
 }
 
+// Scrolls to a message already rendered in the thread and briefly flashes
+// it so it's easy to spot. Returns whether it was found — callers that can
+// page in older history (see `jumpToMessage` in Chat()) use this to decide
+// whether to keep loading further back, WhatsApp-style.
+function flashMessage(messageId: string | undefined): boolean {
+  if (!messageId) return false;
+  const el = document.getElementById(`chat-msg-${messageId}`);
+  if (!el) return false;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("chat-msg-highlight");
+  setTimeout(() => el.classList.remove("chat-msg-highlight"), 1500);
+  return true;
+}
+
 function MessageBubble({
   msg,
   isMine,
   onReply,
   onDelete,
+  onPin,
+  onUnpin,
+  onJumpToMessage,
   roomParticipants,
   onImageClick,
   senderName = "",
+  replyToSenderName = "",
 }) {
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const isRead =
     isMine &&
     roomParticipants.some((p) => p !== msg.senderId && msg.readBy?.includes(p));
 
   if (msg.isDeleted) {
     return (
-      <div className={`chat-message-row ${isMine ? "mine" : "theirs"}`}>
+      <div
+        id={`chat-msg-${msg._id}`}
+        className={`chat-message-row ${isMine ? "mine" : "theirs"}`}
+      >
         {!isMine && (
           <Avatar
             sx={{
@@ -306,7 +335,10 @@ function MessageBubble({
     msg.type === "text" ? FIRST_URL_RE.exec(msg.content || "") : null;
 
   return (
-    <div className={`chat-message-row ${isMine ? "mine" : "theirs"}`}>
+    <div
+      id={`chat-msg-${msg._id}`}
+      className={`chat-message-row ${isMine ? "mine" : "theirs"}`}
+    >
       {!isMine && (
         <Avatar
           sx={{
@@ -323,12 +355,25 @@ function MessageBubble({
       <div className="chat-bubble-wrapper">
         {/* Reply preview */}
         {msg.replyTo && (
-          <div className="chat-reply-preview">
+          <div
+            className="chat-reply-preview"
+            role="button"
+            tabIndex={0}
+            onClick={() => onJumpToMessage(msg.replyTo._id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onJumpToMessage(msg.replyTo._id);
+              }
+            }}
+          >
             <Typography variant="caption" fontWeight={600}>
-              {senderName}
+              {replyToSenderName}
             </Typography>
             <Typography variant="caption" noWrap sx={{ display: "block" }}>
-              {msg.replyTo.content || msg.replyTo.fileName || "File"}
+              {msg.replyTo.isDeleted
+                ? "🚫 Original message deleted"
+                : msg.replyTo.content || msg.replyTo.fileName || "File"}
             </Typography>
           </div>
         )}
@@ -400,6 +445,18 @@ function MessageBubble({
           )}
 
           <div className="chat-meta">
+            {msg.isPinned && (
+              <Suspense fallback={null}>
+                <PushPinIcon
+                  sx={{
+                    fontSize: 12,
+                    opacity: 0.75,
+                    transform: "rotate(45deg)",
+                  }}
+                  aria-label="Pinned message"
+                />
+              </Suspense>
+            )}
             <Typography variant="caption" className="chat-time">
               {formatTime(msg.createdAt)}
             </Typography>
@@ -439,27 +496,60 @@ function MessageBubble({
               <ReplyIcon sx={{ fontSize: 16 }} aria-hidden="true" />
             </Suspense>
           </div>
-          {isMine && (
-            <div
-              className="chat-action-btn chat-action-delete"
-              onClick={() => onDelete(msg)}
-              title="Delete"
-              role="button"
-              tabIndex={0}
-              aria-label="Delete message"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onDelete(msg);
-                }
-              }}
-            >
-              <Suspense fallback={null}>
-                <DeleteIcon sx={{ fontSize: 16 }} aria-hidden="true" />
-              </Suspense>
-            </div>
-          )}
+          <div
+            className="chat-action-btn"
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            title="More options"
+            role="button"
+            tabIndex={0}
+            aria-label="More message options"
+            aria-haspopup="menu"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setMenuAnchor(e.currentTarget as unknown as HTMLElement);
+              }
+            }}
+          >
+            <Suspense fallback={null}>
+              <MoreVertIcon sx={{ fontSize: 16 }} aria-hidden="true" />
+            </Suspense>
+          </div>
         </div>
+
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={() => setMenuAnchor(null)}
+        >
+          <MenuItem
+            onClick={() => {
+              setMenuAnchor(null);
+              msg.isPinned ? onUnpin(msg) : onPin(msg);
+            }}
+          >
+            <Suspense fallback={null}>
+              {msg.isPinned ? (
+                <PushPinOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+              ) : (
+                <PushPinIcon fontSize="small" sx={{ mr: 1 }} />
+              )}
+            </Suspense>
+            {msg.isPinned ? "Unpin message" : "Pin message"}
+          </MenuItem>
+          <MenuItem
+            sx={{ color: "error.main" }}
+            onClick={() => {
+              setMenuAnchor(null);
+              onDelete(msg);
+            }}
+          >
+            <Suspense fallback={null}>
+              <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+            </Suspense>
+            Delete message
+          </MenuItem>
+        </Menu>
       </div>
     </div>
   );
@@ -528,6 +618,7 @@ function ConversationItem({ conv, myUserId, isActive, onClick, unread }) {
 function Chat() {
   const { user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
+  const { setAlert } = useContext(AlertContext);
   const { clearRoomUnread } = useContext(ChatUnreadContext);
   const api = useApiClient();
 
@@ -538,14 +629,18 @@ function Chat() {
     setActiveRoomId,
     typingUsers,
     unreadCounts,
+    pinnedMessages,
     loadingConversations,
     loadingMessages,
     fetchMessages,
+    fetchPinnedMessages,
     dbLoadedRoomsRef,
     startConversation,
     markRoomAsRead,
     deleteMessage,
     deleteConversation,
+    pinMessage,
+    unpinMessage,
     joinRoom,
     sendMessage,
     emitTyping,
@@ -564,6 +659,7 @@ function Chat() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [deleteTargetMsg, setDeleteTargetMsg] = useState<any>(null);
   const [deleteConvConfirm, setDeleteConvConfirm] = useState(false);
+  const [pinnedBarExpanded, setPinnedBarExpanded] = useState(false);
   const [headerMenuAnchor, setHeaderMenuAnchor] = useState<HTMLElement | null>(
     null,
   );
@@ -581,6 +677,51 @@ function Chat() {
   const activeMessages = useMemo(
     () => (activeRoomId ? messages[activeRoomId] : []) || [],
     [messages, activeRoomId],
+  );
+  const activePinnedMessages = useMemo(
+    () => (activeRoomId ? pinnedMessages[activeRoomId] : []) || [],
+    [pinnedMessages, activeRoomId],
+  );
+  const resolveParticipantName = useCallback(
+    (senderId: string) => {
+      const detail = activeRoom?.participantDetails?.find(
+        (p: any) => p.id === senderId || p._id === senderId,
+      );
+      return detail
+        ? `${detail.first_name || ""} ${detail.last_name || ""}`.trim() ||
+            detail.username ||
+            ""
+        : "";
+    },
+    [activeRoom],
+  );
+
+  // Jump to a replied-to/pinned message, WhatsApp-style: if it's already
+  // rendered, just scroll+flash it. If it's older than what's currently
+  // loaded (reply/pin targets are frequently much further back than the
+  // last ~50 messages), page further back a screen at a time until it
+  // turns up or there's genuinely nothing older left to fetch.
+  const jumpToMessage = useCallback(
+    async (messageId: string | undefined) => {
+      if (!messageId || !activeRoomId) return;
+      if (flashMessage(messageId)) return;
+
+      let cursor = activeMessages[0]?.createdAt;
+      let guard = 0;
+      while (cursor && guard < 20) {
+        guard += 1;
+        const fetched = await fetchMessages(activeRoomId, cursor);
+        if (!fetched || fetched.length === 0) break;
+        // Let React commit the newly-fetched messages to the DOM before
+        // checking for the target node.
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => resolve(null)),
+        );
+        if (flashMessage(messageId)) return;
+        cursor = fetched[0]?.createdAt;
+      }
+    },
+    [activeRoomId, activeMessages, fetchMessages],
   );
   const activeRoomParticipants = useMemo(
     () => activeRoom?.participants || [],
@@ -623,8 +764,10 @@ function Chat() {
       setText("");
       setMobileShowThread(true);
       setShowEmojiPicker(false);
+      setPinnedBarExpanded(false);
       joinRoom(roomId);
       if (!dbLoadedRoomsRef.current.has(roomId)) await fetchMessages(roomId);
+      fetchPinnedMessages(roomId);
       markRoomAsRead(roomId);
       emitRead(roomId);
       clearRoomUnread(roomId);
@@ -633,6 +776,7 @@ function Chat() {
       setActiveRoomId,
       joinRoom,
       fetchMessages,
+      fetchPinnedMessages,
       markRoomAsRead,
       emitRead,
       clearRoomUnread,
@@ -764,6 +908,41 @@ function Chat() {
       }
     },
     [activeMessages, loadingMessages, fetchMessages, activeRoomId],
+  );
+
+  // Pin / unpin message
+  const handlePinMessage = useCallback(
+    async (msg) => {
+      if (!activeRoomId) return;
+      try {
+        await pinMessage(msg._id, activeRoomId);
+      } catch (err: any) {
+        setAlert({
+          open: true,
+          message:
+            err?.response?.data?.message || "Could not pin this message.",
+          severity: "error",
+        });
+      }
+    },
+    [pinMessage, activeRoomId, setAlert],
+  );
+
+  const handleUnpinMessage = useCallback(
+    async (msg) => {
+      if (!activeRoomId) return;
+      try {
+        await unpinMessage(msg._id, activeRoomId);
+      } catch (err: any) {
+        setAlert({
+          open: true,
+          message:
+            err?.response?.data?.message || "Could not unpin this message.",
+          severity: "error",
+        });
+      }
+    },
+    [unpinMessage, activeRoomId, setAlert],
   );
 
   // Delete message
@@ -965,6 +1144,101 @@ function Chat() {
 
             <Divider />
 
+            {/* Pinned messages bar */}
+            {activePinnedMessages.length > 0 && (
+              <div className="chat-pinned-bar">
+                <div
+                  className="chat-pinned-bar-header"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={pinnedBarExpanded}
+                  onClick={() => setPinnedBarExpanded((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setPinnedBarExpanded((v) => !v);
+                    }
+                  }}
+                >
+                  <Suspense fallback={null}>
+                    <PushPinIcon
+                      sx={{ fontSize: 14, transform: "rotate(45deg)" }}
+                      aria-hidden="true"
+                    />
+                  </Suspense>
+                  <Typography
+                    variant="caption"
+                    fontWeight={600}
+                    sx={{ flex: 1 }}
+                  >
+                    {activePinnedMessages.length === 1
+                      ? "1 Pinned Message"
+                      : `${activePinnedMessages.length} Pinned Messages`}
+                  </Typography>
+                  <Suspense fallback={null}>
+                    {pinnedBarExpanded ? (
+                      <ExpandLessIcon
+                        sx={{ fontSize: 18 }}
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <ExpandMoreIcon
+                        sx={{ fontSize: 18 }}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </Suspense>
+                </div>
+                {(pinnedBarExpanded
+                  ? activePinnedMessages
+                  : activePinnedMessages.slice(0, 1)
+                ).map((pm: any) => (
+                  <div
+                    key={pm._id}
+                    className="chat-pinned-bar-item"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => jumpToMessage(pm._id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        jumpToMessage(pm._id);
+                      }
+                    }}
+                  >
+                    <div className="chat-pinned-bar-item-content">
+                      <Typography
+                        variant="caption"
+                        fontWeight={600}
+                        sx={{ display: "block" }}
+                      >
+                        {resolveParticipantName(pm.senderId)}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        noWrap
+                        sx={{ display: "block" }}
+                      >
+                        {pm.content || pm.fileName || "File"}
+                      </Typography>
+                    </div>
+                    <IconButton
+                      size="small"
+                      aria-label="Unpin message"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUnpinMessage(pm);
+                      }}
+                    >
+                      <Suspense fallback={null}>
+                        <CloseIcon sx={{ fontSize: 14 }} aria-hidden="true" />
+                      </Suspense>
+                    </IconButton>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Messages area */}
             <div
               className="chat-messages-area"
@@ -992,24 +1266,25 @@ function Chat() {
                 </div>
               )}
               {activeMessages.map((msg) => {
-                const senderDetail = activeRoom?.participantDetails?.find(
-                  (p) => p.id === msg.senderId || p._id === msg.senderId,
-                );
-                const senderName = senderDetail
-                  ? `${senderDetail.first_name || ""} ${senderDetail.last_name || ""}`.trim() ||
-                    senderDetail.username ||
-                    ""
-                  : "";
+                const senderName = resolveParticipantName(msg.senderId);
                 return (
                   <MessageBubble
                     key={msg._id}
                     msg={msg}
                     isMine={msg.senderId === user?.id}
-                    onReply={setReplyTo}
+                    onReply={(m) => setReplyTo({ ...m, senderName })}
                     onDelete={setDeleteTargetMsg}
+                    onPin={handlePinMessage}
+                    onUnpin={handleUnpinMessage}
+                    onJumpToMessage={jumpToMessage}
                     roomParticipants={activeRoomParticipants}
                     onImageClick={setLightboxUrl}
                     senderName={senderName}
+                    replyToSenderName={
+                      msg.replyTo
+                        ? resolveParticipantName(msg.replyTo.senderId)
+                        : ""
+                    }
                   />
                 );
               })}

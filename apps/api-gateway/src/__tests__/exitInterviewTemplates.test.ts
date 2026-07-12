@@ -20,6 +20,9 @@ jest.mock("@hrms/db", () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    user: {
+      findUnique: jest.fn(),
+    },
   };
   return { prismaWithTenant: _db };
 });

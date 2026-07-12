@@ -234,7 +234,7 @@ function WebAuthnDevices() {
     borderRadius: 1.5,
     border: "1px solid",
     borderColor: "divider",
-    p: 2,
+    p: 3,
   });
 
   const getThemedListItemStyles = (credential) => {
@@ -333,7 +333,7 @@ function WebAuthnDevices() {
                     display: "flex",
                     gap: 1,
                     width: "100%",
-                    p: { xs: 1.5, sm: 0 },
+                    p: { xs: 1.5, sm: 2 },
                   }}
                 >
                   <Box
@@ -401,7 +401,15 @@ function WebAuthnDevices() {
                       </Box>
                     </Box>
 
-                    <Box sx={{ display: "flex", alignItems: "center", mr: 2 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignSelf: "center",
+                        alignItems: "center",
+                        mr: 2,
+                        mt: 0,
+                      }}
+                    >
                       <Button
                         variant="warning"
                         size="small"

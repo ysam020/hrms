@@ -360,6 +360,9 @@ describe("chatHandlers", () => {
         senderId: "user-1",
         chatRoomId: "r1",
       });
+      mockChatRoomFindUnique.mockResolvedValue({
+        participants: ["user-1", "user-2"],
+      });
       mockMessageUpdate.mockResolvedValue({
         id: "m1",
         chatRoomId: "r1",
@@ -371,7 +374,7 @@ describe("chatHandlers", () => {
       expect(mockMessageUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "m1" },
-          data: { isDeleted: true, content: null },
+          data: expect.objectContaining({ isDeleted: true, content: null }),
         }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(

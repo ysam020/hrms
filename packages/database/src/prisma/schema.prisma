@@ -840,6 +840,9 @@ model Message {
   replyToId    String?   @db.ObjectId
   readBy       String[]  @db.ObjectId
   isDeleted    Boolean   @default(false)
+  isPinned     Boolean   @default(false)
+  pinnedAt     DateTime?
+  pinnedBy     String?   @db.ObjectId
   createdAt    DateTime? @default(now())
   updatedAt    DateTime? @updatedAt
 
@@ -847,6 +850,7 @@ model Message {
 
   @@index([chatRoomId, createdAt])
   @@index([chatRoomId, isDeleted])
+  @@index([chatRoomId, isPinned])
   @@map("messages")
 }
 

@@ -64,11 +64,6 @@ export const permissionStructure = {
       update_resignation_status: ["team", "all"],
     },
   },
-  JoinRequests: {
-    actions: {
-      approve: ["-"],
-    },
-  },
   Permissions: {
     actions: {
       create_role: ["-"],
@@ -118,9 +113,11 @@ export const permissionStructure = {
       manage: ["-"],
     },
   },
-  CompanyInfo: {
+  Organisation: {
     actions: {
-      edit: ["-"],
+      edit_company_info: ["-"],
+      edit_organisation_settings: ["-"],
+      approve_join_requests: ["-"],
     },
   },
 };

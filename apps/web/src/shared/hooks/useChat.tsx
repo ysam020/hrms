@@ -28,6 +28,7 @@ function useChat() {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState({}); // roomId -> username[]
   const [unreadCounts, setUnreadCounts] = useState({}); // roomId -> number
+  const [pinnedMessages, setPinnedMessages] = useState({}); // roomId -> Message[]
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
@@ -122,8 +123,13 @@ function useChat() {
           }));
           saveMessages(fetched).catch(console.error);
         }
+        // Returned so callers (e.g. "jump to replied/pinned message") can
+        // tell whether paging further back would find anything at all,
+        // without having to read back out-of-date React state.
+        return fetched;
       } catch (err) {
         console.error("fetchMessages error:", err);
+        return [];
       } finally {
         setLoadingMessages(false);
       }
@@ -190,10 +196,95 @@ function useChat() {
         delete next[roomId];
         return next;
       });
+      setPinnedMessages((prev) => {
+        const next = { ...prev };
+        delete next[roomId];
+        return next;
+      });
       deleteConversationFromDB(roomId).catch(console.error);
       deleteRoomMessages(roomId).catch(console.error);
     },
     [dbLoadedRoomsRef],
+  );
+
+  const fetchPinnedMessages = useCallback(
+    async (roomId) => {
+      try {
+        const res = await api.get(API_ENDPOINTS.GET_PINNED_MESSAGES(roomId));
+        setPinnedMessages((prev) => ({
+          ...prev,
+          [roomId]: res.data.data || [],
+        }));
+      } catch (err: any) {
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError")
+          return;
+        console.error("fetchPinnedMessages error:", err);
+      }
+    },
+    [api],
+  );
+
+  const pinMessage = useCallback(
+    async (messageId, roomId) => {
+      const res = await apiClient.post(API_ENDPOINTS.PIN_MESSAGE(messageId));
+      const pinned = res.data.data;
+      setMessages((prev) => ({
+        ...prev,
+        [roomId]: (prev[roomId] || []).map((m) =>
+          m._id === messageId
+            ? {
+                ...m,
+                isPinned: true,
+                pinnedAt: pinned.pinnedAt,
+                pinnedBy: pinned.pinnedBy,
+              }
+            : m,
+        ),
+      }));
+      setPinnedMessages((prev) => {
+        const existing = (prev[roomId] || []).filter(
+          (m: any) => m._id !== messageId,
+        );
+        return { ...prev, [roomId]: [pinned, ...existing].slice(0, 5) };
+      });
+      patchMessage(messageId, {
+        isPinned: true,
+        pinnedAt: pinned.pinnedAt,
+        pinnedBy: pinned.pinnedBy,
+      }).catch(console.error);
+      socketRef.current?.emit("chat:pin-message", {
+        messageId,
+        roomId,
+        pinnedAt: pinned.pinnedAt,
+        pinnedBy: pinned.pinnedBy,
+      });
+    },
+    [socketRef],
+  );
+
+  const unpinMessage = useCallback(
+    async (messageId, roomId) => {
+      await apiClient.delete(API_ENDPOINTS.PIN_MESSAGE(messageId));
+      setMessages((prev) => ({
+        ...prev,
+        [roomId]: (prev[roomId] || []).map((m) =>
+          m._id === messageId
+            ? { ...m, isPinned: false, pinnedAt: null, pinnedBy: null }
+            : m,
+        ),
+      }));
+      setPinnedMessages((prev) => ({
+        ...prev,
+        [roomId]: (prev[roomId] || []).filter((m: any) => m._id !== messageId),
+      }));
+      patchMessage(messageId, {
+        isPinned: false,
+        pinnedAt: null,
+        pinnedBy: null,
+      }).catch(console.error);
+      socketRef.current?.emit("chat:unpin-message", { messageId, roomId });
+    },
+    [socketRef],
   );
 
   // Socket actions
@@ -380,6 +471,52 @@ function useChat() {
     );
   }, []);
 
+  const handleMessagePinned = useCallback(
+    ({ messageId, roomId, pinnedAt, pinnedBy }) => {
+      setMessages((prev) => {
+        if (!prev[roomId]) return prev;
+        return {
+          ...prev,
+          [roomId]: prev[roomId].map((m) =>
+            m._id === messageId
+              ? { ...m, isPinned: true, pinnedAt, pinnedBy }
+              : m,
+          ),
+        };
+      });
+      patchMessage(messageId, { isPinned: true, pinnedAt, pinnedBy }).catch(
+        console.error,
+      );
+      // The relay payload doesn't carry full message content, so refetch
+      // the (small, capped-at-5) pinned list from the server to render it.
+      fetchPinnedMessages(roomId);
+    },
+    [fetchPinnedMessages],
+  );
+
+  const handleMessageUnpinned = useCallback(({ messageId, roomId }) => {
+    setMessages((prev) => {
+      if (!prev[roomId]) return prev;
+      return {
+        ...prev,
+        [roomId]: prev[roomId].map((m) =>
+          m._id === messageId
+            ? { ...m, isPinned: false, pinnedAt: null, pinnedBy: null }
+            : m,
+        ),
+      };
+    });
+    patchMessage(messageId, {
+      isPinned: false,
+      pinnedAt: null,
+      pinnedBy: null,
+    }).catch(console.error);
+    setPinnedMessages((prev) => ({
+      ...prev,
+      [roomId]: (prev[roomId] || []).filter((m: any) => m._id !== messageId),
+    }));
+  }, []);
+
   const handleRead = useCallback(({ roomId, reader }) => {
     setMessages((prev) => {
       if (!prev[roomId]) return prev;
@@ -444,6 +581,8 @@ function useChat() {
     socket.on("chat:stop-typing", handleStopTyping);
     socket.on("chat:read", handleRead);
     socket.on("chat:message-deleted", handleMessageDeleted);
+    socket.on("chat:message-pinned", handleMessagePinned);
+    socket.on("chat:message-unpinned", handleMessageUnpinned);
 
     return () => {
       socket.off("chat:message", handleIncomingMessage);
@@ -451,6 +590,8 @@ function useChat() {
       socket.off("chat:stop-typing", handleStopTyping);
       socket.off("chat:read", handleRead);
       socket.off("chat:message-deleted", handleMessageDeleted);
+      socket.off("chat:message-pinned", handleMessagePinned);
+      socket.off("chat:message-unpinned", handleMessageUnpinned);
     };
   }, [
     user?.id,
@@ -461,6 +602,8 @@ function useChat() {
     handleStopTyping,
     handleRead,
     handleMessageDeleted,
+    handleMessagePinned,
+    handleMessageUnpinned,
   ]);
 
   return {
@@ -470,15 +613,19 @@ function useChat() {
     setActiveRoomId,
     typingUsers,
     unreadCounts,
+    pinnedMessages,
     loadingConversations,
     loadingMessages,
     fetchConversations,
     fetchMessages,
+    fetchPinnedMessages,
     dbLoadedRoomsRef,
     startConversation,
     markRoomAsRead,
     deleteMessage,
     deleteConversation,
+    pinMessage,
+    unpinMessage,
     joinRoom,
     sendMessage,
     emitTyping,

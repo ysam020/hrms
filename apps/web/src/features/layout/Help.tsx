@@ -213,7 +213,7 @@ function Help() {
               </Typography>
               <Typography
                 component="a"
-                href="mailto:support@hrms.app"
+                href="mailto:support@praesto.cloud"
                 variant="body2"
                 fontWeight={500}
                 sx={{
@@ -222,7 +222,7 @@ function Help() {
                   "&:hover": { textDecoration: "underline" },
                 }}
               >
-                support@hrms.app
+                support@praesto.cloud
               </Typography>
             </Box>
           </Box>
@@ -238,7 +238,7 @@ function Help() {
               </Typography>
               <Typography
                 component="a"
-                href="mailto:hello@hrms.app"
+                href="mailto:hello@praesto.cloud"
                 variant="body2"
                 fontWeight={500}
                 sx={{
@@ -247,7 +247,7 @@ function Help() {
                   "&:hover": { textDecoration: "underline" },
                 }}
               >
-                hello@hrms.app
+                hello@praesto.cloud
               </Typography>
             </Box>
           </Box>

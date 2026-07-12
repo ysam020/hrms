@@ -4,11 +4,7 @@ import {
   signAccessToken,
   signRefreshToken,
 } from "../services/jwt";
-import {
-  validateRefreshToken,
-  storeRefreshToken,
-  revokeRefreshToken,
-} from "../services/redis";
+import { validateRefreshToken, storeRefreshToken } from "../services/redis";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -58,9 +54,13 @@ export const refreshToken = async (
       });
     }
 
-    // Normal path: rotate — revoke old token, issue new pair
+    // Normal path: rotate — issue new pair. storeRefreshToken() overwrites
+    // the current-token key and sets the grace-period prev-token key itself;
+    // an explicit revoke here would delete both keys (and null the Mongo
+    // fallback) in the gap before they're rewritten, so a concurrent refresh
+    // (another tab, a retried request) landing in that gap would fail with
+    // no grace fallback at all.
     const newRefreshToken = signRefreshToken(payload.userId);
-    await revokeRefreshToken(payload.userId);
     await storeRefreshToken(
       payload.userId,
       newRefreshToken,

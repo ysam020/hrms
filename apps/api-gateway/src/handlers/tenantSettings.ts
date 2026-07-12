@@ -263,8 +263,18 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
 
   const superUser = await isSuperUser(userId);
 
-  const isPrivileged =
+  let isPrivileged =
     superUser || ["owner", "admin"].includes(req.user!.tenantRole ?? "");
+
+  if (!isPrivileged) {
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { permissions: true },
+    });
+    isPrivileged = (actor?.permissions ?? []).includes(
+      "Organisation:edit_organisation_settings",
+    );
+  }
 
   if (!isPrivileged) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {

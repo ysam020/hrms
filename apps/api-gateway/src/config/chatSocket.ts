@@ -96,6 +96,37 @@ export function setupChatSocket(
             return;
           }
 
+          // Resolve the replied-to message into a preview object before
+          // broadcasting — the sender already has it client-side (they
+          // clicked reply on a rendered message), but recipients only get
+          // whatever we put on the wire here.
+          let replyToObj: any = null;
+          if (replyTo) {
+            const replySrc = await withTenant(() =>
+              prisma.message.findUnique({
+                where: { id: replyTo },
+                select: {
+                  id: true,
+                  content: true,
+                  type: true,
+                  fileName: true,
+                  senderId: true,
+                  isDeleted: true,
+                },
+              }),
+            );
+            if (replySrc) {
+              replyToObj = {
+                _id: replySrc.id,
+                content: replySrc.isDeleted ? null : replySrc.content,
+                type: replySrc.type,
+                fileName: replySrc.isDeleted ? null : replySrc.fileName,
+                senderId: replySrc.senderId,
+                isDeleted: replySrc.isDeleted,
+              };
+            }
+          }
+
           const createMessage = () =>
             prisma.message.create({
               data: {
@@ -130,7 +161,7 @@ export function setupChatSocket(
             ...message,
             _id: message.id,
             chatRoom: message.chatRoomId,
-            replyTo: message.replyToId ?? null,
+            replyTo: replyToObj,
           };
 
           await Promise.all(
@@ -257,6 +288,60 @@ export function setupChatSocket(
           );
         } catch (err) {
           logger.error(`chat:delete-message error for ${userId}:`, { err });
+        }
+      },
+    );
+
+    // Notify all participants that a message was pinned. The pin/unpin
+    // mutation itself happens over REST (POST/DELETE .../pin) — this is
+    // relay-only, matching the chat:delete-message pattern above.
+    socket.on(
+      "chat:pin-message",
+      async ({
+        messageId,
+        roomId,
+        pinnedAt,
+        pinnedBy,
+      }: {
+        messageId: string;
+        roomId: string;
+        pinnedAt: string;
+        pinnedBy: string;
+      }) => {
+        try {
+          const participants = await getParticipants(roomId);
+          await Promise.all(
+            participants.map((p) =>
+              redisAdapter.sendToUser(p, "chat:message-pinned", {
+                messageId,
+                roomId,
+                pinnedAt,
+                pinnedBy,
+              }),
+            ),
+          );
+        } catch (err) {
+          logger.error(`chat:pin-message error for ${userId}:`, { err });
+        }
+      },
+    );
+
+    // Notify all participants that a message was unpinned.
+    socket.on(
+      "chat:unpin-message",
+      async ({ messageId, roomId }: { messageId: string; roomId: string }) => {
+        try {
+          const participants = await getParticipants(roomId);
+          await Promise.all(
+            participants.map((p) =>
+              redisAdapter.sendToUser(p, "chat:message-unpinned", {
+                messageId,
+                roomId,
+              }),
+            ),
+          );
+        } catch (err) {
+          logger.error(`chat:unpin-message error for ${userId}:`, { err });
         }
       },
     );

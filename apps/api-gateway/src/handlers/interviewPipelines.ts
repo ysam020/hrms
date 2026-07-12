@@ -20,7 +20,16 @@ function requireTenantId(req: AuthRequest, res: Response): string | null {
 async function isPrivileged(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   const superUser = await isSuperUser(userId);
-  return superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "");
+  if (superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "")) {
+    return true;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { permissions: true },
+  });
+  return (user?.permissions ?? []).includes(
+    "Organisation:edit_organisation_settings",
+  );
 }
 
 /** GET /interview-pipeline-templates */
