@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requireSuperUser } from "../middleware/authenticate";
+import { authenticate, requireHrPrivileged } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import * as h from "../handlers/attendance";
 import * as breaks from "../handlers/attendanceBreaks";
@@ -25,7 +25,6 @@ attendanceRouter.get(
 attendanceRouter.get(
   "/get-all-attendances/:year/:month",
   authenticate,
-  requireSuperUser,
   h.getAllAttendances,
 );
 attendanceRouter.put(
@@ -42,6 +41,7 @@ attendanceRouter.get(
 attendanceRouter.get(
   "/attendance-insights",
   authenticate,
+  requireHrPrivileged,
   h.attendanceInsights,
 );
 

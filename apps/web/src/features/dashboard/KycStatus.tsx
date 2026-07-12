@@ -77,15 +77,17 @@ function KycStatus() {
           gap: 0.75,
           px: 1,
           py: 0.75,
-          alignContent: "center",
         }}
       >
         {stats.map((s) => (
           <Box
             key={s.label}
             sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
               textAlign: "center",
-              py: 0.5,
               borderRadius: 1.5,
               bgcolor: `${s.color}12`,
               border: `1px solid ${s.color}30`,

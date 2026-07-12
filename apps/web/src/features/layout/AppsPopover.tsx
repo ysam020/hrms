@@ -1,8 +1,13 @@
-import { useState, useMemo } from "react";
+import { useContext, useState, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
 import { useNavigate, useLocation } from "react-router-dom";
+import { UserContext } from "@web/app/providers/UserContext";
+import {
+  isHrOrAbove,
+  canAccessJobOpenings,
+} from "@web/shared/utils/permissions/navAccess";
 
 const MODULE_COLORS = {
   light: {
@@ -181,12 +186,26 @@ function AppsPopover({ theme }: { theme: "light" | "dark" }) {
   const isDark = theme === "dark";
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { user } = useContext(UserContext);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const open = Boolean(anchorEl);
 
   const colors = useMemo(
     () => MODULE_COLORS[isDark ? "dark" : "light"],
     [isDark],
+  );
+
+  const modules = useMemo(
+    () =>
+      MODULES.filter((m) => {
+        // WFH is a hard tenant-level kill switch — when disabled, nobody
+        // sees this tile, not even superusers/owners/admins.
+        if (m.label === "WFH") return Boolean(user?.wfhEnabled);
+        if (m.label === "Reports") return isHrOrAbove(user);
+        if (m.label === "Job Openings") return canAccessJobOpenings(user);
+        return true;
+      }),
+    [user?.isSuperUser, user?.wfhEnabled, user?.tenantRole, user?.permissions],
   );
 
   const handleModuleClick = (path: string) => {
@@ -264,7 +283,7 @@ function AppsPopover({ theme }: { theme: "light" | "dark" }) {
             gap: "4px",
           }}
         >
-          {MODULES.map((m) => (
+          {modules.map((m) => (
             <ModuleTile
               key={m.path}
               label={m.label}

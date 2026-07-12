@@ -120,4 +120,19 @@ export const permissionStructure = {
       approve_join_requests: ["-"],
     },
   },
+  Assets: {
+    actions: {
+      manage: ["-"],
+    },
+  },
+  WFH: {
+    actions: {
+      approve: ["-"],
+    },
+  },
+  Helpdesk: {
+    actions: {
+      manage: ["-"],
+    },
+  },
 };

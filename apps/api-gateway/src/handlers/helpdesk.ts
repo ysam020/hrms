@@ -20,9 +20,10 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { handleError } from "../utils/handleError";
-import { AuthRequest } from "../middleware/authenticate";
+import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
-import { getSchedulerQueue } from "@hrms/queue";
+import { getSchedulerQueue, getNotificationQueue } from "@hrms/queue";
+import { emitWebhookEvent } from "../utils/webhookEmitter";
 import dayjs from "dayjs";
 
 // SLA hours keyed by priority.
@@ -33,14 +34,82 @@ const SLA_HOURS: Record<string, number> = {
   low: 72,
 };
 
-async function assertHrRole(userId: string): Promise<boolean> {
+// tenantRole comes from the JWT (resolved from TenantMembership at login) —
+// User.role is a legacy, never-populated field and must not be used here
+// (same bug already found and fixed in assets.ts/wfh.ts). Falls through to
+// the explicit Helpdesk:manage permission grant for anyone else.
+async function assertHrRole(authUser: AuthUser | undefined): Promise<boolean> {
+  if (!authUser) return false;
+  if (["owner", "admin", "hr"].includes(authUser.tenantRole ?? "")) return true;
   const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, isSuperUser: true },
+    where: { id: authUser.userId },
+    select: { isSuperUser: true, permissions: true },
   });
   if (!user) return false;
   if (user.isSuperUser) return true;
-  return user.role.some((r) => ["owner", "admin", "hr"].includes(r));
+  return ((user.permissions as string[]) ?? []).includes("Helpdesk:manage");
+}
+
+/**
+ * Every user who can act as HR on tickets for this tenant — owner/admin/hr
+ * tenantRole, isSuperUser, or an explicit Helpdesk:manage grant — used to
+ * resolve notification recipients. "Assign to HR" has no single owner in
+ * this app's model, so a ticket is implicitly owned by this whole group
+ * from creation; an individual only gets recorded in `assignedTo` once they
+ * actually pick it up (existing auto-assign-on-first-response behavior).
+ */
+async function getHelpdeskRecipientIds(
+  tenantId: string,
+  excludeUserId?: string,
+): Promise<string[]> {
+  const [roleHolders, otherHolders] = await Promise.all([
+    prisma.tenantMembership.findMany({
+      where: { tenantId, role: { in: ["owner", "admin", "hr"] } },
+      select: { userId: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        tenantId,
+        OR: [
+          { isSuperUser: true },
+          { permissions: { has: "Helpdesk:manage" } },
+        ],
+      },
+      select: { id: true },
+    }),
+  ]);
+  return [
+    ...new Set([
+      ...roleHolders.map((r: any) => r.userId),
+      ...otherHolders.map((u) => u.id),
+    ]),
+  ].filter((id) => id !== excludeUserId);
+}
+
+/** Fire-and-forget in-app + push notification to a set of user IDs. */
+async function notifyTicketEvent(
+  tenantId: string,
+  recipientIds: string[],
+  title: string,
+  message: string,
+  priority: "high" | "medium" | "low",
+): Promise<void> {
+  if (recipientIds.length === 0) return;
+  const users = await prisma.user.findMany({
+    where: { id: { in: recipientIds } },
+    select: { id: true, username: true },
+  });
+  if (users.length === 0) return;
+  await getNotificationQueue().add("helpdeskNotification", {
+    tenantId,
+    title,
+    message,
+    recipients: users.map((u) => u.id),
+    pushTargets: users.map((u) => u.username),
+    eventType: "helpdesk_notification",
+    priority,
+    sendPushNotification: true,
+  });
 }
 
 // Generate a sequential, human-readable ticket number: TICK-00001.
@@ -106,6 +175,41 @@ export async function createTicket(req: Request, res: Response) {
       });
     }
 
+    await emitWebhookEvent("ticket.created", {
+      ticketId: ticket.id,
+      ticketNo,
+      title,
+      category,
+      priority,
+      raisedBy: user!.userId,
+    });
+
+    // Auto-assigned to the HR group (owner/admin/hr/superuser/explicit
+    // Helpdesk:manage) as a whole, not a specific person — notify all of
+    // them so someone actually picks it up. Fire-and-forget: a slow
+    // recipient lookup or queue failure must never block ticket creation.
+    void (async () => {
+      try {
+        const recipientIds = await getHelpdeskRecipientIds(
+          tenantId,
+          user!.userId,
+        );
+        await notifyTicketEvent(
+          tenantId,
+          recipientIds,
+          "New support ticket",
+          `${ticketNo}: ${title} (${priority} priority)`,
+          priority === "critical"
+            ? "high"
+            : (priority as "high" | "medium" | "low"),
+        );
+      } catch (err) {
+        logger.warn(`ticket-created notification failed for ${ticketNo}`, {
+          err,
+        });
+      }
+    })();
+
     logger.info(`Ticket created: ${ticketNo}`, {
       userId: user!.userId,
       category,
@@ -130,7 +234,7 @@ export async function createTicket(req: Request, res: Response) {
 export async function listTickets(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
     const { status, category, priority, search } = req.query as Record<
       string,
       string
@@ -221,7 +325,7 @@ export async function listTickets(req: Request, res: Response) {
 export async function getTicket(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
 
     const ticket = await prisma.ticket.findUnique({
       where: { id: String(req.params.ticketId) },
@@ -246,22 +350,39 @@ export async function getTicket(req: Request, res: Response) {
       : (ticket as any).comments.filter((c: any) => !c.isInternal);
 
     // Enrich comment authors.
-    const commentAuthorIds = [
-      ...new Set(visibleComments.map((c: any) => c.userId)),
-    ];
-    const authors = await prisma.user.findMany({
-      where: { id: { in: commentAuthorIds as string[] } },
+    // Enrich comment authors and the ticket's own raisedBy/assignedTo/
+    // resolvedBy in one query — listTickets already does this for
+    // raisedBy/assignedTo (as raisedByUser/assignedToUser), but getTicket
+    // previously returned those as raw ObjectId strings, so the frontend's
+    // "Raised By" display always rendered blank.
+    const allUserIds = [
+      ...new Set([
+        ...visibleComments.map((c: any) => c.userId),
+        (ticket as any).raisedBy,
+        (ticket as any).assignedTo,
+        (ticket as any).resolvedBy,
+      ]),
+    ].filter(Boolean);
+    const users = await prisma.user.findMany({
+      where: { id: { in: allUserIds as string[] } },
       select: { id: true, username: true, first_name: true, last_name: true },
     });
-    const aMap = new Map(authors.map((a) => [a.id, a]));
+    const uMap = new Map(users.map((u) => [u.id, u]));
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Ticket retrieved",
       data: {
         ...ticket,
+        raisedByUser: uMap.get((ticket as any).raisedBy),
+        assignedToUser: (ticket as any).assignedTo
+          ? uMap.get((ticket as any).assignedTo)
+          : null,
+        resolvedByUser: (ticket as any).resolvedBy
+          ? uMap.get((ticket as any).resolvedBy)
+          : null,
         comments: visibleComments.map((c: any) => ({
           ...c,
-          author: aMap.get(c.userId),
+          author: uMap.get(c.userId),
         })),
       },
     });
@@ -279,7 +400,7 @@ export async function getTicket(req: Request, res: Response) {
 export async function updateTicket(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
 
     const ticket = await prisma.ticket.findUnique({
       where: { id: String(req.params.ticketId) },
@@ -343,6 +464,50 @@ export async function updateTicket(req: Request, res: Response) {
       data,
     });
 
+    if (data.status === "resolved") {
+      await emitWebhookEvent("ticket.resolved", {
+        ticketId: (ticket as any).id,
+        ticketNo: (ticket as any).ticketNo,
+        resolvedBy: user!.userId,
+      });
+    }
+
+    // Notify the HR group + the ticket's raiser (whoever of those isn't the
+    // one who just made this change).
+    const tenantId = getTenantId()!;
+    const changes: string[] = [];
+    if (data.status !== undefined) changes.push(`status → ${data.status}`);
+    if (data.priority !== undefined)
+      changes.push(`priority → ${data.priority}`);
+    if (data.assignedTo !== undefined) changes.push("reassigned");
+    if (data.category !== undefined)
+      changes.push(`category → ${data.category}`);
+    if (data.title !== undefined || data.description !== undefined)
+      changes.push("details edited");
+    const changeSummary =
+      changes.length > 0 ? changes.join(", ") : "was updated";
+
+    void (async () => {
+      try {
+        const hrIds = await getHelpdeskRecipientIds(tenantId, user!.userId);
+        const recipientIds = [
+          ...new Set([...hrIds, (ticket as any).raisedBy]),
+        ].filter((id) => id !== user!.userId);
+        await notifyTicketEvent(
+          tenantId,
+          recipientIds,
+          "Ticket updated",
+          `${(ticket as any).ticketNo}: ${changeSummary}`,
+          "medium",
+        );
+      } catch (err) {
+        logger.warn(
+          `ticket-update notification failed for ${(ticket as any).ticketNo}`,
+          { err },
+        );
+      }
+    })();
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Ticket updated",
     });
@@ -359,7 +524,7 @@ export async function updateTicket(req: Request, res: Response) {
 export async function addComment(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
 
     const ticket = await prisma.ticket.findUnique({
       where: { id: String(req.params.ticketId) },
@@ -407,6 +572,32 @@ export async function addComment(req: Request, res: Response) {
       });
     }
 
+    // Notify the HR group + the raiser — except for internal notes, which
+    // the raiser can't even see, so they must not be tipped off one exists.
+    const tenantId = getTenantId()!;
+    void (async () => {
+      try {
+        const hrIds = await getHelpdeskRecipientIds(tenantId, user!.userId);
+        const recipientIds = internal
+          ? hrIds
+          : [...new Set([...hrIds, (ticket as any).raisedBy])].filter(
+              (id) => id !== user!.userId,
+            );
+        await notifyTicketEvent(
+          tenantId,
+          recipientIds,
+          "New ticket comment",
+          `New comment on ${(ticket as any).ticketNo}`,
+          "medium",
+        );
+      } catch (err) {
+        logger.warn(
+          `ticket-comment notification failed for ${(ticket as any).ticketNo}`,
+          { err },
+        );
+      }
+    })();
+
     return apiResponse(res, RESPONSE_STATUS.CREATED, {
       message: "Comment added",
       data: { commentId: newComment.id },
@@ -424,7 +615,7 @@ export async function addComment(req: Request, res: Response) {
 export async function getHelpdeskStats(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });

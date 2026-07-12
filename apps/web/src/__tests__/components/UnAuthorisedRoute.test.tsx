@@ -1,11 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-vi.mock("lottie-react", () => ({
-  default: () => <div data-testid="lottie-animation" />,
-}));
-vi.mock("@web/assets/lottie/not-found.json", () => ({ default: {} }));
-
 import UnAuthorisedRoute from "@web/app/router/UnAuthorisedRoute";
 
 describe("UnAuthorisedRoute", () => {
@@ -16,9 +11,9 @@ describe("UnAuthorisedRoute", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the Lottie animation", () => {
+  it("renders a 'Page not found' message", () => {
     render(<UnAuthorisedRoute />);
-    expect(screen.getByTestId("lottie-animation")).toBeInTheDocument();
+    expect(screen.getByText(/page not found/i)).toBeInTheDocument();
   });
 
   it("calls window.history.back() when button is clicked", async () => {

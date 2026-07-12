@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { authenticate, requireSuperUser } from "../middleware/authenticate";
+import {
+  authenticate,
+  requireSuperUser,
+  requirePrivileged,
+  requireHrPrivileged,
+} from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import { resolvePublicTenant } from "../middleware/resolvePublicTenant";
 import * as h from "../handlers/recruitment";
@@ -51,25 +56,25 @@ recruitmentRouter.get("/get-job-titles", h.getJobTitles);
 recruitmentRouter.get(
   "/view-applications/:id",
   authenticate,
-  requireSuperUser,
+  requirePrivileged,
   h.viewApplications,
 );
 recruitmentRouter.put(
   "/update-candidate-status",
   authenticate,
-  requireSuperUser,
+  requirePrivileged,
   h.updateCandidateStatus,
 );
 recruitmentRouter.put(
   "/hire-candidate",
   authenticate,
-  requireSuperUser,
+  requirePrivileged,
   h.hireCandidate,
 );
 recruitmentRouter.put(
   "/reject-application",
   authenticate,
-  requireSuperUser,
+  requirePrivileged,
   h.rejectApplication,
 );
 recruitmentRouter.post(
@@ -101,12 +106,13 @@ recruitmentRouter.put(
 recruitmentRouter.get(
   "/job-openings-insights",
   authenticate,
+  requireHrPrivileged,
   h.jobOpeningsInsights,
 );
 recruitmentRouter.put(
   "/schedule-interview",
   authenticate,
-  requireSuperUser,
+  requirePrivileged,
   h.scheduleInterview,
 );
 recruitmentRouter.put(
@@ -136,6 +142,6 @@ recruitmentRouter.post("/add-exit-feedback", authenticate, h.addExitFeedback);
 recruitmentRouter.get(
   "/resignation-insights",
   authenticate,
-  requireSuperUser,
+  requireHrPrivileged,
   h.resignationInsights,
 );

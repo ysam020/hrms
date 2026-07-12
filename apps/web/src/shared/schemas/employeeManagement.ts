@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const employeeManagementSchema = z
   .object({
-    assets: z.array(z.string()).optional(),
     employeeStatus: z
       .enum(["Active", "Terminated", "Absconded"])
       .default("Active"),

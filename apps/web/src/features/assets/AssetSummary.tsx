@@ -63,7 +63,7 @@ function StatCard({ label, value, icon: Icon, color, bg }: SummaryCard) {
 
 function AssetSummary() {
   const { setAlert } = useContext(AlertContext);
-  const [summary, setSummary] = useState<Record<string, number> | null>(null);
+  const [summary, setSummary] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,6 +87,8 @@ function AssetSummary() {
     );
   if (!summary) return null;
 
+  const byStatus = (summary.byStatus as Record<string, number>) ?? {};
+
   const cards: SummaryCard[] = [
     {
       label: "Total Assets",
@@ -97,28 +99,28 @@ function AssetSummary() {
     },
     {
       label: "Available",
-      value: summary.available ?? 0,
+      value: byStatus.available ?? 0,
       icon: CheckCircleIcon,
       color: "#059669",
       bg: "rgba(5,150,105,0.12)",
     },
     {
       label: "Assigned",
-      value: summary.assigned ?? 0,
+      value: byStatus.assigned ?? 0,
       icon: PersonIcon,
       color: "#3b82f6",
       bg: "rgba(59,130,246,0.12)",
     },
     {
       label: "In Maintenance",
-      value: summary.maintenance ?? 0,
+      value: byStatus.maintenance ?? 0,
       icon: BuildIcon,
       color: "#d97706",
       bg: "rgba(217,119,6,0.12)",
     },
     {
       label: "Retired",
-      value: summary.retired ?? 0,
+      value: byStatus.retired ?? 0,
       icon: ArchiveIcon,
       color: "#64748b",
       bg: "rgba(100,116,139,0.12)",

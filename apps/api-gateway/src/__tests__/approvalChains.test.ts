@@ -13,10 +13,19 @@ jest.mock("@hrms/db", () => {
     leaveApplication: { findUnique: jest.fn(), findMany: jest.fn() },
     resignation: { findMany: jest.fn() },
     overtimeRequest: { update: jest.fn(), findMany: jest.fn() },
+    wfhRequest: { update: jest.fn(), findMany: jest.fn() },
+    attendanceRecord: { upsert: jest.fn() },
     user: { findMany: jest.fn() },
   };
-  return { prismaWithTenant: _db };
+  return {
+    prismaWithTenant: _db,
+    getTenantId: jest.fn().mockReturnValue("t1"),
+  };
 });
+
+jest.mock("../utils/webhookEmitter", () => ({
+  emitWebhookEvent: jest.fn(),
+}));
 
 jest.mock("@hrms/approval-engine", () => ({
   actOnStep: jest.fn(),
@@ -46,6 +55,7 @@ const mockResignationFindMany = (prisma as any).resignation
   .findMany as jest.Mock;
 const mockOvertimeFindMany = (prisma as any).overtimeRequest
   .findMany as jest.Mock;
+const mockWfhFindMany = (prisma as any).wfhRequest.findMany as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockGetPendingApprovalsFor = getPendingApprovalsFor as jest.Mock;
 
@@ -366,6 +376,7 @@ describe("listPendingApprovals", () => {
     mockLeaveFindMany.mockResolvedValue([]);
     mockResignationFindMany.mockResolvedValue([]);
     mockOvertimeFindMany.mockResolvedValue([]);
+    mockWfhFindMany.mockResolvedValue([]);
     mockUserFindMany.mockResolvedValue([]);
   });
 

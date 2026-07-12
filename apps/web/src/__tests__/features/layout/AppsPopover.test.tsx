@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import AppsPopover from "@web/features/layout/AppsPopover";
+import { UserContext } from "@web/app/providers/UserContext";
 
 const mockNavigate = vi.fn();
 
@@ -21,6 +22,30 @@ const renderApps = () =>
     </MemoryRouter>,
   );
 
+// Job Openings / WFH / Reports tiles are permission-gated — a superuser with
+// wfhEnabled sees every tile, which is what "every former dock module"
+// below asserts.
+const privilegedUser = {
+  isSuperUser: true,
+  tenantRole: "owner",
+  wfhEnabled: true,
+  permissions: [],
+};
+const renderAppsAsPrivilegedUser = () =>
+  render(
+    <MemoryRouter future={future}>
+      <UserContext.Provider
+        value={{
+          user: privilegedUser,
+          setUser: vi.fn(),
+          handleLogout: vi.fn(),
+        }}
+      >
+        <AppsPopover theme="light" />
+      </UserContext.Provider>
+    </MemoryRouter>,
+  );
+
 describe("AppsPopover", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
@@ -33,7 +58,7 @@ describe("AppsPopover", () => {
   });
 
   it("opens a popover listing every former dock module on click", async () => {
-    renderApps();
+    renderAppsAsPrivilegedUser();
     fireEvent.click(screen.getByRole("button", { name: "Apps" }));
 
     await waitFor(() => {
@@ -54,6 +79,22 @@ describe("AppsPopover", () => {
       "Helpdesk",
       "Reports",
     ].forEach((label) => {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
+  });
+
+  it("hides Job Openings/WFH/Reports tiles for a non-privileged user", async () => {
+    renderApps();
+    fireEvent.click(screen.getByRole("button", { name: "Apps" }));
+    await waitFor(() => {
+      expect(screen.getByText("Attendance")).toBeInTheDocument();
+    });
+
+    ["Job Openings", "WFH", "Reports"].forEach((label) => {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    });
+    // Everything else stays visible
+    ["Employees", "Holidays", "Assets", "Helpdesk"].forEach((label) => {
       expect(screen.getByText(label)).toBeInTheDocument();
     });
   });

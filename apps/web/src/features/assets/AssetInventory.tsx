@@ -36,7 +36,10 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import UndoIcon from "@mui/icons-material/Undo";
 import BlockIcon from "@mui/icons-material/Block";
 import AddIcon from "@mui/icons-material/Add";
+import RestoreIcon from "@mui/icons-material/Restore";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import useAssetCategoryOptions from "./useAssetCategoryOptions";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   available: { color: "#059669", bg: "rgba(5,150,105,0.15)" },
@@ -64,17 +67,6 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-const ASSET_CATEGORIES = [
-  "Laptop",
-  "Desktop",
-  "Monitor",
-  "Phone",
-  "Tablet",
-  "Furniture",
-  "Vehicle",
-  "Other",
-];
-
 function AssetInventory() {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
@@ -92,17 +84,17 @@ function AssetInventory() {
     name: "",
     assetCode: "",
     category: "Laptop",
-    description: "",
+    notes: "",
     purchaseDate: "",
-    purchaseCost: "",
+    purchaseValue: "",
   });
   const [assignForm, setAssignForm] = useState({
     userId: "",
-    conditionOut: "Good",
+    conditionOut: "good",
     notes: "",
   });
   const [returnForm, setReturnForm] = useState({
-    conditionIn: "Good",
+    conditionIn: "good",
     notes: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -143,8 +135,17 @@ function AssetInventory() {
   }, [openAssign, empInputValue]);
 
   const isHr =
-    user?.role?.some((r: string) => ["owner", "admin", "hr"].includes(r)) ||
-    user?.isSuperUser;
+    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    hasPermission(
+      "Assets",
+      "manage",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
+
+  const { options: categoryOptions, ensureAssetCategorySaved } =
+    useAssetCategoryOptions();
 
   const fetchAssets = useCallback(
     async ({ page, limit }) => {
@@ -194,10 +195,12 @@ function AssetInventory() {
   const handleCreate = useCallback(async () => {
     setSubmitting(true);
     try {
+      // Best-effort — see useAssetCategoryOptions for why failures are swallowed.
+      void ensureAssetCategorySaved(createForm.category);
       await apiClient.post(API_ENDPOINTS.CREATE_ASSET, {
         ...createForm,
-        purchaseCost: createForm.purchaseCost
-          ? Number(createForm.purchaseCost)
+        purchaseValue: createForm.purchaseValue
+          ? Number(createForm.purchaseValue)
           : undefined,
       });
       refresh();
@@ -206,9 +209,9 @@ function AssetInventory() {
         name: "",
         assetCode: "",
         category: "Laptop",
-        description: "",
+        notes: "",
         purchaseDate: "",
-        purchaseCost: "",
+        purchaseValue: "",
       });
       setAlert({ open: true, message: "Asset created", severity: "success" });
     } catch (err) {
@@ -220,7 +223,7 @@ function AssetInventory() {
     } finally {
       setSubmitting(false);
     }
-  }, [createForm, refresh, setAlert]);
+  }, [createForm, refresh, setAlert, ensureAssetCategorySaved]);
 
   const handleAssign = useCallback(async () => {
     if (!openAssign) return;
@@ -232,7 +235,7 @@ function AssetInventory() {
       });
       refresh();
       setOpenAssign(null);
-      setAssignForm({ userId: "", conditionOut: "Good", notes: "" });
+      setAssignForm({ userId: "", conditionOut: "good", notes: "" });
       setEmpInputValue("");
       setEmpOptions([]);
       setAlert({ open: true, message: "Asset assigned", severity: "success" });
@@ -258,7 +261,7 @@ function AssetInventory() {
         });
         refresh();
         setOpenReturn(null);
-        setReturnForm({ conditionIn: "Good", notes: "" });
+        setReturnForm({ conditionIn: "good", notes: "" });
         setAlert({
           open: true,
           message: "Asset returned",
@@ -294,7 +297,37 @@ function AssetInventory() {
     [refresh, setAlert],
   );
 
-  const conditionOptions = ["Excellent", "Good", "Fair", "Damaged"];
+  // Brings a maintenance asset back into circulation once it's fixed —
+  // retirement is deliberately terminal, so this excludes "retired" assets.
+  const handleMarkAvailable = useCallback(
+    async (assetId: string) => {
+      try {
+        await apiClient.patch(API_ENDPOINTS.UPDATE_ASSET(assetId), {
+          status: "available",
+        });
+        refresh();
+        setAlert({
+          open: true,
+          message: "Asset marked available",
+          severity: "success",
+        });
+      } catch (err) {
+        setAlert({
+          open: true,
+          message:
+            err?.response?.data?.message || "Failed to update asset status",
+          severity: "error",
+        });
+      }
+    },
+    [refresh, setAlert],
+  );
+
+  const conditionOptions = [
+    { value: "good", label: "Good" },
+    { value: "fair", label: "Fair" },
+    { value: "damaged", label: "Damaged" },
+  ];
 
   const columns = useMemo(
     () => [
@@ -323,20 +356,15 @@ function AssetInventory() {
         render: (row: any) => <StatusChip status={row.status} />,
       },
       {
-        key: "assignedToUser",
+        key: "currentHolder",
         label: "Assigned To",
-        render: (row: any) =>
-          row.assignedToUser
-            ? `${row.assignedToUser.first_name} ${row.assignedToUser.last_name}`
-            : "—",
-      },
-      {
-        key: "purchaseCost",
-        label: "Cost",
-        render: (row: any) =>
-          row.purchaseCost != null
-            ? `₹${Number(row.purchaseCost).toLocaleString("en-IN")}`
-            : "—",
+        render: (row: any) => {
+          const holder = row.currentHolder;
+          if (!holder) return "—";
+          const fullName =
+            `${holder.first_name ?? ""} ${holder.last_name ?? ""}`.trim();
+          return fullName || holder.username || "—";
+        },
       },
     ],
     [],
@@ -370,9 +398,17 @@ function AssetInventory() {
           onClick: () => handleRetire(row.id),
         });
       }
+      if (row.status === "maintenance") {
+        actions.push({
+          icon: <RestoreIcon sx={{ fontSize: 16 }} />,
+          label: "Mark Available",
+          color: "success" as const,
+          onClick: () => handleMarkAvailable(row.id),
+        });
+      }
       return actions;
     },
-    [isHr, handleRetire],
+    [isHr, handleRetire, handleMarkAvailable],
   );
 
   return (
@@ -453,22 +489,26 @@ function AssetInventory() {
               />
             </Grid>
             <Grid item xs={6}>
-              <TextField
-                select
-                label="Category"
-                size="small"
-                fullWidth
+              <Autocomplete
+                freeSolo
+                options={categoryOptions}
                 value={createForm.category}
-                onChange={(e) =>
-                  setCreateForm((f) => ({ ...f, category: e.target.value }))
+                onChange={(_, newValue) =>
+                  setCreateForm((f) => ({ ...f, category: newValue ?? "" }))
                 }
-              >
-                {ASSET_CATEGORIES.map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c}
-                  </MenuItem>
-                ))}
-              </TextField>
+                onInputChange={(_, newInputValue) =>
+                  setCreateForm((f) => ({ ...f, category: newInputValue }))
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Category"
+                    size="small"
+                    fullWidth
+                    helperText="Pick an existing category or type a new one"
+                  />
+                )}
+              />
             </Grid>
             <Grid item xs={6}>
               <TextField
@@ -476,9 +516,12 @@ function AssetInventory() {
                 size="small"
                 type="number"
                 fullWidth
-                value={createForm.purchaseCost}
+                value={createForm.purchaseValue}
                 onChange={(e) =>
-                  setCreateForm((f) => ({ ...f, purchaseCost: e.target.value }))
+                  setCreateForm((f) => ({
+                    ...f,
+                    purchaseValue: e.target.value,
+                  }))
                 }
               />
             </Grid>
@@ -522,9 +565,9 @@ function AssetInventory() {
                 multiline
                 rows={2}
                 fullWidth
-                value={createForm.description}
+                value={createForm.notes}
                 onChange={(e) =>
-                  setCreateForm((f) => ({ ...f, description: e.target.value }))
+                  setCreateForm((f) => ({ ...f, notes: e.target.value }))
                 }
               />
             </Grid>
@@ -554,7 +597,7 @@ function AssetInventory() {
         open={!!openAssign}
         onClose={() => {
           setOpenAssign(null);
-          setAssignForm({ userId: "", conditionOut: "Good", notes: "" });
+          setAssignForm({ userId: "", conditionOut: "good", notes: "" });
           setEmpInputValue("");
           setEmpOptions([]);
         }}
@@ -610,8 +653,8 @@ function AssetInventory() {
             }
           >
             {conditionOptions.map((c) => (
-              <MenuItem key={c} value={c}>
-                {c}
+              <MenuItem key={c.value} value={c.value}>
+                {c.label}
               </MenuItem>
             ))}
           </TextField>
@@ -632,7 +675,7 @@ function AssetInventory() {
             variant="ghost"
             onClick={() => {
               setOpenAssign(null);
-              setAssignForm({ userId: "", conditionOut: "Good", notes: "" });
+              setAssignForm({ userId: "", conditionOut: "good", notes: "" });
               setEmpInputValue("");
               setEmpOptions([]);
             }}
@@ -678,8 +721,8 @@ function AssetInventory() {
             }
           >
             {conditionOptions.map((c) => (
-              <MenuItem key={c} value={c}>
-                {c}
+              <MenuItem key={c.value} value={c.value}>
+                {c.label}
               </MenuItem>
             ))}
           </TextField>

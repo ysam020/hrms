@@ -337,11 +337,12 @@ export async function getMyResignation(req: Request, res: Response) {
 }
 
 export async function viewResignations(req: Request, res: Response) {
-  const { user } = req as AuthRequest;
+  const authReq = req as AuthRequest;
+  const { user } = authReq;
   try {
-    const superUser = await isSuperUser(user!.userId);
+    const privileged = await isPrivileged(authReq);
     const userId =
-      superUser && req.query.userId ? String(req.query.userId) : user!.userId;
+      privileged && req.query.userId ? String(req.query.userId) : user!.userId;
 
     const response = (await grpcCall(recruitmentClient, "listResignations", {
       ...parsePagination(req.query, 10),

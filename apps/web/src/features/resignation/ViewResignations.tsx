@@ -30,6 +30,7 @@ import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "All" },
@@ -252,14 +253,61 @@ function ViewResignations() {
 
   const actions = useCallback(
     (rowData: any) => {
+      const canManageResignation =
+        user?.isSuperUser ||
+        ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+        hasPermission(
+          "ResignationProcess",
+          "approve_resignation",
+          "team",
+          user?.isSuperUser,
+          user?.permissions || [],
+        ) ||
+        hasPermission(
+          "ResignationProcess",
+          "approve_resignation",
+          "all",
+          user?.isSuperUser,
+          user?.permissions || [],
+        ) ||
+        hasPermission(
+          "ResignationProcess",
+          "reject_resignation",
+          "team",
+          user?.isSuperUser,
+          user?.permissions || [],
+        ) ||
+        hasPermission(
+          "ResignationProcess",
+          "reject_resignation",
+          "all",
+          user?.isSuperUser,
+          user?.permissions || [],
+        );
       const canApproveReject =
+        canManageResignation &&
         !["Withdrawn", "Rejected", "Approved"].includes(rowData.status) &&
         (user?.isSuperUser || rowData.userId !== user.id);
       const canWithdraw =
         rowData.status === "Submitted" &&
         (rowData.userId === user.id || user?.isSuperUser);
       const canManageExit =
-        user?.isSuperUser &&
+        (user?.isSuperUser ||
+          ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+          hasPermission(
+            "ResignationProcess",
+            "update_resignation_status",
+            "team",
+            user?.isSuperUser,
+            user?.permissions || [],
+          ) ||
+          hasPermission(
+            "ResignationProcess",
+            "update_resignation_status",
+            "all",
+            user?.isSuperUser,
+            user?.permissions || [],
+          )) &&
         !["Withdrawn", "Rejected"].includes(rowData.status);
 
       return [

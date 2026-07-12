@@ -47,7 +47,7 @@ const DepartmentBreakdown = lazy(() => import("./DepartmentBreakdown"));
 const WorkforceStatus = lazy(() => import("./WorkforceStatus"));
 
 // Constants
-const STORAGE_KEY_LAYOUT = "db_layout_v13";
+const STORAGE_KEY_LAYOUT = "db_layout_v14";
 const STORAGE_KEY_VISIBILITY = "db_visibility_v12";
 const RIGHT_PANEL_WIDTH = 270;
 
@@ -68,9 +68,9 @@ const DEFAULT_LAYOUTS = {
     { i: "quickStats", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
     { i: "workforceStatus", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
     { i: "attendanceCalendar", x: 0, y: 2, w: 12, h: 2, minW: 6, minH: 2 },
-    { i: "hrActivities", x: 0, y: 4, w: 6, h: 3, minW: 4, minH: 2 },
-    { i: "pendingApprovals", x: 6, y: 4, w: 3, h: 3, minW: 3, minH: 2 },
-    { i: "kycStatus", x: 9, y: 4, w: 3, h: 3, minW: 2, minH: 2 },
+    { i: "hrActivities", x: 0, y: 4, w: 6, h: 4, minW: 4, minH: 2 },
+    { i: "pendingApprovals", x: 6, y: 4, w: 3, h: 4, minW: 3, minH: 2 },
+    { i: "kycStatus", x: 9, y: 4, w: 3, h: 4, minW: 2, minH: 2 },
     { i: "jobOpeningsList", x: 0, y: 7, w: 4, h: 5, minW: 3, minH: 2 },
     { i: "birthdayAnniversary", x: 4, y: 7, w: 5, h: 5, minW: 3, minH: 2 },
     { i: "departmentBreakdown", x: 9, y: 7, w: 3, h: 5, minW: 2, minH: 2 },
@@ -79,9 +79,9 @@ const DEFAULT_LAYOUTS = {
     { i: "quickStats", x: 0, y: 0, w: 5, h: 2, minW: 4, minH: 2 },
     { i: "workforceStatus", x: 5, y: 0, w: 5, h: 2, minW: 4, minH: 2 },
     { i: "attendanceCalendar", x: 0, y: 2, w: 10, h: 2, minW: 6, minH: 2 },
-    { i: "hrActivities", x: 0, y: 4, w: 5, h: 3, minW: 4, minH: 2 },
-    { i: "pendingApprovals", x: 5, y: 4, w: 3, h: 3, minW: 2, minH: 2 },
-    { i: "kycStatus", x: 8, y: 4, w: 2, h: 3, minW: 2, minH: 2 },
+    { i: "hrActivities", x: 0, y: 4, w: 5, h: 4, minW: 4, minH: 2 },
+    { i: "pendingApprovals", x: 5, y: 4, w: 3, h: 4, minW: 2, minH: 2 },
+    { i: "kycStatus", x: 8, y: 4, w: 2, h: 4, minW: 2, minH: 2 },
     { i: "jobOpeningsList", x: 0, y: 7, w: 3, h: 5, minW: 3, minH: 2 },
     { i: "birthdayAnniversary", x: 3, y: 7, w: 4, h: 5, minW: 3, minH: 2 },
     { i: "departmentBreakdown", x: 7, y: 7, w: 3, h: 5, minW: 2, minH: 2 },
@@ -90,9 +90,9 @@ const DEFAULT_LAYOUTS = {
     { i: "quickStats", x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 2 },
     { i: "workforceStatus", x: 0, y: 2, w: 6, h: 2, minW: 2, minH: 2 },
     { i: "attendanceCalendar", x: 0, y: 4, w: 6, h: 2, minW: 2, minH: 2 },
-    { i: "hrActivities", x: 0, y: 6, w: 6, h: 3, minW: 2, minH: 2 },
-    { i: "pendingApprovals", x: 0, y: 9, w: 3, h: 3, minW: 2, minH: 2 },
-    { i: "kycStatus", x: 3, y: 9, w: 3, h: 3, minW: 2, minH: 2 },
+    { i: "hrActivities", x: 0, y: 6, w: 6, h: 4, minW: 2, minH: 2 },
+    { i: "pendingApprovals", x: 0, y: 9, w: 3, h: 4, minW: 2, minH: 2 },
+    { i: "kycStatus", x: 3, y: 9, w: 3, h: 4, minW: 2, minH: 2 },
     { i: "jobOpeningsList", x: 0, y: 12, w: 6, h: 5, minW: 2, minH: 2 },
     { i: "birthdayAnniversary", x: 0, y: 17, w: 6, h: 5, minW: 2, minH: 2 },
     { i: "departmentBreakdown", x: 0, y: 22, w: 6, h: 5, minW: 2, minH: 2 },
@@ -101,9 +101,9 @@ const DEFAULT_LAYOUTS = {
     { i: "quickStats", x: 0, y: 0, w: 4, h: 2, minW: 1, minH: 2 },
     { i: "workforceStatus", x: 0, y: 2, w: 4, h: 2, minW: 1, minH: 2 },
     { i: "attendanceCalendar", x: 0, y: 4, w: 4, h: 2, minW: 1, minH: 2 },
-    { i: "hrActivities", x: 0, y: 6, w: 4, h: 3, minW: 1, minH: 2 },
-    { i: "pendingApprovals", x: 0, y: 9, w: 4, h: 3, minW: 1, minH: 2 },
-    { i: "kycStatus", x: 0, y: 12, w: 4, h: 3, minW: 1, minH: 2 },
+    { i: "hrActivities", x: 0, y: 6, w: 4, h: 4, minW: 1, minH: 2 },
+    { i: "pendingApprovals", x: 0, y: 9, w: 4, h: 4, minW: 1, minH: 2 },
+    { i: "kycStatus", x: 0, y: 12, w: 4, h: 4, minW: 1, minH: 2 },
     { i: "jobOpeningsList", x: 0, y: 15, w: 4, h: 5, minW: 1, minH: 2 },
     { i: "birthdayAnniversary", x: 0, y: 20, w: 4, h: 5, minW: 1, minH: 2 },
     { i: "departmentBreakdown", x: 0, y: 25, w: 4, h: 5, minW: 1, minH: 2 },
@@ -112,9 +112,9 @@ const DEFAULT_LAYOUTS = {
     { i: "quickStats", x: 0, y: 0, w: 2, h: 2, minW: 1, minH: 2 },
     { i: "workforceStatus", x: 0, y: 2, w: 2, h: 2, minW: 1, minH: 2 },
     { i: "attendanceCalendar", x: 0, y: 4, w: 2, h: 2, minW: 1, minH: 2 },
-    { i: "hrActivities", x: 0, y: 6, w: 2, h: 3, minW: 1, minH: 2 },
-    { i: "pendingApprovals", x: 0, y: 9, w: 2, h: 3, minW: 1, minH: 2 },
-    { i: "kycStatus", x: 0, y: 12, w: 2, h: 3, minW: 1, minH: 2 },
+    { i: "hrActivities", x: 0, y: 6, w: 2, h: 4, minW: 1, minH: 2 },
+    { i: "pendingApprovals", x: 0, y: 9, w: 2, h: 4, minW: 1, minH: 2 },
+    { i: "kycStatus", x: 0, y: 12, w: 2, h: 4, minW: 1, minH: 2 },
     { i: "jobOpeningsList", x: 0, y: 15, w: 2, h: 5, minW: 1, minH: 2 },
     { i: "birthdayAnniversary", x: 0, y: 20, w: 2, h: 5, minW: 1, minH: 2 },
     { i: "departmentBreakdown", x: 0, y: 25, w: 2, h: 5, minW: 1, minH: 2 },

@@ -89,11 +89,15 @@ jest.mock("@hrms/logger", () => ({
 
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
-import { actOnApprovalForEntity } from "../handlers/approvalChains";
+import {
+  actOnApprovalForEntity,
+  isPrivileged,
+} from "../handlers/approvalChains";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockActOnApprovalForEntity = actOnApprovalForEntity as jest.Mock;
+const mockIsPrivileged = isPrivileged as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockJobCount = (prisma as any).jobOpening.count as jest.Mock;
@@ -458,7 +462,7 @@ describe("recruitmentHandlers", () => {
     });
 
     it("allows superuser to view any user's resignation", async () => {
-      mockUserFindUnique.mockResolvedValueOnce({ isSuperUser: true });
+      mockIsPrivileged.mockResolvedValueOnce(true);
       await viewResignations(makeReq({ query: { userId: "jane" } }), makeRes());
       expect(mockGrpcCall).toHaveBeenCalledWith(
         expect.anything(),
@@ -468,7 +472,7 @@ describe("recruitmentHandlers", () => {
     });
 
     it("returns INTERNAL on error", async () => {
-      mockUserFindUnique.mockRejectedValue(new Error("DB error"));
+      mockIsPrivileged.mockRejectedValueOnce(new Error("DB error"));
       const res = makeRes();
       await viewResignations(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(

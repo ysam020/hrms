@@ -84,7 +84,10 @@ function StatusChip({
   );
 }
 
-const CATEGORIES = ["IT", "HR", "Finance", "Facilities", "Security", "Other"];
+// Must match createTicketSchema/updateTicketSchema's category enum
+// (apps/api-gateway/src/schemas.ts) exactly — selecting a value not in the
+// backend enum fails validation on submit.
+const CATEGORIES = ["IT", "Payroll", "Leave", "Onboarding", "HR", "Other"];
 const PRIORITIES = ["low", "medium", "high", "critical"];
 
 function Tickets() {

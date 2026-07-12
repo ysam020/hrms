@@ -47,6 +47,7 @@ import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import BusinessCenterIcon from "@mui/icons-material/BusinessCenter";
 import FenceIcon from "@mui/icons-material/Fence";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import SaveIcon from "@mui/icons-material/Save";
 import ScheduleIcon from "@mui/icons-material/Schedule";
@@ -147,6 +148,8 @@ interface SettingsSnapshot {
   officeLongitude: number | null;
   officeName: string | null;
   geofenceRadiusMeters: number;
+  // Modules
+  wfhEnabled: boolean;
 }
 
 const SCHEMA_DEFAULTS: SettingsSnapshot = {
@@ -176,6 +179,8 @@ const SCHEMA_DEFAULTS: SettingsSnapshot = {
   officeLongitude: null,
   officeName: null,
   geofenceRadiusMeters: 200,
+  // Modules
+  wfhEnabled: true,
 };
 
 // ─── Effective-date helpers ───────────────────────────────────────────────────
@@ -1130,6 +1135,50 @@ function GeofencingSection({
       >
         <Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+            <HomeWorkIcon fontSize="small" color="primary" />
+            <Typography variant="subtitle1" fontWeight={600}>
+              Work From Home
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            Allow employees to submit WFH requests. When disabled, the WFH
+            module is hidden across the app for everyone in this organisation.
+          </Typography>
+        </Box>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.wfhEnabled}
+              onChange={(e) =>
+                !readOnly && onChange({ wfhEnabled: e.target.checked })
+              }
+              disabled={readOnly}
+              color="primary"
+            />
+          }
+          label={
+            <Typography variant="body2" fontWeight={500}>
+              {settings.wfhEnabled ? "Enabled" : "Disabled"}
+            </Typography>
+          }
+          labelPlacement="start"
+        />
+      </Box>
+
+      <Divider sx={{ my: 3 }} />
+
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          mb: 1,
+          gap: 2,
+          flexWrap: "wrap",
+        }}
+      >
+        <Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
             <FenceIcon fontSize="small" color="primary" />
             <Typography variant="subtitle1" fontWeight={600}>
               Geofencing
@@ -1471,7 +1520,7 @@ function SaveDialog({
 
 export default function OrgSettings() {
   const { setAlert } = useContext(AlertContext);
-  const { user } = useContext(UserContext);
+  const { user, setUser } = useContext(UserContext);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -1575,6 +1624,20 @@ export default function OrgSettings() {
       setDialogOpen(false);
       setDirty(false);
       await fetchSettings();
+      // wfhEnabled (and any other profile-bolted tenant settings) are only
+      // refreshed on login/page load otherwise — without this, an immediate
+      // change (e.g. disabling WFH) wouldn't be reflected in UserContext
+      // until the current session's next reload, leaving stale nav/route
+      // gating for everyone already logged in, including the person who
+      // just made the change.
+      if (effectiveFrom <= new Date()) {
+        try {
+          const profileRes = await apiClient.get(API_ENDPOINTS.GET_PROFILE);
+          if (profileRes.data?.success) setUser(profileRes.data.data.user);
+        } catch {
+          // Non-critical — the setting was still saved successfully.
+        }
+      }
     } catch (err: any) {
       setAlert({
         open: true,

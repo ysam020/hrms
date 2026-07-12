@@ -66,12 +66,18 @@ jest.mock("@hrms/cache", () => ({
   },
 }));
 
+jest.mock("../handlers/approvalChains", () => ({
+  isPrivileged: jest.fn().mockResolvedValue(true),
+}));
+
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { getTenantId } from "@hrms/db";
+import { isPrivileged } from "../handlers/approvalChains";
 
 const mockGetTenantId = getTenantId as jest.Mock;
+const mockIsPrivileged = isPrivileged as jest.Mock;
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
@@ -183,6 +189,37 @@ describe("employeeHandlers", () => {
         expect.any(Object),
       );
     });
+
+    it("returns FORBIDDEN when caller isn't privileged and lacks EmployeeManagement:edit", async () => {
+      mockIsPrivileged.mockResolvedValueOnce(false);
+      mockUserFindUnique.mockResolvedValue({ permissions: [] });
+      const res = makeRes();
+      await editEmployeeDetails(makeReq({ body: { username: "user-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("allows a non-privileged caller holding EmployeeManagement:edit", async () => {
+      mockIsPrivileged.mockResolvedValueOnce(false);
+      mockUserFindUnique
+        .mockResolvedValueOnce({ permissions: ["EmployeeManagement:edit"] })
+        .mockResolvedValueOnce({ id: "u1" });
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      const res = makeRes();
+      await editEmployeeDetails(
+        makeReq({ body: { username: "user-1", employeeStatus: "Active" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("getEmployeeDetails", () => {
@@ -190,7 +227,6 @@ describe("employeeHandlers", () => {
       mockUserFindUnique.mockResolvedValue({
         id: "u1",
         username: "alice",
-        assets: [],
         employeeStatus: "Active",
         wfh: false,
         pf_no: null,
@@ -1139,6 +1175,22 @@ describe("employeeHandlers", () => {
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
+    });
+
+    it("self-scopes to the caller's own record when not privileged", async () => {
+      mockIsPrivileged.mockResolvedValueOnce(false);
+      mockUserAggregateRaw
+        .mockResolvedValueOnce([
+          { username: "user-1", kyc_approval: "Approved" },
+        ])
+        .mockResolvedValueOnce([{ total: 1 }]);
+      const res = makeRes();
+      await viewAllKycs(makeReq({ query: { search: "someone-else" } }), res);
+      const pipeline = mockUserAggregateRaw.mock.calls[0][0].pipeline;
+      const match = pipeline.find((s: any) => s.$match)?.$match;
+      expect(match._id).toEqual({ $oid: "user-1" });
+      // search is ignored entirely once self-scoped — no $or clause added
+      expect(match.$or).toBeUndefined();
     });
   });
 

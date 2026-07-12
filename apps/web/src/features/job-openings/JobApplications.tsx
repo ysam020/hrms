@@ -11,14 +11,45 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import { useContext } from "react";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { UserContext } from "@web/app/providers/UserContext";
 import DataList from "@web/shared/components/DataList";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { Dropdown } from "primereact/dropdown";
 import { interviewStatus } from "@web/assets/data/interviewStatus";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 
 const JobApplications = (props) => {
   const { theme } = useContext(ThemeContext);
+  const { user } = useContext(UserContext);
+  const canViewApplications = hasPermission(
+    "JobOpenings",
+    "view_applications",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canScheduleInterview = hasPermission(
+    "JobOpenings",
+    "schedule_interview",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canHire = hasPermission(
+    "JobOpenings",
+    "hire_candidate",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canReject = hasPermission(
+    "JobOpenings",
+    "reject_candidate",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
 
   const getStatusChip = (status) => {
     const statusMap = {
@@ -104,7 +135,7 @@ const JobApplications = (props) => {
 
   const actions = (row: any) => {
     const list: any[] = [];
-    if (row.resume) {
+    if (row.resume && canViewApplications) {
       list.push({
         icon: <FileDownload sx={{ fontSize: 16 }} />,
         label: `Download resume for ${row.name}`,
@@ -117,15 +148,17 @@ const JobApplications = (props) => {
         },
       });
     }
-    list.push({
-      icon: <EventIcon sx={{ fontSize: 16 }} />,
-      label: `Schedule interview for ${row.name}`,
-      color: "primary" as const,
-      // ScheduleInterviewModal computes the round number itself from
-      // row.interviews — passing it here got stale once a round was
-      // rescheduled (array length didn't track round count correctly).
-      onClick: () => props.handleOpenInterviewModal(row),
-    });
+    if (canScheduleInterview) {
+      list.push({
+        icon: <EventIcon sx={{ fontSize: 16 }} />,
+        label: `Schedule interview for ${row.name}`,
+        color: "primary" as const,
+        // ScheduleInterviewModal computes the round number itself from
+        // row.interviews — passing it here got stale once a round was
+        // rescheduled (array length didn't track round count correctly).
+        onClick: () => props.handleOpenInterviewModal(row),
+      });
+    }
     // Hiring requires at least one round to have been Completed and
     // Cleared — mirrors the authoritative server-side guard in
     // updateApplicationStatus.ts. Omitted entirely rather than shown
@@ -134,7 +167,7 @@ const JobApplications = (props) => {
     const hasClearedRound = (row.interviews || []).some(
       (i: any) => i.interviewConducted && i.cleared,
     );
-    if (hasClearedRound) {
+    if (hasClearedRound && canHire) {
       list.push({
         icon: <CheckCircleIcon sx={{ fontSize: 16 }} />,
         label: `Hire ${row.name}`,
@@ -142,19 +175,21 @@ const JobApplications = (props) => {
         onClick: () => props.handleOpenHiringModal(row),
       });
     }
-    list.push(
-      {
+    if (canReject) {
+      list.push({
         icon: <CancelIcon sx={{ fontSize: 16 }} />,
         label: `Reject ${row.name}`,
         color: "error" as const,
         onClick: () => props.handleOpenRejectModal(row),
-      },
-      {
+      });
+    }
+    if (canViewApplications) {
+      list.push({
         icon: <Info sx={{ fontSize: 16 }} />,
         label: `View details for ${row.name}`,
         onClick: () => props.handleOpenInfoModal(row),
-      },
-    );
+      });
+    }
     return list;
   };
 

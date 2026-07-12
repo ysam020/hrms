@@ -20,7 +20,7 @@ const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict" as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — matches REFRESH_TOKEN_EXPIRE default
   path: "/api/v1/refresh-token",
 };
 
@@ -51,12 +51,12 @@ function issueTokenPair(
     process.env.ACCESS_JWT_TOKEN!,
     {
       algorithm: "HS256",
-      expiresIn: (process.env.ACCESS_JWT_EXPIRE || "1h") as any,
+      expiresIn: (process.env.ACCESS_JWT_EXPIRE || "24h") as any,
     },
   );
   const refreshToken = jwt.sign({ userId }, process.env.REFRESH_TOKEN!, {
     algorithm: "HS256",
-    expiresIn: (process.env.REFRESH_TOKEN_EXPIRE || "7d") as any,
+    expiresIn: (process.env.REFRESH_TOKEN_EXPIRE || "30d") as any,
   });
   return { accessToken, refreshToken };
 }
@@ -717,7 +717,7 @@ export async function completeOrgSetup(req: AuthRequest, res: Response) {
       process.env.ACCESS_JWT_TOKEN!,
       {
         algorithm: "HS256",
-        expiresIn: (process.env.ACCESS_JWT_EXPIRE || "1h") as any,
+        expiresIn: (process.env.ACCESS_JWT_EXPIRE || "24h") as any,
       },
     );
 

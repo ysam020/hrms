@@ -38,6 +38,8 @@ export function toPublic(s: any) {
     officeLongitude: s.officeLongitude ?? null,
     officeName: s.officeName ?? null,
     geofenceRadiusMeters: s.geofenceRadiusMeters ?? 200,
+    // Modules
+    wfhEnabled: s.wfhEnabled ?? SETTINGS_DEFAULTS.wfhEnabled,
     // HR
     probationPeriodDays: s.probationPeriodDays,
     noticePeriodDays: s.noticePeriodDays,
@@ -74,6 +76,8 @@ export const SETTINGS_DEFAULTS = {
   officeLongitude: null as number | null,
   officeName: null as string | null,
   geofenceRadiusMeters: 200,
+  // Modules
+  wfhEnabled: true,
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -146,6 +150,7 @@ export async function writeVersionedSettings(
         officeLongitude: currentActive.officeLongitude ?? null,
         officeName: currentActive.officeName ?? null,
         geofenceRadiusMeters: currentActive.geofenceRadiusMeters ?? 200,
+        wfhEnabled: currentActive.wfhEnabled ?? SETTINGS_DEFAULTS.wfhEnabled,
       }
     : SETTINGS_DEFAULTS;
 
@@ -392,6 +397,10 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
         50,
         Number(body.geofenceRadiusMeters),
       );
+
+    // Modules
+    if (body.wfhEnabled !== undefined)
+      validated.wfhEnabled = Boolean(body.wfhEnabled);
 
     const { settings, message } = await writeVersionedSettings(
       tenantId,

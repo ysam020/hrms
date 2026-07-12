@@ -1,12 +1,17 @@
 import TabsPanel from "@web/shared/components/TabsPanel";
-import { memo } from "react";
+import { memo, useContext } from "react";
+import { UserContext } from "@web/app/providers/UserContext";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import EmployeeList from "./EmployeeList";
 import EmployeeInsights from "./EmployeeInsights";
 
 function EmployeeManagement() {
+  const { user } = useContext(UserContext);
   const tabData = [
     { label: "Employee List", component: EmployeeList },
-    { label: "Insights", component: EmployeeInsights },
+    ...(isHrOrAbove(user)
+      ? [{ label: "Insights", component: EmployeeInsights }]
+      : []),
   ];
 
   return (

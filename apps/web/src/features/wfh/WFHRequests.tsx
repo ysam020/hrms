@@ -33,6 +33,7 @@ import RemoveCircleIcon from "@mui/icons-material/RemoveCircle";
 import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   Pending: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
@@ -72,10 +73,17 @@ function WFHRequests() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const [openRequest, setOpenRequest] = useState(false);
-  const [form, setForm] = useState({
-    date: dayjs().add(1, "day").format("YYYY-MM-DD"),
-    reason: "",
-  });
+  // Kept separate from the submission payload (below) — a controlled
+  // PrimeReact range Calendar must see its own in-progress selection
+  // (start picked, end still null) verbatim. Collapsing that null into
+  // `start` for the controlled `value` makes PrimeReact think the range is
+  // already complete, so the next click starts a new range instead of
+  // extending it.
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([
+    dayjs().add(1, "day").toDate(),
+    null,
+  ]);
+  const [form, setForm] = useState({ reason: "" });
   const [submitting, setSubmitting] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -83,9 +91,14 @@ function WFHRequests() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isApprover =
-    user?.role?.some((r: string) =>
-      ["owner", "admin", "hr", "manager"].includes(r),
-    ) || user?.isSuperUser;
+    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    hasPermission(
+      "WFH",
+      "approve",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
 
   const fetchRequests = useCallback(
     async ({ page, limit }) => {
@@ -166,12 +179,24 @@ function WFHRequests() {
   );
 
   const handleSubmit = useCallback(async () => {
+    const [start, end] = dateRange;
+    if (!start) return;
+    const date = dayjs(start).format("YYYY-MM-DD");
+    // A single click (no second click to pick an end) leaves `end` null —
+    // that's a valid single-day request, not an incomplete one.
+    const toDate = end ? dayjs(end).format("YYYY-MM-DD") : date;
+
     setSubmitting(true);
     try {
-      await apiClient.post(API_ENDPOINTS.REQUEST_WFH, form);
+      await apiClient.post(API_ENDPOINTS.REQUEST_WFH, {
+        date,
+        toDate,
+        reason: form.reason,
+      });
       refresh();
       setOpenRequest(false);
-      setForm({ date: dayjs().add(1, "day").format("YYYY-MM-DD"), reason: "" });
+      setDateRange([dayjs().add(1, "day").toDate(), null]);
+      setForm({ reason: "" });
       setAlert({
         open: true,
         message: "WFH request submitted",
@@ -186,7 +211,7 @@ function WFHRequests() {
     } finally {
       setSubmitting(false);
     }
-  }, [form, refresh, setAlert]);
+  }, [dateRange, form.reason, refresh, setAlert]);
 
   const columns = useMemo(
     () => [
@@ -202,8 +227,14 @@ function WFHRequests() {
       },
       {
         key: "date",
-        label: "Date",
+        label: "From",
         render: (row: any) => dayjs(row.date).format("DD MMM YYYY"),
+      },
+      {
+        key: "toDate",
+        label: "To",
+        render: (row: any) =>
+          dayjs(row.toDate ?? row.date).format("DD MMM YYYY"),
       },
       {
         key: "status",
@@ -225,7 +256,10 @@ function WFHRequests() {
       if (row.status !== "Pending") return [];
       const isOwn = row.userId === user?.id;
       const actions: any[] = [];
-      if (isApprover && !isOwn) {
+      // Superusers may approve/reject their own request — everyone else
+      // must not be the requester (backend enforces this too, via the
+      // approval-engine's allowOverride flag on superuser actions).
+      if (isApprover && (!isOwn || user?.isSuperUser)) {
         actions.push(
           {
             icon: <CheckIcon sx={{ fontSize: 16 }} />,
@@ -335,24 +369,22 @@ function WFHRequests() {
               color="text.secondary"
               sx={{ display: "block", mb: 0.5 }}
             >
-              Date
+              Date (select a range for multiple days)
             </Typography>
             <Calendar
-              value={form.date ? new Date(form.date + "T00:00:00") : null}
+              selectionMode="range"
+              value={dateRange}
               onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  date: e.value
-                    ? dayjs(e.value as Date).format("YYYY-MM-DD")
-                    : "",
-                }))
+                setDateRange(
+                  (e.value as [Date | null, Date | null]) ?? [null, null],
+                )
               }
               dateFormat="dd/mm/yy"
               minDate={new Date()}
               showIcon
               showButtonBar
               appendTo={document.body}
-              placeholder="Select date"
+              placeholder="Select date(s)"
               style={{ width: "100%" }}
             />
           </Box>
@@ -378,7 +410,7 @@ function WFHRequests() {
             onClick={handleSubmit}
             variant="primary"
             size="small"
-            disabled={submitting || !form.date}
+            disabled={submitting || !dateRange[0]}
           >
             {submitting ? "Submitting…" : "Submit"}
           </Button>

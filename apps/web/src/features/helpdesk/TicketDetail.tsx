@@ -21,6 +21,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import LockIcon from "@mui/icons-material/Lock";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
 
@@ -40,8 +41,14 @@ function TicketDetail() {
   const [submitting, setSubmitting] = useState(false);
 
   const isHr =
-    user?.role?.some((r: string) => ["owner", "admin", "hr"].includes(r)) ||
-    user?.isSuperUser;
+    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    hasPermission(
+      "Helpdesk",
+      "manage",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
 
   const load = useCallback(async () => {
     if (!ticketId) return;
@@ -210,8 +217,9 @@ function TicketDetail() {
               Raised By
             </Typography>
             <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {ticket.raisedBy
-                ? `${ticket.raisedBy.first_name ?? ""} ${ticket.raisedBy.last_name ?? ""}`.trim() ||
+              {ticket.raisedByUser
+                ? `${ticket.raisedByUser.first_name ?? ""} ${ticket.raisedByUser.last_name ?? ""}`.trim() ||
+                  ticket.raisedByUser.username ||
                   "—"
                 : "—"}
             </Typography>

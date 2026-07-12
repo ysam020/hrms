@@ -46,11 +46,15 @@ jest.mock("@hrms/logger", () => ({
 
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
-import { actOnApprovalForEntity } from "../handlers/approvalChains";
+import {
+  actOnApprovalForEntity,
+  isPrivileged,
+} from "../handlers/approvalChains";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockActOnApprovalForEntity = actOnApprovalForEntity as jest.Mock;
+const mockIsPrivileged = isPrivileged as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
 
@@ -134,7 +138,7 @@ describe("getLeaveApplications", () => {
   });
 
   it("allows superuser to query any employee's leaves via query param", async () => {
-    mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
+    mockIsPrivileged.mockResolvedValueOnce(true);
 
     const res = makeRes();
     await getLeaveApplications(makeReq({ query: { userId: "jane" } }), res);

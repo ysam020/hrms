@@ -125,7 +125,6 @@ export const startConversationSchema = z.object({
 
 export const editEmployeeDetailsSchema = z.object({
   username: z.string().min(1).max(64),
-  assets: z.array(z.string()).optional(),
   employeeStatus: z.enum(["Active", "Terminated", "Absconded"]).optional(),
   pf_no: z.string().max(64).optional(),
   uan_no: z.string().max(64).optional(),
@@ -281,14 +280,8 @@ export const createAssetSchema = z.object({
       "Asset code must be uppercase alphanumeric with hyphens",
     ),
   name: z.string().min(1).max(256),
-  category: z.enum([
-    "Laptop",
-    "Phone",
-    "Monitor",
-    "Furniture",
-    "Vehicle",
-    "Other",
-  ]),
+  // Free text, not a fixed enum — see AssetCategory / createAssetCategorySchema.
+  category: z.string().min(1).max(64),
   brand: z.string().max(128).optional(),
   model: z.string().max(128).optional(),
   serialNumber: z.string().max(128).optional(),
@@ -298,12 +291,14 @@ export const createAssetSchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
+// "assigned" is deliberately excluded — that transition only happens via
+// POST /assets/assign, which also creates the backing AssetAssignment row.
+// Allowing it here let an asset be forced into "assigned" with no assignment
+// behind it, a stuck state neither assign nor return could recover from.
 export const updateAssetSchema = createAssetSchema
   .omit({ assetCode: true })
   .extend({
-    status: z
-      .enum(["available", "assigned", "maintenance", "retired"])
-      .optional(),
+    status: z.enum(["available", "maintenance", "retired"]).optional(),
   })
   .partial();
 
@@ -311,6 +306,7 @@ export const assignAssetSchema = z.object({
   assetId: z.string().min(1),
   userId: z.string().min(1),
   expectedReturn: z.string().optional(),
+  conditionOut: z.enum(["good", "fair", "damaged"]).optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -318,6 +314,10 @@ export const returnAssetSchema = z.object({
   assetId: z.string().min(1),
   conditionIn: z.enum(["good", "fair", "damaged"]),
   notes: z.string().max(500).optional(),
+});
+
+export const createAssetCategorySchema = z.object({
+  name: z.string().min(1).max(64),
 });
 
 export const acknowledgeAssignmentSchema = z.object({
@@ -348,6 +348,11 @@ export const updateAssetIssueStatusSchema = z.object({
 
 export const requestWfhSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  // Omit for a single-day request — defaults to `date` in the handler.
+  toDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "toDate must be YYYY-MM-DD")
+    .optional(),
   reason: z.string().max(500).optional(),
 });
 

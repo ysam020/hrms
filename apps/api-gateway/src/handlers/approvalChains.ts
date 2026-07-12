@@ -13,6 +13,13 @@ import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
 import { leaveClient, recruitmentClient, grpcCall } from "../grpc/clients";
+import { emitWebhookEvent } from "../utils/webhookEmitter";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import { getWorkingDays, isHoliday, eachDate } from "../utils/workingDays";
+import { getActiveSettings } from "./tenantSettings";
+
+dayjs.extend(utc);
 
 export async function isPrivileged(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
@@ -377,6 +384,15 @@ function summarizePending(
       },
     };
   }
+  if (module === "wfh") {
+    return {
+      summary: `${requestedByName} requested WFH`,
+      detail: {
+        date: entity.date,
+        reason: entity.reason,
+      },
+    };
+  }
   return { summary: `${module} request from ${requestedByName}`, detail: {} };
 }
 
@@ -401,7 +417,7 @@ export async function getPendingApprovalItems(
   const idsByModule = (module: string) =>
     pending.filter((p) => p.module === module).map((p) => p.entityId);
 
-  const [leaves, resignations, overtimeRequests, requesters] =
+  const [leaves, resignations, overtimeRequests, wfhRequests, requesters] =
     await Promise.all([
       (prisma as any).leaveApplication.findMany({
         where: { id: { in: idsByModule("leave") } },
@@ -411,6 +427,9 @@ export async function getPendingApprovalItems(
       }),
       (prisma as any).overtimeRequest.findMany({
         where: { id: { in: idsByModule("overtime") } },
+      }),
+      (prisma as any).wfhRequest.findMany({
+        where: { id: { in: idsByModule("wfh") } },
       }),
       prisma.user.findMany({
         where: {
@@ -428,6 +447,7 @@ export async function getPendingApprovalItems(
     leave: new Map(leaves.map((l: any) => [l.id, l])),
     resignation: new Map(resignations.map((r: any) => [r.id, r])),
     overtime: new Map(overtimeRequests.map((o: any) => [o.id, o])),
+    wfh: new Map(wfhRequests.map((w: any) => [w.id, w])),
   };
   const requesterNameById = new Map(
     requesters.map((u: any) => [u.id, u.username]),
@@ -571,6 +591,55 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
         ...(finalStatus === "approved" ? { approvedAt: new Date() } : {}),
       },
     });
+  },
+  // WFH requests are REST + Prisma (no gRPC service). On approval, also
+  // upserts an AttendanceRecord with status="WFH" for that day — both so
+  // reconcileAttendance doesn't mark it Absent, and so markAttendance's
+  // geofencing check (apps/attendance-service) can recognize the day if the
+  // employee does check in.
+  wfh: async ({ tenantId, entityId, actorUserId, finalStatus, comment }) => {
+    const wfhReq = await (prisma as any).wfhRequest.update({
+      where: { id: entityId },
+      data:
+        finalStatus === "approved"
+          ? {
+              status: "Approved",
+              approvedBy: actorUserId,
+              approvedAt: new Date(),
+            }
+          : { status: "Rejected", rejectionReason: comment ?? null },
+    });
+
+    if (finalStatus === "approved") {
+      // A request can span a date range — upsert an AttendanceRecord for
+      // every working day in it (skipping weekends/holidays, same rule
+      // requestWfh used to validate the range in the first place).
+      const settings = await getActiveSettings(tenantId);
+      const workingDays = getWorkingDays(settings);
+      const datesToMark: Date[] = [];
+      for (const d of eachDate(wfhReq.date, wfhReq.toDate)) {
+        if (!workingDays.includes(dayjs.utc(d).day())) continue;
+        if (await isHoliday(d)) continue;
+        datesToMark.push(d);
+      }
+      await Promise.all(
+        datesToMark.map((date) =>
+          (prisma as any).attendanceRecord.upsert({
+            where: {
+              tenantId_userId_date: { tenantId, userId: wfhReq.userId, date },
+            },
+            create: { tenantId, userId: wfhReq.userId, date, status: "WFH" },
+            update: { status: "WFH" },
+          }),
+        ),
+      );
+      await emitWebhookEvent("wfh.approved", {
+        requestId: entityId,
+        userId: wfhReq.userId,
+        date: wfhReq.date,
+        toDate: wfhReq.toDate,
+      });
+    }
   },
 };
 

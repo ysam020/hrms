@@ -130,3 +130,69 @@ export const requireSuperUser = async (
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+/**
+ * Like requireSuperUser, but also admits tenantRole "admin" (not just
+ * "owner") — for routes where admins should have full visibility/control,
+ * not just owners.
+ */
+export const requirePrivileged = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  if (["owner", "admin"].includes(req.user.tenantRole ?? "")) {
+    next();
+    return;
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { isSuperUser: true },
+    });
+    if (!user?.isSuperUser) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+    next();
+  } catch {
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+/**
+ * Like requirePrivileged, but also admits tenantRole "hr" — for
+ * management-visibility screens (Insights/analytics/reports) that HR staff
+ * need for their job, not just owners/admins.
+ */
+export const requireHrPrivileged = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  if (["owner", "admin", "hr"].includes(req.user.tenantRole ?? "")) {
+    next();
+    return;
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { isSuperUser: true },
+    });
+    if (!user?.isSuperUser) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+    next();
+  } catch {
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};

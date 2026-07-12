@@ -12,7 +12,7 @@ function getClient(): Redis {
   return redis;
 }
 
-const REFRESH_TTL = 7 * 24 * 60 * 60;
+const REFRESH_TTL = 30 * 24 * 60 * 60; // 30 days — matches REFRESH_TOKEN_EXPIRE default
 const PENDING_SUB_TTL = 7 * 24 * 60 * 60;
 // Razorpay replays a webhook up to 5 times over ~24 hours; 48 h is enough
 // headroom to deduplicate any duplicate delivery.

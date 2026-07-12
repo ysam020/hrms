@@ -1,6 +1,7 @@
 import { memo, useContext } from "react";
 import TabsPanel from "@web/shared/components/TabsPanel";
 import { UserContext } from "@web/app/providers/UserContext";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import PayrollRuns from "./PayrollRuns";
 import SalaryAdvances from "./SalaryAdvances";
 import MyPayslips from "./MyPayslips";
@@ -8,12 +9,10 @@ import SalaryManagement from "../salary/SalaryManagement";
 
 function Payroll() {
   const { user } = useContext(UserContext);
-  const isHr =
-    user?.role?.some((r: string) => ["owner", "admin", "hr"].includes(r)) ||
-    user?.isSuperUser;
+  const isHr = isHrOrAbove(user);
 
   const tabData = [
-    { label: "Payroll Runs", component: PayrollRuns },
+    ...(isHr ? [{ label: "Payroll Runs", component: PayrollRuns }] : []),
     // Salary Management is HR-only: viewing/editing each employee's salary
     // structure. The tab click goes to /payroll/salary-management (the list);
     // clicking an employee row navigates to /payroll/salary-management/:userId

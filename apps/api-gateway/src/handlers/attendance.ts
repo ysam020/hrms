@@ -6,6 +6,7 @@ import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
+import { isPrivileged } from "./approvalChains";
 import { getActiveSettings } from "./tenantSettings";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import dayjs from "dayjs";
@@ -73,6 +74,8 @@ export async function getAttendances(req: Request, res: Response) {
 }
 
 export async function getAllAttendances(req: Request, res: Response) {
+  const authReq = req as AuthRequest;
+  const { user } = authReq;
   try {
     const { page, limit } = parsePagination(
       req.query,
@@ -90,8 +93,12 @@ export async function getAllAttendances(req: Request, res: Response) {
     const end = dayjs.utc(endDate).endOf("day").toDate();
     const skip = (page - 1) * limit;
 
+    const privileged = await isPrivileged(authReq);
     const userWhere: any = { employeeStatus: "Active" };
-    if (search) {
+    if (!privileged) {
+      // Non-privileged callers only ever see their own row in this table.
+      userWhere.id = user!.userId;
+    } else if (search) {
       userWhere.username = { contains: search, mode: "insensitive" };
     }
 
@@ -240,8 +247,14 @@ export async function attendanceCorrection(req: Request, res: Response) {
 
 export async function getAttendanceSummary(req: Request, res: Response) {
   try {
-    const { user } = req as AuthRequest;
+    const authReq = req as AuthRequest;
+    const { user } = authReq;
     const userId = String(req.params.userId);
+    if (userId !== user!.userId && !(await isPrivileged(authReq))) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You do not have permission to view this user's attendance.",
+      });
+    }
     const yearNum = parseInt(String(req.params.year));
     const monthNum = parseInt(String(req.params.month));
 
