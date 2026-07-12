@@ -42,12 +42,12 @@ import { SocketProvider } from "@web/app/providers/SocketContext";
 import { ChatUnreadProvider } from "@web/app/providers/ChatUnreadContext";
 import { ApprovalsBadgeProvider } from "@web/app/providers/ApprovalsBadgeContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
+import { clearFaviconDot } from "@web/shared/utils/faviconUtils";
 const HomePage = lazy(() => import("@web/pages/HomePage"));
 const LoginPage = lazy(() => import("@web/features/auth/LoginPage"));
 const OrgSetupPage = lazy(() => import("@web/features/auth/OrgSetupPage"));
 const CareersPage = lazy(() => import("@web/pages/CareersPage"));
 const JobApplicationPage = lazy(() => import("@web/pages/JobApplicationPage"));
-const InvitePage = lazy(() => import("@web/pages/InvitePage"));
 const BroadcastModal = lazy(
   () => import("@web/features/layout/modals/BroadcastModal"),
 );
@@ -102,6 +102,14 @@ function App() {
       navigate("/subscription");
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety net for every path that can clear the session — explicit logout
+  // already clears this itself, but session expiry (setUnauthorizedHandler
+  // above) didn't, so a notification dot set before expiry could survive
+  // indefinitely past the point where there's no one left to view it.
+  useEffect(() => {
+    if (!user) clearFaviconDot();
+  }, [user]);
 
   // Re-validate session when the page is restored from bfcache (back-forward
   // cache). Without this, stale auth state (user non-null from a prior session,
@@ -313,16 +321,6 @@ function App() {
                     }
                   />
                   <Route
-                    path="/invite"
-                    element={
-                      <ErrorBoundary FallbackComponent={ErrorFallback}>
-                        <Suspense fallback={<Loading />}>
-                          <InvitePage />
-                        </Suspense>
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
                     path="/careers/:slug"
                     element={
                       <ErrorBoundary FallbackComponent={ErrorFallback}>
@@ -436,18 +434,23 @@ function App() {
                   </Suspense>
                 </ErrorBoundary>
               )}
-              <ConfirmationDialog
-                open={logoutConfirmOpen}
-                onClose={cancelLogout}
-                onConfirm={confirmLogout}
-                title="Log out"
-                message="Are you sure you want to log out?"
-                confirmText="Log out"
-                cancelText="Cancel"
-                loading={loggingOut}
-                variant="danger"
-                theme={theme}
-              />
+              {/* Never render on /login — there's nothing to confirm logging
+                  out of there, and confirmOpen can still be stale-true if a
+                  session expired mid-confirmation on another page. */}
+              {location.pathname !== "/login" && (
+                <ConfirmationDialog
+                  open={logoutConfirmOpen}
+                  onClose={cancelLogout}
+                  onConfirm={confirmLogout}
+                  title="Log out"
+                  message="Are you sure you want to log out?"
+                  confirmText="Log out"
+                  cancelText="Cancel"
+                  loading={loggingOut}
+                  variant="danger"
+                  theme={theme}
+                />
+              )}
             </div>
           </AlertContext.Provider>
         </UserContext.Provider>

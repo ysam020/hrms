@@ -4,8 +4,6 @@ package auth;
 
 message GoogleOAuthCallbackRequest {
   string code = 1;
-  // base64-encoded JSON: { inviteToken?: string }
-  string state = 2;
 }
 
 message TenantSummary {

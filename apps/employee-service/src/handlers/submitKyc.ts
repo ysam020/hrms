@@ -166,6 +166,7 @@ export const submitKyc = async (
         .then((approvers) => {
           if (approvers.length === 0) return;
           return getNotificationQueue().add("kycSubmitted", {
+            tenantId: getTenantId()!,
             title: "KYC",
             message: `${user.username} filled out their KYC form`,
             recipients: approvers.map((u) => u.id),

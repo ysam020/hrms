@@ -52,13 +52,8 @@ const masterScopedPrisma = prisma.$extends({
 
 // Models that live in the master DB.
 // - user: tenant-scoped via the $extends filter above
-// - tenant / tenantMembership / tenantInvite: cross-tenant admin data, no filter needed
-const MASTER_MODELS = new Set([
-  "user",
-  "tenant",
-  "tenantMembership",
-  "tenantInvite",
-]);
+// - tenant / tenantMembership: cross-tenant admin data, no filter needed
+const MASTER_MODELS = new Set(["user", "tenant", "tenantMembership"]);
 
 // Federated proxy:
 //   prismaWithTenant.user.*           → master DB  (tenantId auto-injected by $extends)

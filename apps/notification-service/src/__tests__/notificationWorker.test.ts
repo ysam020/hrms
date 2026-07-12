@@ -14,8 +14,16 @@ jest.mock("@hrms/db", () => {
   const _db = {
     user: { findMany: jest.fn() },
     notification: { create: jest.fn() },
+    tenant: {
+      findUnique: jest.fn().mockResolvedValue({ dbName: "hrms-test-tenant" }),
+    },
   };
-  return { prisma: _db, prismaWithTenant: _db };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    getClientForDb: jest.fn(() => ({})),
+    runWithTenant: jest.fn((_tenantId, _client, fn) => fn()),
+  };
 });
 
 jest.mock("@hrms/queue", () => ({
@@ -61,6 +69,7 @@ describe("notificationWorker", () => {
   // no-ops ("user may be offline") even for connected users.
   it("delivers to WebSocket using resolved userIds, not raw usernames, when recipients are explicit ids", async () => {
     await runProcessor({
+      tenantId: "tenant-1",
       title: "KYC",
       message: "hi",
       recipients: ["id-1", "id-2"],
@@ -93,6 +102,7 @@ describe("notificationWorker", () => {
     mockUserFindMany.mockResolvedValue([{ id: "id-1" }, { id: "id-2" }]);
 
     await runProcessor({
+      tenantId: "tenant-1",
       title: "KYC",
       message: "hi",
       pushTargets: ["alice", "bob"],
@@ -116,6 +126,7 @@ describe("notificationWorker", () => {
 
   it("also delivers a custom socketEvent to resolved userIds, not usernames", async () => {
     await runProcessor({
+      tenantId: "tenant-1",
       title: "KYC",
       message: "hi",
       recipients: ["id-1"],
@@ -135,7 +146,11 @@ describe("notificationWorker", () => {
   });
 
   it("broadcasts instead of targeting when there are no recipients at all", async () => {
-    await runProcessor({ title: "Announcement", message: "hi" });
+    await runProcessor({
+      tenantId: "tenant-1",
+      title: "Announcement",
+      message: "hi",
+    });
 
     expect(mockSendToUser).not.toHaveBeenCalled();
     expect(mockSendNotification).toHaveBeenCalled();

@@ -432,6 +432,7 @@ export const applyLeave = async (
           ? ` — exceeds balance by ${exhaustionInfo.shortfallDays} day(s) (${exhaustionInfo.remaining} remaining); ${exhaustionInfo.onExhaustion === "manager_override" ? "approver must decide" : "will be treated as loss-of-pay"}.`
           : "";
         await getNotificationQueue().add("leaveApplied", {
+          tenantId: getTenantId()!,
           title: "Leave",
           message: `${applicantUsername} has applied for leave from ${fromStr} to ${toStr}${shortfallNote}`,
           recipients: uniqueIds,

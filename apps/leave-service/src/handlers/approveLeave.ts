@@ -102,6 +102,7 @@ export const approveLeave = async (
 
     getNotificationQueue()
       .add("leaveApproved", {
+        tenantId: getTenantId()!,
         title: "Leave",
         message: MESSAGES.LEAVE_APPROVED,
         targetUser: updatedLeave.userId,

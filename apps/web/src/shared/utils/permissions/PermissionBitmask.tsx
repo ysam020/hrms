@@ -79,6 +79,9 @@ const PERM_DEFS = [
   ["ResignationProcess", "reject_resignation", "team", "all"],
   ["ResignationProcess", "update_resignation_status", "team", "all"],
 
+  // JoinRequests (scopeless)
+  ["JoinRequests", "approve"],
+
   // Permissions (mostly scopeless)
   ["Permissions", "create_role"],
   ["Permissions", "view_roles"],

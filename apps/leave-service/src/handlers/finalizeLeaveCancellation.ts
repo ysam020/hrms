@@ -100,6 +100,7 @@ export const finalizeLeaveCancellation = async (
 
     getNotificationQueue()
       .add(approved ? "leaveCancelled" : "leaveCancellationRejected", {
+        tenantId: getTenantId()!,
         title: "Leave",
         message: approved
           ? "Your leave cancellation was approved."

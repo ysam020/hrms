@@ -16,3 +16,10 @@ export function canonicalizeEmail(rawEmail: string): string {
   }
   return trimmed;
 }
+
+// Expects an already-canonicalized email (see canonicalizeEmail above) so
+// the returned domain is consistently lowercased/trimmed.
+export function getEmailDomain(email: string): string {
+  const atIndex = email.lastIndexOf("@");
+  return atIndex === -1 ? "" : email.slice(atIndex + 1);
+}

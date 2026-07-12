@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticate } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import * as h from "../handlers/approvalChains";
+import { listAllPendingActions } from "../handlers/pendingActions";
 import {
   createApprovalChainSchema,
   updateApprovalChainSchema,
@@ -55,6 +56,13 @@ approvalChainsRouter.get(
   "/approvals/pending",
   authenticate,
   h.listPendingApprovals,
+);
+// Aggregated source for the sidebar badge / dashboard widget / /approvals
+// inbox — see pendingActions.ts for why this replaced 3 separate calls.
+approvalChainsRouter.get(
+  "/approvals/pending-all",
+  authenticate,
+  listAllPendingActions,
 );
 approvalChainsRouter.put(
   "/approvals/:instanceId/act",

@@ -14,6 +14,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import CompanyInfo from "@web/features/company-info/CompanyInfo";
 import OrgSettings from "@web/features/settings/OrgSettings";
 import Subscription from "@web/features/subscription/Subscription";
+import JoinRequests from "@web/features/settings/JoinRequests";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -42,6 +43,12 @@ const SUBSCRIPTION_TAB: SettingsTab = {
   component: <Subscription />,
 };
 
+const JOIN_REQUESTS_TAB: SettingsTab = {
+  label: "Join Requests",
+  slug: "join-requests",
+  component: <JoinRequests />,
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const LS_KEY = "settings_tab";
@@ -67,9 +74,20 @@ export default function Settings() {
     ["owner", "admin"].includes(user?.tenantRole ?? "") ||
     user?.permissions?.some((p: string) => p.startsWith("Subscription:"));
 
-  const tabs: SettingsTab[] = hasSubscriptionAccess
-    ? [...BASE_TABS, SUBSCRIPTION_TAB]
-    : BASE_TABS;
+  // Separate from subscription access — owners/admins/superusers always see
+  // it, and anyone else needs the dedicated JoinRequests:approve permission
+  // (not the Subscription one) so it doesn't leak in for people who only
+  // have subscription access, or hide for people who only have this.
+  const canApproveJoinRequests =
+    user?.isSuperUser ||
+    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    user?.permissions?.some((p: string) => p.startsWith("JoinRequests:"));
+
+  const tabs: SettingsTab[] = [
+    ...BASE_TABS,
+    ...(canApproveJoinRequests ? [JOIN_REQUESTS_TAB] : []),
+    ...(hasSubscriptionAccess ? [SUBSCRIPTION_TAB] : []),
+  ];
 
   // Derive active tab from ?tab= query param; fall back to localStorage
   const getInitialTab = (): number => {

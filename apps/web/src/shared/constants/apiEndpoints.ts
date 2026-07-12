@@ -269,6 +269,8 @@ const TENANT = {
   COMPLETE_ORG_SETUP: "/tenants/complete-org-setup",
   SELECT_TENANT: "/tenants/select",
   MY_TENANT: "/tenants/me",
+  DOMAIN_SUGGESTION: "/tenants/domain-suggestion",
+  JOIN_REQUESTS: "/tenants/join-requests",
 };
 
 const PAYROLL = {
@@ -337,8 +339,10 @@ const WEBHOOKS = {
 
 const APPROVALS = {
   GET_PENDING_APPROVALS: "/approvals/pending",
+  GET_ALL_PENDING_APPROVALS: "/approvals/pending-all",
   ACT_ON_APPROVAL: (instanceId: string) => `/approvals/${instanceId}/act`,
   GET_PENDING_KYC_APPROVALS: "/kyc-approvals/pending",
+  GET_PENDING_JOIN_REQUESTS: "/tenants/join-requests/pending",
 };
 
 const REPORTS = {

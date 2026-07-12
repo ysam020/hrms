@@ -75,6 +75,7 @@ export const requestKycRevision = async (
     const fieldList = Object.keys(fieldIssues).join(", ");
     getNotificationQueue()
       .add("kycRevisionRequested", {
+        tenantId: getTenantId()!,
         title: "KYC",
         message: `${MESSAGES.KYC_REVISION_REQUESTED}: ${fieldList}`,
         targetUser: updatedUser.username,

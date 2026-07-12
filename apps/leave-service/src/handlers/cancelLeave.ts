@@ -38,6 +38,7 @@ async function notifyCancellationRequested(
   const toStr = leave.to.toISOString().split("T")[0];
 
   await getNotificationQueue().add("leaveCancellationRequested", {
+    tenantId,
     title: "Leave",
     message: `${requester?.username || requestedByUserId} has requested to cancel their approved leave from ${fromStr} to ${toStr}.`,
     recipients: uniqueIds,

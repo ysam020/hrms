@@ -70,6 +70,7 @@ export const approveResignation = async (
     // Notify employee (fire-and-forget)
     getNotificationQueue()
       .add("resignationApproved", {
+        tenantId: getTenantId()!,
         title: "Resignation",
         message: MESSAGES.RESIGNATION_APPROVED,
         targetUser: updatedResignation.userId,

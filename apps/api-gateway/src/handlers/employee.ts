@@ -473,80 +473,86 @@ export async function allowKycEdit(req: AuthRequest, res: Response) {
  * than 403, since every logged-in user's dashboard/badge/inbox calls this
  * unconditionally.
  */
+// Shared by the standalone GET /kyc-approvals/pending endpoint and the
+// aggregated GET /approvals/pending-all endpoint (pendingActions.ts) — pure
+// data fetch, no response writing, so it's safe to call from either.
+export async function getPendingKycItems(req: AuthRequest): Promise<any[]> {
+  const [canApprove, canGrantEdit] = await Promise.all([
+    canManageKyc(req, "approve_kyc"),
+    canManageKyc(req, "request_kyc_revision"),
+  ]);
+  if (!canApprove && !canGrantEdit) return [];
+
+  const [pendingSubmissions, editRequests] = await Promise.all([
+    canApprove
+      ? prisma.user.findMany({
+          where: { kyc_approval: "Pending" },
+          select: {
+            id: true,
+            username: true,
+            first_name: true,
+            last_name: true,
+            kyc_date: true,
+          },
+          orderBy: { kyc_date: "desc" },
+        })
+      : Promise.resolve([]),
+    canGrantEdit
+      ? prisma.user.findMany({
+          where: { kyc_approval: "Edit Requested" },
+          select: {
+            id: true,
+            username: true,
+            first_name: true,
+            last_name: true,
+            kyc_edit_request_reason: true,
+            kyc_edit_requested_at: true,
+          },
+          orderBy: { kyc_edit_requested_at: "desc" },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const data = [
+    ...pendingSubmissions.map((u) => ({
+      instanceId: `kyc:${u.id}`,
+      module: "kyc",
+      kycAction: "approve" as const,
+      username: u.username,
+      requestedByName:
+        [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username,
+      createdAt: u.kyc_date,
+      summary: `${u.username} submitted their KYC form for approval`,
+    })),
+    ...editRequests.map((u) => ({
+      instanceId: `kyc:${u.id}`,
+      module: "kyc",
+      kycAction: "allow_edit" as const,
+      username: u.username,
+      requestedByName:
+        [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username,
+      createdAt: u.kyc_edit_requested_at,
+      summary: `${u.username} requested to edit their approved KYC${
+        u.kyc_edit_request_reason ? `: ${u.kyc_edit_request_reason}` : ""
+      }`,
+    })),
+  ];
+
+  // Latest first — each category is independently sorted above, but
+  // concatenating "Pending" submissions and "Edit Requested" items
+  // doesn't interleave the two by date on its own.
+  data.sort(
+    (a, b) =>
+      new Date(b.createdAt ?? 0).getTime() -
+      new Date(a.createdAt ?? 0).getTime(),
+  );
+
+  return data;
+}
+
 export async function listPendingKycActions(req: AuthRequest, res: Response) {
   try {
-    const [canApprove, canGrantEdit] = await Promise.all([
-      canManageKyc(req, "approve_kyc"),
-      canManageKyc(req, "request_kyc_revision"),
-    ]);
-    if (!canApprove && !canGrantEdit) {
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
-    }
-
-    const [pendingSubmissions, editRequests] = await Promise.all([
-      canApprove
-        ? prisma.user.findMany({
-            where: { kyc_approval: "Pending" },
-            select: {
-              id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              kyc_date: true,
-            },
-            orderBy: { kyc_date: "desc" },
-          })
-        : Promise.resolve([]),
-      canGrantEdit
-        ? prisma.user.findMany({
-            where: { kyc_approval: "Edit Requested" },
-            select: {
-              id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              kyc_edit_request_reason: true,
-              kyc_edit_requested_at: true,
-            },
-            orderBy: { kyc_edit_requested_at: "desc" },
-          })
-        : Promise.resolve([]),
-    ]);
-
-    const data = [
-      ...pendingSubmissions.map((u) => ({
-        instanceId: `kyc:${u.id}`,
-        module: "kyc",
-        kycAction: "approve" as const,
-        username: u.username,
-        requestedByName:
-          [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username,
-        createdAt: u.kyc_date,
-        summary: `${u.username} submitted their KYC form for approval`,
-      })),
-      ...editRequests.map((u) => ({
-        instanceId: `kyc:${u.id}`,
-        module: "kyc",
-        kycAction: "allow_edit" as const,
-        username: u.username,
-        requestedByName:
-          [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username,
-        createdAt: u.kyc_edit_requested_at,
-        summary: `${u.username} requested to edit their approved KYC${
-          u.kyc_edit_request_reason ? `: ${u.kyc_edit_request_reason}` : ""
-        }`,
-      })),
-    ];
-
-    // Latest first — each category is independently sorted above, but
-    // concatenating "Pending" submissions and "Edit Requested" items
-    // doesn't interleave the two by date on its own.
-    data.sort(
-      (a, b) =>
-        new Date(b.createdAt ?? 0).getTime() -
-        new Date(a.createdAt ?? 0).getTime(),
-    );
-
+    const data = await getPendingKycItems(req);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (error: unknown) {
     logger.error("listPendingKycActions error:", { error });

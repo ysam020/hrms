@@ -178,6 +178,21 @@ export default function OrgSetupPage() {
   const [website, setWebsite] = useState("");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [domainSuggestion, setDomainSuggestion] = useState<{
+    tenantId: string;
+    tenantName: string;
+  } | null>(null);
+  const [previousRejected, setPreviousRejected] = useState(false);
+  const [joinRequestStatus, setJoinRequestStatus] = useState<
+    "pending" | "approved" | null
+  >(null);
+  const [joinRequestTenant, setJoinRequestTenant] = useState<{
+    tenantId: string;
+    tenantName: string;
+  } | null>(null);
+  const [checkingDomain, setCheckingDomain] = useState(false);
+  const [submittingJoinRequest, setSubmittingJoinRequest] = useState(false);
+  const [dismissedSuggestion, setDismissedSuggestion] = useState(false);
 
   const orgNameRef = useRef(orgName);
   const industryRef = useRef(industry);
@@ -209,6 +224,35 @@ export default function OrgSetupPage() {
         setTenants(tenantList);
 
         if (tenantList.length > 0) return;
+
+        setCheckingDomain(true);
+        try {
+          const suggestionRes = await apiClient.get(
+            API_ENDPOINTS.DOMAIN_SUGGESTION,
+          );
+          if (suggestionRes.data?.success) {
+            const d = suggestionRes.data.data;
+            if (
+              d.requestStatus === "pending" ||
+              d.requestStatus === "approved"
+            ) {
+              setJoinRequestStatus(d.requestStatus);
+              setJoinRequestTenant({
+                tenantId: d.request.tenantId,
+                tenantName: d.request.tenantName,
+              });
+            } else if (d.suggestion) {
+              setDomainSuggestion({
+                tenantId: d.suggestion.tenantId,
+                tenantName: d.suggestion.tenantName,
+              });
+              setPreviousRejected(d.previousRequestStatus === "rejected");
+            }
+          }
+        } catch {
+          // non-fatal — falls through to the normal create-org wizard
+        }
+        setCheckingDomain(false);
 
         // No tenants yet — check if a payment completed but the tab was closed
         // before POST /tenants finished. Only proceed if we have form data saved
@@ -423,7 +467,74 @@ export default function OrgSetupPage() {
     }
   };
 
-  const isCreatingNew = !fetching && tenants.length === 0;
+  const handleRequestJoin = async () => {
+    if (!domainSuggestion) return;
+    setSubmittingJoinRequest(true);
+    try {
+      const res = await apiClient.post(API_ENDPOINTS.JOIN_REQUESTS, {
+        tenantId: domainSuggestion.tenantId,
+      });
+      if (res.data?.success) {
+        setJoinRequestStatus("pending");
+        setJoinRequestTenant(domainSuggestion);
+      } else {
+        setAlert({
+          open: true,
+          message: res.data?.message || "Failed to send join request.",
+          severity: "error",
+        });
+      }
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message: err.response?.data?.message || "Failed to send join request.",
+        severity: "error",
+      });
+    } finally {
+      setSubmittingJoinRequest(false);
+    }
+  };
+
+  const handleCheckAgain = async () => {
+    setCheckingDomain(true);
+    try {
+      const res = await apiClient.get(API_ENDPOINTS.DOMAIN_SUGGESTION);
+      if (res.data?.success) {
+        const d = res.data.data;
+        if (d.requestStatus === "pending" || d.requestStatus === "approved") {
+          setJoinRequestStatus(d.requestStatus);
+          setJoinRequestTenant({
+            tenantId: d.request.tenantId,
+            tenantName: d.request.tenantName,
+          });
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+    setCheckingDomain(false);
+  };
+
+  useEffect(() => {
+    if (joinRequestStatus === "approved" && joinRequestTenant) {
+      handleSelectTenant(joinRequestTenant.tenantId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joinRequestStatus, joinRequestTenant]);
+
+  // A join offer (pending request or a fresh domain-match suggestion) takes
+  // priority over the create-org wizard until the user explicitly dismisses
+  // it via "Create a separate organisation instead".
+  const showJoinOffer =
+    !dismissedSuggestion &&
+    (joinRequestStatus === "pending" || !!domainSuggestion);
+
+  const isCreatingNew =
+    !fetching &&
+    !checkingDomain &&
+    tenants.length === 0 &&
+    joinRequestStatus !== "approved" &&
+    !showJoinOffer;
   const price = PRICES[billing];
 
   const leftColStyle = useMemo(
@@ -435,25 +546,35 @@ export default function OrgSetupPage() {
     [],
   );
 
-  const rightTitle = fetching
-    ? "Loading…"
-    : tenants.length > 0
-      ? "Select your organisation"
-      : step === 0
-        ? "Set up your organisation"
-        : step === 1
-          ? "Choose your plan"
-          : "Organisation profile";
+  const rightTitle =
+    fetching || checkingDomain
+      ? "Loading…"
+      : tenants.length > 0
+        ? "Select your organisation"
+        : showJoinOffer && joinRequestStatus === "pending"
+          ? "Request pending"
+          : showJoinOffer && domainSuggestion
+            ? "Join your team's workspace"
+            : step === 0
+              ? "Set up your organisation"
+              : step === 1
+                ? "Choose your plan"
+                : "Organisation profile";
 
-  const rightSubtitle = !fetching
-    ? tenants.length > 0
-      ? "Choose the organisation you want to log into."
-      : step === 0
-        ? "Tell us a bit about your company to get started."
-        : step === 1
-          ? "All features included. Cancel anytime."
-          : "Help your employees find the right contacts. You can update these anytime."
-    : null;
+  const rightSubtitle =
+    !fetching && !checkingDomain
+      ? tenants.length > 0
+        ? "Choose the organisation you want to log into."
+        : showJoinOffer && joinRequestStatus === "pending"
+          ? "An admin needs to approve your request before you can continue."
+          : showJoinOffer && domainSuggestion
+            ? "We found an existing organisation for your email domain."
+            : step === 0
+              ? "Tell us a bit about your company to get started."
+              : step === 1
+                ? "All features included. Cancel anytime."
+                : "Help your employees find the right contacts. You can update these anytime."
+      : null;
 
   return (
     <Grid container className="login-row">
@@ -510,12 +631,6 @@ export default function OrgSetupPage() {
           className="login-right-col-inner-container"
           style={{ maxHeight: "90vh", overflowY: "auto" }}
         >
-          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button variant="ghost" size="small" onClick={handleLogout}>
-              Log out
-            </Button>
-          </Box>
-
           {/* Logo */}
           <div className="logo-section">
             <div className="logo-container">
@@ -553,7 +668,7 @@ export default function OrgSetupPage() {
           )}
 
           {/* ── Body ── */}
-          {fetching || resuming ? (
+          {fetching || resuming || checkingDomain ? (
             <Box
               sx={{
                 display: "flex",
@@ -573,6 +688,126 @@ export default function OrgSetupPage() {
                   Completing your organisation setup…
                 </Typography>
               )}
+            </Box>
+          ) : joinRequestStatus === "approved" ? (
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 2,
+                py: 4,
+              }}
+            >
+              <CircularProgress />
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                textAlign="center"
+              >
+                Request approved — taking you in…
+              </Typography>
+            </Box>
+          ) : showJoinOffer && joinRequestStatus === "pending" ? (
+            /* Waiting on admin approval */
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="body2" sx={{ color: "var(--text-color)" }}>
+                Your request to join{" "}
+                <strong>{joinRequestTenant?.tenantName}</strong> is waiting for
+                approval from an admin. Check back once they've reviewed it.
+              </Typography>
+              <Button
+                variant="primary"
+                fullWidth
+                size="large"
+                disabled={checkingDomain}
+                loading={checkingDomain}
+                onClick={handleCheckAgain}
+                style={{
+                  borderRadius: "8px",
+                  paddingTop: 11.2,
+                  paddingBottom: 11.2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: 15,
+                }}
+              >
+                Check again
+              </Button>
+              <Divider sx={{ my: 1, borderColor: "var(--text-input-border)" }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "var(--text-color)", opacity: 0.6 }}
+                >
+                  or
+                </Typography>
+              </Divider>
+              <Typography
+                variant="body2"
+                textAlign="center"
+                sx={{
+                  color: "var(--text-color)",
+                  opacity: 0.7,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+                onClick={() => setDismissedSuggestion(true)}
+              >
+                Create a separate organisation instead
+              </Typography>
+            </Box>
+          ) : showJoinOffer && domainSuggestion ? (
+            /* Fresh domain-match offer */
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {previousRejected && (
+                <Typography variant="caption" sx={{ color: "warning.main" }}>
+                  Your previous request was declined.
+                </Typography>
+              )}
+              <Typography variant="body2" sx={{ color: "var(--text-color)" }}>
+                <strong>{domainSuggestion.tenantName}</strong> already has a
+                workspace for your email domain. Request to join, or create a
+                separate organisation.
+              </Typography>
+              <Button
+                variant="primary"
+                fullWidth
+                size="large"
+                disabled={submittingJoinRequest}
+                loading={submittingJoinRequest}
+                onClick={handleRequestJoin}
+                style={{
+                  borderRadius: "8px",
+                  paddingTop: 11.2,
+                  paddingBottom: 11.2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: 15,
+                }}
+              >
+                Request to join
+              </Button>
+              <Divider sx={{ my: 1, borderColor: "var(--text-input-border)" }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "var(--text-color)", opacity: 0.6 }}
+                >
+                  or
+                </Typography>
+              </Divider>
+              <Typography
+                variant="body2"
+                textAlign="center"
+                sx={{
+                  color: "var(--text-color)",
+                  opacity: 0.7,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+                onClick={() => setDismissedSuggestion(true)}
+              >
+                Create a separate organisation instead
+              </Typography>
             </Box>
           ) : tenants.length > 0 ? (
             /* Existing tenant picker */
@@ -690,26 +925,6 @@ export default function OrgSetupPage() {
               >
                 Continue
               </Button>
-
-              <Divider
-                sx={{ my: 2.5, borderColor: "var(--text-input-border)" }}
-              >
-                <Typography
-                  variant="caption"
-                  sx={{ color: "var(--text-color)", opacity: 0.6 }}
-                >
-                  or
-                </Typography>
-              </Divider>
-
-              <Typography
-                variant="body2"
-                textAlign="center"
-                sx={{ color: "var(--text-color)", opacity: 0.7 }}
-              >
-                Have an invite link? Open it in your browser and sign in —
-                you'll be added automatically.
-              </Typography>
             </>
           ) : step === 1 ? (
             /* Step 2: Plan + payment */
@@ -983,6 +1198,12 @@ export default function OrgSetupPage() {
               </Box>
             </>
           )}
+
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+            <Button variant="ghost" size="small" onClick={handleLogout}>
+              Log out
+            </Button>
+          </Box>
         </div>
       </Grid>
     </Grid>

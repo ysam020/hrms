@@ -124,6 +124,7 @@ export const applyForJob = async (
         }
         if (allTargets.length === 0) return;
         return getNotificationQueue().add("jobApplicationReceived", {
+          tenantId,
           title: "Recruitment",
           message: `New job application: ${name} has applied for ${jobOpening.jobTitle}`,
           recipients: allTargets.map((u) => u.id),

@@ -76,6 +76,7 @@ export const updateHrActivity = async (
         .then((users) => {
           if (users.length === 0) return;
           return getNotificationQueue().add("hrActivityUpdated", {
+            tenantId: getTenantId()!,
             title: "HR Activity",
             message: `There is an activity- ${updated.title} on ${displayDate} at ${displayTime}`,
             recipients: users.map((u) => u.id),

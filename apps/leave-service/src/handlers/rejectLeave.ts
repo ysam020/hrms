@@ -47,6 +47,7 @@ export const rejectLeave = async (
 
     getNotificationQueue()
       .add("leaveRejected", {
+        tenantId: getTenantId()!,
         title: "Leave",
         message: MESSAGES.LEAVE_REJECTED,
         targetUser: updatedLeave.userId,

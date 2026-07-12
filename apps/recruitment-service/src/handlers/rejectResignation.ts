@@ -57,6 +57,7 @@ export const rejectResignation = async (
     // Notify employee (fire-and-forget)
     getNotificationQueue()
       .add("resignationRejected", {
+        tenantId: getTenantId()!,
         title: "Resignation",
         message: MESSAGES.RESIGNATION_REJECTED,
         targetUser: updatedResignation.userId,
