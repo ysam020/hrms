@@ -26,26 +26,12 @@ async function generateUniqueUsername(email: string): Promise<string> {
   return username;
 }
 
-interface OAuthState {
-  inviteToken?: string;
-}
-
-function parseState(state?: string): OAuthState {
-  if (!state) return {};
-  try {
-    return JSON.parse(Buffer.from(state, "base64").toString("utf8"));
-  } catch {
-    return {};
-  }
-}
-
 export const googleOAuthCallback = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { code, state: rawState } = call.request;
-    const oauthState = parseState(rawState);
+    const { code } = call.request;
 
     if (!code) {
       return callback(null, {
@@ -156,47 +142,8 @@ export const googleOAuthCallback = async (
       });
     }
 
-    // ── Tenant resolution via invite ──────────────────────────────────────────
     let resolvedTenantId: string | null = null;
     let resolvedTenantRole: string | null = null;
-
-    if (oauthState.inviteToken) {
-      const invite = await prisma.tenantInvite.findFirst({
-        where: {
-          token: oauthState.inviteToken,
-          used: false,
-          expiresAt: { gt: new Date() },
-        },
-      });
-
-      if (invite) {
-        // Ensure the invite email matches (case-insensitive, dot-insensitive for Gmail)
-        if (canonicalizeEmail(invite.email) === email) {
-          resolvedTenantId = invite.tenantId;
-          resolvedTenantRole = invite.role;
-        } else {
-          return callback(null, {
-            message: "This invite was issued to a different email address.",
-            status: status.PERMISSION_DENIED,
-            accessToken: "",
-            refreshToken: "",
-            data: {
-              id: "",
-              email: "",
-              username: "",
-              role: "",
-              firstName: "",
-              lastName: "",
-              tenantId: "",
-              tenantRole: "",
-            },
-            needsTenantSetup: false,
-            tenants: [],
-          });
-        }
-      }
-      // If invite not found/expired we fall through to membership lookup
-    }
 
     // ── Find or create user (cross-tenant lookup by globally unique email) ────
     let user = await prisma.user.findFirst({ where: { email } });
@@ -249,177 +196,142 @@ export const googleOAuthCallback = async (
 
     // ── Resolve tenant membership ──────────────────────────────────────────────
 
-    if (resolvedTenantId) {
-      // Accepting an invite: create/update membership and stamp tenantId on user
-      const existingMembership = await prisma.tenantMembership.findFirst({
-        where: { tenantId: resolvedTenantId, userId: user.id },
+    const memberships = await prisma.tenantMembership.findMany({
+      where: { userId: user.id },
+      take: 10,
+    });
+
+    if (memberships.length === 0 && user.tenantId) {
+      // User.tenantId is stamped but the membership row is missing
+      // (e.g. left behind by a raw data migration) — self-heal instead
+      // of sending an already-onboarded user back to org setup.
+      const staleTenant = await prisma.tenant.findUnique({
+        where: { id: user.tenantId },
       });
-
-      if (!existingMembership) {
-        await Promise.all([
-          prisma.tenantMembership.create({
-            data: {
-              tenantId: resolvedTenantId,
-              userId: user.id,
-              role: resolvedTenantRole!,
-            },
-          }),
-          // Mark invite used
-          oauthState.inviteToken
-            ? prisma.tenantInvite.updateMany({
-                where: { token: oauthState.inviteToken },
-                data: { used: true },
-              })
-            : Promise.resolve(),
-        ]);
-      }
-
-      // Stamp tenantId on user record if not already set
-      if (!user.tenantId) {
+      if (staleTenant?.isActive) {
+        const inferredRole = user.isSuperUser ? "owner" : "employee";
+        const healedMembership = await prisma.tenantMembership.create({
+          data: {
+            tenantId: staleTenant.id,
+            userId: user.id,
+            role: inferredRole,
+          },
+        });
+        logger.warn(
+          "Self-healed missing TenantMembership for user with stamped tenantId",
+          { userId: user.id, tenantId: staleTenant.id, role: inferredRole },
+        );
+        memberships.push(healedMembership);
+      } else {
+        logger.warn(
+          "User.tenantId points at a missing/inactive tenant — clearing stale reference",
+          { userId: user.id, tenantId: user.tenantId },
+        );
         user = await prisma.user.update({
           where: { id: user.id },
-          data: { tenantId: resolvedTenantId },
+          data: { tenantId: null },
         });
       }
-    } else {
-      // No invite — check existing memberships
-      const memberships = await prisma.tenantMembership.findMany({
-        where: { userId: user.id },
-        take: 10,
+    }
+
+    if (memberships.length === 0) {
+      // No tenant yet — issue a "pendingSetup" token
+      const accessToken = signAccessToken({
+        userId: user.id,
+        tenantId: null,
+        tenantRole: null,
+        pendingSetup: true,
+        orgSetupComplete: true,
+        dbName: null,
+      });
+      const refreshToken = signRefreshToken(user.id);
+      await storeRefreshToken(
+        user.id,
+        refreshToken,
+        null,
+        null,
+        undefined,
+        null,
+      );
+
+      return callback(null, {
+        message: "Please create or join an organisation to continue.",
+        status: status.OK,
+        accessToken,
+        refreshToken,
+        data: {
+          id: user.id,
+          email: user.email || "",
+          username: user.username,
+          role: (user.role ?? []).join(","),
+          firstName: user.first_name || "",
+          lastName: user.last_name || "",
+          tenantId: "",
+          tenantRole: "",
+        },
+        needsTenantSetup: true,
+        tenants: [],
+      });
+    }
+
+    if (memberships.length > 1) {
+      // Multiple tenants — need picker; issue pendingSetup token
+      const tenants = await prisma.tenant.findMany({
+        where: { id: { in: memberships.map((m) => m.tenantId) } },
+        select: { id: true, name: true, slug: true },
       });
 
-      if (memberships.length === 0 && user.tenantId) {
-        // User.tenantId is stamped but the membership row is missing
-        // (e.g. left behind by a raw data migration) — self-heal instead
-        // of sending an already-onboarded user back to org setup.
-        const staleTenant = await prisma.tenant.findUnique({
-          where: { id: user.tenantId },
-        });
-        if (staleTenant?.isActive) {
-          const inferredRole = user.isSuperUser ? "owner" : "employee";
-          const healedMembership = await prisma.tenantMembership.create({
-            data: {
-              tenantId: staleTenant.id,
-              userId: user.id,
-              role: inferredRole,
-            },
-          });
-          logger.warn(
-            "Self-healed missing TenantMembership for user with stamped tenantId",
-            { userId: user.id, tenantId: staleTenant.id, role: inferredRole },
-          );
-          memberships.push(healedMembership);
-        } else {
-          logger.warn(
-            "User.tenantId points at a missing/inactive tenant — clearing stale reference",
-            { userId: user.id, tenantId: user.tenantId },
-          );
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { tenantId: null },
-          });
-        }
-      }
+      const accessToken = signAccessToken({
+        userId: user.id,
+        tenantId: null,
+        tenantRole: null,
+        pendingSetup: true,
+        orgSetupComplete: true,
+        dbName: null,
+      });
+      const refreshToken = signRefreshToken(user.id);
+      await storeRefreshToken(
+        user.id,
+        refreshToken,
+        null,
+        null,
+        undefined,
+        null,
+      );
 
-      if (memberships.length === 0) {
-        // No tenant yet — issue a "pendingSetup" token
-        const accessToken = signAccessToken({
-          userId: user.id,
-          tenantId: null,
-          tenantRole: null,
-          pendingSetup: true,
-          orgSetupComplete: true,
-          dbName: null,
-        });
-        const refreshToken = signRefreshToken(user.id);
-        await storeRefreshToken(
-          user.id,
-          refreshToken,
-          null,
-          null,
-          undefined,
-          null,
-        );
+      return callback(null, {
+        message: "Select a tenant to continue.",
+        status: status.OK,
+        accessToken,
+        refreshToken,
+        data: {
+          id: user.id,
+          email: user.email || "",
+          username: user.username,
+          role: "",
+          firstName: user.first_name || "",
+          lastName: user.last_name || "",
+          tenantId: "",
+          tenantRole: "",
+        },
+        needsTenantSetup: false,
+        tenants: tenants.map((t) => {
+          const m = memberships.find((m) => m.tenantId === t.id)!;
+          return { id: t.id, name: t.name, slug: t.slug, role: m.role };
+        }),
+      });
+    }
 
-        return callback(null, {
-          message: "Please create or join an organisation to continue.",
-          status: status.OK,
-          accessToken,
-          refreshToken,
-          data: {
-            id: user.id,
-            email: user.email || "",
-            username: user.username,
-            role: (user.role ?? []).join(","),
-            firstName: user.first_name || "",
-            lastName: user.last_name || "",
-            tenantId: "",
-            tenantRole: "",
-          },
-          needsTenantSetup: true,
-          tenants: [],
-        });
-      }
+    // Exactly one tenant — resolve it
+    const membership = memberships[0];
+    resolvedTenantId = membership.tenantId;
+    resolvedTenantRole = membership.role;
 
-      if (memberships.length > 1) {
-        // Multiple tenants — need picker; issue pendingSetup token
-        const tenants = await prisma.tenant.findMany({
-          where: { id: { in: memberships.map((m) => m.tenantId) } },
-          select: { id: true, name: true, slug: true },
-        });
-
-        const accessToken = signAccessToken({
-          userId: user.id,
-          tenantId: null,
-          tenantRole: null,
-          pendingSetup: true,
-          orgSetupComplete: true,
-          dbName: null,
-        });
-        const refreshToken = signRefreshToken(user.id);
-        await storeRefreshToken(
-          user.id,
-          refreshToken,
-          null,
-          null,
-          undefined,
-          null,
-        );
-
-        return callback(null, {
-          message: "Select a tenant to continue.",
-          status: status.OK,
-          accessToken,
-          refreshToken,
-          data: {
-            id: user.id,
-            email: user.email || "",
-            username: user.username,
-            role: "",
-            firstName: user.first_name || "",
-            lastName: user.last_name || "",
-            tenantId: "",
-            tenantRole: "",
-          },
-          needsTenantSetup: false,
-          tenants: tenants.map((t) => {
-            const m = memberships.find((m) => m.tenantId === t.id)!;
-            return { id: t.id, name: t.name, slug: t.slug, role: m.role };
-          }),
-        });
-      }
-
-      // Exactly one tenant — resolve it
-      const membership = memberships[0];
-      resolvedTenantId = membership.tenantId;
-      resolvedTenantRole = membership.role;
-
-      if (!user.tenantId) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { tenantId: resolvedTenantId },
-        });
-      }
+    if (!user.tenantId) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { tenantId: resolvedTenantId },
+      });
     }
 
     // ── Issue tokens ───────────────────────────────────────────────────────────

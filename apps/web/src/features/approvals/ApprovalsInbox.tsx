@@ -1,6 +1,5 @@
-import { useCallback, useContext, useState } from "react";
+import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import useSocketEvent from "@web/shared/hooks/useSocketEvent";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
@@ -22,40 +21,34 @@ import InboxIcon from "@mui/icons-material/Inbox";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import useFetchData from "@web/shared/hooks/useFetchData";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { ApprovalsBadgeContext } from "@web/app/providers/ApprovalsBadgeContext";
+import {
+  ApprovalsBadgeContext,
+  type PendingApprovalItem,
+  type KycApprovalItem,
+  type JoinRequestApprovalItem,
+} from "@web/app/providers/ApprovalsBadgeContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 dayjs.extend(relativeTime);
 
-interface ChainApprovalItem {
-  instanceId: string;
-  module: string;
-  entityId: string;
-  stepOrder: number;
-  requestedBy: string;
-  requestedByName: string;
-  createdAt: string;
-  summary: string;
-  detail: Record<string, unknown>;
-}
+// KYC and join-request items click through to their own dedicated review
+// UI (the KYC detail page, the Settings > Join Requests panel) rather than
+// getting inline approve/reject buttons here — both can have multiple
+// eligible approvers, so duplicating the decision UI in two places risks
+// them drifting out of sync.
+const isClickThroughItem = (
+  item: PendingApprovalItem,
+): item is KycApprovalItem | JoinRequestApprovalItem =>
+  item.module === "kyc" || item.module === "join_request";
 
-interface KycApprovalItem {
-  instanceId: string;
-  module: "kyc";
-  kycAction: "approve" | "allow_edit";
-  username: string;
-  requestedByName: string;
-  createdAt: string;
-  summary: string;
-}
-
-type PendingApprovalItem = ChainApprovalItem | KycApprovalItem;
-
-const isKycItem = (item: PendingApprovalItem): item is KycApprovalItem =>
-  item.module === "kyc";
+const clickThroughPath = (
+  item: KycApprovalItem | JoinRequestApprovalItem,
+): string =>
+  item.module === "kyc"
+    ? `/view-kyc/${item.username}`
+    : "/settings?tab=join-requests";
 
 const MODULE_LABELS: Record<string, string> = {
   leave: "Leave",
@@ -64,6 +57,7 @@ const MODULE_LABELS: Record<string, string> = {
   wfh: "WFH",
   salary_advance: "Salary Advance",
   kyc: "KYC",
+  join_request: "Join Request",
 };
 
 function initialsOf(name: string): string {
@@ -76,9 +70,12 @@ function initialsOf(name: string): string {
 }
 
 /**
- * Cross-module inbox of everything awaiting the current user's decision —
- * driven by GET /approvals/pending, which resolves against the tenant's
- * configured Approval Chain (or the zero-config reporting-manager default).
+ * Cross-module inbox of everything awaiting the current user's decision.
+ * Reads from ApprovalsBadgeContext — the single shared fetch of
+ * GET /approvals/pending-all, which the server aggregates from the
+ * chain-engine modules (leave, resignation, overtime, wfh, salary advance —
+ * resolved against the tenant's configured Approval Chain, or the
+ * zero-config reporting-manager default), KYC, and tenant join requests.
  * A non-superuser reporting manager has no other page that surfaces a
  * direct report's pending leave/resignation, since the module-specific list
  * views (ViewResignations, leave applications) only show a user's own rows
@@ -87,39 +84,11 @@ function initialsOf(name: string): string {
 function ApprovalsInbox() {
   const navigate = useNavigate();
   const { setAlert } = useContext(AlertContext);
-  const { refetchPendingApprovals } = useContext(ApprovalsBadgeContext);
-  const { data, loading, refetch } = useFetchData<PendingApprovalItem[]>(
-    API_ENDPOINTS.GET_PENDING_APPROVALS,
-    "get",
-    [],
-  );
   const {
-    data: kycData,
-    loading: loadingKyc,
-    refetch: refetchKyc,
-  } = useFetchData<PendingApprovalItem[]>(
-    API_ENDPOINTS.GET_PENDING_KYC_APPROVALS,
-    "get",
-    [],
-  );
-  // Each source list is already sorted newest-first server-side, but
-  // merging the two doesn't interleave them by date on its own.
-  const items = [
-    ...(Array.isArray(data) ? data : []),
-    ...(Array.isArray(kycData) ? kycData : []),
-  ].sort(
-    (a, b) =>
-      new Date(b.createdAt ?? 0).getTime() -
-      new Date(a.createdAt ?? 0).getTime(),
-  );
-
-  // Live-refresh instead of polling — see ApprovalsBadgeContext for why the
-  // generic "notification" event is the right signal to reuse here.
-  const refetchBoth = useCallback(() => {
-    refetch?.();
-    refetchKyc?.();
-  }, [refetch, refetchKyc]);
-  useSocketEvent("notification", refetchBoth);
+    pendingApprovalItems: items,
+    loadingPendingApprovals: loading,
+    refetchPendingApprovals,
+  } = useContext(ApprovalsBadgeContext);
 
   const [decision, setDecision] = useState<{
     instanceId: string;
@@ -151,7 +120,6 @@ function ApprovalsInbox() {
         severity: "success",
       });
       closeDialog();
-      refetch();
       refetchPendingApprovals();
     } catch (err: any) {
       setAlert({
@@ -164,6 +132,8 @@ function ApprovalsInbox() {
     }
   };
 
+  const showSkeleton = loading && items.length === 0;
+
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 820, mx: "auto" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
@@ -171,12 +141,12 @@ function ApprovalsInbox() {
         <Typography variant="h6" fontWeight={700}>
           Pending Approvals
         </Typography>
-        {!loading && !loadingKyc && items.length > 0 && (
+        {!showSkeleton && items.length > 0 && (
           <Chip size="small" label={items.length} color="warning" />
         )}
       </Box>
 
-      {loading || loadingKyc ? (
+      {showSkeleton ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           {[...Array(3)].map((_, i) => (
             <Paper key={i} variant="outlined" sx={{ p: 2 }}>
@@ -206,19 +176,20 @@ function ApprovalsInbox() {
       ) : (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           {items.map((item) =>
-            isKycItem(item) ? (
+            isClickThroughItem(item) ? (
               // KYC actions (approve / request-revision-with-field-issues /
-              // allow-edit) have different payloads per action and already
-              // have a proper UI on the KYC detail page — click through
-              // instead of duplicating that here.
+              // allow-edit) and join requests each already have a proper
+              // dedicated review UI (the KYC detail page, the Settings >
+              // Join Requests panel) — click through instead of duplicating
+              // that here.
               <Paper
                 key={item.instanceId}
                 variant="outlined"
-                onClick={() => navigate(`/view-kyc/${item.username}`)}
+                onClick={() => navigate(clickThroughPath(item))}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    navigate(`/view-kyc/${item.username}`);
+                    navigate(clickThroughPath(item));
                   }
                 }}
                 role="button"

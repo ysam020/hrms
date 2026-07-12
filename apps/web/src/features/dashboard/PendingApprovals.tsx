@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useContext } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -9,20 +9,19 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useNavigate } from "react-router-dom";
-import useFetchData from "@web/shared/hooks/useFetchData";
-import useSocketEvent from "@web/shared/hooks/useSocketEvent";
-import { API_ENDPOINTS } from "@web/shared/constants";
+import {
+  ApprovalsBadgeContext,
+  type PendingApprovalItem,
+  type KycApprovalItem,
+} from "@web/app/providers/ApprovalsBadgeContext";
 
 dayjs.extend(relativeTime);
 
-interface PendingApprovalItem {
-  instanceId: string;
-  module: string;
-  username?: string;
-  requestedByName: string;
-  createdAt: string;
-  summary: string;
-}
+// ChainApprovalItem.module is typed as plain `string`, so
+// `item.module === "kyc"` alone doesn't narrow the union away from it —
+// need an explicit type predicate.
+const isKycItem = (item: PendingApprovalItem): item is KycApprovalItem =>
+  item.module === "kyc";
 
 const MODULE_LABELS: Record<string, string> = {
   leave: "Leave",
@@ -31,6 +30,7 @@ const MODULE_LABELS: Record<string, string> = {
   wfh: "WFH",
   salary_advance: "Salary Advance",
   kyc: "KYC",
+  join_request: "Join Request",
 };
 
 function initialsOf(name: string): string {
@@ -42,61 +42,20 @@ function initialsOf(name: string): string {
     .join("");
 }
 
-// Merges two sources: GET /approvals/pending (the chain-engine-backed
-// modules — leave, resignation, overtime, wfh, salary advance) and GET
-// /kyc-approvals/pending (KYC submissions awaiting approval, and KYC
-// edit-access requests, neither of which are chain-engine instances since
-// several people can be eligible to act on either — see submitKyc.ts /
-// allowKycEdit.ts). KYC items live-update via socket instead of polling:
-// kyc-submitted/kyc-edit-requested add one, kyc-edit-allowed/
-// kyc-edit-resolved remove one (the latter fires for every OTHER eligible
-// approver the moment one of them acts, so a stale, already-handled item
-// never lingers in someone else's list).
+// Reads from ApprovalsBadgeContext — the single shared fetch of
+// GET /approvals/pending-all, which the server aggregates from the
+// chain-engine modules (leave, resignation, overtime, wfh, salary advance),
+// KYC submissions/edit-access requests, and tenant join requests. See that
+// context for why this used to be 3 independent fetches per surface.
 function PendingApprovals() {
   const navigate = useNavigate();
-  const {
-    data: approvals,
-    loading: loadingApprovals,
-    refetch: refetchApprovals,
-  } = useFetchData<PendingApprovalItem[]>(
-    API_ENDPOINTS.GET_PENDING_APPROVALS,
-    "get",
-    [],
-  );
-  const {
-    data: kycRequests,
-    loading: loadingKyc,
-    refetch: refetchKyc,
-  } = useFetchData<PendingApprovalItem[]>(
-    API_ENDPOINTS.GET_PENDING_KYC_APPROVALS,
-    "get",
-    [],
+  const { pendingApprovalItems, loadingPendingApprovals } = useContext(
+    ApprovalsBadgeContext,
   );
 
-  // Every event that can add or resolve a pending item — leave applied,
-  // resignation submitted, KYC edit requested/allowed/resolved, etc. —
-  // already goes through notificationWorker.ts, which emits the generic
-  // "notification" socket event to the relevant recipients (the same
-  // channel the bell/toast system relies on). Reusing it here means this
-  // widget updates live with no polling and no dedicated push event per
-  // module.
-  const refetchBoth = useCallback(() => {
-    refetchApprovals?.();
-    refetchKyc?.();
-  }, [refetchApprovals, refetchKyc]);
-  useSocketEvent("notification", refetchBoth);
-
-  const isLoading = loadingApprovals || loadingKyc;
-  // Each source list is already sorted newest-first server-side, but
-  // merging the two doesn't interleave them by date on its own.
-  const items = [
-    ...(Array.isArray(approvals) ? approvals : []),
-    ...(Array.isArray(kycRequests) ? kycRequests : []),
-  ].sort(
-    (a, b) =>
-      new Date(b.createdAt ?? 0).getTime() -
-      new Date(a.createdAt ?? 0).getTime(),
-  );
+  const isLoading =
+    loadingPendingApprovals && pendingApprovalItems.length === 0;
+  const items = pendingApprovalItems;
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -180,9 +139,10 @@ function PendingApprovals() {
           items.slice(0, 5).map((item, i) => {
             const displayName = item.requestedByName || "?";
             const initials = initialsOf(displayName);
-            const targetPath =
-              item.module === "kyc" && item.username
-                ? `/view-kyc/${item.username}`
+            const targetPath = isKycItem(item)
+              ? `/view-kyc/${item.username}`
+              : item.module === "join_request"
+                ? "/settings?tab=join-requests"
                 : "/approvals";
 
             return (

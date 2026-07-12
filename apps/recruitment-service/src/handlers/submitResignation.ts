@@ -150,6 +150,7 @@ export const submitResignation = async (
         const uniqueUsernames = [...new Set(allTargets.map((u) => u.username))];
         if (uniqueUsernames.length === 0) return;
         await getNotificationQueue().add("resignationSubmitted", {
+          tenantId: getTenantId()!,
           title: "Resignation",
           message: `${applicantUsername} has submitted resignation form`,
           recipients: uniqueIds,

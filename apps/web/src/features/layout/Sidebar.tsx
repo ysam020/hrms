@@ -145,11 +145,12 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
               onClick={() => handleNavigation(item.path)}
             >
               <Suspense fallback={<div style={{ width: 24, height: 24 }} />}>
-                {badgeCountByPath[item.path] > 0 ? (
+                {badgeCountByPath[item.path] !== undefined ? (
                   <Badge
                     badgeContent={badgeCountByPath[item.path]}
                     color="error"
                     max={99}
+                    showZero
                   >
                     {item.icon}
                   </Badge>

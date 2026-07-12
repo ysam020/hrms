@@ -489,26 +489,20 @@ export function googleAuthRedirect(req: Request, res: Response) {
   const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
   const scope = "profile email";
 
-  // Allow the frontend to pass an invite token via ?invite=TOKEN
-  const inviteToken = (req.query.invite as string) || undefined;
-  const statePayload = inviteToken ? { inviteToken } : {};
-  const state = Buffer.from(JSON.stringify(statePayload)).toString("base64");
-
   const url =
     `https://accounts.google.com/o/oauth2/v2/auth` +
     `?client_id=${encodeURIComponent(clientId!)}` +
     `&redirect_uri=${encodeURIComponent(callbackUrl!)}` +
     `&response_type=code` +
     `&scope=${encodeURIComponent(scope)}` +
-    `&access_type=offline` +
-    `&state=${encodeURIComponent(state)}`;
+    `&access_type=offline`;
   res.redirect(url);
 }
 
 export async function googleAuthCallback(req: Request, res: Response) {
   const rawClientUrl = process.env.CLIENT_URL || "https://localhost:5173";
   const clientUrl = rawClientUrl.split(",")[0].trim();
-  const { code, error, state } = req.query;
+  const { code, error } = req.query;
 
   if (error || !code) {
     return jsRedirect(
@@ -521,7 +515,9 @@ export async function googleAuthCallback(req: Request, res: Response) {
     const response = await grpcCall<any, any>(
       authClient,
       "googleOAuthCallback",
-      { code: String(code), state: state ? String(state) : "" },
+      {
+        code: String(code),
+      },
     );
 
     if (!response.accessToken) {

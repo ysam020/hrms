@@ -81,6 +81,7 @@ export const allowKycEdit = async (
     // Notify employee (fire-and-forget)
     getNotificationQueue()
       .add("kycEditAllowed", {
+        tenantId: getTenantId()!,
         title: "KYC",
         message: MESSAGES.KYC_EDIT_ALLOWED,
         targetUser: updatedUser!.username,
@@ -102,6 +103,7 @@ export const allowKycEdit = async (
         const others = approvers.filter((a) => a.id !== actorUserId);
         if (others.length === 0) return;
         return getNotificationQueue().add("kycEditResolved", {
+          tenantId: getTenantId()!,
           title: "KYC",
           message: `${updatedUser!.username}'s KYC edit-access request was already handled.`,
           pushTargets: others.map((u) => u.username),

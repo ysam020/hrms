@@ -177,6 +177,7 @@ export const updateApplicationStatus = async (
       .then((hrUsers) => {
         if (hrUsers.length === 0) return;
         return getNotificationQueue().add("applicationStatusUpdated", {
+          tenantId: getTenantId()!,
           title: "Recruitment",
           message: `Interview status updated: ${updatedApplication.name} - ${applicationStatus}`,
           recipients: hrUsers.map((u) => u.id),

@@ -75,6 +75,7 @@ export const requestKycEditAccess = async (
       .then((approvers) => {
         if (approvers.length === 0) return;
         return getNotificationQueue().add("kycEditAccessRequested", {
+          tenantId: getTenantId()!,
           title: "KYC",
           message: `${user.username} requested to edit their approved KYC: ${reason}`,
           recipients: approvers.map((u) => u.id),

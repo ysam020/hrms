@@ -57,6 +57,7 @@ export const approveKyc = async (
     // Notify employee (fire-and-forget)
     getNotificationQueue()
       .add("kycApproved", {
+        tenantId: getTenantId()!,
         title: "KYC",
         message: MESSAGES.KYC_APPROVED,
         targetUser: updatedUser.username,

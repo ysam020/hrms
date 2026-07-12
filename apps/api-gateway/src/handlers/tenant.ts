@@ -1,13 +1,20 @@
-import { Request, Response } from "express";
-import { prisma, getClientForDb } from "@hrms/db";
+import { Response } from "express";
+import {
+  prisma,
+  getClientForDb,
+  canonicalizeEmail,
+  getEmailDomain,
+  isPublicEmailDomain,
+} from "@hrms/db";
 import { randomBytes, createHmac } from "crypto";
 import jwt from "jsonwebtoken";
 import { AuthRequest } from "../middleware/authenticate";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, sendEmail } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { aesEncrypt } from "@hrms/crypto";
 import { fetchPaymentMethod, getRazorpay } from "./payment";
+import { getNotificationQueue } from "@hrms/queue";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -145,6 +152,26 @@ async function buildTenant(
   if (existing) slug = `${slug}-${randomBytes(3).toString("hex")}`;
   const dbName = `hrms-${slug}`;
 
+  // Derive a domain for auto-join suggestions — best-effort, never blocks
+  // tenant creation. Public/free-mail domains are never claimed, and a
+  // domain already claimed by another tenant is silently left unset here
+  // rather than erroring (see the schema comment on Tenant.domain for why
+  // this isn't a DB-level unique constraint).
+  let domain: string | null = null;
+  const creator = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  if (creator?.email) {
+    const candidateDomain = getEmailDomain(canonicalizeEmail(creator.email));
+    if (candidateDomain && !isPublicEmailDomain(candidateDomain)) {
+      const claimedBy = await prisma.tenant.findFirst({
+        where: { domain: candidateDomain },
+      });
+      if (!claimedBy) domain = candidateDomain;
+    }
+  }
+
   const now = new Date();
   const planExpiresAt = new Date(now);
   if (billing === "annual") {
@@ -171,6 +198,7 @@ async function buildTenant(
         subscriptionStatus: "active",
         planActivatedAt: now,
         planExpiresAt,
+        ...(domain && { domain }),
         ...(pmInfo && {
           paymentMethod: pmInfo.method,
           paymentMethodSummary: pmInfo.summary,
@@ -487,130 +515,6 @@ export async function selectTenant(req: AuthRequest, res: Response) {
   }
 }
 
-// POST /api/v1/tenants/invite — invite someone by email (requires tenantId + owner/admin role)
-export async function inviteUser(req: AuthRequest, res: Response) {
-  const { userId, tenantId, tenantRole } = req.user!;
-  if (!tenantId) {
-    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
-      message: "No active tenant.",
-    });
-  }
-  if (!["owner", "admin"].includes(tenantRole ?? "")) {
-    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
-      message: "Only owners and admins can invite users.",
-    });
-  }
-
-  try {
-    const { email, role = "employee" } = req.body as {
-      email?: string;
-      role?: string;
-    };
-    if (!email?.trim()) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "Email is required.",
-      });
-    }
-
-    const VALID_ROLES = ["admin", "hr", "manager", "employee"];
-    if (!VALID_ROLES.includes(role)) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`,
-      });
-    }
-
-    // Check if already a member
-    const existingUser = await prisma.user.findFirst({
-      where: { email: email.trim() },
-    });
-    if (existingUser) {
-      const alreadyMember = await prisma.tenantMembership.findFirst({
-        where: { tenantId, userId: existingUser.id },
-      });
-      if (alreadyMember) {
-        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-          message: "User is already a member of this organisation.",
-        });
-      }
-    }
-
-    // Expire old pending invites for this email in this tenant
-    await prisma.tenantInvite.updateMany({
-      where: { tenantId, email: email.trim(), used: false },
-      data: { used: true },
-    });
-
-    const token = randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-    const invite = await prisma.tenantInvite.create({
-      data: {
-        tenantId,
-        email: email.trim(),
-        role,
-        token,
-        expiresAt,
-        invitedBy: userId,
-      },
-    });
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { name: true },
-    });
-
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: {
-        inviteId: invite.id,
-        token,
-        email: invite.email,
-        role: invite.role,
-        expiresAt: invite.expiresAt,
-        // Frontend constructs the invite URL: /invite?token=TOKEN
-        inviteUrl: `${process.env.CLIENT_URL?.split(",")[0].trim()}/invite?token=${token}`,
-        tenantName: tenant?.name,
-      },
-      message: "Invite created successfully.",
-    });
-  } catch (error: unknown) {
-    logger.error("inviteUser error:", { error });
-    return handleError(res, error);
-  }
-}
-
-// GET /api/v1/tenants/invite/:token — resolve an invite (public, for the invite landing page)
-export async function resolveInvite(req: Request, res: Response) {
-  try {
-    const token = String(req.params.token);
-    const invite = await prisma.tenantInvite.findFirst({
-      where: { token, used: false, expiresAt: { gt: new Date() } },
-    });
-
-    if (!invite) {
-      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
-        message: "Invite not found or has expired.",
-      });
-    }
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: invite.tenantId },
-      select: { id: true, name: true, slug: true },
-    });
-
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: {
-        email: invite.email,
-        role: invite.role,
-        tenant,
-        expiresAt: invite.expiresAt,
-      },
-    });
-  } catch (error: unknown) {
-    logger.error("resolveInvite error:", { error });
-    return handleError(res, error);
-  }
-}
-
 // GET /api/v1/tenants/available — list all tenants the current user is a member of
 export async function listAvailableTenants(req: AuthRequest, res: Response) {
   const { userId } = req.user!;
@@ -826,34 +730,455 @@ export async function completeOrgSetup(req: AuthRequest, res: Response) {
   }
 }
 
-// DELETE /api/v1/tenants/invite/:id — revoke a pending invite
-export async function revokeInvite(req: AuthRequest, res: Response) {
-  const { tenantId, tenantRole } = req.user!;
+// ─── Domain-matched join requests ──────────────────────────────────────────────
+
+// GET /api/v1/tenants/domain-suggestion — checked by pendingSetup users on the
+// org-setup page: is there an existing org matching my email domain, or do I
+// already have a join request in flight?
+export async function checkDomainSuggestion(req: AuthRequest, res: Response) {
+  const { userId } = req.user!;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    const domain = user?.email
+      ? getEmailDomain(canonicalizeEmail(user.email))
+      : "";
+
+    const myRequest = await prisma.tenantJoinRequest.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (myRequest?.status === "pending" || myRequest?.status === "approved") {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: myRequest.tenantId },
+        select: { id: true, name: true },
+      });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        data: {
+          requestStatus: myRequest.status,
+          request: tenant
+            ? {
+                id: myRequest.id,
+                tenantId: tenant.id,
+                tenantName: tenant.name,
+                createdAt: myRequest.createdAt,
+              }
+            : null,
+          suggestion: null,
+          previousRequestStatus: null,
+        },
+      });
+    }
+
+    if (!domain || isPublicEmailDomain(domain)) {
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        data: {
+          requestStatus: null,
+          request: null,
+          suggestion: null,
+          previousRequestStatus: null,
+        },
+      });
+    }
+
+    const match = await prisma.tenant.findFirst({
+      where: { domain, isActive: true },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true },
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: {
+        requestStatus: null,
+        request: null,
+        suggestion: match
+          ? { tenantId: match.id, tenantName: match.name, domain }
+          : null,
+        previousRequestStatus:
+          myRequest?.status === "rejected" ? "rejected" : null,
+      },
+    });
+  } catch (error: unknown) {
+    logger.error("checkDomainSuggestion error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// POST /api/v1/tenants/join-requests — request to join a domain-matched tenant
+export async function createJoinRequest(req: AuthRequest, res: Response) {
+  const { userId } = req.user!;
+  try {
+    const { tenantId } = req.body as { tenantId?: string };
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "tenantId is required.",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    const email = user?.email ? canonicalizeEmail(user.email) : "";
+    const domain = email ? getEmailDomain(email) : "";
+
+    if (!domain || isPublicEmailDomain(domain)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Domain-based join requests aren't available for this email address.",
+      });
+    }
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Organisation not found.",
+      });
+    }
+    if (tenant.domain !== domain) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message:
+          "You can only request to join an organisation that matches your email domain.",
+      });
+    }
+    if (!tenant.isActive) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "This organisation is not currently active.",
+      });
+    }
+
+    const alreadyMember = await prisma.tenantMembership.findFirst({
+      where: { tenantId, userId },
+    });
+    if (alreadyMember) {
+      return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+        message: "You're already a member of this organisation.",
+      });
+    }
+
+    await prisma.tenantJoinRequest.upsert({
+      where: { tenantId_userId: { tenantId, userId } },
+      create: { tenantId, userId, email, domain, status: "pending" },
+      update: {
+        status: "pending",
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null,
+        createdAt: new Date(),
+      },
+    });
+
+    // Fire-and-forget notification to the target tenant's owners/admins and
+    // anyone else holding the JoinRequests:approve permission.
+    void (async () => {
+      try {
+        const [admins, permissionHolders] = await Promise.all([
+          prisma.tenantMembership.findMany({
+            where: { tenantId, role: { in: ["owner", "admin"] } },
+            select: { userId: true },
+          }),
+          prisma.user.findMany({
+            where: { tenantId, permissions: { has: "JoinRequests:approve:-" } },
+            select: { id: true },
+          }),
+        ]);
+        const recipientIds = [
+          ...new Set([
+            ...admins.map((a) => a.userId),
+            ...permissionHolders.map((u) => u.id),
+          ]),
+        ];
+        const recipientUsers = await prisma.user.findMany({
+          where: { id: { in: recipientIds } },
+          select: { id: true, email: true },
+        });
+
+        await Promise.all(
+          recipientUsers
+            .filter((u) => u.email)
+            .map((u) =>
+              sendEmail({
+                to: u.email!,
+                subject: `New request to join ${tenant.name}`,
+                html: `<p>${email} has requested to join <strong>${tenant.name}</strong> on Praesto.</p><p>Review it under Settings &gt; Join Requests.</p>`,
+              }).catch((e) =>
+                logger.warn("join-request notification email failed", {
+                  error: e,
+                }),
+              ),
+            ),
+        );
+
+        if (recipientIds.length > 0) {
+          getNotificationQueue()
+            .add("joinRequestSubmitted", {
+              tenantId,
+              title: "Join request",
+              message: `${email} requested to join ${tenant.name}`,
+              recipients: recipientIds,
+              eventType: "join_request_notification",
+              priority: "medium",
+              sendPushNotification: false,
+            })
+            .catch((e) =>
+              logger.warn("join-request queue notification failed", {
+                error: e,
+              }),
+            );
+        }
+      } catch (error: unknown) {
+        logger.warn("join-request notification lookup failed", { error });
+      }
+    })();
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { status: "pending" },
+      message:
+        "Your request to join has been sent to the organisation's admins.",
+    });
+  } catch (error: unknown) {
+    logger.error("createJoinRequest error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// Mirrors canManageKyc in employee.ts: tenantRole owner/admin always pass;
+// anyone else needs isSuperUser or the explicit JoinRequests:approve
+// permission (req.user from the JWT doesn't carry either, hence the lookup).
+async function canApproveJoinRequests(req: AuthRequest): Promise<boolean> {
+  const { userId, tenantRole } = req.user!;
+  if (["owner", "admin"].includes(tenantRole ?? "")) return true;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isSuperUser: true, permissions: true },
+  });
+  if (user?.isSuperUser) return true;
+  const permissions = (user?.permissions as string[]) ?? [];
+  return permissions.includes("JoinRequests:approve:-");
+}
+
+// GET /api/v1/tenants/join-requests — list pending join requests for the caller's tenant
+export async function listJoinRequests(req: AuthRequest, res: Response) {
+  const { tenantId } = req.user!;
   if (!tenantId) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
       message: "No active tenant.",
     });
   }
-  if (!["owner", "admin"].includes(tenantRole ?? "")) {
+  if (!(await canApproveJoinRequests(req))) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
-      message: "Only owners and admins can revoke invites.",
+      message: "You don't have permission to view join requests.",
+    });
+  }
+  try {
+    const status = (req.query.status as string) || "pending";
+    const requests = await prisma.tenantJoinRequest.findMany({
+      where: { tenantId, status },
+      orderBy: { createdAt: "desc" },
+    });
+    const users = await prisma.user.findMany({
+      where: { id: { in: requests.map((r) => r.userId) } },
+      select: { id: true, first_name: true, last_name: true, email: true },
+    });
+    const result = requests.map((r) => {
+      const u = users.find((u) => u.id === r.userId);
+      return {
+        id: r.id,
+        userId: r.userId,
+        name: u ? `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() : "",
+        email: r.email,
+        status: r.status,
+        createdAt: r.createdAt,
+      };
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { requests: result },
+    });
+  } catch (error: unknown) {
+    logger.error("listJoinRequests error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// POST /api/v1/tenants/join-requests/:id/approve
+export async function approveJoinRequest(req: AuthRequest, res: Response) {
+  const { userId, tenantId } = req.user!;
+  if (!tenantId) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "No active tenant.",
+    });
+  }
+  if (!(await canApproveJoinRequests(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "You don't have permission to approve join requests.",
     });
   }
   try {
     const id = String(req.params.id);
-    const invite = await prisma.tenantInvite.findFirst({
-      where: { id, tenantId, used: false },
+    const request = await prisma.tenantJoinRequest.findUnique({
+      where: { id },
     });
-    if (!invite) {
+    if (!request || request.tenantId !== tenantId) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
-        message: "Invite not found.",
+        message: "Join request not found.",
       });
     }
-    await prisma.tenantInvite.update({ where: { id }, data: { used: true } });
+    if (request.status !== "pending") {
+      return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+        message: "This request has already been resolved.",
+      });
+    }
+
+    const existingMembership = await prisma.tenantMembership.findFirst({
+      where: { tenantId, userId: request.userId },
+    });
+    if (!existingMembership) {
+      await prisma.tenantMembership.create({
+        data: {
+          tenantId,
+          userId: request.userId,
+          role: "employee",
+          invitedBy: userId,
+        },
+      });
+    }
+
+    await prisma.tenantJoinRequest.update({
+      where: { id },
+      data: { status: "approved", reviewedBy: userId, reviewedAt: new Date() },
+    });
+
+    void (async () => {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true },
+      });
+      if (request.email) {
+        sendEmail({
+          to: request.email,
+          subject: `Your request to join ${tenant?.name ?? "the organisation"} was approved`,
+          html: `<p>You've been added to <strong>${tenant?.name ?? "the organisation"}</strong>. Sign in to get started.</p>`,
+        }).catch((e) =>
+          logger.warn("join-request approval email failed", { error: e }),
+        );
+      }
+    })();
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      message: "Invite revoked.",
+      data: { requestId: id, status: "approved" },
+      message: "Request approved.",
     });
   } catch (error: unknown) {
+    logger.error("approveJoinRequest error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// POST /api/v1/tenants/join-requests/:id/reject
+export async function rejectJoinRequest(req: AuthRequest, res: Response) {
+  const { userId, tenantId } = req.user!;
+  if (!tenantId) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "No active tenant.",
+    });
+  }
+  if (!(await canApproveJoinRequests(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "You don't have permission to reject join requests.",
+    });
+  }
+  try {
+    const id = String(req.params.id);
+    const { reason } = req.body as { reason?: string };
+    const request = await prisma.tenantJoinRequest.findUnique({
+      where: { id },
+    });
+    if (!request || request.tenantId !== tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Join request not found.",
+      });
+    }
+    if (request.status !== "pending") {
+      return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+        message: "This request has already been resolved.",
+      });
+    }
+
+    await prisma.tenantJoinRequest.update({
+      where: { id },
+      data: {
+        status: "rejected",
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        rejectionReason: reason ?? null,
+      },
+    });
+
+    void (async () => {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true },
+      });
+      if (request.email) {
+        sendEmail({
+          to: request.email,
+          subject: `Your request to join ${tenant?.name ?? "the organisation"} was declined`,
+          html: `<p>Your request to join <strong>${tenant?.name ?? "the organisation"}</strong> was declined.</p>`,
+        }).catch((e) =>
+          logger.warn("join-request rejection email failed", { error: e }),
+        );
+      }
+    })();
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { requestId: id, status: "rejected" },
+      message: "Request rejected.",
+    });
+  } catch (error: unknown) {
+    logger.error("rejectJoinRequest error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// GET /api/v1/tenants/join-requests/pending — feeds the sidebar/dashboard
+// "Pending Approvals" surfaces, mirroring listPendingKycActions in
+// employee.ts (same response shape, same "empty list rather than 403 for
+// non-holders" semantics since this is merged into a shared widget).
+// Shared by the standalone GET /tenants/join-requests/pending endpoint and
+// the aggregated GET /approvals/pending-all endpoint (pendingActions.ts) —
+// pure data fetch, no response writing, so it's safe to call from either.
+export async function getPendingJoinRequestItems(
+  req: AuthRequest,
+): Promise<any[]> {
+  const { tenantId } = req.user!;
+  if (!tenantId) return [];
+  if (!(await canApproveJoinRequests(req))) return [];
+
+  const requests = await prisma.tenantJoinRequest.findMany({
+    where: { tenantId, status: "pending" },
+    orderBy: { createdAt: "desc" },
+  });
+  return requests.map((r) => ({
+    instanceId: `join_request:${r.id}`,
+    module: "join_request",
+    requestedByName: r.email,
+    createdAt: r.createdAt,
+    summary: `${r.email} requested to join your organisation`,
+  }));
+}
+
+export async function listPendingJoinRequestActions(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    const data = await getPendingJoinRequestItems(req);
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
+  } catch (error: unknown) {
+    logger.error("listPendingJoinRequestActions error:", { error });
     return handleError(res, error);
   }
 }

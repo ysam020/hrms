@@ -29,9 +29,17 @@ model Tenant {
   helpEmail              String?
   officeAddress          String?
   website                String?
+  // Company email domain, used to suggest joining an existing org instead of
+  // creating a duplicate. Intentionally NOT @unique: Prisma does not emit
+  // sparse:true for optional @unique fields on MongoDB (prisma/prisma#12827),
+  // so a plain unique index throws E11000 on the second tenant ever created
+  // with domain left null (e.g. a free-mail signup). "One tenant per domain"
+  // is enforced in application code (buildTenant) instead — see tenant.ts.
+  domain                 String?
   isActive               Boolean   @default(true)
   createdAt              DateTime  @default(now())
 
+  @@index([domain])
   @@map("tenants")
 }
 
@@ -49,20 +57,24 @@ model TenantMembership {
   @@map("tenant_memberships")
 }
 
-model TenantInvite {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId  String   @db.ObjectId
-  email     String
-  role      String
-  token     String   @unique
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  invitedBy String   @db.ObjectId
-  createdAt DateTime @default(now())
+model TenantJoinRequest {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String    @db.ObjectId
+  userId          String    @db.ObjectId
+  email           String // canonicalized email at request time, for admin display/audit
+  domain          String // matched domain at request time, for audit
+  // "pending" | "approved" | "rejected"
+  status          String    @default("pending")
+  reviewedBy      String?   @db.ObjectId
+  reviewedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  @@index([tenantId])
-  @@index([email])
-  @@map("tenant_invites")
+  @@unique([tenantId, userId])
+  @@index([tenantId, status])
+  @@index([userId])
+  @@map("tenant_join_requests")
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────

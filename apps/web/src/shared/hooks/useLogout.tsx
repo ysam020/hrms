@@ -4,40 +4,12 @@ import apiClient, {
   cancelAllPendingRequests,
 } from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { clearFaviconDot } from "@web/shared/utils/faviconUtils";
 
 function useLogout(setUser) {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-
-  // Clear favicon notification dot
-  const clearFaviconDot = () => {
-    const originalFavicon = "/favicon.ico";
-    const canvas = document.createElement("canvas");
-    const img = document.createElement("img");
-
-    img.src = originalFavicon;
-    img.onload = () => {
-      const size = 32;
-      canvas.width = size;
-      canvas.height = size;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(img, 0, 0, size, size);
-
-      const newFavicon = canvas.toDataURL("image/png");
-      const link =
-        document.querySelector<HTMLLinkElement>("link[rel='icon']") ||
-        (document.createElement("link") as HTMLLinkElement);
-      link.rel = "icon";
-      link.href = newFavicon;
-      document.head.appendChild(link);
-    };
-
-    // Also reset the document title
-    document.title = "HRMS";
-  };
 
   const performLogout = useCallback(async () => {
     setLoggingOut(true);

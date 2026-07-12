@@ -1,4 +1,4 @@
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { getNotificationQueue } from "@hrms/queue";
 
@@ -149,6 +149,7 @@ async function notifyLeaveAutoCancelled(
   if (uniqueUsernames.length === 0) return;
 
   await getNotificationQueue().add("leaveAutoCancelled", {
+    tenantId: getTenantId()!,
     title: "Leave",
     message: `${employee?.username || userId}'s approved leave for today was auto-cancelled — they checked in instead.`,
     recipients: uniqueIds,

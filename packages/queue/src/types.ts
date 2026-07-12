@@ -6,6 +6,9 @@ export interface EmailJobData {
 }
 
 export interface NotificationJobData {
+  /** Tenant this notification belongs to — required so the worker persists
+   * it into that tenant's own database instead of the shared master DB. */
+  tenantId: string;
   title: string;
   message: string;
   /** Array of user IDs (ObjectId strings) to store as DB recipients */

@@ -381,90 +381,100 @@ function summarizePending(
 }
 
 /** GET /approvals/pending — enriched with entity summaries for the inbox UI. */
+// Shared by the standalone GET /approvals/pending endpoint and the
+// aggregated GET /approvals/pending-all endpoint (pendingActions.ts) — pure
+// data fetch, no response writing, so it's safe to call from either.
+export async function getPendingApprovalItems(
+  req: AuthRequest,
+): Promise<any[]> {
+  const { tenantId, userId } = req.user!;
+  if (!tenantId) return [];
+
+  const pending = await getPendingApprovalsFor(tenantId, userId);
+  if (pending.length === 0) return [];
+
+  const instances = await (prisma as any).approvalInstance.findMany({
+    where: { id: { in: pending.map((p) => p.instanceId) } },
+  });
+  const instanceById = new Map(instances.map((i: any) => [i.id, i]));
+
+  const idsByModule = (module: string) =>
+    pending.filter((p) => p.module === module).map((p) => p.entityId);
+
+  const [leaves, resignations, overtimeRequests, requesters] =
+    await Promise.all([
+      (prisma as any).leaveApplication.findMany({
+        where: { id: { in: idsByModule("leave") } },
+      }),
+      (prisma as any).resignation.findMany({
+        where: { id: { in: idsByModule("resignation") } },
+      }),
+      (prisma as any).overtimeRequest.findMany({
+        where: { id: { in: idsByModule("overtime") } },
+      }),
+      prisma.user.findMany({
+        where: {
+          id: {
+            in: [
+              ...new Set(instances.map((i: any) => i.requestedBy as string)),
+            ] as string[],
+          },
+        },
+        select: { id: true, username: true },
+      }),
+    ]);
+
+  const entityByModule: Record<string, Map<string, any>> = {
+    leave: new Map(leaves.map((l: any) => [l.id, l])),
+    resignation: new Map(resignations.map((r: any) => [r.id, r])),
+    overtime: new Map(overtimeRequests.map((o: any) => [o.id, o])),
+  };
+  const requesterNameById = new Map(
+    requesters.map((u: any) => [u.id, u.username]),
+  );
+
+  const data = pending.map((p) => {
+    const instance = instanceById.get(p.instanceId) as any;
+    const requestedByName =
+      requesterNameById.get(instance?.requestedBy) ??
+      instance?.requestedBy ??
+      "Someone";
+    const entity = entityByModule[p.module]?.get(p.entityId);
+    const { summary, detail } = summarizePending(
+      p.module,
+      entity,
+      requestedByName,
+    );
+    return {
+      instanceId: p.instanceId,
+      module: p.module,
+      entityId: p.entityId,
+      stepOrder: p.stepOrder,
+      requestedBy: instance?.requestedBy,
+      requestedByName,
+      createdAt: instance?.createdAt,
+      summary,
+      detail,
+    };
+  });
+
+  // Latest first — the underlying step/instance queries have no inherent
+  // recency order (Mongo natural order, not guaranteed to be creation
+  // order), so this needs to be explicit.
+  data.sort(
+    (a, b) =>
+      new Date(b.createdAt ?? 0).getTime() -
+      new Date(a.createdAt ?? 0).getTime(),
+  );
+
+  return data;
+}
+
 export async function listPendingApprovals(req: AuthRequest, res: Response) {
   const tenantId = requireTenantId(req, res);
   if (!tenantId) return;
   try {
-    const { userId } = req.user!;
-    const pending = await getPendingApprovalsFor(tenantId, userId);
-    if (pending.length === 0) {
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: [] });
-    }
-
-    const instances = await (prisma as any).approvalInstance.findMany({
-      where: { id: { in: pending.map((p) => p.instanceId) } },
-    });
-    const instanceById = new Map(instances.map((i: any) => [i.id, i]));
-
-    const idsByModule = (module: string) =>
-      pending.filter((p) => p.module === module).map((p) => p.entityId);
-
-    const [leaves, resignations, overtimeRequests, requesters] =
-      await Promise.all([
-        (prisma as any).leaveApplication.findMany({
-          where: { id: { in: idsByModule("leave") } },
-        }),
-        (prisma as any).resignation.findMany({
-          where: { id: { in: idsByModule("resignation") } },
-        }),
-        (prisma as any).overtimeRequest.findMany({
-          where: { id: { in: idsByModule("overtime") } },
-        }),
-        prisma.user.findMany({
-          where: {
-            id: {
-              in: [
-                ...new Set(instances.map((i: any) => i.requestedBy as string)),
-              ] as string[],
-            },
-          },
-          select: { id: true, username: true },
-        }),
-      ]);
-
-    const entityByModule: Record<string, Map<string, any>> = {
-      leave: new Map(leaves.map((l: any) => [l.id, l])),
-      resignation: new Map(resignations.map((r: any) => [r.id, r])),
-      overtime: new Map(overtimeRequests.map((o: any) => [o.id, o])),
-    };
-    const requesterNameById = new Map(
-      requesters.map((u: any) => [u.id, u.username]),
-    );
-
-    const data = pending.map((p) => {
-      const instance = instanceById.get(p.instanceId) as any;
-      const requestedByName =
-        requesterNameById.get(instance?.requestedBy) ??
-        instance?.requestedBy ??
-        "Someone";
-      const entity = entityByModule[p.module]?.get(p.entityId);
-      const { summary, detail } = summarizePending(
-        p.module,
-        entity,
-        requestedByName,
-      );
-      return {
-        instanceId: p.instanceId,
-        module: p.module,
-        entityId: p.entityId,
-        stepOrder: p.stepOrder,
-        requestedBy: instance?.requestedBy,
-        requestedByName,
-        createdAt: instance?.createdAt,
-        summary,
-        detail,
-      };
-    });
-
-    // Latest first — the underlying step/instance queries have no inherent
-    // recency order (Mongo natural order, not guaranteed to be creation
-    // order), so this needs to be explicit.
-    data.sort(
-      (a, b) =>
-        new Date(b.createdAt ?? 0).getTime() -
-        new Date(a.createdAt ?? 0).getTime(),
-    );
-
+    const data = await getPendingApprovalItems(req);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data });
   } catch (error: unknown) {
     logger.error("listPendingApprovals error:", { error });

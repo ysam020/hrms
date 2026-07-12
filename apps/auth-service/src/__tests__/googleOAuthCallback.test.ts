@@ -14,7 +14,6 @@ jest.mock("@hrms/db", () => {
       findMany: jest.fn(),
       create: jest.fn(),
     },
-    tenantInvite: { findFirst: jest.fn(), updateMany: jest.fn() },
     tenant: { findMany: jest.fn(), findUnique: jest.fn() },
   };
   return {

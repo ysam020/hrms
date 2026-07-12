@@ -18,4 +18,8 @@ export {
 } from "./tenantContext";
 export { prismaWithTenant } from "./prismaWithTenant";
 export { getClientForDb, closeAllTenantClients } from "./tenantClientPool";
-export { canonicalizeEmail } from "./email";
+export { canonicalizeEmail, getEmailDomain } from "./email";
+export {
+  isPublicEmailDomain,
+  PUBLIC_EMAIL_DOMAINS,
+} from "./publicEmailDomains";

@@ -1,5 +1,10 @@
 import { Worker } from "bullmq";
-import { prisma } from "@hrms/db";
+import {
+  prisma,
+  prismaWithTenant,
+  runWithTenant,
+  getClientForDb,
+} from "@hrms/db";
 import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import { logger } from "@hrms/logger";
 import { getNotificationPublisher } from "@hrms/websocket";
@@ -11,6 +16,7 @@ export function startNotificationWorker(): Worker {
     "notificationQueue",
     async (job) => {
       const {
+        tenantId,
         title,
         message,
         recipients = [],
@@ -23,105 +29,137 @@ export function startNotificationWorker(): Worker {
         socketPayload,
       } = job.data;
 
-      // Resolve DB recipients: prefer explicit user IDs, else resolve from usernames
-      let resolvedRecipients = [...recipients];
-      if (resolvedRecipients.length === 0) {
-        const targetUsernames =
-          pushTargets.length > 0
-            ? pushTargets
-            : targetUser
-              ? Array.isArray(targetUser)
-                ? targetUser
-                : [targetUser]
-              : [];
-        if (targetUsernames.length > 0) {
-          const users = await prisma.user.findMany({
-            where: { username: { in: targetUsernames } },
-            select: { id: true },
-          });
-          resolvedRecipients = users.map((u) => u.id);
-        }
+      if (!tenantId) {
+        // Every notification in this app belongs to a tenant. Writing it
+        // without one used to silently fall back to the shared master DB
+        // (prisma.notification.create with no tenant scoping) — refuse
+        // instead, so a missing tenantId fails loudly at the producer.
+        throw new Error(
+          `Notification job ${job.id} is missing tenantId — refusing to process.`,
+        );
       }
 
-      // Persist notification to DB
-      const notification = await (prisma.notification.create as any)({
-        data: {
-          title,
-          message,
-          eventType,
-          priority,
-          timeStamp: new Date(),
-          ...(resolvedRecipients.length > 0
-            ? {
-                recipients: {
-                  create: resolvedRecipients.map((userId) => ({ userId })),
-                },
-              }
-            : {}),
-        },
-        include: { recipients: true },
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { dbName: true },
       });
-
-      // Deliver via WebSocket to connected clients through the API gateway.
-      // sendToUser()/the socket registry are keyed by userId, not username —
-      // resolvedRecipients above already is that userId list (either passed
-      // directly as `recipients`, or resolved from pushTargets/targetUser),
-      // so reuse it here instead of re-deriving anything from usernames.
-      const wsPublisher = getNotificationPublisher();
-
-      if (resolvedRecipients.length > 0) {
-        await Promise.all(
-          resolvedRecipients.map((userId) =>
-            wsPublisher.sendToUser(userId, "notification", notification),
-          ),
+      if (!tenant?.dbName) {
+        // A null tenantClient here would make prismaWithTenant silently fall
+        // back to the master DB (the exact bug this fix closes) — refuse
+        // instead of writing into the wrong database.
+        throw new Error(
+          `Notification job ${job.id}: tenant ${tenantId} has no resolvable database.`,
         );
-        if (socketEvent) {
+      }
+      const tenantClient = getClientForDb(tenant.dbName);
+
+      return runWithTenant(tenantId, tenantClient, async () => {
+        // Resolve DB recipients: prefer explicit user IDs, else resolve from usernames
+        let resolvedRecipients = [...recipients];
+        if (resolvedRecipients.length === 0) {
+          const targetUsernames =
+            pushTargets.length > 0
+              ? pushTargets
+              : targetUser
+                ? Array.isArray(targetUser)
+                  ? targetUser
+                  : [targetUser]
+                : [];
+          if (targetUsernames.length > 0) {
+            const users = await prismaWithTenant.user.findMany({
+              where: { username: { in: targetUsernames } },
+              select: { id: true },
+            });
+            resolvedRecipients = users.map((u) => u.id);
+          }
+        }
+
+        // Persist notification to the tenant's own database
+        const notification = await (
+          prismaWithTenant.notification.create as any
+        )({
+          data: {
+            tenantId,
+            title,
+            message,
+            eventType,
+            priority,
+            timeStamp: new Date(),
+            ...(resolvedRecipients.length > 0
+              ? {
+                  recipients: {
+                    create: resolvedRecipients.map((userId) => ({
+                      tenantId,
+                      userId,
+                    })),
+                  },
+                }
+              : {}),
+          },
+          include: { recipients: true },
+        });
+
+        // Deliver via WebSocket to connected clients through the API gateway.
+        // sendToUser()/the socket registry are keyed by userId, not username —
+        // resolvedRecipients above already is that userId list (either passed
+        // directly as `recipients`, or resolved from pushTargets/targetUser),
+        // so reuse it here instead of re-deriving anything from usernames.
+        const wsPublisher = getNotificationPublisher();
+
+        if (resolvedRecipients.length > 0) {
           await Promise.all(
             resolvedRecipients.map((userId) =>
-              wsPublisher.sendToUser(
-                userId,
-                socketEvent,
-                socketPayload ?? notification,
-              ),
+              wsPublisher.sendToUser(userId, "notification", notification),
             ),
           );
+          if (socketEvent) {
+            await Promise.all(
+              resolvedRecipients.map((userId) =>
+                wsPublisher.sendToUser(
+                  userId,
+                  socketEvent,
+                  socketPayload ?? notification,
+                ),
+              ),
+            );
+          }
+        } else {
+          await wsPublisher.sendNotification(notification);
         }
-      } else {
-        await wsPublisher.sendNotification(notification);
-      }
 
-      // FCM push notifications
-      let fcmResult = { sentCount: 0, failedCount: 0, success: false };
-      if (sendPushNotification) {
-        let targets: string[] = pushTargets;
-        if (!targets.length && targetUser) {
-          targets = Array.isArray(targetUser) ? targetUser : [targetUser];
+        // FCM push notifications
+        let fcmResult = { sentCount: 0, failedCount: 0, success: false };
+        if (sendPushNotification) {
+          let targets: string[] = pushTargets;
+          if (!targets.length && targetUser) {
+            targets = Array.isArray(targetUser) ? targetUser : [targetUser];
+          }
+
+          const result =
+            targets.length > 0
+              ? await sendPushNotifications(targets, title, message)
+              : await sendPushNotifications("ALL_USERS", title, message);
+
+          fcmResult = {
+            sentCount: result.sentCount,
+            failedCount: result.failedCount,
+            success: result.success,
+          };
         }
 
-        const result =
-          targets.length > 0
-            ? await sendPushNotifications(targets, title, message)
-            : await sendPushNotifications("ALL_USERS", title, message);
+        logger.info(`Notification job ${job.id} processed`, {
+          notificationId: notification.id,
+          dbRecipients: recipients.length,
+          fcmSent: fcmResult.sentCount,
+        });
 
-        fcmResult = {
-          sentCount: result.sentCount,
-          failedCount: result.failedCount,
-          success: result.success,
+        return {
+          success: true,
+          notificationId: notification.id,
+          dbRecipients: recipients.length,
+          pushNotificationResult: fcmResult,
         };
-      }
-
-      logger.info(`Notification job ${job.id} processed`, {
-        notificationId: notification.id,
-        dbRecipients: recipients.length,
-        fcmSent: fcmResult.sentCount,
       });
-
-      return {
-        success: true,
-        notificationId: notification.id,
-        dbRecipients: recipients.length,
-        pushNotificationResult: fcmResult,
-      };
     },
     {
       connection: getBullMQConnection(),
