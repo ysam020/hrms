@@ -10,6 +10,7 @@ import {
   acknowledgeAssignmentSchema,
   reportAssetIssueSchema,
   updateAssetIssueStatusSchema,
+  createAssetCategorySchema,
 } from "../schemas";
 
 export const assetsRouter: Router = Router();
@@ -32,6 +33,15 @@ assetsRouter.patch(
 
 // ── Summary (static, before /:assetId) ────────────────────────────────────
 assetsRouter.get("/summary", authenticate, h.getAssetSummary);
+
+// ── Categories (static, before /:assetId) ──────────────────────────────────
+assetsRouter.get("/categories", authenticate, h.listAssetCategories);
+assetsRouter.post(
+  "/categories",
+  authenticate,
+  validate(createAssetCategorySchema),
+  h.createAssetCategory,
+);
 
 // ── Assignment sub-actions ─────────────────────────────────────────────────
 assetsRouter.post(

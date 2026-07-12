@@ -8,12 +8,29 @@ import { cacheManager } from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
 import { safeDecrypt } from "@hrms/crypto";
+import { isPrivileged } from "./approvalChains";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
+  const authReq = req as AuthRequest;
   try {
+    let isPrivilegedUser = await isPrivileged(authReq);
+    if (!isPrivilegedUser) {
+      const actor = await prisma.user.findUnique({
+        where: { id: authReq.user!.userId },
+        select: { permissions: true },
+      });
+      isPrivilegedUser = (actor?.permissions ?? []).includes(
+        "EmployeeManagement:edit",
+      );
+    }
+    if (!isPrivilegedUser) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+    }
+
     const {
       username,
-      assets,
       employeeStatus,
       pf_no,
       uan_no,
@@ -42,7 +59,6 @@ export async function editEmployeeDetails(req: Request, res: Response) {
 
     const updateData: Record<string, any> = {};
 
-    if (assets !== undefined) updateData.assets = assets;
     if (employeeStatus !== undefined)
       updateData.employeeStatus = employeeStatus;
     if (pf_no !== undefined) updateData.pf_no = pf_no;
@@ -107,7 +123,6 @@ export async function getEmployeeDetails(req: Request, res: Response) {
       select: {
         id: true,
         username: true,
-        assets: true,
         employeeStatus: true,
         wfh: true,
         wfhHomeLatitude: true,
@@ -561,6 +576,7 @@ export async function listPendingKycActions(req: AuthRequest, res: Response) {
 }
 
 export async function viewAllKycs(req: Request, res: Response) {
+  const authReq = req as AuthRequest;
   try {
     const { page, limit } = parsePagination(req.query, 10);
     const skip = (page - 1) * limit;
@@ -576,7 +592,10 @@ export async function viewAllKycs(req: Request, res: Response) {
       employeeStatus: "Active",
       tenantId: { $oid: tenantId },
     };
-    if (req.query.search) {
+    if (!(await isPrivileged(authReq))) {
+      // Non-privileged callers only ever see their own record in this list.
+      match._id = { $oid: authReq.user!.userId };
+    } else if (req.query.search) {
       // Escape special regex characters to prevent ReDoS
       const escaped = String(req.query.search).replace(
         /[.*+?^${}()|[\]\\]/g,

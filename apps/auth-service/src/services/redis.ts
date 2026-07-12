@@ -13,7 +13,7 @@ export const getRedisClient = (): Redis => {
   return redis;
 };
 
-const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
+const REFRESH_TTL = 30 * 24 * 60 * 60; // 30 days in seconds — matches REFRESH_TOKEN_EXPIRE default
 const PREV_TOKEN_GRACE_SECONDS = 60;
 
 export interface RefreshTokenMeta {

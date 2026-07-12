@@ -8,12 +8,13 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
 import { recordLoginEvent } from "../services/loginEventService";
+import { getActiveSettings } from "./tenantSettings";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict" as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — matches REFRESH_TOKEN_EXPIRE default
   path: "/api/v1/refresh-token",
 };
 
@@ -145,13 +146,18 @@ export async function getProfile(req: Request, res: Response) {
 
     let tenantName: string | null = null;
     let tenantSlug: string | null = null;
+    let wfhEnabled = true;
     if (user?.tenantId) {
-      const tenant = await prisma.tenant.findUnique({
-        where: { id: user.tenantId },
-        select: { name: true, slug: true },
-      });
+      const [tenant, activeSettings] = await Promise.all([
+        prisma.tenant.findUnique({
+          where: { id: user.tenantId },
+          select: { name: true, slug: true },
+        }),
+        getActiveSettings(user.tenantId),
+      ]);
       tenantName = tenant?.name ?? null;
       tenantSlug = tenant?.slug ?? null;
+      wfhEnabled = activeSettings?.wfhEnabled ?? true;
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -161,6 +167,7 @@ export async function getProfile(req: Request, res: Response) {
           tenantName,
           tenantSlug,
           tenantRole: user?.tenantRole ?? null,
+          wfhEnabled,
         },
       },
       message: "Profile fetched",

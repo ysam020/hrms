@@ -11,18 +11,8 @@ import {
 
 export const hrmRouter: Router = Router();
 
-hrmRouter.get(
-  "/get-hr-activities",
-  authenticate,
-  requireSuperUser,
-  h.getHrActivities,
-);
-hrmRouter.get(
-  "/hr-activity/:_id",
-  authenticate,
-  requireSuperUser,
-  h.getHrActivity,
-);
+hrmRouter.get("/get-hr-activities", authenticate, h.getHrActivities);
+hrmRouter.get("/hr-activity/:_id", authenticate, h.getHrActivity);
 hrmRouter.post(
   "/add-hr-activity",
   authenticate,

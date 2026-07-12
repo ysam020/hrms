@@ -33,6 +33,9 @@ jest.mock("@hrms/db", () => {
     compOffCredit: {
       updateMany: jest.fn(),
     },
+    wfhRequest: {
+      findFirst: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -84,6 +87,7 @@ const mockLeaveBalanceUpdateMany = (prisma as any).leaveBalance
   .updateMany as jest.Mock;
 const mockCompOffUpdateMany = (prisma as any).compOffCredit
   .updateMany as jest.Mock;
+const mockWfhFindFirst = (prisma as any).wfhRequest.findFirst as jest.Mock;
 const mockNotificationAdd = getNotificationQueue().add as jest.Mock;
 
 const DEFAULT_ATTENDANCE_SETTINGS = {
@@ -128,6 +132,8 @@ describe("markAttendance", () => {
     mockCompOffUpdateMany.mockResolvedValue({ count: 1 });
     mockUserFindMany.mockResolvedValue([]);
     mockNotificationAdd.mockResolvedValue(undefined);
+    // No approved WFH request for today by default.
+    mockWfhFindFirst.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when userId or type is missing", async () => {

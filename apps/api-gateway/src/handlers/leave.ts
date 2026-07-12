@@ -43,14 +43,15 @@ export async function addLeave(req: Request, res: Response) {
 }
 
 export async function getLeaveApplications(req: Request, res: Response) {
-  const { user } = req as AuthRequest;
+  const authReq = req as AuthRequest;
+  const { user } = authReq;
   try {
-    const superUser = await isSuperUser(user!.userId);
+    const privileged = await isPrivileged(authReq);
     let userId: string | undefined;
 
-    if (superUser && req.query.userId) {
+    if (privileged && req.query.userId) {
       userId = req.query.userId as string;
-    } else if (superUser && req.query.search) {
+    } else if (privileged && req.query.search) {
       const search = String(req.query.search);
       const found = await prisma.user.findFirst({
         where: { username: { contains: search, mode: "insensitive" } },
@@ -65,7 +66,7 @@ export async function getLeaveApplications(req: Request, res: Response) {
         });
       }
       userId = found.id;
-    } else if (!superUser) {
+    } else if (!privileged) {
       userId = user!.userId;
     }
 
@@ -144,9 +145,16 @@ export async function updateLeaveStatus(req: Request, res: Response) {
       // If the leave is still Pending this cancels immediately; if it's
       // already Approved, leave-service instead requests cancellation and
       // routes it through the Approval Chain (module "leave").
+      //
+      // userId is omitted entirely for a privileged caller withdrawing on
+      // someone else's behalf — cancelLeave's ownership check
+      // (leave.userId !== userId) only runs when userId is present, so
+      // sending the privileged caller's own id here would always trip it
+      // and reject a withdrawal this route just authorized above.
+      const privileged = await isPrivileged(authReq);
       const response = (await grpcCall(leaveClient, "cancelLeave", {
         id: leaveId,
-        userId: user!.userId,
+        ...(privileged ? {} : { userId: user!.userId }),
         reason: reason || "",
       })) as any;
       return apiResponse(res, grpcToHttpStatus(response.status), response);

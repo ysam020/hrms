@@ -101,7 +101,6 @@ model User {
   wfhHomeLatitude             Float?
   wfhHomeLongitude            Float?
   wfhHomeName                 String?   // human-readable address label
-  assets                      String[]
   note                        String?
   employeeStatus              String    @default("Active")
   reasonForTermination        String?
@@ -1116,6 +1115,12 @@ model TenantSettings {
   // Allowed radius in metres (applies to both office and WFH home location)
   geofenceRadiusMeters   Int      @default(200)
 
+  // ── Modules ────────────────────────────────────────────────────────────────
+  // Tenant-wide switch for the WFH module (distinct from User.wfh, which is
+  // per-employee eligibility). Defaults true so existing tenants keep today's
+  // behavior.
+  wfhEnabled             Boolean  @default(true)
+
   // ── HR ─────────────────────────────────────────────────────────────────────
   probationPeriodDays    Int      @default(90)
   noticePeriodDays       Int      @default(30)
@@ -1269,12 +1274,32 @@ model SalaryAdvance {
 
 // ─── Asset Management ─────────────────────────────────────────────────────────
 
+// Tenant-scoped lookup of asset categories in use — mirrors Designation for
+// job titles. The static starter set lives client-side (ASSET_CATEGORIES in
+// AssetInventory.tsx); a category typed in at asset-creation time that isn't
+// already known gets persisted here so it shows up in the dropdown next time.
+model AssetCategory {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  name      String
+  isActive  Boolean  @default(true)
+  createdBy String?  @db.ObjectId
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, name])
+  @@map("asset_categories")
+}
+
 model Asset {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId      String?   @db.ObjectId
   assetCode     String    // unique per tenant (e.g. "LAP-001")
   name          String
-  category      String    // Laptop | Phone | Monitor | Furniture | Vehicle | Other
+  // Free text, not a fixed enum — seeded with a starter set (Laptop, Desktop,
+  // Phone, Tablet, Monitor, Furniture, Vehicle, Other) but HR can enter a new
+  // one at creation time, same as Designation/jobTitle. See AssetCategory
+  // below for the persisted, tenant-scoped lookup of categories in use.
+  category      String
   brand         String?
   model         String?
   serialNumber  String?
@@ -1361,7 +1386,12 @@ model WfhRequest {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId        String?   @db.ObjectId
   userId          String    @db.ObjectId
-  date            DateTime  // UTC midnight of the requested day
+  date            DateTime  // UTC midnight of the first requested day
+  // UTC midnight of the last requested day — always set, equals `date` for a
+  // single-day request. Kept non-optional (rather than null-for-single-day)
+  // to sidestep Prisma's Mongo connector treating an explicit null and a
+  // field that was never set as different query-match states.
+  toDate          DateTime
   reason          String?
   // Pending | Approved | Rejected | Cancelled
   status          String    @default("Pending")
@@ -1371,8 +1401,9 @@ model WfhRequest {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  // Prevent duplicate requests for the same employee-day.
-  @@unique([tenantId, userId, date])
+  // No per-date uniqueness anymore — a request now spans [date, toDate], so
+  // overlap with existing requests is checked in application code instead
+  // (see requestWfh in apps/api-gateway/src/handlers/wfh.ts).
   @@index([tenantId, userId, status])
   @@index([tenantId, date, status])
   @@map("wfh_requests")

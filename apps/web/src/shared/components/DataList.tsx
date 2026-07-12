@@ -55,6 +55,8 @@ interface DataListProps<T> {
   getRowId?: (row: T) => string;
   loading?: boolean;
   variant?: "cards" | "rows";
+  /** Alternate row background shading. Rows variant only. */
+  striped?: boolean;
   actions?: (row: T) => DataListAction<T>[];
   /** Makes the whole card clickable (e.g. navigate to a detail page). Cards variant only. */
   onRowClick?: (row: T) => void;
@@ -233,10 +235,12 @@ function TableRowLike<T>({
   row,
   columns,
   actions,
+  alt,
 }: {
   row: T;
   columns: DataListColumn<T>[];
   actions?: DataListAction<T>[];
+  alt?: boolean;
 }) {
   return (
     <Box
@@ -248,6 +252,7 @@ function TableRowLike<T>({
         gap: 1.5,
         py: 1.1,
         px: 2,
+        bgcolor: alt ? "action.hover" : undefined,
         transition: "background-color 0.15s ease",
         "&:hover": { backgroundColor: "action.hover" },
       }}
@@ -323,6 +328,7 @@ function DataList<T>({
   getRowId,
   loading = false,
   variant = "cards",
+  striped = false,
   actions,
   onRowClick,
   pagination,
@@ -353,7 +359,12 @@ function DataList<T>({
         ) : (
           <>
             {i > 0 && <Divider />}
-            <TableRowLike row={row} columns={columns} actions={rowActions} />
+            <TableRowLike
+              row={row}
+              columns={columns}
+              actions={rowActions}
+              alt={striped && i % 2 === 1}
+            />
           </>
         )}
       </Fragment>

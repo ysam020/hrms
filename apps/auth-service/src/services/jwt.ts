@@ -15,14 +15,14 @@ export interface AccessTokenPayload {
 export const signAccessToken = (payload: AccessTokenPayload): string => {
   return jwt.sign(payload, process.env.ACCESS_JWT_TOKEN!, {
     algorithm: "HS256",
-    expiresIn: (process.env.ACCESS_JWT_EXPIRE || "1h") as any,
+    expiresIn: (process.env.ACCESS_JWT_EXPIRE || "24h") as any,
   });
 };
 
 export const signRefreshToken = (userId: string): string => {
   return jwt.sign({ userId }, process.env.REFRESH_TOKEN!, {
     algorithm: "HS256",
-    expiresIn: (process.env.REFRESH_TOKEN_EXPIRE || "7d") as any,
+    expiresIn: (process.env.REFRESH_TOKEN_EXPIRE || "30d") as any,
   });
 };
 

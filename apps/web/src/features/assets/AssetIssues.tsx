@@ -34,7 +34,10 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import FilterList from "@mui/icons-material/FilterList";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import Divider from "@mui/material/Divider";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -147,6 +150,28 @@ function PriorityLabel({ priority }: { priority: string }) {
   );
 }
 
+function DetailRow({ label, value }: { label: string; value: any }) {
+  return (
+    <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+      <Typography
+        variant="caption"
+        sx={{
+          minWidth: 110,
+          flexShrink: 0,
+          color: "text.secondary",
+          fontWeight: 500,
+          pt: "1px",
+        }}
+      >
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+        {value || <span style={{ fontStyle: "italic" }}>—</span>}
+      </Typography>
+    </Box>
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 function AssetIssues() {
@@ -154,8 +179,14 @@ function AssetIssues() {
   const { user } = useContext(UserContext);
 
   const isHr =
-    user?.role?.some((r: string) => ["owner", "admin", "hr"].includes(r)) ||
-    user?.isSuperUser;
+    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    hasPermission(
+      "Assets",
+      "manage",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
 
   // ── Table state ────────────────────────────────────────────────────────────
   const [globalFilter, setGlobalFilter] = useState("");
@@ -208,6 +239,11 @@ function AssetIssues() {
   } | null>(null);
   const [actionNotes, setActionNotes] = useState("");
   const [actioning, setActioning] = useState(false);
+
+  // ── View details dialog (everyone — read-only) ─────────────────────────────
+  // Surfaces reviewNotes/resolverNotes, which are already returned by the
+  // list/detail endpoints but were previously never shown anywhere.
+  const [viewIssue, setViewIssue] = useState<any>(null);
 
   // ── Fetch issues ───────────────────────────────────────────────────────────
   const fetchIssues = useCallback(
@@ -384,19 +420,27 @@ function AssetIssues() {
 
   const rowActions = useCallback(
     (row: any) => {
-      if (!isHr) return [];
+      const viewAction = {
+        icon: <VisibilityIcon sx={{ fontSize: 16 }} />,
+        label: "View Details",
+        onClick: () => setViewIssue(row),
+      };
+      if (!isHr) return [viewAction];
       const next = NEXT_ACTIONS[row.status] ?? [];
-      return next.map((a) => ({
-        icon: a.icon,
-        label: a.label,
-        onClick: () =>
-          setActionDialog({
-            issueId: row.id,
-            targetStatus: a.status,
-            label: a.label,
-            currentType: row.type,
-          }),
-      }));
+      return [
+        viewAction,
+        ...next.map((a) => ({
+          icon: a.icon,
+          label: a.label,
+          onClick: () =>
+            setActionDialog({
+              issueId: row.id,
+              targetStatus: a.status,
+              label: a.label,
+              currentType: row.type,
+            }),
+        })),
+      ];
     },
     [isHr],
   );
@@ -665,6 +709,111 @@ function AssetIssues() {
             disabled={actioning}
           >
             {actioning ? "Saving…" : actionDialog?.label}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── View Details Dialog (everyone) ──────────────────────────────── */}
+      <Dialog
+        open={!!viewIssue}
+        onClose={() => setViewIssue(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Issue Details</DialogTitle>
+        <DialogContent
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 1.5,
+            pt: "16px !important",
+          }}
+        >
+          <DetailRow
+            label="Asset"
+            value={
+              viewIssue?.asset
+                ? `${viewIssue.asset.assetCode} — ${viewIssue.asset.name}`
+                : "—"
+            }
+          />
+          <DetailRow
+            label="Type"
+            value={
+              ISSUE_TYPES.find((t) => t.value === viewIssue?.type)?.label ??
+              viewIssue?.type
+            }
+          />
+          <DetailRow
+            label="Priority"
+            value={viewIssue && <PriorityLabel priority={viewIssue.priority} />}
+          />
+          <DetailRow
+            label="Status"
+            value={viewIssue && <StatusChip status={viewIssue.status} />}
+          />
+          <DetailRow label="Title" value={viewIssue?.title} />
+          <DetailRow label="Description" value={viewIssue?.description} />
+          <DetailRow
+            label="Reported By"
+            value={viewIssue?.reporter?.username}
+          />
+          <DetailRow
+            label="Reported On"
+            value={
+              viewIssue?.createdAt
+                ? dayjs(viewIssue.createdAt).format("DD MMM YYYY, h:mm A")
+                : null
+            }
+          />
+
+          {viewIssue?.reviewedAt && (
+            <>
+              <Divider sx={{ my: 0.5 }} />
+              <DetailRow
+                label="Reviewed By"
+                value={viewIssue?.reviewer?.username}
+              />
+              <DetailRow
+                label="Reviewed On"
+                value={dayjs(viewIssue.reviewedAt).format(
+                  "DD MMM YYYY, h:mm A",
+                )}
+              />
+              <DetailRow
+                label={
+                  viewIssue?.status === "rejected"
+                    ? "Rejection Notes"
+                    : "Review Notes"
+                }
+                value={viewIssue?.reviewNotes}
+              />
+            </>
+          )}
+
+          {viewIssue?.resolvedAt && (
+            <>
+              <Divider sx={{ my: 0.5 }} />
+              <DetailRow
+                label="Resolved On"
+                value={dayjs(viewIssue.resolvedAt).format(
+                  "DD MMM YYYY, h:mm A",
+                )}
+              />
+              <DetailRow
+                label="Resolution Notes"
+                value={viewIssue?.resolverNotes}
+              />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="ghost"
+            onClick={() => setViewIssue(null)}
+            size="small"
+          >
+            Close
           </Button>
         </DialogActions>
       </Dialog>

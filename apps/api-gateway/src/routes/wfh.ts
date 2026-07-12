@@ -6,17 +6,13 @@ import { requestWfhSchema, updateWfhStatusSchema } from "../schemas";
 
 export const wfhRouter: Router = Router();
 
-wfhRouter.post(
-  "/requests",
-  authenticate,
-  validate(requestWfhSchema),
-  h.requestWfh,
-);
-wfhRouter.get("/requests", authenticate, h.listWfhRequests);
+wfhRouter.use(authenticate, h.requireWfhEnabled);
+
+wfhRouter.post("/requests", validate(requestWfhSchema), h.requestWfh);
+wfhRouter.get("/requests", h.listWfhRequests);
 wfhRouter.patch(
   "/requests/status",
-  authenticate,
   validate(updateWfhStatusSchema),
   h.updateWfhStatus,
 );
-wfhRouter.get("/calendar", authenticate, h.getWfhCalendar);
+wfhRouter.get("/calendar", h.getWfhCalendar);

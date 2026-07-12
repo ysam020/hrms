@@ -1,5 +1,14 @@
 import { lazy } from "react";
 import Dashboard from "@web/features/dashboard/Dashboard";
+import RequireAccess from "./RequireAccess";
+import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
+import {
+  canAccessSettings,
+  canManagePermissions,
+  canViewAnalytics,
+  canAccessJobOpenings,
+  isHrOrAbove,
+} from "@web/shared/utils/permissions/navAccess";
 // Lazy load ALL other routes to prevent eager loading
 const Profile = lazy(() => import("@web/features/profile/Profile"));
 const Help = lazy(() => import("@web/features/layout/Help"));
@@ -122,14 +131,22 @@ const routesConfig = () => {
     },
     {
       path: "/analytics/*",
-      element: <Analytics />,
+      element: (
+        <RequireAccess check={canViewAnalytics}>
+          <Analytics />
+        </RequireAccess>
+      ),
       allowedModules: [],
       name: "Analytics",
       category: null,
     },
     {
       path: "/permissions/*",
-      element: <Permissions />,
+      element: (
+        <RequireAccess check={canManagePermissions}>
+          <Permissions />
+        </RequireAccess>
+      ),
       allowedModules: [],
       name: "Permissions",
       category: null,
@@ -157,14 +174,22 @@ const routesConfig = () => {
     },
     {
       path: "/subscription",
-      element: <Subscription />,
+      element: (
+        <RequireAccess check={hasSubscriptionAccess}>
+          <Subscription />
+        </RequireAccess>
+      ),
       allowedModules: [],
       name: "Subscription",
       category: null,
     },
     {
       path: "/settings",
-      element: <Settings />,
+      element: (
+        <RequireAccess check={canAccessSettings}>
+          <Settings />
+        </RequireAccess>
+      ),
       allowedModules: [],
       name: "Settings",
       category: null,
@@ -172,14 +197,22 @@ const routesConfig = () => {
     // Legacy routes — kept for deep-link compatibility
     {
       path: "/company-info",
-      element: <CompanyInfo />,
+      element: (
+        <RequireAccess check={canAccessSettings}>
+          <CompanyInfo />
+        </RequireAccess>
+      ),
       allowedModules: [],
       name: "Company Information",
       category: null,
     },
     {
       path: "/org-settings",
-      element: <OrgSettings />,
+      element: (
+        <RequireAccess check={canAccessSettings}>
+          <OrgSettings />
+        </RequireAccess>
+      ),
       allowedModules: [],
       name: "Organisation Settings",
       category: null,
@@ -257,14 +290,22 @@ const routesConfig = () => {
     },
     {
       path: "/job-openings/*",
-      element: <JobOpenings />,
+      element: (
+        <RequireAccess check={canAccessJobOpenings}>
+          <JobOpenings />
+        </RequireAccess>
+      ),
       allowedModules: ["Job Openings"],
       name: "Job Openings",
       category: "HR & Management",
     },
     {
       path: "/view-job-opening/:_id",
-      element: <ViewIndividualJob />,
+      element: (
+        <RequireAccess check={canAccessJobOpenings}>
+          <ViewIndividualJob />
+        </RequireAccess>
+      ),
       allowedModules: ["Job Openings"],
       name: "View Job",
       category: "HR & Management",
@@ -309,7 +350,11 @@ const routesConfig = () => {
     },
     {
       path: "/wfh/*",
-      element: <WFH />,
+      element: (
+        <RequireAccess check={(u) => Boolean(u?.wfhEnabled)}>
+          <WFH />
+        </RequireAccess>
+      ),
       allowedModules: ["WFH Requests"],
       name: "WFH Requests",
       category: "HR & Management",
@@ -344,7 +389,11 @@ const routesConfig = () => {
     },
     {
       path: "/reports/*",
-      element: <Reports />,
+      element: (
+        <RequireAccess check={isHrOrAbove}>
+          <Reports />
+        </RequireAccess>
+      ),
       allowedModules: [],
       name: "Reports",
       category: "HR & Management",

@@ -124,6 +124,15 @@ const PERM_DEFS = [
   ["Organisation", "edit_company_info"],
   ["Organisation", "edit_organisation_settings"],
   ["Organisation", "approve_join_requests"],
+
+  // Assets (scopeless)
+  ["Assets", "manage"],
+
+  // WFH (scopeless)
+  ["WFH", "approve"],
+
+  // Helpdesk (scopeless)
+  ["Helpdesk", "manage"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }

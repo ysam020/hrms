@@ -9,6 +9,8 @@ import CardContent from "@mui/material/CardContent";
 import Alert from "@mui/material/Alert";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { UserContext } from "@web/app/providers/UserContext";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import CustomModal from "@web/shared/components/Modal";
 import { useFormik } from "formik";
 import { z } from "zod";
@@ -43,6 +45,28 @@ const validationSchema = toFormikValidationSchema(
 function InfoModal(props) {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
+  const { user } = useContext(UserContext);
+  const canReassign = hasPermission(
+    "JobOpenings",
+    "reassign_interviewer",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canReschedule = hasPermission(
+    "JobOpenings",
+    "schedule_interview",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canUpdateStatus = hasPermission(
+    "JobOpenings",
+    "update_candidate_status",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const { name, email, aadharNo } = props.applicantData || {};
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [rescheduleIndex, setRescheduleIndex] = useState<number | null>(null);
@@ -508,21 +532,28 @@ function InfoModal(props) {
                             </Typography>
                             {!interview.interviewConducted &&
                               editIndex !== index &&
-                              rescheduleIndex !== index && (
+                              rescheduleIndex !== index &&
+                              (canReassign || canReschedule) && (
                                 <Stack direction="row" spacing={1}>
-                                  <Button
-                                    onClick={() => handleAssignClick(index)}
-                                    style={{ marginTop: 0 }}
-                                  >
-                                    Reassign
-                                  </Button>
-                                  <Button
-                                    variant="outlined"
-                                    onClick={() => handleRescheduleClick(index)}
-                                    style={{ marginTop: 0 }}
-                                  >
-                                    Reschedule
-                                  </Button>
+                                  {canReassign && (
+                                    <Button
+                                      onClick={() => handleAssignClick(index)}
+                                      style={{ marginTop: 0 }}
+                                    >
+                                      Reassign
+                                    </Button>
+                                  )}
+                                  {canReschedule && (
+                                    <Button
+                                      variant="outlined"
+                                      onClick={() =>
+                                        handleRescheduleClick(index)
+                                      }
+                                      style={{ marginTop: 0 }}
+                                    >
+                                      Reschedule
+                                    </Button>
+                                  )}
                                 </Stack>
                               )}
                           </Box>
@@ -689,6 +720,7 @@ function InfoModal(props) {
 
                           {/* Status Update */}
                           {!shouldHideStatusDropdown(roundNumber) &&
+                            canUpdateStatus &&
                             (interviewHasEnded(interview) ? (
                               <Box
                                 sx={{

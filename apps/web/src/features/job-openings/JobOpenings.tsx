@@ -2,6 +2,7 @@ import { memo, useCallback, useContext, useState } from "react";
 import TabsPanel from "@web/shared/components/TabsPanel";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import NewJobOpening from "./NewJobOpening";
 import ViewJobOpenings from "./ViewJobOpenings";
 import Insights from "./Insights";
@@ -32,7 +33,9 @@ function JobOpenings() {
       label: "View Job Openings",
       component: <ViewJobOpenings refreshKey={refreshKey} />,
     },
-    { label: "Insights", component: <Insights /> },
+    ...(isHrOrAbove(user)
+      ? [{ label: "Insights", component: <Insights /> }]
+      : []),
   ];
 
   return (

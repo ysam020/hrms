@@ -307,6 +307,8 @@ const ASSETS = {
   REPORT_ASSET_ISSUE: "/assets/issues",
   UPDATE_ASSET_ISSUE_STATUS: (issueId: string) =>
     `/assets/issues/${issueId}/status`,
+  LIST_ASSET_CATEGORIES: "/assets/categories",
+  CREATE_ASSET_CATEGORY: "/assets/categories",
 };
 
 const WFH = {

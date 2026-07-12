@@ -18,18 +18,42 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { handleError } from "../utils/handleError";
-import { AuthRequest } from "../middleware/authenticate";
+import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
+import { getNotificationQueue } from "@hrms/queue";
 
-async function assertHrRole(userId: string): Promise<boolean> {
+// Prisma's MongoDB connector treats an explicit `null` and "field was never
+// set" as different states — `{ returnedOn: null }` alone only matches rows
+// where the field was explicitly written as null, not rows where it was
+// simply omitted at creation (which every AssetAssignment.create() call here
+// used to do). All creates below now write `returnedOn: null` explicitly, but
+// this still has to match existing/legacy rows created before that fix.
+const NOT_RETURNED = {
+  OR: [{ returnedOn: null }, { returnedOn: { isSet: false } }],
+};
+
+// Same story for acknowledgedAt.
+const NOT_ACKNOWLEDGED = {
+  OR: [{ acknowledgedAt: null }, { acknowledgedAt: { isSet: false } }],
+};
+
+// tenantRole comes from the JWT (resolved from TenantMembership at login) —
+// User.role is a legacy, never-populated field and must not be used here.
+// Falls through to the explicit Assets:manage permission grant for anyone
+// else (e.g. a non-HR employee given delegated asset-management access).
+async function assertHrRole(authUser: AuthUser | undefined): Promise<boolean> {
+  if (!authUser) return false;
+  if (["owner", "admin", "hr"].includes(authUser.tenantRole ?? "")) {
+    return true;
+  }
   const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, isSuperUser: true },
+    where: { id: authUser.userId },
+    select: { isSuperUser: true, permissions: true },
   });
   if (!user) return false;
   if (user.isSuperUser) return true;
-  return user.role.some((r) => ["owner", "admin", "hr"].includes(r));
+  return ((user.permissions as string[]) ?? []).includes("Assets:manage");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +65,7 @@ async function assertHrRole(userId: string): Promise<boolean> {
 export async function createAsset(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -98,8 +122,11 @@ export async function createAsset(req: Request, res: Response) {
 export async function listAssets(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const isHr = await assertHrRole(user!.userId);
-    const { status, category, search } = req.query as Record<string, string>;
+    const isHr = await assertHrRole(user);
+    const { status, category, search, userId } = req.query as Record<
+      string,
+      string
+    >;
     const { page, limit } = parsePagination(req.query);
     const skip = (page - 1) * limit;
     const take = limit;
@@ -115,13 +142,21 @@ export async function listAssets(req: Request, res: Response) {
       ];
     }
 
-    // Non-HR employees see only their currently assigned assets.
     if (!isHr) {
+      // Non-HR employees see only their own currently assigned assets.
       const myAssignments = await prisma.assetAssignment.findMany({
-        where: { userId: user!.userId, returnedOn: null },
+        where: { userId: user!.userId, ...NOT_RETURNED },
         select: { assetId: true },
       });
       where.id = { in: myAssignments.map((a: any) => a.assetId) };
+    } else if (userId) {
+      // HR viewing a specific employee's currently assigned assets (e.g. the
+      // Employee profile page's Assets card).
+      const theirAssignments = await prisma.assetAssignment.findMany({
+        where: { userId, ...NOT_RETURNED },
+        select: { assetId: true },
+      });
+      where.id = { in: theirAssignments.map((a: any) => a.assetId) };
     }
 
     const [assets, total] = await Promise.all([
@@ -131,33 +166,45 @@ export async function listAssets(req: Request, res: Response) {
         skip,
         take,
         include: {
+          // No `where`/`take` here — Prisma's MongoDB connector doesn't
+          // reliably apply a filter on a nested relation include (it can
+          // silently return an empty array instead of erroring), so fetch
+          // a small unfiltered window and resolve the active (non-returned)
+          // assignment in application code below instead.
           assignments: {
-            where: { returnedOn: null },
-            take: 1,
             orderBy: { assignedOn: "desc" },
+            take: 5,
           },
         },
       }),
       prisma.asset.count({ where }),
     ]);
 
+    // Resolve each asset's current (non-returned) assignment in JS.
+    const activeAssignmentByAsset = new Map<string, any>();
+    for (const a of assets as any[]) {
+      const active = (a.assignments ?? []).find((x: any) => !x.returnedOn);
+      if (active) activeAssignmentByAsset.set(a.id, active);
+    }
+
     // Enrich with current holder's username.
-    const holderIds = (assets as any[])
-      .filter((a: any) => a.assignments[0]?.userId)
-      .map((a: any) => a.assignments[0].userId);
+    const holderIds = [...activeAssignmentByAsset.values()].map(
+      (a) => a.userId,
+    );
     const holders = await prisma.user.findMany({
       where: { id: { in: holderIds } },
       select: { id: true, username: true, first_name: true, last_name: true },
     });
     const holderMap = new Map(holders.map((h) => [h.id, h]));
 
-    const enriched = (assets as any[]).map((a: any) => ({
-      ...a,
-      currentHolder: a.assignments[0]
-        ? (holderMap.get(a.assignments[0].userId) ?? null)
-        : null,
-      assignments: undefined, // strip raw relation from response
-    }));
+    const enriched = (assets as any[]).map((a: any) => {
+      const active = activeAssignmentByAsset.get(a.id);
+      return {
+        ...a,
+        currentHolder: active ? (holderMap.get(active.userId) ?? null) : null,
+        assignments: undefined, // strip raw relation from response
+      };
+    });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Assets retrieved",
@@ -192,7 +239,7 @@ export async function getAsset(req: Request, res: Response) {
       });
     }
 
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
     const currentAssignment = (asset as any).assignments.find(
       (a: any) => !a.returnedOn,
     );
@@ -240,7 +287,7 @@ export async function getAsset(req: Request, res: Response) {
 export async function updateAsset(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -273,6 +320,13 @@ export async function updateAsset(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message:
           "Cannot mark an assigned asset as available. Use the return endpoint instead.",
+      });
+    }
+    // Retirement is terminal — a retired asset cannot transition anywhere
+    // else (maintenance assets can still come back to available).
+    if (status !== undefined && (asset as any).status === "retired") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "A retired asset's status cannot be changed.",
       });
     }
 
@@ -311,18 +365,20 @@ export async function updateAsset(req: Request, res: Response) {
 export async function assignAsset(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
     }
 
-    const { assetId, userId, expectedReturn, notes } = req.body as {
-      assetId: string;
-      userId: string;
-      expectedReturn?: string;
-      notes?: string;
-    };
+    const { assetId, userId, expectedReturn, conditionOut, notes } =
+      req.body as {
+        assetId: string;
+        userId: string;
+        expectedReturn?: string;
+        conditionOut?: string;
+        notes?: string;
+      };
 
     // Validate target employee exists.
     const employee = await prisma.user.findUnique({
@@ -352,7 +408,20 @@ export async function assignAsset(req: Request, res: Response) {
       });
     }
 
-    // Sequential writes — MongoDB standalone has no multi-doc transactions.
+    // Atomic conditional flip closes the race window between the read above
+    // and this write — two concurrent assign calls can no longer both
+    // succeed against the same asset. Only after this succeeds do we create
+    // the assignment row (sequential, non-transactional — MongoDB standalone
+    // has no multi-doc transactions).
+    const flipped = await prisma.asset.updateMany({
+      where: { id: assetId, status: "available" },
+      data: { status: "assigned" },
+    });
+    if (flipped.count === 0) {
+      return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+        message: "Asset was just assigned by someone else. Please retry.",
+      });
+    }
     await prisma.assetAssignment.create({
       data: {
         tenantId: getTenantId() ?? undefined,
@@ -360,13 +429,13 @@ export async function assignAsset(req: Request, res: Response) {
         userId,
         assignedBy: user!.userId,
         expectedReturn: expectedReturn ? new Date(expectedReturn) : null,
-        conditionOut: (asset as any).condition,
+        conditionOut: conditionOut ?? (asset as any).condition,
         notes: notes ?? null,
+        // Explicit nulls (not omitted) — see NOT_RETURNED/NOT_ACKNOWLEDGED
+        // comment above for why this matters on MongoDB.
+        returnedOn: null,
+        acknowledgedAt: null,
       },
-    });
-    await prisma.asset.update({
-      where: { id: assetId },
-      data: { status: "assigned" },
     });
 
     await emitWebhookEvent("asset.assigned", {
@@ -398,7 +467,7 @@ export async function assignAsset(req: Request, res: Response) {
 export async function returnAsset(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -423,7 +492,7 @@ export async function returnAsset(req: Request, res: Response) {
     }
 
     const activeAssignment = await prisma.assetAssignment.findFirst({
-      where: { assetId, returnedOn: null },
+      where: { assetId, ...NOT_RETURNED },
       orderBy: { assignedOn: "desc" },
     });
     if (!activeAssignment) {
@@ -472,7 +541,7 @@ export async function returnAsset(req: Request, res: Response) {
 export async function retireAsset(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -593,11 +662,11 @@ export async function reportAssetIssue(req: Request, res: Response) {
 
     // Find the active assignment for this user.
     const activeAssignment = await prisma.assetAssignment.findFirst({
-      where: { assetId, userId: user!.userId, returnedOn: null },
+      where: { assetId, userId: user!.userId, ...NOT_RETURNED },
       orderBy: { assignedOn: "desc" },
     });
 
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
 
     // Non-HR must currently hold the asset to report an issue.
     if (!isHr && !activeAssignment) {
@@ -644,6 +713,55 @@ export async function reportAssetIssue(req: Request, res: Response) {
       reportedBy: user!.userId,
     });
 
+    // Notify everyone who can manage assets (in-app + push) — fire-and-forget
+    // so a slow recipient lookup or queue failure never blocks the report.
+    void (async () => {
+      try {
+        const tenantId = getTenantId();
+        if (!tenantId) return;
+
+        const [roleHolders, permissionHolders] = await Promise.all([
+          prisma.tenantMembership.findMany({
+            where: { tenantId, role: { in: ["owner", "admin", "hr"] } },
+            select: { userId: true },
+          }),
+          prisma.user.findMany({
+            where: { tenantId, permissions: { has: "Assets:manage" } },
+            select: { id: true },
+          }),
+        ]);
+        const recipientIds = [
+          ...new Set([
+            ...roleHolders.map((r: any) => r.userId),
+            ...permissionHolders.map((u) => u.id),
+          ]),
+        ].filter((id) => id !== user!.userId);
+        if (recipientIds.length === 0) return;
+
+        const recipientUsers = await prisma.user.findMany({
+          where: { id: { in: recipientIds } },
+          select: { id: true, username: true },
+        });
+
+        const issuePriority = (issue as any).priority as string;
+        await getNotificationQueue().add("assetIssueReported", {
+          tenantId,
+          title: "Asset issue reported",
+          message: `${(asset as any).assetCode} — ${title} (${type})`,
+          recipients: recipientUsers.map((u) => u.id),
+          pushTargets: recipientUsers.map((u) => u.username),
+          eventType: "asset_notification",
+          priority:
+            issuePriority === "critical"
+              ? "high"
+              : (issuePriority as "high" | "medium" | "low"),
+          sendPushNotification: true,
+        });
+      } catch (error) {
+        logger.warn("asset-issue notification failed", { error });
+      }
+    })();
+
     logger.info(
       `Asset issue reported: ${(issue as any).id} (${type}) on ${(asset as any).assetCode}`,
       {
@@ -669,7 +787,7 @@ export async function reportAssetIssue(req: Request, res: Response) {
 export async function listAssetIssues(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
     const { status, type, priority, assetId } = req.query as Record<
       string,
       string
@@ -751,7 +869,7 @@ export async function getAssetIssue(req: Request, res: Response) {
       });
     }
 
-    const isHr = await assertHrRole(user!.userId);
+    const isHr = await assertHrRole(user);
     if (!isHr && (issue as any).reportedBy !== user!.userId) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
@@ -817,7 +935,7 @@ export async function getAssetIssue(req: Request, res: Response) {
 export async function updateAssetIssueStatus(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -872,12 +990,32 @@ export async function updateAssetIssueStatus(req: Request, res: Response) {
     });
 
     // ── Auto-effects on resolution ────────────────────────────────────────────
+    // Guard against a stale issue: if the asset has since been returned and/or
+    // reassigned (a different — or no — assignment is now the active one),
+    // the auto-effects below must not retire/maintenance/free an asset that's
+    // legitimately in someone else's hands, or re-close an assignment that
+    // was already closed through the normal return flow.
+    let effectsSkipped = false;
     if (isResolution) {
       const asset = await prisma.asset.findUnique({
         where: { id: (issue as any).assetId },
       });
+      const currentAssignment = await prisma.assetAssignment.findFirst({
+        where: { assetId: (issue as any).assetId, ...NOT_RETURNED },
+        orderBy: { assignedOn: "desc" },
+      });
+      const assignmentStillCurrent =
+        !(issue as any).assignmentId ||
+        (currentAssignment as any)?.id === (issue as any).assignmentId;
 
-      if (issueType === "lost" || issueType === "stolen") {
+      if (!assignmentStillCurrent) {
+        effectsSkipped = true;
+        logger.warn(
+          `Skipped auto-effects for resolved issue ${issueId}: asset ${(issue as any).assetId} ` +
+            "has since been returned/reassigned to a different assignment.",
+          { userId: user!.userId },
+        );
+      } else if (issueType === "lost" || issueType === "stolen") {
         // Asset is gone — retire it.
         await prisma.asset.update({
           where: { id: (issue as any).assetId },
@@ -936,7 +1074,9 @@ export async function updateAssetIssueStatus(req: Request, res: Response) {
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      message: `Issue status updated to '${status}'`,
+      message: effectsSkipped
+        ? `Issue status updated to '${status}'. The asset has since been returned/reassigned, so the automatic ${issueType} effect was skipped.`
+        : `Issue status updated to '${status}'`,
     });
   } catch (error) {
     logger.error("PATCH /assets/issues/:issueId/status error:", { error });
@@ -955,7 +1095,7 @@ export async function updateAssetIssueStatus(req: Request, res: Response) {
 export async function getAssetSummary(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    if (!(await assertHrRole(user!.userId))) {
+    if (!(await assertHrRole(user))) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
@@ -969,7 +1109,7 @@ export async function getAssetSummary(req: Request, res: Response) {
       }),
       // Assignments awaiting employee acknowledgement.
       prisma.assetAssignment.count({
-        where: { returnedOn: null, acknowledgedAt: null },
+        where: { AND: [NOT_RETURNED, NOT_ACKNOWLEDGED] },
       }),
     ]);
 
@@ -992,6 +1132,79 @@ export async function getAssetSummary(req: Request, res: Response) {
     });
   } catch (error) {
     logger.error("GET /assets/summary error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATEGORIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /assets/categories
+ * Tenant-scoped lookup of asset categories in use — mirrors listDesignations.
+ * Backs the Category autocomplete in the Create Asset dialog.
+ */
+export async function listAssetCategories(req: Request, res: Response) {
+  try {
+    const categories = await prisma.assetCategory.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Asset categories retrieved",
+      data: categories,
+    });
+  } catch (error) {
+    logger.error("GET /assets/categories error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * POST /assets/categories
+ * Persists a newly-typed category so it appears in the dropdown next time —
+ * mirrors createDesignation. Relies on the @@unique([tenantId, name])
+ * constraint to no-op (via P2002) if it's already known.
+ */
+export async function createAssetCategory(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    if (!(await assertHrRole(user))) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+    }
+
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "No active tenant.",
+      });
+    }
+
+    const { name } = req.body as { name: string };
+    const category = await prisma.assetCategory.create({
+      data: {
+        tenantId,
+        name: name.trim(),
+        createdBy: user!.userId,
+      },
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.CREATED, {
+      message: "Asset category added",
+      data: category,
+    });
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      // Already exists for this tenant — not an error from the caller's
+      // perspective (ensureAssetCategorySaved treats this as success).
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        message: "Asset category already exists",
+      });
+    }
+    logger.error("POST /assets/categories error:", { error });
     return handleError(res, error);
   }
 }

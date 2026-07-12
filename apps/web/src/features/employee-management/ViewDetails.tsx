@@ -6,6 +6,7 @@ import CardContent from "@mui/material/CardContent";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Chip from "@mui/material/Chip";
+import Tooltip from "@mui/material/Tooltip";
 import Grid from "@mui/material/Grid2";
 import CircularProgress from "@mui/material/CircularProgress";
 import {
@@ -24,15 +25,15 @@ import Business from "@mui/icons-material/Business";
 import Warning from "@mui/icons-material/Warning";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { MultiSelect } from "primereact/multiselect";
+import { UserContext } from "@web/app/providers/UserContext";
+import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { InputNumber } from "primereact/inputnumber";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
 import DropdownWrapper from "@web/shared/components/DropdownWrapper";
 import DataList from "@web/shared/components/DataList";
 import { validationSchema } from "./schemas";
-import { assets } from "@web/assets/data/companyAssets";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import {
@@ -55,8 +56,20 @@ const LocationPicker = lazy(
 
 function ViewDetails() {
   const { username } = useParams();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const { setAlert } = useContext(AlertContext);
+  const { user } = useContext(UserContext);
+  const canEditEmployee =
+    user?.isSuperUser ||
+    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    hasPermission(
+      "EmployeeManagement",
+      "edit",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
 
   const [salaryComponents, setSalaryComponents] = useState<
     SalaryComponentDef[]
@@ -74,9 +87,18 @@ function ViewDetails() {
     "Error loading employee details",
   );
 
+  // Real assigned-assets data, sourced from the Assets module (Asset +
+  // AssetAssignment) rather than the legacy User.assets free-text field.
+  const { data: assignedAssets, loading: assetsLoading } = useFetchData<any[]>(
+    data?.id
+      ? `/assets?page=1&limit=50&userId=${data.id}&status=assigned`
+      : null,
+    "get",
+    [data?.id],
+  );
+
   const formik = useFormik({
     initialValues: {
-      assets: [] as any[],
       employeeStatus: "",
       pf_no: "",
       uan_no: "",
@@ -255,7 +277,6 @@ function ViewDetails() {
   const handleEditClick = () => {
     // Populate formik with current data when entering edit mode
     formik.setValues({
-      assets: data?.assets || [],
       employeeStatus:
         data?.employeeStatus === "Terminated" ||
         data?.employeeStatus === "Absconded"
@@ -392,9 +413,11 @@ function ViewDetails() {
               variant="outlined"
             />
             {!isEditing ? (
-              <Button onClick={handleEditClick} style={{ marginTop: 0 }}>
-                Edit
-              </Button>
+              canEditEmployee && (
+                <Button onClick={handleEditClick} style={{ marginTop: 0 }}>
+                  Edit
+                </Button>
+              )
             ) : (
               <Box display="flex" gap={1}>
                 <Button onClick={formik.handleSubmit} style={{ marginTop: 0 }}>
@@ -410,74 +433,73 @@ function ViewDetails() {
 
         <form onSubmit={formik.handleSubmit}>
           <Grid container spacing={1}>
-            {/* Assets */}
+            {/* Assets — sourced from the Assets module (Asset + AssetAssignment),
+                not editable here; assign/return happens in the Assets module
+                itself so it goes through the real workflow (condition
+                tracking, audit trail, issue reporting). */}
             <Grid size={12}>
               <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <Assignment sx={{ fontSize: 18, color: "text.secondary" }} />
-                  <Typography variant="subtitle2" fontWeight="500">
-                    Assets
-                  </Typography>
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  mb={1}
+                >
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Assignment
+                      sx={{ fontSize: 18, color: "text.secondary" }}
+                    />
+                    <Typography variant="subtitle2" fontWeight="500">
+                      Assets
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={() => navigate("/assets")}
+                    style={{ marginTop: 0 }}
+                  >
+                    Manage in Assets
+                  </Button>
                 </Box>
                 <Grid container spacing={1.5}>
                   <Grid size={12}>
-                    {isEditing ? (
-                      <>
-                        <MultiSelect
-                          value={formik.values.assets}
-                          options={assets.map((a) => ({ label: a, value: a }))}
-                          onChange={(e) =>
-                            formik.setFieldValue("assets", e.value)
-                          }
-                          onBlur={() => formik.setFieldTouched("assets", true)}
-                          display="chip"
-                          placeholder="Select Assets"
-                          style={{ width: "100%" }}
-                        />
-                        {getFieldError("assets") && (
-                          <Typography
-                            variant="caption"
-                            color="error"
-                            sx={{ display: "block", mt: 0.5 }}
+                    {assetsLoading ? (
+                      <CircularProgress size={16} />
+                    ) : assignedAssets && assignedAssets.length > 0 ? (
+                      <Box display="flex" flexWrap="wrap" gap={1}>
+                        {assignedAssets.map((asset: any) => (
+                          <Tooltip
+                            key={asset.id}
+                            title={`${asset.category} · ${asset.condition} condition`}
                           >
-                            {getFieldError("assets")}
-                          </Typography>
-                        )}
-                      </>
-                    ) : (
-                      <Box>
-                        {data?.assets && data.assets.length > 0 ? (
-                          <Box display="flex" flexWrap="wrap" gap={1}>
-                            {data.assets.map((asset, index) => (
-                              <Chip
-                                key={index}
-                                label={asset}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                                sx={{
-                                  backgroundColor: "rgba(25, 118, 210, 0.08)",
-                                  border: "1px solid rgba(25, 118, 210, 0.3)",
-                                  color: "primary.main",
-                                  fontWeight: 500,
-                                }}
-                              />
-                            ))}
-                          </Box>
-                        ) : (
-                          <Chip
-                            label="No Assets Allocated"
-                            size="small"
-                            color="default"
-                            variant="outlined"
-                            sx={{
-                              backgroundColor: "rgba(158, 158, 158, 0.08)",
-                              border: "1px solid rgba(158, 158, 158, 0.3)",
-                              color: "text.secondary",
-                            }}
-                          />
-                        )}
+                            <Chip
+                              label={`${asset.assetCode} — ${asset.name}`}
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                              sx={{
+                                backgroundColor: "rgba(25, 118, 210, 0.08)",
+                                border: "1px solid rgba(25, 118, 210, 0.3)",
+                                color: "primary.main",
+                                fontWeight: 500,
+                              }}
+                            />
+                          </Tooltip>
+                        ))}
                       </Box>
+                    ) : (
+                      <Chip
+                        label="No Assets Allocated"
+                        size="small"
+                        color="default"
+                        variant="outlined"
+                        sx={{
+                          backgroundColor: "rgba(158, 158, 158, 0.08)",
+                          border: "1px solid rgba(158, 158, 158, 0.3)",
+                          color: "text.secondary",
+                        }}
+                      />
                     )}
                   </Grid>
                 </Grid>

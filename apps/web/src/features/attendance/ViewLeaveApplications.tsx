@@ -46,6 +46,8 @@ function ViewLeaveApplications() {
   const { user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
   const canManageLeave =
+    user?.isSuperUser ||
+    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
     hasPermission(
       "Leave",
       "approve",
@@ -198,11 +200,12 @@ function ViewLeaveApplications() {
 
   const handleLeaveActionConfirm = useCallback(async () => {
     const { id: _id, status } = actionDialog;
+    const action = status === "Withdraw" ? "cancel" : status!.toLowerCase();
     setActionLoading(true);
     try {
       const response = await apiClient.put(API_ENDPOINTS.UPDATE_LEAVE_STATUS, {
         leaveId: _id,
-        action: status!.toLowerCase(),
+        action,
       });
       if (!response.data.success) {
         setAlert({
@@ -216,7 +219,10 @@ function ViewLeaveApplications() {
       refresh();
       setAlert({
         open: true,
-        message: `Leave application ${status!.toLowerCase()}d successfully`,
+        message:
+          status === "Withdraw"
+            ? "Leave application withdrawn successfully"
+            : `Leave application ${status!.toLowerCase()}d successfully`,
         severity: "success",
       });
     } catch (error) {
@@ -409,29 +415,51 @@ function ViewLeaveApplications() {
     [],
   );
 
+  const isPrivilegedUser =
+    user?.isSuperUser || ["owner", "admin"].includes(user?.tenantRole ?? "");
+
   const rowActions = useCallback(
     (row: any) => {
+      const actions: any[] = [];
       const canTakeAction =
         canManageLeave && (user?.isSuperUser || row.userId !== user?.id);
-      if (!canTakeAction) return [];
-      return [
-        {
-          icon: <CheckIcon sx={{ fontSize: 16 }} aria-hidden="true" />,
-          label: `Approve leave for ${row.username}`,
-          color: "success" as const,
-          onClick: () =>
-            handleLeaveActionClick(row.id || row._id, row.username, "Approve"),
-        },
-        {
+      if (canTakeAction) {
+        actions.push(
+          {
+            icon: <CheckIcon sx={{ fontSize: 16 }} aria-hidden="true" />,
+            label: `Approve leave for ${row.username}`,
+            color: "success" as const,
+            onClick: () =>
+              handleLeaveActionClick(
+                row.id || row._id,
+                row.username,
+                "Approve",
+              ),
+          },
+          {
+            icon: <CloseIcon sx={{ fontSize: 16 }} aria-hidden="true" />,
+            label: `Reject leave for ${row.username}`,
+            color: "error" as const,
+            onClick: () =>
+              handleLeaveActionClick(row.id || row._id, row.username, "Reject"),
+          },
+        );
+      }
+      const isOwn = row.userId === user?.id;
+      const canWithdraw =
+        (isOwn || isPrivilegedUser) &&
+        ["Pending", "Approved"].includes(row.status);
+      if (canWithdraw) {
+        actions.push({
           icon: <CloseIcon sx={{ fontSize: 16 }} aria-hidden="true" />,
-          label: `Reject leave for ${row.username}`,
-          color: "error" as const,
+          label: `Withdraw leave for ${row.username}`,
           onClick: () =>
-            handleLeaveActionClick(row.id || row._id, row.username, "Reject"),
-        },
-      ];
+            handleLeaveActionClick(row.id || row._id, row.username, "Withdraw"),
+        });
+      }
+      return actions;
     },
-    [user, handleLeaveActionClick, canManageLeave],
+    [user, handleLeaveActionClick, canManageLeave, isPrivilegedUser],
   );
 
   return (
@@ -535,14 +563,26 @@ function ViewLeaveApplications() {
         onClose={handleLeaveActionCancel}
         onConfirm={handleLeaveActionConfirm}
         title={
-          actionDialog.status === "Approve" ? "Approve Leave" : "Reject Leave"
+          actionDialog.status === "Approve"
+            ? "Approve Leave"
+            : actionDialog.status === "Withdraw"
+              ? "Withdraw Leave"
+              : "Reject Leave"
         }
         message={
           actionDialog.status === "Approve"
             ? `Are you sure you want to approve the leave application for ${actionDialog.username}?`
-            : `Are you sure you want to reject the leave application for ${actionDialog.username}?`
+            : actionDialog.status === "Withdraw"
+              ? `Are you sure you want to withdraw the leave application for ${actionDialog.username}?`
+              : `Are you sure you want to reject the leave application for ${actionDialog.username}?`
         }
-        confirmText={actionDialog.status === "Approve" ? "Approve" : "Reject"}
+        confirmText={
+          actionDialog.status === "Approve"
+            ? "Approve"
+            : actionDialog.status === "Withdraw"
+              ? "Withdraw"
+              : "Reject"
+        }
         cancelText="Cancel"
         loading={actionLoading}
         variant={actionDialog.status === "Reject" ? "danger" : "default"}

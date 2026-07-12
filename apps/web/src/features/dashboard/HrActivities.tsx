@@ -58,6 +58,7 @@ function HrActivities() {
         <DataList
           ariaLabel="HR activities"
           variant="rows"
+          striped
           data={activities}
           loading={isLoading}
           emptyMessage="No activities found"

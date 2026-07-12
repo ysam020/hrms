@@ -19,6 +19,11 @@ import Typography from "@mui/material/Typography";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
 import { ApprovalsBadgeContext } from "@web/app/providers/ApprovalsBadgeContext";
+import {
+  canManagePermissions,
+  canViewAnalytics,
+  canAccessSettings,
+} from "@web/shared/utils/permissions/navAccess";
 
 const SpaceDashboardIcon = lazy(
   () => import("@mui/icons-material/SpaceDashboard"),
@@ -63,18 +68,33 @@ function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
       },
       { title: "Calendar", icon: <CalendarMonthIcon />, path: "/calendar" },
       { title: "Chat", icon: <ForumIcon />, path: "/chat" },
-      { title: "Permissions", icon: <SettingsIcon />, path: "/permissions" },
+      {
+        title: "Permissions",
+        icon: <SettingsIcon />,
+        path: "/permissions",
+        isVisible: canManagePermissions,
+      },
       {
         title: "Organization Tree",
         icon: <AccountTreeIcon />,
         path: "/organization-tree",
       },
-      { title: "Analytics", icon: <EqualizerIcon />, path: "/analytics" },
+      {
+        title: "Analytics",
+        icon: <EqualizerIcon />,
+        path: "/analytics",
+        isVisible: canViewAnalytics,
+      },
       { title: "Policy", icon: <PolicyIcon />, path: "/policy" },
-      { title: "Settings", icon: <TuneIcon />, path: "/settings" },
+      {
+        title: "Settings",
+        icon: <TuneIcon />,
+        path: "/settings",
+        isVisible: canAccessSettings,
+      },
       { title: "Help", icon: <LiveHelpIcon />, path: "/help" },
-    ];
-  }, []);
+    ].filter((item) => !item.isVisible || item.isVisible(user));
+  }, [user]);
 
   // Legacy routes that now live under /settings should keep the Settings icon active
   const SETTINGS_ALIASES = ["/subscription", "/company-info", "/org-settings"];
