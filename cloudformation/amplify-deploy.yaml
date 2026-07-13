@@ -67,7 +67,7 @@ Resources:
                   - ../../node_modules/**/*
                   - ../../.pnpm-store/**/*
       CustomRules:
-        - Source: </^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>
+        - Source: </^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>
           Target: /index.html
           Status: "200"
 
