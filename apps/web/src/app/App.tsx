@@ -50,6 +50,13 @@ const LoginPage = lazy(() => import("@web/features/auth/LoginPage"));
 const OrgSetupPage = lazy(() => import("@web/features/auth/OrgSetupPage"));
 const CareersPage = lazy(() => import("@web/pages/CareersPage"));
 const JobApplicationPage = lazy(() => import("@web/pages/JobApplicationPage"));
+const PrivacyPolicyPage = lazy(
+  () => import("@web/pages/legal/PrivacyPolicyPage"),
+);
+const TermsOfUsePage = lazy(() => import("@web/pages/legal/TermsOfUsePage"));
+const RefundPolicyPage = lazy(
+  () => import("@web/pages/legal/RefundPolicyPage"),
+);
 const BroadcastModal = lazy(
   () => import("@web/features/layout/modals/BroadcastModal"),
 );
@@ -349,6 +356,38 @@ function App() {
                       <ErrorBoundary FallbackComponent={ErrorFallback}>
                         <Suspense fallback={<Loading />}>
                           <JobApplicationPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  {/* Public legal pages — accessible whether logged in or
+                      not, no auth gate, same as /careers. */}
+                  <Route
+                    path="/privacy-policy"
+                    element={
+                      <ErrorBoundary FallbackComponent={ErrorFallback}>
+                        <Suspense fallback={<Loading />}>
+                          <PrivacyPolicyPage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/terms-of-use"
+                    element={
+                      <ErrorBoundary FallbackComponent={ErrorFallback}>
+                        <Suspense fallback={<Loading />}>
+                          <TermsOfUsePage />
+                        </Suspense>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/refund-policy"
+                    element={
+                      <ErrorBoundary FallbackComponent={ErrorFallback}>
+                        <Suspense fallback={<Loading />}>
+                          <RefundPolicyPage />
                         </Suspense>
                       </ErrorBoundary>
                     }

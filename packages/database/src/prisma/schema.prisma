@@ -863,6 +863,9 @@ model AuditLog {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId    String?  @db.ObjectId
   userId      String?  @db.ObjectId
+  // Denormalized at write time — survives the acting user later being
+  // deleted/renamed, and avoids a join every time the log is displayed.
+  username    String?
   action      String
   entityType  String
   oldValue    Json?

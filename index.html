@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Praesto — Product Guide</title>
+
+    <link rel="icon" href="https://ysam020-praesto-guide.s3.ap-south-1.amazonaws.com/favicon.ico" type="image/x-icon">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Praesto — Product Guide">
+    <meta property="og:description" content="Comprehensive product documentation and user guide for Praesto.">
+    <meta property="og:image" content="https://ysam020-praesto-guide.s3.ap-south-1.amazonaws.com/favicon.ico">
+    <meta property="og:url" content="https://praesto.cloud">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Praesto">
+
+    <!-- Twitter/X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Praesto — Product Guide">
+    <meta name="twitter:description" content="Comprehensive product documentation and user guide for Praesto.">
+    <meta name="twitter:image" content="https://ysam020-praesto-guide.s3.ap-south-1.amazonaws.com/favicon.ico">
+</head>
+<body>
+<title>Praesto — Product &amp; Sales Guide</title>
+<style>
+  @font-face {
+    font-family: 'PraestoSerif';
+    src: local('Iowan Old Style'), local('Georgia');
+  }
+
+  :root {
+    --bg: #f4f3ee;
+    --bg-raised: #ffffff;
+    --bg-sunken: #eae7dd;
+    --ink: #1a2420;
+    --ink-soft: #566159;
+    --ink-faint: #7c887f;
+    --accent: #2e6b57;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3ede9;
+    --gold: #96702a;
+    --gold-soft: #f3e9d4;
+    --border: #dcd8cc;
+    --border-strong: #c7c2b2;
+    --shadow: 0 1px 2px rgba(26, 36, 32, 0.06), 0 8px 24px rgba(26, 36, 32, 0.05);
+    --radius: 10px;
+    --serif: 'PraestoSerif', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121712;
+      --bg-raised: #1a221d;
+      --bg-sunken: #0d110e;
+      --ink: #edeae1;
+      --ink-soft: #a9b2a9;
+      --ink-faint: #79837a;
+      --accent: #6ab89c;
+      --accent-ink: #0c1512;
+      --accent-soft: #1c2e27;
+      --gold: #e0b467;
+      --gold-soft: #2c2417;
+      --border: #2a332c;
+      --border-strong: #3a453b;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #121712;
+    --bg-raised: #1a221d;
+    --bg-sunken: #0d110e;
+    --ink: #edeae1;
+    --ink-soft: #a9b2a9;
+    --ink-faint: #79837a;
+    --accent: #6ab89c;
+    --accent-ink: #0c1512;
+    --accent-soft: #1c2e27;
+    --gold: #e0b467;
+    --gold-soft: #2c2417;
+    --border: #2a332c;
+    --border-strong: #3a453b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f4f3ee;
+    --bg-raised: #ffffff;
+    --bg-sunken: #eae7dd;
+    --ink: #1a2420;
+    --ink-soft: #566159;
+    --ink-faint: #7c887f;
+    --accent: #2e6b57;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3ede9;
+    --gold: #96702a;
+    --gold-soft: #f3e9d4;
+    --border: #dcd8cc;
+    --border-strong: #c7c2b2;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; gap: 24px; padding: 0 18px 64px; }
+  }
+
+  /* ---------- Cover ---------- */
+  .cover {
+    grid-column: 1 / -1;
+    padding: 72px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .cover-eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .cover h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(2.4rem, 4.4vw, 3.6rem);
+    line-height: 1.08;
+    margin: 14px 0 6px;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  .cover .sub {
+    font-size: 1.15rem;
+    color: var(--ink-soft);
+    max-width: 640px;
+    text-wrap: balance;
+  }
+  .cover .meta {
+    margin-top: 28px;
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+  .cover .meta strong { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- TOC ---------- */
+  nav.toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+  nav.toc .toc-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 12px;
+  }
+  nav.toc ol { list-style: none; padding: 0; margin: 0; }
+  nav.toc > ol > li { margin-bottom: 4px; }
+  nav.toc a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 7px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+  nav.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+  nav.toc a:hover { background: var(--bg-sunken); color: var(--accent); }
+  nav.toc ol ol { margin-left: 10px; border-left: 1px solid var(--border); }
+  nav.toc ol ol a { font-weight: 400; font-size: 13px; }
+
+  @media (max-width: 880px) {
+    nav.toc { position: static; max-height: none; margin-bottom: 8px; }
+    nav.toc[data-collapsed] ol { display: none; }
+  }
+  .toc-toggle { display: none; }
+  @media (max-width: 880px) {
+    .toc-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      cursor: pointer;
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
+
+  /* ---------- Main content ---------- */
+  main { min-width: 0; }
+
+  section.block { padding: 56px 0; border-bottom: 1px solid var(--border); }
+  section.block:last-child { border-bottom: none; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+    line-height: 1.2;
+    margin: 0 0 8px;
+    text-wrap: balance;
+  }
+  .block-intro {
+    color: var(--ink-soft);
+    font-size: 1.02rem;
+    max-width: 680px;
+    margin-bottom: 28px;
+  }
+  h3 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 1.3rem;
+    margin: 32px 0 10px;
+  }
+  h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 20px 0 8px;
+    color: var(--ink);
+  }
+  p { margin: 0 0 14px; max-width: 700px; }
+  .prose p:last-child { margin-bottom: 0; }
+  ul, ol { max-width: 700px; padding-left: 22px; margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+  strong { font-weight: 650; }
+
+  /* ---------- Pitch / hero highlight ---------- */
+  .pitch {
+    font-family: var(--serif);
+    font-size: clamp(1.15rem, 2vw, 1.4rem);
+    line-height: 1.5;
+    color: var(--ink);
+    max-width: 760px;
+    text-wrap: balance;
+    margin-bottom: 6px;
+  }
+  .pitch em { font-style: normal; color: var(--accent); }
+
+  /* ---------- Differentiator cards ---------- */
+  .diff-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+    margin-top: 28px;
+  }
+  .diff-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 18px 16px;
+    box-shadow: var(--shadow);
+  }
+  .diff-card .num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+  }
+  .diff-card h4 { margin: 6px 0 6px; font-size: 0.98rem; }
+  .diff-card p { font-size: 13.5px; color: var(--ink-soft); margin: 0; }
+
+  /* ---------- Compare table ---------- */
+  .table-wrap { overflow-x: auto; margin: 20px 0 8px; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+  thead th {
+    text-align: left;
+    background: var(--bg-sunken);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.market { color: var(--ink-faint); }
+  td.praesto { color: var(--ink); font-weight: 500; }
+  td.praesto::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+
+  /* ---------- Steps (genuinely sequential flows) ---------- */
+  .steps { list-style: none; padding: 0; margin: 22px 0; max-width: 720px; counter-reset: step; }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 2px 0 22px 40px;
+    border-left: 1px solid var(--border-strong);
+    margin-left: 15px;
+  }
+  .steps li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -15px;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .steps h4 { margin: 0 0 4px; font-size: 0.98rem; }
+  .steps p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+
+  /* ---------- Callouts ---------- */
+  .callout {
+    border-left: 3px solid var(--gold);
+    background: var(--gold-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 18px 0;
+    max-width: 700px;
+  }
+  .callout .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .callout p { margin: 0; font-size: 14.5px; color: var(--ink); }
+  .callout p + p { margin-top: 8px; }
+
+  /* ---------- Module cards (details/summary) ---------- */
+  .module {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .module summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 20px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 650;
+    font-size: 1rem;
+  }
+  .module summary::-webkit-details-marker { display: none; }
+  .module summary .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  .module summary::after {
+    content: "+";
+    font-family: var(--mono);
+    font-size: 18px;
+    color: var(--accent);
+    margin-left: auto;
+  }
+  .module[open] summary::after { content: "–"; }
+  .module .module-body { padding: 0 20px 22px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .module .module-body p, .module .module-body ul { max-width: 660px; }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+    margin: 0 6px 6px 0;
+  }
+  
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+  }
+  @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+  footer.doc-footer {
+    padding: 40px 0 0;
+    color: var(--ink-faint);
+    font-size: 12.5px;
+  }
+</style>
+
+<div class="shell">
+  <div class="cover">
+    <div class="cover-eyebrow">Internal Sales Enablement</div>
+    <h1>Praesto — the guided tour</h1>
+    <p class="sub">A plain-language walkthrough of the Praesto HR platform: how the product works end to end, and the arguments for why it beats a typical HRMS in a first conversation with a prospect.</p>
+    <div class="meta">
+      <span><strong>Audience</strong> — Sales team, pre-sales demos</span>
+      <span><strong>Product</strong> — Praesto, multi-tenant SaaS HRMS</span>
+      <span><strong>Format</strong> — Read top to bottom once, then use as reference</span>
+    </div>
+  </div>
+
+  <nav class="toc" id="toc" data-collapsed="">
+    <button class="toc-toggle" id="tocToggle" type="button">Contents <span>▾</span></button>
+    <div class="toc-title">On this page</div>
+    <ol>
+      <li><a href="#why">Why Praesto wins</a></li>
+      <li><a href="#tenant">Getting a company onboarded</a></li>
+      <li><a href="#journey">Job posting → first login</a></li>
+      <li><a href="#profile">Profile &amp; security</a></li>
+      <li><a href="#dashboard">The dashboard</a></li>
+      <li><a href="#orgtree">Org chart &amp; permissions</a></li>
+      <li><a href="#analytics">Analytics</a></li>
+      <li><a href="#policy">Company policies</a></li>
+      <li><a href="#settings">Settings &amp; billing</a></li>
+      <li><a href="#ux">App experience</a>
+        <ol>
+          <li><a href="#ux-theme">Theme &amp; dark mode</a></li>
+          <li><a href="#ux-spotlight">Spotlight search</a></li>
+          <li><a href="#ux-apps">Apps launcher</a></li>
+          <li><a href="#ux-keyboard">Keyboard shortcuts</a></li>
+          <li><a href="#ux-help">Help &amp; support</a></li>
+          <li><a href="#ux-notifications">Notifications</a></li>
+        </ol>
+      </li>
+      <li><a href="#modules">Module reference</a>
+        <ol>
+          <li><a href="#m-approvals">Approvals (cross-cutting)</a></li>
+          <li><a href="#m-audit">Audit logs (cross-cutting)</a></li>
+          <li><a href="#m-attendance">Attendance &amp; leave</a></li>
+          <li><a href="#m-employee-record">Employee management</a></li>
+          <li><a href="#m-wfh">Work from home</a></li>
+          <li><a href="#m-holidays">Holidays</a></li>
+          <li><a href="#m-activities">HR activities</a></li>
+          <li><a href="#m-jobopenings">Job openings</a></li>
+          <li><a href="#m-kyc">KYC</a></li>
+          <li><a href="#m-resignation">Resignation &amp; offboarding</a></li>
+          <li><a href="#m-payroll">Payroll &amp; salary</a></li>
+          <li><a href="#m-assets">Assets</a></li>
+          <li><a href="#m-helpdesk">Helpdesk</a></li>
+          <li><a href="#m-chat">Chat</a></li>
+          <li><a href="#m-calendar">Calendar</a></li>
+          <li><a href="#m-reports">Reports</a></li>
+          <li><a href="#m-webhooks">Webhooks</a></li>
+          <li><a href="#m-chatbot">AI assistant</a></li>
+        </ol>
+      </li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- WHY PRAESTO WINS -->
+    <section class="block" id="why">
+      <div class="eyebrow">The pitch</div>
+      <h2>Why Praesto wins the room</h2>
+      <p class="pitch">Most HR software asks a company to configure everything before it's useful. Praesto ships with sensible defaults — <em>statutory leave, Indian tax slabs, an approval chain, a hiring pipeline</em> — already switched on, so a new customer is working inside the product within minutes of paying, not weeks into an implementation project.</p>
+
+      <div class="diff-grid">
+        <div class="diff-card">
+          <div class="num">01</div>
+          <h4>Your own database, not a shared table</h4>
+          <p>Every customer gets a dedicated database, not rows filtered by a tenant ID in a shared table. When a prospect asks "is our data mixed with other companies' data?" — the answer is a flat no.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">02</div>
+          <h4>Nobody has a password to lose</h4>
+          <p>Sign-in is Google, or a fingerprint / security key (passkey). There is no password to phish, forget, or reset — a genuinely modern security posture most HR tools still don't offer.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">03</div>
+          <h4>Resumes screen themselves</h4>
+          <p>Every application is read and scored against the job's requirements by an AI model the moment it's submitted — weak matches are filtered automatically, before a human ever opens the resume.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">04</div>
+          <h4>Hiring mistakes are blocked, not just discouraged</h4>
+          <p>The system won't let a recruiter skip an interview round, double-book an interviewer, or hire a candidate who hasn't cleared a round. Process discipline is built in, not left to good intentions.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">05</div>
+          <h4>Attendance you can actually trust</h4>
+          <p>Punching in requires a live face match with liveness detection plus GPS location — not a button anyone at a shared desk can tap on a colleague's behalf.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">06</div>
+          <h4>One inbox for every approval</h4>
+          <p>Leave, resignation, WFH, salary advances — every request a manager needs to act on lands in one live-updating inbox with a badge count, instead of five different screens to check.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">07</div>
+          <h4>Offboarding is a real workflow</h4>
+          <p>Notice-period rules by tenure, waivers with buyout tracking, garden leave, a clearance checklist by department, full &amp; final settlement, and exit interviews — not just an "approve resignation" button.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">08</div>
+          <h4>Build your own reports</h4>
+          <p>Instead of a fixed library of canned reports, admins pick any data source, any fields, any filters, and export or save the result — no engineering ticket required.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">09</div>
+          <h4>An AI assistant that only knows what you're allowed to see</h4>
+          <p>The built-in HR chatbot answers questions using each employee's own leave, attendance, and salary data — and is explicitly barred from ever sharing anyone else's. It also runs on a self-hosted model, not a third-party AI API, which matters to security-conscious buyers.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">10</div>
+          <h4>Live in minutes, not a sales cycle</h4>
+          <p>A company can sign in with Google, complete a 3-step setup wizard, pay, and be fully provisioned — no implementation team, no waiting on a sales-assisted rollout.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">11</div>
+          <h4>A matching email domain gets you a request, not a login</h4>
+          <p>Sign in with an email on an already-registered company domain and you land on a "Request Access" screen, not the app. Someone on the inside — Owner, Admin, or any role with that right — has to explicitly approve you first.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">12</div>
+          <h4>Permissions are enforced, not just hidden</h4>
+          <p>A module a person isn't permitted to use doesn't just disappear from their menu — typing its URL directly is blocked server-side too. Most HR tools only hide the button.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">13</div>
+          <h4>A full before-and-after change trail</h4>
+          <p>Every create, update, or approval anywhere in the app is logged with who did it, when, from where, and the exact data value before and after the change — a real audit trail, not just a login history.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">14</div>
+          <h4>Real-time 1:1 chat with read receipts</h4>
+          <p>A full workplace messaging system built right in — text, files, images, videos, emoji, reply-to-message threading, pinned messages, link previews, typing indicators, and read receipts. No need for a separate tool like Slack for quick HR or team conversations.</p>
+        </div>
+        <div class="diff-card">
+          <div class="num">15</div>
+          <h4>A complete calendar with event management</h4>
+          <p>A shared company calendar with month, week, day, and agenda views — anyone can create events with time slots, and upcoming events merge seamlessly with holidays and leave in the dashboard.</p>
+        </div>
+      </div>
+
+      <h3>How that stacks up against a typical HRMS</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Capability</th><th>Typical HRMS</th><th>Praesto</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Data isolation</td><td class="market">Shared database, tenant ID filter</td><td class="praesto">Dedicated database per company</td></tr>
+            <tr><td>Login</td><td class="market">Email + password (+ maybe 2FA add-on)</td><td class="praesto">Google sign-in or passkey — no passwords at all</td></tr>
+            <tr><td>Resume screening</td><td class="market">Manual review, or a paid add-on</td><td class="praesto">Built-in AI scoring on every application, automatically</td></tr>
+            <tr><td>Interview pipeline</td><td class="market">One fixed pipeline</td><td class="praesto">Multiple named templates, per-stage interviewer roles, BGV stage</td></tr>
+            <tr><td>Attendance capture</td><td class="market">Manual punch or basic biometric device</td><td class="praesto">Face + liveness detection + GPS, from any device</td></tr>
+            <tr><td>Approvals</td><td class="market">Separate screens per module</td><td class="praesto">One unified, live-updating inbox with a badge count</td></tr>
+            <tr><td>Offboarding</td><td class="market">A resignation form and a status field</td><td class="praesto">Notice-period rules, waivers, garden leave, clearance checklist, F&amp;F settlement, exit interview</td></tr>
+            <tr><td>Reporting</td><td class="market">Fixed set of canned reports</td><td class="praesto">Self-serve report builder across any module</td></tr>
+            <tr><td>Setup</td><td class="market">Sales call → onboarding project</td><td class="praesto">Self-serve wizard, live in minutes</td></tr>
+            <tr><td>Joining an existing company</td><td class="market">Anyone with the sign-up link gets in</td><td class="praesto">Matching email domain only earns a request; an admin must approve</td></tr>
+            <tr><td>Permission enforcement</td><td class="market">Usually just hides the menu item</td><td class="praesto">Blocked server-side too — direct URLs don't work either</td></tr>
+            <tr><td>Audit trail</td><td class="market">Login history, if anything</td><td class="praesto">Every change logged with before/after values across 18 entity types</td></tr>
+            <tr><td>Internal messaging</td><td class="market">Not included — use Slack/Teams</td><td class="praesto">Built-in 1:1 chat with files, read receipts, and pinned messages</td></tr>
+            <tr><td>Theme / dark mode</td><td class="market">One fixed look</td><td class="praesto">Light and dark mode with one-click toggle, OS preference auto-detect</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+    </section>
+
+    <!-- TENANT CREATION -->
+    <section class="block" id="tenant">
+      <div class="eyebrow">Getting started</div>
+      <h2>How a company gets onboarded</h2>
+      <p class="block-intro">There is no separate sales-assisted provisioning step, but there's also no free-for-all: Praesto tells the difference between "your company is already here, ask to get in" and "your company isn't here yet, let's create it" automatically, from nothing but the email domain.</p>
+
+      <ol class="steps">
+        <li>
+          <h4>Sign in with Google or a passkey</h4>
+          <p>The very first screen only offers "Sign in with Google" or "Security Key / Biometric" — no password to create.</p>
+        </li>
+        <li>
+          <h4>Praesto checks the email domain</h4>
+          <p>The moment someone signs in, Praesto reads the domain of their email address and checks whether a company is already registered under it. What happens next depends entirely on that one check.</p>
+        </li>
+      </ol>
+
+      <div class="two-col">
+        <div>
+          <h3>Domain already registered</h3>
+          <p>The person is shown a <strong>"Request Access"</strong> screen instead of the app itself. Their request goes to whoever in the company holds access-granting permission (the Owner, an Admin, or any role given that right). Nobody gets into the app — not even to look around — until someone on the inside explicitly approves them. The <strong>Join Requests</strong> tab inside Settings shows all pending requests, with approve/reject buttons for each.</p>
+        </div>
+        <div>
+          <h3>Domain not recognised</h3>
+          <p>They're taken through the <strong>Org Setup wizard</strong>: organisation details (name, industry, company size, work week), plan &amp; payment (Razorpay), and optional contact info. The moment payment clears, the company's own database is provisioned instantly, a sensible work week is set, and statutory leave types (26-week Maternity Leave and Paternity Leave, per Indian law) are pre-loaded automatically.</p>
+        </div>
+      </div>
+
+      <p>The person who completes that setup becomes the company's <strong>Owner</strong> and is automatically granted <strong>Superuser</strong> access — full permissions across every module, out of the box, with nobody to approve them because they're the first person in. From that point on, they're the one who reviews everyone else's access requests and decides what each of them can do.</p>
+
+      <h3>A guided (but optional) checklist</h3>
+      <p>New owners see a dismissible setup checklist shown as a sequence of modals — one per unresolved item — nudging them through seven configuration steps:</p>
+      <ol>
+        <li><strong>Company Info</strong> — help phone, email, office address, and website</li>
+        <li><strong>Organisation Settings</strong> — leave policies, attendance rules, probation &amp; notice periods</li>
+        <li><strong>Leave Policy</strong> — carry-forward, encashment, comp-off, and exhaustion behaviour</li>
+        <li><strong>Exit Policy</strong> — notice periods by tenure, offboarding clearance checklist, exit interview questions</li>
+        <li><strong>Approval Workflows</strong> — multi-level approval chains, delegate routing</li>
+        <li><strong>Recruitment Pipeline</strong> — interview stages, interviewer roles, BGV steps</li>
+        <li><strong>Payroll Components</strong> — salary components, PF/ESI/PT configuration</li>
+      </ol>
+      <p>Every step is pre-filled with defaults, so skipping any of them doesn't break anything. The checklist state is server-side and shared across admins — if one admin completes a step, other admins won't see it again. Each step has "Set up now" (navigates to the relevant Settings page) and "Skip for now" (moves to the next item).</p>
+
+     
+    </section>
+
+    <!-- RECRUITMENT -> ONBOARDING JOURNEY -->
+    <section class="block" id="journey">
+      <div class="eyebrow">The core story</div>
+      <h2>From a job posting to a new hire's first login</h2>
+      <p class="block-intro">This is the flow to walk a prospect through end to end — it's where Praesto's guardrails and automation are most visible.</p>
+
+      <ol class="steps">
+        <li>
+          <h4>HR posts a job opening</h4>
+          <p>One form: job title, number of vacancies, description, posting date, application deadline, required skills, experience needed, salary range, and the hiring manager. Saving it generates a shareable public "Apply" link that can be posted anywhere — LinkedIn, job boards, WhatsApp.</p>
+        </li>
+        <li>
+          <h4>Candidates apply — no account needed</h4>
+          <p>Every company gets its own public careers page listing open roles. A candidate applies with name, phone, email, ID number, and a resume upload. No login, no account creation, and duplicate applications to the same job are blocked automatically.</p>
+        </li>
+        <li>
+          <h4>The resume screens itself</h4>
+          <p>The instant a resume is submitted, an AI model reads it and scores the candidate 0–10 against that specific job's requirements. Weak matches are automatically marked "Rejected"; the rest move forward. HR and the hiring manager are notified immediately either way.</p>
+        </li>
+        <li>
+          <h4>Interviews run on a defined pipeline</h4>
+          <p>Every job follows an interview pipeline template — a default 3-stage pipeline (Screening → Technical → HR/Salary discussion) ships out of the box, and HR can build custom templates per role with their own stages, interviewer roles, and an explicit background-verification step. HR schedules each round with an approved interviewer; a round can't be skipped, and a later round can't be booked until the one before it is marked "Cleared."</p>
+        </li>
+        <li>
+          <h4>Hiring the candidate</h4>
+          <p>Once at least one round is cleared, HR sets the offered salary, joining date, and referral source, and marks the candidate hired. The system will not allow a hire to go through if no round was actually cleared — it's enforced, not just a UI suggestion.</p>
+        </li>
+        <li>
+          <h4>Day one: signing in with the company email</h4>
+          <p>Once the new hire has been added to the organisation, they sign in the same way everyone else does — with Google, using their official company email address, or with a passkey once they've registered one. There's no separate password to set up on day one.</p>
+        </li>
+        <li>
+          <h4>Completing onboarding paperwork (KYC)</h4>
+          <p>The new employee fills a single digital onboarding form: photo, date of birth, contact details, personal and official email, permanent and current address, ID documents (with photo uploads), education and experience certificates, and bank details for payroll. Every approver with KYC rights is notified the moment it's submitted, and the employee is notified either way once a decision is made — approved, or sent back for revision on just the specific field that needs fixing, not the whole form. See the full lock/revision cycle under <a href="#m-kyc">KYC</a> below.</p>
+        </li>
+      </ol>
+
+  
+    </section>
+
+    <!-- PROFILE -->
+    <section class="block" id="profile">
+      <div class="eyebrow">Every employee's account</div>
+      <h2>Profile: personal info, notifications, and passwordless login</h2>
+      <p class="block-intro">The profile area is organised into three tabs, accessible from the avatar icon in the sidebar.</p>
+
+      <h3>Basic Info</h3>
+      <p>Displays the employee's contact details, employment information, address, banking details, and ID numbers. This data comes from the employee record and KYC — it's visible here for quick reference but is edited through the appropriate module (KYC for personal details, HR/admin for employment details).</p>
+
+      <h3>Push Notifications</h3>
+      <p>An employee clicks "Enable on this device," grants notification permission, and the browser or device is registered to receive push alerts (leave decisions, approvals waiting, tickets updated, and more). Every device they've enabled is listed by name — "Chrome on macOS," "Safari on iPhone" — with a <strong>"This Device" badge</strong> and a last-used date, and can be removed individually or all at once. Unused devices clean themselves up automatically after 90 days.</p>
+
+      <h3>Security Keys (passkeys)</h3>
+      <p>An employee clicks "Register this device," and their browser's built-in fingerprint, Face ID, or a physical security key becomes a login credential — no password involved. Each device/browser gets its own passkey, all listed with a friendly name and registration date, removable individually.</p>
+
+      <p>From then on, the login screen offers "Use Security Key / Biometric" as an alternative to the standard sign-in — the app checks whether that username has a registered passkey and, if so, triggers the fingerprint/Face ID/security-key prompt directly.</p>
+
+     
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="block" id="dashboard">
+      <div class="eyebrow">Where the day starts</div>
+      <h2>The dashboard</h2>
+      <p class="block-intro">A customisable widget grid (employees can drag, resize, or hide widgets via a "Customize layout" toggle in the top toolbar, with a "Reset to default" option), plus a persistent "My Workspace" panel for the things people check every day.</p>
+
+      <h3>My Workspace panel</h3>
+      <ul>
+        <li><strong>Punch In / Punch Out</strong> with today's times, an animated live clock showing current time, and total hours worked so far (face recognition, described in the Attendance module below)</li>
+        <li><strong>This month at a glance</strong> — paid leave used, loss-of-pay days, presents, holidays, week-offs</li>
+        <li><strong>Leave balance</strong> — remaining balance for each leave type at a glance</li>
+        <li><strong>Quick actions / shortcuts</strong> — one-tap buttons to Apply Leave, My Payslips, My Profile, Calendar, Attendance, and KYC</li>
+        <li><strong>Coming up</strong> — a merged, date-sorted list of the next calendar events and company holidays, labelled "Today" / "Tomorrow" where relevant</li>
+        <li>A banner if the employee has pending leave approvals waiting on them</li>
+      </ul>
+
+      <h3>Dashboard widgets</h3>
+      <p>All optional and rearrangeable by every user:</p>
+      <ul>
+        <li><strong>Quick Stats</strong> — headcount, active employees, and key summary numbers</li>
+        <li><strong>Workforce Status</strong> — who's in today, who's on leave, who's WFH</li>
+        <li><strong>Attendance Calendar</strong> — a mini monthly calendar colour-coded by attendance status</li>
+        <li><strong>HR Activities feed</strong> — latest announcements and events</li>
+        <li><strong>Pending Approvals</strong> — items waiting for the logged-in user's action</li>
+        <li><strong>KYC Status</strong> — completion tracking for the organisation</li>
+        <li><strong>Open Positions</strong> — active job openings with application counts</li>
+        <li><strong>Birthdays &amp; Anniversaries</strong> — upcoming celebrations</li>
+        <li><strong>Department Breakdown</strong> — headcount by department, visualised</li>
+        <li><strong>Upcoming Holidays</strong> — the next company holidays</li>
+      </ul>
+
+    </section>
+
+    <!-- ORG TREE + PERMISSIONS -->
+    <section class="block" id="orgtree">
+      <div class="eyebrow">Structure &amp; access</div>
+      <h2>Organisation chart and permissions</h2>
+
+      <h3>Organisation tree</h3>
+      <p>A visual, expandable chart of the whole company — every employee shown with photo, name, designation, and department, with role-based icons (crown for leadership, target for managers, and so on). Clicking anyone opens their detail card.</p>
+
+      <h3>Permissions (role-based access control)</h3>
+      <p>A genuine, granular permissions system, not a fixed "Admin / Employee" toggle. The Owner (automatically Superuser from day one — see <a href="#tenant">how a company gets onboarded</a>) is who reviews access requests and hands out permissions to everyone else, using three tools:</p>
+      <ul>
+        <li><strong>Manage Roles</strong> — build custom roles (e.g. "Team Lead," "Recruiter"), assign people to them, and configure exactly what each role can do, module by module. Anyone assigned a role automatically gets every permission that role carries. Roles are created with a name and description, and their permissions are configured through a detailed modal showing every available module and action.</li>
+        <li><strong>User Permissions</strong> — grant a "lone" permission to one specific person directly, independent of whatever role they hold, plus a "Super User" flag for blanket access.</li>
+        <li><strong>Teams</strong> — group people into teams with a team name and member list (searchable by employee name), which powers team-scoped approvals (e.g. a manager who can approve leave for their own team but nobody else's). Team members can be added or removed at any time.</li>
+      </ul>
+      <p>Permissions are defined as <em>module → action → scope</em> — for example, a role can be allowed to approve leave for their team but not the whole company, or be limited to Job Openings actions only, or given full access to everything. This lets a customer's access model mirror how their organisation actually works, instead of forcing everyone into "Admin" or "Employee."</p>
+      <p>The default for everyone is <strong>their own data only</strong> — an employee can view and act on their own record unless a permission explicitly widens that to their team or the whole company. And it's enforced in both directions: a module nobody's given them access to doesn't just stay off their menu, typing its URL directly doesn't get them in either — the check happens on the server, not just in what the screen shows.</p>
+      <p>If someone needs a permission they don't have — say, a team lead who needs approval rights for a new hire's leave — they can raise a request straight from the <a href="#m-helpdesk">Helpdesk</a> module instead of pinging IT informally; it routes to whoever can actually grant it.</p>
+
+      <h3>Permission-based scope of work</h3>
+      <p>The part worth demoing explicitly: for the modules where it matters, every action carries its own <strong>scope</strong> — <span class="badge">self</span> <span class="badge">team</span> <span class="badge">all</span> — so the same action means something different depending on who holds it. A manager and an HR admin can both hold "approve leave," but one is scoped to their own team and the other to the whole company, and that's a configuration choice, not two different features.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Module</th><th>Action</th><th>Available scopes</th></tr></thead>
+          <tbody>
+            <tr><td>Attendance</td><td>View records</td><td class="praesto">Self · Team · All</td></tr>
+            <tr><td>Attendance</td><td>Correct attendance</td><td class="praesto">All (HR/admin only)</td></tr>
+            <tr><td>Leave</td><td>Apply</td><td class="praesto">Self</td></tr>
+            <tr><td>Leave</td><td>Approve / reject</td><td class="praesto">Team · All</td></tr>
+            <tr><td>Resignation</td><td>Approve / reject</td><td class="praesto">Team · All</td></tr>
+            <tr><td>KYC</td><td>View</td><td class="praesto">Self · All</td></tr>
+            <tr><td>KYC</td><td>Approve / edit</td><td class="praesto">All</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Other modules — Permissions itself, Job Openings, Holidays, Salary Management, Policy, Subscription, Company Info — are simpler on/off switches rather than self/team/all, because there's no natural "team" version of, say, editing the company's billing plan.</p>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section class="block" id="analytics">
+      <div class="eyebrow">For leadership</div>
+      <h2>Analytics</h2>
+      <p class="block-intro">A management-facing dashboard across four areas — a strong "data-driven HR" talking point. Access is permission-gated; only users with analytics view permission see the sidebar link.</p>
+      <div class="two-col">
+        <ul>
+          <li><strong>Workforce</strong> — headcount growth, age and tenure distribution, department and designation breakdowns, active/inactive status</li>
+          <li><strong>Leave &amp; attendance</strong> — approval rates, leave-type usage, working-hours trends, a leave-pattern heatmap</li>
+        </ul>
+        <ul>
+          <li><strong>Recruitment</strong> — job status, applications by role, hiring-manager workload, a stage-by-stage hiring funnel</li>
+          <li><strong>Salary</strong> — pay distribution, compensation breakdown, salary bands by designation</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- POLICIES -->
+    <section class="block" id="policy">
+      <div class="eyebrow">Governance</div>
+      <h2>Company policies</h2>
+      <p>HR writes a policy in a rich-text editor under any category — POSH Policy, Leave Policy, Code of Conduct, or a custom type — and publishes it. Every employee can browse policies by category, read them in full, and download a PDF copy. Anyone with edit rights can update or retire a policy later; saving under an existing policy type updates it in place rather than duplicating it. The Policy icon lives in the main sidebar — accessible to every employee at all times.</p>
+    </section>
+
+    <!-- SETTINGS + BILLING -->
+    <section class="block" id="settings">
+      <div class="eyebrow">Configuration</div>
+      <h2>Settings &amp; billing</h2>
+      <p class="block-intro">Everything a company needs to tune Praesto to how it actually runs, without a support ticket. Settings is a unified area with four tabs (visible based on permissions):</p>
+
+      <h3>Tab 1: Company Info</h3>
+      <p>Organisation name, industry, size, help phone number, support email, office address, and website — the public-facing details employees can reference and that appear on company materials.</p>
+
+      <h3>Tab 2: Organisation Settings</h3>
+      <p>The big one — this tab has its own sub-tabs for granular configuration:</p>
+      <ul>
+        <li><strong>Leave</strong> — annual quotas per leave type (paid, sick, casual), whether sick leave needs a medical certificate, and <strong>fully custom leave types</strong> with their own key, accrual method (lump sum or monthly), proration by join date, carry-forward rules (max days, expiry months), encashment (rate per day, max days per year), comp-off support with configurable expiry, and what happens when a balance runs out (reject, auto-LOP, or manager override)</li>
+        <li><strong>Attendance</strong> — work start time (hour and minute), late-arrival grace period, full-day minimum hours, half-day minimum hours, how many days back an employee can self-correct attendance (regularization backdate window), overtime pre-approval toggle, and <strong>geofencing</strong> (enable/disable, office location on a map via a location picker, and configurable radius in metres — punches outside the radius are rejected, except on approved WFH days)</li>
+        <li><strong>HR Policy</strong> — default probation period (days), notice period (days), and maximum interview rounds allowed per job opening</li>
+        <li><strong>Work Week</strong> — which days count as working days company-wide, configurable per day of the week</li>
+        <li><strong>Exit Policy</strong> — notice period rules by tenure, an offboarding clearance checklist (configurable by department with required/optional items and owning roles), and exit interview questions. Dedicated settings screen for configuring the entire offboarding workflow</li>
+        <li><strong>Payroll Components</strong> — salary components (Basic, HRA, Conveyance and custom components), statutory deductions (PF, ESI), and state-wise Professional Tax slab configuration</li>
+        <li><strong>Recruitment Pipeline</strong> — interview pipeline templates with customizable stages, interviewer roles, and BGV steps. A default 3-stage pipeline ships out of the box</li>
+      </ul>
+      <p>Changes can be scheduled to take effect <strong>immediately, at the start of next month, at the start of next year, or on a custom date</strong> — with a note explaining why, and the ability to cancel a scheduled change before it lands. Every setting change creates a new settings snapshot with an effective date, so the history of when and why things changed is preserved.</p>
+
+      <h3>Tab 3: Join Requests</h3>
+      <p>Visible to owners, admins, superusers, and anyone with the <code>Organisation:approve_join_requests</code> permission. Shows all pending requests from people whose email domain matches the company, with approve/reject buttons for each. Approving adds them as an employee; rejecting turns them away.</p>
+
+      <h3>Tab 4: Subscription (billing)</h3>
+      <p>One plan, billed monthly or annually through Razorpay (card, UPI, net banking, and more). The billing screen shows current status, renewal date, and payment method, with a 7-day grace period if a payment lapses before access is suspended. Only visible to users with subscription access permissions.</p>
+    </section>
+
+    <!-- APP EXPERIENCE -->
+    <section class="block" id="ux">
+      <div class="eyebrow">The experience layer</div>
+      <h2>App experience — things that make it feel premium</h2>
+      <p class="block-intro">Beyond the HR modules themselves, Praesto ships with a set of experience features that make the daily use feel polished and fast.</p>
+
+      <h3 id="ux-theme">Theme &amp; dark mode</h3>
+      <p>A <strong>one-click theme toggle</strong> (sun/moon icon) in the top toolbar switches between light and dark mode instantly. The app also auto-detects the operating system's colour-scheme preference on first load, so macOS and Windows dark-mode users see a dark app without configuring anything. The theme preference is persisted locally — it survives page reloads and stays across sessions. Both themes are fully designed: every screen, every component, every chart adapts — it's not a CSS filter hack.</p>
+
+      <h3 id="ux-spotlight">Spotlight search (Route Query)</h3>
+      <p>Pressing <strong>Shift + Space</strong> anywhere in the app opens a <strong>spotlight-style search modal</strong> — a fast way to jump to any page, tab, or feature without navigating through menus. It searches across all routes, including deep sub-tabs like "Attendance Correction," "Salary Management," "Exit Feedback," "Webhook Endpoints," "Report Builder," and more. Results are grouped by category (Profile, Permissions, Analytics, Attendance &amp; Leaves, KYC, Payroll Management, etc.) and clicking one navigates there instantly. This is the "I know what I want — take me there" shortcut for power users.</p>
+
+      <h3 id="ux-apps">Apps launcher</h3>
+      <p>A <strong>grid icon</strong> in the top toolbar opens an Apps popover — a visual grid of all available modules (Attendance, Employees, Holidays, HR Activities, Job Openings, KYC, Resignation, Payroll, Assets, WFH, Helpdesk, Reports), each with its own colour-coded icon. The grid dynamically hides modules the user doesn't have access to (e.g. WFH is hidden when the tenant has it disabled, Reports is hidden for non-HR users, Job Openings respects recruiter permissions). The currently active module gets a visual ring highlight. This is the main way users navigate between modules — it sits right next to the search icon for quick access.</p>
+
+      <h3 id="ux-keyboard">Keyboard shortcuts</h3>
+      <p>Documented on the <strong>Help page</strong> (accessible from the sidebar) and organised by category:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Category</th><th>Shortcut</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>View</td><td><code>⌘/Ctrl + Shift + F</code></td><td>Toggle fullscreen mode</td></tr>
+            <tr><td>View</td><td><code>⌘/Ctrl + Shift + S</code></td><td>Show / hide the sidebar</td></tr>
+            <tr><td>View</td><td><code>Alt + M</code></td><td>Toggle DOM magnifier around the cursor</td></tr>
+            <tr><td>Navigation</td><td><code>Shift + Space</code></td><td>Open spotlight / route query search</td></tr>
+            <tr><td>Navigation</td><td><code>⌘/Ctrl + Shift + A</code></td><td>Toggle the AI assistant chatbot</td></tr>
+            <tr><td>Navigation</td><td><code>⌘/Ctrl + Shift + ← →</code></td><td>Navigate between pages (forward/back)</td></tr>
+            <tr><td>Account</td><td><code>⌘/Ctrl + Shift + L</code></td><td>Logout</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Shortcuts are OS-aware: the Help page auto-detects macOS vs. Windows/Linux and shows the right modifier key (⌘ vs. Ctrl). There's also an <code>Alt + P</code> shortcut for a built-in performance profiler (developer tool).</p>
+
+      <h3 id="ux-help">Help &amp; support</h3>
+      <p>The Help page (sidebar icon) shows two things:</p>
+      <ul>
+        <li><strong>App Support</strong> — support email (<code>support@praesto.cloud</code>) and business enquiries email (<code>hello@praesto.cloud</code>), always visible</li>
+        <li><strong>Keyboard Shortcuts</strong> — the full list above, rendered as interactive cards grouped by category</li>
+      </ul>
+
+      <h3 id="ux-notifications">Notifications</h3>
+      <p>A <strong>bell icon</strong> in the top toolbar opens a notification drawer showing all recent notifications (leave decisions, approvals waiting, ticket updates, KYC submissions, and more). The bell shows a <strong>badge count</strong> of unread notifications. Push notifications can be enabled per-device from the Profile, and are delivered via Firebase Cloud Messaging to any registered browser or device. Unused devices are auto-cleaned after 90 days. The favicon also gets a coloured dot indicator when there are unread notifications, so users can spot them even from a browser tab.</p>
+    </section>
+
+    <!-- MODULE REFERENCE -->
+    <section class="block" id="modules">
+      <div class="eyebrow">Reference</div>
+      <h2>Module by module</h2>
+      <p class="block-intro">Everything above is the narrative arc. Below is a complete reference for every module — open any one for the full detail.</p>
+
+      <details class="module" id="m-approvals">
+        <summary>Approvals — the engine behind every request <span class="tag">cross-cutting</span></summary>
+        <div class="module-body">
+          <p>Leave, resignation, salary advances, and more all run through the same configurable Approval Chain engine. Out of the box, an employee's direct manager approves, falling back to a company owner/admin if there isn't one. Companies can configure multi-step chains (e.g. Manager → HR → Owner), route differently based on conditions like leave length, and let an approver set a temporary delegate while they're away.</p>
+          <p>Every pending item a manager needs to act on — regardless of which module it came from — lands in one <strong>Pending Approvals inbox</strong> (accessible from the sidebar with a dedicated inbox icon), updating live with no manual refresh, with a <strong>badge count</strong> in the navigation showing how many things are waiting on them. This means a manager never has to check five different screens to find out what needs their attention.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-audit">
+        <summary>Audit logs <span class="tag">cross-cutting</span></summary>
+        <div class="module-body">
+          <p>A book icon in the top toolbar opens a slide-out activity feed — a wide (1000px) drawer showing a running record of every create, update, and delete anywhere in the app, plus logins. Each entry shows a timestamp, IP address, device info (parsed automatically — e.g. "Chrome on macOS"), who did it, and — expandable per entry — the data's <strong>old value and new value side by side</strong> as a structured JSON diff, so a settings change or a role edit shows exactly what it was before and what it became.</p>
+          <p>The audit log can be filtered by:</p>
+          <ul>
+            <li><strong>Time range</strong> — last day, last week, last month, last 3 months, last 6 months, or last year</li>
+            <li><strong>Entity type</strong> — one of 18 categories: Account security, Employee records, Attendance, Leave, WFH, Job Openings, Job Applications, Resignation, Payroll Runs, Salary Structure, Salary Advance, Assets, Helpdesk, HR Activities, Policies, Roles &amp; Permissions, Tenant Settings, and Holidays</li>
+            <li><strong>Specific employee</strong> — filter to see only actions by or about a particular person</li>
+          </ul>
+          <p>All three filters can be applied together or cleared with one "Clear all filters" button.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-attendance">
+        <summary>Attendance &amp; leave</summary>
+        <div class="module-body">
+          <p>Everything to do with a person's working day lives under one Attendance area, organised into five tabs:</p>
+
+          <h4>1. View All Attendances</h4>
+          <p>Employees see their own record; anyone holding a team- or company-wide view permission (see <a href="#orgtree">scope of work</a>) sees their team's or the whole company's daily records in one searchable, exportable table.</p>
+
+          <h4>2. Leave Application</h4>
+          <p>The leave types on offer, annual quotas, accrual method, carry-forward, and encashment rules are all set once by the tenant in Settings → Leave — an employee just picks a type, a date range, and a reason, and the system checks it against those rules automatically (balance, blackout periods, overlapping requests). Supports:</p>
+          <ul>
+            <li>Multiple leave types (paid, sick, casual, maternity, paternity, and custom types)</li>
+            <li>Half-day and full-day leave</li>
+            <li>Multi-day date range selection</li>
+            <li>Automatic balance checking and deduction</li>
+            <li>Configurable behaviour when balance runs out: reject, auto-convert to loss-of-pay, or let the manager override</li>
+          </ul>
+
+          <h4>3. View Leave Applications</h4>
+          <p>Anyone with team- or company-wide leave-approval permission sees pending requests in a filterable table (or the unified <a href="#m-approvals">Approvals</a> inbox) and can approve or reject with a comment.</p>
+
+          <h4>4. Attendance Correction</h4>
+          <p>An employee can fix their own recent record within a <strong>backdating window</strong> the tenant configures (default: 3 days). The number of self-corrections allowed per month is also configurable, so a company can decide how much slack to allow before it wants HR involved. HR/admins aren't limited by either setting.</p>
+
+          <h4>5. Insights (attendance analytics)</h4>
+          <p>Attendance rate, average hours worked, what share of punches were biometric versus manually corrected, a per-employee risk flag for declining attendance, and department comparisons — all in one analytics tab.</p>
+
+          <h4>Punch In / Punch Out (face recognition)</h4>
+          <p>Not a single tap — the camera captures a <strong>live face match</strong> against the employee's stored face profile, with a <strong>liveness check</strong> (blink detection, head movement) to rule out a photo held up to the camera, then the device's GPS location is captured with the punch. First use enrolls the face; every time after, it verifies against it. If geofencing is enabled, the punch is only accepted if the GPS coordinates fall within the configured radius of the office (or the employee's home if they're on an approved WFH day).</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-employee-record">
+        <summary>Employee management</summary>
+        <div class="module-body">
+          <p>The central employee directory, organised into tabs:</p>
+          <ul>
+            <li><strong>Employee List</strong> — a searchable, filterable table of all employees with their status, department, designation, and contact info. Clicking any employee opens a detailed profile view showing all their information, employment history, salary structure, and currently issued assets.</li>
+            <li><strong>Insights</strong> — workforce analytics specific to employee data: department distribution, designation breakdown, headcount trends, and more.</li>
+          </ul>
+          <p>From their own record, an employee doesn't have to ask HR for two things people usually chase down by email: their current <strong>salary structure</strong> (the Basic / HRA / Conveyance / deductions breakdown HR has set up for them — full detail under <a href="#m-payroll">Payroll &amp; salary</a>) and the <strong>assets currently issued to them</strong> (which laptop, phone, or equipment is in their name — full detail under <a href="#m-assets">Assets</a>). Both are simply visible, not something they can edit themselves.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-wfh">
+        <summary>Work from home</summary>
+        <div class="module-body">
+          <p>This module only shows up at all if the company has switched it on in Settings (the <code>wfhEnabled</code> toggle) — if a customer doesn't want to offer WFH, it's not just hidden, it's genuinely unavailable, checked on the server as well as in the menu. Even superusers and admins won't see the WFH tile in the Apps launcher when it's disabled tenant-wide.</p>
+          <p>Where it's enabled, the module has two tabs:</p>
+          <ul>
+            <li><strong>WFH Requests</strong> — an employee requests a single future date with an optional reason — weekends and dates that already have a leave request are blocked automatically. A manager, HR, or admin approves or rejects it directly (no multi-step chain needed here), and once approved it shows correctly as "WFH" rather than an absence.</li>
+            <li><strong>WFH Calendar</strong> — a team calendar view lets managers see who's working remotely on any given day, for coverage planning.</li>
+          </ul>
+          <p>Because a WFH day isn't logged from the office, attendance geofencing is bypassed on an approved WFH day — the punch is accepted without needing to fall inside the office's GPS radius.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-holidays">
+        <summary>Holidays</summary>
+        <div class="module-body">
+          <p>A simple, admin-managed calendar of company holidays by year. Holidays feed automatically into both Leave (excluded from day counts) and Attendance (shown correctly as "Holiday" rather than an unexplained absence). They also appear in the dashboard's "Coming up" list and the shared Calendar. Each holiday has a name and date, manageable by anyone with holiday permissions.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-activities">
+        <summary>HR activities</summary>
+        <div class="module-body">
+          <p>A company announcements and events board, organised into two tabs:</p>
+          <ul>
+            <li><strong>Add New Activity</strong> — HR posts a title, description, date and time</li>
+            <li><strong>View Activities</strong> — all posted activities visible to everyone until they automatically expire</li>
+          </ul>
+          <p>Every post shows who created and last edited it, for accountability. Activities also appear as a widget on the dashboard.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-jobopenings">
+        <summary>Job openings</summary>
+        <div class="module-body">
+          <p>The full hiring pipeline, stage by stage (see also the <a href="#journey">job posting → first login</a> walkthrough earlier in this guide for the demo-ready narrative version). Organised into three tabs:</p>
+
+          <h4>New Job Opening</h4>
+          <p>One form: job title, vacancies, description, skills, experience, salary range, hiring manager. A public "Apply" link is generated automatically.</p>
+
+          <h4>View Job Openings</h4>
+          <p>All job openings in a filterable list. Clicking one opens a detailed view showing the job details, all applications received, their AI screening scores, and the interview pipeline status for each candidate.</p>
+
+          <h4>Insights</h4>
+          <p>Recruitment-specific analytics: job status breakdown, applications by role, hiring-manager workload, and a stage-by-stage funnel visualisation.</p>
+
+          <h4>The pipeline in action</h4>
+          <ol>
+            <li>HR creates the job opening — a public apply link is generated automatically</li>
+            <li>A candidate applies through that link — no account needed (public careers page at <code>/careers/:slug</code>)</li>
+            <li>The resume is screened automatically; a low match score against the job's requirements gets the candidate auto-rejected before HR ever opens the file</li>
+            <li>HR schedules an interview round with an approved interviewer at a specific date and time</li>
+            <li>The candidate receives an email with the interview details</li>
+            <li>The candidate attends the interview</li>
+            <li>The interviewer marks the round "Completed" and records feedback</li>
+            <li>The round is then marked "Cleared" or "Rejected" based on that feedback</li>
+            <li>If cleared, the next round in the pipeline is scheduled the same way — and so on until the pipeline is finished</li>
+            <li>HR hires the candidate, entering the gross salary and joining date</li>
+            <li>The candidate receives a hiring confirmation email</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="module" id="m-kyc">
+        <summary>KYC</summary>
+        <div class="module-body">
+          <p>The identity/compliance paperwork cycle, organised into three tabs:</p>
+          <h4>Complete KYC</h4>
+          <p>The employee fills the form: personal details, addresses, ID documents (with photo uploads), education and experience certificates, and bank details for payroll.</p>
+          <h4>View Employee KYCs</h4>
+          <p>A table of all employee KYC submissions with their status (pending, approved, revision requested).</p>
+          <h4>KYC Insights</h4>
+          <p>Completion tracking: how many employees have submitted, how many are approved, how many need revision.</p>
+
+          <h4>The lock/revision cycle</h4>
+          <ol>
+            <li>The employee fills the KYC form (personal details, addresses, ID documents, bank details)</li>
+            <li>Every approver with KYC rights is notified that a submission is waiting</li>
+            <li>The approver either approves it, or requests a revision on the specific field(s) that need fixing</li>
+            <li>The employee is notified either way</li>
+            <li>Once approved, the KYC record is <strong>locked</strong> — the employee can no longer edit it directly</li>
+            <li>To change anything after that, the employee submits an edit request from the portal; whoever holds edit/approve permission for KYC is notified</li>
+            <li>Once that edit is made, the record is locked again — it doesn't stay open for further changes</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="module" id="m-resignation">
+        <summary>Resignation &amp; offboarding</summary>
+        <div class="module-body">
+          <p>A comprehensive offboarding workflow, organised into four tabs:</p>
+
+          <h4>Resignation Form</h4>
+          <p>An employee submits a resignation with a reason.</p>
+
+          <h4>View Resignations</h4>
+          <p>A table of all resignations with their status. From here, the approver can:</p>
+          <ul>
+            <li><strong>Approve</strong>, <strong>reject</strong>, or <strong>negotiate</strong> it (counter on terms like the last working day) — the employee can also <strong>withdraw</strong> their own resignation while it's still pending</li>
+            <li>The tenant sets a default notice period in Settings (which can already vary by tenure, role, or department), but the approver can also set the notice period manually on that specific resignation, overriding the default</li>
+          </ul>
+
+          <h4>Exit Management (post-approval)</h4>
+          <p>Once a resignation is approved, a full exit management dialog opens with three tabs:</p>
+          <ul>
+            <li><strong>Clearance Checklist</strong> — configurable items by department and role (IT equipment returned? Access cards collected? Knowledge transfer complete?). Each item can be marked complete with notes. Required items must all be checked off before the process can close.</li>
+            <li><strong>Notice Period</strong> — tracks notice period renegotiation events, showing the timeline of any changes to the last working day with reasons</li>
+            <li><strong>Full &amp; Final Settlement</strong> — HR computes the settlement in a single click, with itemised line items (earnings and deductions) and a net payable amount. Status tracking from computed through to disbursed.</li>
+          </ul>
+
+          <h4>Exit Feedback</h4>
+          <p>If approved, the employee fills out an exit-feedback survey — the questions themselves are configurable by the tenant, not fixed. Feedback can be viewed later by HR through a dedicated viewer modal.</p>
+
+          <h4>Insights</h4>
+          <p>Resignation-specific analytics: attrition trends, reasons breakdown, notice period adherence, and department-level patterns.</p>
+
+          <p>Additional offboarding features:</p>
+          <ul>
+            <li>Assets the employee was issued get marked returned right in the portal, feeding back into the <a href="#m-assets">Assets</a> module</li>
+            <li>A simple toggle marks the departing employee eligible (or not) for <strong>rehire</strong>, for future reference</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="module" id="m-payroll">
+        <summary>Payroll &amp; salary</summary>
+        <div class="module-body">
+          <p>Organised into four tabs:</p>
+
+          <h4>Payroll Runs</h4>
+          <p>Running payroll for a period moves through a clear approval trail: <strong>Draft → Processing → Approved → Disbursed</strong>. Each run covers all employees for a given month.</p>
+
+          <h4>Salary Management</h4>
+          <p>HR defines each employee's salary breakdown — Basic, HRA, Conveyance, and any custom pay or deduction components the company has set up. Clicking an employee opens a dedicated <strong>Edit Salary Structure</strong> screen. Statutory components like Provident Fund and ESI can be set to calculate automatically as a percentage of pay, and India's state-wise Professional Tax is calculated from configured slabs — contractors are automatically exempted from all three.</p>
+
+          <h4>Salary Advances</h4>
+          <p>Employees can request a salary advance (amount, repayment months, reason); HR approves or rejects it, and the system tracks repayment automatically as EMIs are paid off.</p>
+
+          <h4>My Payslips</h4>
+          <p>Every employee can see and download their own historical payslips as a PDF — no need to ask HR.</p>
+
+          <div class="callout">
+            <div class="label">Demo note</div>
+            <p>Income-tax (TDS) calculation isn't part of the product today — keep the pitch to PF, ESI, and Professional Tax.</p>
+          </div>
+        </div>
+      </details>
+
+      <details class="module" id="m-assets">
+        <summary>Assets</summary>
+        <div class="module-body">
+          <p>Organised into two tabs:</p>
+
+          <h4>Asset Inventory</h4>
+          <p>HR tracks every company asset (laptops, monitors, phones, furniture, vehicles, and more) with a unique code, purchase details, and status — <strong>Available, Assigned, Maintenance, or Retired</strong>. Assigning one to an employee records the condition at handover; returning it records the condition at return.</p>
+
+          <h4>Asset Summary</h4>
+          <p>An overview of asset distribution: how many assets by type, status breakdown, and who has what.</p>
+
+          <h4>Problem reporting</h4>
+          <p>Employees can report a problem with something they hold — damage, malfunction, loss, theft, or a return request — and HR resolves it through a review workflow. Certain resolutions have automatic effects: a lost/stolen report retires the asset, a damage report moves it into maintenance, a return request frees it back to available.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-helpdesk">
+        <summary>Helpdesk</summary>
+        <div class="module-body">
+          <p>Any employee can raise a support ticket — <strong>IT, HR, Finance, Facilities, Security, or Other</strong> — with a priority level. Each ticket gets an automatic response-time deadline based on priority (from 4 hours for Critical up to 72 hours for Low), and is flagged if that deadline is missed. Tickets move through <strong>Open → In Progress → Resolved → Closed</strong>, with a comment thread that supports HR-only internal notes hidden from the person who raised the ticket.</p>
+          <p>Clicking any ticket opens a <strong>detailed ticket view</strong> with the full comment thread, status timeline, and action buttons.</p>
+          <p>This doubles as the front door for <strong>requesting a permission</strong> you don't currently have — e.g. a team lead who needs approval rights over a new hire's leave. Raising it as a ticket means it's tracked and routed like everything else, instead of being a favour asked over chat.</p>
+          <p>The Helpdesk is available to all employees — no special permission needed to create a ticket.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-chat">
+        <summary>Chat — real-time 1:1 messaging</summary>
+        <div class="module-body">
+          <p>A full workplace messaging system accessible from the sidebar (with an unread badge count on the icon). This is not a toy — it's a WhatsApp-style experience built right into the HR platform:</p>
+
+          <h4>Core messaging</h4>
+          <ul>
+            <li><strong>1:1 conversations</strong> with any colleague in the organisation — search for them by name to start a conversation</li>
+            <li><strong>Text messages</strong> with automatic link detection and clickable URLs</li>
+            <li><strong>Link previews</strong> — shared URLs automatically fetch and display the page's title, description, and image (OpenGraph)</li>
+            <li><strong>Emoji picker</strong> — a full emoji picker built into the message composer</li>
+            <li><strong>File attachments</strong> — send any file type (documents, spreadsheets, etc.) with icon-based rendering by file type (PDF, Excel, Word, etc.) and file size display</li>
+            <li><strong>Image sharing</strong> — inline image previews with a click-to-expand lightbox</li>
+            <li><strong>Video sharing</strong> — inline video player with controls</li>
+          </ul>
+
+          <h4>Conversation features</h4>
+          <ul>
+            <li><strong>Reply-to-message</strong> — reply to a specific message with a preview of the original, click the preview to jump back to it (WhatsApp-style scroll-to-message)</li>
+            <li><strong>Pinned messages</strong> — pin important messages per conversation; a collapsible pinned-messages bar appears at the top of the thread showing all pins</li>
+            <li><strong>Delete messages</strong> — soft-delete a message (shows "🚫 This message was deleted" in place)</li>
+            <li><strong>Delete conversations</strong> — remove an entire conversation thread</li>
+            <li><strong>Read receipts</strong> — single tick (sent), double blue tick (read) on your own messages</li>
+            <li><strong>Typing indicators</strong> — animated dots with "X is typing…" when the other person is composing</li>
+            <li><strong>Unread counts</strong> — per-conversation unread badge, plus a total unread count on the sidebar icon</li>
+            <li><strong>Smart timestamps</strong> — "Just now," "Yesterday," "Mon," or a date for older messages</li>
+            <li><strong>Message search</strong> — search within conversations to find old messages</li>
+          </ul>
+
+          <h4>Technical quality</h4>
+          <ul>
+            <li>Real-time delivery via WebSocket — no polling, messages arrive instantly</li>
+            <li>Messages are persisted and loaded from the database, with pagination for older history</li>
+            <li>Responsive layout — on mobile, the conversation list and thread are separate screens; on desktop, they're side-by-side</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="module" id="m-calendar">
+        <summary>Calendar — shared event management</summary>
+        <div class="module-body">
+          <p>A full-featured shared calendar accessible from the sidebar:</p>
+          <ul>
+            <li><strong>Four views</strong> — Month, Week, Day, and Agenda, switchable from the toolbar</li>
+            <li><strong>Create events</strong> — click any date/time slot or use the "+" button to create a new event with title, description, date, start time, and end time</li>
+            <li><strong>Edit events</strong> — click any event to see its details in a popover, then edit or delete it</li>
+            <li><strong>Upcoming events sidebar</strong> — a panel showing the next 5 upcoming events with countdown labels ("Today," "Tomorrow," relative time)</li>
+            <li><strong>Navigate by date</strong> — arrow buttons to move between periods, a "Today" button to jump back to the current date</li>
+            <li><strong>Click-to-navigate</strong> — the dashboard's "Coming up" list deep-links into the Calendar at the correct date and view</li>
+            <li><strong>Delete confirmation</strong> — events require a confirmation dialog before deletion</li>
+          </ul>
+          <p>Events created in the Calendar also appear in the dashboard's "Coming up" section alongside holidays, giving everyone a single merged timeline of what's happening.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-reports">
+        <summary>Reports</summary>
+        <div class="module-body">
+          <p>A self-serve report builder (permission-gated to HR and above) with two tabs:</p>
+          <ul>
+            <li><strong>Report Builder</strong> — pick a data source (Employee, Attendance, Leave, Salary, Recruitment, or Payroll), choose the fields, add filters and a sort order, then run it. Results can be exported to CSV.</li>
+            <li><strong>Saved Reports</strong> — save any report by name for one-click re-runs later, building up a library of go-to reports without recreating them each time.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="module" id="m-webhooks">
+        <summary>Webhooks (integrations)</summary>
+        <div class="module-body">
+          <p>For companies that want their own systems notified in real time, organised into two tabs:</p>
+          <ul>
+            <li><strong>Webhook Endpoints</strong> — register endpoints subscribed to specific events — new employee, leave approved, payroll disbursed, asset assigned, and more — each with a signing secret for verifying authenticity and a test-ping button to confirm connectivity.</li>
+            <li><strong>Delivery Log</strong> — a full delivery log with request/response details and retry support. See which deliveries succeeded, which failed, and retry any that didn't go through.</li>
+          </ul>
+          <p>This is the "connect Praesto to your own tools" story for technically-inclined buyers.</p>
+        </div>
+      </details>
+
+      <details class="module" id="m-chatbot">
+        <summary>AI assistant</summary>
+        <div class="module-body">
+          <p>A floating "HRMS Assistant" chat bubble (toggleable with <code>⌘/Ctrl + Shift + A</code>), available on every page. It answers HR questions in plain language and can pull the logged-in employee's own real data — leave balance and history, attendance for a given month, salary and payslip details, profile info, and company policy content. It's read-only by design: it can tell you your leave balance, but it can't file the leave application for you.</p>
+          <p>The assistant includes <strong>suggested prompts</strong> to help users get started:</p>
+          <ul>
+            <li>"What is the maternity leave policy?"</li>
+            <li>"How many leaves do I have remaining?"</li>
+            <li>"What is my current salary?"</li>
+            <li>"Show my attendance for this month"</li>
+            <li>"What is the work from home policy?"</li>
+            <li>"What is my date of birth on record?"</li>
+          </ul>
+          <p>The assistant supports <strong>streaming responses</strong> — answers appear word by word in real time, not as a block after a long wait.</p>
+          <p>Two points worth making to a prospect: it runs on a <strong>self-hosted AI model</strong> rather than sending data to a third-party AI provider, and it's explicitly restricted to only ever share the logged-in person's own data — it will refuse to disclose anyone else's. Chat history can be cleared with a single button.</p>
+        </div>
+      </details>
+
+     
+    </section>
+
+    <footer class="doc-footer">
+      Praesto — internal sales enablement guide. Built from the current state of the product; re-check anything customer-facing against a live demo before a high-stakes pitch.
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  (function () {
+    var toggle = document.getElementById('tocToggle');
+    var toc = document.getElementById('toc');
+    if (!toggle || !toc) return;
+    toc.setAttribute('data-collapsed', '');
+    toggle.addEventListener('click', function () {
+      if (toc.hasAttribute('data-collapsed')) {
+        toc.removeAttribute('data-collapsed');
+      } else {
+        toc.setAttribute('data-collapsed', '');
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>

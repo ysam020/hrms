@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { logger } from "@hrms/logger";
+import { attachAuditLogging } from "./auditMiddleware";
 
 const pool = new Map<string, PrismaClient>();
 
@@ -19,6 +20,7 @@ export function getClientForDb(dbName: string): PrismaClient {
         { emit: "stdout", level: "warn" },
       ],
     });
+    attachAuditLogging(client);
     pool.set(dbName, client);
     logger.info(`Tenant DB client created for "${dbName}"`);
   }

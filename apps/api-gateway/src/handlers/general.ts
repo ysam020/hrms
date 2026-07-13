@@ -288,13 +288,9 @@ export async function getAuditLogs(req: Request, res: Response) {
 
     const where: any = { timestamp: { gte: pastDate } };
     if (entityType) where.entityType = entityType;
-    if (userName) {
-      const user = await prisma.user.findFirst({
-        where: { username: userName },
-        select: { id: true },
-      });
-      if (user) where.userId = user.id;
-    }
+    // username is denormalized onto the log row at write time, so this
+    // still finds a user's history even if they're later renamed or removed.
+    if (userName) where.username = userName;
 
     const logs = await prisma.auditLog.findMany({
       where,
@@ -306,6 +302,7 @@ export async function getAuditLogs(req: Request, res: Response) {
       _id: l.id,
       action: l.action,
       entityType: l.entityType,
+      username: l.username,
       description: l.description,
       ipAddress: l.ipAddress,
       userAgent: l.userAgent,

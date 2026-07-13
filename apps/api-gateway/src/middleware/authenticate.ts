@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { prisma, runWithTenant, getClientForDb } from "@hrms/db";
+import { prisma, runWithTenant, getClientForDb, AuditActor } from "@hrms/db";
 import { gatewayTenantStorage } from "./tenantContext";
 
 export interface AuthUser {
@@ -36,6 +36,21 @@ async function resolveDbName(
   return tenant?.dbName ?? null;
 }
 
+// In-memory cache: userId → username, purely for labelling audit log rows —
+// not security-sensitive, and (like dbNameCache above) tolerates serving a
+// stale value for the rare case a user renames themselves mid-session.
+const usernameCache = new Map<string, string | null>();
+
+async function resolveUsername(userId: string): Promise<string | null> {
+  if (usernameCache.has(userId)) return usernameCache.get(userId)!;
+  const user = await prisma.user
+    .findUnique({ where: { id: userId }, select: { username: true } })
+    .catch(() => null);
+  const username = user?.username ?? null;
+  usernameCache.set(userId, username);
+  return username;
+}
+
 export const authenticate = (
   req: AuthRequest,
   res: Response,
@@ -56,14 +71,25 @@ export const authenticate = (
 
     if (tid) {
       // Resolve dbName (from JWT if present, else fall back to a DB lookup for old tokens)
-      resolveDbName(tid, dbNameFromToken)
-        .then((dbName) => {
+      // and username (for audit-log attribution) in parallel.
+      Promise.all([
+        resolveDbName(tid, dbNameFromToken),
+        resolveUsername(payload.userId),
+      ])
+        .then(([dbName, username]) => {
           const tenantClient = dbName ? getClientForDb(dbName) : null;
+          const actor: AuditActor = {
+            userId: payload.userId ?? null,
+            username,
+            ipAddress: req.ip || req.socket.remoteAddress || "",
+            userAgent: req.headers["user-agent"] || "",
+          };
           // Run the handler chain inside BOTH storage contexts:
           // - gatewayTenantStorage → read by grpcCall to forward metadata to gRPC services
-          // - runWithTenant (DB package) → read by prismaWithTenant for direct DB calls
+          // - runWithTenant (DB package) → read by prismaWithTenant for direct DB calls,
+          //   and by the audit-logging Prisma middleware for who/where to attribute a change
           gatewayTenantStorage.run({ tenantId: tid, dbName }, () => {
-            runWithTenant(tid, tenantClient, next);
+            runWithTenant(tid, tenantClient, next, actor);
           });
         })
         .catch(() => {

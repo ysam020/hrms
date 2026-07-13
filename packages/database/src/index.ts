@@ -14,8 +14,10 @@ export {
   tenantStorage,
   getTenantId,
   getTenantClient,
+  getAuditActor,
   runWithTenant,
 } from "./tenantContext";
+export type { AuditActor } from "./tenantContext";
 export { prismaWithTenant } from "./prismaWithTenant";
 export { getClientForDb, closeAllTenantClients } from "./tenantClientPool";
 export { canonicalizeEmail, getEmailDomain } from "./email";

@@ -1,43 +1,29 @@
 import { Response, NextFunction } from "express";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { getClientForDb } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { AuthRequest } from "./authenticate";
 
-const METHOD_TO_ACTION: Record<string, string> = {
-  POST: "CREATE",
-  PUT: "UPDATE",
-  PATCH: "UPDATE",
-  DELETE: "DELETE",
-};
+// This middleware now covers ONLY security/identity events that aren't a
+// mutation on a specific business record — logout and WebAuthn credential
+// management. Every actual data mutation (leave, attendance, payroll, KYC,
+// permissions, etc. — anything going through Prisma) is captured with a
+// real before/after diff by the audit middleware attached to each tenant's
+// PrismaClient instead (see packages/database/src/auditMiddleware.ts),
+// which is far more accurate than guessing an entity type from a URL path.
+//
+// Deliberately excluded: /refresh-token and the pre-login parts of the
+// WebAuthn/Google flow (options/verify-login/redirect). None of those run
+// through `authenticate`, so there's no resolved tenant to attribute or
+// write the entry into, and a token refresh isn't a meaningful user action
+// worth an accountability-trail entry regardless.
+const AUTH_PATHS =
+  /\/(webauthn-register|webauthn-credential|disable-webauthn|logout)/i;
 
-// Auth paths where failed attempts should also be logged (security-relevant)
-const AUTH_PATHS = /\/(webauthn|auth\/google|logout|refresh-token)/i;
-
-// Strip sensitive query parameters from a path before logging to avoid
-// capturing PII (email addresses, search terms) in the audit trail.
-const SENSITIVE_PARAM_RE =
-  /([?&])(password|token|secret|key|apikey|search|email|q)=[^&]*/gi;
-
-function sanitizePath(path: string): string {
-  return path.replace(SENSITIVE_PARAM_RE, "$1$2=***");
-}
-
-function deriveEntityType(path: string): string {
-  if (/\/leave/i.test(path)) return "leave";
-  if (/\/attendance/i.test(path)) return "attendance";
-  if (/\/resignation/i.test(path)) return "recruitment";
-  if (/\/job-|\/apply-for-job|\/application-status/i.test(path))
-    return "recruitment";
-  if (/\/hr-activity|\/hrm/i.test(path)) return "hrActivity";
-  if (/\/salary/i.test(path)) return "salary";
-  if (/\/notification/i.test(path)) return "notification";
-  if (/\/webauthn|\/auth\/google|\/logout|\/refresh-token/i.test(path))
-    return "auth";
-  if (/\/employee|\/kyc|\/user/i.test(path)) return "employee";
-  if (/\/permission/i.test(path)) return "permission";
-  if (/\/holiday/i.test(path)) return "general";
-  if (/\/chat/i.test(path)) return "chat";
-  return "general";
+function sanitizeAction(path: string): string {
+  if (/logout/i.test(path)) return "Logged out";
+  if (/disable-webauthn/i.test(path)) return "Removed a security key";
+  if (/webauthn-register/i.test(path)) return "Registered a security key";
+  return "Account security action";
 }
 
 export function auditLogMiddleware(
@@ -45,36 +31,42 @@ export function auditLogMiddleware(
   res: Response,
   next: NextFunction,
 ): void {
-  const action = METHOD_TO_ACTION[req.method.toUpperCase()];
-  const isAuthPath = AUTH_PATHS.test(req.path);
-
-  // Only intercept mutation methods, or GET on auth paths
-  if (!action && !isAuthPath) return next();
-
-  // Capture tenant before the response closes (AsyncLocalStorage is gone by then)
-  const tenantId = req.user?.tenantId || null;
+  if (!AUTH_PATHS.test(req.path)) return next();
 
   res.on("finish", () => {
-    const isFailedAuth = isAuthPath && res.statusCode >= 400;
-    const isSuccessfulMutation =
-      action && res.statusCode >= 200 && res.statusCode < 300;
+    // Read req.user here, inside the callback, not before next() above.
+    // This middleware is mounted ahead of `authenticate` in the app's
+    // middleware chain (see server.ts), so req.user is NOT populated yet at
+    // the top of this function — it's only set once `authenticate` runs
+    // later in the chain. By the time 'finish' fires the request has fully
+    // completed, so req.user (mutated in place onto the same req object) is
+    // reliably available here.
+    const tenantId = req.user?.tenantId || null;
+    const dbName = req.user?.dbName || null;
+    if (!tenantId || !dbName) return; // pre-login / unauthenticated — nowhere to attribute this
 
-    if (!isSuccessfulMutation && !isFailedAuth) return;
-    if (!tenantId) return; // skip audit logs for unauthenticated/setup requests
+    const isFailure = res.statusCode >= 400;
+    if (res.statusCode < 200 || (res.statusCode >= 300 && !isFailure)) return;
 
     const userId = req.user?.userId || null;
-    const entityType = deriveEntityType(req.path);
-    const description = `${action || "GET"} ${sanitizePath(req.originalUrl)} → ${res.statusCode}`;
     const ipAddress = req.ip || req.socket.remoteAddress || "";
 
-    prisma.auditLog
+    // Write directly to this request's tenant database via the pooled client
+    // rather than through the AsyncLocalStorage-backed `prismaWithTenant`
+    // proxy: by the time 'finish' fires, the tenant context that `authenticate`
+    // establishes with runWithTenant() has already unwound, so a
+    // getTenantClient() lookup here would silently miss and fall back to the
+    // master database instead of this tenant's own.
+    const tenantClient = getClientForDb(dbName);
+
+    tenantClient.auditLog
       .create({
         data: {
           tenantId,
           userId,
-          action: action || "AUTH",
-          entityType,
-          description,
+          action: "AUTH",
+          entityType: "auth",
+          description: `${sanitizeAction(req.path)}${isFailure ? " (failed)" : ""}`,
           ipAddress,
           userAgent: req.headers["user-agent"] || "",
         },
