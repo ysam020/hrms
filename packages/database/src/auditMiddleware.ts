@@ -52,6 +52,35 @@ const SENSITIVE_FIELDS = new Set([
   "otpHash",
 ]);
 
+// Fields that change on every single write regardless of whether anything a
+// person would recognize as "the record" actually changed — excluded when
+// deciding whether an UPDATE is worth a log entry at all.
+const BOOKKEEPING_FIELDS = new Set(["updatedAt"]);
+
+// An UPDATE whose only differences are inside redacted fields (e.g. a push
+// send bumping fcmTokens[].lastUsed) or bookkeeping fields would write a log
+// entry with an old/new value pair that's identical after redaction — noise
+// with no accountability value. Compare pre-redaction so this only
+// suppresses genuine no-ops, never a real change to a sensitive field.
+function hasMeaningfulChange(before: unknown, after: unknown): boolean {
+  if (before === null || before === undefined) return true;
+  if (after === null || after === undefined) return true;
+  if (typeof before !== "object" || typeof after !== "object") {
+    return before !== after;
+  }
+  const keys = new Set([
+    ...Object.keys(before as Record<string, unknown>),
+    ...Object.keys(after as Record<string, unknown>),
+  ]);
+  for (const key of keys) {
+    if (BOOKKEEPING_FIELDS.has(key) || SENSITIVE_FIELDS.has(key)) continue;
+    const b = (before as Record<string, unknown>)[key];
+    const a = (after as Record<string, unknown>)[key];
+    if (JSON.stringify(b) !== JSON.stringify(a)) return true;
+  }
+  return false;
+}
+
 function redact(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) return value.map(redact);
@@ -85,8 +114,21 @@ function recordAuditEntry(
 ): void {
   if (!target) return;
 
-  const actor = getAuditActor();
   const action = ACTION_MAP[prismaAction] ?? "UPDATE";
+
+  // An update that only touched redacted/bookkeeping fields (e.g. a push
+  // send stamping fcmTokens[].lastUsed) has nothing to show once redacted —
+  // skip it rather than write a confusing "changed nothing" entry.
+  if (
+    action === "UPDATE" &&
+    before != null &&
+    after != null &&
+    !hasMeaningfulChange(before, after)
+  ) {
+    return;
+  }
+
+  const actor = getAuditActor();
 
   target.auditLog
     .create({

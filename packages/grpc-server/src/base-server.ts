@@ -9,17 +9,31 @@ import { runWithTenant, getClientForDb } from "@hrms/db";
 // Middleware that reads x-tenant-id and x-tenant-db-name gRPC metadata headers
 // (set by the API gateway) and stores them in AsyncLocalStorage so that
 // prismaWithTenant automatically routes queries to the correct tenant database.
+// Also reads the x-actor-* headers (who's making the call) so this service's
+// own audit-logging Prisma middleware can attribute a mutation to a person,
+// even though authentication itself happened in api-gateway's process.
 const tenantContextMiddleware = async (
   call: any,
   next: () => Promise<any>,
 ): Promise<any> => {
-  const tenantId: string | undefined = (call.metadata?.get("x-tenant-id") ??
-    [])[0];
-  const dbName: string | undefined = (call.metadata?.get("x-tenant-db-name") ??
-    [])[0];
+  const getHeader = (key: string): string | undefined =>
+    (call.metadata?.get(key) ?? [])[0];
+
+  const tenantId = getHeader("x-tenant-id");
+  const dbName = getHeader("x-tenant-db-name");
   if (tenantId) {
     const tenantClient = dbName ? getClientForDb(dbName) : null;
-    return runWithTenant(tenantId, tenantClient, () => next());
+    const userId = getHeader("x-actor-user-id");
+    const username = getHeader("x-actor-username");
+    const actor = userId
+      ? {
+          userId,
+          username: username ?? null,
+          ipAddress: getHeader("x-actor-ip") ?? "",
+          userAgent: getHeader("x-actor-user-agent") ?? "",
+        }
+      : undefined;
+    return runWithTenant(tenantId, tenantClient, () => next(), actor);
   }
   return next();
 };
