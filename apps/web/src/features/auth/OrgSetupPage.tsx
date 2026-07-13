@@ -28,7 +28,6 @@ import ListItem from "@mui/material/ListItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import CheckIcon from "@mui/icons-material/Check";
-import ScienceIcon from "@mui/icons-material/Science";
 import PeopleIcon from "@mui/icons-material/People";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import AssessmentIcon from "@mui/icons-material/Assessment";
@@ -929,34 +928,6 @@ export default function OrgSetupPage() {
           ) : step === 1 ? (
             /* Step 2: Plan + payment */
             <>
-              {/* Test mode notice */}
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  bgcolor: (t) => alpha(t.palette.warning.main, 0.1),
-                  border: 1,
-                  borderColor: "warning.light",
-                  borderRadius: "8px",
-                  px: 1.5,
-                  py: 1,
-                  mb: 2.5,
-                }}
-              >
-                <ScienceIcon fontSize="small" color="warning" />
-                <Typography
-                  variant="caption"
-                  color="warning.dark"
-                  fontWeight={500}
-                >
-                  Test mode — pay via UPI using{" "}
-                  <Box component="span" fontFamily="monospace" fontWeight={700}>
-                    success@razorpay
-                  </Box>
-                </Typography>
-              </Box>
-
               {/* Billing toggle */}
               <Box sx={{ display: "flex", justifyContent: "center", mb: 2.5 }}>
                 <ToggleButtonGroup
