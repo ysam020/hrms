@@ -50,6 +50,9 @@ export const getPayslip = async (
         designation: true,
         joining_date: true,
         salary: true, // full monthly CTC — used by gateway for pro-rata recalculation
+        uan_no: true,
+        bank_account_no: true,
+        pan_no: true,
       },
     });
 

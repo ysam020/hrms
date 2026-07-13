@@ -9,19 +9,11 @@ import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import Grid from "@mui/material/Grid2";
 import CircularProgress from "@mui/material/CircularProgress";
-import {
-  useEffect,
-  useState,
-  useContext,
-  useMemo,
-  lazy,
-  Suspense,
-} from "react";
+import { useState, useContext, lazy, Suspense } from "react";
 import { useFormik } from "formik";
 import Edit from "@mui/icons-material/Edit";
 import Assignment from "@mui/icons-material/Assignment";
 import AccountBalance from "@mui/icons-material/AccountBalance";
-import Business from "@mui/icons-material/Business";
 import Warning from "@mui/icons-material/Warning";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
@@ -29,22 +21,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
-import { InputNumber } from "primereact/inputnumber";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
 import DropdownWrapper from "@web/shared/components/DropdownWrapper";
-import DataList from "@web/shared/components/DataList";
 import { validationSchema } from "./schemas";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
-import {
-  computeSalaryComponents,
-  redistributeGross,
-  getMergedComponents,
-  componentsArrayToValues,
-  legacyFieldsToComponentValues,
-  type SalaryComponentDef,
-  type PtSlab,
-} from "@web/shared/utils/salaryCalc";
 
 // Lazy load components
 const UnAuthorisedRoute = lazy(
@@ -70,13 +51,6 @@ function ViewDetails() {
       user?.isSuperUser,
       user?.permissions || [],
     );
-
-  const [salaryComponents, setSalaryComponents] = useState<
-    SalaryComponentDef[]
-  >([]);
-  const [ptSlabs, setPtSlabs] = useState<PtSlab[]>([]);
-  const [isEditingSalary, setIsEditingSalary] = useState(false);
-  const [savingSalary, setSavingSalary] = useState(false);
 
   // Fetch employee data using custom hook
   const { data, loading, error, refetch } = useFetchData(
@@ -141,139 +115,6 @@ function ViewDetails() {
       }
     },
   });
-  // Separate formik + save action for the Salary Structure card — it writes
-  // through UPDATE_SALARY (salary-service's SalaryStructure, same endpoint
-  // EditSalaryStructure.tsx uses) instead of EDIT_EMPLOYEE_DETAILS, so
-  // User.salary* has exactly one writer instead of two independently
-  // drifting ones.
-  const mergedComponents = useMemo(
-    () => getMergedComponents(salaryComponents),
-    [salaryComponents],
-  );
-
-  const salaryStructureValues: Record<string, number> = data?.salaryStructure
-    ?.components?.length
-    ? componentsArrayToValues(data.salaryStructure.components)
-    : legacyFieldsToComponentValues(data?.salaryStructure);
-
-  const salaryFormik = useFormik({
-    initialValues: {
-      grossSalary: 0,
-      components: {} as Record<string, number>,
-    },
-    onSubmit: async (values) => {
-      setSavingSalary(true);
-      try {
-        const now = new Date();
-        const components = mergedComponents.map((c) => ({
-          code: c.code,
-          name: c.name,
-          type: c.type,
-          amount: values.components[c.code] ?? 0,
-        }));
-        const res = await apiClient.put(API_ENDPOINTS.UPDATE_SALARY, {
-          userId: data?.id,
-          year: now.getFullYear(),
-          month: now.getMonth() + 1,
-          salaryStructure: { components },
-        });
-        setAlert({
-          open: true,
-          message: res.data.message,
-          severity: "success",
-        });
-        setIsEditingSalary(false);
-        refetch();
-      } catch (err: any) {
-        setAlert({
-          open: true,
-          message:
-            err.message === "Network Error"
-              ? "Network Error, your details will be submitted when you are back online"
-              : err.response?.data?.message || "Something went wrong",
-          severity: "error",
-        });
-      } finally {
-        setSavingSalary(false);
-      }
-    },
-  });
-
-  const basicPay = salaryFormik.values.components.BASIC ?? 0;
-
-  // Locked (auto-derived) component codes for the currently-configured
-  // tenant components — PF/ESI/PT (and any percent_of_basic component)
-  // recompute automatically off Basic/gross while editing.
-  const { locked: lockedSalaryKeys } = computeSalaryComponents({
-    basicPay,
-    grossSalary: salaryFormik.values.grossSalary,
-    components: mergedComponents,
-    ptSlabs,
-    workState: data?.workState ?? null,
-  });
-
-  useEffect(() => {
-    if (!isEditingSalary) return;
-    const { values: derived } = computeSalaryComponents({
-      basicPay,
-      grossSalary: salaryFormik.values.grossSalary,
-      components: mergedComponents,
-      ptSlabs,
-      workState: formik.values.workState,
-    });
-    for (const [code, value] of Object.entries(derived)) {
-      if (salaryFormik.values.components[code] !== value) {
-        salaryFormik.setFieldValue(`components.${code}`, value);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isEditingSalary,
-    basicPay,
-    salaryFormik.values.grossSalary,
-    mergedComponents,
-    ptSlabs,
-  ]);
-
-  const handleAmountChange = (
-    componentKey: string,
-    value: number | null | undefined,
-  ) => {
-    salaryFormik.setFieldValue(`components.${componentKey}`, value ?? 0);
-  };
-
-  const handleGrossChange = (value: number | null | undefined) => {
-    const newGross = value ?? 0;
-    const rescaled = redistributeGross(
-      newGross,
-      mergedComponents,
-      salaryFormik.values.components,
-      lockedSalaryKeys,
-    );
-    salaryFormik.setValues({
-      grossSalary: newGross,
-      components: rescaled,
-    });
-  };
-
-  const handleEditSalaryClick = () => {
-    const raw = data?.salaryStructure;
-    const values = raw?.components?.length
-      ? componentsArrayToValues(raw.components)
-      : legacyFieldsToComponentValues(raw);
-    let earnings = 0;
-    for (const c of mergedComponents) {
-      if (c.type === "earning") earnings += values[c.code] ?? 0;
-    }
-    salaryFormik.setValues({ grossSalary: earnings, components: values });
-    setIsEditingSalary(true);
-  };
-
-  const handleCancelSalaryEdit = () => {
-    salaryFormik.resetForm();
-    setIsEditingSalary(false);
-  };
-
   const handleEditClick = () => {
     // Populate formik with current data when entering edit mode
     formik.setValues({
@@ -318,34 +159,6 @@ function ViewDetails() {
       ? error
       : null;
   };
-
-  // Load the tenant's configured salary components + PT slabs (seeded with
-  // defaults matching the old hardcoded rates on first read — see
-  // listSalaryComponents in the api-gateway).
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadSalaryComponents() {
-      try {
-        const [componentsRes, slabsRes] = await Promise.all([
-          apiClient.get(API_ENDPOINTS.LIST_SALARY_COMPONENTS),
-          apiClient.get(API_ENDPOINTS.LIST_PT_SLABS),
-        ]);
-        if (isMounted) {
-          setSalaryComponents(componentsRes.data?.data ?? []);
-          setPtSlabs(slabsRes.data?.data ?? []);
-        }
-      } catch (error) {
-        console.error("Error loading salary components:", error);
-      }
-    }
-
-    loadSalaryComponents();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   if (loading) {
     return (
@@ -506,16 +319,33 @@ function ViewDetails() {
               </Paper>
             </Grid>
 
-            {/* Salary Information */}
+            {/* Salary Information — the salary structure itself (components,
+                gross, advances) is managed solely in Payroll > Salary
+                Management; this card shows read-only statutory identifiers. */}
             <Grid size={12}>
               <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <AccountBalance
-                    sx={{ fontSize: 18, color: "text.secondary" }}
-                  />
-                  <Typography variant="subtitle2" fontWeight="500">
-                    Salary Information
-                  </Typography>
+                <Box
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  mb={1}
+                >
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <AccountBalance
+                      sx={{ fontSize: 18, color: "text.secondary" }}
+                    />
+                    <Typography variant="subtitle2" fontWeight="500">
+                      Salary Information
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={() => navigate("/payroll/salary-management")}
+                    style={{ marginTop: 0 }}
+                  >
+                    Manage in Payroll
+                  </Button>
                 </Box>
 
                 <Grid container spacing={1.5}>
@@ -654,134 +484,6 @@ function ViewDetails() {
                     )}
                   </Grid>
                 </Grid>
-              </Paper>
-            </Grid>
-
-            {/* Salary Structure */}
-            <Grid size={12}>
-              <Paper sx={{ p: 1.5, bgcolor: "background.default" }}>
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  mb={1}
-                >
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Business sx={{ fontSize: 18, color: "text.secondary" }} />
-                    <Typography variant="subtitle2" fontWeight="500">
-                      Salary Structure
-                    </Typography>
-                  </Box>
-                  {!isEditingSalary ? (
-                    <Button
-                      onClick={handleEditSalaryClick}
-                      style={{ marginTop: 0 }}
-                    >
-                      Edit
-                    </Button>
-                  ) : (
-                    <Box display="flex" gap={1}>
-                      <Button
-                        onClick={salaryFormik.handleSubmit}
-                        disabled={savingSalary}
-                        style={{ marginTop: 0 }}
-                      >
-                        {savingSalary ? "Saving..." : "Save"}
-                      </Button>
-                      <Button
-                        onClick={handleCancelSalaryEdit}
-                        style={{ marginTop: 0 }}
-                      >
-                        Cancel
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-                {isEditingSalary && (
-                  <Box sx={{ mb: 1.5 }}>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ mb: 0.5, display: "block" }}
-                    >
-                      Gross Salary
-                    </Typography>
-                    <InputNumber
-                      value={salaryFormik.values.grossSalary}
-                      onValueChange={(e) => handleGrossChange(e.value)}
-                      placeholder="0.00"
-                      min={0}
-                      minFractionDigits={0}
-                      maxFractionDigits={2}
-                      inputStyle={{
-                        padding: "6px 8px",
-                        fontSize: "0.875rem",
-                        width: "160px",
-                      }}
-                    />
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block", mt: 0.5 }}
-                    >
-                      Changing this proportionally redistributes the earning
-                      components below.
-                    </Typography>
-                  </Box>
-                )}
-                <Box
-                  sx={{
-                    boxShadow: isEditingSalary
-                      ? 1
-                      : "0 4px 12px rgba(0, 0, 0, 0.1)",
-                    borderRadius: 2,
-                  }}
-                >
-                  <DataList
-                    ariaLabel="Salary structure"
-                    variant="rows"
-                    data={mergedComponents}
-                    getRowId={(component: SalaryComponentDef) => component.code}
-                    columns={[
-                      {
-                        key: "name",
-                        label: "Component",
-                        primary: true,
-                        render: (component: SalaryComponentDef) =>
-                          component.name,
-                      },
-                      {
-                        key: "amount",
-                        label: "Amount",
-                        render: (component: SalaryComponentDef) =>
-                          isEditingSalary ? (
-                            <InputNumber
-                              value={
-                                salaryFormik.values.components[
-                                  component.code
-                                ] ?? 0
-                              }
-                              onValueChange={(e) =>
-                                handleAmountChange(component.code, e.value)
-                              }
-                              placeholder="0.00"
-                              min={0}
-                              minFractionDigits={0}
-                              maxFractionDigits={2}
-                              inputStyle={{
-                                padding: "6px 8px",
-                                fontSize: "0.875rem",
-                                width: "120px",
-                              }}
-                              disabled={lockedSalaryKeys.has(component.code)}
-                            />
-                          ) : (
-                            (salaryStructureValues[component.code] ?? "--")
-                          ),
-                      },
-                    ]}
-                  />
-                </Box>
               </Paper>
             </Grid>
 

@@ -90,6 +90,12 @@ function MyPayslips() {
         ),
       },
       { key: "pf", label: "PF", render: (row: any) => money(row.pf) },
+      {
+        key: "advanceDeduction",
+        label: "Advance EMI",
+        render: (row: any) =>
+          row.advanceDeduction ? money(row.advanceDeduction) : "—",
+      },
     ],
     [],
   );

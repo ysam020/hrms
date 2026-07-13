@@ -15,9 +15,32 @@ import { getActiveSettings } from "./tenantSettings";
 import { classifyImpliedNonWorkingDays } from "../utils/payrollCalc";
 import { jsPDF } from "jspdf";
 
+// Owner/admin/hr (tenantRole) and superusers manage salary by default;
+// SalaryManagement:update_salary lets a tenant grant that access to anyone
+// else without handing out a full HR role.
+async function canManageSalary(
+  userId: string,
+  tenantRole: string | null | undefined,
+): Promise<boolean> {
+  if (["owner", "admin", "hr"].includes(tenantRole ?? "")) return true;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isSuperUser: true, permissions: true },
+  });
+  if (user?.isSuperUser) return true;
+  return (user?.permissions ?? []).includes("SalaryManagement:update_salary");
+}
+
 export async function updateSalary(req: Request, res: Response) {
   try {
     const { user } = req as AuthRequest;
+    const allowed = await canManageSalary(user!.userId, user!.tenantRole);
+    if (!allowed) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You do not have permission to manage salary structures",
+      });
+    }
+
     const { userId, year, month, salaryStructure } = req.body;
     let {
       basicPay,
@@ -200,6 +223,81 @@ const MONTH_NAMES = [
   "November",
   "December",
 ];
+
+const ONES = [
+  "",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+  "Eleven",
+  "Twelve",
+  "Thirteen",
+  "Fourteen",
+  "Fifteen",
+  "Sixteen",
+  "Seventeen",
+  "Eighteen",
+  "Nineteen",
+];
+const TENS = [
+  "",
+  "",
+  "Twenty",
+  "Thirty",
+  "Forty",
+  "Fifty",
+  "Sixty",
+  "Seventy",
+  "Eighty",
+  "Ninety",
+];
+
+/** Indian numbering (Crore/Lakh/Thousand) amount-in-words for the payslip's net-payable line. */
+function numberToWordsIndian(amount: number): string {
+  const twoDigits = (n: number): string => {
+    if (n < 20) return ONES[n];
+    const tens = TENS[Math.floor(n / 10)];
+    const ones = n % 10;
+    return ones ? `${tens}-${ONES[ones]}` : tens;
+  };
+  const threeDigits = (n: number): string => {
+    if (n >= 100) {
+      const rest = n % 100;
+      return `${ONES[Math.floor(n / 100)]} Hundred${rest ? ` ${twoDigits(rest)}` : ""}`;
+    }
+    return twoDigits(n);
+  };
+
+  let n = Math.round(Math.abs(amount));
+  if (n === 0) return "Zero";
+
+  const crore = Math.floor(n / 10000000);
+  n %= 10000000;
+  const lakh = Math.floor(n / 100000);
+  n %= 100000;
+  const thousand = Math.floor(n / 1000);
+  n %= 1000;
+  const hundred = n;
+
+  const parts: string[] = [];
+  if (crore) parts.push(`${threeDigits(crore)} Crore`);
+  if (lakh) parts.push(`${threeDigits(lakh)} Lakh`);
+  if (thousand) parts.push(`${threeDigits(thousand)} Thousand`);
+  if (hundred) parts.push(threeDigits(hundred));
+
+  return parts.join(" ");
+}
+
+/** "Rs." avoids the ₹ glyph — not present in jsPDF's base14 helvetica encoding, would render as a missing-glyph box. */
+const formatINR = (n: number): string =>
+  `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export async function generateSalarySlip(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -440,508 +538,282 @@ export async function generateSalarySlip(req: Request, res: Response) {
       ];
     }
 
+    // ── Salary advance EMI — itemized as its own deduction row instead of
+    // being folded into a generic total. Disbursed months use the exact
+    // amount that was actually deducted (PayrollLineItem.advanceDeduction /
+    // SalaryStructure.advanceDeduction); an as-yet-undisbursed month
+    // projects it from the employee's active advance the same way
+    // initiatePayrollRun would compute it.
+    let advanceDeductionAmount =
+      (disbursedLineItem as any)?.advanceDeduction ??
+      (salaryStructure as any).advanceDeduction ??
+      0;
+    if (!disbursedLineItem && !advanceDeductionAmount && tenantId) {
+      const activeAdvance = await prisma.salaryAdvance.findFirst({
+        where: {
+          tenantId,
+          userId: requestedUserId,
+          status: { in: ["Approved", "Repaying"] },
+        },
+        select: { emiAmount: true, remainingAmount: true },
+      });
+      if (activeAdvance) {
+        advanceDeductionAmount = Math.min(
+          activeAdvance.emiAmount ?? 0,
+          activeAdvance.remainingAmount ?? 0,
+        );
+      }
+    }
+    if (advanceDeductionAmount > 0) {
+      deductionRows.push({
+        label: "Salary Advance EMI",
+        value: advanceDeductionAmount,
+      });
+    }
+
     const calcGrossEarnings = earningsRows.reduce((s, r) => s + r.value, 0);
     const calcTotalDed = deductionRows.reduce((s, r) => s + r.value, 0);
     const calcNetPayable = Math.max(0, calcGrossEarnings - calcTotalDed);
 
-    // ── Standard (unprorated) salary structure — the employee's configured
-    // monthly baseline, as opposed to earningsRows/deductionRows above which
-    // are this pay period's actual (possibly attendance-prorated) amounts.
-    const structureComponents = (salaryStructure as any).components as
-      | Array<{ code: string; name?: string; type: string; amount: number }>
-      | undefined;
+    const lopDays = Math.max(0, totalMonthDays - paidDays);
 
-    let structureEarningsRows: { label: string; value: number }[];
-    let structureDeductionRows: { label: string; value: number }[];
-
-    if (structureComponents?.length) {
-      structureEarningsRows = structureComponents
-        .filter((c) => c.type === "earning")
-        .map((c) => ({ label: c.name || c.code, value: c.amount ?? 0 }));
-      structureDeductionRows = structureComponents
-        .filter((c) => c.type === "deduction")
-        .map((c) => ({ label: c.name || c.code, value: c.amount ?? 0 }));
-    } else {
-      structureEarningsRows = [
-        { label: "Basic Pay", value: salaryStructure.basicPay ?? 0 },
-        { label: "HRA", value: salaryStructure.hra ?? 0 },
-        {
-          label: "Conveyance Allowance",
-          value: salaryStructure.conveyance ?? 0,
-        },
-        { label: "Incentive", value: salaryStructure.incentive ?? 0 },
-      ];
-      structureDeductionRows = [
-        { label: "Provident Fund (PF)", value: salaryStructure.pf ?? 0 },
-        { label: "ESI", value: salaryStructure.esi ?? 0 },
-        { label: "Professional Tax (PT)", value: salaryStructure.pt ?? 0 },
-        { label: "Other Deductions", value: salaryStructure.deductions ?? 0 },
-      ];
-    }
-    const structureGrossSalary =
-      salaryStructure.grossSalary ??
-      structureEarningsRows.reduce((s, r) => s + r.value, 0);
+    const tenant = tenantId
+      ? await prisma.tenant.findUnique({
+          where: { id: tenantId },
+          select: { name: true },
+        })
+      : null;
 
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
     const marginX = 15;
     const contentW = pageW - marginX * 2;
 
-    const navyD: [number, number, number] = [15, 45, 96];
-    const steel: [number, number, number] = [88, 148, 199];
-    const powder: [number, number, number] = [176, 210, 235];
-    const altRow: [number, number, number] = [240, 245, 252];
-    const textDark: [number, number, number] = [25, 30, 50];
-    const textMid: [number, number, number] = [80, 90, 110];
-    const textLight: [number, number, number] = [150, 155, 170];
+    const textDark: [number, number, number] = [30, 30, 30];
+    const textGray: [number, number, number] = [110, 110, 110];
+    const borderGray: [number, number, number] = [205, 205, 205];
+    const headerGreen: [number, number, number] = [232, 247, 236];
+    const accentGreen: [number, number, number] = [56, 142, 60];
 
-    const fillPoly = (pts: number[][], color: [number, number, number]) => {
-      doc.setFillColor(...color);
-      const [sx, sy] = pts[0];
-      const moves: number[][] = [];
-      for (let i = 1; i < pts.length; i++) {
-        moves.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
-      }
-      doc.lines(moves, sx, sy, [1, 1], "F", true);
-    };
+    let curY = 18;
 
-    // ─── Header bar ────────────────────────────────────────────────────────────
-    doc.setFillColor(...navyD);
-    doc.rect(0, 0, pageW, 20, "F");
-    doc.setFillColor(...steel);
-    doc.rect(0, 18, pageW, 2, "F");
-
-    // Top-right corner decoration (on top of header)
-    fillPoly(
-      [
-        [pageW - 38, 0],
-        [pageW, 0],
-        [pageW, 38],
-      ],
-      steel,
-    );
-    fillPoly(
-      [
-        [pageW - 48, 0],
-        [pageW - 38, 0],
-        [pageW, 38],
-        [pageW, 48],
-      ],
-      powder,
-    );
-
-    // Logo: white circle with "P"
-    doc.setFillColor(255, 255, 255);
-    doc.circle(marginX + 5, 10, 5, "F");
-    doc.setTextColor(...navyD);
-    doc.setFontSize(8.5);
+    // ─── Company header — name only, no logo ────────────────────────────────────
+    doc.setTextColor(...textDark);
+    doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("P", marginX + 5, 13, { align: "center" });
+    doc.text(tenant?.name || "Company", marginX, curY);
+    curY += 8;
+    doc.setDrawColor(...borderGray);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, curY, marginX + contentW, curY);
+    curY += 9;
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Praesto", marginX + 12, 10.5);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...powder);
-    doc.text("HRMS", marginX + 12, 15.5);
-
-    doc.setTextColor(255, 255, 255);
+    // ─── Title ───────────────────────────────────────────────────────────────────
+    doc.setTextColor(...textDark);
     doc.setFontSize(13);
     doc.setFont("helvetica", "bold");
-    doc.text("SALARY SLIP", pageW - marginX - 52, 10.5);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...powder);
-    doc.text(monthLabel.toUpperCase(), pageW - marginX - 52, 16);
+    doc.text(`Payslip for the month of ${monthLabel}`, marginX, curY);
+    curY += 9;
 
-    // ─── Employee name strip ────────────────────────────────────────────────────
-    let curY = 26;
-
-    doc.setFillColor(...powder);
-    doc.rect(marginX, curY, contentW, 18, "F");
-    doc.setFillColor(...steel);
-    doc.rect(marginX, curY, 4, 18, "F");
-
-    doc.setTextColor(...navyD);
-    doc.setFontSize(14);
+    doc.setTextColor(...accentGreen);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text(employeeName, marginX + 8, curY + 8);
+    doc.text("PAY SUMMARY", marginX, curY);
+    curY += 6;
 
-    const subLine = [employee?.designation, employee?.department]
-      .filter(Boolean)
-      .join(" • ");
-    if (subLine) {
-      doc.setTextColor(...textMid);
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "normal");
-      doc.text(subLine, marginX + 8, curY + 14.5);
-    }
+    // ─── Pay summary: employee info (2 cols) + Paid Days / LOP Days boxes ──────
+    const summaryTop = curY;
+    const boxColW = 40;
+    const infoColGap = 6;
+    const infoColW = (contentW - boxColW - infoColGap * 2) / 2;
+    const col1X = marginX;
+    const col2X = marginX + infoColW + infoColGap;
+    const boxX = marginX + contentW - boxColW;
 
-    curY += 22;
-
-    // ─── Employee info grid (2 × 2) ─────────────────────────────────────────────
-    const infoItems = [
-      { label: "USERNAME", value: employee?.username || "-" },
-      { label: "PAY PERIOD", value: monthLabel },
-      { label: "DEPARTMENT", value: employee?.department || "-" },
-      { label: "DESIGNATION", value: employee?.designation || "-" },
-    ];
-    const cellW = contentW / 2;
-    const cellH = 15;
-
-    doc.setDrawColor(...powder);
-    doc.setLineWidth(0.4);
-    doc.rect(marginX, curY, contentW, 2 * cellH);
-
-    infoItems.forEach((item, idx) => {
-      const col = idx % 2;
-      const row = Math.floor(idx / 2);
-      const x = marginX + col * cellW;
-      const y = curY + row * cellH;
-
-      if (row > 0 && col === 0) {
-        doc.setDrawColor(...powder);
-        doc.setLineWidth(0.3);
-        doc.line(marginX, y, marginX + contentW, y);
-      }
-
-      doc.setTextColor(...textLight);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.text(item.label, x + 4, y + 5.5);
-
+    const infoRow = (
+      x: number,
+      y: number,
+      label: string,
+      value: string,
+    ): void => {
       doc.setTextColor(...textDark);
-      doc.setFontSize(9.5);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(label, x, y);
+      doc.text(":", x + 32, y);
       doc.setFont("helvetica", "bold");
-      doc.text(item.value, x + 4, y + 12);
-    });
+      doc.text(value || "-", x + 36, y);
+    };
 
-    doc.setDrawColor(...powder);
-    doc.setLineWidth(0.3);
-    doc.line(marginX + cellW, curY, marginX + cellW, curY + 2 * cellH);
+    const col1Fields: [string, string][] = [
+      ["Employee Name", employeeName],
+      ["Designation", employee?.designation || "-"],
+      [
+        "Date of Joining",
+        employee?.joining_date
+          ? new Date(employee.joining_date).toLocaleDateString("en-GB")
+          : "-",
+      ],
+    ];
+    const col2Fields: [string, string][] = [
+      ["Employee ID", employee?.username || "-"],
+      ["UAN", employee?.uan_no || "-"],
+      ["Bank Account No", employee?.bank_account_no || "-"],
+      ["PAN", employee?.pan_no || "-"],
+    ];
 
-    curY += 2 * cellH + 10;
+    const infoRowH = 7;
+    col1Fields.forEach(([label, value], i) =>
+      infoRow(col1X, summaryTop + i * infoRowH, label, value),
+    );
+    col2Fields.forEach(([label, value], i) =>
+      infoRow(col2X, summaryTop + i * infoRowH, label, value),
+    );
 
-    // ─── Two-column salary table ─────────────────────────────────────────────────
-    const colGap = 5;
+    // Paid Days / LOP Days boxes, stacked at the right.
+    const dayBox = (y: number, label: string, value: string) => {
+      const h = 11;
+      doc.setDrawColor(...borderGray);
+      doc.setLineWidth(0.3);
+      doc.rect(boxX, y, boxColW, h);
+      doc.setTextColor(...textGray);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(label, boxX + 3, y + 4.5);
+      doc.setTextColor(...textDark);
+      doc.setFontSize(10.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(value, boxX + 3, y + 9);
+    };
+    dayBox(
+      summaryTop - 5,
+      "Paid Days",
+      String(paidDays % 1 === 0 ? paidDays : paidDays.toFixed(1)),
+    );
+    dayBox(
+      summaryTop - 5 + 13,
+      "LOP Days",
+      String(lopDays % 1 === 0 ? lopDays : lopDays.toFixed(1)),
+    );
+
+    curY =
+      summaryTop +
+      Math.max(col1Fields.length, col2Fields.length) * infoRowH +
+      8;
+
+    // ─── Earnings / Deductions two-column table ─────────────────────────────────
+    const colGap = 4;
     const halfW = (contentW - colGap) / 2;
     const leftX = marginX;
     const rightX = marginX + halfW + colGap;
-    const rowH = 10;
+    const rowH = 7.5;
 
-    doc.setTextColor(...textMid);
+    doc.setFillColor(...headerGreen);
+    doc.rect(leftX, curY, contentW, 8, "F");
+    doc.setDrawColor(...borderGray);
+    doc.setLineWidth(0.3);
+    doc.line(rightX - colGap / 2, curY, rightX - colGap / 2, curY + 8);
+
+    doc.setTextColor(...textDark);
     doc.setFontSize(8.5);
     doc.setFont("helvetica", "bold");
-    doc.text("THIS MONTH'S PAYSLIP", leftX, curY);
-    curY += 5;
-
-    const tableTop = curY;
-
-    // Column headers
-    doc.setFillColor(...steel);
-    doc.rect(leftX, curY, halfW, 8, "F");
-    doc.setFillColor(...navyD);
-    doc.rect(rightX, curY, halfW, 8, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8.5);
-    doc.setFont("helvetica", "bold");
-    doc.text("EARNINGS", leftX + 4, curY + 5.5);
-    doc.text("AMOUNT", leftX + halfW - 4, curY + 5.5, { align: "right" });
-    doc.text("DEDUCTIONS", rightX + 4, curY + 5.5);
-    doc.text("AMOUNT", rightX + halfW - 4, curY + 5.5, { align: "right" });
-
+    doc.text("EARNINGS", leftX + 3, curY + 5.5);
+    doc.text("AMOUNT", leftX + halfW - 3, curY + 5.5, { align: "right" });
+    doc.text("DEDUCTIONS", rightX + 3, curY + 5.5);
+    doc.text("AMOUNT", rightX + halfW - 3, curY + 5.5, { align: "right" });
     curY += 8;
 
+    const tableTop = curY - 8;
     const maxRows = Math.max(earningsRows.length, deductionRows.length);
 
     for (let i = 0; i < maxRows; i++) {
-      if (i % 2 === 0) {
-        doc.setFillColor(...altRow);
-        doc.rect(leftX, curY, halfW, rowH, "F");
-        doc.rect(rightX, curY, halfW, rowH, "F");
-      }
-
-      const textY = curY + 6.5;
-
+      const textY = curY + 5.2;
       if (i < earningsRows.length) {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
         doc.setTextColor(...textDark);
-        doc.text(earningsRows[i].label, leftX + 4, textY);
+        doc.text(earningsRows[i].label, leftX + 3, textY);
         doc.setFont("helvetica", "bold");
-        doc.text(earningsRows[i].value.toFixed(2), leftX + halfW - 4, textY, {
+        doc.text(formatINR(earningsRows[i].value), leftX + halfW - 3, textY, {
           align: "right",
         });
       }
-
       if (i < deductionRows.length) {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
         doc.setTextColor(...textDark);
-        doc.text(deductionRows[i].label, rightX + 4, textY);
+        doc.text(deductionRows[i].label, rightX + 3, textY);
         doc.setFont("helvetica", "bold");
-        doc.text(deductionRows[i].value.toFixed(2), rightX + halfW - 4, textY, {
+        doc.text(formatINR(deductionRows[i].value), rightX + halfW - 3, textY, {
           align: "right",
         });
       }
-
-      // Row separator — subtle horizontal rule under each row for a cleaner,
-      // more official grid look.
-      doc.setDrawColor(...powder);
-      doc.setLineWidth(0.2);
-      doc.line(leftX, curY + rowH, leftX + halfW, curY + rowH);
-      doc.line(rightX, curY + rowH, rightX + halfW, curY + rowH);
-
       curY += rowH;
     }
+    doc.line(rightX - colGap / 2, tableTop + 8, rightX - colGap / 2, curY);
 
-    // Totals row — always use the attendance-derived values computed above.
-    const grossEarnings = calcGrossEarnings;
-    const totalDeductions = calcTotalDed;
-
-    doc.setFillColor(...powder);
-    doc.rect(leftX, curY, halfW, 9, "F");
-    doc.rect(rightX, curY, halfW, 9, "F");
-    doc.setTextColor(...navyD);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("Gross Earnings", leftX + 4, curY + 6);
-    doc.text(grossEarnings.toFixed(2), leftX + halfW - 4, curY + 6, {
-      align: "right",
-    });
-    doc.text("Total Deductions", rightX + 4, curY + 6);
-    doc.text(totalDeductions.toFixed(2), rightX + halfW - 4, curY + 6, {
-      align: "right",
-    });
-
-    curY += 9;
-
-    // Outer border + column divider around the whole header+rows+totals block.
-    doc.setDrawColor(...steel);
-    doc.setLineWidth(0.5);
-    doc.rect(leftX, tableTop, contentW, curY - tableTop);
-    doc.setDrawColor(...powder);
+    // Gross Earnings / Total Deductions summary row.
+    doc.setDrawColor(...borderGray);
     doc.setLineWidth(0.3);
-    doc.line(rightX - colGap / 2, tableTop, rightX - colGap / 2, curY);
+    doc.line(leftX, curY, leftX + contentW, curY);
+    curY += 2;
+    doc.setTextColor(...textDark);
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Gross Earnings", leftX, curY + 5);
+    doc.text(formatINR(calcGrossEarnings), leftX + halfW - 3, curY + 5, {
+      align: "right",
+    });
+    doc.text("Total Deductions", rightX, curY + 5);
+    doc.text(formatINR(calcTotalDed), rightX + halfW - 3, curY + 5, {
+      align: "right",
+    });
+    curY += 7;
 
-    // ─── Net payable banner ─────────────────────────────────────────────────────
-    const netPayable = calcNetPayable;
-    curY += 6;
+    doc.setDrawColor(...borderGray);
+    doc.setLineWidth(0.4);
+    doc.rect(leftX, tableTop, contentW, curY - tableTop);
 
-    doc.setFillColor(...navyD);
-    doc.rect(marginX, curY, contentW, 18, "F");
-    doc.setFillColor(...steel);
-    doc.rect(marginX, curY, contentW, 2, "F");
+    // ─── Total Net Payable — dashed box with amount in words ───────────────────
+    curY += 8;
+    const netBoxH = 20;
+    doc.setDrawColor(...accentGreen);
+    doc.setLineWidth(0.4);
+    doc.setLineDashPattern([1.5, 1.2], 0);
+    doc.roundedRect(marginX, curY, contentW, netBoxH, 2, 2);
+    doc.setLineDashPattern([], 0);
 
-    doc.setTextColor(255, 255, 255);
+    const netWords = `(Indian Rupee ${numberToWordsIndian(calcNetPayable)} Only)`;
+    doc.setTextColor(...textDark);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `Total Net Payable ${formatINR(calcNetPayable)}`,
+      pageW / 2,
+      curY + 9,
+      { align: "center" },
+    );
     doc.setFontSize(8.5);
     doc.setFont("helvetica", "normal");
-    doc.text("NET PAYABLE FOR", marginX + 5, curY + 9);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(monthLabel.toUpperCase(), marginX + 5, curY + 15);
+    doc.setTextColor(...textGray);
+    doc.text(netWords, pageW / 2, curY + 14.5, { align: "center" });
 
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...powder);
+    doc.setFontSize(7);
     doc.text(
-      `Rs. ${netPayable.toFixed(2)}`,
-      marginX + contentW - 5,
-      curY + 13,
-      { align: "right" },
+      "**Total Net Payable = Gross Earnings - Total Deductions",
+      pageW / 2,
+      curY + netBoxH + 5,
+      { align: "center" },
     );
+    curY += netBoxH + 15;
 
-    curY += 18;
-
-    // ─── Attendance summary ─────────────────────────────────────────────────────
-    {
-      curY += 8;
-
-      // 2-row grid: label row + value row, 6 columns.
-      // All values come from the tenant-scoped attendance queries above — authoritative.
-      const attItems = [
-        { label: "PRESENT", value: String(attPresent + attLate) },
-        { label: "HALF DAYS", value: String(attHalfDay) },
-        { label: "HOLIDAYS/WFH", value: String(attHoliday + attWfh) },
-        { label: "WEEK OFFS", value: String(attWeekOff) },
-        { label: "PAID LEAVES", value: String(paidLeaves) },
-        {
-          label: `PAID / ${totalMonthDays} DAYS`,
-          value: String(paidDays % 1 === 0 ? paidDays : paidDays.toFixed(1)),
-        },
-      ];
-
-      const boxH = 22;
-      doc.setFillColor(245, 248, 253);
-      doc.rect(marginX, curY, contentW, boxH, "F");
-      doc.setFillColor(...steel);
-      doc.rect(marginX, curY, 3, boxH, "F");
-
-      doc.setTextColor(...textMid);
-      doc.setFontSize(7.5);
-      doc.setFont("helvetica", "bold");
-      doc.text("ATTENDANCE SUMMARY", marginX + 7, curY + 6);
-
-      const attColW = (contentW - 7) / attItems.length;
-      attItems.forEach((item, i) => {
-        const x = marginX + 7 + i * attColW;
-        doc.setTextColor(...textLight);
-        doc.setFontSize(6.5);
-        doc.setFont("helvetica", "normal");
-        doc.text(item.label, x, curY + 13);
-        doc.setTextColor(...textDark);
-        doc.setFontSize(9.5);
-        doc.setFont("helvetica", "bold");
-        doc.text(item.value, x, curY + 19);
-      });
-
-      curY += boxH;
-    }
-
-    // ─── Salary structure (standard monthly, before proration) ─────────────────
-    {
-      const structRowH = 7;
-      const maxStructRows = Math.max(
-        structureEarningsRows.length,
-        structureDeductionRows.length,
-      );
-      const neededHeight = 6 + 5 + 7 + maxStructRows * structRowH + 8 + 8;
-
-      // Leave headroom only for the solid footer bar (pageH-15..pageH) plus a
-      // small margin — the decorative corner polygons below only occupy the
-      // bottom-left 35mm, not the full content width.
-      if (curY + neededHeight > pageH - 20) {
-        doc.addPage();
-        curY = 20;
-      } else {
-        curY += 6;
-      }
-
-      doc.setTextColor(...textMid);
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "bold");
-      doc.text("SALARY STRUCTURE — STANDARD MONTHLY", marginX, curY);
-      curY += 5;
-
-      const structTop = curY;
-
-      doc.setFillColor(...steel);
-      doc.rect(leftX, curY, halfW, 7, "F");
-      doc.setFillColor(...navyD);
-      doc.rect(rightX, curY, halfW, 7, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(7.5);
-      doc.setFont("helvetica", "bold");
-      doc.text("EARNINGS", leftX + 4, curY + 5);
-      doc.text("AMOUNT", leftX + halfW - 4, curY + 5, { align: "right" });
-      doc.text("DEDUCTIONS", rightX + 4, curY + 5);
-      doc.text("AMOUNT", rightX + halfW - 4, curY + 5, { align: "right" });
-      curY += 7;
-
-      for (let i = 0; i < maxStructRows; i++) {
-        const textY = curY + 5;
-        if (i < structureEarningsRows.length) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(...textDark);
-          doc.text(structureEarningsRows[i].label, leftX + 4, textY);
-          doc.setFont("helvetica", "bold");
-          doc.text(
-            structureEarningsRows[i].value.toFixed(2),
-            leftX + halfW - 4,
-            textY,
-            { align: "right" },
-          );
-        }
-        if (i < structureDeductionRows.length) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(...textDark);
-          doc.text(structureDeductionRows[i].label, rightX + 4, textY);
-          doc.setFont("helvetica", "bold");
-          doc.text(
-            structureDeductionRows[i].value.toFixed(2),
-            rightX + halfW - 4,
-            textY,
-            { align: "right" },
-          );
-        }
-        curY += structRowH;
-      }
-
-      doc.setFillColor(...powder);
-      doc.rect(leftX, curY, contentW, 8, "F");
-      doc.setTextColor(...navyD);
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "bold");
-      doc.text("Gross Salary (Monthly)", leftX + 4, curY + 5.5);
-      doc.text(
-        structureGrossSalary.toFixed(2),
-        leftX + contentW - 4,
-        curY + 5.5,
-        { align: "right" },
-      );
-      curY += 8;
-
-      doc.setDrawColor(...steel);
-      doc.setLineWidth(0.5);
-      doc.rect(leftX, structTop, contentW, curY - structTop);
-      doc.setDrawColor(...powder);
-      doc.setLineWidth(0.3);
-      doc.line(rightX - colGap / 2, structTop, rightX - colGap / 2, curY);
-
-      doc.setTextColor(...textLight);
-      doc.setFontSize(6.5);
-      doc.setFont("helvetica", "italic");
-      doc.text(
-        "This is the configured monthly structure, before proration for the attendance/leave shown above.",
-        marginX,
-        curY + 4,
-      );
-      curY += 8;
-    }
-
-    // ─── Footer bar ─────────────────────────────────────────────────────────────
-    fillPoly(
-      [
-        [0, pageH - 28],
-        [0, pageH],
-        [28, pageH],
-      ],
-      powder,
-    );
-    fillPoly(
-      [
-        [0, pageH - 35],
-        [0, pageH - 28],
-        [28, pageH],
-        [35, pageH],
-      ],
-      steel,
-    );
-
-    doc.setFillColor(...navyD);
-    doc.rect(0, pageH - 13, pageW, 13, "F");
-    doc.setFillColor(...steel);
-    doc.rect(0, pageH - 15, pageW, 2, "F");
-
-    doc.setTextColor(...powder);
-    doc.setFontSize(6.5);
+    // ─── Footer ──────────────────────────────────────────────────────────────────
+    doc.setTextColor(...textGray);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text(
-      "This is a system-generated payslip and does not require a signature.",
-      marginX,
-      pageH - 6,
-    );
-    doc.text(
-      `Generated on ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`,
-      pageW - marginX,
-      pageH - 6,
-      { align: "right" },
-    );
+    doc.text("-- This is a system-generated document. --", pageW / 2, curY, {
+      align: "center",
+    });
 
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
     res.setHeader("Content-Type", "application/pdf");

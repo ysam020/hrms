@@ -38,17 +38,39 @@ import {
 
 type AllowedRole = "owner" | "admin" | "hr" | "manager" | "employee";
 
+// tenantRole comes from the JWT (resolved from TenantMembership at login) —
+// User.role is a legacy, never-populated field and must not be used here
+// (see the identical note in wfh.ts) — checking it silently denied every
+// real owner/admin/hr account that only had tenantRole set, leaving just
+// isSuperuser=true accounts able to touch payroll runs/salary advances.
 async function assertRole(
   userId: string,
+  tenantRole: string | null | undefined,
   allowed: AllowedRole[],
 ): Promise<boolean> {
+  if (allowed.includes((tenantRole ?? "") as AllowedRole)) return true;
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true, isSuperUser: true },
+    select: { isSuperUser: true },
   });
-  if (!user) return false;
-  if (user.isSuperUser) return true;
-  return user.role.some((r) => allowed.includes(r as AllowedRole));
+  return user?.isSuperUser === true;
+}
+
+// Salary advance approval also admits holders of the standalone
+// SalaryManagement:approve_advance permission, not just owner/admin/hr —
+// mirrors the permissions-driven gate now applied on the frontend.
+async function canApproveAdvances(
+  userId: string,
+  tenantRole: string | null | undefined,
+): Promise<boolean> {
+  if (await assertRole(userId, tenantRole, ["owner", "admin", "hr"])) {
+    return true;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { permissions: true },
+  });
+  return (user?.permissions ?? []).includes("SalaryManagement:approve_advance");
 }
 
 // SLA hours by priority (used by helpdesk too, kept here for co-location)
@@ -200,7 +222,11 @@ async function createRzpPayout(
 export async function initiatePayrollRun(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    const allowed = await assertRole(user!.userId, user!.tenantRole, [
+      "owner",
+      "admin",
+      "hr",
+    ]);
     if (!allowed) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Only HR, admin, or owner can initiate payroll runs",
@@ -661,7 +687,11 @@ export async function initiatePayrollRun(req: Request, res: Response) {
 export async function listPayrollRuns(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    const allowed = await assertRole(user!.userId, user!.tenantRole, [
+      "owner",
+      "admin",
+      "hr",
+    ]);
     if (!allowed) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Access restricted to HR, admin, or owner",
@@ -704,7 +734,11 @@ export async function listPayrollRuns(req: Request, res: Response) {
 export async function getPayrollRun(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    const allowed = await assertRole(user!.userId, user!.tenantRole, [
+      "owner",
+      "admin",
+      "hr",
+    ]);
     if (!allowed) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
@@ -835,7 +869,11 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
       });
     }
 
-    const allowed = await assertRole(user!.userId, transition.roles);
+    const allowed = await assertRole(
+      user!.userId,
+      user!.tenantRole,
+      transition.roles,
+    );
     if (!allowed) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: `Only ${transition.roles.join("/")} can ${action} a payroll run`,
@@ -1085,6 +1123,7 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
           esi: li.esi ?? null,
           pt: li.pt ?? null,
           deductions: li.totalDeductions,
+          advanceDeduction: li.advanceDeduction ?? 0,
           grossEarnings: li.grossSalary,
           netPayable: li.netPayable,
         };
@@ -1224,11 +1263,10 @@ export async function requestSalaryAdvance(req: Request, res: Response) {
 export async function listSalaryAdvances(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const isPrivileged = await assertRole(user!.userId, [
-      "owner",
-      "admin",
-      "hr",
-    ]);
+    const isPrivileged = await canApproveAdvances(
+      user!.userId,
+      user!.tenantRole,
+    );
     const { status } = req.query as Record<string, string>;
     const { page, limit } = parsePagination(req.query);
     const skip = (page - 1) * limit;
@@ -1277,10 +1315,10 @@ export async function listSalaryAdvances(req: Request, res: Response) {
 export async function updateSalaryAdvanceStatus(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const allowed = await assertRole(user!.userId, ["owner", "admin", "hr"]);
+    const allowed = await canApproveAdvances(user!.userId, user!.tenantRole);
     if (!allowed) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
-        message: "Only HR/admin/owner can update advance status",
+        message: "You do not have permission to update advance status",
       });
     }
 
@@ -1345,15 +1383,35 @@ export async function updateSalaryAdvanceStatus(req: Request, res: Response) {
 /**
  * GET /payroll/my-payslips
  * Returns the current employee's payslips (from SalaryStructure).
+ *
+ * SalaryStructure is written by two different flows that share the same
+ * table: HR editing an employee's salary config (Salary Management, which
+ * defaults to the *current* month and can also target future months), and
+ * payroll disbursement upserting a payslip snapshot per employee (see the
+ * "Generate payslips" step above). Only the latter represents money that
+ * was actually paid out, so a row must not be shown here unless a
+ * PayrollRun for its (year, month) has actually reached "disbursed" —
+ * otherwise employees see a "payslip" for a month payroll hasn't run yet.
  */
 export async function getMyPayslips(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const payslips = await prisma.salaryStructure.findMany({
+    const disbursedRuns = await prisma.payrollRun.findMany({
+      where: { status: "disbursed" },
+      select: { year: true, month: true },
+    });
+    const disbursedPeriods = new Set(
+      disbursedRuns.map((r) => `${r.year}-${r.month}`),
+    );
+
+    const structures = await prisma.salaryStructure.findMany({
       where: { userId: user!.userId },
       orderBy: [{ year: "desc" }, { month: "desc" }],
-      take: 24,
     });
+    const payslips = structures
+      .filter((s) => disbursedPeriods.has(`${s.year}-${s.month}`))
+      .slice(0, 24);
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Payslips retrieved",
       data: payslips,

@@ -99,6 +99,7 @@ export const permissionStructure = {
       update_salary: ["-"],
       view_salaries: ["-"],
       view_salary_slips: ["-"],
+      approve_advance: ["-"],
     },
   },
   Policy: {

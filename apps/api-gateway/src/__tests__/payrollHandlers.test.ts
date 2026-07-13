@@ -1,16 +1,21 @@
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
-import { initiatePayrollRun } from "../handlers/payroll";
+import { initiatePayrollRun, getMyPayslips } from "../handlers/payroll";
 
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn(), findMany: jest.fn() },
-    payrollRun: { findUnique: jest.fn(), create: jest.fn() },
+    payrollRun: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
     payrollLineItem: { createMany: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
     leaveBalance: { findMany: jest.fn() },
     professionalTaxSlab: { findMany: jest.fn() },
     salaryComponentDefinition: { findMany: jest.fn() },
     salaryAdvance: { findMany: jest.fn() },
+    salaryStructure: { findMany: jest.fn() },
     payCycle: { findFirst: jest.fn() },
     tenantSettings: { findFirst: jest.fn() },
     holiday: { findMany: jest.fn() },
@@ -78,7 +83,7 @@ const mockPayCycleFindFirst = (prisma as any).payCycle.findFirst as jest.Mock;
 
 const makeReq = (overrides: any = {}) =>
   ({
-    user: { userId: "hr-1", tenantId: "t1" },
+    user: { userId: "hr-1", tenantId: "t1", tenantRole: "hr" },
     body: {},
     query: {},
     params: {},
@@ -316,13 +321,13 @@ describe("initiatePayrollRun", () => {
   });
 
   it("returns FORBIDDEN when the caller isn't owner/admin/hr", async () => {
-    mockUserFindUnique.mockResolvedValue({
-      role: ["employee"],
-      isSuperUser: false,
-    });
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: false });
     const res = makeRes();
     await initiatePayrollRun(
-      makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+      makeReq({
+        user: { userId: "emp-1", tenantId: "t1", tenantRole: "employee" },
+        body: { month: PAST_MONTH, year: PAST_YEAR },
+      }),
       res,
     );
     expect(mockUserFindMany).not.toHaveBeenCalled();
@@ -431,5 +436,44 @@ describe("initiatePayrollRun", () => {
       expect(data.warning).toBeUndefined();
       expect(data.payCycleId).toBeNull();
     });
+  });
+});
+
+describe("getMyPayslips", () => {
+  const mockRunFindMany = (prisma as any).payrollRun.findMany as jest.Mock;
+  const mockStructureFindMany = (prisma as any).salaryStructure
+    .findMany as jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("only returns SalaryStructure rows for months that actually disbursed", async () => {
+    mockRunFindMany.mockResolvedValue([{ year: 2026, month: 5 }]);
+    mockStructureFindMany.mockResolvedValue([
+      { userId: "hr-1", year: 2026, month: 7, netPayable: 93800 }, // salary config edited for the current month, never run
+      { userId: "hr-1", year: 2026, month: 5, netPayable: 93050 }, // actually disbursed
+    ]);
+    const res = makeRes();
+
+    await getMyPayslips(makeReq(), res);
+
+    const data = (res.json as jest.Mock).mock.calls[0][0].data;
+    expect(data).toEqual([
+      { userId: "hr-1", year: 2026, month: 5, netPayable: 93050 },
+    ]);
+  });
+
+  it("returns an empty list when no payroll run has ever disbursed", async () => {
+    mockRunFindMany.mockResolvedValue([]);
+    mockStructureFindMany.mockResolvedValue([
+      { userId: "hr-1", year: 2026, month: 7, netPayable: 93800 },
+    ]);
+    const res = makeRes();
+
+    await getMyPayslips(makeReq(), res);
+
+    const data = (res.json as jest.Mock).mock.calls[0][0].data;
+    expect(data).toEqual([]);
   });
 });

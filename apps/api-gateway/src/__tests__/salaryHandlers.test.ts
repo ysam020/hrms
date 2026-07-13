@@ -19,6 +19,8 @@ jest.mock("@hrms/db", () => {
     payrollLineItem: { findFirst: jest.fn().mockResolvedValue(null) },
     tenantSettings: { findFirst: jest.fn().mockResolvedValue(null) },
     holiday: { findMany: jest.fn().mockResolvedValue([]) },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
+    salaryAdvance: { findFirst: jest.fn().mockResolvedValue(null) },
   };
   return {
     prisma: _db,
@@ -69,7 +71,7 @@ const makeRes = () =>
   ({ json: jest.fn(), setHeader: jest.fn(), send: jest.fn() }) as any;
 const makeReq = (overrides: Record<string, any> = {}) =>
   ({
-    user: { userId: "user-id-1" },
+    user: { userId: "user-id-1", tenantRole: "hr" },
     body: {},
     query: {},
     params: {},

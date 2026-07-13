@@ -539,7 +539,6 @@ export default function OrgSetupPage() {
 
   const leftColStyle = useMemo(
     () => ({
-      background: "url(/assets/images/login-bg.webp)",
       backgroundSize: "cover",
       backgroundPosition: "center",
     }),
