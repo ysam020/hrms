@@ -460,8 +460,14 @@ Resources:
             Statement:
               - Sid: PublishDeployConfig
                 Effect: Allow
-                Action: s3:PutObject
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
                 Resource: !Sub "${DeployArtifactsBucket.Arn}/*"
+              - Sid: PublishDeployConfigList
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt DeployArtifactsBucket.Arn
               - Sid: SetImageTag
                 Effect: Allow
                 Action: ssm:PutParameter
