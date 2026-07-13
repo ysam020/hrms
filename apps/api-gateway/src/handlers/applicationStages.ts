@@ -60,6 +60,11 @@ export async function advanceApplicationStage(req: AuthRequest, res: Response) {
         message: "Application not found.",
       });
     }
+    if (["Hired", "Rejected"].includes(application.status)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `This candidate has already been ${application.status} — no further stage updates are allowed.`,
+      });
+    }
 
     // Validate against the pipeline template snapshotted at apply-time
     // (applyForJob.ts) — without this, stageName/stageOrder/BGV requirement
@@ -172,8 +177,15 @@ export async function bulkAdvanceStage(req: AuthRequest, res: Response) {
       outcome?: string;
     };
 
+    // Hired/Rejected applications are silently dropped from the batch
+    // rather than failing the whole request — same tolerant filtering the
+    // tenantId check above already does for ids from another tenant.
     const applications = await (prisma as any).jobApplication.findMany({
-      where: { id: { in: applicationIds }, tenantId },
+      where: {
+        id: { in: applicationIds },
+        tenantId,
+        status: { notIn: ["Hired", "Rejected"] },
+      },
       select: { id: true },
     });
     const validIds = applications.map((a: any) => a.id);

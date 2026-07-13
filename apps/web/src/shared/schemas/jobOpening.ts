@@ -24,6 +24,7 @@ export const jobOpeningSchema = z
       .tuple([z.number(), z.number()])
       .refine(([min, max]) => min < max, "Invalid budget range"),
     hiringManager: z.string().trim().min(1, "Hiring manager is required"),
+    pipelineTemplateId: z.string().trim().optional(),
   })
   .refine((data) => data.applicationDeadline >= data.jobPostingDate, {
     message: "Deadline must be after the job posting date",

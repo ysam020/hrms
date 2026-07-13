@@ -13,7 +13,6 @@ message Employee {
   string department = 8;
   string designation = 9;
   string dateOfJoining = 10;
-  string employmentType = 11;
   string status = 12;
   string managerId = 13;
   string profileImage = 14;
@@ -37,7 +36,6 @@ message CreateEmployeeRequest {
   string department = 5;
   string designation = 6;
   string dateOfJoining = 7;
-  string employmentType = 8;
   string managerId = 9;
 }
 
@@ -48,7 +46,6 @@ message UpdateEmployeeRequest {
   string phone = 4;
   string department = 5;
   string designation = 6;
-  string employmentType = 7;
   string status = 8;
   string managerId = 9;
 }

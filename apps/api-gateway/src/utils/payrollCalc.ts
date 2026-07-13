@@ -54,9 +54,7 @@ const DEFAULT_PF_PERCENT = 12;
 const DEFAULT_ESI_PERCENT = 1.75;
 
 /**
- * PF/ESI/PT statutory deductions. Contractors are exempt under Indian law
- * (subject to TDS u/s 194J instead, not modelled here yet) — every other
- * employee keeps the exact original calculation by default.
+ * PF/ESI/PT statutory deductions.
  *
  * `componentRates` — the tenant's configured PF/ESI SalaryComponentDefinition
  * rows (Settings → Payroll Components) — lets a tenant override the 12%/1.75%
@@ -66,14 +64,10 @@ const DEFAULT_ESI_PERCENT = 1.75;
 export function calcStatutoryDeductions(
   gross: number,
   basicPay: number,
-  employmentType: string | null | undefined,
   workState: string | null | undefined,
   slabsByState: Map<string, ProfessionalTaxSlabRow[]>,
   componentRates?: ComponentRateRow[],
 ): { pf: number; esi: number; pt: number } {
-  if (employmentType === "contractor") {
-    return { pf: 0, esi: 0, pt: 0 };
-  }
   const pfPercent =
     componentRates?.find((c) => c.code === "PF")?.percentValue ??
     DEFAULT_PF_PERCENT;

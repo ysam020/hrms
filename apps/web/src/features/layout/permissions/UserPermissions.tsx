@@ -24,9 +24,9 @@ import debounce from "lodash/debounce";
 import { permissionStructure } from "@web/assets/data/permissionStructure";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import saveUserPermissions from "@web/shared/utils/permissions/saveUserPermissions";
-import renderPermissionMatrix from "@web/shared/utils/permissions/renderPermissionMatrix";
 import togglePermission from "@web/shared/utils/permissions/togglePermission";
 import Button from "@web/shared/components/Button";
+import PermissionMatrix from "@web/shared/components/PermissionMatrix";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function UserPermissions() {
@@ -355,13 +355,13 @@ function UserPermissions() {
                   />
                 ))}
               </Tabs>
-              {renderPermissionMatrix(
-                activeModule,
-                permissionStructure,
-                isSuperUser,
-                hasPermission,
-                permissions,
-                (module, action, scope) =>
+              <PermissionMatrix
+                activeModule={activeModule}
+                permissionStructure={permissionStructure}
+                isChecked={(module, action, scope) =>
+                  hasPermission(module, action, scope, isSuperUser, permissions)
+                }
+                onToggle={(module, action, scope) =>
                   togglePermission(
                     module,
                     action,
@@ -371,10 +371,15 @@ function UserPermissions() {
                     setPermissions,
                     setHasChanges,
                     originalUserPermissions,
-                  ),
-                setPermissions,
-                setHasChanges,
-              )}
+                  )
+                }
+                disabled={isSuperUser}
+                disabledTooltip={
+                  isSuperUser
+                    ? "Super admin permissions cannot be modified"
+                    : ""
+                }
+              />
             </>
           )}
         </Paper>

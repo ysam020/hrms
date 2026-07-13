@@ -814,6 +814,12 @@ export async function scheduleInterview(req: Request, res: Response) {
         message: "Application not found",
       });
 
+    if (app.status === "Hired" || app.status === "Rejected") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `This candidate has already been ${app.status} and cannot be scheduled for another interview.`,
+      });
+    }
+
     if (user?.tenantId) {
       const activeSettings = await getActiveSettings(user.tenantId);
       const maxRounds =
@@ -908,6 +914,12 @@ export async function rescheduleInterview(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Application not found",
       });
+
+    if (app.status === "Hired" || app.status === "Rejected") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `This candidate has already been ${app.status} and cannot be rescheduled.`,
+      });
+    }
 
     const existingInterviews = Array.isArray(app.interviews)
       ? (app.interviews as any[])

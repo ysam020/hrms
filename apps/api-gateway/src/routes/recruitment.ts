@@ -43,13 +43,13 @@ recruitmentRouter.post(
 recruitmentRouter.put(
   "/edit-job-opening/:_id",
   authenticate,
-  requireSuperUser,
+  requirePrivileged,
   h.editJobOpening,
 );
 recruitmentRouter.delete(
   "/delete-job-opening/:_id",
   authenticate,
-  requireSuperUser,
+  requirePrivileged,
   h.deleteJobOpening,
 );
 recruitmentRouter.get("/get-job-titles", h.getJobTitles);

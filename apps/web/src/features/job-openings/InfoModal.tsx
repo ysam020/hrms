@@ -85,6 +85,12 @@ function InfoModal(props) {
   const getStatusOptions = (interview) =>
     interview?.interviewConducted ? ["Cleared"] : ["Completed"];
 
+  // Hired/Rejected are terminal — reassigning an interviewer or
+  // rescheduling a round has no valid next step once the candidate is
+  // already decided. Mirrors the server-side guards in
+  // updateApplicationStatus.ts / scheduleInterview / rescheduleInterview.
+  const isTerminalStatus = status === "Hired" || status === "Rejected";
+
   // Only users with the JobOpenings:take_interview permission (or
   // superusers) show up as candidates for "Reassign Interviewer". An empty
   // userList makes UserAutoComplete fall back to an unrestricted
@@ -531,6 +537,7 @@ function InfoModal(props) {
                               {interview.interviewer || "Not assigned"}
                             </Typography>
                             {!interview.interviewConducted &&
+                              !isTerminalStatus &&
                               editIndex !== index &&
                               rescheduleIndex !== index &&
                               (canReassign || canReschedule) && (

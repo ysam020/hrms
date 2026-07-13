@@ -72,6 +72,10 @@ function ScheduleInterviewModal({
   const prevRoundCleared =
     roundNumber <= 1 || status === `Round ${roundNumber - 1} Cleared`;
   const roundLimitReached = roundNumber > maxInterviewRounds;
+  // Hired/Rejected are terminal — mirrors the server-side guard in
+  // scheduleInterview.ts. The row action that opens this modal is already
+  // hidden once terminal, so this only fires against stale props.
+  const isTerminal = status === "Hired" || status === "Rejected";
 
   // Must start strictly after the previous round's interview ends, not
   // just "now" — e.g. Round 1 at 3–4 PM today means Round 2 can't be
@@ -209,7 +213,16 @@ function ScheduleInterviewModal({
       </Box>
 
       {/* Block scheduling past the tenant's configured round limit */}
-      {roundLimitReached ? (
+      {isTerminal ? (
+        <Box sx={{ p: 2 }}>
+          <Alert severity="warning" sx={{ borderRadius: 2 }}>
+            <Typography variant="body2">
+              This candidate has already been <strong>{status}</strong> and
+              cannot be scheduled for another interview.
+            </Typography>
+          </Alert>
+        </Box>
+      ) : roundLimitReached ? (
         <Box sx={{ p: 2 }}>
           <Alert severity="warning" sx={{ borderRadius: 2 }}>
             <Typography variant="body2">

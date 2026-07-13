@@ -50,67 +50,27 @@ describe("calcProfessionalTax", () => {
 
 describe("calcStatutoryDeductions", () => {
   it("matches today's exact formula for a regular employee (no slabs configured)", () => {
-    const result = calcStatutoryDeductions(
-      20000,
-      10000,
-      "employee",
-      null,
-      new Map(),
-    );
+    const result = calcStatutoryDeductions(20000, 10000, null, new Map());
     expect(result).toEqual({ pf: 1200, esi: 350, pt: 200 });
   });
 
   it("skips ESI above the 21000 gross threshold", () => {
-    const result = calcStatutoryDeductions(
-      25000,
-      12500,
-      "employee",
-      null,
-      new Map(),
-    );
+    const result = calcStatutoryDeductions(25000, 12500, null, new Map());
     expect(result.esi).toBe(0);
   });
 
-  it("exempts contractors from PF, ESI, and PT entirely", () => {
-    const result = calcStatutoryDeductions(
-      20000,
-      10000,
-      "contractor",
-      "Karnataka",
-      new Map(),
-    );
-    expect(result).toEqual({ pf: 0, esi: 0, pt: 0 });
-  });
-
-  it("treats an unset employmentType as a regular employee (backward compatible)", () => {
-    const result = calcStatutoryDeductions(20000, 10000, null, null, new Map());
-    expect(result).toEqual({ pf: 1200, esi: 350, pt: 200 });
-  });
-
   it("uses tenant-configured PF/ESI rates when provided", () => {
-    const result = calcStatutoryDeductions(
-      20000,
-      10000,
-      "employee",
-      null,
-      new Map(),
-      [
-        { code: "PF", percentValue: 10 },
-        { code: "ESI", percentValue: 1 },
-      ],
-    );
+    const result = calcStatutoryDeductions(20000, 10000, null, new Map(), [
+      { code: "PF", percentValue: 10 },
+      { code: "ESI", percentValue: 1 },
+    ]);
     expect(result).toEqual({ pf: 1000, esi: 200, pt: 200 });
   });
 
   it("falls back to the default rate for a code missing from the tenant's configured rows", () => {
-    const result = calcStatutoryDeductions(
-      20000,
-      10000,
-      "employee",
-      null,
-      new Map(),
-      [{ code: "PF", percentValue: 10 }],
-    );
+    const result = calcStatutoryDeductions(20000, 10000, null, new Map(), [
+      { code: "PF", percentValue: 10 },
+    ]);
     expect(result).toEqual({ pf: 1000, esi: 350, pt: 200 }); // ESI defaults to 1.75%
   });
 });

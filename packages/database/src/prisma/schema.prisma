@@ -29,6 +29,10 @@ model Tenant {
   helpEmail              String?
   officeAddress          String?
   website                String?
+  // Work-location state, for Professional Tax slab lookup — set once during
+  // org setup and applied to every employee's PT deduction (see
+  // apps/api-gateway/src/handlers/payroll.ts), rather than captured per employee.
+  workState              String?
   // Company email domain, used to suggest joining an existing org instead of
   // creating a duplicate. Intentionally NOT @unique: Prisma does not emit
   // sparse:true for optional @unique fields on MongoDB (prisma/prisma#12827),
@@ -116,11 +120,6 @@ model User {
   designationId                String?   @db.ObjectId
   // office (default, geofenced) | field | remote — field/remote skip geofencing entirely.
   attendanceMode              String    @default("office")
-  // employee (default) | contractor — branches TDS logic (194J vs 192) in payroll.
-  employmentType               String    @default("employee")
-  // Work-location state, for Professional Tax slab lookup — distinct from
-  // permanent_address_state since home address ≠ work location.
-  workState                     String?
   payCycleId                    String?   @db.ObjectId
   joining_date                DateTime?
   employee_photo              String?

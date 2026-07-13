@@ -38,12 +38,6 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       reasonForTermination,
       dateOfTermination,
       dateOfAbscond,
-      wfh,
-      wfhHomeLatitude,
-      wfhHomeLongitude,
-      wfhHomeName,
-      employmentType,
-      workState,
     } = req.body;
 
     const targetUser = await prisma.user.findUnique({
@@ -64,12 +58,6 @@ export async function editEmployeeDetails(req: Request, res: Response) {
     if (pf_no !== undefined) updateData.pf_no = pf_no;
     if (uan_no !== undefined) updateData.uan_no = uan_no;
     if (esic_no !== undefined) updateData.esic_no = esic_no;
-    if (wfh !== undefined) updateData.wfh = wfh;
-    if (wfhHomeLatitude !== undefined)
-      updateData.wfhHomeLatitude = wfhHomeLatitude ?? null;
-    if (wfhHomeLongitude !== undefined)
-      updateData.wfhHomeLongitude = wfhHomeLongitude ?? null;
-    if (wfhHomeName !== undefined) updateData.wfhHomeName = wfhHomeName ?? null;
     if (reasonForTermination !== undefined)
       updateData.reasonForTermination = reasonForTermination;
     if (dateOfTermination !== undefined)
@@ -78,9 +66,6 @@ export async function editEmployeeDetails(req: Request, res: Response) {
         : null;
     if (dateOfAbscond !== undefined)
       updateData.dateOfAbscond = dateOfAbscond ? new Date(dateOfAbscond) : null;
-    if (employmentType !== undefined)
-      updateData.employmentType = employmentType;
-    if (workState !== undefined) updateData.workState = workState ?? null;
 
     await prisma.user.update({
       where: { id: targetUser.id },
@@ -124,10 +109,6 @@ export async function getEmployeeDetails(req: Request, res: Response) {
         id: true,
         username: true,
         employeeStatus: true,
-        wfh: true,
-        wfhHomeLatitude: true,
-        wfhHomeLongitude: true,
-        wfhHomeName: true,
         pf_no: true,
         uan_no: true,
         esic_no: true,
@@ -143,8 +124,6 @@ export async function getEmployeeDetails(req: Request, res: Response) {
         dateOfTermination: true,
         dateOfAbscond: true,
         isSuperUser: true,
-        employmentType: true,
-        workState: true,
       },
     });
 

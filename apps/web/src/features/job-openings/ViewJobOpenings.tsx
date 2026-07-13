@@ -44,20 +44,29 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
-  const canEdit = hasPermission(
-    "JobOpenings",
-    "edit_job_opening",
-    "-",
-    user?.isSuperUser,
-    user?.permissions || [],
-  );
-  const canDelete = hasPermission(
-    "JobOpenings",
-    "delete_job_opening",
-    "-",
-    user?.isSuperUser,
-    user?.permissions || [],
-  );
+  // Superusers, owners, and admins always see edit/delete regardless of the
+  // granular permission bit — mirrors requirePrivileged on the backend
+  // routes these actions call.
+  const isPrivilegedRole =
+    user?.isSuperUser || ["owner", "admin"].includes(user?.tenantRole ?? "");
+  const canEdit =
+    isPrivilegedRole ||
+    hasPermission(
+      "JobOpenings",
+      "edit_job_opening",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
+  const canDelete =
+    isPrivilegedRole ||
+    hasPermission(
+      "JobOpenings",
+      "delete_job_opening",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    );
   const [jobData, setJobData] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("Active");
   const [loading, setLoading] = useState(false);

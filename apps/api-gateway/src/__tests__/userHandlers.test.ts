@@ -14,6 +14,7 @@ jest.mock("../grpc/clients", () => ({
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn(), findFirst: jest.fn() },
+    tenant: { findUnique: jest.fn() },
   };
   return {
     prisma: _db,
@@ -35,6 +36,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
+const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: any = {}) =>
@@ -51,6 +53,7 @@ describe("userHandlers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGrpcCall.mockResolvedValue({ data: null, message: "OK", status: 0 });
+    mockTenantFindUnique.mockResolvedValue({ workState: null });
   });
 
   describe("getAllUsers", () => {
