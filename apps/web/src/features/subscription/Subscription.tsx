@@ -234,7 +234,8 @@ export default function Subscription() {
       const options = {
         key: keyId,
         subscription_id: subscriptionId,
-        name: "HRMS",
+        name: "Praesto",
+        image: `${window.location.origin}/favicon.ico`,
         description: `HRMS Pro – ${renewBillingRef.current === "annual" ? "Annual" : "Monthly"} subscription`,
         prefill: {
           name: user
