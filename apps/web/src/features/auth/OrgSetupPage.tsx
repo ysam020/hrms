@@ -1054,6 +1054,20 @@ export default function OrgSetupPage() {
                   {`Pay ${price.display} & Continue`}
                 </Button>
               </Box>
+
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "block",
+                  textAlign: "center",
+                  mt: 1.5,
+                  opacity: 0.6,
+                }}
+              >
+                By continuing you agree to our{" "}
+                <a href="/terms-of-use">Terms of Use</a> and{" "}
+                <a href="/refund-policy">Refund Policy</a>.
+              </Typography>
             </>
           ) : (
             /* Step 3: Contact info */

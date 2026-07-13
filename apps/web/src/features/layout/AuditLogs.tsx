@@ -10,6 +10,7 @@ import NotesIcon from "@mui/icons-material/Notes";
 import QueryBuilderIcon from "@mui/icons-material/QueryBuilder";
 import CellTowerIcon from "@mui/icons-material/CellTower";
 import DevicesIcon from "@mui/icons-material/Devices";
+import PersonIcon from "@mui/icons-material/Person";
 import FilterAltOffIcon from "@mui/icons-material/FilterAltOff";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
@@ -164,8 +165,7 @@ function AuditLogs(props) {
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {logs.map((item, index) => {
-              const hasDetails =
-                !!item.details?.oldValue || !!item.details?.newValue;
+              const hasDetails = !!item.oldValue || !!item.newValue;
 
               const deviceInfo = getDeviceInfo(item);
 
@@ -179,6 +179,10 @@ function AuditLogs(props) {
                     <span className="flex-div-secondary">
                       <NotesIcon sx={{ fontSize: "18px" }} />
                       <p>{item.description}</p>
+                    </span>
+                    <span className="flex-div-secondary">
+                      <PersonIcon sx={{ fontSize: "18px" }} />
+                      <p>{item.username || "System"}</p>
                     </span>
                     <span className="flex-div-secondary">
                       <QueryBuilderIcon sx={{ fontSize: "18px" }} />
@@ -208,11 +212,11 @@ function AuditLogs(props) {
                           gap={2}
                           flexDirection={{ xs: "column", md: "row" }}
                         >
-                          {item.details?.oldValue && (
+                          {item.oldValue && (
                             <Box flex={1}>
                               <h4 style={{ marginBottom: "8px" }}>Old Value</h4>
                               <JsonView
-                                value={item.details?.oldValue}
+                                value={item.oldValue}
                                 displayObjectSize={false}
                                 displayDataTypes={false}
                                 enableClipboard={false}
@@ -232,11 +236,11 @@ function AuditLogs(props) {
                             </Box>
                           )}
 
-                          {item.details?.newValue && (
+                          {item.newValue && (
                             <Box flex={1}>
                               <h4 style={{ marginBottom: "8px" }}>New Value</h4>
                               <JsonView
-                                value={item.details?.newValue}
+                                value={item.newValue}
                                 displayObjectSize={false}
                                 displayDataTypes={false}
                                 enableClipboard={false}

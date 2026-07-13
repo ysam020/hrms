@@ -531,22 +531,21 @@ describe("generalHandlers", () => {
       expect(call[2].data[0].action).toBe("CREATE");
     });
 
-    it("filters by userId when userName matches a user", async () => {
-      mockUserFindFirst.mockResolvedValue({ id: "u1" });
+    it("filters by the denormalized username directly", async () => {
       mockAuditLogFindMany.mockResolvedValue([]);
       const res = makeRes();
       await getAuditLogs(makeReq({ query: { userName: "alice" } }), res);
       const whereArg = mockAuditLogFindMany.mock.calls[0][0].where;
-      expect(whereArg.userId).toBe("u1");
+      expect(whereArg.username).toBe("alice");
+      expect(mockUserFindFirst).not.toHaveBeenCalled();
     });
 
-    it("does not filter by userId when userName not found", async () => {
-      mockUserFindFirst.mockResolvedValue(null);
+    it("does not add a username filter when userName is not provided", async () => {
       mockAuditLogFindMany.mockResolvedValue([]);
       const res = makeRes();
-      await getAuditLogs(makeReq({ query: { userName: "ghost" } }), res);
+      await getAuditLogs(makeReq({ query: {} }), res);
       const whereArg = mockAuditLogFindMany.mock.calls[0][0].where;
-      expect(whereArg.userId).toBeUndefined();
+      expect(whereArg.username).toBeUndefined();
     });
 
     it("returns INTERNAL_SERVER_ERROR on DB error", async () => {

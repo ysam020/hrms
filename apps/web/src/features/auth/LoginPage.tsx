@@ -407,6 +407,37 @@ function LoginPage() {
               Protected by enterprise-grade security
             </Typography>
           </div>
+
+          {/* Legal links */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 2,
+              mt: 2.5,
+            }}
+          >
+            {[
+              { label: "Privacy Policy", href: "/privacy-policy" },
+              { label: "Terms of Use", href: "/terms-of-use" },
+              { label: "Refund Policy", href: "/refund-policy" },
+            ].map((link) => (
+              <Typography
+                key={link.href}
+                component="a"
+                href={link.href}
+                variant="caption"
+                sx={{
+                  color: "var(--text-color)",
+                  opacity: 0.6,
+                  textDecoration: "none",
+                  "&:hover": { opacity: 1, textDecoration: "underline" },
+                }}
+              >
+                {link.label}
+              </Typography>
+            ))}
+          </Box>
         </motion.div>
       </Grid>
     </Grid>
