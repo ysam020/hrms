@@ -462,6 +462,7 @@ function App() {
                   loading={loggingOut}
                   variant="danger"
                   theme={theme}
+                  autoFocusConfirm
                 />
               )}
               <SubscriptionExpiredDialog

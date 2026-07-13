@@ -69,6 +69,7 @@ message SalaryStructure {
   double grossSalary = 14;
   double netPayable = 15;
   repeated ComponentAmount components = 16;
+  double advanceDeduction = 17;
 }
 
 message Employee {
@@ -79,6 +80,10 @@ message Employee {
   string last_name = 5;
   string department = 6;
   string designation = 7;
+  string joining_date = 8;
+  string uan_no = 9;
+  string bank_account_no = 10;
+  string pan_no = 11;
 }
 
 message AttendanceSummary {

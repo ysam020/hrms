@@ -8,6 +8,7 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
+import { canApproveAdvances as canApproveAdvancesAccess } from "@web/shared/utils/permissions/navAccess";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -69,9 +70,7 @@ function SalaryAdvances() {
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const isHr =
-    user?.role?.some((r: string) => ["owner", "admin", "hr"].includes(r)) ||
-    user?.isSuperUser;
+  const canApproveAdvances = canApproveAdvancesAccess(user);
 
   const fetchAdvances = useCallback(
     async ({ page, limit }) => {
@@ -115,16 +114,17 @@ function SalaryAdvances() {
   });
 
   const handleAction = useCallback(
-    async (advanceId: string, status: string) => {
+    async (advanceId: string, action: "approve" | "reject") => {
       try {
         await apiClient.patch(API_ENDPOINTS.UPDATE_SALARY_ADVANCE_STATUS, {
           advanceId,
-          status,
+          action,
         });
         refresh();
         setAlert({
           open: true,
-          message: `Advance ${status}`,
+          message:
+            action === "approve" ? "Advance approved" : "Advance rejected",
           severity: "success",
         });
       } catch (err) {
@@ -173,9 +173,9 @@ function SalaryAdvances() {
         primary: true,
         hideLabel: true,
         render: (row: any) =>
-          row.user?.first_name
-            ? `${row.user.first_name} ${row.user.last_name}`
-            : row.userId,
+          row.employee?.first_name
+            ? `${row.employee.first_name} ${row.employee.last_name ?? ""}`.trim()
+            : row.employee?.username || row.userId,
       },
       {
         key: "amount",
@@ -224,23 +224,24 @@ function SalaryAdvances() {
 
   const rowActions = useCallback(
     (row: any) => {
-      if (!isHr || row.status !== "pending") return [];
+      if (!canApproveAdvances || row.status?.toLowerCase() !== "pending")
+        return [];
       return [
         {
           icon: <CheckIcon sx={{ fontSize: 16 }} />,
           label: "Approve",
           color: "success" as const,
-          onClick: () => handleAction(row.id, "approved"),
+          onClick: () => handleAction(row.id, "approve"),
         },
         {
           icon: <CloseIcon sx={{ fontSize: 16 }} />,
           label: "Reject",
           color: "error" as const,
-          onClick: () => handleAction(row.id, "rejected"),
+          onClick: () => handleAction(row.id, "reject"),
         },
       ];
     },
-    [isHr, handleAction],
+    [canApproveAdvances, handleAction],
   );
 
   const memoizedData = useMemo(() => data || [], [data]);

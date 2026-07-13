@@ -668,6 +668,10 @@ model SalaryStructure {
   esi             Float?
   pt              Float?
   deductions      Float?
+  // SalaryAdvance EMI deducted this month, if any — broken out of
+  // `deductions` so payslips can itemize it instead of folding it into a
+  // generic total (mirrors PayrollLineItem.advanceDeduction).
+  advanceDeduction Float?
   grossEarnings   Float?
   netPayable      Float?
   createdAt       DateTime? @default(now())

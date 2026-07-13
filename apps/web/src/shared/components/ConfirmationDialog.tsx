@@ -22,6 +22,7 @@ function ConfirmationDialog({
   loading = false,
   theme = undefined,
   variant = "default",
+  autoFocusConfirm = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -34,6 +35,11 @@ function ConfirmationDialog({
   loading?: boolean;
   theme?: "light" | "dark";
   variant?: "default" | "danger";
+  // Off by default: most confirmations here are destructive (delete, reject,
+  // etc.) and auto-focusing that button would make a stray Enter press
+  // trigger it. Opt in per-usage where landing on Enter is the point (e.g.
+  // logout).
+  autoFocusConfirm?: boolean;
 }) {
   const appTheme = useContext(ThemeContext).theme;
   theme = theme ?? appTheme ?? "light";
@@ -98,6 +104,7 @@ function ConfirmationDialog({
           loading={loading}
           variant={isDanger ? "danger" : "primary"}
           loadingText="Processing..."
+          autoFocus={autoFocusConfirm}
         >
           {confirmText}
         </Button>

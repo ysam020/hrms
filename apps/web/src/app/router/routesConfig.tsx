@@ -8,6 +8,7 @@ import {
   canViewAnalytics,
   canAccessJobOpenings,
   isHrOrAbove,
+  canManageSalary,
 } from "@web/shared/utils/permissions/navAccess";
 // Lazy load ALL other routes to prevent eager loading
 const Profile = lazy(() => import("@web/features/profile/Profile"));
@@ -329,7 +330,11 @@ const routesConfig = () => {
     // specificity scoring picks it over the wildcard when navigating to a userId.
     {
       path: "/payroll/salary-management/:userId",
-      element: <EditSalaryStructure />,
+      element: (
+        <RequireAccess check={canManageSalary}>
+          <EditSalaryStructure />
+        </RequireAccess>
+      ),
       allowedModules: ["Salary Management"],
       name: "Edit Salary Structure",
       category: "HR & Management",

@@ -110,6 +110,7 @@ const PERM_DEFS = [
   ["SalaryManagement", "update_salary"],
   ["SalaryManagement", "view_salaries"],
   ["SalaryManagement", "view_salary_slips"],
+  ["SalaryManagement", "approve_advance"],
 
   // EmployeeManagement (scopeless)
   ["EmployeeManagement", "view"],

@@ -44,6 +44,46 @@ export const canAccessJobOpenings = (user: NavUser): boolean =>
     user?.permissions?.some((p) => p.startsWith("JobOpenings:")),
   );
 
+/**
+ * Superusers, owner/admin/hr, and holders of the SalaryManagement
+ * view_salaries/update_salary permissions. Mirrors the server-side
+ * canManageSalary check in the salary handler.
+ */
+export const canManageSalary = (user: NavUser): boolean =>
+  Boolean(
+    isHrOrAbove(user) ||
+    hasPermission(
+      "SalaryManagement",
+      "view_salaries",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    ) ||
+    hasPermission(
+      "SalaryManagement",
+      "update_salary",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    ),
+  );
+
+/**
+ * Superusers, owner/admin/hr, and holders of SalaryManagement:approve_advance.
+ * Mirrors the server-side canApproveAdvances check in the payroll handler.
+ */
+export const canApproveAdvances = (user: NavUser): boolean =>
+  Boolean(
+    isHrOrAbove(user) ||
+    hasPermission(
+      "SalaryManagement",
+      "approve_advance",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    ),
+  );
+
 /** Mirrors the server-side isPrivileged check in updateTenantSettings. */
 export const canAccessSettings = (user: NavUser): boolean =>
   Boolean(
