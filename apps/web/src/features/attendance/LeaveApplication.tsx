@@ -32,8 +32,10 @@ function LeaveApplication() {
 
   const fileUploadRef = useRef(null);
 
-  // Fetch available paid leaves
-  const { data: paidLeavesData } = useFetchData(
+  // Fetch per-leave-type balances — `balances` is a JSON string keyed by
+  // leave type: { [key]: { name, remaining } }, covering every leave type
+  // configured in tenant settings (not just Paid Leave).
+  const { data: leaveBalanceData } = useFetchData(
     "/get-available-paid-leaves",
     "get",
     [user],
@@ -41,8 +43,15 @@ function LeaveApplication() {
     null,
   );
 
-  // Extract available paid leaves from the fetched data
-  const availablePaidLeaves = paidLeavesData?.remainingPaidLeaves || 0;
+  const leaveBalances = useMemo(() => {
+    if (!leaveBalanceData?.balances) return [];
+    try {
+      const parsed = JSON.parse(leaveBalanceData.balances);
+      return Object.values(parsed) as { name: string; remaining: number }[];
+    } catch {
+      return [];
+    }
+  }, [leaveBalanceData]);
 
   // Leave types come from the org's configured policy — customLeaveTypes and
   // leavePolicies (Settings → Organisation Settings → Leave) — so a
@@ -161,13 +170,33 @@ function LeaveApplication() {
               Leave Application
             </Typography>
           </Box>
-          <Chip
-            icon={<Info />}
-            label={`${availablePaidLeaves} paid leave(s) available`}
-            size="small"
-            color="primary"
-            variant="outlined"
-          />
+          <Box
+            display="flex"
+            flexWrap="wrap"
+            gap={0.75}
+            justifyContent="flex-end"
+          >
+            {leaveBalances.length === 0 ? (
+              <Chip
+                icon={<Info />}
+                label="0 leave(s) available"
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ) : (
+              leaveBalances.map((b) => (
+                <Chip
+                  key={b.name}
+                  icon={<Info />}
+                  label={`${b.name}: ${b.remaining}`}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+              ))
+            )}
+          </Box>
         </Box>
 
         <form onSubmit={formik.handleSubmit}>

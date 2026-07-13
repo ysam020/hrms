@@ -217,6 +217,10 @@ export function findPolicy(
 
 export interface QuotaSettings {
   leavePolicies: LeavePolicy[];
+  // [{ name, key, daysPerYear, requiresProof }] — the older, simpler config
+  // surface. A matching leavePolicies entry takes precedence when both are
+  // configured for the same key (see TenantSettings.leavePolicies comment).
+  customLeaveTypes?: { key?: string; name?: string; daysPerYear?: number }[];
   paidLeavesPerYear: number;
   sickLeavesPerYear: number;
   casualLeavesPerYear: number;
@@ -224,7 +228,7 @@ export interface QuotaSettings {
 
 const BUILTIN_SCALAR_QUOTA: Record<
   string,
-  keyof Omit<QuotaSettings, "leavePolicies">
+  "paidLeavesPerYear" | "sickLeavesPerYear" | "casualLeavesPerYear"
 > = {
   PL: "paidLeavesPerYear",
   "PAID LEAVE": "paidLeavesPerYear",
@@ -242,6 +246,14 @@ export function resolveAnnualQuota(
   const policy = findPolicy(settings.leavePolicies, leaveType);
   if (policy && typeof policy.daysPerYear === "number") {
     return policy.daysPerYear;
+  }
+  const custom = settings.customLeaveTypes?.find(
+    (t) =>
+      t.key?.toLowerCase() === leaveType.toLowerCase() ||
+      t.name?.toLowerCase() === leaveType.toLowerCase(),
+  );
+  if (custom && typeof custom.daysPerYear === "number") {
+    return custom.daysPerYear;
   }
   const scalarKey = BUILTIN_SCALAR_QUOTA[leaveType.toUpperCase()];
   return scalarKey ? settings[scalarKey] : null;

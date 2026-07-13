@@ -1,0 +1,253 @@
+# Used by the dedicated monitoring EC2 host in prod (see MonitoringInstance in
+# cloudformation/hrms-deploy.yaml). The ASG scales the app fleet to 2-4
+# instances, so static targets (like prometheus.yml / prometheus-local.yml use)
+# don't work here — instead each job uses EC2 service discovery to find every
+# running instance tagged Name=hrms-prod and scrapes its published metrics
+# port directly over the VPC (see the "ports" additions in
+# docker-compose.prod.yml). Region is hardcoded to match the stack's deploy
+# region (ap-south-1) — update if this stack is ever deployed elsewhere.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: api-gateway
+    ec2_sd_configs:
+      - region: ap-south-1
+        port: 19003
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:19003"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: api-gateway
+
+  - job_name: auth-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9101"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: auth-service
+
+  - job_name: user-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9102"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: user-service
+
+  - job_name: employee-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9103"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: employee-service
+
+  - job_name: attendance-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9104"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: attendance-service
+
+  - job_name: leave-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9105"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: leave-service
+
+  - job_name: recruitment-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9106"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: recruitment-service
+
+  - job_name: hrm-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9107"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: hrm-service
+
+  - job_name: salary-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9108"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: salary-service
+
+  - job_name: analytics-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9109"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: analytics-service
+
+  - job_name: notification-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9110"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: notification-service
+
+  - job_name: scheduler-service
+    ec2_sd_configs:
+      - region: ap-south-1
+        filters:
+          - name: tag:Name
+            values: ["hrms-prod"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_private_ip]
+        regex: "(.+)"
+        replacement: "${1}:9111"
+        target_label: __address__
+      - source_labels: [__meta_ec2_instance_id]
+        target_label: instance_id
+      - source_labels: [__meta_ec2_availability_zone]
+        target_label: az
+      - target_label: service
+        replacement: scheduler-service

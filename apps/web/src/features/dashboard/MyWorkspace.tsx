@@ -151,7 +151,7 @@ function MyWorkspace({ isDark }) {
 
   // Today's attendance
   const todayRecord = useMemo(() => {
-    const todayStr = dayjs().format("YYYY-MM-DD");
+    const todayStr = new Date().toISOString().slice(0, 10);
     return (data.attendances || []).find((a) => a.date?.startsWith(todayStr));
   }, [data.attendances]);
 
