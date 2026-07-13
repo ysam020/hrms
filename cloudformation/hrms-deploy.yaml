@@ -260,7 +260,8 @@ Resources:
 
   # ─────────────────────────── Secrets: Grafana admin login ───────────────────────────
   # Generated once at stack creation; MonitoringInstance's deploy.sh reads this
-  # at boot/redeploy and exports it as GF_SECURITY_ADMIN_PASSWORD. Rotate via
+  # at boot/redeploy and writes it to /opt/hrms-monitoring/.env (loaded by
+  # docker-compose.monitoring-prod.yml's grafana service). Rotate via
   # `aws secretsmanager put-secret-value` + re-running deploy.sh over SSM.
   GrafanaAdminSecret:
     Type: AWS::SecretsManager::Secret
@@ -822,10 +823,10 @@ Resources:
           aws s3 sync "s3://${DeployArtifactsBucket}/monitoring/" /opt/hrms-monitoring/monitoring/ \
             --region "$AWS_REGION" --delete
 
-          export GF_SECURITY_ADMIN_PASSWORD
-          GF_SECURITY_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
+          GF_ADMIN_SECRET=$(aws secretsmanager get-secret-value \
             --secret-id "${GrafanaAdminSecret}" --region "$AWS_REGION" \
             --query 'SecretString' --output text)
+          printf 'GF_SECURITY_ADMIN_PASSWORD=%s\n' "$GF_ADMIN_SECRET" > /opt/hrms-monitoring/.env
 
           cd /opt/hrms-monitoring
           docker compose -f docker-compose.monitoring-prod.yml pull --quiet

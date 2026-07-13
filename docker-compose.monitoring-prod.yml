@@ -5,9 +5,9 @@
 # to CloudWatch Logs from every service (packages/logger), so Grafana points
 # at CloudWatch for logs instead of running Loki here.
 #
-# GF_SECURITY_ADMIN_PASSWORD is exported by /opt/hrms-monitoring/deploy.sh
-# (reads it from Secrets Manager) before this is brought up — never commit a
-# real password here.
+# The grafana service's env_file (.env, gitignored) is written by
+# /opt/hrms-monitoring/deploy.sh from Secrets Manager before this is brought
+# up — never commit a real .env file here.
 name: hrms-monitoring
 
 services:
@@ -39,8 +39,9 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
+    env_file:
+      - .env
     volumes:
       - ./monitoring/grafana/provisioning-prod:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards-prod:/var/lib/grafana/dashboards:ro
