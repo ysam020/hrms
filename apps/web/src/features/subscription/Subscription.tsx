@@ -21,7 +21,6 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import ToggleButton from "@mui/material/ToggleButton";
 import Alert from "@mui/material/Alert";
 import CheckIcon from "@mui/icons-material/Check";
-import ScienceIcon from "@mui/icons-material/Science";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
@@ -481,34 +480,6 @@ export default function Subscription() {
               <Typography variant="h6" fontWeight={600} gutterBottom>
                 Renew Subscription
               </Typography>
-
-              {/* Test mode notice */}
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  bgcolor: (t) => alpha(t.palette.warning.main, 0.1),
-                  border: 1,
-                  borderColor: "warning.light",
-                  borderRadius: 1.5,
-                  px: 1.5,
-                  py: 1,
-                  mb: 2,
-                }}
-              >
-                <ScienceIcon fontSize="small" color="warning" />
-                <Typography
-                  variant="caption"
-                  color="warning.dark"
-                  fontWeight={500}
-                >
-                  Test mode — pay via UPI using{" "}
-                  <Box component="span" fontFamily="monospace" fontWeight={700}>
-                    success@razorpay
-                  </Box>
-                </Typography>
-              </Box>
 
               {/* Billing toggle */}
               <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
