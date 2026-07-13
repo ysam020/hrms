@@ -86,13 +86,6 @@ describe("LoginPage", () => {
     expect(screen.getByText("Complete HR Suite")).toBeInTheDocument();
   });
 
-  it("renders stats section", () => {
-    renderLoginPage();
-    expect(screen.getByText("10K+")).toBeInTheDocument();
-    expect(screen.getByText("2M+")).toBeInTheDocument();
-    expect(screen.getByText("50%")).toBeInTheDocument();
-  });
-
   it("shows WebAuthn form when 'Use Security Key' is clicked", async () => {
     renderLoginPage();
     fireEvent.click(screen.getByText(/Use Security Key/i));

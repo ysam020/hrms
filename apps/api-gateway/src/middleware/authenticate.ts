@@ -85,10 +85,12 @@ export const authenticate = (
             userAgent: req.headers["user-agent"] || "",
           };
           // Run the handler chain inside BOTH storage contexts:
-          // - gatewayTenantStorage → read by grpcCall to forward metadata to gRPC services
+          // - gatewayTenantStorage → read by grpcCall to forward tenant + actor as
+          //   metadata to gRPC services, so a mutation performed by a downstream
+          //   service (leave-service, hrm-service, etc.) can still be attributed
           // - runWithTenant (DB package) → read by prismaWithTenant for direct DB calls,
           //   and by the audit-logging Prisma middleware for who/where to attribute a change
-          gatewayTenantStorage.run({ tenantId: tid, dbName }, () => {
+          gatewayTenantStorage.run({ tenantId: tid, dbName, actor }, () => {
             runWithTenant(tid, tenantClient, next, actor);
           });
         })

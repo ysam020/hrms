@@ -125,6 +125,16 @@ export const grpcCall = <Req, Res>(
   if (tenantId) meta.add("x-tenant-id", tenantId);
   if (dbName) meta.add("x-tenant-db-name", dbName);
 
+  // Forward who's making this call so a downstream service's own audit-log
+  // writes (see packages/grpc-server/src/base-server.ts) can still attribute
+  // a mutation to a person, even though it's happening in a different process
+  // than the one that authenticated the request.
+  const actor = store?.actor;
+  if (actor?.userId) meta.add("x-actor-user-id", actor.userId);
+  if (actor?.username) meta.add("x-actor-username", actor.username);
+  if (actor?.ipAddress) meta.add("x-actor-ip", actor.ipAddress);
+  if (actor?.userAgent) meta.add("x-actor-user-agent", actor.userAgent);
+
   return new Promise((resolve, reject) => {
     client[method](
       request,

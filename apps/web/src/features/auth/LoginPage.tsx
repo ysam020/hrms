@@ -162,35 +162,6 @@ function LoginPage() {
               </motion.div>
             ))}
           </div>
-
-          <div className="stats-section">
-            <div className="stat-item">
-              <Typography variant="h4" className="stat-number">
-                10K+
-              </Typography>
-              <Typography variant="caption" className="stat-label">
-                Companies Trust Us
-              </Typography>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat-item">
-              <Typography variant="h4" className="stat-number">
-                2M+
-              </Typography>
-              <Typography variant="caption" className="stat-label">
-                Employees Managed
-              </Typography>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat-item">
-              <Typography variant="h4" className="stat-number">
-                50%
-              </Typography>
-              <Typography variant="caption" className="stat-label">
-                Time Saved on HR Tasks
-              </Typography>
-            </div>
-          </div>
         </motion.div>
       </Grid>
 
