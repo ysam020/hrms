@@ -19,17 +19,23 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Alert from "@mui/material/Alert";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 import BusinessIcon from "@mui/icons-material/Business";
 import PhoneIcon from "@mui/icons-material/Phone";
 import EmailIcon from "@mui/icons-material/Email";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import LanguageIcon from "@mui/icons-material/Language";
+import MapIcon from "@mui/icons-material/Map";
 import EditIcon from "@mui/icons-material/Edit";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { UserContext } from "@web/app/providers/UserContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
+import { states } from "@web/assets/data/statesData";
 
 interface OrgProfile {
   name: string;
@@ -37,6 +43,7 @@ interface OrgProfile {
   helpEmail: string | null;
   officeAddress: string | null;
   website: string | null;
+  workState: string | null;
 }
 
 function InfoRow({
@@ -108,6 +115,7 @@ export default function CompanyInfo() {
   const [editEmail, setEditEmail] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
+  const [editWorkState, setEditWorkState] = useState("");
 
   const canEdit =
     user?.isSuperUser ||
@@ -129,6 +137,7 @@ export default function CompanyInfo() {
     setEditEmail(profile?.helpEmail ?? "");
     setEditAddress(profile?.officeAddress ?? "");
     setEditWebsite(profile?.website ?? "");
+    setEditWorkState(profile?.workState ?? "");
     setEditOpen(true);
   };
 
@@ -140,6 +149,7 @@ export default function CompanyInfo() {
         helpEmail: editEmail || null,
         officeAddress: editAddress || null,
         website: editWebsite || null,
+        workState: editWorkState || null,
       });
       if (res.data?.success) {
         setProfile(res.data.data.orgProfile);
@@ -165,7 +175,8 @@ export default function CompanyInfo() {
     profile?.helpPhone ||
     profile?.helpEmail ||
     profile?.officeAddress ||
-    profile?.website;
+    profile?.website ||
+    profile?.workState;
 
   return (
     <Container maxWidth="sm" sx={{ py: 4 }}>
@@ -239,6 +250,11 @@ export default function CompanyInfo() {
                 value={profile.officeAddress}
               />
               <InfoRow
+                icon={<MapIcon />}
+                label="State"
+                value={profile.workState}
+              />
+              <InfoRow
                 icon={<LanguageIcon />}
                 label="Website"
                 value={profile.website}
@@ -296,9 +312,23 @@ export default function CompanyInfo() {
             rows={2}
             value={editAddress}
             onChange={(e) => setEditAddress(e.target.value)}
-            placeholder="123 Main Street, Mumbai, Maharashtra 400001"
+            placeholder="123 Main Street, Mumbai 400001"
             size="small"
           />
+          <FormControl fullWidth size="small">
+            <InputLabel>State</InputLabel>
+            <Select
+              value={editWorkState}
+              label="State"
+              onChange={(e) => setEditWorkState(e.target.value)}
+            >
+              {states.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {s}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             label="Website"
             fullWidth

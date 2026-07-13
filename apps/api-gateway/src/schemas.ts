@@ -143,15 +143,6 @@ export const editEmployeeDetailsSchema = z.object({
   reasonForTermination: z.string().max(512).optional(),
   dateOfTermination: z.string().optional(),
   dateOfAbscond: z.string().optional(),
-  wfh: z.boolean().optional(),
-  // Previously missing from this schema entirely — the handler reads them,
-  // but zod strips unrecognized keys by default, so WFH home-location edits
-  // (and therefore WFH geofencing) were silently no-ops until this fix.
-  wfhHomeLatitude: z.number().min(-90).max(90).nullable().optional(),
-  wfhHomeLongitude: z.number().min(-180).max(180).nullable().optional(),
-  wfhHomeName: z.string().max(500).nullable().optional(),
-  employmentType: z.enum(["employee", "contractor"]).optional(),
-  workState: z.string().max(60).nullable().optional(),
 });
 
 export const completeKycSchema = z.object({

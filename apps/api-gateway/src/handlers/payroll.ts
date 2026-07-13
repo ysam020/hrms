@@ -304,8 +304,6 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       select: {
         id: true,
         salary: true,
-        employmentType: true,
-        workState: true,
         salaryBasicPay: true,
         salaryHra: true,
         salaryConveyance: true,
@@ -438,6 +436,17 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       : [];
     const ptSlabsByState = groupSlabsByState(ptSlabs);
 
+    // Work state is set once during org setup (Tenant.workState) and applies
+    // to every employee's PT deduction, rather than being captured per employee.
+    const tenantWorkState = tenantId
+      ? ((
+          await prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { workState: true },
+          })
+        )?.workState ?? null)
+      : null;
+
     // PF/ESI rates — tenant-configured SalaryComponentDefinition rows
     // (Settings → Payroll Components) when present, else the 12%/1.75%
     // defaults calcStatutoryDeductions already falls back to.
@@ -539,8 +548,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         const statutory = calcStatutoryDeductions(
           gross,
           basicPay,
-          emp.employmentType,
-          emp.workState,
+          tenantWorkState,
           ptSlabsByState,
           componentRates,
         );
@@ -591,8 +599,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         const statutory = calcStatutoryDeductions(
           gross,
           basicPay,
-          emp.employmentType,
-          emp.workState,
+          tenantWorkState,
           ptSlabsByState,
           componentRates,
         );

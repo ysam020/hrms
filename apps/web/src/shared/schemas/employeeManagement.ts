@@ -11,8 +11,6 @@ export const employeeManagementSchema = z
     reasonForTermination: z.string().optional(),
     dateOfTermination: z.string().optional(),
     dateOfAbscond: z.string().optional(),
-    employmentType: z.enum(["employee", "contractor"]).optional(),
-    workState: z.string().nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.employeeStatus === "Terminated") {

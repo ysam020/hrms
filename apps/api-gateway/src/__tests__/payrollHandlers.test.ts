@@ -4,6 +4,7 @@ import { initiatePayrollRun, getMyPayslips } from "../handlers/payroll";
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn(), findMany: jest.fn() },
+    tenant: { findUnique: jest.fn() },
     payrollRun: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -63,6 +64,7 @@ jest.mock("@hrms/cache", () => ({
 
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
+const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 const mockRunFindUnique = (prisma as any).payrollRun.findUnique as jest.Mock;
 const mockRunCreate = (prisma as any).payrollRun.create as jest.Mock;
 const mockLineItemCreateMany = (prisma as any).payrollLineItem
@@ -112,6 +114,7 @@ describe("initiatePayrollRun", () => {
     mockPtSlabFindMany.mockResolvedValue([]);
     mockComponentFindMany.mockResolvedValue([]);
     mockAdvanceFindMany.mockResolvedValue([]);
+    mockTenantFindUnique.mockResolvedValue({ workState: null });
     mockTenantSettingsFindFirst.mockResolvedValue(null);
     mockHolidayFindMany.mockResolvedValue([]);
     mockPayCycleFindFirst.mockResolvedValue(null);
@@ -122,8 +125,6 @@ describe("initiatePayrollRun", () => {
       {
         id: "emp-1",
         salary: 30000,
-        employmentType: "employee",
-        workState: null,
         salaryBasicPay: 20000,
         salaryHra: 6000,
         salaryConveyance: 4000,
@@ -162,8 +163,6 @@ describe("initiatePayrollRun", () => {
       {
         id: "emp-2",
         salary: 30000,
-        employmentType: "employee",
-        workState: null,
         salaryBasicPay: null,
         salaryHra: null,
         salaryConveyance: null,
@@ -200,8 +199,6 @@ describe("initiatePayrollRun", () => {
       {
         id: "emp-3",
         salary: 20000,
-        employmentType: "employee",
-        workState: null,
         salaryBasicPay: 10000,
         salaryHra: 0,
         salaryConveyance: 0,
@@ -241,8 +238,6 @@ describe("initiatePayrollRun", () => {
       {
         id: "emp-4",
         salary: 31000,
-        employmentType: "employee",
-        workState: null,
         salaryBasicPay: null,
         salaryHra: null,
         salaryConveyance: null,
@@ -280,8 +275,6 @@ describe("initiatePayrollRun", () => {
       {
         id: "emp-5",
         salary: 31000,
-        employmentType: "employee",
-        workState: null,
         salaryBasicPay: null,
         salaryHra: null,
         salaryConveyance: null,
@@ -335,9 +328,7 @@ describe("initiatePayrollRun", () => {
 
   describe("pay cycle", () => {
     it("stamps the run with the tenant's default active pay cycle", async () => {
-      mockUserFindMany.mockResolvedValue([
-        { id: "emp-1", salary: 30000, employmentType: "employee" },
-      ]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
       mockPayCycleFindFirst.mockResolvedValue({
         id: "cycle-1",
         frequency: "monthly",
@@ -366,9 +357,7 @@ describe("initiatePayrollRun", () => {
     });
 
     it("uses the explicitly requested payCycleId instead of the default when provided", async () => {
-      mockUserFindMany.mockResolvedValue([
-        { id: "emp-1", salary: 30000, employmentType: "employee" },
-      ]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
       mockPayCycleFindFirst.mockResolvedValue({
         id: "cycle-biweekly",
         frequency: "biweekly",
@@ -397,9 +386,7 @@ describe("initiatePayrollRun", () => {
     });
 
     it("includes a warning in the response when the resolved cycle isn't monthly", async () => {
-      mockUserFindMany.mockResolvedValue([
-        { id: "emp-1", salary: 30000, employmentType: "employee" },
-      ]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
       mockPayCycleFindFirst.mockResolvedValue({
         id: "cycle-1",
         frequency: "biweekly",
@@ -422,9 +409,7 @@ describe("initiatePayrollRun", () => {
     });
 
     it("does not include a warning when no pay cycle is configured", async () => {
-      mockUserFindMany.mockResolvedValue([
-        { id: "emp-1", salary: 30000, employmentType: "employee" },
-      ]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
       const res = makeRes();
 
       await initiatePayrollRun(

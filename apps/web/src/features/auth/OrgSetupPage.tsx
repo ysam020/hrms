@@ -41,6 +41,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import LogoDark from "@web/assets/data/LogoDark";
 import LogoLight from "@web/assets/data/LogoLight";
+import { states } from "@web/assets/data/statesData";
 import WorkWeekPicker, {
   defaultWorkWeek,
   type WorkWeekValue,
@@ -175,6 +176,7 @@ export default function OrgSetupPage() {
   const [helpEmail, setHelpEmail] = useState("");
   const [officeAddress, setOfficeAddress] = useState("");
   const [website, setWebsite] = useState("");
+  const [workState, setWorkState] = useState("");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [fetching, setFetching] = useState(true);
   const [domainSuggestion, setDomainSuggestion] = useState<{
@@ -1102,12 +1104,27 @@ export default function OrgSetupPage() {
                 rows={2}
                 value={officeAddress}
                 onChange={(e) => setOfficeAddress(e.target.value)}
-                placeholder="123 Main Street, Mumbai, Maharashtra 400001"
+                placeholder="123 Main Street, Mumbai 400001"
                 sx={{
                   mb: 2,
                   "& .MuiOutlinedInput-root": { borderRadius: "8px" },
                 }}
               />
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>State</InputLabel>
+                <Select
+                  value={workState}
+                  label="State"
+                  onChange={(e) => setWorkState(e.target.value)}
+                  sx={{ borderRadius: "8px" }}
+                >
+                  {states.map((s) => (
+                    <MenuItem key={s} value={s}>
+                      {s}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <TextField
                 label="Website"
                 fullWidth
@@ -1157,6 +1174,7 @@ export default function OrgSetupPage() {
                         ...(helpEmail && { helpEmail }),
                         ...(officeAddress && { officeAddress }),
                         ...(website && { website }),
+                        ...(workState && { workState }),
                       });
                     } catch {
                       // non-fatal — continue to app even if save fails

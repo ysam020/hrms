@@ -228,7 +228,6 @@ describe("employeeHandlers", () => {
         id: "u1",
         username: "alice",
         employeeStatus: "Active",
-        wfh: false,
         pf_no: null,
         uan_no: null,
         esic_no: null,

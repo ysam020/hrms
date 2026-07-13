@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { userClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { camelToSnake, apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { parsePagination, PAGINATION } from "../utils/pagination";
@@ -69,7 +69,6 @@ export async function getUserData(req: Request, res: Response) {
         salaryEsi: true,
         salaryPt: true,
         salaryComponentBreakdown: true,
-        workState: true,
       },
     });
     if (salaryData) {
@@ -83,7 +82,18 @@ export async function getUserData(req: Request, res: Response) {
         pt: salaryData.salaryPt,
         components: salaryData.salaryComponentBreakdown ?? [],
       };
-      snake.workState = salaryData.workState;
+    }
+
+    // Work state now lives on the Tenant (set once during org setup) rather
+    // than per employee — used for Professional Tax slab lookup in the
+    // salary structure editor.
+    const tenantId = getTenantId();
+    if (tenantId) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { workState: true },
+      });
+      snake.workState = tenant?.workState ?? null;
     }
 
     // Strip PII that only the owner or a superuser may see

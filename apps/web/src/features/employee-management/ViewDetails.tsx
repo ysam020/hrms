@@ -22,7 +22,6 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
-import DropdownWrapper from "@web/shared/components/DropdownWrapper";
 import { validationSchema } from "./schemas";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
@@ -30,9 +29,6 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 // Lazy load components
 const UnAuthorisedRoute = lazy(
   () => import("@web/app/router/UnAuthorisedRoute"),
-);
-const LocationPicker = lazy(
-  () => import("@web/shared/components/LocationPicker"),
 );
 
 function ViewDetails() {
@@ -80,12 +76,6 @@ function ViewDetails() {
       reasonForTermination: "",
       dateOfTermination: "",
       dateOfAbscond: "",
-      wfh: false,
-      wfhHomeLatitude: null as number | null,
-      wfhHomeLongitude: null as number | null,
-      wfhHomeName: null as string | null,
-      employmentType: "employee" as "employee" | "contractor",
-      workState: null as string | null,
     },
     validationSchema,
     onSubmit: async (values) => {
@@ -129,13 +119,6 @@ function ViewDetails() {
       reasonForTermination: data?.reasonForTermination || "",
       dateOfTermination: data?.dateOfTermination || "",
       dateOfAbscond: data?.dateOfAbscond || "",
-      wfh: data?.wfh || false,
-      wfhHomeLatitude: data?.wfhHomeLatitude ?? null,
-      wfhHomeLongitude: data?.wfhHomeLongitude ?? null,
-      wfhHomeName: data?.wfhHomeName ?? null,
-      employmentType:
-        data?.employmentType === "contractor" ? "contractor" : "employee",
-      workState: data?.workState ?? null,
     });
     setIsEditing(true);
   };
@@ -432,57 +415,6 @@ function ViewDetails() {
                       </Box>
                     )}
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 3 }}>
-                    {isEditing ? (
-                      <DropdownWrapper
-                        name="employmentType"
-                        options={[
-                          { label: "Employee", value: "employee" },
-                          { label: "Contractor", value: "contractor" },
-                        ]}
-                        placeholder="Employment Type"
-                        formik={formik}
-                      />
-                    ) : (
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ mb: 0.5, display: "block" }}
-                        >
-                          Employment Type
-                        </Typography>
-                        <Typography variant="body2">
-                          {data?.employmentType === "contractor"
-                            ? "Contractor"
-                            : "Employee"}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 3 }}>
-                    {isEditing ? (
-                      <FormikInputWrapper
-                        type="text"
-                        name="workState"
-                        placeholder="Work State (for Professional Tax)"
-                        formik={formik}
-                      />
-                    ) : (
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ mb: 0.5, display: "block" }}
-                        >
-                          Work State
-                        </Typography>
-                        <Typography variant="body2">
-                          {data?.workState || "--"}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Grid>
                 </Grid>
               </Paper>
             </Grid>
@@ -578,86 +510,6 @@ function ViewDetails() {
                         label="Mark as Absconded"
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={formik.values.wfh}
-                            onChange={(e) => {
-                              formik.setFieldValue("wfh", e.target.checked);
-                              // Clear home location when WFH is disabled
-                              if (!e.target.checked) {
-                                formik.setFieldValue("wfhHomeLatitude", null);
-                                formik.setFieldValue("wfhHomeLongitude", null);
-                                formik.setFieldValue("wfhHomeName", null);
-                              }
-                            }}
-                          />
-                        }
-                        label="Work from Home"
-                      />
-                      {getFieldError("wfh") && (
-                        <Typography
-                          variant="caption"
-                          color="error"
-                          sx={{ display: "block", mt: 0.5 }}
-                        >
-                          {getFieldError("wfh")}
-                        </Typography>
-                      )}
-                    </Grid>
-                    {/* Home location picker — shown when WFH is enabled */}
-                    {formik.values.wfh && (
-                      <Grid size={12}>
-                        <Box
-                          sx={{
-                            mt: 1,
-                            p: 1.5,
-                            border: "1px solid",
-                            borderColor: "divider",
-                            borderRadius: 1,
-                            bgcolor: "background.paper",
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                            fontWeight={500}
-                            sx={{ mb: 1 }}
-                          >
-                            Employee's home location (used for geofencing)
-                          </Typography>
-                          <Suspense
-                            fallback={
-                              <Box
-                                sx={{
-                                  height: 280,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  border: "1px solid",
-                                  borderColor: "divider",
-                                  borderRadius: 1,
-                                }}
-                              >
-                                <CircularProgress size={24} />
-                              </Box>
-                            }
-                          >
-                            <LocationPicker
-                              lat={formik.values.wfhHomeLatitude}
-                              lng={formik.values.wfhHomeLongitude}
-                              name={formik.values.wfhHomeName}
-                              height={280}
-                              onChange={(v) => {
-                                formik.setFieldValue("wfhHomeLatitude", v.lat);
-                                formik.setFieldValue("wfhHomeLongitude", v.lng);
-                                formik.setFieldValue("wfhHomeName", v.name);
-                              }}
-                            />
-                          </Suspense>
-                        </Box>
-                      </Grid>
-                    )}
                     {formik.values.employeeStatus === "Terminated" && (
                       <Grid size={12}>
                         <FormikInputWrapper
@@ -700,36 +552,6 @@ function ViewDetails() {
                         <strong>Is Super User:</strong>{" "}
                         {data?.isSuperUser ? "Yes" : "No"}
                       </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant="body2">
-                        <strong>Work from Home:</strong>{" "}
-                        {data?.wfh ? "Yes" : "No"}
-                      </Typography>
-                      {data?.wfh && data?.wfhHomeName && (
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ display: "block", mt: 0.25 }}
-                        >
-                          📍{" "}
-                          {data.wfhHomeName.length > 60
-                            ? data.wfhHomeName.slice(0, 60) + "…"
-                            : data.wfhHomeName}
-                        </Typography>
-                      )}
-                      {data?.wfh &&
-                        !data?.wfhHomeName &&
-                        data?.wfhHomeLatitude && (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ display: "block", mt: 0.25 }}
-                          >
-                            📍 {data.wfhHomeLatitude?.toFixed(5)},{" "}
-                            {data.wfhHomeLongitude?.toFixed(5)}
-                          </Typography>
-                        )}
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <Typography variant="body2">

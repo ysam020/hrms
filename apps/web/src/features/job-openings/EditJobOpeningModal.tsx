@@ -1,4 +1,4 @@
-import { memo, useContext, useEffect } from "react";
+import { memo, useContext, useEffect, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
@@ -16,6 +16,7 @@ import Grid from "@mui/material/Grid2";
 import { Dropdown } from "primereact/dropdown";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import useJobTitleOptions from "./useJobTitleOptions";
+import useFetchData from "@web/shared/hooks/useFetchData";
 
 const FormikDropdownWrapper = ({
   name,
@@ -113,6 +114,23 @@ function EditJobOpeningModal(props) {
   const { setAlert } = useContext(AlertContext);
   const { options: jobTitleOptions, ensureJobTitleSaved } =
     useJobTitleOptions();
+  const { data: pipelineTemplatesData } = useFetchData(
+    API_ENDPOINTS.LIST_INTERVIEW_PIPELINE_TEMPLATES,
+    "get",
+    [],
+    null,
+    null,
+  );
+  const pipelineTemplateOptions = useMemo(() => {
+    if (!pipelineTemplatesData || !Array.isArray(pipelineTemplatesData))
+      return [];
+    return pipelineTemplatesData
+      .filter((t) => t.isActive)
+      .map((t) => ({
+        label: t.isDefault ? `${t.name} (Default)` : t.name,
+        value: t.id,
+      }));
+  }, [pipelineTemplatesData]);
   const {
     id: _id,
     jobPostingDate,
@@ -131,6 +149,7 @@ function EditJobOpeningModal(props) {
       experience: "",
       budget: [0, 0],
       hiringManager: "",
+      pipelineTemplateId: "",
     },
     validationSchema,
     onSubmit: async (values) => {
@@ -207,6 +226,7 @@ function EditJobOpeningModal(props) {
             : "",
         budget: Array.isArray(budget) ? budget : [0, 0],
         hiringManager: props.jobData?.hiringManager || "",
+        pipelineTemplateId: props.jobData?.pipelineTemplateId || "",
       });
     }
   }, [props.jobData]);
@@ -393,6 +413,20 @@ function EditJobOpeningModal(props) {
                     name="budget"
                     label="Salary Range (LPA)"
                     formik={formik}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <FormikDropdownWrapper
+                    name="pipelineTemplateId"
+                    options={pipelineTemplateOptions}
+                    placeholder="Interview Pipeline (tenant default)"
+                    formik={formik}
+                    inputProps={{
+                      optionLabel: "label",
+                      optionValue: "value",
+                      showClear: true,
+                      emptyMessage: "No pipelines configured",
+                    }}
                   />
                 </Grid>
               </Grid>

@@ -49,6 +49,17 @@ export const updateApplicationStatus = async (
       });
     }
 
+    // Hired/Rejected are terminal — covers re-hiring, re-rejecting, and
+    // round Completed/Cleared updates arriving after the fact (e.g. a
+    // stale UI tab) all in one place, since hireCandidate, rejectApplication,
+    // and round-status updates all funnel through this single RPC.
+    if (application.status === "Hired" || application.status === "Rejected") {
+      return callback(null, {
+        message: `This candidate has already been ${application.status} — no further status changes are allowed.`,
+        status: status.FAILED_PRECONDITION,
+      });
+    }
+
     // A candidate can only be hired once at least one round has actually
     // been conducted AND formally Cleared — `cleared` is set below when a
     // round is Cleared, independent of the top-level `status` string, which

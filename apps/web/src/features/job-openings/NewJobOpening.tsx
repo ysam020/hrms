@@ -69,6 +69,14 @@ function NewJobOpenings({ onSaved }) {
     null,
   );
 
+  const { data: pipelineTemplatesData } = useFetchData(
+    API_ENDPOINTS.LIST_INTERVIEW_PIPELINE_TEMPLATES,
+    "get",
+    [],
+    null,
+    null,
+  );
+
   const { options: jobTitleOptions, ensureJobTitleSaved } =
     useJobTitleOptions();
 
@@ -87,6 +95,17 @@ function NewJobOpenings({ onSaved }) {
       .filter(Boolean);
   }, [usersData]);
 
+  const pipelineTemplateOptions = useMemo(() => {
+    if (!pipelineTemplatesData || !Array.isArray(pipelineTemplatesData))
+      return [];
+    return pipelineTemplatesData
+      .filter((t) => t.isActive)
+      .map((t) => ({
+        label: t.isDefault ? `${t.name} (Default)` : t.name,
+        value: t.id,
+      }));
+  }, [pipelineTemplatesData]);
+
   const formik = useFormik({
     initialValues: {
       jobTitle: "",
@@ -98,6 +117,7 @@ function NewJobOpenings({ onSaved }) {
       experience: "",
       budget: [0, 0],
       hiringManager: "",
+      pipelineTemplateId: "",
     },
     validationSchema,
     onSubmit: async (values) => {
@@ -290,6 +310,20 @@ function NewJobOpenings({ onSaved }) {
                       inputProps={{
                         filterPlaceholder: "Search hiring manager...",
                         emptyMessage: "No hiring managers found",
+                      }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormikDropdownWrapper
+                      name="pipelineTemplateId"
+                      options={pipelineTemplateOptions}
+                      placeholder="Interview Pipeline (tenant default)"
+                      formik={formik}
+                      inputProps={{
+                        optionLabel: "label",
+                        optionValue: "value",
+                        showClear: true,
+                        emptyMessage: "No pipelines configured",
                       }}
                     />
                   </Grid>

@@ -37,6 +37,12 @@ const MODULE_COLORS = {
 // GlobalDock's module list; the dock was removed in favour of this popover.
 const MODULES = [
   {
+    label: "Assets",
+    path: "/assets",
+    iconClass: "pi-desktop",
+    colorKey: "blue",
+  },
+  {
     label: "Attendance",
     path: "/attendance",
     iconClass: "pi-calendar",
@@ -47,6 +53,12 @@ const MODULES = [
     path: "/employee-management",
     iconClass: "pi-users",
     colorKey: "blue",
+  },
+  {
+    label: "Helpdesk",
+    path: "/helpdesk",
+    iconClass: "pi-headphones",
+    colorKey: "gold",
   },
   {
     label: "Holidays",
@@ -73,29 +85,10 @@ const MODULES = [
     colorKey: "sienna",
   },
   {
-    label: "Resignation",
-    path: "/resignation-process",
-    iconClass: "pi-sign-out",
-    colorKey: "rose",
-  },
-  {
     label: "Payroll",
     path: "/payroll",
     iconClass: "pi-wallet",
     colorKey: "green",
-  },
-  {
-    label: "Assets",
-    path: "/assets",
-    iconClass: "pi-desktop",
-    colorKey: "blue",
-  },
-  { label: "WFH", path: "/wfh", iconClass: "pi-home", colorKey: "teal" },
-  {
-    label: "Helpdesk",
-    path: "/helpdesk",
-    iconClass: "pi-headphones",
-    colorKey: "gold",
   },
   {
     label: "Reports",
@@ -103,6 +96,13 @@ const MODULES = [
     iconClass: "pi-file-export",
     colorKey: "slate",
   },
+  {
+    label: "Resignation",
+    path: "/resignation-process",
+    iconClass: "pi-sign-out",
+    colorKey: "rose",
+  },
+  { label: "WFH", path: "/wfh", iconClass: "pi-home", colorKey: "teal" },
 ] as const;
 
 function ModuleTile({

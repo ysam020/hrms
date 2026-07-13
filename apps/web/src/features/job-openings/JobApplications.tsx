@@ -135,6 +135,11 @@ const JobApplications = (props) => {
 
   const actions = (row: any) => {
     const list: any[] = [];
+    // Hired/Rejected are terminal — scheduling, hiring, or rejecting again
+    // has no valid next step, so those actions are omitted entirely rather
+    // than shown disabled. Mirrors the server-side guards in
+    // updateApplicationStatus.ts / scheduleInterview / rescheduleInterview.
+    const isTerminal = row.status === "Hired" || row.status === "Rejected";
     if (row.resume && canViewApplications) {
       list.push({
         icon: <FileDownload sx={{ fontSize: 16 }} />,
@@ -148,7 +153,7 @@ const JobApplications = (props) => {
         },
       });
     }
-    if (canScheduleInterview) {
+    if (canScheduleInterview && !isTerminal) {
       list.push({
         icon: <EventIcon sx={{ fontSize: 16 }} />,
         label: `Schedule interview for ${row.name}`,
@@ -167,7 +172,7 @@ const JobApplications = (props) => {
     const hasClearedRound = (row.interviews || []).some(
       (i: any) => i.interviewConducted && i.cleared,
     );
-    if (hasClearedRound && canHire) {
+    if (hasClearedRound && canHire && !isTerminal) {
       list.push({
         icon: <CheckCircleIcon sx={{ fontSize: 16 }} />,
         label: `Hire ${row.name}`,
@@ -175,7 +180,7 @@ const JobApplications = (props) => {
         onClick: () => props.handleOpenHiringModal(row),
       });
     }
-    if (canReject) {
+    if (canReject && !isTerminal) {
       list.push({
         icon: <CancelIcon sx={{ fontSize: 16 }} />,
         label: `Reject ${row.name}`,

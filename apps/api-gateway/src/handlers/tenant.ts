@@ -628,6 +628,7 @@ export async function getOrgProfile(req: AuthRequest, res: Response) {
         helpEmail: true,
         officeAddress: true,
         website: true,
+        workState: true,
       },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -659,12 +660,14 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
     });
   }
   try {
-    const { helpPhone, helpEmail, officeAddress, website } = req.body as {
-      helpPhone?: string;
-      helpEmail?: string;
-      officeAddress?: string;
-      website?: string;
-    };
+    const { helpPhone, helpEmail, officeAddress, website, workState } =
+      req.body as {
+        helpPhone?: string;
+        helpEmail?: string;
+        officeAddress?: string;
+        website?: string;
+        workState?: string;
+      };
     const tenant = await prisma.tenant.update({
       where: { id: tenantId },
       data: {
@@ -674,6 +677,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
           officeAddress: officeAddress || null,
         }),
         ...(website !== undefined && { website: website || null }),
+        ...(workState !== undefined && { workState: workState || null }),
       },
       select: {
         name: true,
@@ -681,6 +685,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
         helpEmail: true,
         officeAddress: true,
         website: true,
+        workState: true,
       },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
