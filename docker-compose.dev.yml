@@ -41,6 +41,7 @@ services:
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
+      - SERVICE_NAME=api-gateway
       - METRICS_PORT=9003
       - LOKI_URL=http://loki:3100
       - OLLAMA_URL=http://host.docker.internal:11434
@@ -66,6 +67,7 @@ services:
         - PORT=50051
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=auth-service
       - METRICS_PORT=9101
       - LOKI_URL=http://loki:3100
     ports:
@@ -90,6 +92,7 @@ services:
         - PORT=50052
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=user-service
       - METRICS_PORT=9102
       - LOKI_URL=http://loki:3100
     ports:
@@ -114,6 +117,7 @@ services:
         - PORT=50053
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=employee-service
       - METRICS_PORT=9103
       - LOKI_URL=http://loki:3100
     ports:
@@ -138,6 +142,7 @@ services:
         - PORT=50054
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=attendance-service
       - METRICS_PORT=9104
       - LOKI_URL=http://loki:3100
     ports:
@@ -162,6 +167,7 @@ services:
         - PORT=50055
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=leave-service
       - METRICS_PORT=9105
       - LOKI_URL=http://loki:3100
     ports:
@@ -186,6 +192,7 @@ services:
         - PORT=50056
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=recruitment-service
       - METRICS_PORT=9106
       - LOKI_URL=http://loki:3100
       - OLLAMA_URL=http://host.docker.internal:11434
@@ -211,6 +218,7 @@ services:
         - PORT=50057
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=hrm-service
       - METRICS_PORT=9107
       - LOKI_URL=http://loki:3100
     ports:
@@ -235,6 +243,7 @@ services:
         - PORT=50058
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=salary-service
       - METRICS_PORT=9108
       - LOKI_URL=http://loki:3100
     ports:
@@ -259,6 +268,7 @@ services:
         - PORT=50059
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=analytics-service
       - METRICS_PORT=9109
       - LOKI_URL=http://loki:3100
     ports:
@@ -283,6 +293,7 @@ services:
         - PORT=50060
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=notification-service
       - METRICS_PORT=9110
       - LOKI_URL=http://loki:3100
     ports:
@@ -306,6 +317,7 @@ services:
         - PROJECT=scheduler-service
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=scheduler-service
       - METRICS_PORT=9111
       - LOKI_URL=http://loki:3100
     ports:

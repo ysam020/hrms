@@ -43,64 +43,125 @@ services:
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
+      - SERVICE_NAME=api-gateway
+      - METRICS_PORT=9003
     ports:
       - "19002:9002"
       - "19003:9003"
     <<: *backend-service
 
+  # Metrics ports below are published on the host (not just the compose
+  # network) so the monitoring EC2 host can scrape them over the VPC — see
+  # monitoring/prometheus-prod.yml. InstanceSecurityGroup only allows that
+  # range in from MonitoringSecurityGroup, so they aren't publicly reachable.
   auth-service:
     container_name: hrms-prod-auth-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/auth-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=auth-service
+      - METRICS_PORT=9101
+    ports:
+      - "9101:9101"
     <<: *backend-service
 
   user-service:
     container_name: hrms-prod-user-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/user-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=user-service
+      - METRICS_PORT=9102
+    ports:
+      - "9102:9102"
     <<: *backend-service
 
   employee-service:
     container_name: hrms-prod-employee-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/employee-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=employee-service
+      - METRICS_PORT=9103
+    ports:
+      - "9103:9103"
     <<: *backend-service
 
   attendance-service:
     container_name: hrms-prod-attendance-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/attendance-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=attendance-service
+      - METRICS_PORT=9104
+    ports:
+      - "9104:9104"
     <<: *backend-service
 
   leave-service:
     container_name: hrms-prod-leave-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/leave-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=leave-service
+      - METRICS_PORT=9105
+    ports:
+      - "9105:9105"
     <<: *backend-service
 
   recruitment-service:
     container_name: hrms-prod-recruitment-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/recruitment-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=recruitment-service
+      - METRICS_PORT=9106
+    ports:
+      - "9106:9106"
     <<: *backend-service
 
   hrm-service:
     container_name: hrms-prod-hrm-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/hrm-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=hrm-service
+      - METRICS_PORT=9107
+    ports:
+      - "9107:9107"
     <<: *backend-service
 
   salary-service:
     container_name: hrms-prod-salary-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/salary-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=salary-service
+      - METRICS_PORT=9108
+    ports:
+      - "9108:9108"
     <<: *backend-service
 
   analytics-service:
     container_name: hrms-prod-analytics-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/analytics-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=analytics-service
+      - METRICS_PORT=9109
+    ports:
+      - "9109:9109"
     <<: *backend-service
 
   notification-service:
     container_name: hrms-prod-notification-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/notification-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=notification-service
+      - METRICS_PORT=9110
+    ports:
+      - "9110:9110"
     <<: *backend-service
 
   scheduler-service:
     container_name: hrms-prod-scheduler-service
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/scheduler-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=scheduler-service
+      - METRICS_PORT=9111
+    ports:
+      - "9111:9111"
     <<: *backend-service
 
   web:

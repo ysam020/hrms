@@ -7,13 +7,14 @@ const formatTime = (iso: string) =>
     hour12: true,
   });
 
+const toUtcDateKey = (iso: string) => new Date(iso).toISOString().slice(0, 10);
+
 export const useAttendanceData = (attendances, loading) => {
   const todayAttendance = useMemo(() => {
-    const currentDate = new Date().setHours(0, 0, 0, 0);
-    return attendances?.find((attendance) => {
-      const attendanceDate = new Date(attendance.date).setHours(0, 0, 0, 0);
-      return attendanceDate === currentDate;
-    });
+    const currentDateKey = new Date().toISOString().slice(0, 10);
+    return attendances?.find(
+      (attendance) => toUtcDateKey(attendance.date) === currentDateKey,
+    );
   }, [attendances]);
 
   const todayTimeIn = todayAttendance?.checkIn

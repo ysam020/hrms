@@ -14,6 +14,13 @@ Parameters:
     Type: String
     Default: api
     Description: Subdomain the API is served on (results in <ApiSubdomain>.<DomainName>)
+  GrafanaSubdomain:
+    Type: String
+    Default: grafana
+    Description: >
+      Subdomain Grafana is served on (results in <GrafanaSubdomain>.<DomainName>).
+      Publicly reachable over HTTPS via the existing ALB - Grafana's own login
+      is the only access control (no IP restriction).
   HostedZoneId:
     Type: AWS::Route53::HostedZone::Id
     Description: Existing public Route53 hosted zone ID for DomainName
@@ -28,6 +35,13 @@ Parameters:
   InstanceType:
     Type: String
     Default: m7i-flex.large
+  MonitoringInstanceType:
+    Type: String
+    Default: t3.micro
+    Description: >
+      Instance type for the dedicated Prometheus/Grafana host (see
+      MonitoringInstance below). t3.micro is free-tier eligible and plenty for
+      scraping ~12 targets every 15s.
   MinSize:
     Type: Number
     Default: 1
@@ -244,6 +258,18 @@ Resources:
       Type: String
       Value: latest
 
+  # ─────────────────────────── Secrets: Grafana admin login ───────────────────────────
+  # Generated once at stack creation; MonitoringInstance's deploy.sh reads this
+  # at boot/redeploy and exports it as GF_SECURITY_ADMIN_PASSWORD. Rotate via
+  # `aws secretsmanager put-secret-value` + re-running deploy.sh over SSM.
+  GrafanaAdminSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: /hrms/prod/grafana-admin-password
+      GenerateSecretString:
+        PasswordLength: 24
+        ExcludePunctuation: true
+
   # ─────────────────────────── IAM: EC2 instance role ───────────────────────────
   HrmsInstanceRole:
     Type: AWS::IAM::Role
@@ -297,6 +323,69 @@ Resources:
     Properties:
       Roles:
         - !Ref HrmsInstanceRole
+
+  # ─────────────────────────── IAM: monitoring EC2 host ───────────────────────────
+  MonitoringInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: MonitoringInstancePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Ec2ServiceDiscovery
+                Effect: Allow
+                Action: ec2:DescribeInstances
+                Resource: "*"
+              - Sid: DeployArtifactsRead
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "${DeployArtifactsBucket.Arn}/*"
+              - Sid: DeployArtifactsList
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt DeployArtifactsBucket.Arn
+              - Sid: GrafanaPasswordRead
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref GrafanaAdminSecret
+              # Backs the Grafana CloudWatch datasource (monitoring/grafana/provisioning-prod)
+              # used for logs, since every service already ships logs to
+              # CloudWatch (packages/logger) rather than to Loki in prod.
+              - Sid: CloudWatchLogsRead
+                Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                  - logs:GetLogGroupFields
+                  - logs:StartQuery
+                  - logs:StopQuery
+                  - logs:GetQueryResults
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/hrms/*"
+              - Sid: CloudWatchMetricsRead
+                Effect: Allow
+                Action:
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:DescribeAlarmsForMetric
+                Resource: "*"
+
+  MonitoringInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MonitoringInstanceRole
 
   # ─────────────────────────── IAM: GitHub Actions roles ───────────────────────────
   HrmsBuildRole:
@@ -380,6 +469,10 @@ Resources:
                 Effect: Allow
                 Action: autoscaling:DescribeAutoScalingGroups
                 Resource: "*"
+              - Sid: FindMonitoringInstance
+                Effect: Allow
+                Action: ec2:DescribeInstances
+                Resource: "*"
               - Sid: RunDeployScript
                 Effect: Allow
                 Action: ssm:SendCommand
@@ -422,6 +515,31 @@ Resources:
           FromPort: 19002
           ToPort: 19002
           SourceSecurityGroupId: !Ref AlbSecurityGroup
+        # api-gateway metrics (published as host port 19003, see docker-compose.prod.yml)
+        - IpProtocol: tcp
+          FromPort: 19003
+          ToPort: 19003
+          SourceSecurityGroupId: !Ref MonitoringSecurityGroup
+        # auth-service..scheduler-service metrics (9101-9111), scraped by
+        # monitoring/prometheus-prod.yml via EC2 service discovery
+        - IpProtocol: tcp
+          FromPort: 9101
+          ToPort: 9111
+          SourceSecurityGroupId: !Ref MonitoringSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  MonitoringSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "HRMS monitoring host (Prometheus + Grafana) - Grafana reachable from the ALB only, Prometheus via SSM port-forwarding only."
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -434,6 +552,18 @@ Resources:
       ValidationMethod: DNS
       DomainValidationOptions:
         - DomainName: !Sub "${ApiSubdomain}.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
+
+  # Separate cert (not a SAN on ApiCertificate) so issuing/renewing it can
+  # never touch the already-validated production api.praesto.cloud cert -
+  # attached to HttpsListener via SNI (GrafanaListenerCertificate below).
+  GrafanaCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "${GrafanaSubdomain}.${DomainName}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub "${GrafanaSubdomain}.${DomainName}"
           HostedZoneId: !Ref HostedZoneId
 
   # ─────────────────────────── ALB ───────────────────────────
@@ -483,6 +613,48 @@ Resources:
             Protocol: HTTPS
             Port: "443"
             StatusCode: HTTP_301
+
+  # SNI: lets HttpsListener serve grafana.praesto.cloud on the same ALB/port
+  # as api.praesto.cloud, each with its own cert, routed by ListenerRule below.
+  GrafanaListenerCertificate:
+    Type: AWS::ElasticLoadBalancingV2::ListenerCertificate
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Certificates:
+        - CertificateArn: !Ref GrafanaCertificate
+
+  # Grafana (docker-compose.monitoring-prod.yml) serves plain HTTP on :3000 -
+  # TLS is terminated at the ALB, matching the HttpListener/HttpsListener
+  # split above. Traffic ALB->instance stays inside the VPC.
+  GrafanaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 3000
+      TargetType: instance
+      Targets:
+        - Id: !Ref MonitoringInstance
+          Port: 3000
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /api/health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  GrafanaListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Priority: 1
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !Sub "${GrafanaSubdomain}.${DomainName}"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref GrafanaTargetGroup
 
   # ─────────────────────────── Launch template / ASG ───────────────────────────
   LaunchTemplate:
@@ -592,6 +764,95 @@ Resources:
           Value: hrms-prod
           PropagateAtLaunch: true
 
+  # ─────────────────────────── Monitoring host ───────────────────────────
+  # Single dedicated instance (not in the ASG) running Prometheus + Grafana.
+  # It scrapes every hrms-prod ASG instance via EC2 service discovery (see
+  # monitoring/prometheus-prod.yml), so it has to live outside the fleet it's
+  # watching. Grafana (:3000) is public at GrafanaUrl, via the ALB
+  # (GrafanaListenerRule/GrafanaTargetGroup) - login is the only gate, no IP
+  # restriction. Prometheus (:9090) has no public route; reach it via SSM
+  # port-forwarding:
+  #   aws ssm start-session --target <instance-id> \
+  #     --document-name AWS-StartPortForwardingSession \
+  #     --parameters '{"portNumber":["9090"],"localPortNumber":["9090"]}'
+  # Config updates (prometheus-prod.yml, dashboards, etc.) are picked up by
+  # re-running /opt/hrms-monitoring/deploy.sh over SSM after syncing to S3 —
+  # see .github/workflows/deploy-ec2.yml — not by replacing this instance.
+  MonitoringInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      InstanceType: !Ref MonitoringInstanceType
+      SubnetId: !Select [0, !Ref PublicSubnetIds]
+      SecurityGroupIds:
+        - !Ref MonitoringSecurityGroup
+      IamInstanceProfile: !Ref MonitoringInstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: hrms-monitoring
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+
+          dnf install -y docker
+          systemctl enable --now docker
+
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+            -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+          mkdir -p /opt/hrms-monitoring
+
+          cat > /opt/hrms-monitoring/deploy.sh <<'DEPLOY_EOF'
+          #!/bin/bash
+          set -euo pipefail
+
+          AWS_REGION="${AWS::Region}"
+
+          aws s3 cp "s3://${DeployArtifactsBucket}/docker-compose.monitoring-prod.yml" \
+            /opt/hrms-monitoring/docker-compose.monitoring-prod.yml --region "$AWS_REGION"
+          aws s3 sync "s3://${DeployArtifactsBucket}/monitoring/" /opt/hrms-monitoring/monitoring/ \
+            --region "$AWS_REGION" --delete
+
+          export GF_SECURITY_ADMIN_PASSWORD
+          GF_SECURITY_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
+            --secret-id "${GrafanaAdminSecret}" --region "$AWS_REGION" \
+            --query 'SecretString' --output text)
+
+          cd /opt/hrms-monitoring
+          docker compose -f docker-compose.monitoring-prod.yml pull --quiet
+          docker compose -f docker-compose.monitoring-prod.yml up -d --remove-orphans
+
+          docker image prune -af
+          DEPLOY_EOF
+          chmod +x /opt/hrms-monitoring/deploy.sh
+
+          cat > /etc/systemd/system/hrms-monitoring.service <<'UNIT_EOF'
+          [Unit]
+          Description=HRMS monitoring (Prometheus + Grafana) docker compose stack
+          After=docker.service network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/opt/hrms-monitoring/deploy.sh
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT_EOF
+
+          systemctl daemon-reload
+          systemctl enable --now hrms-monitoring.service
+
   # ─────────────────────────── DNS ───────────────────────────
   ApiDnsRecord:
     Type: AWS::Route53::RecordSet
@@ -604,13 +865,33 @@ Resources:
         HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
         EvaluateTargetHealth: true
 
+  GrafanaDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${GrafanaSubdomain}.${DomainName}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Alb.DNSName
+        HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+
 Outputs:
   ApiUrl:
     Value: !Sub "https://${ApiSubdomain}.${DomainName}"
+  GrafanaUrl:
+    Description: Login with admin / the password in GrafanaAdminSecret (/hrms/prod/grafana-admin-password)
+    Value: !Sub "https://${GrafanaSubdomain}.${DomainName}"
   AlbDnsName:
     Value: !GetAtt Alb.DNSName
   AsgName:
     Value: !Ref Asg
+  MonitoringInstanceId:
+    Description: >
+      Target for SSM port-forwarding to reach Prometheus (:9090) directly -
+      see the comment on MonitoringInstance for the aws ssm command. Grafana
+      itself is public at GrafanaUrl.
+    Value: !Ref MonitoringInstance
   DeployArtifactsBucketName:
     Value: !Ref DeployArtifactsBucket
   HrmsBuildRoleArn:
