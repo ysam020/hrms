@@ -1,4 +1,5 @@
 import {
+  Fragment,
   Suspense,
   lazy,
   useCallback,
@@ -90,6 +91,22 @@ function formatTime(dateStr) {
   return new Date(dateStr).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function formatDateSeparator(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const now = new Date();
+  const startOfDay = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return d.toLocaleDateString([], {
+    day: "numeric",
+    month: "long",
+    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
   });
 }
 
@@ -334,6 +351,31 @@ function MessageBubble({
   const urlMatch =
     msg.type === "text" ? FIRST_URL_RE.exec(msg.content || "") : null;
 
+  const metaContent = (
+    <>
+      {msg.isPinned && (
+        <Suspense fallback={null}>
+          <PushPinIcon
+            sx={{ fontSize: 12, opacity: 0.75, transform: "rotate(45deg)" }}
+            aria-label="Pinned message"
+          />
+        </Suspense>
+      )}
+      <Typography variant="caption" component="span" className="chat-time">
+        {formatTime(msg.createdAt)}
+      </Typography>
+      {isMine && (
+        <Suspense fallback={null}>
+          {isRead ? (
+            <DoneAllIcon sx={{ fontSize: 14, ml: 0.25, color: "#53bdeb" }} />
+          ) : (
+            <DoneIcon sx={{ fontSize: 14, ml: 0.25 }} />
+          )}
+        </Suspense>
+      )}
+    </>
+  );
+
   return (
     <div
       id={`chat-msg-${msg._id}`}
@@ -342,10 +384,10 @@ function MessageBubble({
       {!isMine && (
         <Avatar
           sx={{
-            width: 28,
-            height: 28,
-            fontSize: 12,
-            mr: 0.75,
+            width: 24,
+            height: 24,
+            fontSize: 11,
+            mr: 0.5,
             alignSelf: "flex-end",
           }}
         >
@@ -386,11 +428,22 @@ function MessageBubble({
             <>
               <Typography
                 variant="body2"
-                sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+                sx={{
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontSize: 13,
+                  lineHeight: 1.35,
+                }}
               >
                 <Linkify componentDecorator={linkifyDecorator}>
                   {msg.content}
                 </Linkify>
+                {/* Floated so it tucks to the right of the last line instead of
+                    forcing its own row — falls to a new line only when the last
+                    line has no room left. */}
+                <span className="chat-meta chat-meta-inline">
+                  {metaContent}
+                </span>
               </Typography>
               {urlMatch && <LinkPreview url={urlMatch[0]} />}
             </>
@@ -444,34 +497,9 @@ function MessageBubble({
             </a>
           )}
 
-          <div className="chat-meta">
-            {msg.isPinned && (
-              <Suspense fallback={null}>
-                <PushPinIcon
-                  sx={{
-                    fontSize: 12,
-                    opacity: 0.75,
-                    transform: "rotate(45deg)",
-                  }}
-                  aria-label="Pinned message"
-                />
-              </Suspense>
-            )}
-            <Typography variant="caption" className="chat-time">
-              {formatTime(msg.createdAt)}
-            </Typography>
-            {isMine && (
-              <Suspense fallback={null}>
-                {isRead ? (
-                  <DoneAllIcon
-                    sx={{ fontSize: 14, ml: 0.25, color: "#53bdeb" }}
-                  />
-                ) : (
-                  <DoneIcon sx={{ fontSize: 14, ml: 0.25 }} />
-                )}
-              </Suspense>
-            )}
-          </div>
+          {msg.type !== "text" && (
+            <div className="chat-meta">{metaContent}</div>
+          )}
         </div>
 
         {/* Hover actions */}
@@ -1265,29 +1293,44 @@ function Chat() {
                   </Typography>
                 </div>
               )}
-              {activeMessages.map((msg) => {
-                const senderName = resolveParticipantName(msg.senderId);
-                return (
-                  <MessageBubble
-                    key={msg._id}
-                    msg={msg}
-                    isMine={msg.senderId === user?.id}
-                    onReply={(m) => setReplyTo({ ...m, senderName })}
-                    onDelete={setDeleteTargetMsg}
-                    onPin={handlePinMessage}
-                    onUnpin={handleUnpinMessage}
-                    onJumpToMessage={jumpToMessage}
-                    roomParticipants={activeRoomParticipants}
-                    onImageClick={setLightboxUrl}
-                    senderName={senderName}
-                    replyToSenderName={
-                      msg.replyTo
-                        ? resolveParticipantName(msg.replyTo.senderId)
-                        : ""
-                    }
-                  />
-                );
-              })}
+              {(() => {
+                let lastDateKey: string | null = null;
+                return activeMessages.map((msg) => {
+                  const senderName = resolveParticipantName(msg.senderId);
+                  const dateKey = msg.createdAt
+                    ? new Date(msg.createdAt).toDateString()
+                    : null;
+                  const showDateSeparator =
+                    !!dateKey && dateKey !== lastDateKey;
+                  lastDateKey = dateKey;
+                  return (
+                    <Fragment key={msg._id}>
+                      {showDateSeparator && (
+                        <div className="chat-date-separator">
+                          <span>{formatDateSeparator(msg.createdAt)}</span>
+                        </div>
+                      )}
+                      <MessageBubble
+                        msg={msg}
+                        isMine={msg.senderId === user?.id}
+                        onReply={(m) => setReplyTo({ ...m, senderName })}
+                        onDelete={setDeleteTargetMsg}
+                        onPin={handlePinMessage}
+                        onUnpin={handleUnpinMessage}
+                        onJumpToMessage={jumpToMessage}
+                        roomParticipants={activeRoomParticipants}
+                        onImageClick={setLightboxUrl}
+                        senderName={senderName}
+                        replyToSenderName={
+                          msg.replyTo
+                            ? resolveParticipantName(msg.replyTo.senderId)
+                            : ""
+                        }
+                      />
+                    </Fragment>
+                  );
+                });
+              })()}
               {activeTypingUsers.length > 0 && (
                 <TypingIndicator names={activeTypingUsers} />
               )}

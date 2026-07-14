@@ -26,9 +26,11 @@ import Fuse from "fuse.js";
 import { Search as SearchIcon, Mic as MicIcon } from "@mui/icons-material";
 import routesConfig from "@web/app/router/routesConfig";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { UserContext } from "@web/app/providers/UserContext";
 
 function SpotlightModal({ open, handleClose }) {
   const { theme } = useContext(ThemeContext);
+  const { user } = useContext(UserContext);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState("");
@@ -36,16 +38,14 @@ function SpotlightModal({ open, handleClose }) {
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const recognitionRef = useRef(null);
 
-  // 1. Memoize routes and search engine to prevent re-indexing on every keystroke
-  const { fuse, moduleNames } = useMemo(() => {
+  // Memoize routes and search engine to prevent re-indexing on every keystroke
+  const fuse = useMemo(() => {
     const routes = routesConfig();
-    const names: string[] = [];
-    const fuseInstance = new Fuse(routes, {
+    return new Fuse(routes, {
       keys: ["name", "path"],
       threshold: 0.3,
       distance: 100,
     });
-    return { fuse: fuseInstance, moduleNames: names };
   }, []);
 
   // 2. Direct focus on transition end instead of using multiple setTimeouts
@@ -88,19 +88,16 @@ function SpotlightModal({ open, handleClose }) {
       // Use memoized fuse instance for search
       const results = fuse
         .search(value)
-        .filter(({ item: route }) => {
-          const hasNoRestriction =
-            !route.allowedModules || route.allowedModules.length === 0;
-          const isAllowed = moduleNames.includes(route.name);
-          return hasNoRestriction || isAllowed;
-        })
+        .filter(
+          ({ item: route }) => !route.checkAccess || route.checkAccess(user),
+        )
         .map((r) => r.item)
         .slice(0, 8);
 
       setFilteredRoutes(results);
       setHighlightedIndex(0);
     },
-    [fuse, moduleNames],
+    [fuse, user],
   );
 
   const handleSuggestionClick = (path) => {
