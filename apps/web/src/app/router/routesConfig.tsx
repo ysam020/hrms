@@ -113,6 +113,8 @@ const OrgSettings = lazy(() => import("@web/features/settings/OrgSettings"));
 // Unified Settings (Company Info + Organisation Settings tabs)
 const Settings = lazy(() => import("@web/features/settings/Settings"));
 
+const canAccessWfh = (u) => Boolean(u?.wfhEnabled);
+
 const routesConfig = () => {
   return [
     {
@@ -146,6 +148,7 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Analytics",
       category: null,
+      checkAccess: canViewAnalytics,
     },
     {
       path: "/permissions/*",
@@ -157,6 +160,7 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Permissions",
       category: null,
+      checkAccess: canManagePermissions,
     },
     {
       path: "/organization-tree",
@@ -189,6 +193,7 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Subscription",
       category: null,
+      checkAccess: hasSubscriptionAccess,
     },
     {
       path: "/settings",
@@ -200,6 +205,7 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Settings",
       category: null,
+      checkAccess: canAccessSettings,
     },
     // Legacy routes — kept for deep-link compatibility
     {
@@ -212,6 +218,7 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Company Information",
       category: null,
+      checkAccess: canAccessSettings,
     },
     {
       path: "/org-settings",
@@ -223,6 +230,7 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Organisation Settings",
       category: null,
+      checkAccess: canAccessSettings,
     },
     {
       path: "/policy/*",
@@ -305,6 +313,7 @@ const routesConfig = () => {
       allowedModules: ["Job Openings"],
       name: "Job Openings",
       category: "HR & Management",
+      checkAccess: canAccessJobOpenings,
     },
     {
       path: "/view-job-opening/:_id",
@@ -316,6 +325,7 @@ const routesConfig = () => {
       allowedModules: ["Job Openings"],
       name: "View Job",
       category: "HR & Management",
+      checkAccess: canAccessJobOpenings,
     },
     {
       path: "/attendance/*",
@@ -344,6 +354,7 @@ const routesConfig = () => {
       allowedModules: ["Salary Management"],
       name: "Edit Salary Structure",
       category: "HR & Management",
+      checkAccess: canManageSalary,
     },
     {
       path: "/payroll/tax-declarations/:userId",
@@ -355,6 +366,7 @@ const routesConfig = () => {
       allowedModules: ["Payroll Management"],
       name: "Review Tax Declaration",
       category: "HR & Management",
+      checkAccess: isHrOrAbove,
     },
     {
       path: "/payroll/*",
@@ -373,13 +385,14 @@ const routesConfig = () => {
     {
       path: "/wfh/*",
       element: (
-        <RequireAccess check={(u) => Boolean(u?.wfhEnabled)}>
+        <RequireAccess check={canAccessWfh}>
           <WFH />
         </RequireAccess>
       ),
       allowedModules: ["WFH Requests"],
       name: "WFH Requests",
       category: "HR & Management",
+      checkAccess: canAccessWfh,
     },
     {
       path: "/approvals",
@@ -419,6 +432,7 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Reports",
       category: "HR & Management",
+      checkAccess: isHrOrAbove,
     },
     // Spotlight-only tab routes (not rendered as Routes, only appear in search)
     {
@@ -477,6 +491,7 @@ const routesConfig = () => {
       name: "Manage Roles",
       category: "Permissions",
       spotlightOnly: true,
+      checkAccess: canManagePermissions,
     },
     {
       path: "/permissions/user-permissions",
@@ -485,6 +500,7 @@ const routesConfig = () => {
       name: "User Permissions",
       category: "Permissions",
       spotlightOnly: true,
+      checkAccess: canManagePermissions,
     },
     {
       path: "/permissions/teams",
@@ -493,6 +509,7 @@ const routesConfig = () => {
       name: "Teams",
       category: "Permissions",
       spotlightOnly: true,
+      checkAccess: canManagePermissions,
     },
     {
       path: "/analytics/workforce",
@@ -501,6 +518,7 @@ const routesConfig = () => {
       name: "Workforce Analytics",
       category: "Analytics",
       spotlightOnly: true,
+      checkAccess: canViewAnalytics,
     },
     {
       path: "/analytics/leave-attendance",
@@ -509,6 +527,7 @@ const routesConfig = () => {
       name: "Leave & Attendance Analytics",
       category: "Analytics",
       spotlightOnly: true,
+      checkAccess: canViewAnalytics,
     },
     {
       path: "/analytics/recruitment",
@@ -517,6 +536,7 @@ const routesConfig = () => {
       name: "Recruitment Analytics",
       category: "Analytics",
       spotlightOnly: true,
+      checkAccess: canViewAnalytics,
     },
     {
       path: "/analytics/salary",
@@ -525,6 +545,7 @@ const routesConfig = () => {
       name: "Salary Analytics",
       category: "Analytics",
       spotlightOnly: true,
+      checkAccess: canViewAnalytics,
     },
     {
       path: "/attendance/view-all-attendances",
@@ -736,6 +757,7 @@ const routesConfig = () => {
       name: "WFH Requests",
       category: "WFH",
       spotlightOnly: true,
+      checkAccess: canAccessWfh,
     },
     {
       path: "/wfh/calendar",
@@ -744,6 +766,7 @@ const routesConfig = () => {
       name: "WFH Calendar",
       category: "WFH",
       spotlightOnly: true,
+      checkAccess: canAccessWfh,
     },
     // Helpdesk spotlight entries
     {
@@ -779,6 +802,7 @@ const routesConfig = () => {
       name: "Report Builder",
       category: "Reports",
       spotlightOnly: true,
+      checkAccess: isHrOrAbove,
     },
     {
       path: "/reports/saved-reports",
@@ -787,6 +811,7 @@ const routesConfig = () => {
       name: "Saved Reports",
       category: "Reports",
       spotlightOnly: true,
+      checkAccess: isHrOrAbove,
     },
   ];
 };
