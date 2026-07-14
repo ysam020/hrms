@@ -28,6 +28,9 @@ model Tenant {
   helpPhone              String?
   helpEmail              String?
   officeAddress          String?
+  // Tax Deduction and Collection Account Number — required on Form 16/Form
+  // 24Q, printed on the annual Form 16 certificate (see form16.ts).
+  tan                    String?
   website                String?
   // Work-location state, for Professional Tax slab lookup — set once during
   // org setup and applied to every employee's PT deduction (see
@@ -671,6 +674,9 @@ model SalaryStructure {
   // `deductions` so payslips can itemize it instead of folding it into a
   // generic total (mirrors PayrollLineItem.advanceDeduction).
   advanceDeduction Float?
+  // Income tax (TDS) withheld this month — see IncomeTaxSlab/TaxDeclaration
+  // and calcMonthlyTds() in apps/api-gateway/src/utils/tdsCalc.ts.
+  tds             Float?
   grossEarnings   Float?
   netPayable      Float?
   createdAt       DateTime? @default(now())
@@ -702,6 +708,9 @@ model SalaryComponentDefinition {
   percentOf    String?
   percentValue Float?
   isStatutory  Boolean  @default(false) // PF/ESI/PT — cannot be deleted, only toggled
+  // false = a one-time earning (e.g. a bonus/incentive) that shouldn't be
+  // projected into future months on the TDS worksheet — see computeTdsWorksheet.
+  isRecurring  Boolean  @default(true)
   displayOrder Int      @default(0)
   isActive     Boolean  @default(true)
   createdBy    String   @db.ObjectId
@@ -726,6 +735,68 @@ model ProfessionalTaxSlab {
 
   @@index([tenantId, state])
   @@map("professional_tax_slabs")
+}
+
+// Slab-based Income Tax (TDS, Section 192) rates — one row per income bracket
+// per regime per financial year. Falls back to a hardcoded FY2025-26 table
+// (NEW_REGIME_SLAB_FALLBACK / OLD_REGIME_SLAB_FALLBACK in tdsCalc.ts) exactly
+// like ProfessionalTaxSlab does, until a tenant configures its own rows —
+// slabs change almost every Union Budget so this can't be hardcoded forever.
+model IncomeTaxSlab {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String   @db.ObjectId
+  financialYear String   // e.g. "2025-26"
+  regime        String   // "old" | "new"
+  minIncome     Float
+  maxIncome     Float?
+  ratePercent   Float
+
+  @@index([tenantId, financialYear, regime])
+  @@map("income_tax_slabs")
+}
+
+// One row per employee per financial year — only created once an employee
+// opts out of the default New Regime. A row's existence past "Draft" for the
+// current financial year *is* the "this employee is on Old Regime" signal;
+// no separate regime flag on User. Mirrors the KYC declare→lock→revision
+// cycle (apps/api-gateway/src/handlers/employee.ts), extended with a second
+// declare-then-prove stage: employees provisionally declare exemptions early
+// in the year, then submit proofs later for HR to verify.
+model TaxDeclaration {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String    @db.ObjectId
+  userId        String    @db.ObjectId
+  financialYear String    // e.g. "2025-26"
+
+  // HRA exemption inputs — the exemption itself is computed (see
+  // calcHraExemption in tdsCalc.ts), not directly declared.
+  monthlyRent   Float?
+  isMetroCity   Boolean?
+
+  // [{code, label, declaredAmount, proofAmount}] — codes: SEC80C,
+  // SEC80D_SELF, SEC80D_PARENTS, HOME_LOAN_INTEREST, NPS_80CCD1B, OTHER.
+  // A flat Json array (mirrors SalaryStructure.componentBreakdown) instead
+  // of one column per section, so a new declarable section is a data
+  // change, not a migration.
+  lineItems     Json?
+
+  // Draft | Submitted | RevisionRequested | Declared | ProofsSubmitted |
+  // ProofRevisionRequested | Verified
+  status        String    @default("Draft")
+  revisionNotes Json?     // {field: issue}, same shape as User.kyc_revision_notes
+
+  submittedAt   DateTime?
+  declaredAt    DateTime?
+  provenAt      DateTime?
+  verifiedAt    DateTime?
+  verifiedBy    String?   @db.ObjectId
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([tenantId, userId, financialYear])
+  @@index([tenantId, status])
+  @@map("tax_declarations")
 }
 
 // Multiple pay cycles within one tenant (e.g. bi-weekly factory floor vs
@@ -1235,6 +1306,7 @@ model PayrollLineItem {
   esi              Float   @default(0)
   pt               Float   @default(0)
   advanceDeduction Float   @default(0) // SalaryAdvance EMI deducted this month
+  tds              Float   @default(0) // Income tax (TDS) — see IncomeTaxSlab/TaxDeclaration
   otherDeductions  Float   @default(0)
   totalDeductions  Float   @default(0)
   netPayable       Float

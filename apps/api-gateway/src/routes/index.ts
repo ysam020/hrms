@@ -25,6 +25,7 @@ import { noticePeriodPoliciesRouter } from "./noticePeriodPolicies";
 import { exitPolicyRouter } from "./exitPolicy";
 import { interviewPipelinesRouter } from "./interviewPipelines";
 import { payrollComponentsRouter } from "./payrollComponents";
+import { taxDeclarationRouter } from "./taxDeclaration";
 import { orgStructureRouter } from "./orgStructure";
 import { onboardingRouter } from "./onboarding";
 // ── New features ──────────────────────────────────────────────────────────────
@@ -93,3 +94,4 @@ rootRouter.use("/wfh", ...subscriptionGuard, wfhRouter);
 rootRouter.use("/helpdesk", ...subscriptionGuard, helpdeskRouter);
 rootRouter.use("/webhooks", ...subscriptionGuard, webhooksRouter);
 rootRouter.use("/reports", ...subscriptionGuard, reportsRouter);
+rootRouter.use("/tax-declarations", ...subscriptionGuard, taxDeclarationRouter);

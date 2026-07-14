@@ -9,6 +9,8 @@ import PayrollRuns from "./PayrollRuns";
 import SalaryAdvances from "./SalaryAdvances";
 import MyPayslips from "./MyPayslips";
 import SalaryManagement from "../salary/SalaryManagement";
+import MyTaxDeclaration from "./tax-declaration/MyTaxDeclaration";
+import ReviewTaxDeclarations from "./tax-declaration/ReviewTaxDeclarations";
 
 function Payroll() {
   const { user } = useContext(UserContext);
@@ -27,6 +29,10 @@ function Payroll() {
       : []),
     { label: "Salary Advances", component: SalaryAdvances },
     { label: "My Payslips", component: MyPayslips },
+    { label: "My Tax Declaration", component: MyTaxDeclaration },
+    ...(isHr
+      ? [{ label: "Tax Declarations", component: ReviewTaxDeclarations }]
+      : []),
   ];
 
   return (

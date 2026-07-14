@@ -1,0 +1,1236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Praesto — Subscription Pricing Memo</title>
+
+    <link
+      rel="icon"
+      href="https://ysam020-praesto-guide.s3.ap-south-1.amazonaws.com/favicon.ico"
+      type="image/x-icon"
+    />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Praesto — Product Guide" />
+    <meta
+      property="og:description"
+      content="Comprehensive product documentation and user guide for Praesto."
+    />
+    <meta
+      property="og:image"
+      content="https://ysam020-praesto-guide.s3.ap-south-1.amazonaws.com/favicon.ico"
+    />
+    <meta property="og:url" content="https://praesto.cloud" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Praesto" />
+
+    <!-- Twitter/X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Praesto — Product Guide" />
+    <meta
+      name="twitter:description"
+      content="Comprehensive product documentation and user guide for Praesto."
+    />
+    <meta
+      name="twitter:image"
+      content="https://ysam020-praesto-guide.s3.ap-south-1.amazonaws.com/favicon.ico"
+    />
+  </head>
+  <body>
+    <style>
+      :root {
+        --bg: #f5f3ee;
+        --bg-raised: #ffffff;
+        --bg-sunken: #ebe7dd;
+        --ink: #1c231f;
+        --ink-soft: #55605a;
+        --ink-faint: #838d84;
+        --accent: #2c5a52;
+        --accent-soft: #e2eae6;
+        --accent-ink: #ffffff;
+        --gold: #a8763a;
+        --gold-soft: #f3e8d6;
+        --rust: #a3432c;
+        --rust-soft: #f5e3dd;
+        --border: #ddd8c9;
+        --border-strong: #c7c0ab;
+        --shadow:
+          0 1px 2px rgba(28, 35, 31, 0.06), 0 10px 28px rgba(28, 35, 31, 0.06);
+        --serif: Iowan Old Style, Georgia, "Times New Roman", serif;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        --mono:
+          ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #12160f;
+          --bg-raised: #1a1f19;
+          --bg-sunken: #0d100c;
+          --ink: #e9e6db;
+          --ink-soft: #a7ae9f;
+          --ink-faint: #767d72;
+          --accent: #6faf9c;
+          --accent-soft: #1c2e29;
+          --accent-ink: #0b1512;
+          --gold: #d9a25c;
+          --gold-soft: #2c2418;
+          --rust: #d97a5f;
+          --rust-soft: #2e1e18;
+          --border: #2a3027;
+          --border-strong: #3a4137;
+          --shadow:
+            0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.4);
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #12160f;
+        --bg-raised: #1a1f19;
+        --bg-sunken: #0d100c;
+        --ink: #e9e6db;
+        --ink-soft: #a7ae9f;
+        --ink-faint: #767d72;
+        --accent: #6faf9c;
+        --accent-soft: #1c2e29;
+        --accent-ink: #0b1512;
+        --gold: #d9a25c;
+        --gold-soft: #2c2418;
+        --rust: #d97a5f;
+        --rust-soft: #2e1e18;
+        --border: #2a3027;
+        --border-strong: #3a4137;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.4);
+      }
+      :root[data-theme="light"] {
+        --bg: #f5f3ee;
+        --bg-raised: #ffffff;
+        --bg-sunken: #ebe7dd;
+        --ink: #1c231f;
+        --ink-soft: #55605a;
+        --ink-faint: #838d84;
+        --accent: #2c5a52;
+        --accent-soft: #e2eae6;
+        --accent-ink: #ffffff;
+        --gold: #a8763a;
+        --gold-soft: #f3e8d6;
+        --rust: #a3432c;
+        --rust-soft: #f5e3dd;
+        --border: #ddd8c9;
+        --border-strong: #c7c0ab;
+        --shadow:
+          0 1px 2px rgba(28, 35, 31, 0.06), 0 10px 28px rgba(28, 35, 31, 0.06);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.62;
+        -webkit-font-smoothing: antialiased;
+      }
+      ::selection {
+        background: var(--accent-soft);
+      }
+
+      .page {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 64px 24px 96px;
+      }
+      .wide {
+        max-width: 980px;
+      }
+
+      /* ---------- Masthead ---------- */
+      .masthead {
+        border-bottom: 2px solid var(--ink);
+        padding-bottom: 22px;
+        margin-bottom: 40px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      .masthead .kicker {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--gold);
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+      .masthead h1 {
+        font-family: var(--serif);
+        font-weight: 400;
+        font-size: clamp(1.9rem, 4vw, 2.5rem);
+        margin: 0;
+        letter-spacing: -0.01em;
+        text-wrap: balance;
+      }
+      .masthead .meta {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        text-align: right;
+        line-height: 1.8;
+      }
+
+      h2 {
+        font-family: var(--serif);
+        font-weight: 400;
+        font-size: 1.5rem;
+        margin: 0 0 6px;
+        letter-spacing: -0.005em;
+      }
+      h3 {
+        font-family: var(--sans);
+        font-weight: 700;
+        font-size: 0.92rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--ink-soft);
+        margin: 0 0 14px;
+      }
+      .section {
+        padding: 40px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .section:last-of-type {
+        border-bottom: none;
+      }
+      .section-index {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        margin-bottom: 4px;
+      }
+      p {
+        margin: 0 0 14px;
+        max-width: 66ch;
+      }
+      p.wide-measure {
+        max-width: 78ch;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+        margin: 0 0 14px;
+        max-width: 66ch;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+      strong {
+        font-weight: 700;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 0.88em;
+        background: var(--bg-sunken);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+
+      /* ---------- Verdict block ---------- */
+      .verdict {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        padding: 26px 28px;
+        margin-bottom: 8px;
+      }
+      .verdict .verdict-head {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 18px;
+      }
+      .tier-ladder {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+        max-width: 520px;
+      }
+      @media (max-width: 480px) {
+        .tier-ladder {
+          grid-template-columns: 1fr;
+        }
+      }
+      .tier {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 16px 18px;
+      }
+      .tier.core {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .tier .tier-name {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 4px;
+      }
+      .tier.core .tier-name {
+        color: var(--accent);
+      }
+      .tier .tier-range {
+        font-size: 12.5px;
+        color: var(--ink-soft);
+        margin-bottom: 12px;
+      }
+      .tier .tier-price {
+        font-family: var(--serif);
+        font-size: 1.7rem;
+        line-height: 1;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+        margin-bottom: 4px;
+      }
+      .tier.core .tier-price {
+        color: var(--accent);
+      }
+      .tier .tier-price small {
+        font-family: var(--sans);
+        font-size: 0.62rem;
+        font-weight: 600;
+        color: var(--ink-faint);
+      }
+      .tier .tier-annual {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+      .verdict .notes {
+        margin-top: 20px;
+      }
+      .verdict .notes p {
+        margin-bottom: 8px;
+        font-size: 14.5px;
+        color: var(--ink-soft);
+        max-width: 78ch;
+      }
+      .verdict .notes p:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ---------- Tables ---------- */
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin: 4px 0 8px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        min-width: 480px;
+        font-size: 14.5px;
+      }
+      thead th {
+        text-align: left;
+        background: var(--bg-sunken);
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      tbody td {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-family: var(--mono);
+      }
+      tr.self td {
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+      tr.flag td {
+        background: var(--rust-soft);
+      }
+      .pill {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.03em;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 700;
+      }
+      .pill.ok {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .pill.warn {
+        background: var(--gold-soft);
+        color: var(--gold);
+      }
+      .pill.bad {
+        background: var(--rust-soft);
+        color: var(--rust);
+      }
+
+      /* ---------- Plus/minus ---------- */
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 6px;
+      }
+      @media (max-width: 640px) {
+        .two-col {
+          grid-template-columns: 1fr;
+        }
+      }
+      .col-card {
+        border-radius: 10px;
+        padding: 20px 22px;
+        border: 1px solid var(--border);
+      }
+      .col-card.plus {
+        background: var(--accent-soft);
+        border-color: transparent;
+      }
+      .col-card.minus {
+        background: var(--rust-soft);
+        border-color: transparent;
+      }
+      .col-card h4 {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin: 0 0 12px;
+      }
+      .col-card.plus h4 {
+        color: var(--accent);
+      }
+      .col-card.minus h4 {
+        color: var(--rust);
+      }
+      .col-card ul {
+        margin: 0;
+        padding-left: 18px;
+        max-width: none;
+      }
+      .col-card li {
+        font-size: 14px;
+        margin-bottom: 8px;
+        color: var(--ink);
+      }
+      .col-card li:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ---------- Cost bars ---------- */
+      .cost-row {
+        display: grid;
+        grid-template-columns: 180px 1fr 90px;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 0;
+        font-size: 14px;
+      }
+      .cost-row .name {
+        color: var(--ink);
+      }
+      .cost-row .bar-track {
+        background: var(--bg-sunken);
+        border-radius: 5px;
+        height: 9px;
+        overflow: hidden;
+      }
+      .cost-row .bar-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 5px;
+      }
+      .cost-row.flag .bar-fill {
+        background: var(--rust);
+      }
+      .cost-row .amt {
+        text-align: right;
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        color: var(--ink-soft);
+      }
+      .cost-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding-top: 14px;
+        margin-top: 8px;
+        border-top: 1px solid var(--border-strong);
+        font-family: var(--mono);
+        font-size: 14px;
+      }
+      .cost-total strong {
+        font-size: 17px;
+        font-family: var(--sans);
+      }
+
+      /* ---------- Callout ---------- */
+      .callout {
+        border-left: 3px solid var(--gold);
+        background: var(--gold-soft);
+        border-radius: 0 8px 8px 0;
+        padding: 14px 18px;
+        margin: 16px 0;
+      }
+      .callout.rust {
+        border-left-color: var(--rust);
+        background: var(--rust-soft);
+      }
+      .callout .label {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: var(--gold);
+      }
+      .callout.rust .label {
+        color: var(--rust);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 14px;
+        max-width: none;
+      }
+
+      /* ---------- Action list ---------- */
+      .actions {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .actions li {
+        display: flex;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 14.5px;
+        align-items: flex-start;
+      }
+      .actions li:last-child {
+        border-bottom: none;
+      }
+      .actions .box {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 3px;
+        border: 1.5px solid var(--border-strong);
+        border-radius: 4px;
+      }
+      .actions b {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .actions span.sub {
+        color: var(--ink-soft);
+        font-size: 13.5px;
+      }
+
+      footer {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+    </style>
+
+    <div class="page">
+      <div class="masthead">
+        <div>
+          <div class="kicker">Internal — Pricing Strategy</div>
+          <h1>What should Praesto cost?</h1>
+        </div>
+        <div class="meta">
+          14 Jul 2026<br />ap-south-1 · Mumbai<br />v3 — TDS/Form 16 reviewed
+        </div>
+      </div>
+
+      <div class="section" style="padding-top: 0">
+        <div class="verdict">
+          <div class="verdict-head">
+            Recommended pricing — billed monthly, full feature set at every tier
+          </div>
+          <div class="tier-ladder">
+            <div class="tier">
+              <div class="tier-name">Starter</div>
+              <div class="tier-range">1–25 employees</div>
+              <div class="tier-price">₹4,999<small>/mo flat</small></div>
+              <div class="tier-annual">₹3,999/mo annual</div>
+            </div>
+            <div class="tier core">
+              <div class="tier-name">Growth</div>
+              <div class="tier-range">26–100 employees</div>
+              <div class="tier-price">₹149<small>/employee/mo</small></div>
+              <div class="tier-annual">₹119/employee/mo annual</div>
+            </div>
+          </div>
+          <div class="notes">
+            <p>
+              Scoped to small and medium companies only — 100 employees is the
+              ceiling for now, matched to what one person can sell to, onboard,
+              and support alone. Growth is the plan most customers land in and
+              anchors the market position: above the budget tier (greytHR, Zoho,
+              HROne) on the strength of features that are usually paid add-ons
+              elsewhere.
+            </p>
+            <p>
+              Full reasoning, market comparison, cost basis, and margin math
+              below.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-index">01</div>
+        <h2>What the Indian HRMS market charges</h2>
+        <h3 style="margin-top: 18px">
+          Per-employee, per-month — public and estimated pricing
+        </h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th class="num">Price / employee / mo</th>
+                <th>Model</th>
+                <th>Positioning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>greytHR</td>
+                <td class="num">≈ ₹70</td>
+                <td>Flat block (₹3,495 / 50 employees)</td>
+                <td>Compliance-first, thin feature set</td>
+              </tr>
+              <tr>
+                <td>Zimyo</td>
+                <td class="num">from ₹80</td>
+                <td>Per employee, tiered</td>
+                <td>Budget SMB</td>
+              </tr>
+              <tr>
+                <td>HROne</td>
+                <td class="num">₹85</td>
+                <td>Flat, all-inclusive</td>
+                <td>Mid-market, decent breadth</td>
+              </tr>
+              <tr>
+                <td>Zoho People</td>
+                <td class="num">₹110 – ₹425</td>
+                <td>5 tiers ($1.25 – $5/user)</td>
+                <td>Generic HR suite, not India-payroll-specific</td>
+              </tr>
+              <tr>
+                <td>Pocket HRMS</td>
+                <td class="num">custom</td>
+                <td>From ₹2,995/mo base</td>
+                <td>SMB, payroll-led</td>
+              </tr>
+              <tr>
+                <td>Keka</td>
+                <td class="num">₹100 – ₹160 blended</td>
+                <td>3 tiers, ₹9,999–15,999 base + ₹90–150/extra head</td>
+                <td>
+                  Market leader, SMB/mid-market. Setup fee ₹25k–1L, biometric is
+                  an add-on
+                </td>
+              </tr>
+              <tr class="flag">
+                <td>Darwinbox</td>
+                <td class="num">₹150 – ₹250</td>
+                <td>Custom / enterprise only</td>
+                <td>Enterprise HCM, long sales cycles, needs references</td>
+              </tr>
+              <tr class="self">
+                <td>Praesto (proposed)</td>
+                <td class="num">₹149</td>
+                <td>Starter flat + Growth per-employee, capped at 100</td>
+                <td>
+                  SMB only for now — enterprise-grade depth, budget/mid-market
+                  trust level
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="wide-measure" style="margin-top: 16px">
+          Market band is roughly <strong>₹70–250/employee/month</strong>, budget
+          to enterprise — Darwinbox's enterprise row is included only as context
+          for how far feature depth can be priced, not as a segment Praesto is
+          competing in right now. The direct competitive set for a
+          &lt;100-employee buyer is greytHR, Zimyo, HROne, Zoho People, and
+          Keka. Note the pattern in the "model" column: all of them sell tiers
+          or add-ons. Keka's biometric attendance, for instance, is exactly the
+          feature Praesto ships as standard — and Keka still charges extra for
+          it.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-index">02</div>
+        <h2>Where Praesto stands on features</h2>
+        <p class="wide-measure">
+          Set against that market, not in the abstract.
+        </p>
+        <div class="two-col">
+          <div class="col-card plus">
+            <h4>Ahead of the market</h4>
+            <ul>
+              <li>
+                Face match + liveness + GPS attendance built in — a paid
+                hardware add-on at Keka, absent at greytHR/Zoho/HROne
+              </li>
+              <li>
+                AI resume screening on every application automatically — a
+                premium module elsewhere, if it exists at all
+              </li>
+              <li>
+                Passwordless auth (Google + WebAuthn passkeys) — no competitor
+                in this list offers this; all still lead with password +
+                optional 2FA
+              </li>
+              <li>
+                RBAC + ABAC enforced server-side (self/team/all scoping) — most
+                competitors only hide the menu item, not the route
+              </li>
+              <li>
+                Full before/after audit trail across 18 entity types —
+                competitors mostly stop at login history
+              </li>
+              <li>
+                Self-hosted AI assistant, built-in chat, calendar, report
+                builder, webhooks — replaces 3–4 subscriptions a customer would
+                otherwise stack on top (Slack, a BI tool, a chatbot vendor)
+              </li>
+              <li>
+                No setup fee, live in minutes — direct contrast to Keka's
+                ₹25k–1L implementation charge
+              </li>
+            </ul>
+          </div>
+          <div class="col-card minus">
+            <h4>Behind, or unproven</h4>
+            <ul>
+              <li>
+                TDS/income-tax calculation and Form 16 are now built, but not
+                yet correct enough to advertise — a real bug over-withholds
+                tax in any month with a bonus, and Form 16 is Part B only. See
+                §06 before telling anyone this gap is closed
+              </li>
+              <li>Zero reference customers, case studies, or reviews</li>
+              <li>
+                One developer, no team — support is email-only with a realistic
+                response time, not a round-the-clock desk. Sets a hard ceiling
+                on how many customers can be onboarded and supported at once
+              </li>
+              <li>
+                Running on MongoDB Atlas M0 (free tier) today — 512MB cap, no
+                backups; must move to a paid tier before any real customer's
+                data lives there
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="section wide">
+        <div class="section-index">03</div>
+        <h2>What Praesto actually costs to run</h2>
+        <p class="wide-measure">
+          From the CloudFormation stacks (<code>hrms-prod</code>,
+          <code>hrms-client-prod</code>) — not a guess. Two things worth naming
+          up front: <strong>"EBS" isn't a separate service</strong> — it's just
+          the root disks on the EC2 instances, implicit in running them. And
+          <strong
+            >Aurora, DocumentDB, and a Lambda function are running in this AWS
+            account but appear nowhere in the CloudFormation templates</strong
+          >
+          — see the flag below.
+        </p>
+
+        <h3 style="margin-top: 28px">Real infrastructure, as deployed</h3>
+        <div style="max-width: 640px">
+          <div class="cost-row">
+            <span class="name">EC2 — 2× m7i-flex.large (app)</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 74%"></span></span
+            ><span class="amt">~$170</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">EC2 — t3.micro (monitoring)</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 4%"></span></span
+            ><span class="amt">~$9</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">Application Load Balancer</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 11%"></span></span
+            ><span class="amt">~$22</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">EBS root volumes (80GB)</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 3%"></span></span
+            ><span class="amt">~$7</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">Amplify (build + hosting)</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 5%"></span></span
+            ><span class="amt">~$10</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">ECR (12 repos)</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 2%"></span></span
+            ><span class="amt">~$4</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">S3 (2 buckets, currently tiny)</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 1%"></span></span
+            ><span class="amt">~$1</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">Secrets Manager (3 secrets)</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 1%"></span></span
+            ><span class="amt">~$1.2</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">Route 53</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 1%"></span></span
+            ><span class="amt">~$0.5</span>
+          </div>
+          <div class="cost-row">
+            <span class="name">MongoDB Atlas M0</span
+            ><span class="bar-track"
+              ><span class="bar-fill" style="width: 0%"></span></span
+            ><span class="amt">$0</span>
+          </div>
+          <div class="cost-total">
+            <span>Real monthly total</span><strong>≈ $225 / ₹21,500</strong>
+          </div>
+        </div>
+
+        <h3 style="margin-top: 30px">The one real near-term cost decision</h3>
+        <p class="wide-measure">
+          MongoDB Atlas M0 is free but capped at 512MB with no backups and
+          shared compute — not viable once a paying tenant is producing real
+          attendance, leave, chat, and audit-log volume (the audit trail alone
+          writes a before/after diff on every action across 18 entity types, so
+          it's inherently write-heavy). Budget for
+          <strong>Atlas M10</strong> (dedicated) at roughly
+          <strong>$60–90/month</strong> before signing the first paying
+          customer, not after.
+        </p>
+
+        <div
+          class="cost-total"
+          style="max-width: 640px; border-top-color: var(--accent)"
+        >
+          <span>Fixed baseline once cleaned up + M10 upgraded</span>
+          <strong>≈ $300 / ₹28,700 / mo</strong>
+        </div>
+      </div>
+
+      <div class="section wide">
+        <div class="section-index">04</div>
+        <h2>Two tiers, and why it stops there</h2>
+        <p class="wide-measure">
+          Both tiers ship the <strong>same product</strong> — full feature set,
+          no module locked behind a higher plan. That's deliberate:
+          differentiator #11 in the sales guide is that Praesto doesn't charge
+          extra for things like biometric attendance the way Keka does, and
+          gating features by plan would quietly undo that pitch. What moves
+          between tiers is <strong>price per employee</strong> — not
+          functionality, not support quality.
+        </p>
+        <p class="wide-measure">
+          The earlier draft of this memo went up to a Scale and Enterprise tier.
+          Both are dropped here, not deferred to a footnote — with one developer
+          and no team, a 150+ employee company is a support and onboarding
+          commitment that can't be honestly staffed right now. Revisit those
+          tiers once there's someone other than you answering tickets.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>Employees</th>
+                <th class="num">Monthly</th>
+                <th class="num">Annual</th>
+                <th>Support</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Starter</strong></td>
+                <td>1–25</td>
+                <td class="num">₹4,999 flat</td>
+                <td class="num">₹3,999 flat</td>
+                <td>Email, 2 business days</td>
+              </tr>
+              <tr class="self">
+                <td><strong>Growth</strong></td>
+                <td>26–100</td>
+                <td class="num">₹149/employee</td>
+                <td class="num">₹119/employee</td>
+                <td>Email, 1 business day</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="wide-measure" style="margin-top: 20px">
+          <li>
+            <strong>Starter charges more per head on purpose.</strong> A
+            10-employee company still needs the same ALB, ASG, and monitoring
+            stack a 90-employee company does — the flat ₹4,999 floor
+            (≈₹200/employee at a full 25 seats, more below that) protects margin
+            on accounts too small to amortize the fixed infra cost on their own.
+          </li>
+          <li>
+            <strong>Growth at ₹149/employee</strong> is the anchor plan and the
+            number to lead with in conversation — positioned above Keka/HROne's
+            blended rate, justified by attendance security, AI screening, and
+            audit/RBAC depth neither offers at that price. 100 employees × ₹149
+            = ₹14,900/month, still under Keka's top published tier.
+          </li>
+          <li>
+            <strong>Support times are stated, not promised as an SLA.</strong>
+            "1 business day" is an honest ceiling for one person also writing
+            the code — better to say that plainly than to imply a support desk
+            that doesn't exist.
+          </li>
+          <li>
+            <strong>No setup fee at either tier</strong> — deliberate contrast
+            to Keka's ₹25k–1L implementation charge, consistent with the "live
+            in minutes" pitch.
+          </li>
+        </ul>
+
+        <div class="callout">
+          <div class="label">Open decision</div>
+          <p>
+            Consider a founding-customer rate — e.g. Growth locked at
+            ₹99/employee/month for 12 months — for the first 3–5 paying
+            customers in exchange for a case study or testimonial. Cap it at a
+            small, named number of accounts (see margin math below for why).
+          </p>
+        </div>
+      </div>
+
+      <div class="section wide">
+        <div class="section-index">05</div>
+        <h2>Margin math</h2>
+        <p class="wide-measure">
+          Two cost components: a largely <strong>fixed</strong> infrastructure
+          floor (EC2/ALB/Amplify/monitoring — doesn't move much with one more
+          employee) and a small <strong>variable</strong> cost per employee (S3
+          storage for KYC docs/resumes/chat media, incremental Atlas IO and data
+          transfer, estimated at <strong>≈₹8/employee/month</strong>). Because
+          every customer is capped at 100 employees, the ceiling on total
+          revenue is set by
+          <strong
+            >how many customers one person can sell to, onboard, and
+            support</strong
+          >
+          — not by the infrastructure, which barely needs to grow within this
+          range:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Illustrative mix</th>
+                <th class="num">Employees</th>
+                <th class="num">Revenue/mo</th>
+                <th class="num">Fixed cost/mo</th>
+                <th class="num">Gross margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="flag">
+                <td>First customers</td>
+                <td>2–3 accounts, Starter + Growth mix</td>
+                <td class="num">~120</td>
+                <td class="num">₹18,000</td>
+                <td class="num">₹28,700</td>
+                <td class="num">–65%</td>
+              </tr>
+              <tr>
+                <td>Steady</td>
+                <td>~7 accounts, mostly Growth</td>
+                <td class="num">~350</td>
+                <td class="num">₹52,500</td>
+                <td class="num">₹28,700</td>
+                <td class="num">~40%</td>
+              </tr>
+              <tr>
+                <td>Solo ceiling</td>
+                <td>~12 accounts — realistic max for one person</td>
+                <td class="num">~600</td>
+                <td class="num">₹88,800</td>
+                <td class="num">₹35,000</td>
+                <td class="num">~55%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="wide-measure" style="margin-top: 16px">
+          The first row is a real loss on infrastructure alone, not a rounding
+          error — 2–3 small accounts don't cover the ~₹28,700/month fixed floor.
+          That's expected (the stack is provisioned ahead of revenue) but it's
+          also the strongest argument for keeping the founding-customer discount
+          narrow: giving away Growth at ₹99/employee to more than a handful of
+          accounts stretches the time spent in this loss-making row. By ~12
+          accounts (~600 employees, the practical limit of what a solo founder
+          can service without hiring), fixed cost has barely moved but revenue
+          has grown 5×, which is the whole point of the cap being on customer
+          count and not on infrastructure.
+        </p>
+
+        <div class="callout rust">
+          <div class="label">Not included in this model</div>
+          <p>
+            This is infrastructure gross margin only. It does not account for
+            Razorpay's transaction fee (~2% + GST on domestic cards, higher for
+            international/UPI edge cases), your own time, or customer
+            acquisition cost. Treat the margin figures above as a ceiling, not a
+            full P&amp;L.
+          </p>
+        </div>
+      </div>
+
+      <div class="section wide">
+        <div class="section-index">06</div>
+        <h2>TDS &amp; Form 16 — implementation review</h2>
+        <p class="wide-measure">
+          Reviewed against the unstaged/untracked changes in the working tree:
+          new
+          <code>IncomeTaxSlab</code> and <code>TaxDeclaration</code> Prisma
+          models, a <code>tdsCalc.ts</code> calculation engine, a
+          declare→prove→verify workflow mirroring the existing KYC
+          lock/revision pattern, and Form 16 generation via the same jsPDF
+          approach as the payslip. This is a genuinely substantial build —
+          both tax regimes, financial-year-scoped slabs, a YTD/running-total
+          mechanism (which PF/ESI/PT never needed), and 20+ unit tests on the
+          calculation core. It is not yet correct enough to tell prospects the
+          TDS gap is closed.
+        </p>
+
+        <div class="callout rust">
+          <div class="label">Major — wrong tax withheld on bonus months</div>
+          <p>
+            <code>calcMonthlyTds</code> (<code>tdsCalc.ts:227-268</code>),
+            which is what actually runs during
+            <code>initiatePayrollRun</code>
+            (<code>payroll.ts:688-706</code>) and decides the real rupee
+            amount withheld from an employee's pay, projects the rest of the
+            financial year as
+            <code>currentMonthGross × remainingMonths</code> — it has no
+            concept of a one-time payment. The printable TDS worksheet
+            (<code>computeTdsWorksheet</code>) already does this correctly,
+            excluding non-recurring components
+            (<code>SalaryComponentDefinition.isRecurring</code>) from the
+            projection — but that logic was never applied to the function that
+            controls actual withholding. Net effect: pay anyone a bonus or
+            one-time incentive, and that month's TDS is calculated as if the
+            bonus repeats every remaining month of the year, sharply
+            over-withholding — and the number on the employee's own worksheet
+            PDF won't match what was actually deducted from their paycheck.
+            This is the one to fix before running this against a real
+            employee's pay, not a polish item.
+          </p>
+        </div>
+
+        <h3 style="margin-top: 28px">Correct and solid</h3>
+        <div class="two-col">
+          <div class="col-card plus">
+            <h4>Holds up</h4>
+            <ul>
+              <li>
+                Both regimes modeled correctly, defaulting to New Regime per
+                current law, with old-regime declarations (80C/80D/24(b)/NPS)
+                gated to the regime that actually allows them
+              </li>
+              <li>
+                Slabs are financial-year- and regime-scoped in a proper
+                <code>IncomeTaxSlab</code> table, following the same
+                tenant-override-with-fallback pattern as
+                <code>ProfessionalTaxSlab</code>
+              </li>
+              <li>
+                YTD tax-already-deducted is tracked by summing prior
+                approved/disbursed <code>PayrollLineItem</code> rows within
+                the FY — a real running total, not a guess
+              </li>
+              <li>
+                Declaration→proof→review workflow correctly mirrors the KYC
+                lock/revision pattern, with proper status-transition guards
+              </li>
+              <li>
+                Form 16 Part B is genuinely itemized (exemptions, standard
+                deduction, Chapter VI-A, slab-by-slab tax, month-wise
+                breakup) — not a relabeled payslip
+              </li>
+              <li>
+                20+ unit tests on the calculation core, with real boundary
+                coverage (87A cliffs, top slab, HRA's 3-leg cap)
+              </li>
+            </ul>
+          </div>
+          <div class="col-card minus">
+            <h4>Not done yet</h4>
+            <ul>
+              <li>
+                Section 87A <strong>marginal relief</strong> isn't
+                implemented — an employee just above the ₹12L/₹5L rebate
+                cliff is overtaxed by several times the legally correct
+                amount
+              </li>
+              <li>
+                Surcharge for income above ₹50L is hardcoded to zero —
+                understates liability for higher earners
+              </li>
+              <li>
+                Form 16 <strong>Part A</strong> (TAN summary, certificate
+                number, quarterly deposit acknowledgments) is missing — only
+                Part B exists, so it isn't a complete, filable Form 16 yet
+              </li>
+              <li>
+                No admin-side way to generate a Form 16 or TDS worksheet for
+                <em>another</em> employee via the API — a real gap for actual
+                year-end filing, where HR needs to produce every employee's
+                Form 16, not just their own
+              </li>
+              <li>
+                Employer NPS contribution (Sec 80CCD(2), valid under both
+                regimes) isn't modeled
+              </li>
+              <li>
+                No integration tests on the declaration workflow or the
+                payroll/salary/Form 16 wiring — only the pure calculation
+                functions in <code>tdsCalc.ts</code> are tested
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <ul class="actions" style="margin-top: 8px">
+          <li>
+            <span class="box"></span>
+            <div>
+              <b
+                >Fix <code>calcMonthlyTds</code> to exclude non-recurring
+                components from annual projection</b
+              ><span class="sub"
+                >— reuse the logic already correct in
+                <code>computeTdsWorksheet</code>; this is the blocker before
+                any real payroll run touches an employee with a bonus</span
+              >
+            </div>
+          </li>
+          <li>
+            <span class="box"></span>
+            <div>
+              <b>Implement Section 87A marginal relief</b
+              ><span class="sub"
+                >— employees just above the rebate cliff are currently taxed
+                several times the correct amount</span
+              >
+            </div>
+          </li>
+          <li>
+            <span class="box"></span>
+            <div>
+              <b>Decide the surcharge question explicitly</b
+              ><span class="sub"
+                >— either implement it, or state clearly (in-app and in the
+                pitch) that income above ₹50L/year isn't supported yet,
+                instead of silently returning zero</span
+              >
+            </div>
+          </li>
+          <li>
+            <span class="box"></span>
+            <div>
+              <b>Scope Form 16 Part A</b
+              ><span class="sub"
+                >— decide whether it ships before year-end, since Part B
+                alone isn't something a customer's CA can file with</span
+              >
+            </div>
+          </li>
+          <li>
+            <span class="box"></span>
+            <div>
+              <b>Keep "no TDS calculation" in the pitch until the bug above is fixed</b
+              ><span class="sub"
+                >— the honest claim today is "TDS is in progress," not
+                "TDS is supported"; overstating this is a bigger risk than the
+                feature gap ever was</span
+              >
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <footer>
+        Praesto — internal pricing memo. Cost figures are estimates from AWS
+        list pricing (ap-south-1) against resources found via CLI +
+        CloudFormation review on 2026-07-14; confirm against actual Cost
+        Explorer data once billing catches up. USD/INR ≈ 95.5. §06 reflects a
+        code review of unstaged TDS/Form 16 changes as of the same date.
+      </footer>
+    </div>
+  </body>
+</html>

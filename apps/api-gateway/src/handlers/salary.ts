@@ -13,6 +13,13 @@ import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
 import { getActiveSettings } from "./tenantSettings";
 import { classifyImpliedNonWorkingDays } from "../utils/payrollCalc";
+import {
+  calcMonthlyTds,
+  getFinancialYear,
+  remainingMonthsInFinancialYear,
+  aggregateEarningsByCode,
+  buildThisMonthComponents,
+} from "../utils/tdsCalc";
 import { jsPDF } from "jspdf";
 
 // Owner/admin/hr (tenantRole) and superusers manage salary by default;
@@ -209,7 +216,7 @@ export async function getUserSalary(req: Request, res: Response) {
   }
 }
 
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
   "January",
   "February",
   "March",
@@ -296,8 +303,28 @@ function numberToWordsIndian(amount: number): string {
 }
 
 /** "Rs." avoids the ₹ glyph — not present in jsPDF's base14 helvetica encoding, would render as a missing-glyph box. */
-const formatINR = (n: number): string =>
+export const formatINR = (n: number): string =>
   `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * Password-protects every generated salary PDF (payslip, TDS worksheet) with
+ * PAN + date of birth (DDMMYYYY, e.g. "AAAAA0000A10101993") — something only
+ * the employee (or someone who already has their KYC details) would know.
+ * Returns null when either piece is missing, which callers treat as a hard
+ * block on generating the document rather than falling back to unencrypted.
+ */
+export function derivePdfPassword(
+  panNo: string | null | undefined,
+  dob: string | null | undefined,
+): string | null {
+  if (!panNo || !dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `${panNo}${dd}${mm}${yyyy}`;
+}
 
 export async function generateSalarySlip(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -328,10 +355,18 @@ export async function generateSalarySlip(req: Request, res: Response) {
 
     const { employee, salaryStructure, attendanceSummary } = response.data;
     const employeeName =
-      [employee?.first_name, employee?.last_name].filter(Boolean).join(" ") ||
+      [employee?.firstName, employee?.lastName].filter(Boolean).join(" ") ||
       employee?.username ||
       "Employee";
     const monthLabel = `${MONTH_NAMES[(month - 1) % 12]} ${year}`;
+
+    const pdfPassword = derivePdfPassword(employee?.panNo, employee?.dob);
+    if (!pdfPassword) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Cannot generate this payslip: PAN and date of birth must both be on file (used to password-protect the PDF). Complete KYC first.",
+      });
+    }
 
     // ── Attendance-based salary recalculation ──────────────────────────────────
     // AttendanceRecord/LeaveBalance are business models — prismaWithTenant
@@ -461,6 +496,15 @@ export async function generateSalarySlip(req: Request, res: Response) {
 
     let earningsRows: { label: string; value: number }[];
     let deductionRows: { label: string; value: number }[];
+    // Only populated on the legacy (no componentBreakdown) path — irrelevant
+    // otherwise, since buildThisMonthComponents prefers componentBreakdown
+    // when it's present and never reads this fallback in that case.
+    let legacyEarningsForTds = {
+      basicPay: 0,
+      hra: 0,
+      conveyance: 0,
+      incentive: 0,
+    };
 
     if (componentBreakdown?.length) {
       const prorationRatio = disbursedLineItem
@@ -536,6 +580,12 @@ export async function generateSalarySlip(req: Request, res: Response) {
         { label: "Professional Tax (PT)", value: calcPt },
         { label: "Other Deductions", value: calcOtherDed },
       ];
+      legacyEarningsForTds = {
+        basicPay: calcBasicPay,
+        hra: calcHra,
+        conveyance: calcConveyance,
+        incentive: calcIncentive,
+      };
     }
 
     // ── Salary advance EMI — itemized as its own deduction row instead of
@@ -571,6 +621,103 @@ export async function generateSalarySlip(req: Request, res: Response) {
       });
     }
 
+    // ── Income Tax (TDS) — a disbursed month uses the exact amount actually
+    // withheld; an as-yet-undisbursed month previews it the same way
+    // initiatePayrollRun would compute it (see that function's comment on
+    // why TDS needs financial-year-to-date state, unlike PF/ESI/PT).
+    let tdsAmount = (disbursedLineItem as any)?.tds ?? 0;
+    if (!disbursedLineItem) {
+      const financialYear = getFinancialYear(month, year);
+      const fyStartYear = parseInt(financialYear.split("-")[0], 10);
+      const remainingMonths = remainingMonthsInFinancialYear(month, year);
+
+      const [taxSlabs, priorRuns, declarationRow, earningComponentDefs] =
+        await Promise.all([
+          tenantId
+            ? (prisma as any).incomeTaxSlab.findMany({
+                where: { tenantId, financialYear },
+              })
+            : Promise.resolve([]),
+          tenantId
+            ? prisma.payrollRun.findMany({
+                where: {
+                  tenantId,
+                  status: { in: ["approved", "disbursed"] },
+                  OR: [
+                    { year: fyStartYear, month: { gte: 4 } },
+                    { year: fyStartYear + 1, month: { lte: 3 } },
+                  ],
+                },
+                select: { id: true, month: true, year: true },
+              })
+            : Promise.resolve([]),
+          tenantId
+            ? (prisma as any).taxDeclaration.findFirst({
+                where: {
+                  tenantId,
+                  userId: requestedUserId,
+                  financialYear,
+                  status: { in: ["Declared", "ProofsSubmitted", "Verified"] },
+                },
+              })
+            : Promise.resolve(null),
+          tenantId
+            ? (prisma as any).salaryComponentDefinition.findMany({
+                where: { tenantId, type: "earning" },
+                select: { code: true, name: true, isRecurring: true },
+              })
+            : Promise.resolve([]),
+        ]);
+      const priorRunIds = (priorRuns as any[])
+        .filter((r) => r.year < year || (r.year === year && r.month < month))
+        .map((r) => r.id);
+      const priorLineItems = priorRunIds.length
+        ? await prisma.payrollLineItem.findMany({
+            where: {
+              payrollRunId: { in: priorRunIds },
+              userId: requestedUserId,
+            },
+            select: {
+              componentBreakdown: true,
+              basicPay: true,
+              hra: true,
+              conveyance: true,
+              incentive: true,
+              tds: true,
+            },
+          })
+        : [];
+      const ytdByCode = aggregateEarningsByCode(priorLineItems as any[]);
+      const ytdTds = (priorLineItems as any[]).reduce(
+        (s, li) => s + (li.tds ?? 0),
+        0,
+      );
+      const thisMonthComponents = buildThisMonthComponents(
+        componentBreakdown as any,
+        legacyEarningsForTds,
+        earningComponentDefs,
+      );
+
+      tdsAmount = calcMonthlyTds({
+        regime: declarationRow ? "old" : "new",
+        components: thisMonthComponents,
+        ytdByCode,
+        ytdTds,
+        remainingMonths,
+        slabs: taxSlabs,
+        declaration: declarationRow
+          ? {
+              monthlyRent: (declarationRow as any).monthlyRent,
+              isMetroCity: (declarationRow as any).isMetroCity,
+              lineItems: (declarationRow as any).lineItems ?? [],
+            }
+          : undefined,
+      });
+    }
+    if (tdsAmount > 0) {
+      deductionRows.push({ label: "Income Tax (TDS)", value: tdsAmount });
+    }
+
     const calcGrossEarnings = earningsRows.reduce((s, r) => s + r.value, 0);
     const calcTotalDed = deductionRows.reduce((s, r) => s + r.value, 0);
     const calcNetPayable = Math.max(0, calcGrossEarnings - calcTotalDed);
@@ -584,7 +731,15 @@ export async function generateSalarySlip(req: Request, res: Response) {
         })
       : null;
 
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const doc = new jsPDF({
+      unit: "mm",
+      format: "a4",
+      encryption: {
+        userPassword: pdfPassword,
+        ownerPassword: pdfPassword,
+        userPermissions: ["print", "copy"],
+      },
+    });
     const pageW = doc.internal.pageSize.getWidth();
     const marginX = 15;
     const contentW = pageW - marginX * 2;
@@ -650,16 +805,16 @@ export async function generateSalarySlip(req: Request, res: Response) {
       ["Designation", employee?.designation || "-"],
       [
         "Date of Joining",
-        employee?.joining_date
-          ? new Date(employee.joining_date).toLocaleDateString("en-GB")
+        employee?.joiningDate
+          ? new Date(employee.joiningDate).toLocaleDateString("en-GB")
           : "-",
       ],
     ];
     const col2Fields: [string, string][] = [
       ["Employee ID", employee?.username || "-"],
-      ["UAN", employee?.uan_no || "-"],
-      ["Bank Account No", employee?.bank_account_no || "-"],
-      ["PAN", employee?.pan_no || "-"],
+      ["UAN", employee?.uanNo || "-"],
+      ["Bank Account No", employee?.bankAccountNo || "-"],
+      ["PAN", employee?.panNo || "-"],
     ];
 
     const infoRowH = 7;

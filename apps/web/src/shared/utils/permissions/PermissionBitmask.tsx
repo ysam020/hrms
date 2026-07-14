@@ -134,6 +134,12 @@ const PERM_DEFS = [
 
   // Helpdesk (scopeless)
   ["Helpdesk", "manage"],
+
+  // TaxDeclaration
+  ["TaxDeclaration", "fill_declaration", "self"],
+  ["TaxDeclaration", "view_declaration", "self", "all"],
+  ["TaxDeclaration", "review_declaration", "all"],
+  ["TaxDeclaration", "review_proofs", "all"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }

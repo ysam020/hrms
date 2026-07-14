@@ -84,6 +84,7 @@ message Employee {
   string uan_no = 9;
   string bank_account_no = 10;
   string pan_no = 11;
+  string dob = 12; // ISO date string — used to derive the PDF password (PAN + DDMMYYYY)
 }
 
 message AttendanceSummary {

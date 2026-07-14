@@ -153,6 +153,30 @@ const PAYROLL_COMPONENTS = {
   CREATE_PAY_CYCLE: "/pay-cycles",
   UPDATE_PAY_CYCLE: (id: string) => `/pay-cycles/${id}`,
   DELETE_PAY_CYCLE: (id: string) => `/pay-cycles/${id}`,
+  LIST_TDS_SLABS: "/tds-slabs",
+  CREATE_TDS_SLAB: "/tds-slabs",
+  UPDATE_TDS_SLAB: (id: string) => `/tds-slabs/${id}`,
+  DELETE_TDS_SLAB: (id: string) => `/tds-slabs/${id}`,
+};
+
+const TAX_DECLARATION = {
+  GET_MY_DECLARATION: (financialYear: string) =>
+    `/tax-declarations/mine?financialYear=${financialYear}`,
+  SAVE_DRAFT_DECLARATION: "/tax-declarations/draft",
+  SUBMIT_DECLARATION: "/tax-declarations/submit",
+  SUBMIT_DECLARATION_PROOFS: "/tax-declarations/proofs",
+  LIST_DECLARATIONS: (
+    financialYear: string,
+    page: number,
+    limit: number,
+    params = "",
+  ) =>
+    `/tax-declarations?financialYear=${financialYear}&page=${page}&limit=${limit}${params}`,
+  GET_PENDING_DECLARATIONS: "/tax-declarations/pending",
+  GET_DECLARATION_FOR_REVIEW: (userId: string, financialYear: string) =>
+    `/tax-declarations/${userId}?financialYear=${financialYear}`,
+  REVIEW_DECLARATION: "/tax-declarations/review",
+  REVIEW_DECLARATION_PROOFS: "/tax-declarations/review-proofs",
 };
 
 const RECRUITMENT_PIPELINE = {
@@ -395,4 +419,5 @@ export const API_ENDPOINTS = {
   ...WEBHOOKS,
   ...REPORTS,
   ...APPROVALS,
+  ...TAX_DECLARATION,
 };

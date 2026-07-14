@@ -31,6 +31,13 @@ import {
   groupSlabsByState,
   classifyImpliedNonWorkingDays,
 } from "../utils/payrollCalc";
+import {
+  calcMonthlyTds,
+  getFinancialYear,
+  remainingMonthsInFinancialYear,
+  aggregateEarningsByCode,
+  buildThisMonthComponents,
+} from "../utils/tdsCalc";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -457,6 +464,15 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         })
       : [];
 
+    // Earning component definitions (labels + isRecurring) — used to build
+    // each employee's this-month TDS input via buildThisMonthComponents.
+    const earningComponentDefs = tenantId
+      ? await (prisma as any).salaryComponentDefinition.findMany({
+          where: { tenantId, type: "earning" },
+          select: { code: true, name: true, isRecurring: true },
+        })
+      : [];
+
     // Fetch pending salary advances eligible for deduction this month.
     const advances = await prisma.salaryAdvance.findMany({
       where: { status: { in: ["Approved", "Repaying"] } },
@@ -480,6 +496,81 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         });
       }
     }
+
+    // ── Income Tax (TDS) — financial-year-to-date state + this employee's regime ──
+    // TDS is an annual liability paid off monthly, unlike PF/ESI/PT which are
+    // stateless — so unlike those, it needs what's already been withheld/earned
+    // this financial year. There's no separate running-total model: prior
+    // finalized (approved/disbursed) PayrollLineItem rows are immutable
+    // snapshots, so summing them directly avoids a second source of truth that
+    // could drift. See calcMonthlyTds in utils/tdsCalc.ts.
+    const financialYear = getFinancialYear(month, year);
+    const fyStartYear = parseInt(financialYear.split("-")[0], 10);
+    const remainingMonths = remainingMonthsInFinancialYear(month, year);
+
+    const [taxSlabs, priorRuns, declarations] = await Promise.all([
+      tenantId
+        ? (prisma as any).incomeTaxSlab.findMany({
+            where: { tenantId, financialYear },
+          })
+        : Promise.resolve([]),
+      tenantId
+        ? prisma.payrollRun.findMany({
+            where: {
+              tenantId,
+              status: { in: ["approved", "disbursed"] },
+              OR: [
+                { year: fyStartYear, month: { gte: 4 } },
+                { year: fyStartYear + 1, month: { lte: 3 } },
+              ],
+            },
+            select: { id: true, month: true, year: true },
+          })
+        : Promise.resolve([]),
+      tenantId
+        ? (prisma as any).taxDeclaration.findMany({
+            where: {
+              tenantId,
+              financialYear,
+              userId: { in: empIds },
+              status: { in: ["Declared", "ProofsSubmitted", "Verified"] },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    // Only runs strictly before the one being initiated now count as "prior".
+    const priorRunIds = (priorRuns as any[])
+      .filter((r) => r.year < year || (r.year === year && r.month < month))
+      .map((r) => r.id);
+    const priorLineItems = priorRunIds.length
+      ? await prisma.payrollLineItem.findMany({
+          where: { payrollRunId: { in: priorRunIds }, userId: { in: empIds } },
+          select: {
+            userId: true,
+            componentBreakdown: true,
+            basicPay: true,
+            hra: true,
+            conveyance: true,
+            incentive: true,
+            tds: true,
+          },
+        })
+      : [];
+    const priorLineItemsByUser = new Map<string, any[]>();
+    const ytdTdsByUser = new Map<string, number>();
+    for (const li of priorLineItems as any[]) {
+      const list = priorLineItemsByUser.get(li.userId) ?? [];
+      list.push(li);
+      priorLineItemsByUser.set(li.userId, list);
+      ytdTdsByUser.set(
+        li.userId,
+        (ytdTdsByUser.get(li.userId) ?? 0) + (li.tds ?? 0),
+      );
+    }
+    const declarationByUser = new Map(
+      (declarations as any[]).map((d) => [d.userId, d]),
+    );
 
     // ── Build line-items (attendance-based pro-rata) ──────────────────────────
     let totalGross = 0;
@@ -612,7 +703,33 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       const adv = advanceMap.get(emp.id);
       const advanceDeduction = adv ? Math.min(adv.emi, adv.remaining) : 0;
 
-      const totalDed = pf + esi + pt + otherDeductions + advanceDeduction;
+      const declarationRow = declarationByUser.get(emp.id);
+      const thisMonthComponents = buildThisMonthComponents(
+        componentBreakdown as any,
+        { basicPay, hra, conveyance, incentive },
+        earningComponentDefs,
+      );
+      const ytdByCode = aggregateEarningsByCode(
+        priorLineItemsByUser.get(emp.id) ?? [],
+      );
+      const ytdTds = ytdTdsByUser.get(emp.id) ?? 0;
+      const tds = calcMonthlyTds({
+        regime: declarationRow ? "old" : "new",
+        components: thisMonthComponents,
+        ytdByCode,
+        ytdTds,
+        remainingMonths,
+        slabs: taxSlabs,
+        declaration: declarationRow
+          ? {
+              monthlyRent: declarationRow.monthlyRent,
+              isMetroCity: declarationRow.isMetroCity,
+              lineItems: declarationRow.lineItems ?? [],
+            }
+          : undefined,
+      });
+
+      const totalDed = pf + esi + pt + otherDeductions + advanceDeduction + tds;
       const net = Math.max(0, gross - totalDed);
 
       totalGross += gross;
@@ -631,6 +748,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         esi,
         pt,
         advanceDeduction,
+        tds,
         otherDeductions,
         totalDeductions: totalDed,
         componentBreakdown,
@@ -970,6 +1088,7 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
           pf: true,
           esi: true,
           pt: true,
+          tds: true,
           totalDeductions: true,
           netPayable: true,
         },
@@ -1129,6 +1248,7 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
           pf: li.pf ?? null,
           esi: li.esi ?? null,
           pt: li.pt ?? null,
+          tds: li.tds ?? null,
           deductions: li.totalDeductions,
           advanceDeduction: li.advanceDeduction ?? 0,
           grossEarnings: li.grossSalary,

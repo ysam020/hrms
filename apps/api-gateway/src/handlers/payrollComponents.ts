@@ -340,6 +340,109 @@ export async function deletePtSlab(req: AuthRequest, res: Response) {
   }
 }
 
+// ─── Income Tax (TDS) slabs ─────────────────────────────────────────────────────
+
+export async function listIncomeTaxSlabs(req: AuthRequest, res: Response) {
+  const tenantId = requireTenantId(req, res);
+  if (!tenantId) return;
+  try {
+    const slabs = await (prisma as any).incomeTaxSlab.findMany({
+      where: { tenantId },
+      orderBy: [
+        { financialYear: "desc" },
+        { regime: "asc" },
+        { minIncome: "asc" },
+      ],
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: slabs });
+  } catch (error: unknown) {
+    logger.error("listIncomeTaxSlabs error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function createIncomeTaxSlab(req: AuthRequest, res: Response) {
+  const tenantId = requireTenantId(req, res);
+  if (!tenantId) return;
+  if (!(await isPrivileged(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "Only owners and admins can configure Income Tax slabs.",
+    });
+  }
+  try {
+    const slab = await (prisma as any).incomeTaxSlab.create({
+      data: { tenantId, ...req.body },
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Slab added.",
+      data: slab,
+    });
+  } catch (error: unknown) {
+    logger.error("createIncomeTaxSlab error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function updateIncomeTaxSlab(req: AuthRequest, res: Response) {
+  const tenantId = requireTenantId(req, res);
+  if (!tenantId) return;
+  if (!(await isPrivileged(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "Only owners and admins can configure Income Tax slabs.",
+    });
+  }
+  try {
+    const { id } = req.params as { id: string };
+    const existing = await (prisma as any).incomeTaxSlab.findFirst({
+      where: { id, tenantId },
+    });
+    if (!existing) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Slab not found.",
+      });
+    }
+    const updated = await (prisma as any).incomeTaxSlab.update({
+      where: { id },
+      data: req.body,
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Slab updated.",
+      data: updated,
+    });
+  } catch (error: unknown) {
+    logger.error("updateIncomeTaxSlab error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function deleteIncomeTaxSlab(req: AuthRequest, res: Response) {
+  const tenantId = requireTenantId(req, res);
+  if (!tenantId) return;
+  if (!(await isPrivileged(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "Only owners and admins can configure Income Tax slabs.",
+    });
+  }
+  try {
+    const { id } = req.params as { id: string };
+    const existing = await (prisma as any).incomeTaxSlab.findFirst({
+      where: { id, tenantId },
+    });
+    if (!existing) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Slab not found.",
+      });
+    }
+    await (prisma as any).incomeTaxSlab.delete({ where: { id } });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Slab removed.",
+    });
+  } catch (error: unknown) {
+    logger.error("deleteIncomeTaxSlab error:", { error });
+    return handleError(res, error);
+  }
+}
+
 // ─── Pay cycles ─────────────────────────────────────────────────────────────────
 
 export async function listPayCycles(req: AuthRequest, res: Response) {

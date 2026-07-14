@@ -3,6 +3,7 @@ import {
   updateSalary,
   getUserSalary,
   generateSalarySlip,
+  derivePdfPassword,
 } from "../handlers/salary";
 
 jest.mock("../grpc/clients", () => ({
@@ -15,8 +16,17 @@ jest.mock("@hrms/db", () => {
     user: { findUnique: jest.fn() },
     attendanceRecord: { findMany: jest.fn().mockResolvedValue([]) },
     leaveBalance: { findFirst: jest.fn().mockResolvedValue(null) },
-    payrollRun: { findFirst: jest.fn().mockResolvedValue(null) },
-    payrollLineItem: { findFirst: jest.fn().mockResolvedValue(null) },
+    payrollRun: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    payrollLineItem: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    incomeTaxSlab: { findMany: jest.fn().mockResolvedValue([]) },
+    taxDeclaration: { findFirst: jest.fn().mockResolvedValue(null) },
+    salaryComponentDefinition: { findMany: jest.fn().mockResolvedValue([]) },
     tenantSettings: { findFirst: jest.fn().mockResolvedValue(null) },
     holiday: { findMany: jest.fn().mockResolvedValue([]) },
     tenant: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -310,7 +320,13 @@ describe("generateSalarySlip", () => {
 
   const makePayslipResponse = () => ({
     data: {
-      employee: { username: "emp-1", first_name: "Jane", last_name: "Doe" },
+      employee: {
+        username: "emp-1",
+        firstName: "Jane",
+        lastName: "Doe",
+        panNo: "AAAAA0000A",
+        dob: "1993-10-10T00:00:00.000Z",
+      },
       salaryStructure: {
         basicPay: 25000,
         hra: 15000,
@@ -375,5 +391,31 @@ describe("generateSalarySlip", () => {
       where: { payrollRunId: "run-1", userId: "emp-1" },
     });
     expect(res.send).toHaveBeenCalled();
+  });
+});
+
+describe("derivePdfPassword", () => {
+  it("concatenates PAN with DOB formatted as DDMMYYYY", () => {
+    expect(derivePdfPassword("AAAAA0000A", "1993-10-10T00:00:00.000Z")).toBe(
+      "AAAAA0000A10101993",
+    );
+  });
+
+  it("pads single-digit day/month with a leading zero", () => {
+    expect(derivePdfPassword("AAAAA0000A", "1990-08-05T00:00:00.000Z")).toBe(
+      "AAAAA0000A05081990",
+    );
+  });
+
+  it("returns null when PAN is missing", () => {
+    expect(derivePdfPassword(null, "1993-10-10T00:00:00.000Z")).toBeNull();
+  });
+
+  it("returns null when DOB is missing", () => {
+    expect(derivePdfPassword("AAAAA0000A", null)).toBeNull();
+  });
+
+  it("returns null when DOB is not a parseable date", () => {
+    expect(derivePdfPassword("AAAAA0000A", "not-a-date")).toBeNull();
   });
 });
