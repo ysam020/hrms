@@ -73,10 +73,17 @@ export const webAuthnAuthenticationVerify = async (
       clientExtensionResults: raw.clientExtensionResults || {},
     };
 
+    // ORIGIN may be a comma-separated list (e.g. apex + www), same convention
+    // as CLIENT_URL in server.ts's CORS config — @simplewebauthn accepts
+    // either a single origin or an array of allowed origins here.
+    const expectedOrigin = (process.env.ORIGIN || "https://localhost:5173")
+      .split(",")
+      .map((o) => o.trim());
+
     const verification = await verifyAuthenticationResponse({
       response: credentialForVerification,
       expectedChallenge,
-      expectedOrigin: process.env.ORIGIN || "https://localhost:5173",
+      expectedOrigin,
       expectedRPID: process.env.RP_ID || "localhost",
       authenticator: {
         credentialID: storedCred.credentialID,

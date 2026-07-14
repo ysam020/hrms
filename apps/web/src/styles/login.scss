@@ -9,6 +9,10 @@
 // Left column
 .login-left-col {
   position: relative;
+  // Always a dark branded panel regardless of the app's light/dark theme —
+  // without this it falls back to --card-background-primary (near-white in
+  // light mode), which the semi-transparent overlay below can't fully cover.
+  background-color: #111b21;
   background-size: cover !important;
   background-position: center !important;
   display: flex;
