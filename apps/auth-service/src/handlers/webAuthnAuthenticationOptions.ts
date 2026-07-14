@@ -13,7 +13,14 @@ export const webAuthnAuthenticationOptions = async (
     const { username } = call.request;
 
     const user = await prisma.user.findFirst({ where: { username } });
-    if (!user || !user.webAuthnCredentials) {
+    if (!user) {
+      return callback(null, {
+        message: MESSAGES.USER_NOT_FOUND,
+        status: status.NOT_FOUND,
+        options: "",
+      });
+    }
+    if (!user.webAuthnCredentials) {
       return callback(null, {
         message: MESSAGES.NO_CREDENTIALS_FOUND,
         status: status.NOT_FOUND,

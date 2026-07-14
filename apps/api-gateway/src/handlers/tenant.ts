@@ -5,6 +5,8 @@ import {
   canonicalizeEmail,
   getEmailDomain,
   isPublicEmailDomain,
+  runWithTenant,
+  AuditActor,
 } from "@hrms/db";
 import { randomBytes, createHmac } from "crypto";
 import jwt from "jsonwebtoken";
@@ -90,6 +92,7 @@ async function buildTenant(
     };
   },
   res: Response,
+  req: AuthRequest,
 ) {
   const {
     name,
@@ -152,23 +155,45 @@ async function buildTenant(
   if (existing) slug = `${slug}-${randomBytes(3).toString("hex")}`;
   const dbName = `hrms-${slug}`;
 
-  // Derive a domain for auto-join suggestions — best-effort, never blocks
-  // tenant creation. Public/free-mail domains are never claimed, and a
-  // domain already claimed by another tenant is silently left unset here
-  // rather than erroring (see the schema comment on Tenant.domain for why
-  // this isn't a DB-level unique constraint).
+  // Derive a domain for auto-join suggestions — public/free-mail domains are
+  // never claimed. A domain already claimed by another *active* tenant
+  // blocks creation outright (see below) rather than silently creating a
+  // second, domain-less org for it — the frontend already steers matching
+  // signups into the join-request flow (checkDomainSuggestion), so reaching
+  // here with a claimed domain means that guard was bypassed or lost a race.
   let domain: string | null = null;
   const creator = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true },
+    select: { email: true, username: true },
   });
   if (creator?.email) {
     const candidateDomain = getEmailDomain(canonicalizeEmail(creator.email));
     if (candidateDomain && !isPublicEmailDomain(candidateDomain)) {
       const claimedBy = await prisma.tenant.findFirst({
-        where: { domain: candidateDomain },
+        where: { domain: candidateDomain, isActive: true },
       });
-      if (!claimedBy) domain = candidateDomain;
+      if (claimedBy) {
+        // Payment was already captured by Razorpay before this endpoint
+        // runs (client-side checkout for createTenant, or a verified
+        // subscription for completePendingSetup) — best-effort cancel it
+        // rather than silently charging for a tenant we're refusing to
+        // create. Future cycles are stopped; the already-captured payment
+        // may still need a manual refund.
+        await (getRazorpay().subscriptions.cancel as any)(
+          razorpaySubscriptionId,
+          { cancel_at_cycle_end: 0 },
+        ).catch((error: unknown) =>
+          logger.error(
+            "[buildTenant] Failed to cancel subscription for rejected duplicate-domain signup:",
+            { error, razorpaySubscriptionId },
+          ),
+        );
+        return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+          message: `${claimedBy.name} already has a workspace for your email domain. Request to join that organisation instead.`,
+          code: "DOMAIN_ALREADY_CLAIMED",
+        });
+      }
+      domain = candidateDomain;
     }
   }
 
@@ -207,72 +232,94 @@ async function buildTenant(
     }),
   ]);
 
+  // Attribute audit rows written during provisioning (tenantSettings.create,
+  // the User/TenantMembership writes below) to the tenant + user creating
+  // it — there's no authenticate() middleware run for this request (the JWT
+  // is a pendingSetup token with no tenantId yet) to populate this context.
+  const actor: AuditActor = {
+    userId,
+    username: creator?.username ?? null,
+    ipAddress: req.ip || req.socket.remoteAddress || "",
+    userAgent: req.headers["user-agent"] || "",
+  };
+
   // Force Atlas to materialise the tenant database, then seed default settings.
   // Fire-and-forget: failures are logged but must not block the main setup flow.
   const tenantClient = getClientForDb(dbName);
-  void (async () => {
-    try {
-      await (tenantClient.$runCommandRaw as any)({
-        insert: "_init",
-        documents: [
-          {
-            _id: { $oid: tenant.id },
-            tenantId: tenant.id,
-            initializedAt: new Date(),
-          },
-        ],
-      });
-      // Seed the initial TenantSettings version so services always have a DB record.
-      // workWeekPattern defaults to Mon-Fri if the signup step was skipped —
-      // never blocks tenant creation.
-      await (tenantClient as any).tenantSettings.create({
-        data: {
-          tenantId: tenant.id,
-          effectiveFrom: now,
-          createdBy: userId,
-          note: "Initial defaults",
-          workWeekPattern: workWeekPattern ?? {
-            type: "mon_fri",
-            workingDays: [1, 2, 3, 4, 5],
-          },
-          // Maternity Leave is a statutory entitlement in India (Maternity
-          // Benefit Act, 26 weeks) — seeded so it shows up as a real,
-          // editable policy in Settings rather than only existing as a bare
-          // dropdown option. Paternity is a common accompanying default.
-          leavePolicies: [
+  void runWithTenant(
+    tenant.id,
+    tenantClient,
+    async () => {
+      try {
+        await (tenantClient.$runCommandRaw as any)({
+          insert: "_init",
+          documents: [
             {
-              key: "MATERNITY",
-              name: "Maternity Leave",
-              daysPerYear: 182,
-              isStatutory: true,
-              requiresProof: true,
-              onExhaustion: "manager_override",
-            },
-            {
-              key: "PATERNITY",
-              name: "Paternity Leave",
-              daysPerYear: 15,
-              isStatutory: false,
-              requiresProof: false,
-              onExhaustion: "manager_override",
+              _id: { $oid: tenant.id },
+              tenantId: tenant.id,
+              initializedAt: new Date(),
             },
           ],
-        },
-      });
-    } catch (error: unknown) {
-      logger.warn("[buildTenant] Failed to seed TenantSettings:", { error });
-    }
-  })();
+        });
+        // Seed the initial TenantSettings version so services always have a DB record.
+        // workWeekPattern defaults to Mon-Fri if the signup step was skipped —
+        // never blocks tenant creation.
+        await (tenantClient as any).tenantSettings.create({
+          data: {
+            tenantId: tenant.id,
+            effectiveFrom: now,
+            createdBy: userId,
+            note: "Initial defaults",
+            workWeekPattern: workWeekPattern ?? {
+              type: "mon_fri",
+              workingDays: [1, 2, 3, 4, 5],
+            },
+            // Maternity Leave is a statutory entitlement in India (Maternity
+            // Benefit Act, 26 weeks) — seeded so it shows up as a real,
+            // editable policy in Settings rather than only existing as a bare
+            // dropdown option. Paternity is a common accompanying default.
+            leavePolicies: [
+              {
+                key: "MATERNITY",
+                name: "Maternity Leave",
+                daysPerYear: 182,
+                isStatutory: true,
+                requiresProof: true,
+                onExhaustion: "manager_override",
+              },
+              {
+                key: "PATERNITY",
+                name: "Paternity Leave",
+                daysPerYear: 15,
+                isStatutory: false,
+                requiresProof: false,
+                onExhaustion: "manager_override",
+              },
+            ],
+          },
+        });
+      } catch (error: unknown) {
+        logger.warn("[buildTenant] Failed to seed TenantSettings:", { error });
+      }
+    },
+    actor,
+  );
 
-  await Promise.all([
-    prisma.user.update({
-      where: { id: userId },
-      data: { tenantId: tenant.id, isSuperUser: true },
-    }),
-    prisma.tenantMembership.create({
-      data: { tenantId: tenant.id, userId, role: "owner" },
-    }),
-  ]);
+  await runWithTenant(
+    tenant.id,
+    tenantClient,
+    () =>
+      Promise.all([
+        prisma.user.update({
+          where: { id: userId },
+          data: { tenantId: tenant.id, isSuperUser: true },
+        }),
+        prisma.tenantMembership.create({
+          data: { tenantId: tenant.id, userId, role: "owner" },
+        }),
+      ]),
+    actor,
+  );
 
   const { accessToken, refreshToken } = issueTokenPair(
     userId,
@@ -362,6 +409,7 @@ export async function createTenant(req: AuthRequest, res: Response) {
         workWeekPattern,
       },
       res,
+      req,
     );
   } catch (error: unknown) {
     logger.error("createTenant error:", { error });
@@ -430,6 +478,7 @@ export async function completePendingSetup(req: AuthRequest, res: Response) {
         workWeekPattern,
       },
       res,
+      req,
     );
 
     // Fire-and-forget cleanup — response already sent by buildTenant.

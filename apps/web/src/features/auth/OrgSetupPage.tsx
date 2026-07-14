@@ -193,7 +193,6 @@ export default function OrgSetupPage() {
   } | null>(null);
   const [checkingDomain, setCheckingDomain] = useState(false);
   const [submittingJoinRequest, setSubmittingJoinRequest] = useState(false);
-  const [dismissedSuggestion, setDismissedSuggestion] = useState(false);
 
   const orgNameRef = useRef(orgName);
   const industryRef = useRef(industry);
@@ -525,11 +524,9 @@ export default function OrgSetupPage() {
   }, [joinRequestStatus, joinRequestTenant]);
 
   // A join offer (pending request or a fresh domain-match suggestion) takes
-  // priority over the create-org wizard until the user explicitly dismisses
-  // it via "Create a separate organisation instead".
-  const showJoinOffer =
-    !dismissedSuggestion &&
-    (joinRequestStatus === "pending" || !!domainSuggestion);
+  // priority over the create-org wizard for as long as it exists — a domain
+  // that already has an organisation must join it, not spin up a duplicate.
+  const showJoinOffer = joinRequestStatus === "pending" || !!domainSuggestion;
 
   const isCreatingNew =
     !fetching &&
@@ -735,27 +732,6 @@ export default function OrgSetupPage() {
               >
                 Check again
               </Button>
-              <Divider sx={{ my: 1, borderColor: "var(--text-input-border)" }}>
-                <Typography
-                  variant="caption"
-                  sx={{ color: "var(--text-color)", opacity: 0.6 }}
-                >
-                  or
-                </Typography>
-              </Divider>
-              <Typography
-                variant="body2"
-                textAlign="center"
-                sx={{
-                  color: "var(--text-color)",
-                  opacity: 0.7,
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                }}
-                onClick={() => setDismissedSuggestion(true)}
-              >
-                Create a separate organisation instead
-              </Typography>
             </Box>
           ) : showJoinOffer && domainSuggestion ? (
             /* Fresh domain-match offer */
@@ -767,8 +743,7 @@ export default function OrgSetupPage() {
               )}
               <Typography variant="body2" sx={{ color: "var(--text-color)" }}>
                 <strong>{domainSuggestion.tenantName}</strong> already has a
-                workspace for your email domain. Request to join, or create a
-                separate organisation.
+                workspace for your email domain. Request to join to continue.
               </Typography>
               <Button
                 variant="primary"
@@ -788,27 +763,6 @@ export default function OrgSetupPage() {
               >
                 Request to join
               </Button>
-              <Divider sx={{ my: 1, borderColor: "var(--text-input-border)" }}>
-                <Typography
-                  variant="caption"
-                  sx={{ color: "var(--text-color)", opacity: 0.6 }}
-                >
-                  or
-                </Typography>
-              </Divider>
-              <Typography
-                variant="body2"
-                textAlign="center"
-                sx={{
-                  color: "var(--text-color)",
-                  opacity: 0.7,
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                }}
-                onClick={() => setDismissedSuggestion(true)}
-              >
-                Create a separate organisation instead
-              </Typography>
             </Box>
           ) : tenants.length > 0 ? (
             /* Existing tenant picker */

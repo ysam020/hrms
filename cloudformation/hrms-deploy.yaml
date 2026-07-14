@@ -595,6 +595,19 @@ Resources:
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
+      # Each ASG instance runs its own local Redis (docker-compose.prod.yml),
+      # not a shared cache — multi-step flows that stash state there
+      # server-side (e.g. the WebAuthn login challenge) break if the ALB
+      # round-robins the two requests to different instances. Pin a browser
+      # session to one instance for the cookie's lifetime so those steps land
+      # on the same backend.
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: "true"
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: "3600"
 
   HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
