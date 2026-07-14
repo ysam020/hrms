@@ -338,6 +338,8 @@ function UserPermissions() {
                 scrollButtons="auto"
                 sx={{
                   borderColor: "divider",
+                  bgcolor: (t) =>
+                    t.palette.mode === "light" ? "#F5F5F6" : "#1C262A",
                   "& .MuiTabs-flexContainer": {
                     height: "auto",
                   },

@@ -23,6 +23,7 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import BadgeIcon from "@mui/icons-material/Badge";
 import BusinessIcon from "@mui/icons-material/Business";
 import PhoneIcon from "@mui/icons-material/Phone";
 import EmailIcon from "@mui/icons-material/Email";
@@ -42,6 +43,7 @@ interface OrgProfile {
   helpPhone: string | null;
   helpEmail: string | null;
   officeAddress: string | null;
+  tan: string | null;
   website: string | null;
   workState: string | null;
 }
@@ -114,6 +116,7 @@ export default function CompanyInfo() {
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  const [editTan, setEditTan] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
   const [editWorkState, setEditWorkState] = useState("");
 
@@ -136,6 +139,7 @@ export default function CompanyInfo() {
     setEditPhone(profile?.helpPhone ?? "");
     setEditEmail(profile?.helpEmail ?? "");
     setEditAddress(profile?.officeAddress ?? "");
+    setEditTan(profile?.tan ?? "");
     setEditWebsite(profile?.website ?? "");
     setEditWorkState(profile?.workState ?? "");
     setEditOpen(true);
@@ -148,6 +152,7 @@ export default function CompanyInfo() {
         helpPhone: editPhone || null,
         helpEmail: editEmail || null,
         officeAddress: editAddress || null,
+        tan: editTan || null,
         website: editWebsite || null,
         workState: editWorkState || null,
       });
@@ -175,6 +180,7 @@ export default function CompanyInfo() {
     profile?.helpPhone ||
     profile?.helpEmail ||
     profile?.officeAddress ||
+    profile?.tan ||
     profile?.website ||
     profile?.workState;
 
@@ -254,6 +260,7 @@ export default function CompanyInfo() {
                 label="State"
                 value={profile.workState}
               />
+              <InfoRow icon={<BadgeIcon />} label="TAN" value={profile.tan} />
               <InfoRow
                 icon={<LanguageIcon />}
                 label="Website"
@@ -329,6 +336,15 @@ export default function CompanyInfo() {
               ))}
             </Select>
           </FormControl>
+          <TextField
+            label="TAN"
+            fullWidth
+            value={editTan}
+            onChange={(e) => setEditTan(e.target.value.toUpperCase())}
+            placeholder="DELB12345C"
+            helperText="Tax Deduction and Collection Account Number — printed on Form 16"
+            size="small"
+          />
           <TextField
             label="Website"
             fullWidth

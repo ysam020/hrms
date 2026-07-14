@@ -627,6 +627,7 @@ export async function getOrgProfile(req: AuthRequest, res: Response) {
         helpPhone: true,
         helpEmail: true,
         officeAddress: true,
+        tan: true,
         website: true,
         workState: true,
       },
@@ -660,11 +661,12 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
     });
   }
   try {
-    const { helpPhone, helpEmail, officeAddress, website, workState } =
+    const { helpPhone, helpEmail, officeAddress, tan, website, workState } =
       req.body as {
         helpPhone?: string;
         helpEmail?: string;
         officeAddress?: string;
+        tan?: string;
         website?: string;
         workState?: string;
       };
@@ -676,6 +678,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
         ...(officeAddress !== undefined && {
           officeAddress: officeAddress || null,
         }),
+        ...(tan !== undefined && { tan: tan || null }),
         ...(website !== undefined && { website: website || null }),
         ...(workState !== undefined && { workState: workState || null }),
       },
@@ -684,6 +687,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
         helpPhone: true,
         helpEmail: true,
         officeAddress: true,
+        tan: true,
         website: true,
         workState: true,
       },

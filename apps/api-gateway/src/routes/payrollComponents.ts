@@ -7,6 +7,8 @@ import {
   updateSalaryComponentSchema,
   createPtSlabSchema,
   updatePtSlabSchema,
+  createIncomeTaxSlabSchema,
+  updateIncomeTaxSlabSchema,
   createPayCycleSchema,
   updatePayCycleSchema,
 } from "../schemas";
@@ -50,6 +52,25 @@ payrollComponentsRouter.put(
   h.updatePtSlab,
 );
 payrollComponentsRouter.delete("/pt-slabs/:id", authenticate, h.deletePtSlab);
+
+payrollComponentsRouter.get("/tds-slabs", authenticate, h.listIncomeTaxSlabs);
+payrollComponentsRouter.post(
+  "/tds-slabs",
+  authenticate,
+  validate(createIncomeTaxSlabSchema),
+  h.createIncomeTaxSlab,
+);
+payrollComponentsRouter.put(
+  "/tds-slabs/:id",
+  authenticate,
+  validate(updateIncomeTaxSlabSchema),
+  h.updateIncomeTaxSlab,
+);
+payrollComponentsRouter.delete(
+  "/tds-slabs/:id",
+  authenticate,
+  h.deleteIncomeTaxSlab,
+);
 
 payrollComponentsRouter.get("/pay-cycles", authenticate, h.listPayCycles);
 payrollComponentsRouter.post(

@@ -687,6 +687,7 @@ export const createSalaryComponentSchema = z.object({
   calcType: z.enum(["fixed", "percent_of_basic", "formula"]).default("fixed"),
   percentOf: z.string().max(60).optional(),
   percentValue: z.number().min(0).optional(),
+  isRecurring: z.boolean().default(true),
   displayOrder: z.number().int().min(0).default(0),
 });
 
@@ -702,6 +703,62 @@ export const createPtSlabSchema = z.object({
 });
 
 export const updatePtSlabSchema = createPtSlabSchema.partial();
+
+export const createIncomeTaxSlabSchema = z.object({
+  financialYear: z.string().min(1).max(20),
+  regime: z.enum(["old", "new"]),
+  minIncome: z.number().min(0),
+  maxIncome: z.number().min(0).optional(),
+  ratePercent: z.number().min(0).max(100),
+});
+
+export const updateIncomeTaxSlabSchema = createIncomeTaxSlabSchema.partial();
+
+// ── Tax declarations (Old Regime) ────────────────────────────────────────────
+
+const taxDeclarationLineItemSchema = z.object({
+  code: z.enum([
+    "SEC80C",
+    "SEC80D_SELF",
+    "SEC80D_PARENTS",
+    "HOME_LOAN_INTEREST",
+    "NPS_80CCD1B",
+    "OTHER",
+  ]),
+  label: z.string().max(120).optional(),
+  declaredAmount: z.number().min(0),
+  proofAmount: z.number().min(0).optional(),
+});
+
+export const saveDraftDeclarationSchema = z.object({
+  financialYear: z.string().min(1).max(20).optional(),
+  monthlyRent: z.number().min(0).optional(),
+  isMetroCity: z.boolean().optional(),
+  lineItems: z.array(taxDeclarationLineItemSchema).optional(),
+});
+
+export const submitDeclarationSchema = z.object({
+  financialYear: z.string().min(1).max(20).optional(),
+});
+
+export const submitDeclarationProofsSchema = z.object({
+  financialYear: z.string().min(1).max(20).optional(),
+  proofs: z.record(z.number().min(0)),
+});
+
+export const reviewDeclarationSchema = z.object({
+  userId: z.string().min(1),
+  financialYear: z.string().min(1).max(20),
+  decision: z.enum(["Declared", "RevisionRequested"]),
+  revisionNotes: z.record(z.string()).optional(),
+});
+
+export const reviewDeclarationProofsSchema = z.object({
+  userId: z.string().min(1),
+  financialYear: z.string().min(1).max(20),
+  decision: z.enum(["Verified", "ProofRevisionRequested"]),
+  revisionNotes: z.record(z.string()).optional(),
+});
 
 export const createPayCycleSchema = z.object({
   name: z.string().min(1).max(120),

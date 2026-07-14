@@ -34,13 +34,37 @@ const salaryRow = {
   year: 2024,
   netPayable: 50000,
 };
+// Shape as it comes out of Prisma (snake_case, matching the User model columns).
 const employeeRow = {
   id: "u1",
   username: "john",
   email: "john@test.com",
   first_name: "John",
   last_name: "Doe",
+  department: null,
+  designation: null,
   joining_date: null,
+  uan_no: null,
+  bank_account_no: null,
+  pan_no: null,
+  dob: null,
+};
+// Shape the handler must emit on the wire — the Employee proto message's
+// generated encode() reads camelCase properties, not Prisma's snake_case
+// column names, so the handler maps every field explicitly (see getPayslip.ts).
+const expectedEmployeeWire = {
+  id: "u1",
+  username: "john",
+  email: "john@test.com",
+  firstName: "John",
+  lastName: "Doe",
+  department: "",
+  designation: "",
+  joiningDate: "",
+  uanNo: "",
+  bankAccountNo: "",
+  panNo: "",
+  dob: "",
 };
 
 describe("getPayslip", () => {
@@ -88,7 +112,7 @@ describe("getPayslip", () => {
     const response = cb.mock.calls[0][1];
     expect(response.status).toBe(0);
     expect(response.data.attendanceSummary).toBeNull();
-    expect(response.data.employee).toEqual(employeeRow);
+    expect(response.data.employee).toEqual(expectedEmployeeWire);
     expect(response.data.salaryStructure).toEqual({
       ...salaryRow,
       components: [],

@@ -10,10 +10,12 @@ jest.mock("@hrms/db", () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
-    payrollLineItem: { createMany: jest.fn() },
+    payrollLineItem: { createMany: jest.fn(), findMany: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
     leaveBalance: { findMany: jest.fn() },
     professionalTaxSlab: { findMany: jest.fn() },
+    incomeTaxSlab: { findMany: jest.fn() },
+    taxDeclaration: { findMany: jest.fn() },
     salaryComponentDefinition: { findMany: jest.fn() },
     salaryAdvance: { findMany: jest.fn() },
     salaryStructure: { findMany: jest.fn() },
@@ -67,6 +69,7 @@ const mockUserFindMany = prisma.user.findMany as jest.Mock;
 const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 const mockRunFindUnique = (prisma as any).payrollRun.findUnique as jest.Mock;
 const mockRunCreate = (prisma as any).payrollRun.create as jest.Mock;
+const mockRunFindManyForTds = (prisma as any).payrollRun.findMany as jest.Mock;
 const mockLineItemCreateMany = (prisma as any).payrollLineItem
   .createMany as jest.Mock;
 const mockAttendanceFindMany = (prisma as any).attendanceRecord
@@ -74,6 +77,12 @@ const mockAttendanceFindMany = (prisma as any).attendanceRecord
 const mockLeaveBalanceFindMany = (prisma as any).leaveBalance
   .findMany as jest.Mock;
 const mockPtSlabFindMany = (prisma as any).professionalTaxSlab
+  .findMany as jest.Mock;
+const mockIncomeTaxSlabFindMany = (prisma as any).incomeTaxSlab
+  .findMany as jest.Mock;
+const mockTaxDeclarationFindMany = (prisma as any).taxDeclaration
+  .findMany as jest.Mock;
+const mockLineItemFindMany = (prisma as any).payrollLineItem
   .findMany as jest.Mock;
 const mockComponentFindMany = (prisma as any).salaryComponentDefinition
   .findMany as jest.Mock;
@@ -118,6 +127,10 @@ describe("initiatePayrollRun", () => {
     mockTenantSettingsFindFirst.mockResolvedValue(null);
     mockHolidayFindMany.mockResolvedValue([]);
     mockPayCycleFindFirst.mockResolvedValue(null);
+    mockIncomeTaxSlabFindMany.mockResolvedValue([]);
+    mockTaxDeclarationFindMany.mockResolvedValue([]);
+    mockLineItemFindMany.mockResolvedValue([]);
+    mockRunFindManyForTds.mockResolvedValue([]);
   });
 
   it("uses the employee's own configured Basic/HRA/Conveyance, prorated by attendance, instead of the fixed 50/25/25 split", async () => {

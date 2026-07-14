@@ -61,6 +61,12 @@ const EditSalaryStructure = lazy(
   () => import("@web/features/salary/EditSalaryStructure"),
 );
 
+// Tax Declaration (detail view only — the review list is a tab inside Payroll)
+const ViewIndividualTaxDeclaration = lazy(
+  () =>
+    import("@web/features/payroll/tax-declaration/ViewIndividualTaxDeclaration"),
+);
+
 // Holidays
 const Holidays = lazy(() => import("@web/features/holidays/Holidays"));
 
@@ -337,6 +343,17 @@ const routesConfig = () => {
       ),
       allowedModules: ["Salary Management"],
       name: "Edit Salary Structure",
+      category: "HR & Management",
+    },
+    {
+      path: "/payroll/tax-declarations/:userId",
+      element: (
+        <RequireAccess check={isHrOrAbove}>
+          <ViewIndividualTaxDeclaration />
+        </RequireAccess>
+      ),
+      allowedModules: ["Payroll Management"],
+      name: "Review Tax Declaration",
       category: "HR & Management",
     },
     {

@@ -53,6 +53,7 @@ export const getPayslip = async (
         uan_no: true,
         bank_account_no: true,
         pan_no: true,
+        dob: true, // used by the gateway to derive the PDF password (PAN + DDMMYYYY)
       },
     });
 
@@ -143,9 +144,24 @@ export const getPayslip = async (
       message: MESSAGES.PAYSLIP_FETCHED,
       status: status.OK,
       data: {
+        // The Employee proto message's generated encode() reads camelCase
+        // properties (firstName, panNo, ...) — Prisma's User model uses
+        // snake_case column names, so this must be mapped explicitly rather
+        // than spread as-is, or every snake_case field silently encodes as
+        // empty (protobuf has no name-based passthrough, only field numbers).
         employee: {
-          ...employee,
-          joining_date: employee.joining_date?.toISOString() ?? null,
+          id: employee.id,
+          username: employee.username,
+          email: employee.email ?? "",
+          firstName: employee.first_name ?? "",
+          lastName: employee.last_name ?? "",
+          department: employee.department ?? "",
+          designation: employee.designation ?? "",
+          joiningDate: employee.joining_date?.toISOString() ?? "",
+          uanNo: employee.uan_no ?? "",
+          bankAccountNo: employee.bank_account_no ?? "",
+          panNo: employee.pan_no ?? "",
+          dob: employee.dob?.toISOString() ?? "",
         },
         salaryStructure: toWireSalaryStructure(salaryStructure),
         attendanceSummary,

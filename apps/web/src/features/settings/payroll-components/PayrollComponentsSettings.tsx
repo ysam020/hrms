@@ -47,6 +47,7 @@ interface SalaryComponent {
   calcType: "fixed" | "percent_of_basic" | "formula";
   percentValue: number | null;
   isStatutory: boolean;
+  isRecurring: boolean;
   displayOrder: number;
 }
 
@@ -56,6 +57,15 @@ interface PtSlab {
   minGross: number;
   maxGross: number | null;
   monthlyPT: number;
+}
+
+interface IncomeTaxSlab {
+  id: string;
+  financialYear: string;
+  regime: "old" | "new";
+  minIncome: number;
+  maxIncome: number | null;
+  ratePercent: number;
 }
 
 interface PayCycle {
@@ -73,6 +83,7 @@ const EMPTY_COMPONENT_FORM = {
   isTaxable: true,
   calcType: "fixed" as "fixed" | "percent_of_basic" | "formula",
   percentValue: 0,
+  isRecurring: true,
   displayOrder: 0,
 };
 
@@ -88,6 +99,21 @@ const EMPTY_CYCLE_FORM = {
   frequency: "monthly" as PayCycle["frequency"],
   payDay: 1,
   isDefault: false,
+};
+
+function currentFinancialYear(): string {
+  const now = new Date();
+  const startYear =
+    now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+const EMPTY_TAX_SLAB_FORM = {
+  financialYear: currentFinancialYear(),
+  regime: "new" as "old" | "new",
+  minIncome: 0,
+  maxIncome: "" as number | "",
+  ratePercent: 0,
 };
 
 export default function PayrollComponentsSettings() {
@@ -118,6 +144,16 @@ export default function PayrollComponentsSettings() {
   const [savingSlab, setSavingSlab] = useState(false);
   const [deleteSlabTarget, setDeleteSlabTarget] = useState<PtSlab | null>(null);
 
+  const [taxSlabs, setTaxSlabs] = useState<IncomeTaxSlab[]>([]);
+  const [taxSlabDialogOpen, setTaxSlabDialogOpen] = useState(false);
+  const [editingTaxSlab, setEditingTaxSlab] = useState<IncomeTaxSlab | null>(
+    null,
+  );
+  const [taxSlabForm, setTaxSlabForm] = useState(EMPTY_TAX_SLAB_FORM);
+  const [savingTaxSlab, setSavingTaxSlab] = useState(false);
+  const [deleteTaxSlabTarget, setDeleteTaxSlabTarget] =
+    useState<IncomeTaxSlab | null>(null);
+
   const [cycleDialogOpen, setCycleDialogOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<PayCycle | null>(null);
   const [cycleForm, setCycleForm] = useState(EMPTY_CYCLE_FORM);
@@ -129,14 +165,17 @@ export default function PayrollComponentsSettings() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [componentsRes, slabsRes, cyclesRes] = await Promise.all([
-        apiClient.get(API_ENDPOINTS.LIST_SALARY_COMPONENTS),
-        apiClient.get(API_ENDPOINTS.LIST_PT_SLABS),
-        apiClient.get(API_ENDPOINTS.LIST_PAY_CYCLES),
-      ]);
+      const [componentsRes, slabsRes, cyclesRes, taxSlabsRes] =
+        await Promise.all([
+          apiClient.get(API_ENDPOINTS.LIST_SALARY_COMPONENTS),
+          apiClient.get(API_ENDPOINTS.LIST_PT_SLABS),
+          apiClient.get(API_ENDPOINTS.LIST_PAY_CYCLES),
+          apiClient.get(API_ENDPOINTS.LIST_TDS_SLABS),
+        ]);
       setComponents(componentsRes.data?.data ?? []);
       setSlabs(slabsRes.data?.data ?? []);
       setCycles(cyclesRes.data?.data ?? []);
+      setTaxSlabs(taxSlabsRes.data?.data ?? []);
     } catch (err: any) {
       setAlert({
         open: true,
@@ -170,6 +209,7 @@ export default function PayrollComponentsSettings() {
       isTaxable: c.isTaxable,
       calcType: c.calcType,
       percentValue: c.percentValue ?? 0,
+      isRecurring: c.isRecurring ?? true,
       displayOrder: c.displayOrder,
     });
     setComponentDialogOpen(true);
@@ -281,6 +321,80 @@ export default function PayrollComponentsSettings() {
       await apiClient.delete(API_ENDPOINTS.DELETE_PT_SLAB(deleteSlabTarget.id));
       setAlert({ open: true, message: "Slab removed.", severity: "info" });
       setDeleteSlabTarget(null);
+      await fetchAll();
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message: err?.response?.data?.message ?? "Failed to remove slab.",
+        severity: "error",
+      });
+    }
+  }
+
+  // ── Income Tax (TDS) slab handlers ───────────────────────────────────────────
+
+  function openAddTaxSlab() {
+    setEditingTaxSlab(null);
+    setTaxSlabForm(EMPTY_TAX_SLAB_FORM);
+    setTaxSlabDialogOpen(true);
+  }
+  function openEditTaxSlab(s: IncomeTaxSlab) {
+    setEditingTaxSlab(s);
+    setTaxSlabForm({
+      financialYear: s.financialYear,
+      regime: s.regime,
+      minIncome: s.minIncome,
+      maxIncome: s.maxIncome ?? "",
+      ratePercent: s.ratePercent,
+    });
+    setTaxSlabDialogOpen(true);
+  }
+  async function saveTaxSlab() {
+    setSavingTaxSlab(true);
+    try {
+      const payload = {
+        financialYear: taxSlabForm.financialYear,
+        regime: taxSlabForm.regime,
+        minIncome: taxSlabForm.minIncome,
+        maxIncome:
+          taxSlabForm.maxIncome === ""
+            ? undefined
+            : Number(taxSlabForm.maxIncome),
+        ratePercent: taxSlabForm.ratePercent,
+      };
+      if (editingTaxSlab) {
+        await apiClient.put(
+          API_ENDPOINTS.UPDATE_TDS_SLAB(editingTaxSlab.id),
+          payload,
+        );
+      } else {
+        await apiClient.post(API_ENDPOINTS.CREATE_TDS_SLAB, payload);
+      }
+      setAlert({
+        open: true,
+        message: editingTaxSlab ? "Slab updated." : "Slab added.",
+        severity: "success",
+      });
+      setTaxSlabDialogOpen(false);
+      await fetchAll();
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message: err?.response?.data?.message ?? "Failed to save slab.",
+        severity: "error",
+      });
+    } finally {
+      setSavingTaxSlab(false);
+    }
+  }
+  async function confirmDeleteTaxSlab() {
+    if (!deleteTaxSlabTarget) return;
+    try {
+      await apiClient.delete(
+        API_ENDPOINTS.DELETE_TDS_SLAB(deleteTaxSlabTarget.id),
+      );
+      setAlert({ open: true, message: "Slab removed.", severity: "info" });
+      setDeleteTaxSlabTarget(null);
       await fetchAll();
     } catch (err: any) {
       setAlert({
@@ -406,6 +520,11 @@ export default function PayrollComponentsSettings() {
             iconPosition="start"
             label={`Pay Cycles (${cycles.length})`}
           />
+          <Tab
+            icon={<PaymentsIcon fontSize="small" />}
+            iconPosition="start"
+            label={`Income Tax Slabs (${taxSlabs.length})`}
+          />
         </Tabs>
 
         {/* ── Components ── */}
@@ -445,6 +564,14 @@ export default function PayrollComponentsSettings() {
                           <Chip
                             size="small"
                             label="Statutory"
+                            sx={{ ml: 1 }}
+                            variant="outlined"
+                          />
+                        )}
+                        {c.type === "earning" && c.isRecurring === false && (
+                          <Chip
+                            size="small"
+                            label="One-time"
                             sx={{ ml: 1 }}
                             variant="outlined"
                           />
@@ -622,6 +749,86 @@ export default function PayrollComponentsSettings() {
             )}
           </Box>
         )}
+
+        {/* ── Income Tax Slabs ── */}
+        {tab === 3 && (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Income tax (TDS) slabs change almost every Union Budget — add a
+              row per bracket for each regime and financial year. Without any
+              rows configured, TDS falls back to the last confirmed slabs
+              (FY2025-26).
+            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+              {canEdit && (
+                <Button
+                  variant="primary"
+                  size="small"
+                  icon={<AddCircleOutlineIcon />}
+                  onClick={openAddTaxSlab}
+                >
+                  Add slab
+                </Button>
+              )}
+            </Box>
+            {taxSlabs.length === 0 ? (
+              <Alert severity="info">
+                No Income Tax slabs configured — TDS uses the FY2025-26 fallback
+                slabs for both regimes.
+              </Alert>
+            ) : (
+              <DataList
+                ariaLabel="Income tax slabs"
+                variant="rows"
+                data={taxSlabs}
+                getRowId={(s) => s.id}
+                columns={[
+                  { key: "financialYear", label: "FY" },
+                  {
+                    key: "regime",
+                    label: "Regime",
+                    render: (s) => (
+                      <Chip
+                        size="small"
+                        label={s.regime === "new" ? "New Regime" : "Old Regime"}
+                        color={s.regime === "new" ? "primary" : "default"}
+                        variant="outlined"
+                      />
+                    ),
+                  },
+                  {
+                    key: "incomeRange",
+                    label: "Income range",
+                    render: (s) =>
+                      `₹${s.minIncome} – ${s.maxIncome != null ? `₹${s.maxIncome}` : "∞"}`,
+                  },
+                  {
+                    key: "ratePercent",
+                    label: "Rate",
+                    render: (s) => `${s.ratePercent}%`,
+                  },
+                ]}
+                actions={
+                  canEdit
+                    ? (s) => [
+                        {
+                          icon: <EditIcon fontSize="small" />,
+                          label: "Edit",
+                          onClick: () => openEditTaxSlab(s),
+                        },
+                        {
+                          icon: <DeleteIcon fontSize="small" />,
+                          label: "Remove",
+                          color: "error" as const,
+                          onClick: () => setDeleteTaxSlabTarget(s),
+                        },
+                      ]
+                    : undefined
+                }
+              />
+            )}
+          </Box>
+        )}
       </Paper>
 
       {/* ── Component dialog ── */}
@@ -727,6 +934,27 @@ export default function PayrollComponentsSettings() {
             }
             label={<Typography variant="body2">Taxable</Typography>}
           />
+          {componentForm.type === "earning" && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={componentForm.isRecurring}
+                  onChange={(e) =>
+                    setComponentForm((f) => ({
+                      ...f,
+                      isRecurring: e.target.checked,
+                    }))
+                  }
+                />
+              }
+              label={
+                <Typography variant="body2">
+                  Recurring (projects forward on the TDS worksheet — turn off
+                  for one-time payments like a bonus)
+                </Typography>
+              }
+            />
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
@@ -917,6 +1145,107 @@ export default function PayrollComponentsSettings() {
         </DialogActions>
       </Dialog>
 
+      {/* ── Income Tax slab dialog ── */}
+      <Dialog
+        open={taxSlabDialogOpen}
+        onClose={() => setTaxSlabDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        TransitionComponent={SlideUpTransition}
+      >
+        <DialogTitle>
+          {editingTaxSlab ? "Edit Income Tax slab" : "Add Income Tax slab"}
+        </DialogTitle>
+        <DialogContent
+          sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
+        >
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="Financial year"
+                size="small"
+                fullWidth
+                placeholder="2025-26"
+                value={taxSlabForm.financialYear}
+                onChange={(e) =>
+                  setTaxSlabForm((f) => ({
+                    ...f,
+                    financialYear: e.target.value,
+                  }))
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Regime</InputLabel>
+                <Select
+                  label="Regime"
+                  value={taxSlabForm.regime}
+                  onChange={(e) =>
+                    setTaxSlabForm((f) => ({
+                      ...f,
+                      regime: e.target.value as "old" | "new",
+                    }))
+                  }
+                >
+                  <MenuItem value="new">New Regime</MenuItem>
+                  <MenuItem value="old">Old Regime</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 4 }}>
+              {numField(
+                "Min income",
+                taxSlabForm.minIncome,
+                (v) => setTaxSlabForm((f) => ({ ...f, minIncome: v })),
+                { min: 0, suffix: "₹" },
+              )}
+            </Grid>
+            <Grid size={{ xs: 4 }}>
+              {numField(
+                "Max income",
+                taxSlabForm.maxIncome === ""
+                  ? 0
+                  : Number(taxSlabForm.maxIncome),
+                (v) => setTaxSlabForm((f) => ({ ...f, maxIncome: v })),
+                { min: 0, suffix: "₹", helperText: "0 = no upper bound" },
+              )}
+            </Grid>
+            <Grid size={{ xs: 4 }}>
+              {numField(
+                "Rate",
+                taxSlabForm.ratePercent,
+                (v) => setTaxSlabForm((f) => ({ ...f, ratePercent: v })),
+                { min: 0, max: 100, suffix: "%" },
+              )}
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            variant="ghost"
+            size="small"
+            onClick={() => setTaxSlabDialogOpen(false)}
+            disabled={savingTaxSlab}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="small"
+            onClick={saveTaxSlab}
+            disabled={savingTaxSlab || !taxSlabForm.financialYear.trim()}
+            loading={savingTaxSlab}
+            loadingText="Saving…"
+            icon={<SaveIcon />}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <ConfirmationDialog
         open={!!deleteComponentTarget}
         onClose={() => setDeleteComponentTarget(null)}
@@ -939,6 +1268,14 @@ export default function PayrollComponentsSettings() {
         onConfirm={confirmDeleteCycle}
         title="Remove pay cycle?"
         message={`"${deleteCycleTarget?.name}" will no longer be assignable.`}
+        variant="danger"
+      />
+      <ConfirmationDialog
+        open={!!deleteTaxSlabTarget}
+        onClose={() => setDeleteTaxSlabTarget(null)}
+        onConfirm={confirmDeleteTaxSlab}
+        title="Remove slab?"
+        message={`This ${deleteTaxSlabTarget?.financialYear} ${deleteTaxSlabTarget?.regime === "new" ? "New" : "Old"} Regime slab will no longer apply.`}
         variant="danger"
       />
     </Box>

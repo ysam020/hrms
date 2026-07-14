@@ -37,6 +37,14 @@ export const permissionStructure = {
       request_kyc_revision: ["all"],
     },
   },
+  TaxDeclaration: {
+    actions: {
+      fill_declaration: ["self"],
+      view_declaration: ["self", "all"],
+      review_declaration: ["all"],
+      review_proofs: ["all"],
+    },
+  },
   JobOpenings: {
     actions: {
       view_job_openings: ["-"],
