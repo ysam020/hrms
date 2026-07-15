@@ -35,6 +35,7 @@ import { Dropdown } from "primereact/dropdown";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 
 function ViewLeaveApplications() {
   const [statusFilter, setStatusFilter] = useState("All");
@@ -46,8 +47,7 @@ function ViewLeaveApplications() {
   const { user } = useContext(UserContext);
   const { theme } = useContext(ThemeContext);
   const canManageLeave =
-    user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    isOwnerOrAdmin(user) ||
     hasPermission(
       "Leave",
       "approve",
@@ -415,8 +415,7 @@ function ViewLeaveApplications() {
     [],
   );
 
-  const isPrivilegedUser =
-    user?.isSuperUser || ["owner", "admin"].includes(user?.tenantRole ?? "");
+  const isPrivilegedUser = isOwnerOrAdmin(user);
 
   const rowActions = useCallback(
     (row: any) => {

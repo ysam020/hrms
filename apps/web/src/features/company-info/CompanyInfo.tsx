@@ -37,6 +37,7 @@ import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { UserContext } from "@web/app/providers/UserContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { states } from "@web/assets/data/statesData";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 
 interface OrgProfile {
   name: string;
@@ -121,8 +122,7 @@ export default function CompanyInfo() {
   const [editWorkState, setEditWorkState] = useState("");
 
   const canEdit =
-    user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    isOwnerOrAdmin(user) ||
     user?.permissions?.includes("Organisation:edit_company_info");
 
   useEffect(() => {

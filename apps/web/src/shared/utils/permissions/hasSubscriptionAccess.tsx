@@ -1,3 +1,5 @@
+import { ROLE, type TenantRole } from "./roles";
+
 /**
  * Owners and admins can always manage the subscription for their org.
  * Superusers and explicit `Subscription:*` permission holders can also access it.
@@ -11,7 +13,9 @@ const hasSubscriptionAccess = (
 ): boolean => {
   return Boolean(
     user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    ([ROLE.OWNER, ROLE.ADMIN] as TenantRole[]).includes(
+      (user?.tenantRole ?? "") as TenantRole,
+    ) ||
     user?.permissions?.some((p: string) => p.startsWith("Subscription:")),
   );
 };

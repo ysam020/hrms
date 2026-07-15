@@ -16,6 +16,7 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -131,9 +132,7 @@ function PayrollRuns() {
   const [statusFilter, setStatusFilter] = useState("All");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isHr =
-    user?.role?.some((r: string) => ["owner", "admin", "hr"].includes(r)) ||
-    user?.isSuperUser;
+  const isHr = isHrOrAbove(user);
 
   const fetchRuns = useCallback(
     async ({ page, limit }) => {

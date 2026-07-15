@@ -39,6 +39,7 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import WorkIcon from "@mui/icons-material/Work";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import { UserContext } from "@web/app/providers/UserContext";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
@@ -180,8 +181,7 @@ export default function OnboardingModals() {
   const [skippedHint, setSkippedHint] = useState<string | null>(null);
   const [hintOpen, setHintOpen] = useState(false);
 
-  const isEligible =
-    user?.isSuperUser || ["owner", "admin"].includes(user?.tenantRole ?? "");
+  const isEligible = isOwnerOrAdmin(user);
 
   // Instant paint from cache, then reconcile against the server.
   useEffect(() => {

@@ -21,6 +21,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
 import { validationSchema } from "./schemas";
 import Button from "@web/shared/components/Button";
@@ -38,8 +39,7 @@ function ViewDetails() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const canEditEmployee =
-    user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    isOwnerOrAdmin(user) ||
     hasPermission(
       "EmployeeManagement",
       "edit",

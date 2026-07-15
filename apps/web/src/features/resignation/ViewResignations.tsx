@@ -30,6 +30,7 @@ import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "All" },
@@ -260,8 +261,7 @@ function ViewResignations() {
   const actions = useCallback(
     (rowData: any) => {
       const canManageResignation =
-        user?.isSuperUser ||
-        ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+        isOwnerOrAdmin(user) ||
         hasPermission(
           "ResignationProcess",
           "approve_resignation",
@@ -298,8 +298,7 @@ function ViewResignations() {
         rowData.status === "Submitted" &&
         (rowData.userId === user.id || user?.isSuperUser);
       const canManageExit =
-        (user?.isSuperUser ||
-          ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+        (isOwnerOrAdmin(user) ||
           hasPermission(
             "ResignationProcess",
             "update_resignation_status",
