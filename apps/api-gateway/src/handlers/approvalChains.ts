@@ -1,7 +1,8 @@
 import { Response } from "express";
-import { recruitment } from "@hrms/proto";
+import { recruitment, salary } from "@hrms/proto";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { cacheManager } from "@hrms/cache";
 import { logger } from "@hrms/logger";
 import {
   actOnStep,
@@ -12,7 +13,13 @@ import {
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
-import { leaveClient, recruitmentClient, grpcCall } from "../grpc/clients";
+import {
+  leaveClient,
+  recruitmentClient,
+  salaryClient,
+  performanceReviewClient,
+  grpcCall,
+} from "../grpc/clients";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -640,6 +647,123 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
         toDate: wfhReq.toDate,
       });
     }
+  },
+  // Performance reviews are a separate gRPC service (performance-review-service).
+  // No microservice in this codebase calls another microservice's gRPC client
+  // directly — the gateway is the only cross-service orchestrator — so the
+  // salary-revision auto-creation on approval happens here, not inside
+  // performance-review-service itself: create the new SalaryStructure first
+  // (if the manager recommended one), then tell performance-review-service to
+  // finalize the review with a reference to it.
+  performance_review: async ({ tenantId, entityId, finalStatus }) => {
+    let salaryStructureId: string | undefined;
+    if (finalStatus === "approved") {
+      const reviewResp: any = await grpcCall(
+        performanceReviewClient,
+        "getReview",
+        { id: entityId },
+      );
+      const review = reviewResp?.data;
+
+      // The manager only recommends a % increment — resolved against the
+      // employee's current gross (User.salary) to get the new CTC.
+      let newCtc = 0;
+      if (review?.recommendedIncrementPct) {
+        const employee = await prisma.user.findUnique({
+          where: { id: review.userId },
+          select: { salary: true },
+        });
+        const currentSalary = employee?.salary ?? 0;
+        if (currentSalary > 0) {
+          newCtc = Math.round(
+            currentSalary * (1 + review.recommendedIncrementPct / 100),
+          );
+        }
+      }
+
+      if (newCtc > 0) {
+        const effectiveDate = review.effectiveFrom
+          ? new Date(review.effectiveFrom)
+          : new Date();
+        const month = effectiveDate.getMonth() + 1;
+        const year = effectiveDate.getFullYear();
+
+        // Mirror updateSalary's own find-or-create (handlers/salary.ts): a
+        // SalaryStructure row already exists for this (userId, month, year)
+        // more often than not (e.g. seeded/legacy data, or a prior revision
+        // landing in the same period) — update that row in place instead of
+        // appending a duplicate one for the same period.
+        const existing: any = await grpcCall(
+          salaryClient,
+          "getSalaryStructure",
+          {
+            userId: review.userId,
+            month,
+            year,
+          },
+        );
+
+        let result: any;
+        if (existing?.data?.id) {
+          // fromPartial fills every OMITTED numeric field with proto3's
+          // zero-value default, and updateSalaryStructure.ts treats an
+          // explicit 0 as "caller provided this" — so hra/conveyance/etc
+          // must be carried over explicitly here, or they'd get silently
+          // wiped to 0 instead of left untouched.
+          result = await grpcCall(
+            salaryClient,
+            "updateSalaryStructure",
+            salary.UpdateSalaryRequest.fromPartial({
+              id: existing.data.id,
+              basicPay: newCtc,
+              hra: existing.data.hra ?? 0,
+              conveyance: existing.data.conveyance ?? 0,
+              incentive: existing.data.incentive ?? 0,
+              pf: existing.data.pf ?? 0,
+              esi: existing.data.esi ?? 0,
+              pt: existing.data.pt ?? 0,
+              deductions: existing.data.deductions ?? 0,
+            }),
+          );
+        } else {
+          result = await grpcCall(
+            salaryClient,
+            "createSalaryStructure",
+            salary.CreateSalaryRequest.fromPartial({
+              userId: review.userId,
+              basicPay: newCtc,
+              month,
+              year,
+            }),
+          );
+        }
+        salaryStructureId = result?.data?.id;
+
+        // createSalaryStructure only writes the SalaryStructure collection —
+        // it does NOT sync User.salary the way the gateway's own updateSalary
+        // handler does (handlers/salary.ts), which is what the Employees
+        // module and payroll proration actually read. Without this, the
+        // revision is invisible everywhere except payslip generation for
+        // that specific month/year.
+        await prisma.user.update({
+          where: { id: review.userId },
+          data: { salary: newCtc, salaryBasicPay: newCtc },
+        });
+
+        // The Employee module's employee-details response is cached — without
+        // busting it here (same as updateSalary in handlers/salary.ts does),
+        // it keeps serving the pre-revision payload (a 304) even though
+        // User.salary was just updated underneath it.
+        await cacheManager.invalidatePattern(
+          `t:${tenantId}:employee-details:*`,
+        );
+      }
+    }
+    await grpcCall(performanceReviewClient, "finalizeReview", {
+      id: entityId,
+      approved: finalStatus === "approved",
+      salaryStructureId,
+    });
   },
 };
 

@@ -1,0 +1,23 @@
+{
+  "name": "performance-review-service",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "node dist/bootstrap.js",
+    "prod": "node dist/bootstrap.js",
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@hrms/approval-engine": "workspace:*",
+    "@hrms/common": "workspace:*",
+    "@hrms/db": "workspace:*",
+    "@hrms/grpc-server": "workspace:*",
+    "@hrms/logger": "workspace:*",
+    "@hrms/proto": "workspace:^",
+    "dayjs": "^1.11.13",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@hrms/typescript-config": "workspace:*",
+    "tsx": "^4.19.2"
+  }
+}

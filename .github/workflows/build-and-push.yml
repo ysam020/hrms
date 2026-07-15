@@ -67,6 +67,10 @@ jobs:
             dockerfile: docker/base.Dockerfile
             repo: notification-service
             build_args: --build-arg APP_DIR=notification-service --build-arg PROJECT=notification-service --build-arg PORT=50060
+          - name: performance-review-service
+            dockerfile: docker/base.Dockerfile
+            repo: performance-review-service
+            build_args: --build-arg APP_DIR=performance-review-service --build-arg PROJECT=performance-review-service --build-arg PORT=50061
           - name: scheduler-service
             dockerfile: docker/base.Dockerfile
             repo: scheduler-service

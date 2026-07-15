@@ -20,6 +20,7 @@ services:
       - SALARY_SERVICE_HOST=salary-service
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
+      - PERFORMANCE_REVIEW_SERVICE_HOST=performance-review-service
     ports:
       - "9002:9002"
     env_file: .env
@@ -162,6 +163,20 @@ services:
         - PORT=50060
     ports:
       - "50060:50060"
+    env_file: .env
+
+  performance-review-service:
+    container_name: performance-review-service
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      no_cache: true
+      args:
+        - APP_DIR=performance-review-service
+        - PROJECT=performance-review-service
+        - PORT=50061
+    ports:
+      - "50061:50061"
     env_file: .env
 
   scheduler-service:

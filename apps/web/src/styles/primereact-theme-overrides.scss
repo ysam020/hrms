@@ -6,6 +6,36 @@ body > .p-datepicker {
   z-index: 1400 !important;
 }
 
+// The Calendar's icon-trigger button (`showIcon`) is rendered inline next to
+// the input, inside `.p-calendar` — so when the whole Calendar sits inside an
+// MUI Dialog, the button gets portaled to <body> along with everything else,
+// landing OUTSIDE the #dark/#light id-scoped overrides below (those only
+// cover descendants of the .App div, not Dialog portals). Left unstyled, it
+// falls back to the raw lara-dark-cyan theme's default #22d3ee button, which
+// reads as a jarring bright cyan square regardless of the active theme.
+// `body.p-dark`/`body.p-light` (toggled by usePrimeReactTheme) are ancestors
+// of every portaled node, so scope this one to the body class instead.
+body.p-dark .p-calendar .p-button {
+  background: var(--card-background) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: var(--text-color) !important;
+
+  &:enabled:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+body.p-light .p-calendar .p-button {
+  background: #ffffff !important;
+  border-color: #d1d5db !important;
+  color: #000000 !important;
+
+  &:enabled:hover {
+    background: #f3f4f6 !important;
+  }
+}
+
 #dark {
   // Password Input Component
   .p-password {

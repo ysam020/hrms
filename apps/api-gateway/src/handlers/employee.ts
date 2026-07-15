@@ -108,6 +108,9 @@ export async function getEmployeeDetails(req: Request, res: Response) {
       select: {
         id: true,
         username: true,
+        first_name: true,
+        middle_name: true,
+        last_name: true,
         employeeStatus: true,
         pf_no: true,
         uan_no: true,

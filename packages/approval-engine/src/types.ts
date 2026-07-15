@@ -3,7 +3,8 @@ export type ApprovalModule =
   | "resignation"
   | "wfh"
   | "salary_advance"
-  | "overtime";
+  | "overtime"
+  | "performance_review";
 
 export type ApprovalDecision = "approved" | "rejected";
 

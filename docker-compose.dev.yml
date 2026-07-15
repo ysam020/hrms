@@ -40,6 +40,7 @@ services:
       - SALARY_SERVICE_HOST=salary-service
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
+      - PERFORMANCE_REVIEW_SERVICE_HOST=performance-review-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
       - SERVICE_NAME=api-gateway
       - METRICS_PORT=9003
@@ -299,6 +300,31 @@ services:
     ports:
       - "50060:50060"
       - "9110:9110"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *backend-service
+
+  performance-review-service:
+    container_name: hrms-dev-performance-review-service
+    image: ysam090/hrms-performance-review-service:latest
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args:
+        - APP_DIR=performance-review-service
+        - PROJECT=performance-review-service
+        - PORT=50061
+    environment:
+      - AWS_SECRET_NAME=hrms/config/docker
+      - SERVICE_NAME=performance-review-service
+      - METRICS_PORT=9112
+      - LOKI_URL=http://loki:3100
+    ports:
+      - "50061:50061"
+      - "9112:9112"
     depends_on:
       mongodb:
         condition: service_healthy

@@ -144,4 +144,9 @@ export const permissionStructure = {
       manage: ["-"],
     },
   },
+  PerformanceReview: {
+    actions: {
+      manage_cycles: ["-"],
+    },
+  },
 };

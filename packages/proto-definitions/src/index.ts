@@ -8,4 +8,5 @@ export * as salary from "./generated/salary/salary";
 export * as recruitment from "./generated/recruitment/recruitment";
 export * as notification from "./generated/notification/notification";
 export * as analytics from "./generated/analytics/analytics";
+export * as performanceReview from "./generated/performance-review/performance-review";
 export * as health from "./generated/health/health";

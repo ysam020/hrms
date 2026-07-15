@@ -18,6 +18,7 @@ import {
   recruitment,
   notification,
   analytics,
+  performanceReview,
 } from "@hrms/proto";
 
 function buildClientCredentials(): ChannelCredentials {
@@ -103,6 +104,15 @@ export const notificationClient = new notification.NotificationServiceClient(
   ),
   creds,
 );
+export const performanceReviewClient =
+  new performanceReview.PerformanceReviewServiceClient(
+    addr(
+      process.env.PERFORMANCE_REVIEW_SERVICE_HOST,
+      process.env.PERFORMANCE_REVIEW_SERVICE_PORT,
+      50061,
+    ),
+    creds,
+  );
 
 import { Metadata } from "@grpc/grpc-js";
 import { gatewayTenantStorage } from "../middleware/tenantContext";
