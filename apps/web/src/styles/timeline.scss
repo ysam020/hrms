@@ -64,6 +64,42 @@
   }
 }
 
+// Horizontal layout
+.compact-timeline.p-timeline-horizontal {
+  width: 100% !important;
+  overflow-x: auto;
+  padding-bottom: 0.5rem !important;
+
+  .p-timeline-event {
+    min-width: 120px;
+    margin-bottom: 0 !important;
+  }
+
+  .p-timeline-event-connector {
+    width: 100% !important;
+    height: 2px !important;
+    background: linear-gradient(
+      to right,
+      rgba(108, 93, 252, 0.3) 0%,
+      rgba(108, 93, 252, 0.1) 100%
+    ) !important;
+  }
+
+  .p-timeline-event-content {
+    text-align: center !important;
+  }
+}
+
+#dark .compact-timeline.p-timeline-horizontal {
+  .p-timeline-event-connector {
+    background: linear-gradient(
+      to right,
+      rgba(108, 93, 252, 0.4) 0%,
+      rgba(108, 93, 252, 0.2) 100%
+    ) !important;
+  }
+}
+
 // Responsive
 @media (max-width: 768px) {
   .compact-timeline {

@@ -7,9 +7,11 @@ import {
   useState,
 } from "react";
 import dayjs from "dayjs";
-import { Timeline } from "primereact/timeline";
 import { Calendar } from "primereact/calendar";
 import DataList from "@web/shared/components/DataList";
+import StatusTimeline, {
+  type TimelineStage,
+} from "@web/shared/components/StatusTimeline";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
@@ -26,7 +28,6 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import { API_ENDPOINTS } from "@web/shared/constants";
-import "@web/styles/timeline.scss";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   draft: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
@@ -56,19 +57,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-type TimelineEvent = {
-  label: string;
-  date?: string;
-  state: "done" | "pending" | "rejected";
-};
-
-const EVENT_COLOR: Record<TimelineEvent["state"], string> = {
-  done: "#059669",
-  pending: "#94a3b8",
-  rejected: "#dc2626",
-};
-
-function buildTimeline(review: any): TimelineEvent[] {
+function buildTimeline(review: any): TimelineStage[] {
   const isRejected = review.status === "rejected";
   return [
     { label: "Cycle Started", date: review.createdAt, state: "done" },
@@ -404,47 +393,7 @@ function Reviews() {
                 <StatusChip status={detail.status} />
               </Box>
 
-              <Timeline
-                value={buildTimeline(detail)}
-                align="left"
-                className="compact-timeline"
-                marker={(item: TimelineEvent) => (
-                  <Box
-                    sx={{
-                      width: 24,
-                      height: 24,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: "50%",
-                        backgroundColor: EVENT_COLOR[item.state],
-                      }}
-                    />
-                  </Box>
-                )}
-                content={(item: TimelineEvent) => (
-                  <Box sx={{ pl: 2, pb: 1.5 }}>
-                    <Typography variant="body2" fontWeight={600}>
-                      {item.label}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      {item.date
-                        ? dayjs(item.date).format("DD MMM YYYY, hh:mm A")
-                        : "Pending"}
-                    </Typography>
-                  </Box>
-                )}
-              />
+              <StatusTimeline stages={buildTimeline(detail)} />
 
               {(detail.selfComments || detail.selfRating > 0) && (
                 <>

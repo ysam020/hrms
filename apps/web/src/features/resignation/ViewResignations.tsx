@@ -16,7 +16,6 @@ import { ErrorBoundary } from "react-error-boundary";
 import { UserContext } from "@web/app/providers/UserContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
-import ViewFeedbackModal from "./ViewFeedbackModal";
 import ResignationDecisionDialog from "./ResignationDecisionDialog";
 import ExitManagementDialog from "./ExitManagementDialog";
 import Box from "@mui/material/Box";
@@ -44,8 +43,6 @@ function ViewResignations() {
   const { user } = useContext(UserContext);
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
-  const [resignationData, setResignationData] = useState(null);
-  const [openModal, setOpenModal] = useState(false);
   const [decisionDialog, setDecisionDialog] = useState<{
     mode: "approve" | "reject";
     id: string;
@@ -55,17 +52,26 @@ function ViewResignations() {
     id: string;
     name?: string;
     rehireEligible?: boolean | null;
+    status?: string;
+    submittedOn?: string;
+    approvedOn?: string;
+    rejectedOn?: string;
+    withdrawnOn?: string;
+    relievedFromDutyOn?: string;
+    canManage?: boolean;
+    reason?: string;
+    overallJobSatisfaction?: number;
+    qualityOfCommunication?: string;
+    supportFromManager?: string;
+    appreciationForWork?: string;
+    collaborationWithinTheTeam?: string;
+    overallCompanyCulture?: string;
+    suggestions?: string;
   } | null>(null);
   const [statusFilter, setStatusFilter] = useState("All");
   const [globalFilter, setGlobalFilter] = useState("");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleOpenModal = useCallback((data) => {
-    setResignationData(data);
-    setOpenModal(true);
-  }, []);
-  const handleCloseModal = useCallback(() => setOpenModal(false), []);
 
   const fetchResignations = useCallback(
     async ({ page, limit }) => {
@@ -312,10 +318,36 @@ function ViewResignations() {
 
       return [
         {
-          icon: <VisibilityIcon sx={{ fontSize: 16 }} />,
-          label: `View feedback for ${rowData.username ?? "employee"}`,
-          color: "primary" as const,
-          onClick: () => handleOpenModal(rowData),
+          icon: canManageExit ? (
+            <ManageAccountsIcon sx={{ fontSize: 16 }} />
+          ) : (
+            <VisibilityIcon sx={{ fontSize: 16 }} />
+          ),
+          label: canManageExit
+            ? `Manage exit for ${rowData.username ?? "employee"}`
+            : `View exit details for ${rowData.username ?? "employee"}`,
+          color: "secondary" as const,
+          onClick: () =>
+            setExitManagement({
+              id: rowData.id,
+              name: rowData.username,
+              rehireEligible: rowData.rehireEligible,
+              status: rowData.status,
+              submittedOn: rowData.submittedOn,
+              approvedOn: rowData.approvedOn,
+              rejectedOn: rowData.rejectedOn,
+              withdrawnOn: rowData.withdrawnOn,
+              relievedFromDutyOn: rowData.relievedFromDutyOn,
+              canManage: canManageExit,
+              reason: rowData.reason,
+              overallJobSatisfaction: rowData.overallJobSatisfaction,
+              qualityOfCommunication: rowData.qualityOfCommunication,
+              supportFromManager: rowData.supportFromManager,
+              appreciationForWork: rowData.appreciationForWork,
+              collaborationWithinTheTeam: rowData.collaborationWithinTheTeam,
+              overallCompanyCulture: rowData.overallCompanyCulture,
+              suggestions: rowData.suggestions,
+            }),
         },
         ...(canApproveReject
           ? [
@@ -357,24 +389,9 @@ function ViewResignations() {
               },
             ]
           : []),
-        ...(canManageExit
-          ? [
-              {
-                icon: <ManageAccountsIcon sx={{ fontSize: 16 }} />,
-                label: `Manage exit for ${rowData.username ?? "employee"}`,
-                color: "secondary" as const,
-                onClick: () =>
-                  setExitManagement({
-                    id: rowData.id,
-                    name: rowData.username,
-                    rehireEligible: rowData.rehireEligible,
-                  }),
-              },
-            ]
-          : []),
       ];
     },
-    [user, handleOpenModal, handleResignationAction],
+    [user, handleResignationAction],
   );
 
   return (
@@ -422,12 +439,6 @@ function ViewResignations() {
         }}
       />
 
-      <ViewFeedbackModal
-        open={openModal}
-        handleClose={handleCloseModal}
-        resignationData={resignationData}
-      />
-
       <ResignationDecisionDialog
         open={!!decisionDialog}
         mode={decisionDialog?.mode ?? "approve"}
@@ -445,6 +456,21 @@ function ViewResignations() {
         resignationId={exitManagement?.id ?? null}
         employeeName={exitManagement?.name}
         rehireEligible={exitManagement?.rehireEligible}
+        status={exitManagement?.status}
+        submittedOn={exitManagement?.submittedOn}
+        approvedOn={exitManagement?.approvedOn}
+        rejectedOn={exitManagement?.rejectedOn}
+        withdrawnOn={exitManagement?.withdrawnOn}
+        relievedFromDutyOn={exitManagement?.relievedFromDutyOn}
+        canManage={exitManagement?.canManage}
+        reason={exitManagement?.reason}
+        overallJobSatisfaction={exitManagement?.overallJobSatisfaction}
+        qualityOfCommunication={exitManagement?.qualityOfCommunication}
+        supportFromManager={exitManagement?.supportFromManager}
+        appreciationForWork={exitManagement?.appreciationForWork}
+        collaborationWithinTheTeam={exitManagement?.collaborationWithinTheTeam}
+        overallCompanyCulture={exitManagement?.overallCompanyCulture}
+        suggestions={exitManagement?.suggestions}
         onClose={() => setExitManagement(null)}
       />
     </ErrorBoundary>

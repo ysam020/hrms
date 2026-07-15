@@ -15,11 +15,62 @@ import TextField from "@mui/material/TextField";
 import Switch from "@mui/material/Switch";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
+import Divider from "@mui/material/Divider";
+import Rating from "@mui/material/Rating";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import dayjs from "dayjs";
+import StatusTimeline, {
+  type TimelineStage,
+} from "@web/shared/components/StatusTimeline";
+
+function buildResignationStages(resignation: {
+  status?: string;
+  submittedOn?: string;
+  approvedOn?: string;
+  rejectedOn?: string;
+  withdrawnOn?: string;
+  relievedFromDutyOn?: string;
+}): TimelineStage[] {
+  const {
+    status,
+    submittedOn,
+    approvedOn,
+    rejectedOn,
+    withdrawnOn,
+    relievedFromDutyOn,
+  } = resignation;
+  const stages: TimelineStage[] = [
+    { label: "Submitted", date: submittedOn, state: "done" },
+  ];
+
+  if (status === "Withdrawn") {
+    stages.push({ label: "Withdrawn", date: withdrawnOn, state: "done" });
+    return stages;
+  }
+
+  stages.push(
+    rejectedOn
+      ? { label: "Rejected", date: rejectedOn, state: "rejected" }
+      : {
+          label: "Approved",
+          date: approvedOn || undefined,
+          state: approvedOn ? "done" : "pending",
+        },
+  );
+
+  if (status !== "Rejected") {
+    stages.push({
+      label: "Relieved",
+      date: relievedFromDutyOn || undefined,
+      state: relievedFromDutyOn ? "done" : "pending",
+    });
+  }
+
+  return stages;
+}
 
 interface ChecklistItem {
   itemDefId: string;
@@ -50,7 +101,74 @@ interface Props {
   resignationId: string | null;
   employeeName?: string;
   rehireEligible?: boolean | null;
+  status?: string;
+  submittedOn?: string;
+  approvedOn?: string;
+  rejectedOn?: string;
+  withdrawnOn?: string;
+  relievedFromDutyOn?: string;
+  // Only users who can manage the exit (checklist/settlement/rehire) see
+  // those tabs — everyone else only sees the read-only Feedback tab, which
+  // is what "View feedback" used to show on its own before the two dialogs
+  // were merged into this one.
+  canManage?: boolean;
+  reason?: string;
+  overallJobSatisfaction?: number;
+  qualityOfCommunication?: string;
+  supportFromManager?: string;
+  appreciationForWork?: string;
+  collaborationWithinTheTeam?: string;
+  overallCompanyCulture?: string;
+  suggestions?: string;
   onClose: () => void;
+}
+
+function FeedbackRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  const display = value || "Not provided";
+  return (
+    <>
+      <Box sx={{ py: 1.25 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 2,
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 500,
+              color: "text.secondary",
+              minWidth: "160px",
+              flexShrink: 0,
+            }}
+          >
+            {label}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              textAlign: "right",
+              color: value ? "text.primary" : "text.disabled",
+              fontStyle: value ? "normal" : "italic",
+              lineHeight: 1.4,
+            }}
+          >
+            {display}
+          </Typography>
+        </Box>
+      </Box>
+      <Divider sx={{ opacity: 0.6 }} />
+    </>
+  );
 }
 
 export default function ExitManagementDialog({
@@ -58,6 +176,21 @@ export default function ExitManagementDialog({
   resignationId,
   employeeName,
   rehireEligible: initialRehireEligible,
+  status,
+  submittedOn,
+  approvedOn,
+  rejectedOn,
+  withdrawnOn,
+  relievedFromDutyOn,
+  canManage = true,
+  reason,
+  overallJobSatisfaction,
+  qualityOfCommunication,
+  supportFromManager,
+  appreciationForWork,
+  collaborationWithinTheTeam,
+  overallCompanyCulture,
+  suggestions,
   onClose,
 }: Props) {
   const { setAlert } = useContext(AlertContext);
@@ -103,9 +236,12 @@ export default function ExitManagementDialog({
     setChecklist([]);
     setNoticeEvents([]);
     setRehireEligible(initialRehireEligible ?? null);
-    if (open) fetchAll();
+    // Viewers without manage access only ever see the read-only Feedback
+    // tab, so skip fetching data they can't act on.
+    if (open && canManage) fetchAll();
+    else setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, resignationId]);
+  }, [open, resignationId, canManage]);
 
   async function toggleChecklistItem(item: ChecklistItem) {
     if (!resignationId) return;
@@ -239,24 +375,103 @@ export default function ExitManagementDialog({
         Manage exit{employeeName ? ` — ${employeeName}` : ""}
       </DialogTitle>
       <DialogContent sx={{ pt: 1 }}>
+        <Box sx={{ mb: 2, overflowX: "auto" }}>
+          <StatusTimeline
+            orientation="horizontal"
+            stages={buildResignationStages({
+              status,
+              submittedOn,
+              approvedOn,
+              rejectedOn,
+              withdrawnOn,
+              relievedFromDutyOn,
+            })}
+          />
+        </Box>
+
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}
           sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
         >
-          <Tab label="Checklist" />
-          <Tab label="Final Settlement" />
-          <Tab label="Notice History" />
-          <Tab label="Rehire" />
+          <Tab label="Feedback" />
+          {canManage && <Tab label="Checklist" />}
+          {canManage && <Tab label="Final Settlement" />}
+          {canManage && <Tab label="Notice History" />}
+          {canManage && <Tab label="Rehire" />}
         </Tabs>
 
-        {loading ? (
+        {tab === 0 && (
+          <Box>
+            <Box sx={{ py: 1.5, textAlign: "center" }}>
+              <Typography
+                variant="subtitle2"
+                fontWeight={600}
+                color="text.secondary"
+                gutterBottom
+              >
+                Overall Job Satisfaction
+              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 1.5,
+                }}
+              >
+                <Rating value={overallJobSatisfaction || 0} readOnly />
+                <Typography variant="h6" fontWeight={600} color="primary.main">
+                  {overallJobSatisfaction || 0}/5
+                </Typography>
+              </Box>
+            </Box>
+            <Divider sx={{ my: 1 }} />
+            <FeedbackRow label="Exit Reason" value={reason} />
+            <FeedbackRow
+              label="Quality of Communication"
+              value={qualityOfCommunication}
+            />
+            <FeedbackRow label="Manager Support" value={supportFromManager} />
+            <FeedbackRow
+              label="Work Appreciation"
+              value={appreciationForWork}
+            />
+            <FeedbackRow
+              label="Team Collaboration"
+              value={collaborationWithinTheTeam}
+            />
+            <FeedbackRow
+              label="Company Culture"
+              value={overallCompanyCulture}
+            />
+            <Box sx={{ py: 1.25 }}>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 500, color: "text.secondary", mb: 0.5 }}
+              >
+                Suggestions
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: suggestions ? "text.primary" : "text.disabled",
+                  fontStyle: suggestions ? "normal" : "italic",
+                }}
+              >
+                {suggestions || "Not provided"}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
+        {canManage && loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
             <CircularProgress size={24} />
           </Box>
         ) : (
           <>
-            {tab === 0 && (
+            {tab === 1 && (
               <Box>
                 {checklist.length === 0 ? (
                   <Alert severity="info">
@@ -301,7 +516,7 @@ export default function ExitManagementDialog({
               </Box>
             )}
 
-            {tab === 1 && (
+            {tab === 2 && (
               <Box>
                 <Button
                   variant="primary"
@@ -395,7 +610,7 @@ export default function ExitManagementDialog({
               </Box>
             )}
 
-            {tab === 2 && (
+            {tab === 3 && (
               <Box>
                 <Box
                   sx={{ display: "flex", gap: 1.5, mb: 2, flexWrap: "wrap" }}
@@ -459,7 +674,7 @@ export default function ExitManagementDialog({
               </Box>
             )}
 
-            {tab === 3 && (
+            {tab === 4 && (
               <Box>
                 <FormControlLabel
                   control={

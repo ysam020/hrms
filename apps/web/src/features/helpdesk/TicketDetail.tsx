@@ -22,8 +22,36 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import LockIcon from "@mui/icons-material/Lock";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import StatusTimeline, {
+  type TimelineStage,
+} from "@web/shared/components/StatusTimeline";
 
 const STATUS_OPTIONS = ["open", "in_progress", "resolved", "closed"];
+
+// "In Progress" and "Closed" have no dedicated timestamp columns on Ticket
+// (only createdAt/resolvedAt exist) — reached-but-undated stages fall back
+// to StatusTimeline's "—" rendering, same as Payroll Run's "Processing".
+function buildTicketStages(ticket: any): TimelineStage[] {
+  const reachedInProgress = ["in_progress", "resolved", "closed"].includes(
+    ticket.status,
+  );
+  return [
+    { label: "Raised", date: ticket.createdAt, state: "done" },
+    {
+      label: "In Progress",
+      state: reachedInProgress ? "done" : "pending",
+    },
+    {
+      label: "Resolved",
+      date: ticket.resolvedAt || undefined,
+      state: ticket.resolvedAt ? "done" : "pending",
+    },
+    {
+      label: "Closed",
+      state: ticket.status === "closed" ? "done" : "pending",
+    },
+  ];
+}
 
 function TicketDetail() {
   const { ticketId } = useParams<{ ticketId: string }>();
@@ -251,6 +279,15 @@ function TicketDetail() {
             </Box>
           )}
         </Box>
+
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+          Timeline
+        </Typography>
+        <StatusTimeline
+          orientation="horizontal"
+          stages={buildTicketStages(ticket)}
+        />
 
         {/* HR: Update Status */}
         {isHr && (
