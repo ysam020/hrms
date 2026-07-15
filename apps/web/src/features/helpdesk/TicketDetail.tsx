@@ -22,6 +22,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import LockIcon from "@mui/icons-material/Lock";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import StatusTimeline, {
   type TimelineStage,
 } from "@web/shared/components/StatusTimeline";
@@ -69,7 +70,7 @@ function TicketDetail() {
   const [submitting, setSubmitting] = useState(false);
 
   const isHr =
-    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    isHrOrAbove(user) ||
     hasPermission(
       "Helpdesk",
       "manage",

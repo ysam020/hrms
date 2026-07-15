@@ -1,5 +1,6 @@
 import hasPermission from "./hasPermission";
 import hasSubscriptionAccess from "./hasSubscriptionAccess";
+import { ROLE, type TenantRole } from "./roles";
 
 type NavUser = {
   isSuperUser?: boolean;
@@ -20,11 +21,18 @@ export const canManagePermissions = (user: NavUser): boolean =>
     ),
   );
 
+/** Superusers and org owners/admins. */
+export const isOwnerOrAdmin = (user: NavUser): boolean =>
+  Boolean(
+    user?.isSuperUser ||
+    ([ROLE.OWNER, ROLE.ADMIN] as TenantRole[]).includes(
+      (user?.tenantRole ?? "") as TenantRole,
+    ),
+  );
+
 /** Superusers and org owners/admins — no dedicated Analytics permission exists yet. */
 export const canViewAnalytics = (user: NavUser): boolean =>
-  Boolean(
-    user?.isSuperUser || ["owner", "admin"].includes(user?.tenantRole ?? ""),
-  );
+  Boolean(isOwnerOrAdmin(user));
 
 /**
  * Superusers and owner/admin/hr — gates management-visibility screens
@@ -34,7 +42,9 @@ export const canViewAnalytics = (user: NavUser): boolean =>
 export const isHrOrAbove = (user: NavUser): boolean =>
   Boolean(
     user?.isSuperUser ||
-    ["owner", "admin", "hr"].includes(user?.tenantRole ?? ""),
+    [ROLE.OWNER, ROLE.ADMIN, ROLE.HR].includes(
+      (user?.tenantRole ?? "") as TenantRole,
+    ),
   );
 
 /** Superusers, owner/admin/hr, and holders of any JobOpenings:* permission grant. */
@@ -103,8 +113,7 @@ export const canManageReviews = (user: NavUser): boolean =>
 /** Mirrors the server-side isPrivileged check in updateTenantSettings. */
 export const canAccessSettings = (user: NavUser): boolean =>
   Boolean(
-    user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    isOwnerOrAdmin(user) ||
     hasPermission(
       "Organisation",
       "edit_company_info",

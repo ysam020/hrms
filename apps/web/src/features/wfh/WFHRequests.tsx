@@ -34,6 +34,7 @@ import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   Pending: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
@@ -91,7 +92,7 @@ function WFHRequests() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isApprover =
-    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    isHrOrAbove(user) ||
     hasPermission(
       "WFH",
       "approve",

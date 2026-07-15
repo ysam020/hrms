@@ -34,6 +34,7 @@ import DataList from "@web/shared/components/DataList";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import { numField } from "@web/shared/components/numField";
 
@@ -90,8 +91,7 @@ export default function ExitPolicySettings() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const canEdit =
-    user?.isSuperUser ||
-    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    isHrOrAbove(user) ||
     user?.permissions?.includes("Organisation:edit_organisation_settings");
 
   const [tab, setTab] = useState(0);

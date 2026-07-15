@@ -16,6 +16,7 @@ import OrgSettings from "@web/features/settings/OrgSettings";
 import Subscription from "@web/features/subscription/Subscription";
 import JoinRequests from "@web/features/settings/JoinRequests";
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -75,8 +76,7 @@ export default function Settings() {
   // permission (not the Subscription one) so it doesn't leak in for people
   // who only have subscription access, or hide for people who only have this.
   const canApproveJoinRequests =
-    user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    isOwnerOrAdmin(user) ||
     user?.permissions?.includes("Organisation:approve_join_requests");
 
   const tabs: SettingsTab[] = [

@@ -55,6 +55,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import type { LocationValue } from "@web/shared/components/LocationPicker";
 import { numField } from "@web/shared/components/numField";
@@ -1546,8 +1547,7 @@ export default function OrgSettings() {
   const [cancelling, setCancelling] = useState<string | null>(null);
 
   const canEdit =
-    user?.isSuperUser ||
-    ["owner", "admin"].includes(user?.tenantRole ?? "") ||
+    isOwnerOrAdmin(user) ||
     user?.permissions?.includes("Organisation:edit_organisation_settings");
 
   // ── Fetch ────────────────────────────────────────────────────────────────────

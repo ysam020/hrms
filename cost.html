@@ -746,27 +746,30 @@
                 No setup fee, live in minutes — direct contrast to Keka's
                 ₹25k–1L implementation charge
               </li>
+              <li>
+                Performance review cycles that actually move money — a
+                manager's recommended increment, once approved through the
+                same approval-chain engine used for leave/resignation, writes
+                a new salary structure automatically. Most competitors treat
+                review and comp revision as two disconnected modules
+              </li>
             </ul>
           </div>
           <div class="col-card minus">
             <h4>Behind, or unproven</h4>
             <ul>
               <li>
-                TDS/income-tax calculation and Form 16 are now built, but not
-                yet correct enough to advertise — a real bug over-withholds
-                tax in any month with a bonus, and Form 16 is Part B only. See
-                §06 before telling anyone this gap is closed
+                TDS/income-tax withholding is now calculated correctly
+                (see §06 — the bonus-month over-withholding bug is fixed),
+                but Form 16 is provisional/Part B only, marginal relief on the
+                Sec 87A rebate isn't implemented, and surcharge on >₹50L
+                income is hardcoded to zero
               </li>
               <li>Zero reference customers, case studies, or reviews</li>
               <li>
                 One developer, no team — support is email-only with a realistic
                 response time, not a round-the-clock desk. Sets a hard ceiling
                 on how many customers can be onboarded and supported at once
-              </li>
-              <li>
-                Running on MongoDB Atlas M0 (free tier) today — 512MB cap, no
-                backups; must move to a paid tier before any real customer's
-                data lives there
               </li>
             </ul>
           </div>
@@ -793,86 +796,99 @@
           <div class="cost-row">
             <span class="name">EC2 — 2× m7i-flex.large (app)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 74%"></span></span
+              ><span class="bar-fill" style="width: 57%"></span></span
             ><span class="amt">~$170</span>
           </div>
           <div class="cost-row">
             <span class="name">EC2 — t3.micro (monitoring)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 4%"></span></span
+              ><span class="bar-fill" style="width: 3%"></span></span
             ><span class="amt">~$9</span>
           </div>
           <div class="cost-row">
             <span class="name">Application Load Balancer</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 11%"></span></span
+              ><span class="bar-fill" style="width: 7%"></span></span
             ><span class="amt">~$22</span>
           </div>
           <div class="cost-row">
             <span class="name">EBS root volumes (80GB)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 3%"></span></span
+              ><span class="bar-fill" style="width: 2%"></span></span
             ><span class="amt">~$7</span>
           </div>
           <div class="cost-row">
             <span class="name">Amplify (build + hosting)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 5%"></span></span
+              ><span class="bar-fill" style="width: 3%"></span></span
             ><span class="amt">~$10</span>
           </div>
           <div class="cost-row">
             <span class="name">ECR (12 repos)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 2%"></span></span
+              ><span class="bar-fill" style="width: 1%"></span></span
             ><span class="amt">~$4</span>
           </div>
           <div class="cost-row">
             <span class="name">S3 (2 buckets, currently tiny)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 1%"></span></span
+              ><span class="bar-fill" style="width: 0%"></span></span
             ><span class="amt">~$1</span>
           </div>
           <div class="cost-row">
             <span class="name">Secrets Manager (3 secrets)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 1%"></span></span
+              ><span class="bar-fill" style="width: 0%"></span></span
             ><span class="amt">~$1.2</span>
           </div>
           <div class="cost-row">
             <span class="name">Route 53</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 1%"></span></span
+              ><span class="bar-fill" style="width: 0%"></span></span
             ><span class="amt">~$0.5</span>
           </div>
           <div class="cost-row">
-            <span class="name">MongoDB Atlas M0</span
+            <span class="name">MongoDB Atlas M10 (dedicated cluster)</span
             ><span class="bar-track"
-              ><span class="bar-fill" style="width: 0%"></span></span
-            ><span class="amt">$0</span>
+              ><span class="bar-fill" style="width: 25%"></span></span
+            ><span class="amt">~$75</span>
           </div>
           <div class="cost-total">
-            <span>Real monthly total</span><strong>≈ $225 / ₹21,500</strong>
+            <span>Real monthly total</span><strong>≈ $300 / ₹28,700</strong>
           </div>
         </div>
 
-        <h3 style="margin-top: 30px">The one real near-term cost decision</h3>
-        <p class="wide-measure">
-          MongoDB Atlas M0 is free but capped at 512MB with no backups and
-          shared compute — not viable once a paying tenant is producing real
+        <p class="wide-measure" style="margin-top: 20px">
+          The Atlas line is a dedicated <strong>M10</strong> cluster, not the
+          free M0 tier — M0 caps at 512MB with no backups and shared compute,
+          which isn't viable once a paying tenant is producing real
           attendance, leave, chat, and audit-log volume (the audit trail alone
-          writes a before/after diff on every action across 18 entity types, so
-          it's inherently write-heavy). Budget for
-          <strong>Atlas M10</strong> (dedicated) at roughly
-          <strong>$60–90/month</strong> before signing the first paying
-          customer, not after.
+          writes a before/after diff on every action across 18 entity types,
+          so it's inherently write-heavy). $75/month is base cluster cost
+          (~$0.09/hr in ap-south-1) plus a small backup-storage allowance;
+          confirm against the actual Atlas invoice once real usage data
+          exists.
         </p>
 
-        <div
-          class="cost-total"
-          style="max-width: 640px; border-top-color: var(--accent)"
-        >
-          <span>Fixed baseline once cleaned up + M10 upgraded</span>
-          <strong>≈ $300 / ₹28,700 / mo</strong>
+        <div class="callout rust" style="margin-top: 8px">
+          <div class="label">Flagged — not part of the app</div>
+          <p>
+            <strong>Aurora PostgreSQL cluster</strong> and
+            <strong>DocumentDB cluster</strong> (both named
+            <code>database-1</code>) were created the same day this audit
+            ran, both untagged, both console defaults. Nothing in the
+            codebase or either CloudFormation stack references Postgres or
+            DocumentDB. <strong>A Lambda function (<code
+              >hrms-scan-upload</code
+            >)</strong> has an S3 invoke permission scoped to the
+            <code>praesto</code> bucket, but that bucket has no notification
+            configuration wired up — so it never actually fires. Combined,
+            these are estimated to add
+            <strong>~$150–200/month for infrastructure that does nothing</strong
+            >, on top of the $300 total above. Recommend confirming and
+            deleting — this is unrelated to the Atlas decision and still
+            open.
+          </p>
         </div>
       </div>
 
@@ -1054,41 +1070,40 @@
         <div class="section-index">06</div>
         <h2>TDS &amp; Form 16 — implementation review</h2>
         <p class="wide-measure">
-          Reviewed against the unstaged/untracked changes in the working tree:
-          new
-          <code>IncomeTaxSlab</code> and <code>TaxDeclaration</code> Prisma
-          models, a <code>tdsCalc.ts</code> calculation engine, a
-          declare→prove→verify workflow mirroring the existing KYC
-          lock/revision pattern, and Form 16 generation via the same jsPDF
-          approach as the payslip. This is a genuinely substantial build —
-          both tax regimes, financial-year-scoped slabs, a YTD/running-total
-          mechanism (which PF/ESI/PT never needed), and 20+ unit tests on the
-          calculation core. It is not yet correct enough to tell prospects the
-          TDS gap is closed.
+          Reviewed twice — first against the unstaged working tree, now
+          against the merged, committed state (<code>feat: add tds in
+          payroll</code>, PR #86). New <code>IncomeTaxSlab</code> and
+          <code>TaxDeclaration</code> Prisma models, a
+          <code>tdsCalc.ts</code> calculation engine, a declare→prove→verify
+          workflow mirroring the existing KYC lock/revision pattern, and Form
+          16 generation via the same jsPDF approach as the payslip. This is a
+          genuinely substantial build — both tax regimes, financial-year-scoped
+          slabs, a YTD/running-total mechanism (which PF/ESI/PT never needed),
+          and 20+ unit tests on the calculation core. The bug that blocked
+          calling this "done" is now fixed (see below); what's left is a
+          smaller, named list of legal-completeness gaps, not a correctness
+          risk.
         </p>
 
-        <div class="callout rust">
-          <div class="label">Major — wrong tax withheld on bonus months</div>
+        <div
+          class="callout"
+          style="border-left-color: var(--accent); background: var(--accent-soft)"
+        >
+          <div class="label" style="color: var(--accent)">
+            Fixed — confirmed against current committed code
+          </div>
           <p>
-            <code>calcMonthlyTds</code> (<code>tdsCalc.ts:227-268</code>),
-            which is what actually runs during
-            <code>initiatePayrollRun</code>
-            (<code>payroll.ts:688-706</code>) and decides the real rupee
-            amount withheld from an employee's pay, projects the rest of the
-            financial year as
-            <code>currentMonthGross × remainingMonths</code> — it has no
-            concept of a one-time payment. The printable TDS worksheet
-            (<code>computeTdsWorksheet</code>) already does this correctly,
-            excluding non-recurring components
-            (<code>SalaryComponentDefinition.isRecurring</code>) from the
-            projection — but that logic was never applied to the function that
-            controls actual withholding. Net effect: pay anyone a bonus or
-            one-time incentive, and that month's TDS is calculated as if the
-            bonus repeats every remaining month of the year, sharply
-            over-withholding — and the number on the employee's own worksheet
-            PDF won't match what was actually deducted from their paycheck.
-            This is the one to fix before running this against a real
-            employee's pay, not a polish item.
+            The bonus-month over-withholding bug is resolved.
+            <code>calcMonthlyTds</code> (<code>tdsCalc.ts:247-249</code>) is
+            now a thin wrapper around <code>computeTdsWorksheet</code>, so the
+            function that actually runs during <code>initiatePayrollRun</code>
+            and the printable worksheet share one implementation — a one-time
+            component (<code>SalaryComponentDefinition.isRecurring: false</code>)
+            is correctly excluded from the rest-of-year projection in both
+            places, so a bonus month no longer inflates withholding, and the
+            worksheet PDF now matches what's actually deducted. This was
+            originally flagged as the blocking issue in this review; it is no
+            longer open.
           </p>
         </div>
 
@@ -1167,15 +1182,17 @@
 
         <ul class="actions" style="margin-top: 8px">
           <li>
-            <span class="box"></span>
+            <span
+              class="box"
+              style="background: var(--accent); border-color: var(--accent)"
+            ></span>
             <div>
               <b
-                >Fix <code>calcMonthlyTds</code> to exclude non-recurring
+                >Done — <code>calcMonthlyTds</code> now excludes non-recurring
                 components from annual projection</b
               ><span class="sub"
-                >— reuse the logic already correct in
-                <code>computeTdsWorksheet</code>; this is the blocker before
-                any real payroll run touches an employee with a bonus</span
+                >— confirmed fixed in the current committed code, see the
+                callout above</span
               >
             </div>
           </li>
@@ -1213,11 +1230,11 @@
           <li>
             <span class="box"></span>
             <div>
-              <b>Keep "no TDS calculation" in the pitch until the bug above is fixed</b
+              <b>Update the pitch to "TDS withholding is correct, Form 16 is provisional"</b
               ><span class="sub"
-                >— the honest claim today is "TDS is in progress," not
-                "TDS is supported"; overstating this is a bigger risk than the
-                feature gap ever was</span
+                >— the withholding bug is fixed, so it's honest to claim TDS
+                is supported; just don't call Form 16 complete until Part A
+                exists and marginal relief/surcharge are handled</span
               >
             </div>
           </li>

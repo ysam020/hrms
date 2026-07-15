@@ -15,6 +15,7 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import EditJobOpeningModal from "./EditJobOpeningModal";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import Skeleton from "@mui/material/Skeleton";
@@ -47,8 +48,7 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   // Superusers, owners, and admins always see edit/delete regardless of the
   // granular permission bit — mirrors requirePrivileged on the backend
   // routes these actions call.
-  const isPrivilegedRole =
-    user?.isSuperUser || ["owner", "admin"].includes(user?.tenantRole ?? "");
+  const isPrivilegedRole = isOwnerOrAdmin(user);
   const canEdit =
     isPrivilegedRole ||
     hasPermission(

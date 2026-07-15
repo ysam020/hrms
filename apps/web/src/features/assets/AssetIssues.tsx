@@ -38,6 +38,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import Divider from "@mui/material/Divider";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import StatusTimeline, {
   type TimelineStage,
 } from "@web/shared/components/StatusTimeline";
@@ -204,7 +205,7 @@ function AssetIssues() {
   const { user } = useContext(UserContext);
 
   const isHr =
-    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    isHrOrAbove(user) ||
     hasPermission(
       "Assets",
       "manage",

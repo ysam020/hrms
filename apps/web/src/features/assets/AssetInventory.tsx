@@ -39,6 +39,7 @@ import AddIcon from "@mui/icons-material/Add";
 import RestoreIcon from "@mui/icons-material/Restore";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import useAssetCategoryOptions from "./useAssetCategoryOptions";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
@@ -135,7 +136,7 @@ function AssetInventory() {
   }, [openAssign, empInputValue]);
 
   const isHr =
-    ["owner", "admin", "hr"].includes(user?.tenantRole ?? "") ||
+    isHrOrAbove(user) ||
     hasPermission(
       "Assets",
       "manage",
