@@ -84,6 +84,22 @@ export const canApproveAdvances = (user: NavUser): boolean =>
     ),
   );
 
+/**
+ * Superusers, owner/admin/hr, and holders of PerformanceReview:manage_cycles.
+ * Mirrors the server-side canManageReviews check in the performanceReview handler.
+ */
+export const canManageReviews = (user: NavUser): boolean =>
+  Boolean(
+    isHrOrAbove(user) ||
+    hasPermission(
+      "PerformanceReview",
+      "manage_cycles",
+      "-",
+      user?.isSuperUser,
+      user?.permissions || [],
+    ),
+  );
+
 /** Mirrors the server-side isPrivileged check in updateTenantSettings. */
 export const canAccessSettings = (user: NavUser): boolean =>
   Boolean(

@@ -30,6 +30,7 @@ import { orgStructureRouter } from "./orgStructure";
 import { onboardingRouter } from "./onboarding";
 // ── New features ──────────────────────────────────────────────────────────────
 import { payrollRouter } from "./payroll";
+import { performanceReviewRouter } from "./performanceReview";
 import { assetsRouter } from "./assets";
 import { wfhRouter } from "./wfh";
 import { helpdeskRouter } from "./helpdesk";
@@ -89,6 +90,11 @@ rootRouter.use(...subscriptionGuard, orgStructureRouter);
 rootRouter.use(...subscriptionGuard, onboardingRouter);
 // ── New feature routers ───────────────────────────────────────────────────────
 rootRouter.use("/payroll", ...subscriptionGuard, payrollRouter);
+rootRouter.use(
+  "/performance-reviews",
+  ...subscriptionGuard,
+  performanceReviewRouter,
+);
 rootRouter.use("/assets", ...subscriptionGuard, assetsRouter);
 rootRouter.use("/wfh", ...subscriptionGuard, wfhRouter);
 rootRouter.use("/helpdesk", ...subscriptionGuard, helpdeskRouter);

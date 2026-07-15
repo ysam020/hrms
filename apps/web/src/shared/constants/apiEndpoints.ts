@@ -313,6 +313,26 @@ const PAYROLL = {
     `/payroll/my-payslips?page=${page}&limit=${limit}`,
 };
 
+const PERFORMANCE_REVIEW = {
+  REVIEW_CYCLES: "/performance-reviews/cycles",
+  CREATE_REVIEW_CYCLE: "/performance-reviews/cycles",
+  REVIEW_CYCLE: (cycleId: string) => `/performance-reviews/cycles/${cycleId}`,
+  REVIEW_CYCLE_STATUS: (cycleId: string) =>
+    `/performance-reviews/cycles/${cycleId}/status`,
+  MY_REVIEWS: (userId: string) => `/performance-reviews?userId=${userId}`,
+  TEAM_REVIEWS: (reviewerId: string) =>
+    `/performance-reviews?reviewerId=${reviewerId}`,
+  CYCLE_REVIEWS: (cycleId: string) => `/performance-reviews?cycleId=${cycleId}`,
+  // Unscoped — only privileged (HR/admin/owner/superuser) callers may use
+  // this; the gateway rejects a bare query from anyone else.
+  ALL_REVIEWS: "/performance-reviews",
+  REVIEW: (reviewId: string) => `/performance-reviews/${reviewId}`,
+  SUBMIT_SELF_ASSESSMENT: (reviewId: string) =>
+    `/performance-reviews/${reviewId}/self-assessment`,
+  SUBMIT_MANAGER_REVIEW: (reviewId: string) =>
+    `/performance-reviews/${reviewId}/manager-review`,
+};
+
 const ASSETS = {
   ASSETS: (page: number, limit: number, params = "") =>
     `/assets?page=${page}&limit=${limit}${params}`,
@@ -413,6 +433,7 @@ export const API_ENDPOINTS = {
   ...PAYMENT,
   ...TENANT,
   ...PAYROLL,
+  ...PERFORMANCE_REVIEW,
   ...ASSETS,
   ...WFH,
   ...HELPDESK,

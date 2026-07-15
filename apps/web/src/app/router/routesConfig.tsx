@@ -18,6 +18,9 @@ const Analytics = lazy(() => import("@web/features/analytics/Analytics"));
 
 // New feature modules
 const Payroll = lazy(() => import("@web/features/payroll/Payroll"));
+const PerformanceReview = lazy(
+  () => import("@web/features/performance-review/PerformanceReview"),
+);
 const AssetManagement = lazy(
   () => import("@web/features/assets/AssetManagement"),
 );
@@ -376,6 +379,13 @@ const routesConfig = () => {
       category: "HR & Management",
     },
     {
+      path: "/performance-reviews/*",
+      element: <PerformanceReview />,
+      allowedModules: ["Performance Review"],
+      name: "Performance Review",
+      category: "HR & Management",
+    },
+    {
       path: "/assets/*",
       element: <AssetManagement />,
       allowedModules: ["Asset Management"],
@@ -730,6 +740,23 @@ const routesConfig = () => {
       allowedModules: [],
       name: "My Payslips",
       category: "Payroll Management",
+      spotlightOnly: true,
+    },
+    // Performance Review spotlight entries
+    {
+      path: "/performance-reviews/review-cycles",
+      element: null,
+      allowedModules: [],
+      name: "Review Cycles",
+      category: "Performance Review",
+      spotlightOnly: true,
+    },
+    {
+      path: "/performance-reviews/reviews",
+      element: null,
+      allowedModules: [],
+      name: "Reviews",
+      category: "Performance Review",
       spotlightOnly: true,
     },
     // Assets spotlight entries

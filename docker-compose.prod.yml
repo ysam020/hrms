@@ -42,6 +42,7 @@ services:
       - SALARY_SERVICE_HOST=salary-service
       - ANALYTICS_SERVICE_HOST=analytics-service
       - NOTIFICATION_SERVICE_HOST=notification-service
+      - PERFORMANCE_REVIEW_SERVICE_HOST=performance-review-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
       - SERVICE_NAME=api-gateway
       - METRICS_PORT=9003
@@ -152,6 +153,16 @@ services:
       - METRICS_PORT=9110
     ports:
       - "9110:9110"
+    <<: *backend-service
+
+  performance-review-service:
+    container_name: hrms-prod-performance-review-service
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/performance-review-service:${TAG_NAME:-latest}
+    environment:
+      - SERVICE_NAME=performance-review-service
+      - METRICS_PORT=9112
+    ports:
+      - "9112:9112"
     <<: *backend-service
 
   scheduler-service:

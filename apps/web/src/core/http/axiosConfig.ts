@@ -7,6 +7,7 @@ declare module "axios" {
     _authRetried?: boolean;
     _csrfRetried?: boolean;
     _requestId?: string;
+    _supersededRetried?: boolean;
   }
 }
 
@@ -248,7 +249,8 @@ apiClient.interceptors.request.use(
 
     // ── AbortController ────────────────────────────────────────────
     const method = config.method?.toLowerCase() ?? "";
-    const isRetry = config._authRetried || config._csrfRetried;
+    const isRetry =
+      config._authRetried || config._csrfRetried || config._supersededRetried;
 
     const controller = new AbortController();
 
@@ -312,6 +314,29 @@ apiClient.interceptors.response.use(
     // Always clean up the registry for the failed request.
     if (originalRequest?._requestId) {
       pendingRequests.delete(originalRequest._requestId);
+    }
+
+    // GET-dedup (above) cancels the earlier of two concurrent identical
+    // requests by calling controller.abort("superseded") — that's an
+    // internal implementation detail, not a real failure or an intentional
+    // cancellation by the caller (e.g. an unmount cleanup, which aborts its
+    // own signal with no/different reason and must NOT be retried here).
+    // By the time this rejection lands, the request that superseded it has
+    // already gone through, so retrying immediately just gets the same
+    // fresh data instead of every caller having to special-case
+    // ERR_CANCELED itself — which several features (assets, job openings,
+    // performance reviews, ...) were doing inconsistently or not at all,
+    // surfacing a spurious error toast for what's just two tabs/components
+    // fetching the same endpoint on mount.
+    if (
+      (error.code === "ERR_CANCELED" || error.name === "CanceledError") &&
+      (originalRequest?.signal as AbortSignal | undefined)?.reason ===
+        "superseded" &&
+      !originalRequest._supersededRetried
+    ) {
+      originalRequest._supersededRetried = true;
+      originalRequest.signal = undefined;
+      return apiClient(originalRequest);
     }
 
     if (error.response?.status === 403 && !originalRequest._csrfRetried) {

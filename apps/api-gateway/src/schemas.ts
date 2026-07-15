@@ -819,3 +819,46 @@ export const saveReportSchema = z.object({
   schedule: z.string().max(64).optional(), // cron expression
   recipients: z.array(z.string().email()).max(10).optional(),
 });
+
+// ── Performance Review ────────────────────────────────────────────────────────
+
+export const createCycleSchema = z.object({
+  name: z.string().min(1).max(256),
+  periodStart: z.string().datetime({ offset: true }).or(z.string().min(1)),
+  periodEnd: z.string().datetime({ offset: true }).or(z.string().min(1)),
+  ratingScale: z.number().int().min(1).max(10).optional(),
+  userIds: z.array(z.string().min(1)).min(1).max(1000),
+});
+
+export const updateCycleSchema = z.object({
+  name: z.string().min(1).max(256).optional(),
+  periodStart: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().min(1))
+    .optional(),
+  periodEnd: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().min(1))
+    .optional(),
+  ratingScale: z.number().int().min(1).max(10).optional(),
+  userIds: z.array(z.string().min(1)).max(1000).optional(),
+});
+
+export const updateCycleStatusSchema = z.object({
+  status: z.enum(["active", "closed", "deleted"]),
+});
+
+export const submitSelfAssessmentSchema = z.object({
+  selfComments: z.string().max(5000).optional(),
+  selfRating: z.number().min(0).max(10),
+});
+
+export const submitManagerReviewSchema = z.object({
+  managerComments: z.string().max(5000).optional(),
+  managerRating: z.number().min(0).max(10),
+  overallRating: z.number().min(0).max(10),
+  recommendedIncrementPct: z.number().min(0).max(100).optional(),
+  effectiveFrom: z.string().min(1).optional(),
+});

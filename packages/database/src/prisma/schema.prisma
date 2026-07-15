@@ -200,6 +200,7 @@ model User {
   notifications               NotificationRecipient[]
   salaryStructures            SalaryStructure[]
   loginEvents                 LoginEvent[]
+  performanceReviews          PerformanceReview[]
 
 
   @@index([employeeStatus])
@@ -1348,6 +1349,65 @@ model SalaryAdvance {
   @@index([tenantId, userId])
   @@index([tenantId, status])
   @@map("salary_advances")
+}
+
+// ─── Performance Review ───────────────────────────────────────────────────────
+
+model PerformanceReviewCycle {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String    @db.ObjectId
+  name        String // "H1 2026 Annual Review"
+  periodStart DateTime
+  periodEnd   DateTime
+  status      String    @default("draft") // draft | active | closed
+  ratingScale Int       @default(5) // e.g. 1-5
+  createdBy   String    @db.ObjectId
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  reviews     PerformanceReview[]
+
+  @@index([tenantId, status])
+  @@map("performance_review_cycles")
+}
+
+model PerformanceReview {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId String @db.ObjectId
+  cycleId String @db.ObjectId
+  userId  String @db.ObjectId // employee being reviewed
+  // Reporting manager, resolved at creation from Team.teamLeaderId — left
+  // unset when the employee isn't on any Team yet; the actual approval
+  // routing at manager-review time is resolved independently by
+  // @hrms/approval-engine (falls back to owner/admin), so this is
+  // informational/denormalized rather than load-bearing.
+  reviewerId String? @db.ObjectId
+  // draft -> self_assessment_submitted -> manager_review_submitted -> approved | rejected
+  status  String @default("draft")
+  selfComments String?
+  selfRating   Float?
+  managerComments String?
+  managerRating   Float?
+  overallRating   Float?
+  // HR's recommended comp change, proposed alongside the manager review
+  recommendedIncrementPct Float?
+  effectiveFrom           DateTime?
+  // Populated once the final-approval side-effect (api-gateway) creates the
+  // new SalaryStructure — cross-service reference, no Prisma @relation.
+  salaryStructureId String?   @db.ObjectId
+  submittedAt       DateTime?
+  managerSubmittedAt DateTime?
+  finalizedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  cycle PerformanceReviewCycle @relation(fields: [cycleId], references: [id])
+  user  User?                  @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, userId])
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+  @@map("performance_reviews")
 }
 
 // ─── Asset Management ─────────────────────────────────────────────────────────

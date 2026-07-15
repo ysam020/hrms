@@ -1,0 +1,146 @@
+syntax = "proto3";
+package performance_review;
+
+// ── Data models ───────────────────────────────────────────────────────────────
+
+message PerformanceReviewCycle {
+  string id = 1;
+  string name = 2;
+  string periodStart = 3; // ISO date string
+  string periodEnd = 4; // ISO date string
+  string status = 5; // draft | active | closed
+  int32 ratingScale = 6;
+  string createdBy = 7;
+  string createdAt = 8;
+}
+
+message PerformanceReview {
+  string id = 1;
+  string cycleId = 2;
+  string userId = 3;
+  string reviewerId = 4;
+  string status = 5; // draft | self_assessment_submitted | manager_review_submitted | approved | rejected
+  string selfComments = 6;
+  double selfRating = 7;
+  string managerComments = 8;
+  double managerRating = 9;
+  double overallRating = 10;
+  double recommendedIncrementPct = 11;
+  string effectiveFrom = 13; // ISO date string
+  string salaryStructureId = 14;
+  string submittedAt = 15;
+  string finalizedAt = 16;
+  string managerSubmittedAt = 17;
+  string createdAt = 18;
+}
+
+// ── Requests ──────────────────────────────────────────────────────────────────
+
+message CreateCycleRequest {
+  string name = 1;
+  string periodStart = 2;
+  string periodEnd = 3;
+  int32 ratingScale = 4;
+  repeated string userIds = 5; // employees included in this cycle
+}
+
+message GetCycleRequest {
+  string id = 1;
+}
+
+message ListCyclesRequest {}
+
+message UpdateCycleRequest {
+  string id = 1;
+  string name = 2;
+  string periodStart = 3;
+  string periodEnd = 4;
+  int32 ratingScale = 5;
+  // Full desired membership list — diffed server-side against existing
+  // reviews for this cycle. Newly-added userIds get a fresh draft review;
+  // removed userIds only have their review deleted if it's still in
+  // "draft" (nothing submitted yet), to avoid losing submitted work.
+  repeated string userIds = 6;
+}
+
+message UpdateCycleStatusRequest {
+  string id = 1;
+  string status = 2; // "active" | "closed" | "deleted" (deleted = soft delete)
+}
+
+message SubmitSelfAssessmentRequest {
+  string reviewId = 1;
+  string selfComments = 2;
+  double selfRating = 3;
+}
+
+message SubmitManagerReviewRequest {
+  string reviewId = 1;
+  string managerComments = 2;
+  double managerRating = 3;
+  double overallRating = 4;
+  double recommendedIncrementPct = 5;
+  string effectiveFrom = 7;
+}
+
+message GetReviewRequest {
+  string id = 1;
+}
+
+message ListReviewsRequest {
+  string cycleId = 1;
+  string userId = 2;
+  string reviewerId = 3;
+}
+
+message FinalizeReviewRequest {
+  string id = 1;
+  bool approved = 2;
+  string salaryStructureId = 3;
+}
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+
+message CycleResponse {
+  string message = 1;
+  int32 status = 2;
+  PerformanceReviewCycle data = 3;
+}
+
+message ListCyclesResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated PerformanceReviewCycle data = 3;
+}
+
+message ReviewResponse {
+  string message = 1;
+  int32 status = 2;
+  PerformanceReview data = 3;
+}
+
+message ListReviewsResponse {
+  string message = 1;
+  int32 status = 2;
+  repeated PerformanceReview data = 3;
+}
+
+message BasicResponse {
+  string message = 1;
+  int32 status = 2;
+}
+
+// ── Service ───────────────────────────────────────────────────────────────────
+
+service PerformanceReviewService {
+  rpc CreateCycle (CreateCycleRequest) returns (CycleResponse);
+  rpc GetCycle (GetCycleRequest) returns (CycleResponse);
+  rpc ListCycles (ListCyclesRequest) returns (ListCyclesResponse);
+  rpc UpdateCycle (UpdateCycleRequest) returns (CycleResponse);
+  rpc UpdateCycleStatus (UpdateCycleStatusRequest) returns (CycleResponse);
+  rpc SubmitSelfAssessment (SubmitSelfAssessmentRequest) returns (ReviewResponse);
+  rpc SubmitManagerReview (SubmitManagerReviewRequest) returns (ReviewResponse);
+  rpc GetReview (GetReviewRequest) returns (ReviewResponse);
+  rpc ListReviews (ListReviewsRequest) returns (ListReviewsResponse);
+  rpc FinalizeReview (FinalizeReviewRequest) returns (ReviewResponse);
+}

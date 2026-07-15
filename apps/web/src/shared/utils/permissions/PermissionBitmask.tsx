@@ -140,6 +140,9 @@ const PERM_DEFS = [
   ["TaxDeclaration", "view_declaration", "self", "all"],
   ["TaxDeclaration", "review_declaration", "all"],
   ["TaxDeclaration", "review_proofs", "all"],
+
+  // PerformanceReview (scopeless)
+  ["PerformanceReview", "manage_cycles"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }

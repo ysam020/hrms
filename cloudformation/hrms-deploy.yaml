@@ -239,6 +239,15 @@ Resources:
       EncryptionConfiguration:
         EncryptionType: AES256
 
+  PerformanceReviewServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${EcrRepositoryPrefix}/performance-review-service"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
   SchedulerServiceRepository:
     Type: AWS::ECR::Repository
     Properties:

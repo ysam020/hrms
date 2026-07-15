@@ -91,6 +91,12 @@ const MODULES = [
     colorKey: "green",
   },
   {
+    label: "Performance Review",
+    path: "/performance-reviews",
+    iconClass: "pi-chart-line",
+    colorKey: "purple",
+  },
+  {
     label: "Reports",
     path: "/reports",
     iconClass: "pi-file-export",

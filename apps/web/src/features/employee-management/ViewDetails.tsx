@@ -191,9 +191,18 @@ function ViewDetails() {
         >
           <Box display="flex" alignItems="center" gap={1}>
             <Edit color="primary" />
-            <Typography variant="h6" fontWeight="600">
-              {isEditing ? "Edit Employee Details" : "Employee Details"}
-            </Typography>
+            <Box>
+              <Typography variant="h6" fontWeight="600">
+                {isEditing ? "Edit Employee Details" : "Employee Details"}
+              </Typography>
+              {!isEditing && (data?.first_name || data?.last_name) && (
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  {[data?.first_name, data?.middle_name, data?.last_name]
+                    .filter(Boolean)
+                    .join(" ")}
+                </Typography>
+              )}
+            </Box>
           </Box>
           <Box display="flex" alignItems="center" gap={1}>
             <Chip
