@@ -4,8 +4,6 @@ import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
-import Card from "@mui/material/Card";
-import CardContent from "@mui/material/CardContent";
 import Alert from "@mui/material/Alert";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -20,7 +18,6 @@ import Button from "@web/shared/components/Button";
 import InfoIcon from "@mui/icons-material/Info";
 import PersonIcon from "@mui/icons-material/Person";
 import EmailIcon from "@mui/icons-material/Email";
-import ScheduleIcon from "@mui/icons-material/Schedule";
 import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -32,6 +29,39 @@ import TextField from "@mui/material/TextField";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import dayjs from "dayjs";
+import StatusTimeline, {
+  type TimelineStage,
+} from "@web/shared/components/StatusTimeline";
+
+// Dynamic-length timeline: one stage per interview round (no fixed set),
+// since a JobApplication has no appliedAt/hiredAt/rejectedAt columns —
+// "Applied" and the terminal Hired/Rejected bookends are shown without a
+// date, only the interview rounds carry a real timestamp.
+function buildApplicationStages(
+  interviews: any[],
+  status: string,
+): TimelineStage[] {
+  const stages: TimelineStage[] = [{ label: "Applied", state: "done" }];
+
+  for (const interview of interviews || []) {
+    stages.push({
+      label: `Round ${interview.roundNumber}`,
+      date: interview.interviewStartTime
+        ? dayjs(interview.interviewStartTime, "YYYYMMDDTHHmmss").toDate()
+        : undefined,
+      state: interview.cleared ? "done" : "pending",
+    });
+  }
+
+  if (status === "Hired" || status === "Rejected") {
+    stages.push({
+      label: status,
+      state: status === "Rejected" ? "rejected" : "done",
+    });
+  }
+
+  return stages;
+}
 
 const validationSchema = toFormikValidationSchema(
   z.object({
@@ -350,6 +380,245 @@ function InfoModal(props) {
     return "default";
   };
 
+  // Renders everything that used to live in a separate "Interview Rounds"
+  // card grid — interviewer + reassign/reschedule actions, conducted
+  // status, feedback, and the status-update control — as the timeline
+  // stage's own extra content, so the round-by-round detail lives directly
+  // under its own stage instead of a duplicate section below the timeline.
+  function renderRoundExtra(interview: any, index: number) {
+    const roundNumber = interview.roundNumber ?? index + 1;
+    return (
+      <Box sx={{ minWidth: 260, maxWidth: 440 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            mb: 1,
+            flexWrap: "wrap",
+          }}
+        >
+          <AssignmentIndIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+          <Typography variant="body2" color="text.secondary">
+            Interviewer: {interview.interviewer || "Not assigned"}
+          </Typography>
+          {!interview.interviewConducted &&
+            !isTerminalStatus &&
+            editIndex !== index &&
+            rescheduleIndex !== index &&
+            (canReassign || canReschedule) && (
+              <Stack direction="row" spacing={1}>
+                {canReassign && (
+                  <Button
+                    onClick={() => handleAssignClick(index)}
+                    style={{ marginTop: 0 }}
+                  >
+                    Reassign
+                  </Button>
+                )}
+                {canReschedule && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleRescheduleClick(index)}
+                    style={{ marginTop: 0 }}
+                  >
+                    Reschedule
+                  </Button>
+                )}
+              </Stack>
+            )}
+        </Box>
+
+        {/* Reschedule Form */}
+        {rescheduleIndex === index && (
+          <Box sx={{ p: 2, bgcolor: "action.hover", borderRadius: 1, mb: 1 }}>
+            <Typography variant="body2" fontWeight={500} gutterBottom>
+              Reschedule Interview
+            </Typography>
+            <Stack spacing={1}>
+              <Calendar
+                value={rescheduleDateTime}
+                onChange={(e) => setRescheduleDateTime(e.value as Date)}
+                showTime
+                hourFormat="24"
+                dateFormat="dd/mm/yy"
+                appendTo={() =>
+                  document.querySelector("#root .App") as HTMLElement
+                }
+                minDate={new Date()}
+                disabledDays={[0]}
+                showButtonBar
+                stepMinute={15}
+                style={{ width: "100%" }}
+                placeholder="Select new date and time"
+              />
+              <Stack direction="row" spacing={1}>
+                <Button
+                  onClick={() => handleRescheduleSubmit(index)}
+                  disabled={rescheduling}
+                >
+                  Confirm
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleRescheduleCancel}
+                >
+                  Cancel
+                </Button>
+              </Stack>
+            </Stack>
+          </Box>
+        )}
+
+        {/* Reassign Form */}
+        {editIndex === index && (
+          <Box sx={{ p: 2, bgcolor: "action.hover", borderRadius: 1, mb: 1 }}>
+            <Typography variant="body2" fontWeight={500} gutterBottom>
+              Reassign Interviewer
+            </Typography>
+            <form onSubmit={formik.handleSubmit}>
+              <Stack spacing={1}>
+                {interviewersLoading ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Loading eligible interviewers…
+                  </Typography>
+                ) : interviewerUsernames.length === 0 ? (
+                  <Alert severity="warning">
+                    No users currently have interview-taking permission.
+                  </Alert>
+                ) : (
+                  <UserAutoComplete
+                    formik={formik}
+                    userList={interviewerUsernames}
+                    placeholder="Select new interviewer"
+                  />
+                )}
+                <Stack direction="row" spacing={1}>
+                  <Button type="submit" disabled={formik.isSubmitting}>
+                    Assign
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleCancelClick}
+                  >
+                    Cancel
+                  </Button>
+                </Stack>
+              </Stack>
+            </form>
+          </Box>
+        )}
+
+        {/* Interview Status */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          {interview.interviewConducted ? (
+            <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
+          ) : (
+            <CancelIcon sx={{ fontSize: 16, color: "error.main" }} />
+          )}
+          <Typography variant="body2" color="text.secondary">
+            Interview Conducted: {interview.interviewConducted ? "Yes" : "No"}
+          </Typography>
+        </Box>
+
+        {interview.feedback && (
+          <Box sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 1, mb: 1 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontWeight={600}
+              display="block"
+            >
+              Feedback
+            </Typography>
+            <Typography variant="body2">{interview.feedback}</Typography>
+          </Box>
+        )}
+
+        {/* Status Update */}
+        {!shouldHideStatusDropdown(roundNumber) &&
+          canUpdateStatus &&
+          (interviewHasEnded(interview) ? (
+            <Box sx={{ p: 2, bgcolor: "action.hover", borderRadius: 1 }}>
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                Update Status
+              </Typography>
+              <Stack spacing={1}>
+                <Dropdown
+                  value={statusInputs[index] || ""}
+                  options={getStatusOptions(interview)}
+                  placeholder="Select interview status"
+                  style={{ width: "100%" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                  onChange={(e) =>
+                    setStatusInputs((prev) => ({ ...prev, [index]: e.value }))
+                  }
+                />
+                {!interview.interviewConducted && (
+                  <TextField
+                    value={feedbackInputs[index] || ""}
+                    onChange={(e) =>
+                      setFeedbackInputs((prev) => ({
+                        ...prev,
+                        [index]: e.target.value,
+                      }))
+                    }
+                    placeholder="Interview feedback (required)"
+                    multiline
+                    minRows={2}
+                    size="small"
+                    fullWidth
+                  />
+                )}
+                <Button
+                  onClick={() => updateStatus(index)}
+                  disabled={
+                    !statusInputs[index] ||
+                    (!interview.interviewConducted &&
+                      !(feedbackInputs[index] || "").trim())
+                  }
+                >
+                  Update Status
+                </Button>
+              </Stack>
+            </Box>
+          ) : (
+            <Alert severity="info">
+              <Typography variant="body2">
+                This round can be marked Completed/Cleared after the scheduled
+                interview ends
+                {interview.interviewEndTime
+                  ? ` (${dayjs(interview.interviewEndTime, "YYYYMMDDTHHmmss").format("DD MMM YYYY, HH:mm")})`
+                  : ""}
+                .
+              </Typography>
+            </Alert>
+          ))}
+      </Box>
+    );
+  }
+
+  // "Applied" always occupies stage 0, then one stage per interview round in
+  // order, so a round's detail can be attached back onto its stage purely
+  // by index alignment with the interviews array.
+  const stages: TimelineStage[] = buildApplicationStages(
+    interviews,
+    status,
+  ).map((stage, i) => {
+    const roundIndex = i - 1;
+    if (roundIndex >= 0 && roundIndex < interviews.length) {
+      return {
+        ...stage,
+        extra: renderRoundExtra(interviews[roundIndex], roundIndex),
+      };
+    }
+    return stage;
+  });
+
   const modalStyle = {
     width: { xs: "95%", sm: "90%", md: 1000, lg: 1200 },
     maxHeight: "95vh",
@@ -442,383 +711,12 @@ function InfoModal(props) {
           </Box>
         </Box>
 
-        {/* Interview Details */}
-        <Box sx={{ p: 2 }}>
-          <Typography
-            variant="subtitle2"
-            color="text.secondary"
-            gutterBottom
-            sx={{ mb: 2 }}
-          >
-            Interview Rounds
+        {/* Status Timeline */}
+        <Box sx={{ p: 2, pt: 0 }}>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            Timeline
           </Typography>
-
-          {interviews?.length > 0 ? (
-            <Grid container spacing={1}>
-              {interviews.map((interview, index) => {
-                const roundNumber = interview.roundNumber ?? index + 1;
-                return (
-                  <Grid size={{ xs: 12, lg: 6 }} key={roundNumber}>
-                    <Card
-                      variant="outlined"
-                      sx={{
-                        overflow: "visible",
-                        borderRadius: 2,
-                        border:
-                          theme === "light"
-                            ? "1px solid #e5e7eb"
-                            : "1px solid #374151",
-                      }}
-                    >
-                      <CardContent sx={{ p: 2 }}>
-                        {/* Round Header */}
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1,
-                            mb: 2,
-                          }}
-                        >
-                          <Avatar
-                            sx={{
-                              width: 32,
-                              height: 32,
-                              bgcolor: "primary.main",
-                              fontSize: "0.875rem",
-                            }}
-                          >
-                            {roundNumber}
-                          </Avatar>
-                          <Typography variant="subtitle1" fontWeight={600}>
-                            Round {roundNumber} Interview
-                          </Typography>
-                        </Box>
-
-                        {/* Interview Info */}
-                        <Stack spacing={1.5}>
-                          {/* Date & Time */}
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                            }}
-                          >
-                            <ScheduleIcon
-                              sx={{ fontSize: 16, color: "text.secondary" }}
-                            />
-                            <Typography variant="body2" color="text.secondary">
-                              {/* Derive the date from interviewStartTime, not
-                                the separate interviewDate field — two
-                                fields for the same moment can drift out of
-                                sync (as happened here), while this is the
-                                same field the "not yet ended" alert below
-                                already keys off of. */}
-                              {interview.interviewStartTime
-                                ? `${dayjs(interview.interviewStartTime, "YYYYMMDDTHHmmss").format("DD MMM YYYY")}, ${dayjs(interview.interviewStartTime, "YYYYMMDDTHHmmss").format("HH:mm")} – ${dayjs(interview.interviewEndTime, "YYYYMMDDTHHmmss").format("HH:mm")}`
-                                : "Not scheduled"}
-                            </Typography>
-                          </Box>
-
-                          {/* Interviewer */}
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                            }}
-                          >
-                            <AssignmentIndIcon
-                              sx={{ fontSize: 16, color: "text.secondary" }}
-                            />
-                            <Typography variant="body2" color="text.secondary">
-                              Interviewer:{" "}
-                              {interview.interviewer || "Not assigned"}
-                            </Typography>
-                            {!interview.interviewConducted &&
-                              !isTerminalStatus &&
-                              editIndex !== index &&
-                              rescheduleIndex !== index &&
-                              (canReassign || canReschedule) && (
-                                <Stack direction="row" spacing={1}>
-                                  {canReassign && (
-                                    <Button
-                                      onClick={() => handleAssignClick(index)}
-                                      style={{ marginTop: 0 }}
-                                    >
-                                      Reassign
-                                    </Button>
-                                  )}
-                                  {canReschedule && (
-                                    <Button
-                                      variant="outlined"
-                                      onClick={() =>
-                                        handleRescheduleClick(index)
-                                      }
-                                      style={{ marginTop: 0 }}
-                                    >
-                                      Reschedule
-                                    </Button>
-                                  )}
-                                </Stack>
-                              )}
-                          </Box>
-
-                          {/* Reschedule Form */}
-                          {rescheduleIndex === index && (
-                            <Box
-                              sx={{
-                                p: 2,
-                                bgcolor: "action.hover",
-                                borderRadius: 1,
-                              }}
-                            >
-                              <Typography
-                                variant="body2"
-                                fontWeight={500}
-                                gutterBottom
-                              >
-                                Reschedule Interview
-                              </Typography>
-                              <Stack spacing={1}>
-                                <Calendar
-                                  value={rescheduleDateTime}
-                                  onChange={(e) =>
-                                    setRescheduleDateTime(e.value as Date)
-                                  }
-                                  showTime
-                                  hourFormat="24"
-                                  dateFormat="dd/mm/yy"
-                                  appendTo={() =>
-                                    document.querySelector(
-                                      "#root .App",
-                                    ) as HTMLElement
-                                  }
-                                  minDate={new Date()}
-                                  disabledDays={[0]}
-                                  showButtonBar
-                                  stepMinute={15}
-                                  style={{ width: "100%" }}
-                                  placeholder="Select new date and time"
-                                />
-                                <Stack direction="row" spacing={1}>
-                                  <Button
-                                    onClick={() =>
-                                      handleRescheduleSubmit(index)
-                                    }
-                                    disabled={rescheduling}
-                                  >
-                                    Confirm
-                                  </Button>
-                                  <Button
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={handleRescheduleCancel}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </Stack>
-                              </Stack>
-                            </Box>
-                          )}
-
-                          {/* Reassign Form */}
-                          {editIndex === index && (
-                            <Box
-                              sx={{
-                                p: 2,
-                                bgcolor: "action.hover",
-                                borderRadius: 1,
-                              }}
-                            >
-                              <Typography
-                                variant="body2"
-                                fontWeight={500}
-                                gutterBottom
-                              >
-                                Reassign Interviewer
-                              </Typography>
-                              <form onSubmit={formik.handleSubmit}>
-                                <Stack spacing={1}>
-                                  {interviewersLoading ? (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                    >
-                                      Loading eligible interviewers…
-                                    </Typography>
-                                  ) : interviewerUsernames.length === 0 ? (
-                                    <Alert severity="warning">
-                                      No users currently have interview-taking
-                                      permission.
-                                    </Alert>
-                                  ) : (
-                                    <UserAutoComplete
-                                      formik={formik}
-                                      userList={interviewerUsernames}
-                                      placeholder="Select new interviewer"
-                                    />
-                                  )}
-                                  <Stack direction="row" spacing={1}>
-                                    <Button
-                                      type="submit"
-                                      disabled={formik.isSubmitting}
-                                    >
-                                      Assign
-                                    </Button>
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      onClick={handleCancelClick}
-                                    >
-                                      Cancel
-                                    </Button>
-                                  </Stack>
-                                </Stack>
-                              </form>
-                            </Box>
-                          )}
-
-                          {/* Interview Status */}
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                            }}
-                          >
-                            {interview.interviewConducted ? (
-                              <CheckCircleIcon
-                                sx={{ fontSize: 16, color: "success.main" }}
-                              />
-                            ) : (
-                              <CancelIcon
-                                sx={{ fontSize: 16, color: "error.main" }}
-                              />
-                            )}
-                            <Typography variant="body2" color="text.secondary">
-                              Interview Conducted:{" "}
-                              {interview.interviewConducted ? "Yes" : "No"}
-                            </Typography>
-                          </Box>
-
-                          {interview.feedback && (
-                            <Box
-                              sx={{
-                                p: 1.5,
-                                bgcolor: "action.hover",
-                                borderRadius: 1,
-                              }}
-                            >
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                fontWeight={600}
-                                display="block"
-                              >
-                                Feedback
-                              </Typography>
-                              <Typography variant="body2">
-                                {interview.feedback}
-                              </Typography>
-                            </Box>
-                          )}
-
-                          {/* Status Update */}
-                          {!shouldHideStatusDropdown(roundNumber) &&
-                            canUpdateStatus &&
-                            (interviewHasEnded(interview) ? (
-                              <Box
-                                sx={{
-                                  mt: 2,
-                                  p: 2,
-                                  bgcolor: "action.hover",
-                                  borderRadius: 1,
-                                }}
-                              >
-                                <Typography
-                                  variant="h6"
-                                  fontWeight={500}
-                                  gutterBottom
-                                >
-                                  Update Status
-                                </Typography>
-                                <Stack spacing={1}>
-                                  <Dropdown
-                                    value={statusInputs[index] || ""}
-                                    options={getStatusOptions(interview)}
-                                    placeholder="Select interview status"
-                                    style={{ width: "100%" }}
-                                    // appendTo="self" gets clipped by the
-                                    // modal Paper's overflow:auto — same fix
-                                    // as the reschedule Calendar above.
-                                    appendTo={() =>
-                                      document.querySelector(
-                                        "#root .App",
-                                      ) as HTMLElement
-                                    }
-                                    onChange={(e) =>
-                                      setStatusInputs((prev) => ({
-                                        ...prev,
-                                        [index]: e.value,
-                                      }))
-                                    }
-                                  />
-                                  {!interview.interviewConducted && (
-                                    <TextField
-                                      value={feedbackInputs[index] || ""}
-                                      onChange={(e) =>
-                                        setFeedbackInputs((prev) => ({
-                                          ...prev,
-                                          [index]: e.target.value,
-                                        }))
-                                      }
-                                      placeholder="Interview feedback (required)"
-                                      multiline
-                                      minRows={2}
-                                      size="small"
-                                      fullWidth
-                                    />
-                                  )}
-                                  <Button
-                                    onClick={() => updateStatus(index)}
-                                    disabled={
-                                      !statusInputs[index] ||
-                                      (!interview.interviewConducted &&
-                                        !(feedbackInputs[index] || "").trim())
-                                    }
-                                  >
-                                    Update Status
-                                  </Button>
-                                </Stack>
-                              </Box>
-                            ) : (
-                              <Alert severity="info" sx={{ mt: 2 }}>
-                                <Typography variant="body2">
-                                  This round can be marked Completed/Cleared
-                                  after the scheduled interview ends
-                                  {interview.interviewEndTime
-                                    ? ` (${dayjs(interview.interviewEndTime, "YYYYMMDDTHHmmss").format("DD MMM YYYY, HH:mm")})`
-                                    : ""}
-                                  .
-                                </Typography>
-                              </Alert>
-                            ))}
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          ) : (
-            <Alert severity="info" sx={{ borderRadius: 2 }}>
-              <Typography variant="body2">
-                No interviews scheduled for this candidate yet.
-              </Typography>
-            </Alert>
-          )}
+          <StatusTimeline stages={stages} />
         </Box>
       </Box>
     </CustomModal>

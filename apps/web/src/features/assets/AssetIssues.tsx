@@ -38,6 +38,9 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import Divider from "@mui/material/Divider";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import StatusTimeline, {
+  type TimelineStage,
+} from "@web/shared/components/StatusTimeline";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -170,6 +173,28 @@ function DetailRow({ label, value }: { label: string; value: any }) {
       </Typography>
     </Box>
   );
+}
+
+function buildAssetIssueStages(issue: any): TimelineStage[] {
+  if (!issue) return [];
+  const isRejected = issue.status === "rejected";
+  const stages: TimelineStage[] = [
+    { label: "Reported", date: issue.createdAt, state: "done" },
+    {
+      label: "Reviewed",
+      date: issue.reviewedAt || undefined,
+      state: issue.reviewedAt ? (isRejected ? "rejected" : "done") : "pending",
+    },
+  ];
+  // Nothing left to resolve once rejected.
+  if (!isRejected) {
+    stages.push({
+      label: "Resolved",
+      date: issue.resolvedAt || undefined,
+      state: issue.resolvedAt ? "done" : "pending",
+    });
+  }
+  return stages;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -754,17 +779,13 @@ function AssetIssues() {
           />
           <DetailRow label="Title" value={viewIssue?.title} />
           <DetailRow label="Description" value={viewIssue?.description} />
+
+          <Divider sx={{ my: 0.5 }} />
+          <StatusTimeline stages={buildAssetIssueStages(viewIssue)} />
+
           <DetailRow
             label="Reported By"
             value={viewIssue?.reporter?.username}
-          />
-          <DetailRow
-            label="Reported On"
-            value={
-              viewIssue?.createdAt
-                ? dayjs(viewIssue.createdAt).format("DD MMM YYYY, h:mm A")
-                : null
-            }
           />
 
           {viewIssue?.reviewedAt && (
@@ -773,12 +794,6 @@ function AssetIssues() {
               <DetailRow
                 label="Reviewed By"
                 value={viewIssue?.reviewer?.username}
-              />
-              <DetailRow
-                label="Reviewed On"
-                value={dayjs(viewIssue.reviewedAt).format(
-                  "DD MMM YYYY, h:mm A",
-                )}
               />
               <DetailRow
                 label={
@@ -794,12 +809,6 @@ function AssetIssues() {
           {viewIssue?.resolvedAt && (
             <>
               <Divider sx={{ my: 0.5 }} />
-              <DetailRow
-                label="Resolved On"
-                value={dayjs(viewIssue.resolvedAt).format(
-                  "DD MMM YYYY, h:mm A",
-                )}
-              />
               <DetailRow
                 label="Resolution Notes"
                 value={viewIssue?.resolverNotes}

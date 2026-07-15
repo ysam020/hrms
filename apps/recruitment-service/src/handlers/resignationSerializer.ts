@@ -33,5 +33,15 @@ export function toResignationProto(r: any): recruitment.Resignation {
       ? r.relievedFromDutyOn.toISOString()
       : "",
     rehireEligible: r.rehireEligible ?? false,
+    approvedOn: r.approvedOn ? r.approvedOn.toISOString() : "",
+    rejectedOn: r.rejectedOn ? r.rejectedOn.toISOString() : "",
+    withdrawnOn: r.withdrawnOn ? r.withdrawnOn.toISOString() : "",
+    overallJobSatisfaction: r.overallJobSatisfaction ?? 0,
+    qualityOfCommunication: r.qualityOfCommunication ?? "",
+    supportFromManager: r.supportFromManager ?? "",
+    appreciationForWork: r.appreciationForWork ?? "",
+    collaborationWithinTheTeam: r.collaborationWithinTheTeam ?? "",
+    overallCompanyCulture: r.overallCompanyCulture ?? "",
+    suggestions: r.suggestions ?? "",
   };
 }

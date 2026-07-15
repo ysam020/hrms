@@ -30,8 +30,12 @@ import CheckIcon from "@mui/icons-material/Check";
 import CancelIcon from "@mui/icons-material/Cancel";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AddIcon from "@mui/icons-material/Add";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import StatusTimeline, {
+  type TimelineStage,
+} from "@web/shared/components/StatusTimeline";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "All" },
@@ -69,10 +73,45 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
+function buildPayrollRunStages(run: any): TimelineStage[] {
+  const reachedProcessing = ["processing", "approved", "disbursed"].includes(
+    run.status,
+  );
+  const stages: TimelineStage[] = [
+    { label: "Initiated", date: run.createdAt, state: "done" },
+    // No dedicated timestamp column for this transition — only the reached
+    // state is knowable, not when it happened.
+    { label: "Processing", state: reachedProcessing ? "done" : "pending" },
+    {
+      label: "Approved",
+      date: run.approvedAt || undefined,
+      state: run.approvedAt ? "done" : "pending",
+    },
+    {
+      label: "Disbursed",
+      date: run.disbursedAt || undefined,
+      state: run.disbursedAt ? "done" : "pending",
+    },
+  ];
+
+  if (run.status === "cancelled") {
+    // Cut off at the first not-yet-reached stage and mark termination there
+    // — no dedicated "cancelledAt" column exists to date this precisely.
+    const cutoff = stages.findIndex((s) => s.state === "pending");
+    return [
+      ...stages.slice(0, cutoff === -1 ? stages.length : cutoff),
+      { label: "Cancelled", state: "rejected" },
+    ];
+  }
+
+  return stages;
+}
+
 function PayrollRuns() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const [openInitiate, setOpenInitiate] = useState(false);
+  const [viewRun, setViewRun] = useState<any>(null);
 
   // Date guards — payroll can only be initiated for past months.
   // Declared before the form useState so _prevDate can use them.
@@ -245,8 +284,15 @@ function PayrollRuns() {
 
   const rowActions = useCallback(
     (row: any) => {
-      if (!isHr) return [];
-      const actions: any[] = [];
+      const actions: any[] = [
+        {
+          icon: <VisibilityIcon sx={{ fontSize: 16 }} />,
+          label: "View",
+          color: "primary" as const,
+          onClick: () => setViewRun(row),
+        },
+      ];
+      if (!isHr) return actions;
       if (row.status === "draft") {
         actions.push({
           icon: <PlayArrowIcon sx={{ fontSize: 16 }} />,
@@ -395,6 +441,47 @@ function PayrollRuns() {
             disabled={submitting}
           >
             {submitting ? "Initiating…" : "Initiate"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!viewRun}
+        onClose={() => setViewRun(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {viewRun &&
+            dayjs(new Date(viewRun.year, (viewRun.month ?? 1) - 1)).format(
+              "MMMM YYYY",
+            )}{" "}
+          Payroll Run
+        </DialogTitle>
+        <DialogContent
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            pt: "16px !important",
+          }}
+        >
+          {viewRun && (
+            <>
+              <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                <StatusChip status={viewRun.status} />
+                <Typography variant="body2" color="text.secondary">
+                  {viewRun.employeeCount ?? "—"} employees · Gross{" "}
+                  {money(viewRun.totalGross)} · Net {money(viewRun.totalNet)}
+                </Typography>
+              </Box>
+              <StatusTimeline stages={buildPayrollRunStages(viewRun)} />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="ghost" onClick={() => setViewRun(null)} size="small">
+            Close
           </Button>
         </DialogActions>
       </Dialog>

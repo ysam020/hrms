@@ -53,6 +53,18 @@ message Resignation {
   float buyout_amount = 15;
   string relieved_from_duty_on = 16;
   bool rehire_eligible = 17;
+  string approved_on = 18;
+  string rejected_on = 19;
+  string withdrawn_on = 20;
+  // Exit feedback — collected separately from the resignation submission
+  // itself, via a dedicated post-approval feedback endpoint.
+  float overall_job_satisfaction = 21;
+  string quality_of_communication = 22;
+  string support_from_manager = 23;
+  string appreciation_for_work = 24;
+  string collaboration_within_the_team = 25;
+  string overall_company_culture = 26;
+  string suggestions = 27;
 }
 
 message ListResignationsRequest {
