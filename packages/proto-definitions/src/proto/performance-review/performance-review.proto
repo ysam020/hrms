@@ -46,9 +46,17 @@ message CreateCycleRequest {
 
 message GetCycleRequest {
   string id = 1;
+  // Set by the gateway only when the caller is NOT owner/admin/hr/superuser —
+  // the service then rejects unless the caller is enrolled in the cycle.
+  // Left empty for privileged callers, who may fetch any cycle.
+  string requesterId = 2;
 }
 
-message ListCyclesRequest {}
+message ListCyclesRequest {
+  // Same convention as GetCycleRequest.requesterId — when set, only cycles
+  // the caller is enrolled in are returned.
+  string requesterId = 1;
+}
 
 message UpdateCycleRequest {
   string id = 1;

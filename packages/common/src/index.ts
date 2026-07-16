@@ -18,3 +18,4 @@ export {
   toWireSalaryStructure,
   type ComponentAmountInput,
 } from "./salaryComponents";
+export { isSafeUrl, isSafeHostname } from "./ssrfGuard";

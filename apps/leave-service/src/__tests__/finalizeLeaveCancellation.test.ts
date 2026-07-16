@@ -228,4 +228,47 @@ describe("finalizeLeaveCancellation", () => {
       status: status.INTERNAL,
     });
   });
+
+  // NOTE on what this test can and can't prove: $transaction is mocked as a
+  // bare pass-through (`jest.fn((fn) => fn(_db))`, see the jest.mock block
+  // above) — it has no real atomicity, so it cannot demonstrate that the
+  // status-flip write is actually rolled back in the database when the
+  // balance credit-back later fails. Only a live-MongoDB replica-set
+  // integration test could prove that. What this test *does* pin down, at
+  // the application level: when a write inside the transaction body
+  // rejects, the handler must not report success to the caller, and must
+  // not run any post-transaction side effect (cache invalidation) as if
+  // the cancellation had gone through.
+  it("returns INTERNAL and skips post-transaction side effects when the balance credit-back fails mid-transaction", async () => {
+    const requested = {
+      id: "leave-1",
+      status: "Cancellation Requested",
+      userId: "john-id",
+      leaveType: "PL",
+      days: 2,
+    };
+    mockFindUnique.mockResolvedValue(requested);
+    mockFindUniqueOrThrow.mockResolvedValue({
+      ...requested,
+      status: "Cancelled",
+    });
+    mockBalanceFindFirst.mockResolvedValue({
+      id: "bal-1",
+      updatedAt: new Date("2024-01-01"),
+      balances: { PL: 5 },
+    });
+    mockBalanceUpdateMany.mockRejectedValue(new Error("balance write failed"));
+
+    const cb = makeCallback();
+    await finalizeLeaveCancellation(
+      makeCall({ id: "leave-1", approved: true }),
+      cb,
+    );
+
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.INTERNAL_SERVER_ERROR,
+      status: status.INTERNAL,
+    });
+    expect(mockInvalidate).not.toHaveBeenCalled();
+  });
 });

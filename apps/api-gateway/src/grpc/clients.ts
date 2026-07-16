@@ -25,6 +25,17 @@ function buildClientCredentials(): ChannelCredentials {
   const caFile =
     process.env.GRPC_TLS_CA_FILE ??
     path.resolve(__dirname, "../../../../packages/certificates/rootCA.pem");
+  // mTLS: present our own cert/key so each microservice can verify the
+  // caller, not just that we trust the server's cert. Every microservice's
+  // BaseGrpcServer now requires this (see base-server.ts) — without it,
+  // any host that could reach a service's gRPC port could call its RPCs
+  // directly, bypassing gateway-level authorization entirely.
+  const certFile =
+    process.env.GRPC_TLS_CRT_FILE ??
+    path.resolve(__dirname, "../../../../packages/certificates/cert.pem");
+  const keyFile =
+    process.env.GRPC_TLS_KEY_FILE ??
+    path.resolve(__dirname, "../../../../packages/certificates/key.pem");
 
   const overrides =
     process.env.GRPC_SKIP_HOSTNAME_VERIFICATION === "true"
@@ -33,7 +44,12 @@ function buildClientCredentials(): ChannelCredentials {
         { checkServerIdentity: () => undefined }
       : undefined;
 
-  return credentials.createSsl(fs.readFileSync(caFile), null, null, overrides);
+  return credentials.createSsl(
+    fs.readFileSync(caFile),
+    fs.readFileSync(keyFile),
+    fs.readFileSync(certFile),
+    overrides,
+  );
 }
 
 const creds = buildClientCredentials();

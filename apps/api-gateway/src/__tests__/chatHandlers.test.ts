@@ -53,6 +53,12 @@ jest.mock("@hrms/common", () => ({
     INTERNAL_SERVER_ERROR: 500,
     UN_AUTHORIZED: 401,
   },
+  // isSafeUrl/isSafeHostname's only dependency is `dns` (mocked above via
+  // jest.mock("dns", ...)) — using the real implementation here instead of
+  // hand-rolling a fake keeps these tests exercising the actual SSRF-guard
+  // logic (shared with webhooks.ts) rather than a parallel copy of it.
+  isSafeUrl: jest.requireActual("@hrms/common").isSafeUrl,
+  isSafeHostname: jest.requireActual("@hrms/common").isSafeHostname,
 }));
 
 jest.mock("@hrms/logger", () => ({

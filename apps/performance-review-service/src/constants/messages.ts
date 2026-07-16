@@ -3,6 +3,7 @@ export const MESSAGES = {
   CYCLE_CREATED: "Performance review cycle created",
   CYCLE_ID_REQUIRED: "Cycle id is required",
   CYCLE_NOT_FOUND: "Performance review cycle not found",
+  FORBIDDEN: "Forbidden",
   CYCLE_FETCHED: "Performance review cycle fetched",
   CYCLES_FETCHED: "Performance review cycles fetched",
   CYCLE_UPDATED: "Performance review cycle updated",

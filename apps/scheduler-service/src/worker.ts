@@ -1,5 +1,9 @@
 import { Worker } from "bullmq";
-import { getBullMQConnection, getWebhookQueue } from "@hrms/queue";
+import {
+  getBullMQConnection,
+  getWebhookQueue,
+  getDeadLetterQueue,
+} from "@hrms/queue";
 import { logger } from "@hrms/logger";
 import type {
   SchedulerJobData,
@@ -109,6 +113,19 @@ export function startWebhookWorker(): Worker {
       `Webhook delivery ${job?.data?.deliveryId ?? job?.id} failed:`,
       { err },
     );
+    if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+      getDeadLetterQueue()
+        .add("failed-webhook", {
+          originalQueue: "webhookQueue",
+          originalJobId: job.id,
+          originalJobData: job.data,
+          failureReason: err.message,
+          failedAt: new Date().toISOString(),
+        })
+        .catch((dlqErr) =>
+          logger.error("Failed to forward job to DLQ:", { dlqErr }),
+        );
+    }
   });
   worker.on("stalled", (jobId) => {
     logger.warn(`Webhook job ${jobId} stalled`);

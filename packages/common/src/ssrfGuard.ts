@@ -1,0 +1,56 @@
+import dns from "dns";
+
+// SSRF protection — block requests to private/loopback/link-local address
+// ranges, including the cloud instance-metadata IP (169.254.169.254 falls
+// inside 169.254.0.0/16) and IPv4-mapped IPv6 addresses (::ffff:127.0.0.1
+// etc). Originally lived duplicated (and less completely — missing
+// 169.254.*/fc00:/fe80:) in webhooks.ts; consolidated here so every
+// outbound-URL feature (chat link previews, tenant webhooks, ...) gets the
+// same coverage instead of each reinventing its own subset.
+const PRIVATE_IP_RE =
+  /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|::1|::ffff:|fc00:|fe80:)/i;
+
+function isPrivateIp(host: string): boolean {
+  if (PRIVATE_IP_RE.test(host)) return true;
+  // 172.16.0.0/12
+  const m = host.match(/^172\.(\d+)\./);
+  return !!m && parseInt(m[1], 10) >= 16 && parseInt(m[1], 10) <= 31;
+}
+
+/**
+ * Hostname/protocol-level check — cheap, synchronous, catches the obvious
+ * cases. Does NOT protect against DNS rebinding (a hostname that resolves
+ * to a private/metadata IP only at request time) — pair with
+ * isSafeHostname() below, called again immediately before the request is
+ * actually sent.
+ */
+export function isSafeUrl(
+  raw: string,
+  { requireHttps = true }: { requireHttps?: boolean } = {},
+): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (requireHttps && parsed.protocol !== "https:") return false;
+  return !isPrivateIp(parsed.hostname.toLowerCase());
+}
+
+/**
+ * Resolves the hostname and checks every returned address — prevents
+ * DNS-rebinding SSRF (a domain that's public at validation time but is
+ * re-pointed at a private/metadata IP before — or at — request time).
+ * Callers must call this again right before making the request, not just
+ * once at registration/creation time, since DNS can change in between.
+ */
+export async function isSafeHostname(hostname: string): Promise<boolean> {
+  try {
+    const addresses = await dns.promises.lookup(hostname, { all: true });
+    if (addresses.length === 0) return false;
+    return addresses.every(({ address }) => !isPrivateIp(address));
+  } catch {
+    return false;
+  }
+}

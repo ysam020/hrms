@@ -311,8 +311,12 @@ export default function Chatbot() {
               position: "fixed",
               bottom: 88,
               right: 24,
-              width: 380,
-              height: 520,
+              // Capped at 380px on larger screens, but shrinks to fit the
+              // viewport (minus the `right` offset and a matching left
+              // margin) instead of overflowing off-screen on phones
+              // narrower than ~430px.
+              width: "min(380px, calc(100vw - 48px))",
+              height: "min(520px, calc(100vh - 120px))",
               display: "flex",
               flexDirection: "column",
               borderRadius: 12,

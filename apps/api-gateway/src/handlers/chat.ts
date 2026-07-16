@@ -1,48 +1,15 @@
 import { Request, Response } from "express";
-import dns from "dns";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  isSafeUrl,
+  isSafeHostname,
+} from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
-
-// SSRF protection — block requests to private/loopback/link-local address ranges,
-// including IPv4-mapped IPv6 addresses (::ffff:127.0.0.1 etc.)
-const PRIVATE_IP_RE =
-  /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|::1|::ffff:|fc00:|fe80:)/i;
-
-function isSafeUrl(raw: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "https:") return false;
-  const host = parsed.hostname.toLowerCase();
-  if (PRIVATE_IP_RE.test(host)) return false;
-  // Block 172.16.0.0/12
-  const m = host.match(/^172\.(\d+)\./);
-  if (m && parseInt(m[1]) >= 16 && parseInt(m[1]) <= 31) return false;
-  return true;
-}
-
-// Resolve hostname to IPs and verify none are private — prevents DNS rebinding attacks.
-async function isSafeHostname(hostname: string): Promise<boolean> {
-  try {
-    const addresses = await dns.promises.lookup(hostname, { all: true });
-    for (const { address } of addresses) {
-      if (PRIVATE_IP_RE.test(address)) return false;
-      // Block 172.16.0.0/12 on resolved IPs
-      const m = address.match(/^172\.(\d+)\./);
-      if (m && parseInt(m[1]) >= 16 && parseInt(m[1]) <= 31) return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function withId<
   T extends { id: string; chatRoomId?: string; replyToId?: string | null },

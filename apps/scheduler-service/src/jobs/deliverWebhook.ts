@@ -14,6 +14,7 @@
 
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { isSafeUrl, isSafeHostname } from "@hrms/common";
 import { createHmac } from "crypto";
 
 // Re-use the same encrypt/decrypt from crypto package.
@@ -60,6 +61,32 @@ export async function deliverWebhook({
   const { url, secret } = (delivery as any).endpoint;
   const payloadStr = JSON.stringify((delivery as any).payload);
 
+  // Re-validate right before sending, not just at registration time — the
+  // URL's DNS could have been re-pointed at a private/cloud-metadata IP
+  // since it was registered (DNS rebinding). isSafeUrl() catches the
+  // hostname-literal cases; isSafeHostname() resolves DNS and checks the
+  // actual IP(s) about to be connected to.
+  let urlSafe = false;
+  try {
+    const hostname = new URL(url).hostname;
+    urlSafe =
+      isSafeUrl(url, { requireHttps: process.env.NODE_ENV === "production" }) &&
+      (await isSafeHostname(hostname));
+  } catch {
+    urlSafe = false;
+  }
+  if (!urlSafe) {
+    logger.error(
+      `deliverWebhook: URL for delivery ${deliveryId} no longer resolves to a safe address — refusing to send`,
+      { url },
+    );
+    await prisma.webhookDelivery.update({
+      where: { id: deliveryId },
+      data: { status: "failed", error: "URL failed SSRF re-validation" },
+    });
+    return;
+  }
+
   let plainSecret: string;
   try {
     plainSecret = decryptFn(secret);
@@ -90,6 +117,7 @@ export async function deliverWebhook({
 
     const resp = await fetch(url, {
       method: "POST",
+      redirect: "error", // prevent redirect-based SSRF bypassing the checks above
       headers: {
         "Content-Type": "application/json",
         "X-HRMS-Signature-256": `sha256=${sig}`,
