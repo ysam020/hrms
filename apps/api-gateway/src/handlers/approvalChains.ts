@@ -10,7 +10,7 @@ import {
   type ApprovalDecision,
   type ActOnStepResult,
 } from "@hrms/approval-engine";
-import { handleError } from "../utils/handleError";
+import { handleError, handleActionError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
 import {
@@ -873,13 +873,8 @@ export async function actOnApproval(req: AuthRequest, res: Response) {
         : "Approved — forwarded to the next approver.",
       data: result,
     });
-  } catch (error: any) {
-    if (error?.message && !error?.code) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: error.message,
-      });
-    }
+  } catch (error) {
     logger.error("actOnApproval error:", { error });
-    return handleError(res, error);
+    return handleActionError(res, error);
   }
 }

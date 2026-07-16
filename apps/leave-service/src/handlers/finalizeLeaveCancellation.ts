@@ -47,52 +47,61 @@ export const finalizeLeaveCancellation = async (
       });
     }
 
-    // Conditioned on status="Cancellation Requested" so two concurrent
-    // finalize calls for the same leave (duplicate approval-engine callback)
-    // can't both pass the check above and both credit the balance back —
-    // only the request that actually flips the status wins.
-    const transition = await prisma.leaveApplication.updateMany({
-      where: { id, status: "Cancellation Requested" },
-      data: approved
-        ? { status: "Cancelled", cancelledOn: new Date() }
-        : { status: "Approved", cancellationReason: null },
+    // Resolved before the transaction — a read-through cache lookup, not a
+    // write, so it doesn't need to participate in it.
+    const tenantId = getTenantId();
+    const leavePolicies =
+      approved && tenantId
+        ? (await getLeaveSettings(tenantId))?.leavePolicies
+        : undefined;
+
+    // Status flip + balance credit-back must land together: a credit that
+    // succeeds while the status flip is lost (or vice versa) leaves the
+    // leave application and the employee's balance permanently disagreeing
+    // about whether this cancellation was ever finalized.
+    const result = await prisma.$transaction(async (tx) => {
+      // Conditioned on status="Cancellation Requested" so two concurrent
+      // finalize calls for the same leave (duplicate approval-engine
+      // callback) can't both pass the check above and both credit the
+      // balance back — only the request that actually flips the status wins.
+      const transition = await tx.leaveApplication.updateMany({
+        where: { id, status: "Cancellation Requested" },
+        data: approved
+          ? { status: "Cancelled", cancelledOn: new Date() }
+          : { status: "Approved", cancellationReason: null },
+      });
+      if (transition.count === 0) {
+        return { finalized: false as const };
+      }
+
+      const updatedLeave = await tx.leaveApplication.findUniqueOrThrow({
+        where: { id },
+      });
+
+      if (approved && tenantId) {
+        if (isCompOffLeaveType(leave.leaveType, leavePolicies)) {
+          await restoreCompOffCredits(leave.id, tx);
+        } else {
+          await adjustBalance(
+            tenantId,
+            leave.userId,
+            leave.leaveType,
+            leave.days,
+            tx,
+          );
+        }
+      }
+
+      return { finalized: true as const, updatedLeave };
     });
-    if (transition.count === 0) {
+
+    if (!result.finalized) {
       return callback(null, {
         message: MESSAGES.LEAVE_CANCELLED,
         status: status.OK,
       });
     }
-
-    const updatedLeave = await prisma.leaveApplication.findUniqueOrThrow({
-      where: { id },
-    });
-
-    if (approved) {
-      const tenantId = getTenantId();
-      const leavePolicies = tenantId
-        ? (await getLeaveSettings(tenantId))?.leavePolicies
-        : undefined;
-      if (tenantId && isCompOffLeaveType(leave.leaveType, leavePolicies)) {
-        await restoreCompOffCredits(leave.id).catch((err) =>
-          logger.warn(
-            "[finalizeLeaveCancellation] Comp-off credit restore failed:",
-            { err },
-          ),
-        );
-      } else if (tenantId) {
-        await adjustBalance(
-          tenantId,
-          leave.userId,
-          leave.leaveType,
-          leave.days,
-        ).catch((err) =>
-          logger.warn("[finalizeLeaveCancellation] Balance credit failed:", {
-            err,
-          }),
-        );
-      }
-    }
+    const { updatedLeave } = result;
 
     await cacheManager.invalidatePattern(
       `t:${getTenantId() ?? "global"}:leaves:*`,

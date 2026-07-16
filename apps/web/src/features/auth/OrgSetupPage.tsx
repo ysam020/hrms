@@ -9,30 +9,11 @@ import {
 import Grid from "@mui/material/Grid2";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import TextField from "@mui/material/TextField";
 import Button from "@web/shared/components/Button";
 import CircularProgress from "@mui/material/CircularProgress";
-import Divider from "@mui/material/Divider";
-import Chip from "@mui/material/Chip";
 import Stepper from "@mui/material/Stepper";
 import Step from "@mui/material/Step";
 import StepLabel from "@mui/material/StepLabel";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import ToggleButton from "@mui/material/ToggleButton";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import CheckIcon from "@mui/icons-material/Check";
-import PeopleIcon from "@mui/icons-material/People";
-import EventAvailableIcon from "@mui/icons-material/EventAvailable";
-import AssessmentIcon from "@mui/icons-material/Assessment";
-import WorkIcon from "@mui/icons-material/Work";
-import { alpha } from "@mui/material/styles";
 import { useNavigate, useLocation } from "react-router-dom";
 import apiClient, { setAccessToken } from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
@@ -41,119 +22,25 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import LogoDark from "@web/assets/data/LogoDark";
 import LogoLight from "@web/assets/data/LogoLight";
-import { states } from "@web/assets/data/statesData";
-import WorkWeekPicker, {
+import {
   defaultWorkWeek,
   type WorkWeekValue,
 } from "@web/shared/components/WorkWeekPicker";
 import "@web/styles/login.scss";
-
-interface Tenant {
-  id: string;
-  name: string;
-  slug: string;
-  role: string;
-}
-
-// Only non-sensitive form fields — no payment credentials.
-const PENDING_FORM_KEY = "hrms_pending_org_form";
-
-interface PendingOrgForm {
-  orgName: string;
-  industry: string;
-  companySize: string;
-  workWeek: WorkWeekValue;
-}
-
-type Billing = "monthly" | "annual";
-
-const INDUSTRIES = [
-  "Technology",
-  "Healthcare",
-  "Finance & Banking",
-  "Education",
-  "Retail & E-commerce",
-  "Manufacturing",
-  "Construction",
-  "Hospitality & Travel",
-  "Professional Services",
-  "Non-profit",
-  "Other",
-];
-
-const COMPANY_SIZES = [
-  "1–10",
-  "11–50",
-  "51–200",
-  "201–500",
-  "501–1000",
-  "1000+",
-];
-
-const PLAN_FEATURES = [
-  "All modules (Attendance, Leave, Payroll, Recruitment)",
-  "Unlimited employees",
-  "Analytics & Monitoring dashboards",
-  "Role-based permissions",
-  "Push notifications",
-  "Priority support",
-];
-
-const PRICES = {
-  monthly: { display: "₹999", sub: "per month", amount: 99900 },
-  annual: {
-    display: "₹9,999",
-    sub: "per year",
-    savings: "Save ₹2,989 (25%)",
-    amount: 999900,
-  },
-};
-
-const LEFT_FEATURES = [
-  {
-    icon: <PeopleIcon sx={{ fontSize: 22 }} />,
-    title: "Employee Lifecycle",
-    description:
-      "From onboarding to offboarding — manage your entire workforce in one place.",
-    color: "#4caf50",
-  },
-  {
-    icon: <EventAvailableIcon sx={{ fontSize: 22 }} />,
-    title: "Attendance & Leave",
-    description:
-      "Automated tracking, smart approvals, and real-time visibility for teams.",
-    color: "#2196f3",
-  },
-  {
-    icon: <AssessmentIcon sx={{ fontSize: 22 }} />,
-    title: "Payroll & Analytics",
-    description:
-      "Accurate payslips and actionable workforce insights — all in one dashboard.",
-    color: "#ff9800",
-  },
-  {
-    icon: <WorkIcon sx={{ fontSize: 22 }} />,
-    title: "Recruitment",
-    description:
-      "Post openings, track candidates, and hire faster with structured pipelines.",
-    color: "#e91e63",
-  },
-];
-
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (document.getElementById("razorpay-script")) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "razorpay-script";
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
+import { OrgSetupLeftPanel } from "./org-setup/OrgSetupLeftPanel";
+import { TenantPicker } from "./org-setup/TenantPicker";
+import { JoinRequestPending } from "./org-setup/JoinRequestPending";
+import { JoinOfferPrompt } from "./org-setup/JoinOfferPrompt";
+import { OrgDetailsStep } from "./org-setup/OrgDetailsStep";
+import { PlanStep } from "./org-setup/PlanStep";
+import { ContactInfoStep } from "./org-setup/ContactInfoStep";
+import { loadRazorpayScript } from "./org-setup/constants";
+import {
+  PENDING_FORM_KEY,
+  type Billing,
+  type PendingOrgForm,
+  type Tenant,
+} from "./org-setup/types";
 
 export default function OrgSetupPage() {
   const navigate = useNavigate();
@@ -534,7 +421,6 @@ export default function OrgSetupPage() {
     tenants.length === 0 &&
     joinRequestStatus !== "approved" &&
     !showJoinOffer;
-  const price = PRICES[billing];
 
   const leftColStyle = useMemo(
     () => ({
@@ -576,52 +462,7 @@ export default function OrgSetupPage() {
 
   return (
     <Grid container className="login-row">
-      {/* ── Left column ─────────────────────────────────────── */}
-      <Grid size={6} className="login-left-col" style={leftColStyle}>
-        <div className="login-left-content">
-          <div className="login-left-header">
-            <div className="company-badge">
-              <PeopleIcon sx={{ fontSize: 20, mr: 1 }} />
-              <Typography
-                variant="body2"
-                className="main-heading"
-                sx={{ fontWeight: 600 }}
-              >
-                HR Management System
-              </Typography>
-            </div>
-
-            <Typography variant="h3" className="main-heading">
-              Your Workspace,
-              <br />
-              <span className="gradient-text">Your Way</span>
-            </Typography>
-
-            <Typography variant="body1" className="sub-heading">
-              Set up your organisation in minutes and unlock a complete suite of
-              HR tools built for modern teams.
-            </Typography>
-          </div>
-
-          <div className="features-grid">
-            {LEFT_FEATURES.map((f, i) => (
-              <div key={i} className="feature-card">
-                <div className="feature-icon" style={{ color: f.color }}>
-                  {f.icon}
-                </div>
-                <div className="feature-content">
-                  <Typography variant="subtitle2" className="feature-title">
-                    {f.title}
-                  </Typography>
-                  <Typography variant="caption" className="feature-description">
-                    {f.description}
-                  </Typography>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Grid>
+      <OrgSetupLeftPanel style={leftColStyle} />
 
       {/* ── Right column ────────────────────────────────────── */}
       <Grid size={6} className="login-right-col">
@@ -707,453 +548,88 @@ export default function OrgSetupPage() {
               </Typography>
             </Box>
           ) : showJoinOffer && joinRequestStatus === "pending" ? (
-            /* Waiting on admin approval */
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <Typography variant="body2" sx={{ color: "var(--text-color)" }}>
-                Your request to join{" "}
-                <strong>{joinRequestTenant?.tenantName}</strong> is waiting for
-                approval from an admin. Check back once they've reviewed it.
-              </Typography>
-              <Button
-                variant="primary"
-                fullWidth
-                size="large"
-                disabled={checkingDomain}
-                loading={checkingDomain}
-                onClick={handleCheckAgain}
-                style={{
-                  borderRadius: "8px",
-                  paddingTop: 11.2,
-                  paddingBottom: 11.2,
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: 15,
-                }}
-              >
-                Check again
-              </Button>
-            </Box>
+            <JoinRequestPending
+              tenantName={joinRequestTenant?.tenantName}
+              checkingDomain={checkingDomain}
+              onCheckAgain={handleCheckAgain}
+            />
           ) : showJoinOffer && domainSuggestion ? (
-            /* Fresh domain-match offer */
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {previousRejected && (
-                <Typography variant="caption" sx={{ color: "warning.main" }}>
-                  Your previous request was declined.
-                </Typography>
-              )}
-              <Typography variant="body2" sx={{ color: "var(--text-color)" }}>
-                <strong>{domainSuggestion.tenantName}</strong> already has a
-                workspace for your email domain. Request to join to continue.
-              </Typography>
-              <Button
-                variant="primary"
-                fullWidth
-                size="large"
-                disabled={submittingJoinRequest}
-                loading={submittingJoinRequest}
-                onClick={handleRequestJoin}
-                style={{
-                  borderRadius: "8px",
-                  paddingTop: 11.2,
-                  paddingBottom: 11.2,
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: 15,
-                }}
-              >
-                Request to join
-              </Button>
-            </Box>
+            <JoinOfferPrompt
+              tenantName={domainSuggestion.tenantName}
+              previousRejected={previousRejected}
+              submitting={submittingJoinRequest}
+              onRequestJoin={handleRequestJoin}
+            />
           ) : tenants.length > 0 ? (
-            /* Existing tenant picker */
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-              {tenants.map((t) => (
-                <Button
-                  key={t.id}
-                  variant="outline"
-                  fullWidth
-                  disabled={loading}
-                  onClick={() => handleSelectTenant(t.id)}
-                  style={{
-                    justifyContent: "space-between",
-                    paddingTop: 12,
-                    paddingBottom: 12,
-                    paddingLeft: 16,
-                    paddingRight: 16,
-                    borderRadius: "8px",
-                    borderColor: "var(--text-input-border)",
-                    color: "var(--text-color)",
-                  }}
-                >
-                  <Box sx={{ textAlign: "left" }}>
-                    <Typography
-                      fontWeight={600}
-                      color="var(--text-color-secondary)"
-                    >
-                      {t.name}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      color="var(--text-color)"
-                      sx={{ opacity: 0.6 }}
-                    >
-                      {t.slug}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={t.role}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                </Button>
-              ))}
-            </Box>
+            <TenantPicker
+              tenants={tenants}
+              loading={loading}
+              onSelect={handleSelectTenant}
+            />
           ) : step === 0 ? (
-            /* Step 1: Organisation details */
-            <>
-              <TextField
-                label="Organisation name"
-                fullWidth
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && orgName.trim() && setStep(1)
-                }
-                placeholder="Acme Corp"
-                sx={{
-                  mb: 2,
-                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
-                }}
-              />
-
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Industry</InputLabel>
-                <Select
-                  value={industry}
-                  label="Industry"
-                  onChange={(e) => setIndustry(e.target.value)}
-                  sx={{ borderRadius: "8px" }}
-                >
-                  {INDUSTRIES.map((i) => (
-                    <MenuItem key={i} value={i}>
-                      {i}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Company size</InputLabel>
-                <Select
-                  value={companySize}
-                  label="Company size"
-                  onChange={(e) => setCompanySize(e.target.value)}
-                  sx={{ borderRadius: "8px" }}
-                >
-                  {COMPANY_SIZES.map((s) => (
-                    <MenuItem key={s} value={s}>
-                      {s} employees
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Box sx={{ mb: 3 }}>
-                <WorkWeekPicker value={workWeek} onChange={setWorkWeek} />
-              </Box>
-
-              <Button
-                variant="primary"
-                fullWidth
-                size="large"
-                disabled={!orgName.trim()}
-                onClick={() => setStep(1)}
-                style={{
-                  borderRadius: "8px",
-                  paddingTop: 11.2,
-                  paddingBottom: 11.2,
-                  fontWeight: 600,
-                  textTransform: "none",
-                  fontSize: 15,
-                }}
-              >
-                Continue
-              </Button>
-            </>
+            <OrgDetailsStep
+              orgName={orgName}
+              setOrgName={setOrgName}
+              industry={industry}
+              setIndustry={setIndustry}
+              companySize={companySize}
+              setCompanySize={setCompanySize}
+              workWeek={workWeek}
+              setWorkWeek={setWorkWeek}
+              onContinue={() => setStep(1)}
+            />
           ) : step === 1 ? (
-            /* Step 2: Plan + payment */
-            <>
-              {/* Billing toggle */}
-              <Box sx={{ display: "flex", justifyContent: "center", mb: 2.5 }}>
-                <ToggleButtonGroup
-                  value={billing}
-                  exclusive
-                  size="small"
-                  onChange={(_, v) => v && setBilling(v)}
-                  sx={{
-                    "& .MuiToggleButton-root": {
-                      borderRadius: "8px",
-                      px: 3,
-                      textTransform: "none",
-                      fontWeight: 500,
-                    },
-                  }}
-                >
-                  <ToggleButton value="monthly">Monthly</ToggleButton>
-                  <ToggleButton value="annual">Annual</ToggleButton>
-                </ToggleButtonGroup>
-              </Box>
-
-              {/* Plan card */}
-              <Box
-                sx={{
-                  border: 2,
-                  borderColor: "primary.main",
-                  borderRadius: "10px",
-                  p: 2.5,
-                  mb: 2.5,
-                  bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    mb: 1.5,
-                  }}
-                >
-                  <Box>
-                    <Typography variant="h6" fontWeight={700}>
-                      HRMS Pro
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Full-featured HR management
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography
-                      variant="h5"
-                      fontWeight={800}
-                      color="primary.main"
-                    >
-                      {price.display}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {price.sub}
-                    </Typography>
-                    {billing === "annual" && "savings" in price && (
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        color="success.main"
-                        fontWeight={600}
-                      >
-                        {price.savings}
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
-
-                <Divider
-                  sx={{ my: 1.5, borderColor: "var(--text-input-border)" }}
-                />
-
-                <List dense disablePadding>
-                  {PLAN_FEATURES.map((f) => (
-                    <ListItem key={f} disableGutters sx={{ py: 0.3 }}>
-                      <ListItemIcon sx={{ minWidth: 28 }}>
-                        <CheckIcon fontSize="small" color="success" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={f}
-                        primaryTypographyProps={{ variant: "body2" }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-
-              <Box sx={{ display: "flex", gap: 1.5 }}>
-                <Button
-                  variant="outline"
-                  fullWidth
-                  onClick={() => setStep(0)}
-                  disabled={loading}
-                  style={{
-                    borderRadius: "8px",
-                    borderColor: "var(--text-input-border)",
-                    color: "var(--text-color)",
-                    textTransform: "none",
-                    fontWeight: 500,
-                  }}
-                >
-                  Back
-                </Button>
-                <Button
-                  variant="primary"
-                  fullWidth
-                  size="large"
-                  disabled={loading}
-                  onClick={handlePayAndCreate}
-                  loading={loading}
-                  style={{
-                    borderRadius: "8px",
-                    paddingTop: 11.2,
-                    paddingBottom: 11.2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    fontSize: 14,
-                  }}
-                >
-                  {`Pay ${price.display} & Continue`}
-                </Button>
-              </Box>
-
-              <Typography
-                variant="caption"
-                sx={{
-                  display: "block",
-                  textAlign: "center",
-                  mt: 1.5,
-                  opacity: 0.6,
-                }}
-              >
-                By continuing you agree to our{" "}
-                <a href="/terms-of-use">Terms of Use</a> and{" "}
-                <a href="/refund-policy">Refund Policy</a>.
-              </Typography>
-            </>
+            <PlanStep
+              billing={billing}
+              setBilling={setBilling}
+              loading={loading}
+              onBack={() => setStep(0)}
+              onPayAndCreate={handlePayAndCreate}
+            />
           ) : (
-            /* Step 3: Contact info */
-            <>
-              <TextField
-                label="Help phone number"
-                fullWidth
-                value={helpPhone}
-                onChange={(e) => setHelpPhone(e.target.value)}
-                placeholder="+91 98765 43210"
-                sx={{
-                  mb: 2,
-                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
-                }}
-              />
-              <TextField
-                label="Help email address"
-                fullWidth
-                type="email"
-                value={helpEmail}
-                onChange={(e) => setHelpEmail(e.target.value)}
-                placeholder="hr@yourcompany.com"
-                sx={{
-                  mb: 2,
-                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
-                }}
-              />
-              <TextField
-                label="Office address"
-                fullWidth
-                multiline
-                rows={2}
-                value={officeAddress}
-                onChange={(e) => setOfficeAddress(e.target.value)}
-                placeholder="123 Main Street, Mumbai 400001"
-                sx={{
-                  mb: 2,
-                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
-                }}
-              />
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>State</InputLabel>
-                <Select
-                  value={workState}
-                  label="State"
-                  onChange={(e) => setWorkState(e.target.value)}
-                  sx={{ borderRadius: "8px" }}
-                >
-                  {states.map((s) => (
-                    <MenuItem key={s} value={s}>
-                      {s}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField
-                label="Website"
-                fullWidth
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://yourcompany.com"
-                sx={{
-                  mb: 3,
-                  "& .MuiOutlinedInput-root": { borderRadius: "8px" },
-                }}
-              />
-              <Box sx={{ display: "flex", gap: 1.5 }}>
-                <Button
-                  variant="outline"
-                  fullWidth
-                  disabled={loading}
-                  onClick={async () => {
-                    await handleCompleteOrgSetup();
-                    await finishSetup();
-                    setAlert({
-                      open: true,
-                      message: "Organisation created!",
-                      severity: "success",
-                    });
-                  }}
-                  style={{
-                    borderRadius: "8px",
-                    borderColor: "var(--text-input-border)",
-                    color: "var(--text-color)",
-                    textTransform: "none",
-                    fontWeight: 500,
-                  }}
-                >
-                  Skip
-                </Button>
-                <Button
-                  variant="primary"
-                  fullWidth
-                  size="large"
-                  disabled={loading}
-                  loading={loading}
-                  onClick={async () => {
-                    setLoading(true);
-                    try {
-                      await apiClient.put(API_ENDPOINTS.ORG_PROFILE, {
-                        ...(helpPhone && { helpPhone }),
-                        ...(helpEmail && { helpEmail }),
-                        ...(officeAddress && { officeAddress }),
-                        ...(website && { website }),
-                        ...(workState && { workState }),
-                      });
-                    } catch {
-                      // non-fatal — continue to app even if save fails
-                    }
-                    await handleCompleteOrgSetup();
-                    await finishSetup();
-                    setAlert({
-                      open: true,
-                      message: "Organisation created!",
-                      severity: "success",
-                    });
-                  }}
-                  style={{
-                    borderRadius: "8px",
-                    paddingTop: 11.2,
-                    paddingBottom: 11.2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    fontSize: 14,
-                  }}
-                >
-                  Save & Continue
-                </Button>
-              </Box>
-            </>
+            <ContactInfoStep
+              helpPhone={helpPhone}
+              setHelpPhone={setHelpPhone}
+              helpEmail={helpEmail}
+              setHelpEmail={setHelpEmail}
+              officeAddress={officeAddress}
+              setOfficeAddress={setOfficeAddress}
+              workState={workState}
+              setWorkState={setWorkState}
+              website={website}
+              setWebsite={setWebsite}
+              loading={loading}
+              onSkip={async () => {
+                await handleCompleteOrgSetup();
+                await finishSetup();
+                setAlert({
+                  open: true,
+                  message: "Organisation created!",
+                  severity: "success",
+                });
+              }}
+              onSaveAndContinue={async () => {
+                setLoading(true);
+                try {
+                  await apiClient.put(API_ENDPOINTS.ORG_PROFILE, {
+                    ...(helpPhone && { helpPhone }),
+                    ...(helpEmail && { helpEmail }),
+                    ...(officeAddress && { officeAddress }),
+                    ...(website && { website }),
+                    ...(workState && { workState }),
+                  });
+                } catch {
+                  // non-fatal — continue to app even if save fails
+                }
+                await handleCompleteOrgSetup();
+                await finishSetup();
+                setAlert({
+                  open: true,
+                  message: "Organisation created!",
+                  severity: "success",
+                });
+              }}
+            />
           )}
 
           <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>

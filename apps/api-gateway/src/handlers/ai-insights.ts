@@ -351,14 +351,18 @@ async function fetchEmployeeData() {
 
 async function fetchKycData() {
   const tenantId = getTenantId();
-  const tenantMatch = tenantId
-    ? { $match: { tenantId: { $oid: tenantId } } }
-    : null;
+  // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+  // a missing tenantId here would otherwise silently aggregate KYC data
+  // across every tenant instead of failing closed.
+  if (!tenantId) {
+    throw new Error("fetchKycData: no tenant context on request");
+  }
+  const tenantMatch = { $match: { tenantId: { $oid: tenantId } } };
 
   const [rows, deptRows] = await Promise.all([
     prisma.user.aggregateRaw({
       pipeline: [
-        ...(tenantMatch ? [tenantMatch] : []),
+        tenantMatch,
         {
           $group: {
             _id: null,
@@ -378,7 +382,7 @@ async function fetchKycData() {
     }) as unknown as Promise<any[]>,
     prisma.user.aggregateRaw({
       pipeline: [
-        ...(tenantMatch ? [tenantMatch] : []),
+        tenantMatch,
         {
           $group: {
             _id: { dept: "$department", status: "$kyc_approval" },

@@ -7,8 +7,6 @@ import {
   useRef,
   useState,
 } from "react";
-import dayjs from "dayjs";
-import { Calendar } from "primereact/calendar";
 import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
@@ -17,21 +15,9 @@ import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
-import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import Button from "@web/shared/components/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import MenuItem from "@mui/material/MenuItem";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import Grid from "@mui/material/Grid";
-import Autocomplete from "@mui/material/Autocomplete";
-import CircularProgress from "@mui/material/CircularProgress";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import UndoIcon from "@mui/icons-material/Undo";
 import BlockIcon from "@mui/icons-material/Block";
@@ -41,32 +27,37 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import useAssetCategoryOptions from "./useAssetCategoryOptions";
+import { StatusChip } from "./asset-inventory/StatusChip";
+import {
+  CreateAssetDialog,
+  type CreateAssetForm,
+} from "./asset-inventory/CreateAssetDialog";
+import {
+  AssignAssetDialog,
+  type AssignForm,
+  type EmpOption,
+} from "./asset-inventory/AssignAssetDialog";
+import {
+  ReturnAssetDialog,
+  type ReturnForm,
+} from "./asset-inventory/ReturnAssetDialog";
 
-const STATUS_CFG: Record<string, { color: string; bg: string }> = {
-  available: { color: "#059669", bg: "rgba(5,150,105,0.15)" },
-  assigned: { color: "#6366f1", bg: "rgba(99,102,241,0.15)" },
-  maintenance: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
-  retired: { color: "#64748b", bg: "rgba(100,116,139,0.15)" },
+const EMPTY_CREATE_FORM: CreateAssetForm = {
+  name: "",
+  assetCode: "",
+  category: "Laptop",
+  notes: "",
+  purchaseDate: "",
+  purchaseValue: "",
 };
 
-function StatusChip({ status }: { status: string }) {
-  const cfg = STATUS_CFG[status] ?? STATUS_CFG.available;
-  return (
-    <Chip
-      label={status}
-      size="small"
-      sx={{
-        backgroundColor: cfg.bg,
-        color: cfg.color,
-        fontWeight: 600,
-        fontSize: "0.7rem",
-        height: 22,
-        borderRadius: "4px",
-        "& .MuiChip-label": { padding: "0 8px" },
-      }}
-    />
-  );
-}
+const EMPTY_ASSIGN_FORM: AssignForm = {
+  userId: "",
+  conditionOut: "good",
+  notes: "",
+};
+
+const EMPTY_RETURN_FORM: ReturnForm = { conditionIn: "good", notes: "" };
 
 function AssetInventory() {
   const { setAlert } = useContext(AlertContext);
@@ -81,30 +72,16 @@ function AssetInventory() {
     id: string;
     code: string;
   } | null>(null);
-  const [createForm, setCreateForm] = useState({
-    name: "",
-    assetCode: "",
-    category: "Laptop",
-    notes: "",
-    purchaseDate: "",
-    purchaseValue: "",
-  });
-  const [assignForm, setAssignForm] = useState({
-    userId: "",
-    conditionOut: "good",
-    notes: "",
-  });
-  const [returnForm, setReturnForm] = useState({
-    conditionIn: "good",
-    notes: "",
-  });
+  const [createForm, setCreateForm] =
+    useState<CreateAssetForm>(EMPTY_CREATE_FORM);
+  const [assignForm, setAssignForm] = useState<AssignForm>(EMPTY_ASSIGN_FORM);
+  const [returnForm, setReturnForm] = useState<ReturnForm>(EMPTY_RETURN_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Employee search for the assign dialog
-  type EmpOption = { value: string; label: string };
   const [empOptions, setEmpOptions] = useState<EmpOption[]>([]);
   const [empInputValue, setEmpInputValue] = useState("");
   const [empSearching, setEmpSearching] = useState(false);
@@ -206,14 +183,7 @@ function AssetInventory() {
       });
       refresh();
       setOpenCreate(false);
-      setCreateForm({
-        name: "",
-        assetCode: "",
-        category: "Laptop",
-        notes: "",
-        purchaseDate: "",
-        purchaseValue: "",
-      });
+      setCreateForm(EMPTY_CREATE_FORM);
       setAlert({ open: true, message: "Asset created", severity: "success" });
     } catch (err) {
       setAlert({
@@ -236,7 +206,7 @@ function AssetInventory() {
       });
       refresh();
       setOpenAssign(null);
-      setAssignForm({ userId: "", conditionOut: "good", notes: "" });
+      setAssignForm(EMPTY_ASSIGN_FORM);
       setEmpInputValue("");
       setEmpOptions([]);
       setAlert({ open: true, message: "Asset assigned", severity: "success" });
@@ -262,7 +232,7 @@ function AssetInventory() {
         });
         refresh();
         setOpenReturn(null);
-        setReturnForm({ conditionIn: "good", notes: "" });
+        setReturnForm(EMPTY_RETURN_FORM);
         setAlert({
           open: true,
           message: "Asset returned",
@@ -323,12 +293,6 @@ function AssetInventory() {
     },
     [refresh, setAlert],
   );
-
-  const conditionOptions = [
-    { value: "good", label: "Good" },
-    { value: "fair", label: "Fair" },
-    { value: "damaged", label: "Damaged" },
-  ];
 
   const columns = useMemo(
     () => [
@@ -453,310 +417,44 @@ function AssetInventory() {
         }}
       />
 
-      {/* Create Asset Dialog */}
-      <Dialog
+      <CreateAssetDialog
         open={openCreate}
         onClose={() => setOpenCreate(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Add New Asset</DialogTitle>
-        <DialogContent sx={{ pt: "16px !important" }}>
-          <Grid container spacing={2}>
-            <Grid item xs={6}>
-              <TextField
-                label="Asset Name"
-                size="small"
-                fullWidth
-                value={createForm.name}
-                onChange={(e) =>
-                  setCreateForm((f) => ({ ...f, name: e.target.value }))
-                }
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <TextField
-                label="Asset Code"
-                size="small"
-                fullWidth
-                placeholder="e.g. LPT-001"
-                value={createForm.assetCode}
-                onChange={(e) =>
-                  setCreateForm((f) => ({
-                    ...f,
-                    assetCode: e.target.value.toUpperCase(),
-                  }))
-                }
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <Autocomplete
-                freeSolo
-                options={categoryOptions}
-                value={createForm.category}
-                onChange={(_, newValue) =>
-                  setCreateForm((f) => ({ ...f, category: newValue ?? "" }))
-                }
-                onInputChange={(_, newInputValue) =>
-                  setCreateForm((f) => ({ ...f, category: newInputValue }))
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Category"
-                    size="small"
-                    fullWidth
-                    helperText="Pick an existing category or type a new one"
-                  />
-                )}
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <TextField
-                label="Purchase Cost (₹)"
-                size="small"
-                type="number"
-                fullWidth
-                value={createForm.purchaseValue}
-                onChange={(e) =>
-                  setCreateForm((f) => ({
-                    ...f,
-                    purchaseValue: e.target.value,
-                  }))
-                }
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mb: 0.5 }}
-                >
-                  Purchase Date
-                </Typography>
-                <Calendar
-                  value={
-                    createForm.purchaseDate
-                      ? new Date(createForm.purchaseDate + "T00:00:00")
-                      : null
-                  }
-                  onChange={(e) =>
-                    setCreateForm((f) => ({
-                      ...f,
-                      purchaseDate: e.value
-                        ? dayjs(e.value as Date).format("YYYY-MM-DD")
-                        : "",
-                    }))
-                  }
-                  dateFormat="dd/mm/yy"
-                  maxDate={new Date()}
-                  showIcon
-                  showButtonBar
-                  appendTo={document.body}
-                  placeholder="Select date"
-                  style={{ width: "100%" }}
-                />
-              </Box>
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                label="Description"
-                size="small"
-                multiline
-                rows={2}
-                fullWidth
-                value={createForm.notes}
-                onChange={(e) =>
-                  setCreateForm((f) => ({ ...f, notes: e.target.value }))
-                }
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant="ghost"
-            onClick={() => setOpenCreate(false)}
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCreate}
-            variant="primary"
-            size="small"
-            disabled={submitting || !createForm.name || !createForm.assetCode}
-          >
-            {submitting ? "Creating…" : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        form={createForm}
+        setForm={setCreateForm}
+        categoryOptions={categoryOptions}
+        submitting={submitting}
+        onSubmit={handleCreate}
+      />
 
-      {/* Assign Dialog */}
-      <Dialog
+      <AssignAssetDialog
         open={!!openAssign}
+        assetCode={openAssign?.code}
         onClose={() => {
           setOpenAssign(null);
-          setAssignForm({ userId: "", conditionOut: "good", notes: "" });
+          setAssignForm(EMPTY_ASSIGN_FORM);
           setEmpInputValue("");
           setEmpOptions([]);
         }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Assign Asset {openAssign?.code}</DialogTitle>
-        <DialogContent
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            pt: "16px !important",
-          }}
-        >
-          <Autocomplete
-            options={empOptions}
-            getOptionLabel={(o) => o.label}
-            inputValue={empInputValue}
-            onInputChange={(_, v) => setEmpInputValue(v)}
-            onChange={(_, selected) =>
-              setAssignForm((f) => ({ ...f, userId: selected?.value ?? "" }))
-            }
-            loading={empSearching}
-            filterOptions={(x) => x} // server already filters
-            isOptionEqualToValue={(o, v) => o.value === v.value}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Employee"
-                size="small"
-                placeholder="Search by username…"
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {empSearching ? <CircularProgress size={16} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
-          />
-          <TextField
-            select
-            label="Condition Out"
-            size="small"
-            fullWidth
-            value={assignForm.conditionOut}
-            onChange={(e) =>
-              setAssignForm((f) => ({ ...f, conditionOut: e.target.value }))
-            }
-          >
-            {conditionOptions.map((c) => (
-              <MenuItem key={c.value} value={c.value}>
-                {c.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            label="Notes"
-            size="small"
-            multiline
-            rows={2}
-            fullWidth
-            value={assignForm.notes}
-            onChange={(e) =>
-              setAssignForm((f) => ({ ...f, notes: e.target.value }))
-            }
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setOpenAssign(null);
-              setAssignForm({ userId: "", conditionOut: "good", notes: "" });
-              setEmpInputValue("");
-              setEmpOptions([]);
-            }}
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleAssign}
-            variant="primary"
-            size="small"
-            disabled={submitting || !assignForm.userId}
-          >
-            {submitting ? "Assigning…" : "Assign"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        form={assignForm}
+        setForm={setAssignForm}
+        empOptions={empOptions}
+        empInputValue={empInputValue}
+        setEmpInputValue={setEmpInputValue}
+        empSearching={empSearching}
+        submitting={submitting}
+        onSubmit={handleAssign}
+      />
 
-      {/* Return Dialog */}
-      <Dialog
+      <ReturnAssetDialog
         open={!!openReturn}
+        assetCode={openReturn?.code}
         onClose={() => setOpenReturn(null)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Return Asset {openReturn?.code}</DialogTitle>
-        <DialogContent
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            pt: "16px !important",
-          }}
-        >
-          <TextField
-            select
-            label="Condition In"
-            size="small"
-            fullWidth
-            value={returnForm.conditionIn}
-            onChange={(e) =>
-              setReturnForm((f) => ({ ...f, conditionIn: e.target.value }))
-            }
-          >
-            {conditionOptions.map((c) => (
-              <MenuItem key={c.value} value={c.value}>
-                {c.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            label="Notes"
-            size="small"
-            multiline
-            rows={2}
-            fullWidth
-            value={returnForm.notes}
-            onChange={(e) =>
-              setReturnForm((f) => ({ ...f, notes: e.target.value }))
-            }
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant="ghost"
-            onClick={() => setOpenReturn(null)}
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => openReturn && handleReturn(openReturn.id)}
-            variant="primary"
-            size="small"
-            disabled={submitting}
-          >
-            {submitting ? "Processing…" : "Return"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        form={returnForm}
+        setForm={setReturnForm}
+        submitting={submitting}
+        onSubmit={() => openReturn && handleReturn(openReturn.id)}
+      />
     </ErrorBoundary>
   );
 }

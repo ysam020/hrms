@@ -33,7 +33,7 @@ import { Request, Response, NextFunction } from "express";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
-import { handleError } from "../utils/handleError";
+import { handleError, handleActionError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
 import dayjs from "dayjs";
@@ -379,13 +379,8 @@ export async function updateWfhStatus(req: Request, res: Response) {
           ? `WFH request ${result.finalStatus}`
           : "Approved — forwarded to the next approver.",
       });
-    } catch (err: any) {
-      if (err?.message && !err?.code) {
-        return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
-          message: err.message,
-        });
-      }
-      throw err;
+    } catch (err) {
+      return handleActionError(res, err, RESPONSE_STATUS.FORBIDDEN);
     }
   } catch (error) {
     logger.error("PATCH /wfh/requests/status error:", { error });

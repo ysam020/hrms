@@ -7,7 +7,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=api-gateway
-        - PROJECT=api-gateway
+        - PROJECT=api-gateway-service
         - PORT=9002
     environment:
       - AUTH_SERVICE_HOST=auth-service
@@ -61,7 +61,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=employee-service
-        - PROJECT=@hrms/employee-service
+        - PROJECT=employee-service
         - PORT=50053
     ports:
       - "50053:50053"
@@ -75,7 +75,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=attendance-service
-        - PROJECT=@hrms/attendance-service
+        - PROJECT=attendance-service
         - PORT=50054
     ports:
       - "50054:50054"
@@ -89,7 +89,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=leave-service
-        - PROJECT=@hrms/leave-service
+        - PROJECT=leave-service
         - PORT=50055
     ports:
       - "50055:50055"
@@ -103,7 +103,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=recruitment-service
-        - PROJECT=@hrms/recruitment-service
+        - PROJECT=recruitment-service
         - PORT=50056
     ports:
       - "50056:50056"
@@ -117,7 +117,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=hrm-service
-        - PROJECT=@hrms/hrm-service
+        - PROJECT=hrm-service
         - PORT=50057
     ports:
       - "50057:50057"
@@ -131,7 +131,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=salary-service
-        - PROJECT=@hrms/salary-service
+        - PROJECT=salary-service
         - PORT=50058
     ports:
       - "50058:50058"
@@ -145,7 +145,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=analytics-service
-        - PROJECT=@hrms/analytics-service
+        - PROJECT=analytics-service
         - PORT=50059
     ports:
       - "50059:50059"
@@ -159,7 +159,7 @@ services:
       no_cache: true
       args:
         - APP_DIR=notification-service
-        - PROJECT=@hrms/notification-service
+        - PROJECT=notification-service
         - PORT=50060
     ports:
       - "50060:50060"
@@ -187,7 +187,8 @@ services:
       no_cache: true
       args:
         - APP_DIR=scheduler-service
-        - PROJECT=@hrms/scheduler-service
+        - PROJECT=scheduler-service
+        - PORT=9111
     env_file: .env
 
   web:

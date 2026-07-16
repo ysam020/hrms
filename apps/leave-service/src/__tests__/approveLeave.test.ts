@@ -5,7 +5,7 @@ import { approveLeave } from "../handlers/approveLeave";
 import { MESSAGES } from "../constants/messages";
 
 jest.mock("@hrms/db", () => {
-  const _db = {
+  const _db: any = {
     leaveApplication: {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
@@ -23,6 +23,11 @@ jest.mock("@hrms/db", () => {
       updateMany: jest.fn(),
     },
   };
+  // The status flip + balance debit run inside prisma.$transaction(async
+  // (tx) => ...) — the mock passes the same mocked delegates back as `tx` so
+  // existing per-model mocks (updateMany, findUniqueOrThrow, etc.) apply
+  // whether the real code calls them via `prisma` or via `tx`.
+  _db.$transaction = jest.fn((fn: (tx: any) => unknown) => fn(_db));
   return {
     prisma: _db,
     prismaWithTenant: _db,

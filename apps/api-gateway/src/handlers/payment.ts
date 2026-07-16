@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import Razorpay from "razorpay";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@hrms/db";
 import { AuthRequest } from "../middleware/authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
@@ -337,7 +337,12 @@ export async function handleWebhook(req: Request, res: Response) {
       .update(rawBody)
       .digest("hex");
 
-    if (signature !== expected) {
+    const signatureBuf = Buffer.from(signature || "", "utf8");
+    const expectedBuf = Buffer.from(expected, "utf8");
+    if (
+      signatureBuf.length !== expectedBuf.length ||
+      !timingSafeEqual(signatureBuf, expectedBuf)
+    ) {
       logger.warn("Razorpay webhook: invalid signature");
       return res.status(400).json({ ok: false });
     }

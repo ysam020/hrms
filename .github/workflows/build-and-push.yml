@@ -74,7 +74,7 @@ jobs:
           - name: scheduler-service
             dockerfile: docker/base.Dockerfile
             repo: scheduler-service
-            build_args: --build-arg APP_DIR=scheduler-service --build-arg PROJECT=scheduler-service
+            build_args: --build-arg APP_DIR=scheduler-service --build-arg PROJECT=scheduler-service --build-arg PORT=9111
 
     steps:
       - name: Checkout repository

@@ -86,7 +86,16 @@ export const staggerItem: Variants = {
  */
 export const FadeUp = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & {
+  Omit<
+    React.HTMLAttributes<HTMLDivElement>,
+    // framer-motion redefines these with its own (PanInfo-based) signatures,
+    // which conflict with the native DOM event handler types.
+    | "onDrag"
+    | "onDragStart"
+    | "onDragEnd"
+    | "onAnimationStart"
+    | "onAnimationEnd"
+  > & {
     delay?: number;
     duration?: number;
   }

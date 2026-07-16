@@ -1,8 +1,10 @@
-import { loadSecrets } from "@hrms/common";
+import { loadSecrets, validateEnv } from "@hrms/common";
 import { logger } from "@hrms/logger";
+import { envSchema } from "./envSchema";
 
 async function bootstrap() {
   await loadSecrets("hrms/config");
+  validateEnv(envSchema, "notification-service");
 
   // Dynamic imports so Prisma initializes after DEV_MONGODB_URI is set
   const { startEmailWorker } = await import("./workers/emailWorker");

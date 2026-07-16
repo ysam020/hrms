@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Root pnpm workspace — covers every package/app in the monorepo since
+  # they all resolve through the single root pnpm-lock.yaml.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Security patches land as their own focused PRs (not grouped) so they
+      # aren't blocked behind reviewing an unrelated version bump.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

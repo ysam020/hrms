@@ -828,7 +828,7 @@ export async function listPayrollRuns(req: Request, res: Response) {
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const where: any = {};
+    const where: any = { tenantId: getTenantId() };
     if (status) where.status = status;
 
     const [runs, total] = await Promise.all([
@@ -870,8 +870,8 @@ export async function getPayrollRun(req: Request, res: Response) {
       });
     }
 
-    const run = await prisma.payrollRun.findUnique({
-      where: { id: String(req.params.runId) },
+    const run = await prisma.payrollRun.findFirst({
+      where: { id: String(req.params.runId), tenantId: getTenantId() },
       include: { lineItems: true },
     });
     if (!run) {
@@ -946,8 +946,8 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
       });
     }
 
-    const run = await prisma.payrollRun.findUnique({
-      where: { id: runId },
+    const run = await prisma.payrollRun.findFirst({
+      where: { id: runId, tenantId: getTenantId() },
     });
     if (!run) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
@@ -1172,6 +1172,13 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
               userId: li.userId,
               month: runMonth,
               year: runYear,
+            });
+            // The RazorpayX webhook fires with no auth/tenant context, so it
+            // has no way to know which tenant's physical DB to look this
+            // payout up in — this master-DB index is what lets it resolve
+            // that before touching PayrollLineItem (see razorpayxWebhook.ts).
+            await prisma.payoutTenantIndex.create({
+              data: { payoutId: payout.id, tenantId: tenantId! },
             });
             await prisma.payrollLineItem.update({
               where: { id: li.id },
@@ -1455,8 +1462,8 @@ export async function updateSalaryAdvanceStatus(req: Request, res: Response) {
       emiAmount?: number;
     };
 
-    const advance = await prisma.salaryAdvance.findUnique({
-      where: { id: advanceId },
+    const advance = await prisma.salaryAdvance.findFirst({
+      where: { id: advanceId, tenantId: getTenantId() },
     });
     if (!advance) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {

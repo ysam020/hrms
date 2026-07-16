@@ -1,8 +1,10 @@
-import { loadSecrets } from "@hrms/common";
+import { loadSecrets, validateEnv } from "@hrms/common";
 import { logger } from "@hrms/logger";
+import { envSchema } from "./envSchema";
 
 async function bootstrap() {
   await loadSecrets("hrms/config");
+  validateEnv(envSchema, "employee-service");
   await import("./server");
 }
 

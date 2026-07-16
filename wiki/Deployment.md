@@ -142,9 +142,9 @@ The API gateway and Vite dev server both require SSL certificates.
 
 Because each tenant gets its own MongoDB database, production deployments should consider:
 
-- **Connection pool memory:** `getClientForDb` creates one `PrismaClient` per tenant. For large numbers of tenants, memory usage grows linearly. Consider evicting idle clients from the pool after a TTL.
+- **Connection pool memory:** `getClientForDb` creates one `PrismaClient` per tenant, capped at 50 clients per process with LRU eviction, plus a 30-minute idle TTL sweep (`packages/database/src/tenantClientPool.ts`). This bounds memory per process but is still multiplied across every service process — watch per-tenant client counts as tenant volume grows.
 - **Backups:** Each tenant database should be backed up independently. Automate backups via MongoDB Atlas or mongodump cron jobs.
-- **Migrations:** Schema changes applied via `pnpm db:push` affect all databases. For production, apply schema changes in a rolling deployment and verify backward compatibility first.
+- **Migrations:** `pnpm db:push` (`prisma db push`) only targets the single database `DEV_MONGODB_URI` resolves to — it does **not** fan out to tenant databases. Run `pnpm db:migrate` after every schema change to push the schema to every tenant database (`packages/database/src/push-to-all-tenants.ts`). For production, apply schema changes in a rolling deployment and verify backward compatibility first.
 - **Monitoring:** Add per-tenant tags to metrics and logs to identify slow tenants.
 
 ---
