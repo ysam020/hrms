@@ -12,6 +12,7 @@ import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -80,6 +81,11 @@ function AssetInventory() {
   const [globalFilter, setGlobalFilter] = useState("");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [retireTarget, setRetireTarget] = useState<{
+    id: string;
+    code: string;
+  } | null>(null);
+  const [retireLoading, setRetireLoading] = useState(false);
 
   // Employee search for the assign dialog
   const [empOptions, setEmpOptions] = useState<EmpOption[]>([]);
@@ -360,7 +366,7 @@ function AssetInventory() {
           icon: <BlockIcon sx={{ fontSize: 16 }} />,
           label: "Retire",
           color: "error" as const,
-          onClick: () => handleRetire(row.id),
+          onClick: () => setRetireTarget({ id: row.id, code: row.assetCode }),
         });
       }
       if (row.status === "maintenance") {
@@ -373,8 +379,24 @@ function AssetInventory() {
       }
       return actions;
     },
-    [isHr, handleRetire, handleMarkAvailable],
+    [isHr, handleMarkAvailable],
   );
+
+  const handleRetireConfirm = useCallback(async () => {
+    if (!retireTarget) return;
+    setRetireLoading(true);
+    try {
+      await handleRetire(retireTarget.id);
+      setRetireTarget(null);
+    } finally {
+      setRetireLoading(false);
+    }
+  }, [retireTarget, handleRetire]);
+
+  const handleRetireCancel = useCallback(() => {
+    if (retireLoading) return;
+    setRetireTarget(null);
+  }, [retireLoading]);
 
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
@@ -454,6 +476,18 @@ function AssetInventory() {
         setForm={setReturnForm}
         submitting={submitting}
         onSubmit={() => openReturn && handleReturn(openReturn.id)}
+      />
+
+      <ConfirmationDialog
+        open={!!retireTarget}
+        onClose={handleRetireCancel}
+        onConfirm={handleRetireConfirm}
+        title="Retire Asset"
+        message={`Are you sure you want to retire asset ${retireTarget?.code ?? ""}?`}
+        description="This action cannot be undone."
+        confirmText="Retire"
+        loading={retireLoading}
+        variant="danger"
       />
     </ErrorBoundary>
   );

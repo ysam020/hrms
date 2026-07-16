@@ -566,14 +566,6 @@ const routesConfig = () => {
       spotlightOnly: true,
     },
     {
-      path: "/attendance/leave-application",
-      element: null,
-      allowedModules: [],
-      name: "Leave Application",
-      category: "Attendance & Leaves",
-      spotlightOnly: true,
-    },
-    {
       path: "/attendance/view-leave-applications",
       element: null,
       allowedModules: [],
@@ -614,14 +606,6 @@ const routesConfig = () => {
       spotlightOnly: true,
     },
     {
-      path: "/job-openings/new-job-opening",
-      element: null,
-      allowedModules: [],
-      name: "New Job Opening",
-      category: "Job Openings",
-      spotlightOnly: true,
-    },
-    {
       path: "/job-openings/view-job-openings",
       element: null,
       allowedModules: [],
@@ -635,14 +619,6 @@ const routesConfig = () => {
       allowedModules: [],
       name: "Job Openings Insights",
       category: "Job Openings",
-      spotlightOnly: true,
-    },
-    {
-      path: "/hr-activities/add-new-activity",
-      element: null,
-      allowedModules: [],
-      name: "Add New Activity",
-      category: "HR Activities",
       spotlightOnly: true,
     },
     {
@@ -675,14 +651,6 @@ const routesConfig = () => {
       allowedModules: [],
       name: "KYC Insights",
       category: "KYC",
-      spotlightOnly: true,
-    },
-    {
-      path: "/resignation-process/resignation-form",
-      element: null,
-      allowedModules: [],
-      name: "Resignation Form",
-      category: "Resignation Process",
       spotlightOnly: true,
     },
     {

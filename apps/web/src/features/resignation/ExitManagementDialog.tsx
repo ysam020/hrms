@@ -13,6 +13,7 @@ import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import StatusTimeline from "@web/shared/components/StatusTimeline";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import { FeedbackTab } from "./exit-management/FeedbackTab";
 import { ChecklistTab } from "./exit-management/ChecklistTab";
 import { SettlementTab } from "./exit-management/SettlementTab";
@@ -63,6 +64,8 @@ export default function ExitManagementDialog({
   const [renegotiateReason, setRenegotiateReason] = useState("");
   const [renegotiating, setRenegotiating] = useState(false);
   const [computingSettlement, setComputingSettlement] = useState(false);
+  const [approvingSettlement, setApprovingSettlement] = useState(false);
+  const [confirmSettlementOpen, setConfirmSettlementOpen] = useState(false);
 
   async function fetchAll() {
     if (!resignationId) return;
@@ -180,6 +183,7 @@ export default function ExitManagementDialog({
 
   async function approveSettlement() {
     if (!resignationId) return;
+    setApprovingSettlement(true);
     try {
       const res = await apiClient.put(
         API_ENDPOINTS.APPROVE_FNF_SETTLEMENT(resignationId),
@@ -190,6 +194,7 @@ export default function ExitManagementDialog({
         message: "Settlement approved.",
         severity: "success",
       });
+      setConfirmSettlementOpen(false);
     } catch (err: any) {
       setAlert({
         open: true,
@@ -197,6 +202,8 @@ export default function ExitManagementDialog({
           err?.response?.data?.message ?? "Failed to approve settlement.",
         severity: "error",
       });
+    } finally {
+      setApprovingSettlement(false);
     }
   }
 
@@ -287,7 +294,7 @@ export default function ExitManagementDialog({
                 settlement={settlement}
                 computingSettlement={computingSettlement}
                 onCompute={computeSettlement}
-                onApprove={approveSettlement}
+                onApprove={() => setConfirmSettlementOpen(true)}
               />
             )}
 
@@ -322,6 +329,18 @@ export default function ExitManagementDialog({
           Close
         </Button>
       </DialogActions>
+
+      <ConfirmationDialog
+        open={confirmSettlementOpen}
+        onClose={() => !approvingSettlement && setConfirmSettlementOpen(false)}
+        onConfirm={approveSettlement}
+        title="Approve settlement"
+        message="Are you sure you want to approve this full and final settlement?"
+        description="This finalizes the payout amount and cannot be easily reversed once approved."
+        confirmText="Approve"
+        loading={approvingSettlement}
+        variant="default"
+      />
     </Dialog>
   );
 }

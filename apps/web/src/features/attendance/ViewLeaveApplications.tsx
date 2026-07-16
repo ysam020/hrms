@@ -11,12 +11,18 @@ import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Download from "@mui/icons-material/Download";
 import FilterList from "@mui/icons-material/FilterList";
+import AddIcon from "@mui/icons-material/Add";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
 import Switch from "@mui/material/Switch";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Chip from "@mui/material/Chip";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import DataList from "@web/shared/components/DataList";
+import LeaveApplication from "./LeaveApplication";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -88,6 +94,7 @@ function ViewLeaveApplications() {
     status: null,
   });
   const [actionLoading, setActionLoading] = useState(false);
+  const [openApply, setOpenApply] = useState(false);
 
   const statusOptions = useMemo(
     () => [
@@ -450,8 +457,11 @@ function ViewLeaveApplications() {
         ["Pending", "Approved"].includes(row.status);
       if (canWithdraw) {
         actions.push({
-          icon: <CloseIcon sx={{ fontSize: 16 }} aria-hidden="true" />,
+          icon: (
+            <RemoveCircleOutlineIcon sx={{ fontSize: 16 }} aria-hidden="true" />
+          ),
           label: `Withdraw leave for ${row.username}`,
+          color: "error" as const,
           onClick: () =>
             handleLeaveActionClick(row.id || row._id, row.username, "Withdraw"),
         });
@@ -543,6 +553,16 @@ function ViewLeaveApplications() {
                   </IconButton>
                 </span>
               </Tooltip>
+              <Tooltip title="Apply for Leave">
+                <IconButton
+                  onClick={() => setOpenApply(true)}
+                  color="primary"
+                  size="small"
+                  aria-label="Apply for leave"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                </IconButton>
+              </Tooltip>
             </Box>
           }
           pagination={{
@@ -587,6 +607,23 @@ function ViewLeaveApplications() {
         variant={actionDialog.status === "Reject" ? "danger" : "default"}
         theme={theme}
       />
+
+      <Dialog
+        open={openApply}
+        onClose={() => setOpenApply(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Apply for Leave</DialogTitle>
+        <DialogContent>
+          <LeaveApplication
+            onSuccess={() => {
+              setOpenApply(false);
+              refresh();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

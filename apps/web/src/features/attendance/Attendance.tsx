@@ -2,7 +2,6 @@ import TabsPanel from "@web/shared/components/TabsPanel";
 import { memo, useContext } from "react";
 import { UserContext } from "@web/app/providers/UserContext";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
-import LeaveApplication from "./LeaveApplication";
 import ViewAttendances from "./ViewAttendances";
 import ViewLeaveApplications from "./ViewLeaveApplications";
 import AttendanceCorrection from "./AttendanceCorrection";
@@ -12,7 +11,6 @@ function Attendances() {
   const { user } = useContext(UserContext);
   const tabData = [
     { label: "View All Attendances", component: ViewAttendances },
-    { label: "Leave Application", component: LeaveApplication },
     { label: "View Leave Applications", component: ViewLeaveApplications },
     { label: "Attendance Correction", component: AttendanceCorrection },
     ...(isHrOrAbove(user) ? [{ label: "Insights", component: Insights }] : []),

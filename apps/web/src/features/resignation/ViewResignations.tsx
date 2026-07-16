@@ -18,9 +18,16 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import ResignationDecisionDialog from "./ResignationDecisionDialog";
 import ExitManagementDialog from "./ExitManagementDialog";
+import ResignationForm from "./ResignationForm";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
 import Person from "@mui/icons-material/Person";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import CheckIcon from "@mui/icons-material/Check";
@@ -28,6 +35,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import FilterList from "@mui/icons-material/FilterList";
+import AddIcon from "@mui/icons-material/Add";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
@@ -69,8 +77,14 @@ function ViewResignations() {
     overallCompanyCulture?: string;
     suggestions?: string;
   } | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<{
+    id: string;
+    username?: string;
+  } | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [statusFilter, setStatusFilter] = useState("All");
   const [globalFilter, setGlobalFilter] = useState("");
+  const [openResign, setOpenResign] = useState(false);
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -140,6 +154,7 @@ function ViewResignations() {
           message: res.data.message || successMessage,
           severity: "success",
         });
+        return true;
       } catch (err) {
         setAlert({
           open: true,
@@ -149,10 +164,30 @@ function ViewResignations() {
               : err.response?.data?.message || "Something went wrong",
           severity: "error",
         });
+        return false;
       }
     },
     [refresh, setAlert],
   );
+
+  const handleConfirmWithdraw = useCallback(async () => {
+    if (!withdrawTarget) return;
+    setWithdrawing(true);
+    try {
+      const success = await handleResignationAction({
+        id: withdrawTarget.id,
+        action: "withdraw-resignation",
+        successMessage: "Resignation withdrawn successfully",
+      });
+      if (success) setWithdrawTarget(null);
+    } finally {
+      setWithdrawing(false);
+    }
+  }, [withdrawTarget, handleResignationAction]);
+
+  const handleCancelWithdraw = useCallback(() => {
+    if (!withdrawing) setWithdrawTarget(null);
+  }, [withdrawing]);
 
   const getStatusChip = useCallback(
     (status) => {
@@ -380,17 +415,16 @@ function ViewResignations() {
                 icon: <RemoveCircleOutlineIcon sx={{ fontSize: 16 }} />,
                 label: `Withdraw resignation for ${rowData.username ?? "employee"}`,
                 onClick: () =>
-                  handleResignationAction({
+                  setWithdrawTarget({
                     id: rowData.id,
-                    action: "withdraw-resignation",
-                    successMessage: "Resignation withdrawn successfully",
+                    username: rowData.username,
                   }),
               },
             ]
           : []),
       ];
     },
-    [user, handleResignationAction],
+    [user],
   );
 
   return (
@@ -425,6 +459,16 @@ function ViewResignations() {
                 }
               />
             </Box>
+            <Tooltip title="Submit Resignation">
+              <IconButton
+                onClick={() => setOpenResign(true)}
+                color="primary"
+                size="small"
+                aria-label="Submit resignation"
+              >
+                <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+              </IconButton>
+            </Tooltip>
           </Box>
         }
         pagination={{
@@ -471,6 +515,34 @@ function ViewResignations() {
         overallCompanyCulture={exitManagement?.overallCompanyCulture}
         suggestions={exitManagement?.suggestions}
         onClose={() => setExitManagement(null)}
+      />
+
+      <Dialog
+        open={openResign}
+        onClose={() => setOpenResign(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Submit Resignation</DialogTitle>
+        <DialogContent>
+          <ResignationForm
+            onSuccess={() => {
+              setOpenResign(false);
+              refresh();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmationDialog
+        open={!!withdrawTarget}
+        onClose={handleCancelWithdraw}
+        onConfirm={handleConfirmWithdraw}
+        title="Withdraw resignation"
+        message={`Are you sure you want to withdraw the resignation for ${withdrawTarget?.username ?? "this employee"}?`}
+        confirmText="Withdraw"
+        loading={withdrawing}
+        variant="danger"
       />
     </ErrorBoundary>
   );

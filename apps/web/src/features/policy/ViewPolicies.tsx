@@ -18,15 +18,21 @@ import Stack from "@mui/material/Stack";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
+import Tooltip from "@mui/material/Tooltip";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
 import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
 import { Editor } from "primereact/editor";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
+import CreatePolicy from "./CreatePolicy";
 
 const POLICY_TYPES = [
   "POSH Policy",
@@ -404,7 +410,7 @@ function EditPolicyModal({ policy, onClose, onSaved, theme }) {
   );
 }
 
-function ViewPolicies({ refreshKey = 0 }) {
+function ViewPolicies() {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
@@ -414,6 +420,7 @@ function ViewPolicies({ refreshKey = 0 }) {
     { open: false, row: null },
   );
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [openAdd, setOpenAdd] = useState(false);
 
   const canDelete = hasPermission(
     "Policy",
@@ -425,6 +432,13 @@ function ViewPolicies({ refreshKey = 0 }) {
   const canUpdate = hasPermission(
     "Policy",
     "update",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
+  const canCreate = hasPermission(
+    "Policy",
+    "create",
     "-",
     user?.isSuperUser,
     user?.permissions || [],
@@ -444,7 +458,7 @@ function ViewPolicies({ refreshKey = 0 }) {
   }, []);
 
   const { data, totalCount, loading, pagination, setPagination, refresh } =
-    useServerPagination(fetchPolicies, { deps: [refreshKey] });
+    useServerPagination(fetchPolicies, { deps: [] });
 
   const handleDownload = async (row) => {
     try {
@@ -586,6 +600,20 @@ function ViewPolicies({ refreshKey = 0 }) {
         loading={loading}
         emptyMessage="No policies found"
         emptyIcon={<PolicyOutlinedIcon />}
+        toolbarActions={
+          canCreate ? (
+            <Tooltip title="Create Policy">
+              <IconButton
+                onClick={() => setOpenAdd(true)}
+                color="primary"
+                size="small"
+                aria-label="Create policy"
+              >
+                <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+              </IconButton>
+            </Tooltip>
+          ) : undefined
+        }
         pagination={{
           page: pagination.pageIndex,
           pageSize: pagination.pageSize,
@@ -622,6 +650,23 @@ function ViewPolicies({ refreshKey = 0 }) {
         variant="danger"
         theme={theme}
       />
+
+      <Dialog
+        open={openAdd}
+        onClose={() => setOpenAdd(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Create Policy</DialogTitle>
+        <DialogContent>
+          <CreatePolicy
+            onSaved={() => {
+              setOpenAdd(false);
+              refresh();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

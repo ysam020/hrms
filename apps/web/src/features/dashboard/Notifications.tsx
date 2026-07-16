@@ -25,6 +25,7 @@ import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import { saveNotifications } from "@web/core/db";
 import { AnimatePresence, motion } from "framer-motion";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 function Notifications() {
   const { notifications, loading, setNotifications } =
@@ -35,6 +36,8 @@ function Notifications() {
 
   const [groupedNotifications, setGroupedNotifications] = useState<any[]>([]);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   // Group notifications by title
   useEffect(() => {
@@ -203,6 +206,7 @@ function Notifications() {
   };
 
   const clearAllNotifications = useCallback(async () => {
+    setClearingAll(true);
     try {
       await apiClient.put(API_ENDPOINTS.CLEAR_ALL_NOTIFICATIONS);
     } catch {
@@ -210,6 +214,8 @@ function Notifications() {
     }
     setNotifications([]);
     saveNotifications([]).catch(console.error);
+    setClearingAll(false);
+    setConfirmClearAll(false);
   }, [setNotifications]);
 
   return (
@@ -256,7 +262,7 @@ function Notifications() {
 
         {notifications.length > 0 && (
           <IconButton
-            onClick={clearAllNotifications}
+            onClick={() => setConfirmClearAll(true)}
             size="small"
             aria-label="Clear all notifications"
             sx={{
@@ -500,6 +506,19 @@ function Notifications() {
           </Typography>
         </Paper>
       )}
+
+      <ConfirmationDialog
+        open={confirmClearAll}
+        onClose={() => {
+          if (!clearingAll) setConfirmClearAll(false);
+        }}
+        onConfirm={clearAllNotifications}
+        title="Clear All Notifications"
+        message="This will remove all your notifications. This cannot be undone."
+        confirmText="Clear All"
+        loading={clearingAll}
+        variant="danger"
+      />
     </Box>
   );
 }

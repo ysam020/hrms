@@ -18,6 +18,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 const LINE_ITEM_LABELS: Record<string, string> = {
   SEC80C: "Section 80C",
@@ -50,6 +51,9 @@ function ViewIndividualTaxDeclaration() {
   );
   const [revisionNote, setRevisionNote] = useState("");
   const [acting, setActing] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<
+    "declaration" | "proofs" | null
+  >(null);
 
   async function fetchDeclaration() {
     setLoading(true);
@@ -96,6 +100,7 @@ function ViewIndividualTaxDeclaration() {
       });
       setRevisionDialogOpen(false);
       setRevisionNote("");
+      setConfirmAction(null);
       await fetchDeclaration();
     } catch (err: any) {
       setAlert({
@@ -131,6 +136,7 @@ function ViewIndividualTaxDeclaration() {
       });
       setRevisionDialogOpen(false);
       setRevisionNote("");
+      setConfirmAction(null);
       await fetchDeclaration();
     } catch (err: any) {
       setAlert({
@@ -140,6 +146,14 @@ function ViewIndividualTaxDeclaration() {
       });
     } finally {
       setActing(false);
+    }
+  }
+
+  async function handleConfirmAction() {
+    if (confirmAction === "declaration") {
+      await reviewDeclaration("Declared");
+    } else if (confirmAction === "proofs") {
+      await reviewProofs("Verified");
     }
   }
 
@@ -220,7 +234,7 @@ function ViewIndividualTaxDeclaration() {
             <Box sx={{ display: "flex", gap: 1, mt: 3 }}>
               <Button
                 variant="primary"
-                onClick={() => reviewDeclaration("Declared")}
+                onClick={() => setConfirmAction("declaration")}
                 disabled={acting}
               >
                 Approve
@@ -242,7 +256,7 @@ function ViewIndividualTaxDeclaration() {
             <Box sx={{ display: "flex", gap: 1, mt: 3 }}>
               <Button
                 variant="primary"
-                onClick={() => reviewProofs("Verified")}
+                onClick={() => setConfirmAction("proofs")}
                 disabled={acting}
               >
                 Verify proofs
@@ -307,6 +321,24 @@ function ViewIndividualTaxDeclaration() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmationDialog
+        open={confirmAction !== null}
+        onClose={() => (!acting ? setConfirmAction(null) : undefined)}
+        onConfirm={handleConfirmAction}
+        title={
+          confirmAction === "proofs" ? "Verify proofs" : "Approve declaration"
+        }
+        message={
+          confirmAction === "proofs"
+            ? `Are you sure you want to verify the submitted proofs for ${employeeName}?`
+            : `Are you sure you want to approve the tax declaration for ${employeeName}?`
+        }
+        confirmText={confirmAction === "proofs" ? "Verify" : "Approve"}
+        cancelText="Cancel"
+        loading={acting}
+        variant="default"
+      />
     </Box>
   );
 }

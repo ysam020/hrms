@@ -5,7 +5,6 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useNavigate } from "react-router-dom";
 import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
@@ -108,18 +107,11 @@ function ReviewTaxDeclarations() {
     [],
   );
 
-  const actions = useCallback(
-    (row: any) => [
-      {
-        icon: <VisibilityIcon sx={{ fontSize: 16 }} />,
-        label: "Review",
-        color: "primary" as const,
-        onClick: () =>
-          navigate(
-            `/payroll/tax-declarations/${row.userId}?financialYear=${row.financialYear}`,
-          ),
-      },
-    ],
+  const handleRowClick = useCallback(
+    (row: any) =>
+      navigate(
+        `/payroll/tax-declarations/${row.userId}?financialYear=${row.financialYear}`,
+      ),
     [navigate],
   );
 
@@ -149,7 +141,7 @@ function ReviewTaxDeclarations() {
         ariaLabel="Tax declarations"
         data={data || []}
         columns={columns}
-        actions={actions}
+        onRowClick={handleRowClick}
         loading={loading}
         emptyMessage={`No tax declarations for FY ${financialYear}`}
         pagination={{

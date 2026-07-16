@@ -14,6 +14,7 @@ import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
@@ -131,6 +132,12 @@ function PayrollRuns() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    id: string;
+    status: "approved" | "disbursed" | "cancelled";
+    period?: string;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const isHr = isHrOrAbove(user);
 
@@ -300,12 +307,16 @@ function PayrollRuns() {
           onClick: () => handleAction(row.id, "processing"),
         });
       }
+      const period = dayjs(new Date(row.year, (row.month ?? 1) - 1)).format(
+        "MMMM YYYY",
+      );
       if (row.status === "processing") {
         actions.push({
           icon: <CheckIcon sx={{ fontSize: 16 }} />,
           label: "Approve",
           color: "success" as const,
-          onClick: () => handleAction(row.id, "approved"),
+          onClick: () =>
+            setConfirmTarget({ id: row.id, status: "approved", period }),
         });
       }
       if (row.status === "approved") {
@@ -313,7 +324,8 @@ function PayrollRuns() {
           icon: <CheckIcon sx={{ fontSize: 16 }} />,
           label: "Mark Disbursed",
           color: "primary" as const,
-          onClick: () => handleAction(row.id, "disbursed"),
+          onClick: () =>
+            setConfirmTarget({ id: row.id, status: "disbursed", period }),
         });
       }
       if (["draft", "processing"].includes(row.status)) {
@@ -321,13 +333,30 @@ function PayrollRuns() {
           icon: <CancelIcon sx={{ fontSize: 16 }} />,
           label: "Cancel",
           color: "error" as const,
-          onClick: () => handleAction(row.id, "cancelled"),
+          onClick: () =>
+            setConfirmTarget({ id: row.id, status: "cancelled", period }),
         });
       }
       return actions;
     },
     [isHr, handleAction],
   );
+
+  const handleConfirmAction = useCallback(async () => {
+    if (!confirmTarget) return;
+    setConfirmLoading(true);
+    try {
+      await handleAction(confirmTarget.id, confirmTarget.status);
+      setConfirmTarget(null);
+    } finally {
+      setConfirmLoading(false);
+    }
+  }, [confirmTarget, handleAction]);
+
+  const handleCancelConfirm = useCallback(() => {
+    if (confirmLoading) return;
+    setConfirmTarget(null);
+  }, [confirmLoading]);
 
   const memoizedData = useMemo(() => data || [], [data]);
 
@@ -484,6 +513,35 @@ function PayrollRuns() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmationDialog
+        open={!!confirmTarget}
+        onClose={handleCancelConfirm}
+        onConfirm={handleConfirmAction}
+        title={
+          confirmTarget?.status === "approved"
+            ? "Approve Payroll Run"
+            : confirmTarget?.status === "disbursed"
+              ? "Mark Payroll Run Disbursed"
+              : "Cancel Payroll Run"
+        }
+        message={
+          confirmTarget?.status === "approved"
+            ? `Are you sure you want to approve the payroll run for ${confirmTarget?.period}?`
+            : confirmTarget?.status === "disbursed"
+              ? `Are you sure you want to mark the payroll run for ${confirmTarget?.period} as disbursed? This will move real money to employees.`
+              : `Are you sure you want to cancel the payroll run for ${confirmTarget?.period}? This action cannot be undone.`
+        }
+        confirmText={
+          confirmTarget?.status === "approved"
+            ? "Approve"
+            : confirmTarget?.status === "disbursed"
+              ? "Mark Disbursed"
+              : "Cancel Run"
+        }
+        loading={confirmLoading}
+        variant={confirmTarget?.status === "approved" ? "default" : "danger"}
+      />
     </ErrorBoundary>
   );
 }

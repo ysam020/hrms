@@ -25,7 +25,7 @@ import DropdownWrapper from "@web/shared/components/DropdownWrapper";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
-function LeaveApplication() {
+function LeaveApplication({ onSuccess }: { onSuccess?: () => void }) {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const [sickLeave, setIsSickLeave] = useState(false);
@@ -121,6 +121,7 @@ function LeaveApplication() {
         });
         formik.resetForm();
         setIsSickLeave(false);
+        onSuccess?.();
       } catch (error) {
         setAlert({
           open: true,

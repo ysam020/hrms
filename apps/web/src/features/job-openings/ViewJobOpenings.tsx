@@ -17,6 +17,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import EditJobOpeningModal from "./EditJobOpeningModal";
+import NewJobOpening from "./NewJobOpening";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import Skeleton from "@mui/material/Skeleton";
 import IconButton from "@mui/material/IconButton";
@@ -28,7 +29,11 @@ import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 import Divider from "@mui/material/Divider";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
 import FilterList from "@mui/icons-material/FilterList";
+import AddIcon from "@mui/icons-material/Add";
 import InfoIcon from "@mui/icons-material/Info";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -38,10 +43,11 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import dayjs from "dayjs";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
-function ViewJobOpenings({ refreshKey = 0 }) {
+function ViewJobOpenings() {
   const [data, setData] = useState<any[]>([]);
   const navigate = useNavigate();
   const [openModal, setOpenModal] = useState(false);
+  const [openAdd, setOpenAdd] = useState(false);
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
@@ -49,6 +55,13 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   // granular permission bit — mirrors requirePrivileged on the backend
   // routes these actions call.
   const isPrivilegedRole = isOwnerOrAdmin(user);
+  const canCreate = hasPermission(
+    "JobOpenings",
+    "create_job_opening",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const canEdit =
     isPrivilegedRole ||
     hasPermission(
@@ -146,7 +159,7 @@ function ViewJobOpenings({ refreshKey = 0 }) {
 
   useEffect(() => {
     getData();
-  }, [getData, statusFilter, refreshKey]);
+  }, [getData, statusFilter]);
 
   const memoizedData = useMemo(() => data, [data]);
 
@@ -408,6 +421,18 @@ function ViewJobOpenings({ refreshKey = 0 }) {
                   }
                 />
               </Box>
+              {canCreate && (
+                <Tooltip title="New Job Opening">
+                  <IconButton
+                    onClick={() => setOpenAdd(true)}
+                    color="primary"
+                    size="small"
+                    aria-label="New job opening"
+                  >
+                    <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           }
         />
@@ -599,6 +624,23 @@ function ViewJobOpenings({ refreshKey = 0 }) {
             </Box>
           </Paper>
         </Popover>
+
+        <Dialog
+          open={openAdd}
+          onClose={() => setOpenAdd(false)}
+          fullWidth
+          maxWidth="md"
+        >
+          <DialogTitle>New Job Opening</DialogTitle>
+          <DialogContent>
+            <NewJobOpening
+              onSaved={() => {
+                setOpenAdd(false);
+                getData();
+              }}
+            />
+          </DialogContent>
+        </Dialog>
       </ErrorBoundary>
     </div>
   );

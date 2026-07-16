@@ -28,7 +28,7 @@ const validationSchema = toFormikValidationSchema(
   }),
 );
 
-function ResignationForm() {
+function ResignationForm({ onSuccess }: { onSuccess?: () => void }) {
   const { setAlert } = useContext(AlertContext);
 
   const formik = useFormik({
@@ -45,6 +45,7 @@ function ResignationForm() {
           severity: "success",
         });
         resetForm();
+        onSuccess?.();
       } catch (error) {
         setAlert({
           open: true,

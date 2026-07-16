@@ -12,6 +12,7 @@ import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import EditHrActivityModal from "./EditHrActivityModal";
+import AddHrActivity from "./AddHrActivity";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -24,6 +25,10 @@ import Tooltip from "@mui/material/Tooltip";
 import InfoIcon from "@mui/icons-material/Info";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
 import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
@@ -37,7 +42,7 @@ import dayjs from "dayjs";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
-function ViewHrActivities({ refreshKey = 0 }) {
+function ViewHrActivities() {
   const [activityData, setActivityData] = useState<any>(null);
   const [openModal, setOpenModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState("Active");
@@ -61,6 +66,13 @@ function ViewHrActivities({ refreshKey = 0 }) {
     user?.isSuperUser,
     user?.permissions || [],
   );
+  const canCreate = hasPermission(
+    "HRActivities",
+    "create",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     id: string | null;
@@ -71,6 +83,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
     title: "",
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [openAdd, setOpenAdd] = useState(false);
 
   const [detailsAnchorEl, setDetailsAnchorEl] = useState<HTMLElement | null>(
     null,
@@ -138,7 +151,7 @@ function ViewHrActivities({ refreshKey = 0 }) {
     resetPagination,
   } = useServerPagination(fetchHrActivities, {
     initialPageSize: 10,
-    deps: [statusFilter, refreshKey],
+    deps: [statusFilter],
   });
 
   const handleGlobalFilterChange = useCallback(
@@ -362,6 +375,18 @@ function ViewHrActivities({ refreshKey = 0 }) {
                 style={{ minWidth: "120px" }}
               />
             </Box>
+            {canCreate && (
+              <Tooltip title="Add New Activity">
+                <IconButton
+                  onClick={() => setOpenAdd(true)}
+                  color="primary"
+                  size="small"
+                  aria-label="Add new HR activity"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                </IconButton>
+              </Tooltip>
+            )}
           </Box>
         }
         pagination={{
@@ -636,6 +661,23 @@ function ViewHrActivities({ refreshKey = 0 }) {
         variant="danger"
         theme={theme}
       />
+
+      <Dialog
+        open={openAdd}
+        onClose={() => setOpenAdd(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Add New Activity</DialogTitle>
+        <DialogContent>
+          <AddHrActivity
+            onSaved={() => {
+              setOpenAdd(false);
+              refresh();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </ErrorBoundary>
   );
 }
