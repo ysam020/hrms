@@ -62,7 +62,7 @@
     "@grpc/grpc-js": "^1.12.3",
     "@grpc/proto-loader": "^0.7.13",
     "@hrms/logger": "workspace:*",
-    "@types/node": "^22.8.7",
+    "@types/node": "^26.1.1",
     "dotenv": "^16.4.5",
     "dotenv-cli": "^7.4.2",
     "express": "^4.21.1",
