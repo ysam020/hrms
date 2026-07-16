@@ -30,12 +30,23 @@ function buildClientCredentials(): ChannelCredentials {
   // BaseGrpcServer now requires this (see base-server.ts) — without it,
   // any host that could reach a service's gRPC port could call its RPCs
   // directly, bypassing gateway-level authorization entirely.
+  //
+  // This MUST be a distinct identity from the servers' own cert.pem/key.pem,
+  // not the same file reused: when a grpc-js client presents a certificate
+  // identical to the server's own, the server-side TLS handshake resets the
+  // connection (read ECONNRESET) instead of completing — confirmed by
+  // swapping in a separate client-cert.pem/client-key.pem (same CA) and
+  // watching the failure disappear. Every other combination (distinct certs,
+  // TLS 1.2 forced, newer grpc-js) still failed until the identities differed.
   const certFile =
-    process.env.GRPC_TLS_CRT_FILE ??
-    path.resolve(__dirname, "../../../../packages/certificates/cert.pem");
+    process.env.GRPC_TLS_CLIENT_CRT_FILE ??
+    path.resolve(
+      __dirname,
+      "../../../../packages/certificates/client-cert.pem",
+    );
   const keyFile =
-    process.env.GRPC_TLS_KEY_FILE ??
-    path.resolve(__dirname, "../../../../packages/certificates/key.pem");
+    process.env.GRPC_TLS_CLIENT_KEY_FILE ??
+    path.resolve(__dirname, "../../../../packages/certificates/client-key.pem");
 
   const overrides =
     process.env.GRPC_SKIP_HOSTNAME_VERIFICATION === "true"

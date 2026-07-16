@@ -98,7 +98,7 @@ function AttendanceCalendar() {
         <Typography
           variant="caption"
           component="button"
-          onClick={() => navigate("/attendance")}
+          onClick={() => navigate("/attendance/view-all-attendances")}
           sx={{
             color: "primary.main",
             fontSize: "0.68rem",
@@ -160,11 +160,11 @@ function AttendanceCalendar() {
             <Box
               key={day.num}
               data-today={day.isToday ? "true" : undefined}
-              onClick={() => navigate("/attendance")}
+              onClick={() => navigate("/attendance/view-all-attendances")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  navigate("/attendance");
+                  navigate("/attendance/view-all-attendances");
                 }
               }}
               role="button"

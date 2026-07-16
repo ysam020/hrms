@@ -34,11 +34,11 @@ function DepartmentBreakdown() {
         flexDirection: "column",
         cursor: "pointer",
       }}
-      onClick={() => navigate("/employee-management")}
+      onClick={() => navigate("/employee-management/insights")}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          navigate("/employee-management");
+          navigate("/employee-management/insights");
         }
       }}
       role="button"

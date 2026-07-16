@@ -13,8 +13,21 @@ mkdirSync(certsDir, { recursive: true });
 const certFile = join(certsDir, "cert.pem");
 const keyFile = join(certsDir, "key.pem");
 const caFile = join(certsDir, "rootCA.pem");
+// Separate identity for gRPC clients (api-gateway) — mTLS requires the
+// client to present its own cert distinct from the servers' cert.pem, since
+// grpc-js's TLS handshake resets the connection when the peer presents a
+// certificate identical to the verifier's own (confirmed by direct testing:
+// swapping in a distinct client identity, same CA, fixed it).
+const clientCertFile = join(certsDir, "client-cert.pem");
+const clientKeyFile = join(certsDir, "client-key.pem");
 
-if (existsSync(certFile) && existsSync(keyFile) && existsSync(caFile)) {
+if (
+  existsSync(certFile) &&
+  existsSync(keyFile) &&
+  existsSync(caFile) &&
+  existsSync(clientCertFile) &&
+  existsSync(clientKeyFile)
+) {
   console.log("Certificates already exist, skipping generation.");
   process.exit(0);
 }
@@ -32,6 +45,12 @@ try {
   execSync(`mkcert -key-file "${keyFile}" -cert-file "${certFile}" localhost 127.0.0.1`, {
     stdio: "inherit",
   });
+
+  // Separate client identity, signed by the same CA, for gRPC mTLS callers.
+  execSync(
+    `mkcert -client -key-file "${clientKeyFile}" -cert-file "${clientCertFile}" grpc-internal-client`,
+    { stdio: "inherit" },
+  );
 
   // Copy the mkcert root CA so nginx can reference it
   const caRoot = execSync("mkcert -CAROOT", { encoding: "utf8" }).trim();
@@ -66,12 +85,24 @@ if (!usedMkcert) {
     ],
   });
 
+  // Separate self-signed identity for gRPC clients (see note above on why
+  // client and server can't share one cert). Neither is a real CA, so both
+  // leaf certs are bundled into rootCA.pem as mutually-trusted roots.
+  const clientPems = await selfsigned.generate(
+    [{ name: "commonName", value: "grpc-internal-client" }],
+    { days: 365, algorithm: "sha256", keySize: 2048 },
+  );
+
   writeFileSync(keyFile, pems.private);
   writeFileSync(certFile, pems.cert);
-  writeFileSync(caFile, pems.cert);
+  writeFileSync(clientKeyFile, clientPems.private);
+  writeFileSync(clientCertFile, clientPems.cert);
+  writeFileSync(caFile, pems.cert + clientPems.cert);
 }
 
 console.log("Generated certificates in packages/certificates/:");
-console.log("  key.pem     — private key");
-console.log("  cert.pem    — server certificate");
-console.log("  rootCA.pem  — CA root certificate");
+console.log("  key.pem            — server private key");
+console.log("  cert.pem           — server certificate");
+console.log("  client-key.pem     — gRPC client private key");
+console.log("  client-cert.pem    — gRPC client certificate");
+console.log("  rootCA.pem         — CA root certificate");

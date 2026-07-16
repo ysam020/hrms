@@ -133,11 +133,11 @@ function JobOpeningsList() {
             return (
               <Box
                 key={job._id || i}
-                onClick={() => navigate("/job-openings")}
+                onClick={() => navigate("/job-openings/view-job-openings")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    navigate("/job-openings");
+                    navigate("/job-openings/view-job-openings");
                   }
                 }}
                 role="button"
