@@ -520,6 +520,7 @@ function ViewResignations() {
       <Dialog
         open={openResign}
         onClose={() => setOpenResign(false)}
+        disablePortal
         fullWidth
         maxWidth="sm"
       >

@@ -158,46 +158,27 @@ function LeaveApplication({ onSuccess }: { onSuccess?: () => void }) {
   return (
     <Card sx={{ maxWidth: 800, mx: "auto", boxShadow: 2 }}>
       <CardContent sx={{ p: 2 }}>
-        {/* Header */}
-        <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          mb={2}
-        >
-          <Box display="flex" alignItems="center" gap={1}>
-            <EventNote color="primary" />
-            <Typography variant="h6" fontWeight="600">
-              Leave Application
-            </Typography>
-          </Box>
-          <Box
-            display="flex"
-            flexWrap="wrap"
-            gap={0.75}
-            justifyContent="flex-end"
-          >
-            {leaveBalances.length === 0 ? (
+        <Box display="flex" flexWrap="wrap" gap={0.75} mb={2}>
+          {leaveBalances.length === 0 ? (
+            <Chip
+              icon={<Info />}
+              label="0 leave(s) available"
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          ) : (
+            leaveBalances.map((b) => (
               <Chip
+                key={b.name}
                 icon={<Info />}
-                label="0 leave(s) available"
+                label={`${b.name}: ${b.remaining}`}
                 size="small"
                 color="primary"
                 variant="outlined"
               />
-            ) : (
-              leaveBalances.map((b) => (
-                <Chip
-                  key={b.name}
-                  icon={<Info />}
-                  label={`${b.name}: ${b.remaining}`}
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                />
-              ))
-            )}
-          </Box>
+            ))
+          )}
         </Box>
 
         <form onSubmit={formik.handleSubmit}>

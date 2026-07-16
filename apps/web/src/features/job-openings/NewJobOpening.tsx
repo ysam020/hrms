@@ -13,7 +13,6 @@ import Work from "@mui/icons-material/Work";
 import Schedule from "@mui/icons-material/Schedule";
 import Description from "@mui/icons-material/Description";
 import AttachMoney from "@mui/icons-material/AttachMoney";
-import Add from "@mui/icons-material/Add";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useFormik } from "formik";
 import { jobOpeningValidationSchema as validationSchema } from "./schemas";
@@ -160,14 +159,6 @@ function NewJobOpenings({ onSaved }) {
   return (
     <Card sx={{ maxWidth: 800, mx: "auto", boxShadow: 2 }}>
       <CardContent sx={{ p: 2 }}>
-        {/* Header */}
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <Add color="primary" />
-          <Typography variant="h6" fontWeight="600">
-            New Job Opening
-          </Typography>
-        </Box>
-
         {applyLink && (
           <Alert
             severity="success"

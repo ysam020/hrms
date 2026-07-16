@@ -628,6 +628,7 @@ function ViewJobOpenings() {
         <Dialog
           open={openAdd}
           onClose={() => setOpenAdd(false)}
+          disablePortal
           fullWidth
           maxWidth="md"
         >

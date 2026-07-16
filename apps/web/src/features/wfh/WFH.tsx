@@ -1,15 +1,24 @@
 import { memo } from "react";
-import TabsPanel from "@web/shared/components/TabsPanel";
+import Box from "@mui/material/Box";
 import WFHRequests from "./WFHRequests";
-import WFHCalendar from "./WFHCalendar";
 
+/**
+ * WFH page — renders the requests list directly.
+ *
+ * NOTE: We intentionally do NOT use TabsPanel here (mirrors Helpdesk.tsx).
+ * With the Calendar tab removed, there is only one tab left, so wrapping it
+ * in TabsPanel would show a single, pointless tab. The p:3 below matches the
+ * padding TabsPanel's CustomTabPanel would have applied, so this page isn't
+ * flush against the viewport edge; height:100% matches CustomTabPanel's own
+ * sizing too, so WFHRequests' DataList can fill it and scroll its rows
+ * internally instead of the whole page scrolling.
+ */
 function WFH() {
-  const tabData = [
-    { label: "Requests", component: WFHRequests },
-    { label: "Calendar", component: WFHCalendar },
-  ];
-
-  return <TabsPanel tabData={tabData} tabKey="wfh_tab_value" basePath="/wfh" />;
+  return (
+    <Box sx={{ p: 3, height: "100%", boxSizing: "border-box" }}>
+      <WFHRequests />
+    </Box>
+  );
 }
 
 export default memo(WFH);

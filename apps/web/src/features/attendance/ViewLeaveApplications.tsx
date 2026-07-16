@@ -2,10 +2,12 @@ import {
   memo,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
@@ -95,6 +97,24 @@ function ViewLeaveApplications() {
   });
   const [actionLoading, setActionLoading] = useState(false);
   const [openApply, setOpenApply] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep link support (e.g. the dashboard's "Apply Leave" quick action) —
+  // land here with the modal already open instead of just the bare list.
+  useEffect(() => {
+    if (searchParams.get("action") === "apply") {
+      setOpenApply(true);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("action");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const statusOptions = useMemo(
     () => [
@@ -611,6 +631,7 @@ function ViewLeaveApplications() {
       <Dialog
         open={openApply}
         onClose={() => setOpenApply(false)}
+        disablePortal
         fullWidth
         maxWidth="sm"
       >

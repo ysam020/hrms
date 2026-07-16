@@ -665,6 +665,7 @@ function ViewHrActivities() {
       <Dialog
         open={openAdd}
         onClose={() => setOpenAdd(false)}
+        disablePortal
         fullWidth
         maxWidth="sm"
       >

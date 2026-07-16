@@ -754,15 +754,6 @@ const routesConfig = () => {
       spotlightOnly: true,
       checkAccess: canAccessWfh,
     },
-    {
-      path: "/wfh/calendar",
-      element: null,
-      allowedModules: [],
-      name: "WFH Calendar",
-      category: "WFH",
-      spotlightOnly: true,
-      checkAccess: canAccessWfh,
-    },
     // Helpdesk spotlight entries
     {
       path: "/helpdesk/all-tickets",
