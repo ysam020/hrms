@@ -35,7 +35,7 @@
     "dayjs": "^1.11.13",
     "express": "^4.21.1",
     "express-rate-limit": "^8.3.2",
-    "geoip-lite": "^1.4.10",
+    "geoip-lite": "^2.0.3",
     "helmet": "^8.1.0",
     "html-pdf-node": "^1.0.8",
     "http2-express-bridge": "^1.0.7",
