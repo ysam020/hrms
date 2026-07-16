@@ -13,7 +13,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.12.3",
+    "@grpc/grpc-js": "^1.14.4",
     "@hrms/logger": "workspace:*"
   },
   "devDependencies": {

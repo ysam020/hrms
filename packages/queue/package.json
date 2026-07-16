@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@hrms/logger": "workspace:*",
-    "bullmq": "^5.41.7",
-    "ioredis": "^5.3.2"
+    "bullmq": "^5.80.4",
+    "ioredis": "^5.11.1"
   },
   "devDependencies": {
     "@hrms/typescript-config": "workspace:*",
