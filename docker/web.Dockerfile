@@ -50,7 +50,10 @@ RUN --mount=type=secret,id=aws_credentials,target=/root/.aws/credentials \
     --mount=type=secret,id=aws_config,target=/root/.aws/config \
     turbo build --filter=web --force
 
-FROM nginx:alpine AS runner
+# Pinned (not the floating `alpine` tag) for reproducible builds — an
+# automatic base-image update landing between builds shouldn't be able to
+# change what ships to prod without that change going through review.
+FROM nginx:1.27-alpine AS runner
 
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 COPY ./docker/nginx.conf /etc/nginx/conf.d/default.conf

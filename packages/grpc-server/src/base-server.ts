@@ -122,13 +122,27 @@ export class BaseGrpcServer {
     const keyFile =
       process.env.GRPC_TLS_KEY_FILE ??
       path.resolve(__dirname, "../../certificates/key.pem");
+    const caFile =
+      process.env.GRPC_TLS_CA_FILE ??
+      path.resolve(__dirname, "../../certificates/rootCA.pem");
 
-    return grpc.ServerCredentials.createSsl(null, [
-      {
-        cert_chain: fs.readFileSync(certFile),
-        private_key: fs.readFileSync(keyFile),
-      },
-    ]);
+    // mTLS: verify the caller presents a cert signed by our CA (rootCerts +
+    // checkClientCertificate: true), not just that we present ours to them.
+    // Previously rootCerts was null and checkClientCertificate defaulted to
+    // false, so the server never verified the caller's identity — any host
+    // that could reach this port could call any RPC directly, bypassing
+    // gateway-level authorization entirely. See BaseGrpcClient/api-gateway's
+    // grpc/clients.ts, which now present the matching client identity.
+    return grpc.ServerCredentials.createSsl(
+      fs.readFileSync(caFile),
+      [
+        {
+          cert_chain: fs.readFileSync(certFile),
+          private_key: fs.readFileSync(keyFile),
+        },
+      ],
+      true,
+    );
   }
 
   public start(address: string, credentials?: grpc.ServerCredentials): void {

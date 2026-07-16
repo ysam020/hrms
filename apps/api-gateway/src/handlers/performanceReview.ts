@@ -52,8 +52,14 @@ export async function createCycle(req: Request, res: Response) {
 }
 
 export async function listCycles(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
-    const response = await grpcCall(performanceReviewClient, "listCycles", {});
+    const privileged = await canManageReviews(user!.userId, user!.tenantRole);
+    const response = await grpcCall(performanceReviewClient, "listCycles", {
+      // Non-privileged callers only get cycles they're enrolled in — see
+      // listCycles.ts (performance-review-service) for the enforcement.
+      requesterId: privileged ? "" : user!.userId,
+    });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error) {
     logger.error("listCycles error:", { error });
@@ -111,9 +117,14 @@ export async function updateCycleStatus(req: Request, res: Response) {
 }
 
 export async function getCycle(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
+    const privileged = await canManageReviews(user!.userId, user!.tenantRole);
     const response = await grpcCall(performanceReviewClient, "getCycle", {
       id: req.params.cycleId,
+      // Non-privileged callers may only view a cycle they're enrolled in —
+      // see getCycle.ts (performance-review-service) for the enforcement.
+      requesterId: privileged ? "" : user!.userId,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error) {

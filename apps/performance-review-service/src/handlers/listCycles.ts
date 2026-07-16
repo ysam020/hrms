@@ -5,12 +5,28 @@ import { MESSAGES } from "../constants/messages";
 import { toPerformanceReviewCycleProto } from "./serializers";
 
 export const listCycles = async (
-  _call: ServerUnaryCall<any, any>,
+  call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
 ) => {
   try {
+    // Set by the gateway only for non-privileged callers — restricts the
+    // list to cycles they're actually enrolled in (as reviewee or
+    // reviewer), instead of every cycle the tenant has ever run.
+    const requesterId: string | undefined =
+      call.request?.requesterId || undefined;
+
     const cycles = await prisma.performanceReviewCycle.findMany({
-      where: { tenantId: getTenantId()!, status: { not: "deleted" } },
+      where: {
+        tenantId: getTenantId()!,
+        status: { not: "deleted" },
+        ...(requesterId && {
+          reviews: {
+            some: {
+              OR: [{ userId: requesterId }, { reviewerId: requesterId }],
+            },
+          },
+        }),
+      },
       orderBy: { createdAt: "desc" },
     });
 

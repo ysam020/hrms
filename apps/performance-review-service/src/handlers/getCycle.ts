@@ -9,7 +9,7 @@ export const getCycle = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { id } = call.request;
+    const { id, requesterId } = call.request;
 
     if (!id) {
       return callback(null, {
@@ -27,6 +27,24 @@ export const getCycle = async (
         message: MESSAGES.CYCLE_NOT_FOUND,
         status: status.NOT_FOUND,
       });
+    }
+
+    // Set by the gateway only for non-privileged callers — they may only
+    // view a cycle they're actually enrolled in (as reviewee or reviewer).
+    if (requesterId) {
+      const enrolled = await prisma.performanceReview.findFirst({
+        where: {
+          cycleId: id,
+          OR: [{ userId: requesterId }, { reviewerId: requesterId }],
+        },
+        select: { id: true },
+      });
+      if (!enrolled) {
+        return callback(null, {
+          message: MESSAGES.FORBIDDEN,
+          status: status.PERMISSION_DENIED,
+        });
+      }
     }
 
     return callback(null, {

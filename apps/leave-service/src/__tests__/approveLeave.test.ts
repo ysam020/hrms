@@ -61,6 +61,10 @@ const mockFindUniqueOrThrow = (prisma as any).leaveApplication
   .findUniqueOrThrow as jest.Mock;
 const mockUpdateMany = (prisma as any).leaveApplication.updateMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
+const mockBalanceFindFirst = (prisma as any).leaveBalance
+  .findFirst as jest.Mock;
+const mockBalanceUpdateMany = (prisma as any).leaveBalance
+  .updateMany as jest.Mock;
 
 describe("approveLeave", () => {
   beforeEach(() => {
@@ -179,5 +183,47 @@ describe("approveLeave", () => {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,
     });
+  });
+
+  // NOTE on what this test can and can't prove: $transaction is mocked as a
+  // bare pass-through (`jest.fn((fn) => fn(_db))`, see the jest.mock block
+  // above) — it has no real atomicity, so it cannot demonstrate that the
+  // status-flip write is actually rolled back in the database when the
+  // balance debit later fails. Only a live-MongoDB replica-set integration
+  // test could prove that. What this test *does* pin down, at the
+  // application level: when a write inside the transaction body rejects,
+  // the handler must not report success to the caller, and must not run
+  // any post-transaction side effect (cache invalidation, notifications)
+  // as if the approval had gone through.
+  it("returns INTERNAL and skips post-transaction side effects when the balance debit fails mid-transaction", async () => {
+    mockFindUnique.mockResolvedValue({
+      id: "leave-1",
+      status: "Pending",
+      userId: "john-id",
+      leaveType: "PL",
+      days: 2,
+    });
+    mockFindUniqueOrThrow.mockResolvedValue({
+      id: "leave-1",
+      status: "Approved",
+      userId: "john-id",
+      leaveType: "PL",
+      days: 2,
+    });
+    mockBalanceFindFirst.mockResolvedValue({
+      id: "bal-1",
+      updatedAt: new Date(),
+      balances: { PL: 5 },
+    });
+    mockBalanceUpdateMany.mockRejectedValue(new Error("balance write failed"));
+
+    const cb = makeCallback();
+    await approveLeave(makeCall({ id: "leave-1" }), cb);
+
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.INTERNAL_SERVER_ERROR,
+      status: status.INTERNAL,
+    });
+    expect(mockInvalidate).not.toHaveBeenCalled();
   });
 });

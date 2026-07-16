@@ -19,7 +19,12 @@
 import { Request, Response } from "express";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  isSafeUrl,
+  isSafeHostname,
+} from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
@@ -55,28 +60,24 @@ async function assertAdminRole(userId: string): Promise<boolean> {
   return user.role.some((r) => ["owner", "admin"].includes(r));
 }
 
-// SSRF guard: reject private IP ranges in webhook URLs.
-function isSafeWebhookUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    // In production, enforce HTTPS.
-    if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {
-      return false;
-    }
-    const hostname = parsed.hostname;
-    // Block obvious private ranges (same as chat upload guard).
-    const privatePatterns = [
-      /^127\./,
-      /^10\./,
-      /^192\.168\./,
-      /^172\.(1[6-9]|2\d|3[01])\./,
-      /^localhost$/i,
-      /^::1$/,
-    ];
-    return !privatePatterns.some((p) => p.test(hostname));
-  } catch {
+// SSRF guard: reject private/loopback/link-local/metadata IP ranges in
+// webhook URLs, including 169.254.169.254 (AWS/GCP/Azure instance metadata)
+// and IPv6 ULA/link-local. Uses the same guard as the chat link-preview
+// feature (@hrms/common/ssrfGuard) so both features get the same coverage.
+//
+// This check alone is only half the story: it validates whatever the
+// hostname resolves to *right now*, at registration/update time. A tenant
+// could register a URL that's public today and later re-point its DNS at
+// a private/metadata IP (DNS rebinding) — deliverWebhook.ts (scheduler
+// service) re-runs this exact check again immediately before every actual
+// delivery, which is the check that matters for that attack.
+async function isSafeWebhookUrl(url: string): Promise<boolean> {
+  if (
+    !isSafeUrl(url, { requireHttps: process.env.NODE_ENV === "production" })
+  ) {
     return false;
   }
+  return isSafeHostname(new URL(url).hostname);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ export async function createEndpoint(req: Request, res: Response) {
     const { url, events } = req.body as { url: string; events: string[] };
     const tenantId = getTenantId()!;
 
-    if (!isSafeWebhookUrl(url)) {
+    if (!(await isSafeWebhookUrl(url))) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Webhook URL must be a valid, publicly reachable HTTPS URL",
       });
@@ -225,7 +226,7 @@ export async function updateEndpoint(req: Request, res: Response) {
       rotate?: boolean;
     };
 
-    if (url && !isSafeWebhookUrl(url)) {
+    if (url && !(await isSafeWebhookUrl(url))) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Webhook URL must be a valid, publicly reachable HTTPS URL",
       });
@@ -446,6 +447,17 @@ export async function testEndpoint(req: Request, res: Response) {
       });
     }
 
+    const endpointUrl = (endpoint as any).url as string;
+
+    // Re-validate at send time, not just at registration time — the stored
+    // URL's DNS could have been re-pointed at a private/metadata IP since
+    // it was registered (DNS rebinding). See isSafeWebhookUrl above.
+    if (!(await isSafeWebhookUrl(endpointUrl))) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Webhook URL no longer resolves to a safe address",
+      });
+    }
+
     const plainSecret = decryptFn((endpoint as any).secret);
     const testPayload = JSON.stringify({
       event: "ping",
@@ -462,8 +474,9 @@ export async function testEndpoint(req: Request, res: Response) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
-      const resp = await fetch((endpoint as any).url, {
+      const resp = await fetch(endpointUrl, {
         method: "POST",
+        redirect: "error", // prevent redirect-based SSRF bypassing the checks above
         headers: {
           "Content-Type": "application/json",
           "X-HRMS-Signature-256": `sha256=${sig}`,

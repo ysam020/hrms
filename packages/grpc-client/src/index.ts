@@ -26,10 +26,22 @@ export class BaseGrpcClient {
     const caFile =
       process.env.GRPC_TLS_CA_FILE ??
       path.resolve(__dirname, "../../certificates/rootCA.pem");
+    // mTLS: present our own cert/key so the server can verify who's
+    // calling, not just that we trust the server's cert. See
+    // base-server.ts's buildServerCredentials, which now requires this.
+    const certFile =
+      process.env.GRPC_TLS_CRT_FILE ??
+      path.resolve(__dirname, "../../certificates/cert.pem");
+    const keyFile =
+      process.env.GRPC_TLS_KEY_FILE ??
+      path.resolve(__dirname, "../../certificates/key.pem");
 
-    return grpc.credentials.createSsl(fs.readFileSync(caFile), null, null, {
-      checkServerIdentity: () => undefined,
-    });
+    return grpc.credentials.createSsl(
+      fs.readFileSync(caFile),
+      fs.readFileSync(keyFile),
+      fs.readFileSync(certFile),
+      { checkServerIdentity: () => undefined },
+    );
   }
 
   private setupClient() {
