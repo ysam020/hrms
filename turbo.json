@@ -19,8 +19,6 @@
       "cache": false
     },
 
-    "lint": {},
-
     "proto:gen": {
       "cache": false
     },

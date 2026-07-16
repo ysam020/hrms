@@ -1,11 +1,13 @@
 // ⚠️ Telemetry must be the very first import — before express, prisma, grpc.
 import "./telemetry";
 
-import { loadSecrets } from "@hrms/common";
+import { loadSecrets, validateEnv } from "@hrms/common";
 import { logger } from "@hrms/logger";
+import { envSchema } from "./envSchema";
 
 async function bootstrap() {
   await loadSecrets("hrms/config");
+  validateEnv(envSchema, "api-gateway");
   await import("./server");
 }
 

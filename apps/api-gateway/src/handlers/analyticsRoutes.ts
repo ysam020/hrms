@@ -145,8 +145,16 @@ export async function getAgeDistribution(_req: Request, res: Response) {
         data: cached,
       });
 
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const bucketResult = await (prisma.user as any).aggregateRaw({
       pipeline: [
         { $match: { ...tenantIdMatch, dob: { $ne: null } } },
@@ -212,8 +220,16 @@ export async function getJoiningData(_req: Request, res: Response) {
         data: cached,
       });
 
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const result = await (prisma.user as any).aggregateRaw({
       pipeline: [
         { $match: { ...tenantIdMatch, joining_date: { $ne: null } } },
@@ -254,8 +270,16 @@ export async function getTenureDistribution(_req: Request, res: Response) {
       });
 
     const YEAR_MS = 365.25 * 24 * 3600 * 1000;
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const bucketResult = await (prisma.user as any).aggregateRaw({
       pipeline: [
         {
@@ -336,8 +360,16 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const cutoff = `${twelveMonthsAgo.getFullYear()}-${String(twelveMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
 
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const result = await (prisma.user as any).aggregateRaw({
       pipeline: [
         {
@@ -474,8 +506,16 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
     const twelveMonthsAgoStr = twelveMonthsAgo.toISOString().split("T")[0];
 
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const result = await (prisma.leaveApplication as any).aggregateRaw({
       pipeline: [
         {
@@ -523,8 +563,16 @@ export async function getAttendanceTrends(_req: Request, res: Response) {
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
 
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const result = await (prisma.attendanceRecord as any).aggregateRaw({
       pipeline: [
         {
@@ -593,8 +641,16 @@ export async function getWorkingHoursDistribution(
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
 
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const bucketResult = await (prisma.attendanceRecord as any).aggregateRaw({
       pipeline: [
         {
@@ -971,8 +1027,16 @@ export async function getSalaryBands(_req: Request, res: Response) {
         data: cached,
       });
 
-    const tenantIdMatch =
-      tenantId !== "global" ? { tenantId: { $oid: tenantId } } : {};
+    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
+    // unlike findMany/count/etc, it must be filtered by hand, and a missing
+    // tenantId here would otherwise silently aggregate across every tenant.
+    if (tenantId === "global") {
+      logger.error("analytics error: no tenant context on request");
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message: "Internal Server Error",
+      });
+    }
+    const tenantIdMatch = { tenantId: { $oid: tenantId } };
     const bucketResult = await (prisma.user as any).aggregateRaw({
       pipeline: [
         { $match: { ...tenantIdMatch, salary: { $ne: null } } },

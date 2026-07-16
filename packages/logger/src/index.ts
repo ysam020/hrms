@@ -175,13 +175,43 @@ export const apiRequestLogger = (req: any, res: any, next: any) => {
   next();
 };
 
+// Field-name substrings (case-insensitive) that mark a value as sensitive.
+// Matches broadly on purpose — this walks arbitrary proto payloads across
+// every service, so over-redacting a borderline field name is far cheaper
+// than leaking a token, PAN, bank account, DOB, or WebAuthn credential.
+const SENSITIVE_KEY_PATTERN =
+  /token|password|secret|credential|pan(?:number)?|bank|account|ifsc|dob|birth|otp|cvv|ssn|aadhaar|salary|ctc|ssn|routingnumber|publickey|privatekey/i;
+
+function redactSensitive(value: unknown, depth = 0): unknown {
+  if (depth > 10 || value === null || value === undefined) return value;
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+    return "[REDACTED]";
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitive(item, depth + 1));
+  }
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = SENSITIVE_KEY_PATTERN.test(key)
+        ? "[REDACTED]"
+        : redactSensitive(val, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
 export const grpcApiRequestLogger = async (
   call: any,
   next: () => Promise<any>,
 ) => {
   const start = Date.now();
   const method = (call.getPath ? call.getPath() : "unknown") as string;
-  logger.info("gRPC Request", { method, request: call.request });
+  logger.info("gRPC Request", {
+    method,
+    request: redactSensitive(call.request),
+  });
   const result = await next();
   const duration = Date.now() - start;
   grpcRequestDuration.observe({ method, service: serviceName }, duration);

@@ -11,8 +11,12 @@ import { prismaWithTenant as prisma } from "@hrms/db";
  * or a future accrual job) get exhaustion enforcement / debiting for it.
  */
 
-export async function getBalanceRow(tenantId: string, userId: string) {
-  return (prisma as any).leaveBalance.findFirst({
+export async function getBalanceRow(
+  tenantId: string,
+  userId: string,
+  client: any = prisma,
+) {
+  return client.leaveBalance.findFirst({
     where: { tenantId, userId },
   });
 }
@@ -40,16 +44,17 @@ export async function adjustBalance(
   userId: string,
   leaveType: string,
   delta: number,
+  client: any = prisma,
 ): Promise<void> {
   const MAX_ATTEMPTS = 5;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const row = await getBalanceRow(tenantId, userId);
+    const row = await getBalanceRow(tenantId, userId, client);
     if (!row) return;
     const balances = { ...((row.balances as Record<string, number>) ?? {}) };
     if (typeof balances[leaveType] !== "number") return;
     balances[leaveType] = balances[leaveType] + delta;
 
-    const result = await (prisma as any).leaveBalance.updateMany({
+    const result = await client.leaveBalance.updateMany({
       where: { id: row.id, updatedAt: row.updatedAt },
       data: { balances },
     });
@@ -145,8 +150,9 @@ export async function consumeCompOffCredits(
   userId: string,
   days: number,
   leaveApplicationId: string,
+  client: any = prisma,
 ): Promise<number> {
-  const credits = await (prisma as any).compOffCredit.findMany({
+  const credits = await client.compOffCredit.findMany({
     where: {
       tenantId,
       userId,
@@ -162,7 +168,7 @@ export async function consumeCompOffCredits(
     // Guard against a concurrent consumer (two approvals racing on the same
     // credit) claiming the same credit twice — the update only lands if the
     // credit is still "available" at write time.
-    const claimed = await (prisma as any).compOffCredit.updateMany({
+    const claimed = await client.compOffCredit.updateMany({
       where: { id: credit.id, status: "available" },
       data: { status: "used", usedInLeaveApplicationId: leaveApplicationId },
     });
@@ -174,8 +180,9 @@ export async function consumeCompOffCredits(
 /** Reverts every credit consumed by this leave application back to "available" (e.g. on cancellation). */
 export async function restoreCompOffCredits(
   leaveApplicationId: string,
+  client: any = prisma,
 ): Promise<void> {
-  await (prisma as any).compOffCredit.updateMany({
+  await client.compOffCredit.updateMany({
     where: { usedInLeaveApplicationId: leaveApplicationId, status: "used" },
     data: { status: "available", usedInLeaveApplicationId: null },
   });

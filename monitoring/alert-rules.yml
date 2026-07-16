@@ -1,0 +1,62 @@
+# Prometheus alerting rules for the prod stack (see prometheus-prod.yml,
+# which scrapes http_requests_total/grpc_requests_total/*_duration_ms from
+# every service's prom-client /metrics endpoint — packages/logger/src/index.ts).
+#
+# These rules make problems visible in Prometheus/Grafana's own alert views
+# even without Alertmanager wired up. To actually page someone, deploy
+# Alertmanager and point Prometheus's `alerting.alertmanagers` config at it,
+# then configure a receiver (Slack/PagerDuty/etc) — that wiring is
+# infra/credentials work that has to happen outside this repo and is not
+# done here.
+groups:
+  - name: service-availability
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} instance {{ $labels.instance_id }} is down"
+          description: "Prometheus has failed to scrape {{ $labels.service }} ({{ $labels.instance }}) for 2 minutes."
+
+  - name: http-errors
+    rules:
+      - alert: HighHttpErrorRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (service) (rate(http_requests_total[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} 5xx rate above 5%"
+          description: "{{ $labels.service }} has returned 5xx for more than 5% of requests over the last 5 minutes."
+
+      - alert: HighHttpLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (service, le) (rate(http_request_duration_ms_bucket[5m]))
+          ) > 2000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} p95 latency above 2s"
+          description: "{{ $labels.service }}'s 95th percentile HTTP request duration has exceeded 2000ms for 5 minutes."
+
+  - name: grpc-errors
+    rules:
+      - alert: HighGrpcLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (service, le) (rate(grpc_request_duration_ms_bucket[5m]))
+          ) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} gRPC p95 latency above 1s"
+          description: "{{ $labels.service }}'s 95th percentile gRPC request duration has exceeded 1000ms for 5 minutes."

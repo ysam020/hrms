@@ -7,169 +7,24 @@ import Button from "@web/shared/components/Button";
 import Box from "@mui/material/Box";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
-import Typography from "@mui/material/Typography";
-import Checkbox from "@mui/material/Checkbox";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Chip from "@mui/material/Chip";
-import TextField from "@mui/material/TextField";
-import Switch from "@mui/material/Switch";
 import CircularProgress from "@mui/material/CircularProgress";
-import Alert from "@mui/material/Alert";
-import Divider from "@mui/material/Divider";
-import Rating from "@mui/material/Rating";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
-import dayjs from "dayjs";
-import StatusTimeline, {
-  type TimelineStage,
-} from "@web/shared/components/StatusTimeline";
-
-function buildResignationStages(resignation: {
-  status?: string;
-  submittedOn?: string;
-  approvedOn?: string;
-  rejectedOn?: string;
-  withdrawnOn?: string;
-  relievedFromDutyOn?: string;
-}): TimelineStage[] {
-  const {
-    status,
-    submittedOn,
-    approvedOn,
-    rejectedOn,
-    withdrawnOn,
-    relievedFromDutyOn,
-  } = resignation;
-  const stages: TimelineStage[] = [
-    { label: "Submitted", date: submittedOn, state: "done" },
-  ];
-
-  if (status === "Withdrawn") {
-    stages.push({ label: "Withdrawn", date: withdrawnOn, state: "done" });
-    return stages;
-  }
-
-  stages.push(
-    rejectedOn
-      ? { label: "Rejected", date: rejectedOn, state: "rejected" }
-      : {
-          label: "Approved",
-          date: approvedOn || undefined,
-          state: approvedOn ? "done" : "pending",
-        },
-  );
-
-  if (status !== "Rejected") {
-    stages.push({
-      label: "Relieved",
-      date: relievedFromDutyOn || undefined,
-      state: relievedFromDutyOn ? "done" : "pending",
-    });
-  }
-
-  return stages;
-}
-
-interface ChecklistItem {
-  itemDefId: string;
-  label: string;
-  owningRole: string;
-  isRequired: boolean;
-  isComplete: boolean;
-  notes: string | null;
-}
-
-interface NoticeEvent {
-  id: string;
-  previousLastWorkingDay: string | null;
-  newLastWorkingDay: string;
-  reason: string | null;
-  createdAt: string;
-}
-
-interface FnfSettlement {
-  id: string;
-  lineItems: { label: string; type: string; amount: number }[];
-  netPayable: number;
-  status: string;
-}
-
-interface Props {
-  open: boolean;
-  resignationId: string | null;
-  employeeName?: string;
-  rehireEligible?: boolean | null;
-  status?: string;
-  submittedOn?: string;
-  approvedOn?: string;
-  rejectedOn?: string;
-  withdrawnOn?: string;
-  relievedFromDutyOn?: string;
-  // Only users who can manage the exit (checklist/settlement/rehire) see
-  // those tabs — everyone else only sees the read-only Feedback tab, which
-  // is what "View feedback" used to show on its own before the two dialogs
-  // were merged into this one.
-  canManage?: boolean;
-  reason?: string;
-  overallJobSatisfaction?: number;
-  qualityOfCommunication?: string;
-  supportFromManager?: string;
-  appreciationForWork?: string;
-  collaborationWithinTheTeam?: string;
-  overallCompanyCulture?: string;
-  suggestions?: string;
-  onClose: () => void;
-}
-
-function FeedbackRow({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | null;
-}) {
-  const display = value || "Not provided";
-  return (
-    <>
-      <Box sx={{ py: 1.25 }}>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 2,
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: 500,
-              color: "text.secondary",
-              minWidth: "160px",
-              flexShrink: 0,
-            }}
-          >
-            {label}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              textAlign: "right",
-              color: value ? "text.primary" : "text.disabled",
-              fontStyle: value ? "normal" : "italic",
-              lineHeight: 1.4,
-            }}
-          >
-            {display}
-          </Typography>
-        </Box>
-      </Box>
-      <Divider sx={{ opacity: 0.6 }} />
-    </>
-  );
-}
+import StatusTimeline from "@web/shared/components/StatusTimeline";
+import { FeedbackTab } from "./exit-management/FeedbackTab";
+import { ChecklistTab } from "./exit-management/ChecklistTab";
+import { SettlementTab } from "./exit-management/SettlementTab";
+import { NoticeHistoryTab } from "./exit-management/NoticeHistoryTab";
+import { RehireTab } from "./exit-management/RehireTab";
+import { buildResignationStages } from "./exit-management/helpers";
+import type {
+  ChecklistItem,
+  ExitManagementDialogProps,
+  FnfSettlement,
+  NoticeEvent,
+} from "./exit-management/types";
 
 export default function ExitManagementDialog({
   open,
@@ -192,7 +47,7 @@ export default function ExitManagementDialog({
   overallCompanyCulture,
   suggestions,
   onClose,
-}: Props) {
+}: ExitManagementDialogProps) {
   const { setAlert } = useContext(AlertContext);
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -402,67 +257,16 @@ export default function ExitManagementDialog({
         </Tabs>
 
         {tab === 0 && (
-          <Box>
-            <Box sx={{ py: 1.5, textAlign: "center" }}>
-              <Typography
-                variant="subtitle2"
-                fontWeight={600}
-                color="text.secondary"
-                gutterBottom
-              >
-                Overall Job Satisfaction
-              </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 1.5,
-                }}
-              >
-                <Rating value={overallJobSatisfaction || 0} readOnly />
-                <Typography variant="h6" fontWeight={600} color="primary.main">
-                  {overallJobSatisfaction || 0}/5
-                </Typography>
-              </Box>
-            </Box>
-            <Divider sx={{ my: 1 }} />
-            <FeedbackRow label="Exit Reason" value={reason} />
-            <FeedbackRow
-              label="Quality of Communication"
-              value={qualityOfCommunication}
-            />
-            <FeedbackRow label="Manager Support" value={supportFromManager} />
-            <FeedbackRow
-              label="Work Appreciation"
-              value={appreciationForWork}
-            />
-            <FeedbackRow
-              label="Team Collaboration"
-              value={collaborationWithinTheTeam}
-            />
-            <FeedbackRow
-              label="Company Culture"
-              value={overallCompanyCulture}
-            />
-            <Box sx={{ py: 1.25 }}>
-              <Typography
-                variant="body2"
-                sx={{ fontWeight: 500, color: "text.secondary", mb: 0.5 }}
-              >
-                Suggestions
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: suggestions ? "text.primary" : "text.disabled",
-                  fontStyle: suggestions ? "normal" : "italic",
-                }}
-              >
-                {suggestions || "Not provided"}
-              </Typography>
-            </Box>
-          </Box>
+          <FeedbackTab
+            overallJobSatisfaction={overallJobSatisfaction}
+            reason={reason}
+            qualityOfCommunication={qualityOfCommunication}
+            supportFromManager={supportFromManager}
+            appreciationForWork={appreciationForWork}
+            collaborationWithinTheTeam={collaborationWithinTheTeam}
+            overallCompanyCulture={overallCompanyCulture}
+            suggestions={suggestions}
+          />
         )}
 
         {canManage && loading ? (
@@ -472,222 +276,38 @@ export default function ExitManagementDialog({
         ) : (
           <>
             {tab === 1 && (
-              <Box>
-                {checklist.length === 0 ? (
-                  <Alert severity="info">
-                    No exit checklist configured yet. Add checklist items in
-                    Settings → Exit Policy to track offboarding steps like
-                    assets returned and FnF completion here.
-                  </Alert>
-                ) : (
-                  checklist.map((item) => (
-                    <FormControlLabel
-                      key={item.itemDefId}
-                      sx={{ display: "flex", width: "100%", ml: 0, mb: 0.5 }}
-                      control={
-                        <Checkbox
-                          checked={item.isComplete}
-                          onChange={() => toggleChecklistItem(item)}
-                        />
-                      }
-                      label={
-                        <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                        >
-                          <Typography variant="body2">{item.label}</Typography>
-                          <Chip
-                            size="small"
-                            label={item.owningRole}
-                            variant="outlined"
-                          />
-                          {item.isRequired && (
-                            <Chip
-                              size="small"
-                              label="Required"
-                              color="warning"
-                              variant="outlined"
-                            />
-                          )}
-                        </Box>
-                      }
-                    />
-                  ))
-                )}
-              </Box>
+              <ChecklistTab
+                checklist={checklist}
+                onToggle={toggleChecklistItem}
+              />
             )}
 
             {tab === 2 && (
-              <Box>
-                <Button
-                  variant="primary"
-                  size="small"
-                  onClick={computeSettlement}
-                  disabled={computingSettlement}
-                  loading={computingSettlement}
-                  style={{ marginTop: 0, marginBottom: 16 }}
-                >
-                  {settlement ? "Recompute" : "Compute settlement"}
-                </Button>
-                {settlement && (
-                  <Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 0.5,
-                      }}
-                    >
-                      {settlement.lineItems.map((li) => (
-                        <Box
-                          key={`${li.label}-${li.amount}`}
-                          sx={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            px: 2,
-                            py: 1,
-                            border: "1px solid",
-                            borderColor: "divider",
-                            borderRadius: 1,
-                          }}
-                        >
-                          <Typography variant="body2">{li.label}</Typography>
-                          <Typography variant="body2">
-                            {li.type === "deduction" ? "-" : ""}₹
-                            {li.amount.toFixed(2)}
-                          </Typography>
-                        </Box>
-                      ))}
-                    </Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        px: 2,
-                        py: 1.25,
-                        mt: 0.5,
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 2,
-                      }}
-                    >
-                      <Typography sx={{ fontWeight: 700 }}>
-                        Net payable
-                      </Typography>
-                      <Typography sx={{ fontWeight: 700 }}>
-                        ₹{settlement.netPayable.toFixed(2)}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        mt: 2,
-                      }}
-                    >
-                      <Chip
-                        size="small"
-                        label={settlement.status}
-                        color={
-                          settlement.status === "approved"
-                            ? "success"
-                            : "default"
-                        }
-                      />
-                      {settlement.status === "draft" && (
-                        <Button
-                          size="small"
-                          variant="primary"
-                          onClick={approveSettlement}
-                        >
-                          Approve settlement
-                        </Button>
-                      )}
-                    </Box>
-                  </Box>
-                )}
-              </Box>
+              <SettlementTab
+                settlement={settlement}
+                computingSettlement={computingSettlement}
+                onCompute={computeSettlement}
+                onApprove={approveSettlement}
+              />
             )}
 
             {tab === 3 && (
-              <Box>
-                <Box
-                  sx={{ display: "flex", gap: 1.5, mb: 2, flexWrap: "wrap" }}
-                >
-                  <TextField
-                    label="New last working day"
-                    type="date"
-                    size="small"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    value={newLastWorkingDay}
-                    onChange={(e) => setNewLastWorkingDay(e.target.value)}
-                  />
-                  <TextField
-                    label="Reason (optional)"
-                    size="small"
-                    value={renegotiateReason}
-                    onChange={(e) => setRenegotiateReason(e.target.value)}
-                    sx={{ flex: 1, minWidth: 180 }}
-                  />
-                  <Button
-                    variant="primary"
-                    size="small"
-                    onClick={submitRenegotiation}
-                    disabled={renegotiating || !newLastWorkingDay}
-                    style={{ marginTop: 0 }}
-                  >
-                    Update
-                  </Button>
-                </Box>
-                {noticeEvents.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    No renegotiations yet.
-                  </Typography>
-                ) : (
-                  noticeEvents.map((ev) => (
-                    <Box
-                      key={ev.id}
-                      sx={{
-                        mb: 1,
-                        pb: 1,
-                        borderBottom: "1px solid",
-                        borderColor: "divider",
-                      }}
-                    >
-                      <Typography variant="body2">
-                        {ev.previousLastWorkingDay
-                          ? dayjs(ev.previousLastWorkingDay).format(
-                              "DD MMM YYYY",
-                            )
-                          : "—"}
-                        {" → "}
-                        {dayjs(ev.newLastWorkingDay).format("DD MMM YYYY")}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {ev.reason || "No reason given"} ·{" "}
-                        {dayjs(ev.createdAt).format("DD MMM YYYY, h:mm A")}
-                      </Typography>
-                    </Box>
-                  ))
-                )}
-              </Box>
+              <NoticeHistoryTab
+                noticeEvents={noticeEvents}
+                newLastWorkingDay={newLastWorkingDay}
+                setNewLastWorkingDay={setNewLastWorkingDay}
+                renegotiateReason={renegotiateReason}
+                setRenegotiateReason={setRenegotiateReason}
+                renegotiating={renegotiating}
+                onSubmit={submitRenegotiation}
+              />
             )}
 
             {tab === 4 && (
-              <Box>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={!!rehireEligible}
-                      onChange={(e) => toggleRehireEligible(e.target.checked)}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2">Eligible for rehire</Typography>
-                  }
-                />
-              </Box>
+              <RehireTab
+                rehireEligible={rehireEligible}
+                onToggle={toggleRehireEligible}
+              />
             )}
           </>
         )}

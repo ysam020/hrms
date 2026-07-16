@@ -42,63 +42,78 @@ export const approveLeave = async (
       });
     }
 
-    // Conditioned on status="Pending" so two concurrent approvals of the
-    // same leave (duplicate approval-engine callback, admin double-click)
-    // can't both pass the check above and both debit the balance — only the
-    // request that actually flips the status wins.
-    const transition = await prisma.leaveApplication.updateMany({
-      where: { id, status: "Pending" },
-      data: {
-        status: "Approved",
-        approvedById: approvedById || null,
-        approvedOn: new Date(),
-      },
-    });
-    if (transition.count === 0) {
-      return callback(null, {
-        message: MESSAGES.ONLY_PENDING_CAN_BE_APPROVED,
-        status: status.FAILED_PRECONDITION,
-      });
-    }
-
-    const updatedLeave = await prisma.leaveApplication.findUniqueOrThrow({
-      where: { id },
-    });
-
-    await cacheManager.invalidatePattern(
-      `t:${getTenantId() ?? "global"}:leaves:*`,
-    );
-
-    // Debit the balance — no-op unless this user/leave-type is already
-    // balance-tracked (see leaveBalanceHelpers.ts). Comp-off draws down
-    // CompOffCredit records instead of the balances JSON. isCompOffLeaveType
+    // Resolved before the transaction — a read-through cache lookup, not a
+    // write, so it doesn't need to participate in it. isCompOffLeaveType
     // needs leavePolicies to recognize a tenant-defined comp-off type (not
     // just the legacy literal "COMP_OFF" key), so it must agree with apply.
     const tenantId = getTenantId();
     const leavePolicies = tenantId
       ? (await getLeaveSettings(tenantId))?.leavePolicies
       : undefined;
-    if (tenantId && isCompOffLeaveType(updatedLeave.leaveType, leavePolicies)) {
-      await consumeCompOffCredits(
-        tenantId,
-        updatedLeave.userId,
-        updatedLeave.days,
-        updatedLeave.id,
-      ).catch((err) =>
-        logger.warn("[approveLeave] Comp-off credit consumption failed:", {
-          err,
-        }),
-      );
-    } else if (tenantId) {
-      await adjustBalance(
-        tenantId,
-        updatedLeave.userId,
-        updatedLeave.leaveType,
-        -updatedLeave.days,
-      ).catch((err) =>
-        logger.warn("[approveLeave] Balance debit failed:", { err }),
-      );
+
+    // Status flip + balance debit must land together: a debit that succeeds
+    // while the status flip is lost (or vice versa) leaves the leave
+    // application and the employee's balance permanently disagreeing about
+    // whether this leave was ever approved.
+    const result = await prisma.$transaction(async (tx) => {
+      // Conditioned on status="Pending" so two concurrent approvals of the
+      // same leave (duplicate approval-engine callback, admin double-click)
+      // can't both pass the check above and both debit the balance — only
+      // the request that actually flips the status wins.
+      const transition = await tx.leaveApplication.updateMany({
+        where: { id, status: "Pending" },
+        data: {
+          status: "Approved",
+          approvedById: approvedById || null,
+          approvedOn: new Date(),
+        },
+      });
+      if (transition.count === 0) {
+        return { approved: false as const };
+      }
+
+      const updatedLeave = await tx.leaveApplication.findUniqueOrThrow({
+        where: { id },
+      });
+
+      // Debit the balance — no-op unless this user/leave-type is already
+      // balance-tracked (see leaveBalanceHelpers.ts). Comp-off draws down
+      // CompOffCredit records instead of the balances JSON.
+      if (
+        tenantId &&
+        isCompOffLeaveType(updatedLeave.leaveType, leavePolicies)
+      ) {
+        await consumeCompOffCredits(
+          tenantId,
+          updatedLeave.userId,
+          updatedLeave.days,
+          updatedLeave.id,
+          tx,
+        );
+      } else if (tenantId) {
+        await adjustBalance(
+          tenantId,
+          updatedLeave.userId,
+          updatedLeave.leaveType,
+          -updatedLeave.days,
+          tx,
+        );
+      }
+
+      return { approved: true as const, updatedLeave };
+    });
+
+    if (!result.approved) {
+      return callback(null, {
+        message: MESSAGES.ONLY_PENDING_CAN_BE_APPROVED,
+        status: status.FAILED_PRECONDITION,
+      });
     }
+    const { updatedLeave } = result;
+
+    await cacheManager.invalidatePattern(
+      `t:${getTenantId() ?? "global"}:leaves:*`,
+    );
 
     getNotificationQueue()
       .add("leaveApproved", {

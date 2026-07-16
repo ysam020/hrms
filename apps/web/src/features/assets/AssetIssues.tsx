@@ -18,187 +18,37 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import Button from "@web/shared/components/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import MenuItem from "@mui/material/MenuItem";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import AddIcon from "@mui/icons-material/Add";
-import RateReviewIcon from "@mui/icons-material/RateReview";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
-import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import FilterList from "@mui/icons-material/FilterList";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import Divider from "@mui/material/Divider";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
-import StatusTimeline, {
-  type TimelineStage,
-} from "@web/shared/components/StatusTimeline";
+import { StatusChip, PriorityLabel } from "./asset-issues/components";
+import {
+  ISSUE_TYPES,
+  NEXT_ACTIONS,
+  STATUS_OPTIONS,
+} from "./asset-issues/constants";
+import {
+  ReportIssueDialog,
+  type ReportForm,
+} from "./asset-issues/ReportIssueDialog";
+import {
+  HrActionDialog,
+  type ActionDialogState,
+} from "./asset-issues/HrActionDialog";
+import { ViewDetailsDialog } from "./asset-issues/ViewDetailsDialog";
 
-// ── Config ──────────────────────────────────────────────────────────────────
-
-const STATUS_OPTIONS = [
-  { label: "All", value: "All" },
-  { label: "Open", value: "open" },
-  { label: "In Review", value: "in_review" },
-  { label: "Approved", value: "approved" },
-  { label: "Rejected", value: "rejected" },
-  { label: "Resolved", value: "resolved" },
-];
-
-const ISSUE_TYPES = [
-  { value: "malfunction", label: "Malfunction" },
-  { value: "damage", label: "Damage" },
-  { value: "lost", label: "Lost" },
-  { value: "stolen", label: "Stolen" },
-  { value: "return_request", label: "Return Request" },
-  { value: "other", label: "Other" },
-];
-
-const PRIORITIES = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "critical", label: "Critical" },
-];
-
-const STATUS_CFG: Record<string, { color: string; bg: string }> = {
-  open: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
-  in_review: { color: "#6366f1", bg: "rgba(99,102,241,0.15)" },
-  approved: { color: "#059669", bg: "rgba(5,150,105,0.15)" },
-  rejected: { color: "#dc2626", bg: "rgba(220,38,38,0.15)" },
-  resolved: { color: "#64748b", bg: "rgba(100,116,139,0.15)" },
+const EMPTY_REPORT_FORM: ReportForm = {
+  assetId: "",
+  type: "malfunction",
+  priority: "medium",
+  title: "",
+  description: "",
 };
-
-const PRIORITY_CFG: Record<string, { color: string }> = {
-  low: { color: "#64748b" },
-  medium: { color: "#d97706" },
-  high: { color: "#ea580c" },
-  critical: { color: "#dc2626" },
-};
-
-// Allowed HR actions per current status.
-const NEXT_ACTIONS: Record<
-  string,
-  { status: string; label: string; icon: React.ReactNode }[]
-> = {
-  open: [
-    {
-      status: "in_review",
-      label: "Start Review",
-      icon: <RateReviewIcon sx={{ fontSize: 16 }} />,
-    },
-  ],
-  in_review: [
-    {
-      status: "approved",
-      label: "Approve",
-      icon: <CheckCircleIcon sx={{ fontSize: 16 }} />,
-    },
-    {
-      status: "rejected",
-      label: "Reject",
-      icon: <CancelIcon sx={{ fontSize: 16 }} />,
-    },
-  ],
-  approved: [
-    {
-      status: "resolved",
-      label: "Resolve",
-      icon: <TaskAltIcon sx={{ fontSize: 16 }} />,
-    },
-  ],
-};
-
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-function StatusChip({ status }: { status: string }) {
-  const cfg = STATUS_CFG[status] ?? STATUS_CFG.open;
-  const label = status.replace("_", " ").replace(/^\w/, (c) => c.toUpperCase());
-  return (
-    <Chip
-      label={label}
-      size="small"
-      sx={{
-        backgroundColor: cfg.bg,
-        color: cfg.color,
-        fontWeight: 600,
-        fontSize: "0.7rem",
-        height: 22,
-        borderRadius: "4px",
-        "& .MuiChip-label": { padding: "0 8px" },
-      }}
-    />
-  );
-}
-
-function PriorityLabel({ priority }: { priority: string }) {
-  const cfg = PRIORITY_CFG[priority] ?? PRIORITY_CFG.medium;
-  return (
-    <Typography
-      variant="body2"
-      fontSize="0.8rem"
-      fontWeight={600}
-      sx={{ color: cfg.color }}
-    >
-      {priority.charAt(0).toUpperCase() + priority.slice(1)}
-    </Typography>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: any }) {
-  return (
-    <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
-      <Typography
-        variant="caption"
-        sx={{
-          minWidth: 110,
-          flexShrink: 0,
-          color: "text.secondary",
-          fontWeight: 500,
-          pt: "1px",
-        }}
-      >
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-        {value || <span style={{ fontStyle: "italic" }}>—</span>}
-      </Typography>
-    </Box>
-  );
-}
-
-function buildAssetIssueStages(issue: any): TimelineStage[] {
-  if (!issue) return [];
-  const isRejected = issue.status === "rejected";
-  const stages: TimelineStage[] = [
-    { label: "Reported", date: issue.createdAt, state: "done" },
-    {
-      label: "Reviewed",
-      date: issue.reviewedAt || undefined,
-      state: issue.reviewedAt ? (isRejected ? "rejected" : "done") : "pending",
-    },
-  ];
-  // Nothing left to resolve once rejected.
-  if (!isRejected) {
-    stages.push({
-      label: "Resolved",
-      date: issue.resolvedAt || undefined,
-      state: issue.resolvedAt ? "done" : "pending",
-    });
-  }
-  return stages;
-}
-
-// ── Main component ───────────────────────────────────────────────────────────
 
 function AssetIssues() {
   const { setAlert } = useContext(AlertContext);
@@ -225,13 +75,7 @@ function AssetIssues() {
   const [myAssets, setMyAssets] = useState<
     { id: string; assetCode: string; name: string }[]
   >([]);
-  const [reportForm, setReportForm] = useState({
-    assetId: "",
-    type: "malfunction",
-    priority: "medium",
-    title: "",
-    description: "",
-  });
+  const [reportForm, setReportForm] = useState<ReportForm>(EMPTY_REPORT_FORM);
   const [submitting, setSubmitting] = useState(false);
 
   // Load assets when the report dialog opens.
@@ -257,12 +101,9 @@ function AssetIssues() {
   }, [openReport, isHr]);
 
   // ── Action dialog (HR) ─────────────────────────────────────────────────────
-  const [actionDialog, setActionDialog] = useState<{
-    issueId: string;
-    targetStatus: string;
-    label: string;
-    currentType: string;
-  } | null>(null);
+  const [actionDialog, setActionDialog] = useState<ActionDialogState | null>(
+    null,
+  );
   const [actionNotes, setActionNotes] = useState("");
   const [actioning, setActioning] = useState(false);
 
@@ -332,13 +173,7 @@ function AssetIssues() {
       await apiClient.post(API_ENDPOINTS.REPORT_ASSET_ISSUE, reportForm);
       refresh();
       setOpenReport(false);
-      setReportForm({
-        assetId: "",
-        type: "malfunction",
-        priority: "medium",
-        title: "",
-        description: "",
-      });
+      setReportForm(EMPTY_REPORT_FORM);
       setAlert({ open: true, message: "Issue reported", severity: "success" });
     } catch (err: any) {
       setAlert({
@@ -531,302 +366,32 @@ function AssetIssues() {
         }}
       />
 
-      {/* ── Report Issue Dialog (Employee) ───────────────────────────────── */}
-      <Dialog
+      <ReportIssueDialog
         open={openReport}
         onClose={() => {
           setOpenReport(false);
-          setReportForm({
-            assetId: "",
-            type: "malfunction",
-            priority: "medium",
-            title: "",
-            description: "",
-          });
+          setReportForm(EMPTY_REPORT_FORM);
         }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Report Asset Issue</DialogTitle>
-        <DialogContent
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            pt: "16px !important",
-          }}
-        >
-          <TextField
-            select
-            label="Asset"
-            size="small"
-            fullWidth
-            value={reportForm.assetId}
-            onChange={(e) =>
-              setReportForm((f) => ({ ...f, assetId: e.target.value }))
-            }
-            helperText="Only your currently assigned assets are shown"
-          >
-            {myAssets.length === 0 ? (
-              <MenuItem disabled value="">
-                No assets assigned to you
-              </MenuItem>
-            ) : (
-              myAssets.map((a) => (
-                <MenuItem key={a.id} value={a.id}>
-                  {a.assetCode} — {a.name}
-                </MenuItem>
-              ))
-            )}
-          </TextField>
+        form={reportForm}
+        setForm={setReportForm}
+        myAssets={myAssets}
+        submitting={submitting}
+        onSubmit={handleReport}
+      />
 
-          <Box sx={{ display: "flex", gap: 2 }}>
-            <TextField
-              select
-              label="Issue Type"
-              size="small"
-              fullWidth
-              value={reportForm.type}
-              onChange={(e) =>
-                setReportForm((f) => ({ ...f, type: e.target.value }))
-              }
-            >
-              {ISSUE_TYPES.map((t) => (
-                <MenuItem key={t.value} value={t.value}>
-                  {t.label}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              label="Priority"
-              size="small"
-              fullWidth
-              value={reportForm.priority}
-              onChange={(e) =>
-                setReportForm((f) => ({ ...f, priority: e.target.value }))
-              }
-            >
-              {PRIORITIES.map((p) => (
-                <MenuItem key={p.value} value={p.value}>
-                  {p.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
-
-          <TextField
-            label="Title"
-            size="small"
-            fullWidth
-            placeholder="Brief summary of the issue"
-            value={reportForm.title}
-            onChange={(e) =>
-              setReportForm((f) => ({ ...f, title: e.target.value }))
-            }
-          />
-
-          <TextField
-            label="Description"
-            size="small"
-            multiline
-            rows={3}
-            fullWidth
-            placeholder="Describe the issue in detail…"
-            value={reportForm.description}
-            onChange={(e) =>
-              setReportForm((f) => ({ ...f, description: e.target.value }))
-            }
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setOpenReport(false);
-              setReportForm({
-                assetId: "",
-                type: "malfunction",
-                priority: "medium",
-                title: "",
-                description: "",
-              });
-            }}
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleReport}
-            variant="primary"
-            size="small"
-            disabled={
-              submitting ||
-              !reportForm.assetId ||
-              !reportForm.title ||
-              !reportForm.description
-            }
-          >
-            {submitting ? "Submitting…" : "Submit"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── HR Action Dialog ─────────────────────────────────────────────── */}
-      <Dialog
-        open={!!actionDialog}
+      <HrActionDialog
+        actionDialog={actionDialog}
         onClose={() => {
           setActionDialog(null);
           setActionNotes("");
         }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>{actionDialog?.label} Issue</DialogTitle>
-        <DialogContent
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            pt: "16px !important",
-          }}
-        >
-          {actionDialog?.targetStatus === "resolved" && (
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {actionDialog.currentType === "lost" ||
-              actionDialog.currentType === "stolen"
-                ? "⚠️ This will retire the asset."
-                : actionDialog.currentType === "damage"
-                  ? "⚠️ This will move the asset to maintenance."
-                  : actionDialog.currentType === "return_request"
-                    ? "⚠️ This will close the assignment and mark the asset as available."
-                    : null}
-            </Typography>
-          )}
-          <TextField
-            label="Notes (optional)"
-            size="small"
-            multiline
-            rows={3}
-            fullWidth
-            placeholder="Add any notes for this action…"
-            value={actionNotes}
-            onChange={(e) => setActionNotes(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setActionDialog(null);
-              setActionNotes("");
-            }}
-            size="small"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleAction}
-            variant={
-              actionDialog?.targetStatus === "rejected" ? "danger" : "primary"
-            }
-            size="small"
-            disabled={actioning}
-          >
-            {actioning ? "Saving…" : actionDialog?.label}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        notes={actionNotes}
+        setNotes={setActionNotes}
+        actioning={actioning}
+        onConfirm={handleAction}
+      />
 
-      {/* ── View Details Dialog (everyone) ──────────────────────────────── */}
-      <Dialog
-        open={!!viewIssue}
-        onClose={() => setViewIssue(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Issue Details</DialogTitle>
-        <DialogContent
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 1.5,
-            pt: "16px !important",
-          }}
-        >
-          <DetailRow
-            label="Asset"
-            value={
-              viewIssue?.asset
-                ? `${viewIssue.asset.assetCode} — ${viewIssue.asset.name}`
-                : "—"
-            }
-          />
-          <DetailRow
-            label="Type"
-            value={
-              ISSUE_TYPES.find((t) => t.value === viewIssue?.type)?.label ??
-              viewIssue?.type
-            }
-          />
-          <DetailRow
-            label="Priority"
-            value={viewIssue && <PriorityLabel priority={viewIssue.priority} />}
-          />
-          <DetailRow
-            label="Status"
-            value={viewIssue && <StatusChip status={viewIssue.status} />}
-          />
-          <DetailRow label="Title" value={viewIssue?.title} />
-          <DetailRow label="Description" value={viewIssue?.description} />
-
-          <Divider sx={{ my: 0.5 }} />
-          <StatusTimeline stages={buildAssetIssueStages(viewIssue)} />
-
-          <DetailRow
-            label="Reported By"
-            value={viewIssue?.reporter?.username}
-          />
-
-          {viewIssue?.reviewedAt && (
-            <>
-              <Divider sx={{ my: 0.5 }} />
-              <DetailRow
-                label="Reviewed By"
-                value={viewIssue?.reviewer?.username}
-              />
-              <DetailRow
-                label={
-                  viewIssue?.status === "rejected"
-                    ? "Rejection Notes"
-                    : "Review Notes"
-                }
-                value={viewIssue?.reviewNotes}
-              />
-            </>
-          )}
-
-          {viewIssue?.resolvedAt && (
-            <>
-              <Divider sx={{ my: 0.5 }} />
-              <DetailRow
-                label="Resolution Notes"
-                value={viewIssue?.resolverNotes}
-              />
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant="ghost"
-            onClick={() => setViewIssue(null)}
-            size="small"
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ViewDetailsDialog issue={viewIssue} onClose={() => setViewIssue(null)} />
     </ErrorBoundary>
   );
 }

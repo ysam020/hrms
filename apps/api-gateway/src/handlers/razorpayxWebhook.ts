@@ -23,8 +23,12 @@
  */
 
 import { Request, Response } from "express";
-import { createHmac } from "crypto";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { createHmac, timingSafeEqual } from "crypto";
+import {
+  prismaWithTenant as prisma,
+  getClientForDb,
+  runWithTenant,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 
 export async function handleRazorpayXWebhook(req: Request, res: Response) {
@@ -52,7 +56,12 @@ export async function handleRazorpayXWebhook(req: Request, res: Response) {
   const expected = createHmac("sha256", webhookSecret)
     .update(rawBody)
     .digest("hex");
-  if (signature !== expected) {
+  const signatureBuf = Buffer.from(signature, "utf8");
+  const expectedBuf = Buffer.from(expected, "utf8");
+  if (
+    signatureBuf.length !== expectedBuf.length ||
+    !timingSafeEqual(signatureBuf, expectedBuf)
+  ) {
     logger.warn(
       "RazorpayX webhook: invalid signature — possible spoofed request",
     );
@@ -81,52 +90,81 @@ export async function handleRazorpayXWebhook(req: Request, res: Response) {
 
   const payoutId: string = payoutEntity.id;
 
-  // Find the PayrollLineItem that owns this payout_id.
-  const lineItem = await prisma.payrollLineItem.findFirst({
+  // This request carries no auth/session, so there's no tenant context bound
+  // yet — PayrollLineItem lives in the tenant's own physical DB, so we must
+  // resolve which tenant this payout belongs to before querying it. See the
+  // write side in payroll.ts (disburse flow).
+  const indexEntry = await prisma.payoutTenantIndex.findUnique({
     where: { payoutId },
-    select: { id: true, payoutStatus: true },
   });
-  if (!lineItem) {
-    // Could be a payout from another system — log and move on.
+  if (!indexEntry) {
+    // Could be a payout from another system, or one created before this
+    // index existed — log and move on.
     logger.info(
-      `RazorpayX webhook: no line item for payout ${payoutId} (event: ${event})`,
+      `RazorpayX webhook: no tenant index for payout ${payoutId} (event: ${event})`,
     );
     return;
   }
 
-  // Map RazorpayX events to our internal statuses.
-  const statusMap: Record<string, string> = {
-    "payout.processed": "processed",
-    "payout.failed": "failed",
-    "payout.reversed": "reversed",
-    "payout.cancelled": "cancelled",
-  };
-  const newStatus = statusMap[event];
-  if (!newStatus) {
-    logger.info(
-      `RazorpayX webhook: unhandled event '${event}' for payout ${payoutId} — ignored`,
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: indexEntry.tenantId },
+    select: { dbName: true },
+  });
+  if (!tenant?.dbName) {
+    logger.error(
+      `RazorpayX webhook: tenant ${indexEntry.tenantId} has no dbName — cannot resolve payout ${payoutId}`,
     );
     return;
   }
+  const tenantClient = getClientForDb(tenant.dbName);
 
-  const failureReason: string | null =
-    event === "payout.failed"
-      ? (payoutEntity.error?.description ??
-        payoutEntity.failure_reason ??
-        "Unknown")
-      : null;
+  await runWithTenant(indexEntry.tenantId, tenantClient, async () => {
+    // Find the PayrollLineItem that owns this payout_id.
+    const lineItem = await prisma.payrollLineItem.findFirst({
+      where: { payoutId },
+      select: { id: true, payoutStatus: true },
+    });
+    if (!lineItem) {
+      logger.info(
+        `RazorpayX webhook: no line item for payout ${payoutId} (event: ${event})`,
+      );
+      return;
+    }
 
-  await prisma.payrollLineItem.update({
-    where: { id: lineItem.id },
-    data: {
-      payoutStatus: newStatus,
-      ...(failureReason ? { payoutFailureReason: failureReason } : {}),
-    },
-  });
+    // Map RazorpayX events to our internal statuses.
+    const statusMap: Record<string, string> = {
+      "payout.processed": "processed",
+      "payout.failed": "failed",
+      "payout.reversed": "reversed",
+      "payout.cancelled": "cancelled",
+    };
+    const newStatus = statusMap[event];
+    if (!newStatus) {
+      logger.info(
+        `RazorpayX webhook: unhandled event '${event}' for payout ${payoutId} — ignored`,
+      );
+      return;
+    }
 
-  logger.info(`RazorpayX payout ${payoutId} → ${newStatus}`, {
-    lineItemId: lineItem.id,
-    event,
-    ...(failureReason ? { failureReason } : {}),
+    const failureReason: string | null =
+      event === "payout.failed"
+        ? (payoutEntity.error?.description ??
+          payoutEntity.failure_reason ??
+          "Unknown")
+        : null;
+
+    await prisma.payrollLineItem.update({
+      where: { id: lineItem.id },
+      data: {
+        payoutStatus: newStatus,
+        ...(failureReason ? { payoutFailureReason: failureReason } : {}),
+      },
+    });
+
+    logger.info(`RazorpayX payout ${payoutId} → ${newStatus}`, {
+      lineItemId: lineItem.id,
+      event,
+      ...(failureReason ? { failureReason } : {}),
+    });
   });
 }

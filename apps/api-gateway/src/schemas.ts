@@ -34,27 +34,33 @@ export const webAuthnVerifyRegistrationSchema = z.object({
 
 // ── HRM ───────────────────────────────────────────────────────────────────────
 
-export const addHrActivitySchema = z.object({
-  title: z.string().min(1).max(256),
-  description: z.string().max(2000).optional(),
-  date: z.string().max(32).optional(),
-  time: z.string().max(32).optional(),
-  status: z.string().max(64).optional(),
-});
+export const addHrActivitySchema = z
+  .object({
+    title: z.string().min(1).max(256),
+    description: z.string().max(2000).optional(),
+    date: z.string().max(32).optional(),
+    time: z.string().max(32).optional(),
+    status: z.string().max(64).optional(),
+  })
+  .strict();
 
-export const editHrActivitySchema = addHrActivitySchema.partial();
+export const editHrActivitySchema = addHrActivitySchema.partial().strict();
 
-export const createOrUpdatePolicySchema = z.object({
-  policyType: z.string().min(1).max(128),
-  policyName: z.string().max(256).optional(),
-  content: z.string().min(1),
-});
+export const createOrUpdatePolicySchema = z
+  .object({
+    policyType: z.string().min(1).max(128),
+    policyName: z.string().max(256).optional(),
+    content: z.string().min(1),
+  })
+  .strict();
 
-export const updatePolicySchema = z.object({
-  policyType: z.string().max(128).optional(),
-  policyName: z.string().max(256).optional(),
-  content: z.string().optional(),
-});
+export const updatePolicySchema = z
+  .object({
+    policyType: z.string().max(128).optional(),
+    policyName: z.string().max(256).optional(),
+    content: z.string().optional(),
+  })
+  .strict();
 
 // ── Face Descriptor ───────────────────────────────────────────────────────────
 
@@ -530,18 +536,21 @@ export const requestLeaveCancellationSchema = z.object({
 
 // ── Notice period policy ─────────────────────────────────────────────────────
 
-export const createNoticePeriodPolicySchema = z.object({
-  minTenureMonths: z.number().int().min(0).default(0),
-  maxTenureMonths: z.number().int().min(0).optional(),
-  designation: z.string().max(120).optional(),
-  department: z.string().max(120).optional(),
-  noticePeriodDays: z.number().int().min(0).max(180),
-  isProbationPolicy: z.boolean().default(false),
-  priority: z.number().int().min(0).max(100).default(0),
-});
+export const createNoticePeriodPolicySchema = z
+  .object({
+    minTenureMonths: z.number().int().min(0).default(0),
+    maxTenureMonths: z.number().int().min(0).optional(),
+    designation: z.string().max(120).optional(),
+    department: z.string().max(120).optional(),
+    noticePeriodDays: z.number().int().min(0).max(180),
+    isProbationPolicy: z.boolean().default(false),
+    priority: z.number().int().min(0).max(100).default(0),
+  })
+  .strict();
 
-export const updateNoticePeriodPolicySchema =
-  createNoticePeriodPolicySchema.partial();
+export const updateNoticePeriodPolicySchema = createNoticePeriodPolicySchema
+  .partial()
+  .strict();
 
 // ── Exit interview template ──────────────────────────────────────────────────
 
@@ -564,21 +573,26 @@ export const submitExitInterviewResponseSchema = z.object({
 
 // ── Exit checklist ────────────────────────────────────────────────────────────
 
-export const createExitChecklistItemSchema = z.object({
-  label: z.string().min(1).max(200),
-  owningRole: z.enum(["IT", "Finance", "HR", "Admin", "Manager"]),
-  isRequired: z.boolean().default(true),
-  order: z.number().int().min(0).default(0),
-});
+export const createExitChecklistItemSchema = z
+  .object({
+    label: z.string().min(1).max(200),
+    owningRole: z.enum(["IT", "Finance", "HR", "Admin", "Manager"]),
+    isRequired: z.boolean().default(true),
+    order: z.number().int().min(0).default(0),
+  })
+  .strict();
 
 export const updateExitChecklistItemSchema = createExitChecklistItemSchema
   .partial()
-  .extend({ isActive: z.boolean().optional() });
+  .extend({ isActive: z.boolean().optional() })
+  .strict();
 
-export const updateExitChecklistStatusSchema = z.object({
-  isComplete: z.boolean(),
-  notes: z.string().max(500).optional(),
-});
+export const updateExitChecklistStatusSchema = z
+  .object({
+    isComplete: z.boolean(),
+    notes: z.string().max(500).optional(),
+  })
+  .strict();
 
 // ── Resignation extensions ───────────────────────────────────────────────────
 
@@ -679,40 +693,49 @@ export const updateOfferStatusSchema = z.object({
 
 // ── Payroll components ───────────────────────────────────────────────────────
 
-export const createSalaryComponentSchema = z.object({
-  name: z.string().min(1).max(120),
-  code: z.string().min(1).max(60),
-  type: z.enum(["earning", "deduction"]),
-  isTaxable: z.boolean().default(true),
-  calcType: z.enum(["fixed", "percent_of_basic", "formula"]).default("fixed"),
-  percentOf: z.string().max(60).optional(),
-  percentValue: z.number().min(0).optional(),
-  isRecurring: z.boolean().default(true),
-  displayOrder: z.number().int().min(0).default(0),
-});
+export const createSalaryComponentSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    code: z.string().min(1).max(60),
+    type: z.enum(["earning", "deduction"]),
+    isTaxable: z.boolean().default(true),
+    calcType: z.enum(["fixed", "percent_of_basic", "formula"]).default("fixed"),
+    percentOf: z.string().max(60).optional(),
+    percentValue: z.number().min(0).optional(),
+    isRecurring: z.boolean().default(true),
+    displayOrder: z.number().int().min(0).default(0),
+  })
+  .strict();
 
 export const updateSalaryComponentSchema = createSalaryComponentSchema
   .partial()
-  .extend({ isActive: z.boolean().optional() });
+  .extend({ isActive: z.boolean().optional() })
+  .strict();
 
-export const createPtSlabSchema = z.object({
-  state: z.string().min(1).max(60),
-  minGross: z.number().min(0),
-  maxGross: z.number().min(0).optional(),
-  monthlyPT: z.number().min(0),
-});
+export const createPtSlabSchema = z
+  .object({
+    state: z.string().min(1).max(60),
+    minGross: z.number().min(0),
+    maxGross: z.number().min(0).optional(),
+    monthlyPT: z.number().min(0),
+  })
+  .strict();
 
-export const updatePtSlabSchema = createPtSlabSchema.partial();
+export const updatePtSlabSchema = createPtSlabSchema.partial().strict();
 
-export const createIncomeTaxSlabSchema = z.object({
-  financialYear: z.string().min(1).max(20),
-  regime: z.enum(["old", "new"]),
-  minIncome: z.number().min(0),
-  maxIncome: z.number().min(0).optional(),
-  ratePercent: z.number().min(0).max(100),
-});
+export const createIncomeTaxSlabSchema = z
+  .object({
+    financialYear: z.string().min(1).max(20),
+    regime: z.enum(["old", "new"]),
+    minIncome: z.number().min(0),
+    maxIncome: z.number().min(0).optional(),
+    ratePercent: z.number().min(0).max(100),
+  })
+  .strict();
 
-export const updateIncomeTaxSlabSchema = createIncomeTaxSlabSchema.partial();
+export const updateIncomeTaxSlabSchema = createIncomeTaxSlabSchema
+  .partial()
+  .strict();
 
 // ── Tax declarations (Old Regime) ────────────────────────────────────────────
 
@@ -760,35 +783,44 @@ export const reviewDeclarationProofsSchema = z.object({
   revisionNotes: z.record(z.string()).optional(),
 });
 
-export const createPayCycleSchema = z.object({
-  name: z.string().min(1).max(120),
-  frequency: z.enum(["monthly", "biweekly", "weekly"]).default("monthly"),
-  payDay: z.number().int().min(1).max(31),
-  isDefault: z.boolean().default(false),
-});
+export const createPayCycleSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    frequency: z.enum(["monthly", "biweekly", "weekly"]).default("monthly"),
+    payDay: z.number().int().min(1).max(31),
+    isDefault: z.boolean().default(false),
+  })
+  .strict();
 
 export const updatePayCycleSchema = createPayCycleSchema
   .partial()
-  .extend({ isActive: z.boolean().optional() });
+  .extend({ isActive: z.boolean().optional() })
+  .strict();
 
 // ── Org structure ────────────────────────────────────────────────────────────
 
-export const createDepartmentSchema = z.object({
-  name: z.string().min(1).max(160),
-  headUserId: z.string().optional(),
-});
+export const createDepartmentSchema = z
+  .object({
+    name: z.string().min(1).max(160),
+    headUserId: z.string().optional(),
+  })
+  .strict();
 export const updateDepartmentSchema = createDepartmentSchema
   .partial()
-  .extend({ isActive: z.boolean().optional() });
+  .extend({ isActive: z.boolean().optional() })
+  .strict();
 
-export const createDesignationSchema = z.object({
-  name: z.string().min(1).max(160),
-  departmentId: z.string().optional(),
-  level: z.number().int().min(0).optional(),
-});
+export const createDesignationSchema = z
+  .object({
+    name: z.string().min(1).max(160),
+    departmentId: z.string().optional(),
+    level: z.number().int().min(0).optional(),
+  })
+  .strict();
 export const updateDesignationSchema = createDesignationSchema
   .partial()
-  .extend({ isActive: z.boolean().optional() });
+  .extend({ isActive: z.boolean().optional() })
+  .strict();
 
 // ── Onboarding checklist ─────────────────────────────────────────────────────
 

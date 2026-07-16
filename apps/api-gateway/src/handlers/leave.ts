@@ -4,7 +4,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
-import { handleError } from "../utils/handleError";
+import { handleError, handleActionError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
 import { isSuperUser } from "../utils/user";
 import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
@@ -163,14 +163,9 @@ export async function updateLeaveStatus(req: Request, res: Response) {
     return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
       message: "Invalid action. Use approve, reject or cancel",
     });
-  } catch (error: any) {
-    if (error?.message && !error?.code) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: error.message,
-      });
-    }
+  } catch (error) {
     logger.error("PUT /update-leave-status error:", { error });
-    return handleError(res, error);
+    return handleActionError(res, error);
   }
 }
 

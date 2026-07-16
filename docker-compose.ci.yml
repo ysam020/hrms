@@ -188,6 +188,7 @@ services:
       args:
         - APP_DIR=scheduler-service
         - PROJECT=@hrms/scheduler-service
+        - PORT=9111
     env_file: .env
 
   web:

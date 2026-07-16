@@ -53,7 +53,14 @@ const masterScopedPrisma = prisma.$extends({
 // Models that live in the master DB.
 // - user: tenant-scoped via the $extends filter above
 // - tenant / tenantMembership: cross-tenant admin data, no filter needed
-const MASTER_MODELS = new Set(["user", "tenant", "tenantMembership"]);
+// - payoutTenantIndex: read by unauthenticated webhooks (no tenant context
+//   yet exists) specifically to resolve which tenant a payout belongs to
+const MASTER_MODELS = new Set([
+  "user",
+  "tenant",
+  "tenantMembership",
+  "payoutTenantIndex",
+]);
 
 // Federated proxy:
 //   prismaWithTenant.user.*           → master DB  (tenantId auto-injected by $extends)
@@ -80,9 +87,18 @@ export const prismaWithTenant = new Proxy({} as any, {
       return (prisma as any)[prop];
     }
 
-    // All business models → tenant-specific DB (isolated by database, no filter needed)
+    // All business models → tenant-specific DB (isolated by database, no
+    // query-level tenantId filter). If no tenant-specific client is bound
+    // (e.g. a tenant record missing `dbName`), refuse rather than silently
+    // falling back to the shared master DB, which would serve business data
+    // with zero tenant isolation.
     const tenantClient = getTenantClient();
-    return ((tenantClient ?? prisma) as any)[prop];
+    if (!tenantClient) {
+      throw new Error(
+        `prismaWithTenant.${String(prop)}: no tenant-specific DB client bound for the current request — refusing to query the shared master DB for a business model.`,
+      );
+    }
+    return (tenantClient as any)[prop];
   },
 }) as unknown as typeof prisma;
 

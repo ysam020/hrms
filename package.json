@@ -16,7 +16,7 @@
     "test": "jest && pnpm --filter web test:run",
     "test:coverage": "jest --coverage --forceExit",
     "start:prod": "turbo run start:prod",
-    "lint": "turbo run lint",
+    "lint": "eslint --no-config-lookup --config ./eslint.config.js \"**/*.{js,jsx,ts,tsx}\"",
     "proto:gen": "turbo run proto:gen",
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",

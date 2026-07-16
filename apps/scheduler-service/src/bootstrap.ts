@@ -1,11 +1,13 @@
 // ⚠️ Telemetry MUST be the very first import — before any other module.
 import "./telemetry";
 
-import { loadSecrets } from "@hrms/common";
+import { loadSecrets, validateEnv } from "@hrms/common";
 import { logger } from "@hrms/logger";
+import { envSchema } from "./envSchema";
 
 async function bootstrap() {
   await loadSecrets("hrms/config");
+  validateEnv(envSchema, "scheduler-service");
 
   // Dynamic imports so @hrms/cache's eagerly-constructed Redis singleton
   // (packages/cache/src/CacheManager.ts's top-level `getCacheManager()`)

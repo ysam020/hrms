@@ -7,7 +7,7 @@ import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
-import { handleError } from "../utils/handleError";
+import { handleError, handleActionError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { isSuperUser } from "../utils/user";
 import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
@@ -407,13 +407,8 @@ export async function approveResignation(req: Request, res: Response) {
         : "Approved — forwarded to the next approver.",
       data: result,
     });
-  } catch (error: any) {
-    if (error?.message && !error?.code) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: error.message,
-      });
-    }
-    return handleError(res, error);
+  } catch (error) {
+    return handleActionError(res, error);
   }
 }
 
@@ -444,13 +439,8 @@ export async function rejectResignation(req: Request, res: Response) {
         : "Rejected — forwarded to the next approver.",
       data: result,
     });
-  } catch (error: any) {
-    if (error?.message && !error?.code) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: error.message,
-      });
-    }
-    return handleError(res, error);
+  } catch (error) {
+    return handleActionError(res, error);
   }
 }
 

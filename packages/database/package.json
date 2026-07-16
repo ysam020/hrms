@@ -15,6 +15,7 @@
   "scripts": {
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:migrate": "tsx src/push-to-all-tenants.ts",
     "db:studio": "prisma studio",
     "build": "tsc -b"
   },

@@ -10,6 +10,11 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# See alert-rules.yml — evaluated by this Prometheus instance, but requires
+# Alertmanager (not yet deployed) to actually notify anyone.
+rule_files:
+  - "alert-rules.yml"
+
 scrape_configs:
   - job_name: api-gateway
     ec2_sd_configs:

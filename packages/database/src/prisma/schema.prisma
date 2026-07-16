@@ -8,6 +8,21 @@ datasource db {
   url      = env("DEV_MONGODB_URI")
 }
 
+// relationMode defaults to "prisma" for the mongodb provider — referential
+// actions (onDelete/onUpdate) below are emulated by the client, not the DB,
+// and only ever operate within the single physical database a given
+// PrismaClient instance is connected to (see packages/database/src/tenantClientPool.ts).
+//
+// Several models below declare a `user User? @relation(...)` field even
+// though User always lives in the master DB (see MASTER_MODELS in
+// prismaWithTenant.ts) while the model itself lives in a tenant DB. That
+// relation is real for typing/documentation purposes, but Prisma's
+// onDelete emulation can never reach across databases — deleting a User
+// will not (and structurally cannot) cascade into tenant-DB collections.
+// Those fields intentionally have no onDelete clause; cleaning up
+// user-scoped tenant data on account deletion has to happen in application
+// code, not the schema.
+
 // ─── Tenant ───────────────────────────────────────────────────────────────────
 
 model Tenant {
@@ -82,6 +97,20 @@ model TenantJoinRequest {
   @@index([tenantId, status])
   @@index([userId])
   @@map("tenant_join_requests")
+}
+
+// RazorpayX payout webhooks arrive with no auth/session context, but
+// PayrollLineItem (like all business models) lives in the tenant's own
+// physical DB — the webhook has no way to know which tenant DB to query
+// without this. Written once at payout-creation time (see payroll.ts
+// disburse flow), read once by the webhook to resolve tenant context
+// before touching any tenant-scoped model.
+model PayoutTenantIndex {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  payoutId String @unique
+  tenantId String @db.ObjectId
+
+  @@map("payout_tenant_index")
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────
@@ -205,6 +234,12 @@ model User {
 
   @@index([employeeStatus])
   @@index([department, employeeStatus])
+  // User is the one master-DB model shared across every tenant (see
+  // masterScopedPrisma in prismaWithTenant.ts, which auto-injects tenantId
+  // into every query) — unlike per-tenant-DB models, tenantId here is a
+  // real, high-cardinality filter on nearly every query, not a redundant
+  // safety net.
+  @@index([tenantId, employeeStatus])
   @@map("users")
 }
 
@@ -247,7 +282,7 @@ model AttendanceBreak {
   endTime            DateTime?
   durationMinutes    Float?
 
-  record             AttendanceRecord @relation(fields: [attendanceRecordId], references: [id])
+  record             AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
 
   @@index([attendanceRecordId])
   @@map("attendance_breaks")
@@ -373,6 +408,7 @@ model JobOpening {
   pipelineTemplateId String?   @db.ObjectId
   visibility         String    @default("external") // internal | external | both
 
+  @@index([status, createdOn])
   @@map("jobopenings")
 }
 
@@ -406,7 +442,7 @@ model JobApplication {
   currentStageOrder  Int      @default(0)
   referredByUserId   String?  @db.ObjectId
 
-  jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id])
+  jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id], onDelete: SetNull)
   stageEvents  ApplicationStageEvent[]
   offers       Offer[]
 
@@ -453,7 +489,7 @@ model ApplicationStageEvent {
   createdBy     String    @db.ObjectId
   createdAt     DateTime  @default(now())
 
-  application   JobApplication @relation(fields: [applicationId], references: [id])
+  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, stageOrder])
   @@index([tenantId, applicationId])
@@ -479,7 +515,7 @@ model Offer {
   createdBy     String    @db.ObjectId
   createdAt     DateTime  @default(now())
 
-  application   JobApplication @relation(fields: [applicationId], references: [id])
+  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, version])
   @@index([tenantId, status])
@@ -831,6 +867,7 @@ model Notification {
 
   recipients NotificationRecipient[]
 
+  @@index([tenantId])
   @@map("notifications")
 }
 
@@ -841,7 +878,7 @@ model NotificationRecipient {
   userId         String       @db.ObjectId
   isCleared      Boolean      @default(false)
 
-  notification   Notification @relation(fields: [notificationId], references: [id])
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id])
 
   @@index([tenantId, userId, isCleared])
@@ -920,7 +957,7 @@ model Message {
   createdAt    DateTime? @default(now())
   updatedAt    DateTime? @updatedAt
 
-  chatRoom     ChatRoom  @relation(fields: [chatRoomId], references: [id])
+  chatRoom     ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
 
   @@index([chatRoomId, createdAt])
   @@index([chatRoomId, isDeleted])
@@ -1321,7 +1358,7 @@ model PayrollLineItem {
   payoutFailureReason String?
   payoutInitiatedAt   DateTime?
 
-  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id])
+  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
 
   @@index([payrollRunId])
   @@index([tenantId, userId])
@@ -1401,7 +1438,7 @@ model PerformanceReview {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  cycle PerformanceReviewCycle @relation(fields: [cycleId], references: [id])
+  cycle PerformanceReviewCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
   user  User?                  @relation(fields: [userId], references: [id])
 
   @@unique([cycleId, userId])
@@ -1480,7 +1517,7 @@ model AssetAssignment {
   acknowledgedAt    DateTime?
   acknowledgedNote  String?
 
-  asset          Asset     @relation(fields: [assetId], references: [id])
+  asset          Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   @@index([assetId])
   @@index([tenantId, userId])
@@ -1510,7 +1547,7 @@ model AssetIssue {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  asset         Asset     @relation(fields: [assetId], references: [id])
+  asset         Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, assetId])
   @@index([tenantId, reportedBy, status])
@@ -1589,7 +1626,7 @@ model TicketComment {
   isInternal Boolean   @default(false) // internal note — hidden from the ticket raiser
   createdAt  DateTime  @default(now())
 
-  ticket     Ticket    @relation(fields: [ticketId], references: [id])
+  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@map("ticket_comments")
@@ -1633,7 +1670,7 @@ model WebhookDelivery {
   error       String?
   createdAt   DateTime  @default(now())
 
-  endpoint    WebhookEndpoint @relation(fields: [endpointId], references: [id])
+  endpoint    WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Restrict)
 
   @@index([endpointId, status])
   @@index([tenantId, status])
