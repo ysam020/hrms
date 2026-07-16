@@ -34,11 +34,11 @@ function KycStatus() {
         flexDirection: "column",
         cursor: "pointer",
       }}
-      onClick={() => navigate("/kyc")}
+      onClick={() => navigate("/kyc/insights")}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          navigate("/kyc");
+          navigate("/kyc/insights");
         }
       }}
       role="button"

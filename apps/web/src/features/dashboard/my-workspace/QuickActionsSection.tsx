@@ -11,7 +11,7 @@ const QUICK_ACTIONS = [
   {
     icon: <BeachAccessIcon sx={{ fontSize: 18 }} />,
     label: "Apply Leave",
-    path: "/attendance",
+    path: "/attendance/leave-application",
   },
   {
     icon: <PaymentsIcon sx={{ fontSize: 18 }} />,
@@ -31,9 +31,13 @@ const QUICK_ACTIONS = [
   {
     icon: <AssignmentIcon sx={{ fontSize: 18 }} />,
     label: "Attendance",
-    path: "/attendance",
+    path: "/attendance/view-all-attendances",
   },
-  { icon: <BadgeIcon sx={{ fontSize: 18 }} />, label: "KYC", path: "/kyc" },
+  {
+    icon: <BadgeIcon sx={{ fontSize: 18 }} />,
+    label: "KYC",
+    path: "/kyc/complete-kyc",
+  },
 ];
 
 export function QuickActionsSection({

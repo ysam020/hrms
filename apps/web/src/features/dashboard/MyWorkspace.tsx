@@ -165,7 +165,7 @@ function MyWorkspace({ isDark }) {
           maxCorrections={maxCorrections}
           pendingCount={pendingCount}
           loadingPendingLeaves={loading.pendingLeaves}
-          onPendingClick={() => navigate("/attendance")}
+          onPendingClick={() => navigate("/attendance/view-leave-applications")}
         />
 
         <QuickActionsSection

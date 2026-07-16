@@ -31,7 +31,7 @@ function QuickStats() {
       icon: <PeopleIcon />,
       color: "#3b82f6",
       bg: "rgba(59,130,246,0.1)",
-      path: "/employee-management",
+      path: "/employee-management/insights",
       loading: loading.employeeInsights,
     },
     {
@@ -40,7 +40,7 @@ function QuickStats() {
       icon: <EventBusyIcon />,
       color: "#f59e0b",
       bg: "rgba(245,158,11,0.1)",
-      path: "/attendance",
+      path: "/attendance/view-leave-applications",
       loading: loading.pendingLeaves,
     },
     {
@@ -49,7 +49,7 @@ function QuickStats() {
       icon: <WorkIcon />,
       color: "#10b981",
       bg: "rgba(16,185,129,0.1)",
-      path: "/job-openings",
+      path: "/job-openings/view-job-openings",
       loading: loading.jobOpenings,
     },
     {
