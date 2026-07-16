@@ -25,7 +25,7 @@
     "@mui/icons-material": "^6.3.0",
     "@mui/material": "^6.3.0",
     "@uiw/react-json-view": "^2.0.0-alpha.32",
-    "apexcharts": "^3.54.1",
+    "apexcharts": "^5.16.0",
     "axios": "^1.7.9",
     "compression": "^1.7.4",
     "dayjs": "^1.11.13",
