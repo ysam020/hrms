@@ -361,9 +361,8 @@ function AssetInventory() {
 
   const rowActions = useCallback(
     (row: any) => {
-      if (!isHr) return [];
       const actions: any[] = [];
-      if (row.status === "available") {
+      if (isHr && row.status === "available") {
         actions.push({
           icon: <PersonAddIcon sx={{ fontSize: 16 }} />,
           label: "Assign",
@@ -371,7 +370,7 @@ function AssetInventory() {
           onClick: () => setOpenAssign({ id: row.id, code: row.assetCode }),
         });
       }
-      if (row.status === "assigned") {
+      if (isHr && row.status === "assigned") {
         actions.push({
           icon: <UndoIcon sx={{ fontSize: 16 }} />,
           label: "Return",
@@ -379,7 +378,7 @@ function AssetInventory() {
           onClick: () => setOpenReturn({ id: row.id, code: row.assetCode }),
         });
       }
-      if (["available", "maintenance"].includes(row.status)) {
+      if (isHr && ["available", "maintenance"].includes(row.status)) {
         actions.push({
           icon: <BlockIcon sx={{ fontSize: 16 }} />,
           label: "Retire",
@@ -387,7 +386,7 @@ function AssetInventory() {
           onClick: () => setRetireTarget({ id: row.id, code: row.assetCode }),
         });
       }
-      if (row.status === "maintenance") {
+      if (isHr && row.status === "maintenance") {
         actions.push({
           icon: <RestoreIcon sx={{ fontSize: 16 }} />,
           label: "Mark Available",
