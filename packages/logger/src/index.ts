@@ -75,15 +75,22 @@ if (process.env.LOKI_URL) {
   );
 }
 
-transports.push(
-  new WinstonCloudWatch({
-    logGroupName,
-    logStreamName: process.env.AWS_CLOUDWATCH_LOG_STREAM || "app",
-    awsRegion: process.env.AWS_REGION || "ap-south-1",
-    jsonMessage: true,
-    retentionInDays: env === "production" ? 90 : 7,
-  }),
-);
+// Skipped under test: the AWS credential provider chain does a dynamic
+// import() to resolve credentials, which Jest's CJS environment can't
+// service without --experimental-vm-modules — it fails, then retries
+// asynchronously past test teardown ("Cannot log after tests are done").
+// No test relies on log output actually reaching CloudWatch.
+if (process.env.NODE_ENV !== "test") {
+  transports.push(
+    new WinstonCloudWatch({
+      logGroupName,
+      logStreamName: process.env.AWS_CLOUDWATCH_LOG_STREAM || "app",
+      awsRegion: process.env.AWS_REGION || "ap-south-1",
+      jsonMessage: true,
+      retentionInDays: env === "production" ? 90 : 7,
+    }),
+  );
+}
 
 // Recursively convert Error instances to plain objects so JSON.stringify
 // captures message/stack (which are non-enumerable on Error).

@@ -35,7 +35,11 @@ export function isSafeUrl(
     return false;
   }
   if (requireHttps && parsed.protocol !== "https:") return false;
-  return !isPrivateIp(parsed.hostname.toLowerCase());
+  // URL#hostname wraps IPv6 literals in brackets (e.g. "[::1]", "[fc00::1]") —
+  // strip them before testing against PRIVATE_IP_RE, which matches on the
+  // bare address and would otherwise never match a bracketed IPv6 host.
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return !isPrivateIp(hostname);
 }
 
 /**

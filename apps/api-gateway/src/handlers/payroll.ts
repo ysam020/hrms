@@ -15,6 +15,7 @@
 
 import { Request, Response } from "express";
 import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
@@ -39,6 +40,11 @@ import {
   aggregateEarningsByCode,
   buildThisMonthComponents,
 } from "../utils/tdsCalc";
+
+// Required for listPayrollRuns' month-name search (dayjs(str, [format...], true))
+// below — without this, format-string parsing silently no-ops and every
+// month-name search term falls through to the notes contains-match instead.
+dayjs.extend(customParseFormat);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

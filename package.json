@@ -14,7 +14,7 @@
     "dev": "node scripts/generate-certs.mjs && cross-env LOKI_URL=http://localhost:3100 turbo run dev --concurrency=25",
     "build": "turbo run build",
     "test": "jest && pnpm --filter web test:run",
-    "test:coverage": "jest --coverage --forceExit",
+    "test:coverage": "jest --coverage --forceExit && pnpm --filter web test:coverage",
     "start:prod": "turbo run start:prod",
     "lint": "eslint --no-config-lookup --config ./eslint.config.js \"**/*.{js,jsx,ts,tsx}\"",
     "proto:gen": "turbo run proto:gen",
