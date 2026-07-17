@@ -39,6 +39,7 @@ import AddIcon from "@mui/icons-material/Add";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "All" },
@@ -262,7 +263,10 @@ function ViewResignations() {
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
             <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {row.username}
+              {formatEmployeeLabel(
+                `${row.firstName ?? ""} ${row.lastName ?? ""}`,
+                row.username,
+              )}
             </Typography>
           </Box>
         ),

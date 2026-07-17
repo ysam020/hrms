@@ -33,9 +33,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import RemoveCircleIcon from "@mui/icons-material/RemoveCircle";
 import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
+import Person from "@mui/icons-material/Person";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   Pending: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
@@ -228,10 +230,21 @@ function WFHRequests() {
         label: "Employee",
         primary: true,
         hideLabel: true,
-        render: (row: any) =>
-          row.employee
-            ? `${row.employee.first_name} ${row.employee.last_name}`
-            : "—",
+        render: (row: any) => (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Person
+              sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
+            />
+            <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
+              {row.employee
+                ? formatEmployeeLabel(
+                    `${row.employee.first_name ?? ""} ${row.employee.last_name ?? ""}`,
+                    row.employee.username,
+                  )
+                : "—"}
+            </Typography>
+          </Box>
+        ),
       },
       {
         key: "date",

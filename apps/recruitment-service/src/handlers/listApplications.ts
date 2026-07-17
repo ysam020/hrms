@@ -20,6 +20,7 @@ export const listApplications = async (
     const {
       jobTitleId,
       applicationStatus,
+      search,
       page = 1,
       limit = 10,
     } = call.request;
@@ -32,6 +33,12 @@ export const listApplications = async (
     if (jobTitleId) where.jobTitleId = jobTitleId;
     if (applicationStatus && applicationStatus.toLowerCase() !== "all")
       where.status = applicationStatus;
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
+    }
 
     const [applications, total] = await Promise.all([
       prisma.jobApplication.findMany({ where, skip, take: limitNum }),

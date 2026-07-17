@@ -1,4 +1,4 @@
-import { memo, useContext, useMemo, useState } from "react";
+import { memo, useContext, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -27,6 +27,9 @@ function ViewIndividualJob() {
   const { setAlert } = useContext(AlertContext);
   const { user } = useContext(UserContext);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [applicationSearch, setApplicationSearch] = useState("");
+  const [debouncedApplicationSearch, setDebouncedApplicationSearch] =
+    useState("");
   const [applicantData, setApplicantData] = useState<any>({});
   const [openInterviewModal, setOpenInterviewModal] = useState(false);
   const [openHiringModal, setOpenHiringModal] = useState(false);
@@ -40,15 +43,29 @@ function ViewIndividualJob() {
     refetch: refetchJob,
   } = useFetchData(`/view-job-opening/${_id}`, "get", [_id], null, null);
 
-  const applicationsUrl = `/view-applications/${_id}${
-    statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ""
-  }`;
+  // Debounce the applicant search box before it drives a server round-trip —
+  // mirrors the searchRef/debounceRef pattern used with useServerPagination
+  // elsewhere, adapted to this file's plain useFetchData-driven fetch.
+  useEffect(() => {
+    const handle = setTimeout(
+      () => setDebouncedApplicationSearch(applicationSearch),
+      400,
+    );
+    return () => clearTimeout(handle);
+  }, [applicationSearch]);
+
+  const applicationsUrl = `/view-applications/${_id}?${new URLSearchParams({
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(debouncedApplicationSearch
+      ? { search: debouncedApplicationSearch }
+      : {}),
+  }).toString()}`;
 
   // Fetch job applications using custom hook with status filter
   const { data: jobApplications, refetch: refetchApplications } = useFetchData(
     applicationsUrl,
     "get",
-    [_id, statusFilter, data], // Include data to refetch when job data changes
+    [_id, statusFilter, debouncedApplicationSearch, data], // Include data to refetch when job data changes
     null,
     null,
   );
@@ -145,6 +162,8 @@ function ViewIndividualJob() {
           jobApplications={jobApplications || []}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
+          searchTerm={applicationSearch}
+          setSearchTerm={setApplicationSearch}
           handleOpenInterviewModal={handleOpenInterviewModal}
           handleOpenHiringModal={handleOpenHiringModal}
           handleOpenRejectModal={handleOpenRejectModal}

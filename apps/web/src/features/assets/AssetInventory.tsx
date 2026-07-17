@@ -17,8 +17,11 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
+import { Dropdown } from "primereact/dropdown";
+import FilterList from "@mui/icons-material/FilterList";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import UndoIcon from "@mui/icons-material/Undo";
 import BlockIcon from "@mui/icons-material/Block";
@@ -60,6 +63,14 @@ const EMPTY_ASSIGN_FORM: AssignForm = {
 
 const EMPTY_RETURN_FORM: ReturnForm = { conditionIn: "good", notes: "" };
 
+const STATUS_OPTIONS = [
+  { label: "All", value: "All" },
+  { label: "Available", value: "available" },
+  { label: "Assigned", value: "assigned" },
+  { label: "Under Maintenance", value: "maintenance" },
+  { label: "Retired", value: "retired" },
+];
+
 function AssetInventory() {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
@@ -79,6 +90,7 @@ function AssetInventory() {
   const [returnForm, setReturnForm] = useState<ReturnForm>(EMPTY_RETURN_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [retireTarget, setRetireTarget] = useState<{
@@ -135,7 +147,10 @@ function AssetInventory() {
     async ({ page, limit }) => {
       try {
         const search = searchRef.current;
-        const params = search ? `&search=${encodeURIComponent(search)}` : "";
+        let params = search ? `&search=${encodeURIComponent(search)}` : "";
+        if (statusFilter && statusFilter !== "All") {
+          params += `&status=${statusFilter}`;
+        }
         const res = await apiClient(API_ENDPOINTS.ASSETS(page, limit, params));
         return {
           data: res.data.data?.assets || res.data.data || [],
@@ -152,7 +167,7 @@ function AssetInventory() {
         throw err;
       }
     },
-    [setAlert],
+    [statusFilter, setAlert],
   );
 
   const {
@@ -164,7 +179,10 @@ function AssetInventory() {
     handlePageSizeChange,
     refresh,
     resetPagination,
-  } = useServerPagination(fetchAssets, { initialPageSize: 10 });
+  } = useServerPagination(fetchAssets, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
 
   const handleGlobalFilterChange = useCallback(
     (value: string) => {
@@ -413,20 +431,40 @@ function AssetInventory() {
           placeholder: "Search assets…",
         }}
         toolbarActions={
-          isHr ? (
-            <Tooltip title="Add Asset">
-              <span>
-                <IconButton
-                  color="primary"
-                  size="small"
-                  onClick={() => setOpenCreate(true)}
-                  aria-label="Add asset"
-                >
-                  <AddIcon sx={{ fontSize: 20 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-          ) : undefined
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 150 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "150px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+            {isHr && (
+              <Tooltip title="Add Asset">
+                <span>
+                  <IconButton
+                    color="primary"
+                    size="small"
+                    onClick={() => setOpenCreate(true)}
+                    aria-label="Add asset"
+                  >
+                    <AddIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+          </Box>
         }
         pagination={{
           page: pagination.pageIndex,

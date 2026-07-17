@@ -56,6 +56,10 @@ message ListCyclesRequest {
   // Same convention as GetCycleRequest.requesterId — when set, only cycles
   // the caller is enrolled in are returned.
   string requesterId = 1;
+  string search = 2; // matches cycle name, case-insensitive
+  string status = 3; // draft | active | closed | All (default)
+  int32 page = 4;
+  int32 limit = 5;
 }
 
 message UpdateCycleRequest {
@@ -99,6 +103,13 @@ message ListReviewsRequest {
   string cycleId = 1;
   string userId = 2;
   string reviewerId = 3;
+  // Matches the reviewed employee's name/username or the review cycle's
+  // name, case-insensitive — resolved server-side against the shared
+  // User/PerformanceReviewCycle tables since reviews only store bare ids.
+  string search = 4;
+  string status = 5; // draft | self_assessment_submitted | manager_review_submitted | approved | rejected | All (default)
+  int32 page = 6;
+  int32 limit = 7;
 }
 
 message FinalizeReviewRequest {
@@ -119,6 +130,7 @@ message ListCyclesResponse {
   string message = 1;
   int32 status = 2;
   repeated PerformanceReviewCycle data = 3;
+  int32 total = 4;
 }
 
 message ReviewResponse {
@@ -131,6 +143,7 @@ message ListReviewsResponse {
   string message = 1;
   int32 status = 2;
   repeated PerformanceReview data = 3;
+  int32 total = 4;
 }
 
 message BasicResponse {

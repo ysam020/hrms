@@ -87,7 +87,8 @@ const HR_ACTIVITIES = {
 const JOB_OPENINGS = {
   ADD_JOB_OPENING: "/add-job-opening",
   EDIT_JOB_OPENING: (id: string | number) => `/edit-job-opening/${id}`,
-  VIEW_JOB_OPENINGS: "/view-job-openings",
+  VIEW_JOB_OPENINGS: (page: number, limit: number, params = "") =>
+    `/view-job-openings?page=${page}&limit=${limit}${params}`,
   DELETE_JOB_OPENING: (id: string | number) => `/delete-job-opening/${id}`,
   GET_ALL_JOB_OPENINGS: (slug: string) => `/public/careers/${slug}`,
   GET_PUBLIC_JOB_OPENING: (slug: string, id: string) =>
@@ -314,14 +315,16 @@ const PAYROLL = {
 };
 
 const PERFORMANCE_REVIEW = {
-  REVIEW_CYCLES: "/performance-reviews/cycles",
+  REVIEW_CYCLES: (page: number, limit: number, params = "") =>
+    `/performance-reviews/cycles?page=${page}&limit=${limit}${params}`,
   CREATE_REVIEW_CYCLE: "/performance-reviews/cycles",
   REVIEW_CYCLE: (cycleId: string) => `/performance-reviews/cycles/${cycleId}`,
   REVIEW_CYCLE_STATUS: (cycleId: string) =>
     `/performance-reviews/cycles/${cycleId}/status`,
-  MY_REVIEWS: (userId: string) => `/performance-reviews?userId=${userId}`,
-  TEAM_REVIEWS: (reviewerId: string) =>
-    `/performance-reviews?reviewerId=${reviewerId}`,
+  MY_REVIEWS: (userId: string, params = "") =>
+    `/performance-reviews?userId=${userId}${params}`,
+  TEAM_REVIEWS: (reviewerId: string, params = "") =>
+    `/performance-reviews?reviewerId=${reviewerId}${params}`,
   CYCLE_REVIEWS: (cycleId: string) => `/performance-reviews?cycleId=${cycleId}`,
   // Unscoped — only privileged (HR/admin/owner/superuser) callers may use
   // this; the gateway rejects a bare query from anyone else.

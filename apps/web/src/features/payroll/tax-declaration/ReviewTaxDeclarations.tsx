@@ -1,6 +1,8 @@
 import { memo, useCallback, useContext, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
+import Typography from "@mui/material/Typography";
+import Person from "@mui/icons-material/Person";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
@@ -13,6 +15,7 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 
 function currentFinancialYear(): string {
   const now = new Date();
@@ -79,10 +82,20 @@ function ReviewTaxDeclarations() {
       {
         key: "employee",
         label: "Employee",
-        render: (row: any) =>
-          [row.employee?.first_name, row.employee?.last_name]
-            .filter(Boolean)
-            .join(" ") || row.employee?.username,
+        hideLabel: true,
+        render: (row: any) => (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Person
+              sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
+            />
+            <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
+              {formatEmployeeLabel(
+                `${row.employee?.first_name ?? ""} ${row.employee?.last_name ?? ""}`,
+                row.employee?.username,
+              )}
+            </Typography>
+          </Box>
+        ),
       },
       { key: "financialYear", label: "FY" },
       {

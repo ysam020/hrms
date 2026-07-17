@@ -10,14 +10,20 @@ export const listResignations = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { page = 1, limit = 10, userId, status: filterStatus } = call.request;
+    const {
+      page = 1,
+      limit = 10,
+      userId,
+      status: filterStatus,
+      username,
+    } = call.request;
 
     const pageNum = parseInt(String(page)) || 1;
     const limitNum = parseInt(String(limit)) || 10;
     const skip = (pageNum - 1) * limitNum;
 
     const tenantId = getTenantId();
-    const cacheKey = `t:${tenantId ?? "global"}:resignations:${userId || ""}:${filterStatus || "all"}:p${pageNum}:l${limitNum}`;
+    const cacheKey = `t:${tenantId ?? "global"}:resignations:${userId || ""}:${filterStatus || "all"}:${username || ""}:p${pageNum}:l${limitNum}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
@@ -28,6 +34,34 @@ export const listResignations = async (
     const where: any = { tenantId };
     if (userId) where.userId = userId;
     if (filterStatus) where.status = filterStatus;
+
+    if (username) {
+      // Resignations only store a bare userId — resolve the search term
+      // against the shared User table (same DB/Prisma client) instead of
+      // requiring a cross-service call.
+      const matchingUsers = await prisma.user.findMany({
+        where: {
+          tenantId,
+          OR: [
+            { first_name: { contains: username, mode: "insensitive" } },
+            { last_name: { contains: username, mode: "insensitive" } },
+            { username: { contains: username, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      });
+      const matchingIds = matchingUsers.map((u) => u.id);
+      if (where.userId) {
+        // Already scoped to one specific user (privileged pick, or the
+        // caller's own id) — keep that scoping only if it also matches the
+        // search, otherwise there's nothing to return.
+        if (!matchingIds.includes(where.userId)) {
+          where.userId = "__no_match__";
+        }
+      } else {
+        where.userId = { in: matchingIds };
+      }
+    }
 
     const [resignations, totalCount] = await Promise.all([
       prisma.resignation.findMany({

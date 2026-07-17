@@ -18,6 +18,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
 import { AutoComplete } from "primereact/autocomplete";
+import PersonSearchIcon from "@mui/icons-material/PersonSearch";
 import useUserList from "@web/shared/hooks/useUserList";
 import useFetchData from "@web/shared/hooks/useFetchData";
 import debounce from "lodash/debounce";
@@ -27,6 +28,7 @@ import saveUserPermissions from "@web/shared/utils/permissions/saveUserPermissio
 import togglePermission from "@web/shared/utils/permissions/togglePermission";
 import Button from "@web/shared/components/Button";
 import PermissionMatrix from "@web/shared/components/PermissionMatrix";
+import EmptyState from "@web/shared/components/EmptyState";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 function UserPermissions() {
@@ -306,7 +308,17 @@ function UserPermissions() {
         </div>
       )}
 
-      {!isSuperUser && <br />}
+      {!selectedUser && (
+        <Box sx={{ mt: 3 }}>
+          <EmptyState
+            icon={<PersonSearchIcon sx={{ fontSize: 40 }} />}
+            message="Select a user above to view and manage their permissions."
+            dashed
+          />
+        </Box>
+      )}
+
+      {!isSuperUser && selectedUser && <br />}
       {selectedUser && (
         <Paper
           sx={{

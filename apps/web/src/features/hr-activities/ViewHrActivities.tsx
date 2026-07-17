@@ -345,18 +345,9 @@ function ViewHrActivities() {
         }}
         toolbarActions={
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <FilterList
-                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-              />
-              <Typography
-                variant="body2"
-                fontSize="0.8rem"
-                color="text.secondary"
-              >
-                Filter by status:
-              </Typography>
-            </Box>
+            <FilterList
+              sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+            />
             <Box sx={{ minWidth: 120 }}>
               <Dropdown
                 value={statusFilter}

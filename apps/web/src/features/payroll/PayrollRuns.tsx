@@ -32,7 +32,6 @@ import CheckIcon from "@mui/icons-material/Check";
 import CancelIcon from "@mui/icons-material/Cancel";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import StatusTimeline, {
@@ -144,10 +143,12 @@ function PayrollRuns() {
   const fetchRuns = useCallback(
     async ({ page, limit }) => {
       try {
-        const params =
+        const search = searchRef.current;
+        let params =
           statusFilter && statusFilter !== "All"
             ? `&status=${statusFilter}`
             : "";
+        if (search) params += `&search=${encodeURIComponent(search)}`;
         const res = await apiClient(
           API_ENDPOINTS.PAYROLL_RUNS(page, limit, params),
         );
@@ -290,14 +291,7 @@ function PayrollRuns() {
 
   const rowActions = useCallback(
     (row: any) => {
-      const actions: any[] = [
-        {
-          icon: <VisibilityIcon sx={{ fontSize: 16 }} />,
-          label: "View",
-          color: "primary" as const,
-          onClick: () => setViewRun(row),
-        },
-      ];
+      const actions: any[] = [];
       if (!isHr) return actions;
       if (row.status === "draft") {
         actions.push({
@@ -369,10 +363,11 @@ function PayrollRuns() {
         actions={rowActions}
         loading={loading}
         emptyMessage="No payroll runs found"
+        onRowClick={(row: any) => setViewRun(row)}
         search={{
           value: globalFilter,
           onChange: handleGlobalFilterChange,
-          placeholder: "Search…",
+          placeholder: "Search period or notes…",
         }}
         toolbarActions={
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>

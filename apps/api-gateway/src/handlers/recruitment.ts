@@ -18,6 +18,7 @@ export async function viewJobOpenings(req: Request, res: Response) {
     const response = await grpcCall(recruitmentClient, "listJobOpenings", {
       ...parsePagination(req.query),
       jobStatus: req.query.status || "",
+      search: req.query.search || "",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
@@ -195,7 +196,14 @@ export async function viewApplications(req: Request, res: Response) {
     const response = (await grpcCall(recruitmentClient, "listApplications", {
       jobTitleId: req.params.id,
       applicationStatus: req.query.status || "",
-      ...parsePagination(req.query),
+      search: req.query.search || "",
+      // No pagination UI on this list — fetch a large batch by default
+      // instead of the standard small page size (mirrors user.ts/attendance.ts).
+      ...parsePagination(
+        req.query,
+        PAGINATION.DEFAULT_LIMIT_LARGE,
+        PAGINATION.MAX_LIMIT_LARGE,
+      ),
     })) as { data?: any[] };
 
     // Proto strips interviews/aadharNo/reason — fetch them directly and merge
@@ -358,13 +366,23 @@ export async function viewResignations(req: Request, res: Response) {
       ] as string[];
       const users = await prisma.user.findMany({
         where: { id: { in: userIds } },
-        select: { id: true, username: true },
+        select: {
+          id: true,
+          username: true,
+          first_name: true,
+          last_name: true,
+        },
       });
-      const userMap = new Map(users.map((u) => [u.id, u.username]));
-      response.data = records.map((r: any) => ({
-        ...r,
-        username: userMap.get(r.userId) ?? r.userId,
-      }));
+      const userMap = new Map(users.map((u) => [u.id, u]));
+      response.data = records.map((r: any) => {
+        const userInfo = userMap.get(r.userId);
+        return {
+          ...r,
+          username: userInfo?.username ?? r.userId,
+          firstName: userInfo?.first_name,
+          lastName: userInfo?.last_name,
+        };
+      });
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);

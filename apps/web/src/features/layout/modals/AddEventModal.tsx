@@ -260,7 +260,9 @@ function AddEventModal({
               showIcon
               showButtonBar
               placeholder={"Event Date"}
-              appendTo={"self"}
+              appendTo={() =>
+                document.querySelector("#root .App") as HTMLElement
+              }
             />
           </Grid>
 
@@ -280,7 +282,9 @@ function AddEventModal({
               showIcon
               hourFormat="12"
               placeholder={"Start Time"}
-              appendTo={"self"}
+              appendTo={() =>
+                document.querySelector("#root .App") as HTMLElement
+              }
               stepMinute={15}
             />
           </Grid>
@@ -301,7 +305,9 @@ function AddEventModal({
               showIcon
               hourFormat="12"
               placeholder={"End Time"}
-              appendTo={"self"}
+              appendTo={() =>
+                document.querySelector("#root .App") as HTMLElement
+              }
               stepMinute={15}
             />
           </Grid>

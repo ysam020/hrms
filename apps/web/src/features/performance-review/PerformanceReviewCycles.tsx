@@ -4,11 +4,15 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import dayjs from "dayjs";
 import { Calendar } from "primereact/calendar";
+import { Dropdown } from "primereact/dropdown";
+import FilterList from "@mui/icons-material/FilterList";
 import DataList from "@web/shared/components/DataList";
+import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
@@ -72,8 +76,6 @@ const emptyForm = {
 function PerformanceReviewCycles() {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
-  const [cycles, setCycles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCycleId, setEditingCycleId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -82,18 +84,76 @@ function PerformanceReviewCycles() {
     Record<string, string[]>
   >({});
   const [form, setForm] = useState(emptyForm);
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchCycles = useCallback(async () => {
-    setLoading(true);
+  const fetchCyclesPage = useCallback(
+    async ({ page, limit }) => {
+      try {
+        const search = searchRef.current;
+        let params = "";
+        if (statusFilter && statusFilter !== "All") {
+          params += `&status=${encodeURIComponent(statusFilter)}`;
+        }
+        if (search) params += `&search=${encodeURIComponent(search)}`;
+        const res = await apiClient(
+          API_ENDPOINTS.REVIEW_CYCLES(page, limit, params),
+        );
+        return {
+          data: res.data.data ?? [],
+          totalCount: res.data.total ?? 0,
+        };
+      } catch (err: any) {
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError")
+          throw err;
+        setAlert({
+          open: true,
+          message:
+            err?.response?.data?.message || "Failed to fetch review cycles",
+          severity: "error",
+        });
+        throw err;
+      }
+    },
+    [statusFilter, setAlert],
+  );
+
+  const {
+    data: cycles,
+    loading,
+    totalCount,
+    pagination,
+    handlePaginationChange,
+    handlePageSizeChange,
+    refresh,
+    resetPagination,
+  } = useServerPagination(fetchCyclesPage, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
+
+  const handleGlobalFilterChange = useCallback(
+    (value: string) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => resetPagination(), 400);
+    },
+    [resetPagination],
+  );
+
+  // Loaded once up front (and refreshed after any mutation) — a lookup of
+  // every reviewee per cycle for the per-row avatar group. Kept separate
+  // from the cycles page fetch above since it isn't itself paginated or
+  // filtered — a cycle on the current page can have members regardless of
+  // which page/filter is active.
+  const fetchMembersByCycle = useCallback(async () => {
     try {
-      const [cyclesRes, reviewsRes] = await Promise.all([
-        apiClient(API_ENDPOINTS.REVIEW_CYCLES),
-        apiClient(API_ENDPOINTS.ALL_REVIEWS),
-      ]);
-      setCycles(cyclesRes.data.data || []);
-
+      const res = await apiClient(API_ENDPOINTS.ALL_REVIEWS);
       const byCycle: Record<string, string[]> = {};
-      for (const r of reviewsRes.data.data || []) {
+      for (const r of res.data.data || []) {
         (byCycle[r.cycleId] ||= []).push(r.userId);
       }
       setMembersByCycle(byCycle);
@@ -105,20 +165,13 @@ function PerformanceReviewCycles() {
       // real failure, matching the guard used elsewhere in the app (see
       // EmployeeManagement.tsx).
       if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
-      setAlert({
-        open: true,
-        message:
-          err?.response?.data?.message || "Failed to fetch review cycles",
-        severity: "error",
-      });
-    } finally {
-      setLoading(false);
+      // Non-critical — the list still renders, just without avatar groups.
     }
-  }, [setAlert]);
+  }, []);
 
   useEffect(() => {
-    fetchCycles();
-  }, [fetchCycles]);
+    fetchMembersByCycle();
+  }, [fetchMembersByCycle]);
 
   // Loaded once, up front — needed for the create/edit picker, resolving an
   // existing cycle's members when opening it for edit, and the per-row
@@ -203,7 +256,8 @@ function PerformanceReviewCycles() {
         await apiClient.post(API_ENDPOINTS.CREATE_REVIEW_CYCLE, payload);
       }
       closeDialog();
-      fetchCycles();
+      refresh();
+      fetchMembersByCycle();
       setAlert({
         open: true,
         message: editingCycleId
@@ -224,7 +278,14 @@ function PerformanceReviewCycles() {
     } finally {
       setSubmitting(false);
     }
-  }, [form, editingCycleId, closeDialog, fetchCycles, setAlert]);
+  }, [
+    form,
+    editingCycleId,
+    closeDialog,
+    refresh,
+    fetchMembersByCycle,
+    setAlert,
+  ]);
 
   const [statusDialog, setStatusDialog] = useState<{
     open: boolean;
@@ -253,7 +314,7 @@ function PerformanceReviewCycles() {
         API_ENDPOINTS.REVIEW_CYCLE_STATUS(statusDialog.row.id),
         { status: statusDialog.action },
       );
-      fetchCycles();
+      refresh();
       setAlert({
         open: true,
         message:
@@ -276,7 +337,7 @@ function PerformanceReviewCycles() {
     } finally {
       setStatusLoading(false);
     }
-  }, [statusDialog, fetchCycles, setAlert]);
+  }, [statusDialog, refresh, setAlert]);
 
   const columns = useMemo(
     () => [
@@ -377,20 +438,59 @@ function PerformanceReviewCycles() {
           actions={rowActions}
           loading={loading}
           emptyMessage="No review cycles found"
+          search={{
+            value: globalFilter,
+            onChange: handleGlobalFilterChange,
+            placeholder: "Search cycles…",
+          }}
           toolbarActions={
-            <Tooltip title="New Review Cycle">
-              <span>
-                <IconButton
-                  color="primary"
-                  size="small"
-                  onClick={openCreateDialog}
-                  aria-label="New review cycle"
-                >
-                  <AddIcon sx={{ fontSize: 20 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <FilterList
+                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+                />
+                <Box sx={{ minWidth: 120 }}>
+                  <Dropdown
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.value)}
+                    options={[
+                      { label: "All", value: "All" },
+                      { label: "Draft", value: "draft" },
+                      { label: "Active", value: "active" },
+                      { label: "Closed", value: "closed" },
+                    ]}
+                    placeholder="Select Status"
+                    className="w-full"
+                    style={{ minWidth: "120px" }}
+                    appendTo={() =>
+                      document.querySelector("#root .App") as HTMLElement
+                    }
+                  />
+                </Box>
+              </Box>
+              <Tooltip title="New Review Cycle">
+                <span>
+                  <IconButton
+                    color="primary"
+                    size="small"
+                    onClick={openCreateDialog}
+                    aria-label="New review cycle"
+                  >
+                    <AddIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
           }
+          pagination={{
+            page: pagination.pageIndex,
+            pageSize: pagination.pageSize,
+            totalCount,
+            onPageChange: (page) =>
+              handlePaginationChange({ ...pagination, pageIndex: page }),
+            onPageSizeChange: handlePageSizeChange,
+            pageSizeOptions: [10, 25, 50],
+          }}
         />
       </Box>
 

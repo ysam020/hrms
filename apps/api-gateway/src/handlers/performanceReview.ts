@@ -6,6 +6,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
+import { parsePagination } from "../utils/pagination";
 
 // Owner/admin/hr (tenantRole) and superusers manage review cycles by default;
 // PerformanceReview:manage_cycles lets a tenant grant that access to anyone
@@ -55,10 +56,16 @@ export async function listCycles(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const privileged = await canManageReviews(user!.userId, user!.tenantRole);
+    const { search, status } = req.query as Record<string, string>;
+    const { page, limit } = parsePagination(req.query);
     const response = await grpcCall(performanceReviewClient, "listCycles", {
       // Non-privileged callers only get cycles they're enrolled in — see
       // listCycles.ts (performance-review-service) for the enforcement.
       requesterId: privileged ? "" : user!.userId,
+      search: search || "",
+      status: status || "",
+      page,
+      limit,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error) {
@@ -141,7 +148,10 @@ export async function listReviews(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const privileged = await canManageReviews(user!.userId, user!.tenantRole);
-    const { cycleId, userId, reviewerId } = req.query as Record<string, string>;
+    const { cycleId, userId, reviewerId, search, status } = req.query as Record<
+      string,
+      string
+    >;
 
     if (!privileged) {
       // A bare call (no filters at all) or a bare cycleId (no userId/
@@ -166,9 +176,17 @@ export async function listReviews(req: Request, res: Response) {
     }
 
     const response = await grpcCall(performanceReviewClient, "listReviews", {
-      cycleId,
-      userId,
-      reviewerId,
+      cycleId: cycleId || "",
+      userId: userId || "",
+      reviewerId: reviewerId || "",
+      search: search || "",
+      status: status || "",
+      // Deliberately 0/unset — this list has no pager yet (see
+      // listReviews.ts, performance-review-service), and the generated
+      // proto encoder throws ("invalid int32: undefined") if a numeric
+      // field is left as undefined instead of an explicit number.
+      page: 0,
+      limit: 0,
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error) {

@@ -1,4 +1,11 @@
-import { memo, useCallback, useContext, useMemo, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dayjs from "dayjs";
 import { Dropdown } from "primereact/dropdown";
 import DataList from "@web/shared/components/DataList";
@@ -70,6 +77,9 @@ function SalaryAdvances() {
   const [form, setForm] = useState({ amount: "", emiMonths: 3, reason: "" });
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [globalFilter, setGlobalFilter] = useState("");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<{
     id: string;
     action: "approve" | "reject";
@@ -82,10 +92,12 @@ function SalaryAdvances() {
   const fetchAdvances = useCallback(
     async ({ page, limit }) => {
       try {
-        const params =
+        const search = searchRef.current;
+        let params =
           statusFilter && statusFilter !== "All"
             ? `&status=${statusFilter}`
             : "";
+        if (search) params += `&search=${encodeURIComponent(search)}`;
         const res = await apiClient(
           API_ENDPOINTS.SALARY_ADVANCES(page, limit, params),
         );
@@ -115,10 +127,21 @@ function SalaryAdvances() {
     handlePaginationChange,
     handlePageSizeChange,
     refresh,
+    resetPagination,
   } = useServerPagination(fetchAdvances, {
     initialPageSize: 10,
     deps: [statusFilter],
   });
+
+  const handleGlobalFilterChange = useCallback(
+    (value: string) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => resetPagination(), 400);
+    },
+    [resetPagination],
+  );
 
   const handleAction = useCallback(
     async (advanceId: string, action: "approve" | "reject") => {
@@ -283,6 +306,11 @@ function SalaryAdvances() {
         actions={rowActions}
         loading={loading}
         emptyMessage="No salary advances found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search employees…",
+        }}
         toolbarActions={
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

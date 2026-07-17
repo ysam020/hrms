@@ -99,14 +99,23 @@ export async function getAllAttendances(req: Request, res: Response) {
       // Non-privileged callers only ever see their own row in this table.
       userWhere.id = user!.userId;
     } else if (search) {
-      userWhere.username = { contains: search, mode: "insensitive" };
+      userWhere.OR = [
+        { username: { contains: search, mode: "insensitive" } },
+        { first_name: { contains: search, mode: "insensitive" } },
+        { last_name: { contains: search, mode: "insensitive" } },
+      ];
     }
 
     const [totalCount, users] = await Promise.all([
       prisma.user.count({ where: userWhere }),
       prisma.user.findMany({
         where: userWhere,
-        select: { id: true, username: true },
+        select: {
+          id: true,
+          username: true,
+          first_name: true,
+          last_name: true,
+        },
         orderBy: { username: "asc" },
         skip,
         take: limit,
@@ -114,7 +123,7 @@ export async function getAllAttendances(req: Request, res: Response) {
     ]);
 
     const userIds = users.map((u: any) => u.id);
-    const userMap = new Map(users.map((u: any) => [u.id, u.username]));
+    const userMap = new Map(users.map((u: any) => [u.id, u]));
 
     const [attendanceRecords, leaveBalances] = await Promise.all([
       userIds.length > 0
@@ -166,8 +175,11 @@ export async function getAllAttendances(req: Request, res: Response) {
           unpaidLeaves = mb.usedLWP || 0;
         }
       }
+      const userInfo = userMap.get(u.id);
       return {
-        username: userMap.get(u.id),
+        username: userInfo?.username,
+        firstName: userInfo?.first_name,
+        lastName: userInfo?.last_name,
         presents: agg.presents,
         halfDays: agg.halfDays,
         totalLeaves: paidLeaves + unpaidLeaves,

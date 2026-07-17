@@ -43,6 +43,7 @@ import { Dropdown } from "primereact/dropdown";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 
 function ViewLeaveApplications() {
@@ -413,8 +414,11 @@ function ViewLeaveApplications() {
             <Person
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
-            <Typography variant="body2" fontSize="0.8rem">
-              {row.username}
+            <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
+              {formatEmployeeLabel(
+                `${row.firstName ?? ""} ${row.lastName ?? ""}`,
+                row.username,
+              )}
             </Typography>
           </Box>
         ),
@@ -515,18 +519,9 @@ function ViewLeaveApplications() {
                 flexWrap: "wrap",
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <FilterList
-                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-                />
-                <Typography
-                  variant="body2"
-                  fontSize="0.8rem"
-                  color="text.secondary"
-                >
-                  Status:
-                </Typography>
-              </Box>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
               <Box sx={{ minWidth: 120 }}>
                 <Dropdown
                   value={statusFilter}

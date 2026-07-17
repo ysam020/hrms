@@ -8,6 +8,8 @@ import {
 } from "react";
 import dayjs from "dayjs";
 import { Calendar } from "primereact/calendar";
+import { Dropdown } from "primereact/dropdown";
+import FilterList from "@mui/icons-material/FilterList";
 import DataList from "@web/shared/components/DataList";
 import StatusTimeline, {
   type TimelineStage,
@@ -115,16 +117,34 @@ function Reviews() {
   });
   const [approveComment, setApproveComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  // Debounce the search box before it drives a server round-trip — mirrors
+  // the searchRef/debounceRef pattern used elsewhere (e.g. AssetInventory),
+  // adapted to this file's plain useEffect-driven fetch instead of
+  // useServerPagination.
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(globalFilter), 400);
+    return () => clearTimeout(handle);
+  }, [globalFilter]);
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
+      let params = "";
+      if (debouncedSearch)
+        params += `&search=${encodeURIComponent(debouncedSearch)}`;
+      if (statusFilter !== "All")
+        params += `&status=${encodeURIComponent(statusFilter)}`;
+
       const [mineRes, reviewedRes, cyclesRes, usersRes, pendingRes] =
         await Promise.all([
-          apiClient(API_ENDPOINTS.MY_REVIEWS(user.id)),
-          apiClient(API_ENDPOINTS.TEAM_REVIEWS(user.id)),
-          apiClient(API_ENDPOINTS.REVIEW_CYCLES),
+          apiClient(API_ENDPOINTS.MY_REVIEWS(user.id, params)),
+          apiClient(API_ENDPOINTS.TEAM_REVIEWS(user.id, params)),
+          apiClient(API_ENDPOINTS.REVIEW_CYCLES(1, 200)),
           apiClient(API_ENDPOINTS.GET_ALL_USERS()),
           apiClient(API_ENDPOINTS.GET_PENDING_APPROVALS),
         ]);
@@ -167,6 +187,10 @@ function Reviews() {
       // transparently by the shared axios interceptor — this only ever
       // fires for a genuine cancellation (e.g. unmount) or a real failure.
       if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
+      // Otherwise a failed refetch (e.g. after changing the search/status
+      // filter) would silently keep showing the previous, unfiltered
+      // result set instead of reflecting the error.
+      setReviews([]);
       setAlert({
         open: true,
         message: err?.response?.data?.message || "Failed to fetch reviews",
@@ -175,7 +199,7 @@ function Reviews() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, setAlert]);
+  }, [user?.id, debouncedSearch, statusFilter, setAlert]);
 
   useEffect(() => {
     fetchAll();
@@ -361,6 +385,44 @@ function Reviews() {
           loading={loading}
           onRowClick={openDetail}
           emptyMessage="No reviews yet — a review appears here once HR starts a review cycle that includes you"
+          search={{
+            value: globalFilter,
+            onChange: setGlobalFilter,
+            placeholder: "Search by employee or cycle…",
+          }}
+          toolbarActions={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 180 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={[
+                    { label: "All", value: "All" },
+                    { label: "Draft", value: "draft" },
+                    {
+                      label: "Self-Assessment Submitted",
+                      value: "self_assessment_submitted",
+                    },
+                    {
+                      label: "Manager Review Submitted",
+                      value: "manager_review_submitted",
+                    },
+                    { label: "Approved", value: "approved" },
+                    { label: "Rejected", value: "rejected" },
+                  ]}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "180px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+            </Box>
+          }
         />
       </Box>
 

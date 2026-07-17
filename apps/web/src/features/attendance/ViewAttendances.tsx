@@ -25,6 +25,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Person from "@mui/icons-material/Person";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 
 function ViewAttendances() {
   // Use date format YYYY-MM
@@ -148,9 +149,14 @@ function ViewAttendances() {
         hideLabel: true,
         render: (row: any) => (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Person sx={{ fontSize: 16, color: "primary.main" }} />
-            <Typography variant="body2" fontWeight={500}>
-              {row.username}
+            <Person
+              sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
+            />
+            <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
+              {formatEmployeeLabel(
+                `${row.firstName ?? ""} ${row.lastName ?? ""}`,
+                row.username,
+              )}
             </Typography>
           </Box>
         ),

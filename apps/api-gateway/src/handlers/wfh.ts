@@ -235,6 +235,7 @@ export async function listWfhRequests(req: Request, res: Response) {
       userId: targetId,
       from,
       to,
+      search,
     } = req.query as Record<string, string>;
     const { page, limit } = parsePagination(req.query);
     const skip = (page - 1) * limit;
@@ -251,6 +252,29 @@ export async function listWfhRequests(req: Request, res: Response) {
     // match — a range request should show up if any part of it falls inside.
     if (from) where.toDate = { gte: toUtcMidnight(from) };
     if (to) where.date = { lte: toUtcMidnight(to) };
+
+    if (search) {
+      // Requests only store a bare userId — resolve the search term against
+      // the User table instead of a literal field match.
+      const matchingUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { first_name: { contains: search, mode: "insensitive" } },
+            { last_name: { contains: search, mode: "insensitive" } },
+            { username: { contains: search, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      });
+      const matchingIds = matchingUsers.map((u) => u.id);
+      if (where.userId) {
+        if (!matchingIds.includes(where.userId)) {
+          where.userId = "__no_match__";
+        }
+      } else {
+        where.userId = { in: matchingIds };
+      }
+    }
 
     const [requests, total] = await Promise.all([
       prisma.wfhRequest.findMany({
