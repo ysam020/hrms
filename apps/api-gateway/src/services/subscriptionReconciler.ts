@@ -66,8 +66,14 @@ async function reconcile(): Promise<void> {
           ? new Date(sub.current_end * 1000)
           : null;
 
-        if (sub.status === "active") {
+        if (
+          sub.status === "active" &&
+          tenant.subscriptionStatus !== "cancelling"
+        ) {
           // Razorpay considers the subscription active. Heal any stale DB state.
+          // (Excludes "cancelling" tenants — see the dedicated branch below:
+          // healing them here would silently undo a user's in-flight cancel
+          // request while Razorpay's cancellation webhook is still catching up.)
           const updates: Record<string, unknown> = {};
 
           if (tenant.subscriptionStatus !== "active") {

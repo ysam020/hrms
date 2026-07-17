@@ -2,11 +2,17 @@ import { prisma } from "@hrms/db";
 import { startNotificationWorker } from "../workers/notificationWorker";
 
 let capturedProcessor: (job: any) => Promise<any>;
+let capturedHandlers: Record<string, (...args: any[]) => void>;
 
 jest.mock("bullmq", () => ({
   Worker: jest.fn().mockImplementation((_name: string, processor: any) => {
     capturedProcessor = processor;
-    return { on: jest.fn() };
+    capturedHandlers = {};
+    return {
+      on: jest.fn((event: string, handler: any) => {
+        capturedHandlers[event] = handler;
+      }),
+    };
   }),
 }));
 
@@ -26,9 +32,10 @@ jest.mock("@hrms/db", () => {
   };
 });
 
+const mockDlqAdd = jest.fn().mockResolvedValue(undefined);
 jest.mock("@hrms/queue", () => ({
   getBullMQConnection: jest.fn(() => ({})),
-  getDeadLetterQueue: jest.fn(() => ({ add: jest.fn() })),
+  getDeadLetterQueue: jest.fn(() => ({ add: mockDlqAdd })),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -40,6 +47,9 @@ jest.mock("@hrms/firebase", () => ({
     .fn()
     .mockResolvedValue({ sentCount: 0, failedCount: 0, success: true }),
 }));
+
+const { sendPushNotifications: mockSendPushNotifications } =
+  jest.requireMock("@hrms/firebase");
 
 const mockSendToUser = jest.fn().mockResolvedValue(true);
 const mockSendNotification = jest.fn().mockResolvedValue(undefined);
@@ -154,5 +164,145 @@ describe("notificationWorker", () => {
 
     expect(mockSendToUser).not.toHaveBeenCalled();
     expect(mockSendNotification).toHaveBeenCalled();
+  });
+
+  describe("tenant safety guards", () => {
+    it("throws (refuses to process) when the job has no tenantId", async () => {
+      await expect(runProcessor({ title: "x", message: "y" })).rejects.toThrow(
+        /missing tenantId/,
+      );
+      expect(mockNotificationCreate).not.toHaveBeenCalled();
+    });
+
+    it("throws when the tenant has no resolvable database", async () => {
+      (prisma as any).tenant.findUnique.mockResolvedValueOnce({ dbName: null });
+      await expect(
+        runProcessor({ tenantId: "tenant-1", title: "x", message: "y" }),
+      ).rejects.toThrow(/has no resolvable database/);
+      expect(mockNotificationCreate).not.toHaveBeenCalled();
+    });
+
+    it("throws when the tenant record itself does not exist", async () => {
+      (prisma as any).tenant.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        runProcessor({ tenantId: "tenant-1", title: "x", message: "y" }),
+      ).rejects.toThrow(/has no resolvable database/);
+    });
+  });
+
+  describe("FCM push notifications", () => {
+    it("sends to pushTargets when provided", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "Title",
+        message: "Body",
+        pushTargets: ["alice", "bob"],
+      });
+      expect(mockSendPushNotifications).toHaveBeenCalledWith(
+        ["alice", "bob"],
+        "Title",
+        "Body",
+      );
+    });
+
+    it("falls back to targetUser (normalized to an array) when pushTargets is empty", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "Title",
+        message: "Body",
+        targetUser: "alice",
+      });
+      expect(mockSendPushNotifications).toHaveBeenCalledWith(
+        ["alice"],
+        "Title",
+        "Body",
+      );
+    });
+
+    it("broadcasts to ALL_USERS when there are no push targets at all", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "Title",
+        message: "Body",
+      });
+      expect(mockSendPushNotifications).toHaveBeenCalledWith(
+        "ALL_USERS",
+        "Title",
+        "Body",
+      );
+    });
+
+    it("skips FCM entirely when sendPushNotification is false", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "Title",
+        message: "Body",
+        sendPushNotification: false,
+      });
+      expect(mockSendPushNotifications).not.toHaveBeenCalled();
+    });
+
+    it("includes the FCM result in the job's return value", async () => {
+      mockSendPushNotifications.mockResolvedValueOnce({
+        sentCount: 3,
+        failedCount: 1,
+        success: true,
+      });
+      const result = await runProcessor({
+        tenantId: "tenant-1",
+        title: "Title",
+        message: "Body",
+      });
+      expect(result.pushNotificationResult).toEqual({
+        sentCount: 3,
+        failedCount: 1,
+        success: true,
+      });
+    });
+  });
+
+  describe("worker lifecycle events", () => {
+    it("forwards an exhausted-retry failure to the dead-letter queue", async () => {
+      const job = {
+        id: "j1",
+        data: { tenantId: "t1" },
+        attemptsMade: 3,
+        opts: { attempts: 3 },
+      };
+      capturedHandlers.failed(job, new Error("processing crashed"));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockDlqAdd).toHaveBeenCalledWith(
+        "failed-notification",
+        expect.objectContaining({
+          originalQueue: "notificationQueue",
+          originalJobId: "j1",
+          failureReason: "processing crashed",
+        }),
+      );
+    });
+
+    it("does not forward to the DLQ while retry attempts remain", async () => {
+      const job = {
+        id: "j2",
+        data: { tenantId: "t1" },
+        attemptsMade: 1,
+        opts: { attempts: 3 },
+      };
+      capturedHandlers.failed(job, new Error("transient error"));
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(mockDlqAdd).not.toHaveBeenCalled();
+    });
+
+    it("logs stalled and worker-error events", () => {
+      const { logger } = require("@hrms/logger");
+      capturedHandlers.stalled("j3");
+      expect(logger.warn).toHaveBeenCalledWith("Notification job j3 stalled");
+
+      capturedHandlers.error(new Error("conn lost"));
+      expect(logger.error).toHaveBeenCalledWith("Notification worker error:", {
+        err: expect.any(Error),
+      });
+    });
   });
 });

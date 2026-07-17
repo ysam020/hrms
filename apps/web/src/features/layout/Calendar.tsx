@@ -95,11 +95,7 @@ const CustomCalendar = () => {
   const upcomingEvents = useMemo(() => {
     if (!events || !Array.isArray(events)) return [];
 
-    const now = new Date();
-    const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
-    const todayFormatted = todayUTC.toISOString().split("T")[0];
+    const todayFormatted = dayjs().format("YYYY-MM-DD");
 
     return events
       .filter((event) => event.date >= todayFormatted)

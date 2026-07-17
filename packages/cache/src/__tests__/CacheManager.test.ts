@@ -171,4 +171,262 @@ describe("CacheManager", () => {
       });
     });
   });
+
+  describe("Redis failure fallback", () => {
+    it("get() returns null (not throw) and logs when Redis errors", async () => {
+      const { base } = makeFakeRedis();
+      base.get.mockRejectedValue(new Error("redis down"));
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await expect(manager.get("k1")).resolves.toBeNull();
+    });
+
+    it("set() falls back to memory-only when Redis errors, and get() still serves it", async () => {
+      const { base } = makeFakeRedis();
+      base.set.mockRejectedValue(new Error("redis down"));
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await manager.set("k1", { a: 1 }, "default");
+
+      expect(await manager.get("k1")).toEqual({ a: 1 });
+    });
+
+    it("delete() evicts memory even when the Redis call fails", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+      await manager.set("k1", { a: 1 }, "default");
+
+      base.del.mockRejectedValue(new Error("redis down"));
+      await expect(manager.delete("k1")).resolves.toBeUndefined();
+
+      // Memory eviction happens before the Redis call, unconditionally.
+      base.get.mockResolvedValue(null);
+      expect(await manager.get("k1")).toBeNull();
+    });
+
+    it("healthCheck() reports redis:false with an error message when ping fails", async () => {
+      const { base } = makeFakeRedis();
+      base.ping = jest.fn().mockRejectedValue(new Error("connection refused"));
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await expect(manager.healthCheck()).resolves.toEqual({
+        redis: false,
+        memory: true,
+        error: "connection refused",
+      });
+    });
+
+    it("healthCheck() reports redis:true when ping returns PONG", async () => {
+      const { base } = makeFakeRedis();
+      base.ping = jest.fn().mockResolvedValue("PONG");
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await expect(manager.healthCheck()).resolves.toEqual({
+        redis: true,
+        memory: true,
+      });
+    });
+
+    it("logs (but does not throw) when subscriber setup itself fails", () => {
+      mockGetRedisClient.mockImplementation(() => {
+        throw new Error("no redis available");
+      });
+      expect(() => new CacheManager()).not.toThrow();
+    });
+
+    it("logs (but does not throw) when the subscribe() call rejects", async () => {
+      const { base } = makeFakeRedis();
+      const subscriberClient = {
+        ...base,
+        subscribe: jest.fn().mockRejectedValue(new Error("subscribe failed")),
+      };
+      base.duplicate.mockReturnValue(subscriberClient);
+      mockGetRedisClient.mockReturnValue(base);
+
+      expect(() => new CacheManager()).not.toThrow();
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+  });
+
+  describe("in-memory LRU + TTL behavior", () => {
+    it("evicts the least-recently-used entry once at MAX_MEMORY_SIZE (1000)", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      for (let i = 0; i < 1000; i++) {
+        await manager.set(`k${i}`, i, "default");
+      }
+      // Force every read to come from memory by breaking the Redis fallback.
+      base.get.mockResolvedValue(null);
+
+      await manager.set("k1000", 1000, "default");
+
+      // k0 was least-recently-used (never read since insertion) and
+      // should have been evicted to make room for k1000.
+      expect(await manager.get("k0")).toBeNull();
+      expect(await manager.get("k1000")).toBe(1000);
+    });
+
+    it("promotes a key to most-recently-used on read, saving it from LRU eviction", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+      base.get.mockResolvedValue(null);
+
+      for (let i = 0; i < 1000; i++) {
+        await manager.set(`k${i}`, i, "default");
+      }
+      // Touch k1 so it's no longer the LRU entry (k0 still is).
+      await manager.get("k1");
+      await manager.set("k1000", 1000, "default");
+
+      expect(await manager.get("k1")).toBe(1);
+      expect(await manager.get("k0")).toBeNull();
+    });
+
+    it("expires a memory entry after its TTL and falls through to Redis", async () => {
+      const { base, store } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      const now = Date.now();
+      const nowSpy = jest.spyOn(Date, "now").mockReturnValue(now);
+      await manager.set("k1", { a: 1 }, undefined, 10); // 10s custom TTL
+
+      nowSpy.mockReturnValue(now + 11_000);
+      store.set("k1", JSON.stringify({ a: 2 }));
+
+      expect(await manager.get("k1")).toEqual({ a: 2 });
+      nowSpy.mockRestore();
+    });
+
+    it("resolves TTL by entity type, falling back to the default for an unknown type", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await manager.set("k1", { a: 1 }, "salary");
+      expect(base.set).toHaveBeenCalledWith(
+        "k1",
+        JSON.stringify({ a: 1 }),
+        "EX",
+        14400,
+      );
+
+      await manager.set("k2", { a: 2 }, "totally-unknown-entity");
+      expect(base.set).toHaveBeenCalledWith(
+        "k2",
+        JSON.stringify({ a: 2 }),
+        "EX",
+        3600,
+      );
+    });
+
+    it("prefers an explicit custom TTL over the entity-type default", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await manager.set("k1", { a: 1 }, "salary", 99);
+      expect(base.set).toHaveBeenCalledWith(
+        "k1",
+        JSON.stringify({ a: 1 }),
+        "EX",
+        99,
+      );
+    });
+
+    it("cleanup() purges only expired entries from memory", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      const now = Date.now();
+      const nowSpy = jest.spyOn(Date, "now").mockReturnValue(now);
+      await manager.set("expiring", { a: 1 }, undefined, 10);
+      await manager.set("fresh", { a: 2 }, undefined, 1000);
+
+      nowSpy.mockReturnValue(now + 11_000);
+      manager.cleanup();
+
+      expect(manager.getCacheStats().memoryEntries).toBe(1);
+      base.get.mockResolvedValue(null);
+      expect(await manager.get("fresh")).toEqual({ a: 2 });
+      nowSpy.mockRestore();
+    });
+
+    it("getCacheStats() reports the current memory entry count and max size", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await manager.set("k1", { a: 1 }, "default");
+      await manager.set("k2", { a: 2 }, "default");
+
+      expect(manager.getCacheStats()).toEqual({
+        memoryEntries: 2,
+        maxSize: 1000,
+      });
+    });
+  });
+
+  describe("invalidatePattern", () => {
+    it("pages through SCAN cursors and deletes every matched key", async () => {
+      const { base, store } = makeFakeRedis();
+      store.set("t:t1:employees:1", "x");
+      store.set("t:t1:employees:2", "x");
+      base.scan
+        .mockResolvedValueOnce(["17", ["t:t1:employees:1"]])
+        .mockResolvedValueOnce(["0", ["t:t1:employees:2"]]);
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await manager.invalidatePattern("t:t1:employees:*");
+
+      expect(base.scan).toHaveBeenCalledTimes(2);
+      expect(base.del).toHaveBeenCalledWith("t:t1:employees:1");
+      expect(base.del).toHaveBeenCalledWith("t:t1:employees:2");
+    });
+
+    it("skips the del() call for a SCAN page with no matches", async () => {
+      const { base } = makeFakeRedis();
+      base.scan.mockResolvedValue(["0", []]);
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await manager.invalidatePattern("t:t1:nomatch:*");
+
+      expect(base.del).not.toHaveBeenCalled();
+    });
+
+    it("logs (but does not throw) when SCAN itself fails", async () => {
+      const { base } = makeFakeRedis();
+      base.scan.mockRejectedValue(new Error("redis down"));
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await expect(
+        manager.invalidatePattern("t:t1:*"),
+      ).resolves.toBeUndefined();
+    });
+
+    it("evicts memory entries matching a mid-string glob, not just a trailing :* prefix", async () => {
+      const { base } = makeFakeRedis();
+      base.scan.mockResolvedValue(["0", []]);
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+      base.get.mockResolvedValue(null);
+
+      await manager.set("t:t1:employee:v3:alice", { a: 1 }, "default");
+      await manager.invalidatePattern("t:*:employee:v3:alice");
+
+      expect(await manager.get("t:t1:employee:v3:alice")).toBeNull();
+    });
+  });
 });

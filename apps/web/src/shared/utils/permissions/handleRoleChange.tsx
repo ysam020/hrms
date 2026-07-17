@@ -7,6 +7,10 @@ const handleRoleChange = (
   originalUserPermissions,
 ) => {
   const selectedRoleObj = e.value;
+  // originalUserPermissions may not have loaded yet when this fires — guard
+  // the spreads below so that case falls through to the existing
+  // "hasChanges = true" fallback instead of throwing.
+  const safeOriginalPermissions = originalUserPermissions || [];
 
   setSelectedRole(selectedRoleObj);
 
@@ -16,7 +20,7 @@ const handleRoleChange = (
     // Merge original user permissions with role permissions and remove duplicates
     const rolePermissions = selectedRoleObj.permissions;
     const mergedPermissions = [
-      ...new Set([...originalUserPermissions, ...rolePermissions]),
+      ...new Set([...safeOriginalPermissions, ...rolePermissions]),
     ];
 
     newPermissions = mergedPermissions;
@@ -25,10 +29,10 @@ const handleRoleChange = (
     setIsSuperUser(mergedPermissions.includes("*:*:*"));
   } else {
     // Role deselected - filter back to only original user permissions
-    newPermissions = [...originalUserPermissions];
+    newPermissions = [...safeOriginalPermissions];
     setPermissions(newPermissions);
 
-    setIsSuperUser(originalUserPermissions.includes("*:*:*"));
+    setIsSuperUser(safeOriginalPermissions.includes("*:*:*"));
   }
 
   if (originalUserPermissions) {

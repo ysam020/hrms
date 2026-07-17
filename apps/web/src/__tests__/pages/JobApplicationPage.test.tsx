@@ -52,6 +52,13 @@ const fillRequiredFields = async () => {
   await waitFor(() =>
     expect(screen.getByText("resume.pdf")).toBeInTheDocument(),
   );
+  // The filename label updates synchronously in handleFileChange, but the
+  // "resume" field itself (required by validation) is only populated once
+  // jsdom's FileReader.readAsDataURL finishes asynchronously via its own
+  // onloadend callback. Without waiting a tick here, submitting can race
+  // ahead of that callback and silently fail validation, hanging the test
+  // on a mockPost call that never happens.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
 describe("JobApplicationPage", () => {
