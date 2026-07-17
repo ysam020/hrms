@@ -14,6 +14,7 @@
  */
 
 import { Request, Response } from "express";
+import dayjs from "dayjs";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
@@ -823,13 +824,34 @@ export async function listPayrollRuns(req: Request, res: Response) {
       });
     }
 
-    const { status } = req.query as Record<string, string>;
+    const { status, search } = req.query as Record<string, string>;
     const { page, limit } = parsePagination(req.query);
     const skip = (page - 1) * limit;
     const take = limit;
 
     const where: any = { tenantId: getTenantId() };
     if (status) where.status = status;
+    if (search) {
+      const trimmed = search.trim();
+      // Runs are identified by month/year, not a free-text name — resolve
+      // the search term against that instead of a literal string match.
+      // "2026" -> year only; "March"/"Mar"/"March 2026"/"Mar 2026" -> month
+      // (+ year if included); anything else falls back to the notes field.
+      const yearOnly = /^\d{4}$/.exec(trimmed);
+      const parsedMonth = dayjs(
+        trimmed,
+        ["MMMM YYYY", "MMM YYYY", "MMMM", "MMM"],
+        true,
+      );
+      if (yearOnly) {
+        where.year = parseInt(trimmed, 10);
+      } else if (parsedMonth.isValid()) {
+        where.month = parsedMonth.month() + 1;
+        if (/\d{4}/.test(trimmed)) where.year = parsedMonth.year();
+      } else {
+        where.notes = { contains: search, mode: "insensitive" };
+      }
+    }
 
     const [runs, total] = await Promise.all([
       prisma.payrollRun.findMany({
@@ -1401,13 +1423,29 @@ export async function listSalaryAdvances(req: Request, res: Response) {
       user!.userId,
       user!.tenantRole,
     );
-    const { status } = req.query as Record<string, string>;
+    const { status, search } = req.query as Record<string, string>;
     const { page, limit } = parsePagination(req.query);
     const skip = (page - 1) * limit;
     const take = limit;
 
     const where: any = {};
-    if (!isPrivileged) where.userId = user!.userId;
+    if (!isPrivileged) {
+      // Only ever their own advances — a name search wouldn't reveal
+      // anyone else's regardless, so it's not applied here.
+      where.userId = user!.userId;
+    } else if (search) {
+      const matchingUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { first_name: { contains: search, mode: "insensitive" } },
+            { last_name: { contains: search, mode: "insensitive" } },
+            { username: { contains: search, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      });
+      where.userId = { in: matchingUsers.map((u) => u.id) };
+    }
     if (status) where.status = status;
 
     const [advances, total] = await Promise.all([

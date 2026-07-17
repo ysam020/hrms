@@ -1,44 +1,24 @@
-import { lazy, memo, useCallback, useContext, useState } from "react";
-import TabsPanel from "@web/shared/components/TabsPanel";
-import { UserContext } from "@web/app/providers/UserContext";
-import hasPermission from "@web/shared/utils/permissions/hasPermission";
-const AddHrActivity = lazy(() => import("./AddHrActivity"));
-const ViewHrActivities = lazy(() => import("./ViewHrActivities"));
+import { memo } from "react";
+import Box from "@mui/material/Box";
+import ViewHrActivities from "./ViewHrActivities";
 
+/**
+ * HR Activities page — renders the activities list directly.
+ *
+ * NOTE: We intentionally do NOT use TabsPanel here (mirrors Helpdesk.tsx).
+ * Since "Add New Activity" was folded into an in-page modal, there is only
+ * one tab left, so wrapping it in TabsPanel would show a single, pointless
+ * tab. The p:3 below matches the padding TabsPanel's CustomTabPanel would
+ * have applied, so this page isn't flush against the viewport edge;
+ * height:100% matches CustomTabPanel's own sizing too, so
+ * ViewHrActivities' DataList can fill it and scroll its rows internally
+ * instead of the whole page scrolling.
+ */
 function HrActivities() {
-  const { user } = useContext(UserContext);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const onSaved = useCallback(() => setRefreshKey((k) => k + 1), []);
-
-  const canCreate = hasPermission(
-    "HRActivities",
-    "create",
-    "-",
-    user?.isSuperUser,
-    user?.permissions || [],
-  );
-
-  const tabData = [
-    ...(canCreate
-      ? [
-          {
-            label: "Add New Activity",
-            component: <AddHrActivity onSaved={onSaved} />,
-          },
-        ]
-      : []),
-    {
-      label: "View Activities",
-      component: <ViewHrActivities refreshKey={refreshKey} />,
-    },
-  ];
-
   return (
-    <TabsPanel
-      tabData={tabData}
-      tabKey="hr_activities_tab_value"
-      basePath="/hr-activities"
-    />
+    <Box sx={{ p: 3, height: "100%", boxSizing: "border-box" }}>
+      <ViewHrActivities />
+    </Box>
   );
 }
 

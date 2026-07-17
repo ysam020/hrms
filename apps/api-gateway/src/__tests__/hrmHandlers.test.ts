@@ -62,6 +62,9 @@ jest.mock("@hrms/db", () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    user: {
+      findFirst: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -114,6 +117,7 @@ const mockPolicyFindFirst = (prisma as any).policy.findFirst as jest.Mock;
 const mockPolicyFindUnique = (prisma as any).policy.findUnique as jest.Mock;
 const mockPolicyCreate = (prisma as any).policy.create as jest.Mock;
 const mockPolicyUpdate = (prisma as any).policy.update as jest.Mock;
+const mockUserFindFirst = (prisma as any).user.findFirst as jest.Mock;
 
 const makeRes = () =>
   ({
@@ -492,28 +496,46 @@ describe("hrmHandlers", () => {
   });
 
   describe("isSuperuser", () => {
-    it("calls grpcCall checkPermission with username as userId", async () => {
-      mockGrpcCall.mockResolvedValue({ allowed: true });
+    it("looks up the user by username and returns their isSuperUser field", async () => {
+      mockUserFindFirst.mockResolvedValue({ isSuperUser: true });
       const res = makeRes();
       await isSuperuser(makeReq({ params: { username: "alice" } }), res);
-      expect(mockGrpcCall).toHaveBeenCalledWith(
-        expect.anything(),
-        "checkPermission",
+      expect(mockUserFindFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          userId: "alice",
-          resource: "superuser",
-          action: "access",
+          where: { username: "alice" },
         }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        { isSuperUser: true },
+      );
+    });
+
+    it("returns false (not undefined) for a non-superuser", async () => {
+      mockUserFindFirst.mockResolvedValue({ isSuperUser: false });
+      const res = makeRes();
+      await isSuperuser(makeReq({ params: { username: "bob" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        { isSuperUser: false },
+      );
+    });
+
+    it("returns NOT_FOUND when the user does not exist", async () => {
+      mockUserFindFirst.mockResolvedValue(null);
+      const res = makeRes();
+      await isSuperuser(makeReq({ params: { username: "ghost" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
         expect.any(Object),
       );
     });
 
     it("returns INTERNAL on error", async () => {
-      mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
+      mockUserFindFirst.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
       await isSuperuser(makeReq({ params: { username: "alice" } }), res);
       expect(mockApiResponse).toHaveBeenCalledWith(

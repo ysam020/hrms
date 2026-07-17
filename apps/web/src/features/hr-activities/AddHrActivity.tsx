@@ -7,7 +7,6 @@ import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid2";
 import Assignment from "@mui/icons-material/Assignment";
 import Schedule from "@mui/icons-material/Schedule";
-import Add from "@mui/icons-material/Add";
 import { useFormik } from "formik";
 import Button from "@web/shared/components/Button";
 import { validationSchema } from "./schemas";
@@ -53,14 +52,6 @@ function AddHrActivity({ onSaved }) {
   return (
     <Card sx={{ maxWidth: 600, mx: "auto", boxShadow: 2 }}>
       <CardContent sx={{ p: 2 }}>
-        {/* Header */}
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <Add color="primary" />
-          <Typography variant="h6" fontWeight="600">
-            Add HR Activity
-          </Typography>
-        </Box>
-
         <form onSubmit={formik.handleSubmit}>
           <Grid container spacing={1}>
             {/* Activity Details */}

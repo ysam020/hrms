@@ -84,13 +84,23 @@ export async function getLeaveApplications(req: Request, res: Response) {
       ] as string[];
       const users = await prisma.user.findMany({
         where: { id: { in: userIds } },
-        select: { id: true, username: true },
+        select: {
+          id: true,
+          username: true,
+          first_name: true,
+          last_name: true,
+        },
       });
-      const userMap = new Map(users.map((u) => [u.id, u.username]));
-      response.data = records.map((l: any) => ({
-        ...l,
-        username: userMap.get(l.userId) ?? l.userId,
-      }));
+      const userMap = new Map(users.map((u) => [u.id, u]));
+      response.data = records.map((l: any) => {
+        const userInfo = userMap.get(l.userId);
+        return {
+          ...l,
+          username: userInfo?.username ?? l.userId,
+          firstName: userInfo?.first_name,
+          lastName: userInfo?.last_name,
+        };
+      });
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);

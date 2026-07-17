@@ -11,7 +11,7 @@ const QUICK_ACTIONS = [
   {
     icon: <BeachAccessIcon sx={{ fontSize: 18 }} />,
     label: "Apply Leave",
-    path: "/attendance/leave-application",
+    path: "/attendance/view-leave-applications?action=apply",
   },
   {
     icon: <PaymentsIcon sx={{ fontSize: 18 }} />,

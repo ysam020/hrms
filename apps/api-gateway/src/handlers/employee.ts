@@ -136,8 +136,17 @@ export async function getEmployeeDetails(req: Request, res: Response) {
       });
     }
 
+    // tenantRole isn't a User field — it's per-tenant, on TenantMembership
+    // (see the note on isPrivileged/canManageReviews elsewhere: User.role is
+    // a legacy, never-populated column and must not be used for this).
+    const membership = await prisma.tenantMembership.findFirst({
+      where: { tenantId: getTenantId()!, userId: user.id },
+      select: { role: true },
+    });
+
     const data = {
       ...user,
+      tenantRole: membership?.role ?? null,
       pf_no: safeDecrypt(user.pf_no),
       uan_no: safeDecrypt(user.uan_no),
       esic_no: safeDecrypt(user.esic_no),

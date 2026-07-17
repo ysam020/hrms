@@ -15,6 +15,7 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
@@ -26,7 +27,6 @@ const STATUS_OPTIONS = [
   { label: "All", value: "All" },
   { label: "Pending", value: "Pending" },
   { label: "Approved", value: "Approved" },
-  { label: "Rejected", value: "Rejected" },
   { label: "Revision Requested", value: "Revision Requested" },
   { label: "Edit Requested", value: "Edit Requested" },
 ];
@@ -182,7 +182,10 @@ function ViewKycList() {
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
             <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {row.first_name} {row.middle_name || ""} {row.last_name}
+              {formatEmployeeLabel(
+                `${row.first_name ?? ""} ${row.middle_name ?? ""} ${row.last_name ?? ""}`,
+                row.username,
+              )}
             </Typography>
           </Box>
         ),

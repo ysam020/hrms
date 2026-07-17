@@ -23,6 +23,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 // Once a KYC has been decided (Approved) or is mid-review (Edit Requested,
 // awaiting HR's grant), it's not directly editable — the employee must go
@@ -260,6 +261,8 @@ function ViewIndividualKyc() {
   const [editAccessDialogOpen, setEditAccessDialogOpen] = useState(false);
   const [requestingEditAccess, setRequestingEditAccess] = useState(false);
   const [allowingEdit, setAllowingEdit] = useState(false);
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [approving, setApproving] = useState(false);
 
   // Fetch user data using custom hook
   const { data, loading, refetch } = useFetchData(
@@ -289,6 +292,7 @@ function ViewIndividualKyc() {
   useSocketEvent("kyc-edit-resolved", handleKycEditSocketEvent);
 
   const handleKycApproval = async () => {
+    setApproving(true);
     try {
       const res = await apiClient.post(API_ENDPOINTS.KYC_APPROVAL, {
         username,
@@ -299,6 +303,7 @@ function ViewIndividualKyc() {
         message: res.data.message,
         severity: "success",
       });
+      setApproveDialogOpen(false);
       refetch?.();
     } catch (error) {
       setAlert({
@@ -309,6 +314,8 @@ function ViewIndividualKyc() {
             : error.response.data.message,
         severity: "error",
       });
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -476,7 +483,9 @@ function ViewIndividualKyc() {
                   {!isSelfView && (
                     <>
                       {canApproveKyc && !isUneditable && (
-                        <Button onClick={handleKycApproval}>Approve</Button>
+                        <Button onClick={() => setApproveDialogOpen(true)}>
+                          Approve
+                        </Button>
                       )}
                       {canRequestRevision && !isUneditable && (
                         <Button
@@ -524,6 +533,17 @@ function ViewIndividualKyc() {
         onClose={() => setEditAccessDialogOpen(false)}
         onSubmit={handleRequestEditAccess}
         submitting={requestingEditAccess}
+      />
+      <ConfirmationDialog
+        open={approveDialogOpen}
+        onClose={() => (!approving ? setApproveDialogOpen(false) : undefined)}
+        onConfirm={handleKycApproval}
+        title="Approve KYC"
+        message={`Are you sure you want to approve ${data?.username ?? "this employee"}'s KYC?`}
+        confirmText="Approve"
+        cancelText="Cancel"
+        loading={approving}
+        variant="default"
       />
     </>
   );

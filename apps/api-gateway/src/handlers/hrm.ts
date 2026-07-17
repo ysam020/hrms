@@ -689,12 +689,22 @@ export async function deletePolicy(req: Request, res: Response) {
 
 export async function isSuperuser(req: Request, res: Response) {
   try {
-    const response = await grpcCall(hrmClient, "checkPermission", {
-      userId: req.params.username,
-      resource: "superuser",
-      action: "access",
+    // Direct field lookup, not a resource:action permission check — mirrors
+    // update-superuser's username-based lookup (permissions.ts) rather than
+    // routing through checkPermission, which expects a real user id (not a
+    // username) and returns { allowed, reason }, not { isSuperUser }.
+    const user = await prisma.user.findFirst({
+      where: { username: String(req.params.username) },
+      select: { isSuperUser: true },
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    if (!user) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "User not found",
+      });
+    }
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      isSuperUser: !!user.isSuperUser,
+    });
   } catch (error: unknown) {
     return handleError(res, error);
   }

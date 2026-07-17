@@ -22,7 +22,6 @@ import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
@@ -281,27 +280,19 @@ function AssetIssues() {
 
   const rowActions = useCallback(
     (row: any) => {
-      const viewAction = {
-        icon: <VisibilityIcon sx={{ fontSize: 16 }} />,
-        label: "View Details",
-        onClick: () => setViewIssue(row),
-      };
-      if (!isHr) return [viewAction];
+      if (!isHr) return [];
       const next = NEXT_ACTIONS[row.status] ?? [];
-      return [
-        viewAction,
-        ...next.map((a) => ({
-          icon: a.icon,
-          label: a.label,
-          onClick: () =>
-            setActionDialog({
-              issueId: row.id,
-              targetStatus: a.status,
-              label: a.label,
-              currentType: row.type,
-            }),
-        })),
-      ];
+      return next.map((a) => ({
+        icon: a.icon,
+        label: a.label,
+        onClick: () =>
+          setActionDialog({
+            issueId: row.id,
+            targetStatus: a.status,
+            label: a.label,
+            currentType: row.type,
+          }),
+      }));
     },
     [isHr],
   );
@@ -314,6 +305,7 @@ function AssetIssues() {
         data={data || []}
         columns={columns}
         actions={rowActions}
+        onRowClick={(row: any) => setViewIssue(row)}
         loading={loading}
         emptyMessage="No asset issues found"
         search={{

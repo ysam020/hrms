@@ -1,4 +1,4 @@
-import { memo, useCallback, useContext, useMemo } from "react";
+import { memo, useCallback, useContext, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
@@ -11,9 +11,14 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 function SavedReports() {
   const { setAlert } = useContext(AlertContext);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    id: string;
+  } | null>(null);
 
   const fetchReports = useCallback(
     async ({ page, limit }) => {
@@ -97,7 +102,7 @@ function SavedReports() {
 
   const handleDelete = useCallback(
     async (reportId: string) => {
-      if (!confirm("Delete this saved report?")) return;
+      setDeletingId(reportId);
       try {
         await apiClient.delete(API_ENDPOINTS.DELETE_SAVED_REPORT(reportId));
         refresh();
@@ -108,6 +113,9 @@ function SavedReports() {
         });
       } catch {
         setAlert({ open: true, message: "Delete failed", severity: "error" });
+      } finally {
+        setDeletingId(null);
+        setConfirmTarget(null);
       }
     },
     [refresh, setAlert],
@@ -173,10 +181,10 @@ function SavedReports() {
         icon: <DeleteIcon sx={{ fontSize: 16 }} />,
         label: "Delete report",
         color: "error" as const,
-        onClick: () => handleDelete(row.id),
+        onClick: () => setConfirmTarget({ id: row.id }),
       },
     ],
-    [handleRun, handleDownload, handleDelete],
+    [handleRun, handleDownload],
   );
 
   const memoizedData = useMemo(() => data || [], [data]);
@@ -199,6 +207,21 @@ function SavedReports() {
           onPageSizeChange: handlePageSizeChange,
           pageSizeOptions: [5, 10, 25, 50],
         }}
+      />
+
+      <ConfirmationDialog
+        open={!!confirmTarget}
+        onClose={() => {
+          if (!deletingId) setConfirmTarget(null);
+        }}
+        onConfirm={() => {
+          if (confirmTarget) handleDelete(confirmTarget.id);
+        }}
+        title="Delete Saved Report"
+        message="Delete this saved report?"
+        confirmText="Delete"
+        loading={!!deletingId}
+        variant="danger"
       />
     </ErrorBoundary>
   );

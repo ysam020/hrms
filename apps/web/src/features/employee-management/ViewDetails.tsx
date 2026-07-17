@@ -9,6 +9,7 @@ import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import Grid from "@mui/material/Grid2";
 import CircularProgress from "@mui/material/CircularProgress";
+import Alert from "@mui/material/Alert";
 import { useState, useContext, lazy, Suspense } from "react";
 import { useFormik } from "formik";
 import Edit from "@mui/icons-material/Edit";
@@ -21,7 +22,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
-import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
+import {
+  isOwnerOrAdmin,
+  canManagePermissions,
+} from "@web/shared/utils/permissions/navAccess";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
 import { validationSchema } from "./schemas";
 import Button from "@web/shared/components/Button";
@@ -47,6 +51,7 @@ function ViewDetails() {
       user?.isSuperUser,
       user?.permissions || [],
     );
+  const canGrantSuperuser = canManagePermissions(user);
 
   // Fetch employee data using custom hook
   const { data, loading, error, refetch } = useFetchData(
@@ -556,11 +561,63 @@ function ViewDetails() {
                   </Grid>
                 ) : (
                   <Grid container spacing={1.5}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <Typography variant="body2">
-                        <strong>Is Super User:</strong>{" "}
-                        {data?.isSuperUser ? "Yes" : "No"}
+                    <Grid size={12}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ mb: 0.5, display: "block" }}
+                      >
+                        Status
                       </Typography>
+                      <Box display="flex" flexWrap="wrap" gap={0.75} mb={1}>
+                        {data?.tenantRole === "owner" && (
+                          <Chip label="Owner" size="small" color="primary" />
+                        )}
+                        {data?.tenantRole === "admin" && (
+                          <Chip label="Admin" size="small" color="secondary" />
+                        )}
+                        {data?.isSuperUser && (
+                          <Chip
+                            label="Superuser"
+                            size="small"
+                            color="warning"
+                          />
+                        )}
+                        {!data?.isSuperUser &&
+                          data?.tenantRole !== "owner" &&
+                          data?.tenantRole !== "admin" && (
+                            <Chip
+                              label="Employee"
+                              size="small"
+                              variant="outlined"
+                            />
+                          )}
+                      </Box>
+                      {canGrantSuperuser && !data?.isSuperUser && (
+                        <Alert
+                          severity="info"
+                          variant="outlined"
+                          sx={{ mb: 1 }}
+                          action={
+                            <Button
+                              variant="ghost"
+                              size="small"
+                              onClick={() =>
+                                navigate("/permissions/user-permissions")
+                              }
+                              style={{ marginTop: 0 }}
+                            >
+                              Go to User Permissions
+                            </Button>
+                          }
+                        >
+                          To make this employee a superuser, go to{" "}
+                          <strong>
+                            Settings → Permissions → User Permissions
+                          </strong>
+                          , select them, and check "Is Superuser".
+                        </Alert>
+                      )}
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <Typography variant="body2">

@@ -7,7 +7,6 @@ import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid2";
 import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
-import Add from "@mui/icons-material/Add";
 import Description from "@mui/icons-material/Description";
 import { Editor } from "primereact/editor";
 import Button from "@web/shared/components/Button";
@@ -74,13 +73,6 @@ function CreatePolicy({ onSaved }) {
   return (
     <Card sx={{ maxWidth: 860, mx: "auto", boxShadow: 2 }}>
       <CardContent sx={{ p: 2 }}>
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <Add color="primary" />
-          <Typography variant="h6" fontWeight="600">
-            Create Policy
-          </Typography>
-        </Box>
-
         <form onSubmit={handleSubmit}>
           <Grid container spacing={2}>
             {/* Policy Type */}

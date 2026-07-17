@@ -7,6 +7,7 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Typography from "@mui/material/Typography";
 import Button from "@web/shared/components/Button";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import SaveIcon from "@mui/icons-material/Save";
@@ -61,6 +62,8 @@ export default function OrgSettings() {
   const [draft, setDraft] = useState<SettingsSnapshot>(SCHEMA_DEFAULTS);
   const [dirty, setDirty] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [pendingCancelTarget, setPendingCancelTarget] =
+    useState<SettingsSnapshot | null>(null);
 
   const canEdit =
     isOwnerOrAdmin(user) ||
@@ -259,7 +262,7 @@ export default function OrgSettings() {
                     icon={<CancelIcon fontSize="small" />}
                     loading={cancelling === p.id}
                     disabled={cancelling === p.id}
-                    onClick={() => handleCancelPending(p.id!)}
+                    onClick={() => setPendingCancelTarget(p)}
                   >
                     Cancel
                   </Button>
@@ -352,6 +355,34 @@ export default function OrgSettings() {
         saving={saving}
         onCancel={() => setDialogOpen(false)}
         onConfirm={handleSaveConfirm}
+      />
+
+      <ConfirmationDialog
+        open={pendingCancelTarget !== null}
+        onClose={() => {
+          if (cancelling === pendingCancelTarget?.id) return;
+          setPendingCancelTarget(null);
+        }}
+        onConfirm={async () => {
+          if (!pendingCancelTarget?.id) return;
+          await handleCancelPending(pendingCancelTarget.id);
+          setPendingCancelTarget(null);
+        }}
+        title="Cancel pending change"
+        message={
+          <>
+            Cancel the pending change scheduled for{" "}
+            <strong>
+              {pendingCancelTarget &&
+                formatDate(pendingCancelTarget.effectiveFrom)}
+            </strong>
+            {pendingCancelTarget?.note ? ` — ${pendingCancelTarget.note}` : ""}?
+          </>
+        }
+        confirmText="Cancel change"
+        cancelText="Keep it"
+        loading={cancelling === pendingCancelTarget?.id}
+        variant="danger"
       />
     </Container>
   );

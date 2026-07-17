@@ -118,7 +118,7 @@ export function DashboardProvider({
             API_ENDPOINTS.GET_LEAVE_APPLICATIONS("status=Pending&limit=20"),
             { signal },
           ),
-          apiClient.get(API_ENDPOINTS.VIEW_JOB_OPENINGS, { signal }),
+          apiClient.get(API_ENDPOINTS.VIEW_JOB_OPENINGS(1, 50), { signal }),
           apiClient.get(API_ENDPOINTS.EMPLOYEE_INSIGHTS, { signal }),
           apiClient.get(API_ENDPOINTS.GET_KYC_INSIGHTS, { signal }),
           apiClient.get(

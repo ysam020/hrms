@@ -13,6 +13,7 @@ import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Person from "@mui/icons-material/Person";
@@ -96,7 +97,10 @@ function EmployeeList() {
               sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
             />
             <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
-              {row.first_name} {row.middle_name || ""} {row.last_name}
+              {formatEmployeeLabel(
+                `${row.first_name ?? ""} ${row.middle_name ?? ""} ${row.last_name ?? ""}`,
+                row.username,
+              )}
             </Typography>
           </Box>
         ),

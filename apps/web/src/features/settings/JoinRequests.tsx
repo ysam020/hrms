@@ -9,6 +9,7 @@ import ListItemText from "@mui/material/ListItemText";
 import CircularProgress from "@mui/material/CircularProgress";
 import PeopleIcon from "@mui/icons-material/People";
 import Button from "@web/shared/components/Button";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -27,6 +28,11 @@ export default function JoinRequests() {
   const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [pendingDecision, setPendingDecision] = useState<{
+    id: string;
+    decision: "approve" | "reject";
+    name?: string;
+  } | null>(null);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -118,7 +124,13 @@ export default function JoinRequests() {
                     size="small"
                     disabled={actingId === r.id}
                     loading={actingId === r.id}
-                    onClick={() => handleDecision(r.id, "reject")}
+                    onClick={() =>
+                      setPendingDecision({
+                        id: r.id,
+                        decision: "reject",
+                        name: r.name || r.email,
+                      })
+                    }
                     style={{ textTransform: "none" }}
                   >
                     Reject
@@ -128,7 +140,13 @@ export default function JoinRequests() {
                     size="small"
                     disabled={actingId === r.id}
                     loading={actingId === r.id}
-                    onClick={() => handleDecision(r.id, "approve")}
+                    onClick={() =>
+                      setPendingDecision({
+                        id: r.id,
+                        decision: "approve",
+                        name: r.name || r.email,
+                      })
+                    }
                     style={{ textTransform: "none" }}
                   >
                     Approve
@@ -139,6 +157,41 @@ export default function JoinRequests() {
           </List>
         )}
       </Paper>
+
+      <ConfirmationDialog
+        open={pendingDecision !== null}
+        onClose={() => {
+          if (actingId === pendingDecision?.id) return;
+          setPendingDecision(null);
+        }}
+        onConfirm={async () => {
+          if (!pendingDecision) return;
+          await handleDecision(pendingDecision.id, pendingDecision.decision);
+          setPendingDecision(null);
+        }}
+        title={
+          pendingDecision?.decision === "approve"
+            ? "Approve join request"
+            : "Reject join request"
+        }
+        message={
+          pendingDecision?.decision === "approve" ? (
+            <>
+              Approve <strong>{pendingDecision?.name}</strong>'s request to
+              join? This will add them as an employee in your organisation.
+            </>
+          ) : (
+            <>
+              Reject <strong>{pendingDecision?.name}</strong>'s request to join?
+            </>
+          )
+        }
+        confirmText={
+          pendingDecision?.decision === "approve" ? "Approve" : "Reject"
+        }
+        loading={actingId === pendingDecision?.id}
+        variant={pendingDecision?.decision === "approve" ? "default" : "danger"}
+      />
     </Container>
   );
 }

@@ -2,12 +2,13 @@ import {
   memo,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
 import DataList from "@web/shared/components/DataList";
+import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
@@ -17,6 +18,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import EditJobOpeningModal from "./EditJobOpeningModal";
+import NewJobOpening from "./NewJobOpening";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import Skeleton from "@mui/material/Skeleton";
 import IconButton from "@mui/material/IconButton";
@@ -28,7 +30,11 @@ import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 import Divider from "@mui/material/Divider";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
 import FilterList from "@mui/icons-material/FilterList";
+import AddIcon from "@mui/icons-material/Add";
 import InfoIcon from "@mui/icons-material/Info";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -38,10 +44,10 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import dayjs from "dayjs";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
-function ViewJobOpenings({ refreshKey = 0 }) {
-  const [data, setData] = useState<any[]>([]);
+function ViewJobOpenings() {
   const navigate = useNavigate();
   const [openModal, setOpenModal] = useState(false);
+  const [openAdd, setOpenAdd] = useState(false);
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
@@ -49,6 +55,13 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   // granular permission bit — mirrors requirePrivileged on the backend
   // routes these actions call.
   const isPrivilegedRole = isOwnerOrAdmin(user);
+  const canCreate = hasPermission(
+    "JobOpenings",
+    "create_job_opening",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const canEdit =
     isPrivilegedRole ||
     hasPermission(
@@ -69,7 +82,9 @@ function ViewJobOpenings({ refreshKey = 0 }) {
     );
   const [jobData, setJobData] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("Active");
-  const [loading, setLoading] = useState(false);
+  const [globalFilter, setGlobalFilter] = useState("");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
@@ -121,32 +136,63 @@ function ViewJobOpenings({ refreshKey = 0 }) {
     return dayjs(timestamp).format("MMM DD, YYYY • hh:mm A");
   };
 
-  const getData = useCallback(async () => {
-    setLoading(true);
-    setData([]);
-    try {
-      let url = API_ENDPOINTS.VIEW_JOB_OPENINGS;
-      if (statusFilter && statusFilter !== "All") {
-        url += `?status=${encodeURIComponent(statusFilter)}`;
+  const fetchJobOpenings = useCallback(
+    async ({ page, limit }) => {
+      try {
+        const search = searchRef.current;
+        let params = "";
+        if (statusFilter && statusFilter !== "All") {
+          params += `&status=${encodeURIComponent(statusFilter)}`;
+        }
+        if (search) {
+          params += `&search=${encodeURIComponent(search)}`;
+        }
+        const res = await apiClient(
+          API_ENDPOINTS.VIEW_JOB_OPENINGS(page, limit, params),
+        );
+        return {
+          data: res.data.data ?? [],
+          totalCount: res.data.total ?? 0,
+        };
+      } catch (error) {
+        if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
+          throw error;
+        setAlert({
+          open: true,
+          message:
+            error.response?.data?.message || "Failed to load job openings",
+          severity: "error",
+        });
+        throw error;
       }
-      const res = await apiClient(url);
-      setData(res.data.data);
-    } catch (error) {
-      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError")
-        return;
-      setAlert({
-        open: true,
-        message: error.response?.data?.message || "Failed to load job openings",
-        severity: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, setAlert]);
+    },
+    [statusFilter, setAlert],
+  );
 
-  useEffect(() => {
-    getData();
-  }, [getData, statusFilter, refreshKey]);
+  const {
+    data,
+    loading,
+    totalCount,
+    pagination,
+    handlePaginationChange,
+    handlePageSizeChange,
+    refresh,
+    resetPagination,
+    setData,
+  } = useServerPagination(fetchJobOpenings, {
+    initialPageSize: 10,
+    deps: [statusFilter],
+  });
+
+  const handleGlobalFilterChange = useCallback(
+    (value: string) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => resetPagination(), 400);
+    },
+    [resetPagination],
+  );
 
   const memoizedData = useMemo(() => data, [data]);
 
@@ -162,7 +208,7 @@ function ViewJobOpenings({ refreshKey = 0 }) {
         API_ENDPOINTS.DELETE_JOB_OPENING(deleteDialog.id!),
       );
       setDeleteDialog({ open: false, id: null });
-      getData();
+      refresh();
       setAlert({
         open: true,
         message: "Job opening deleted successfully",
@@ -195,8 +241,8 @@ function ViewJobOpenings({ refreshKey = 0 }) {
   }, []);
 
   const revertOptimisticUpdate = useCallback(() => {
-    getData();
-  }, [getData]);
+    refresh();
+  }, [refresh]);
 
   const getStatusChip = (status) => {
     const deletedStyle = {
@@ -376,20 +422,16 @@ function ViewJobOpenings({ refreshKey = 0 }) {
           loading={loading}
           emptyMessage="No job openings found"
           onRowClick={(row: any) => navigate(`/view-job-opening/${row.id}`)}
+          search={{
+            value: globalFilter,
+            onChange: handleGlobalFilterChange,
+            placeholder: "Search job openings…",
+          }}
           toolbarActions={
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <FilterList
-                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-                />
-                <Typography
-                  variant="body2"
-                  fontSize="0.8rem"
-                  color="text.secondary"
-                >
-                  Filter by status:
-                </Typography>
-              </Box>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
               <Box sx={{ minWidth: 120 }}>
                 <Dropdown
                   value={statusFilter}
@@ -408,15 +450,36 @@ function ViewJobOpenings({ refreshKey = 0 }) {
                   }
                 />
               </Box>
+              {canCreate && (
+                <Tooltip title="New Job Opening">
+                  <IconButton
+                    onClick={() => setOpenAdd(true)}
+                    color="primary"
+                    size="small"
+                    aria-label="New job opening"
+                  >
+                    <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           }
+          pagination={{
+            page: pagination.pageIndex,
+            pageSize: pagination.pageSize,
+            totalCount,
+            onPageChange: (page) =>
+              handlePaginationChange({ ...pagination, pageIndex: page }),
+            onPageSizeChange: handlePageSizeChange,
+            pageSizeOptions: [10, 25, 50, 100],
+          }}
         />
 
         <EditJobOpeningModal
           open={openModal}
           handleClose={handleCloseModal}
           jobData={jobData}
-          getData={getData}
+          getData={refresh}
           updateJobOptimistically={updateJobOptimistically}
           revertOptimisticUpdate={revertOptimisticUpdate}
         />
@@ -599,6 +662,24 @@ function ViewJobOpenings({ refreshKey = 0 }) {
             </Box>
           </Paper>
         </Popover>
+
+        <Dialog
+          open={openAdd}
+          onClose={() => setOpenAdd(false)}
+          disablePortal
+          fullWidth
+          maxWidth="md"
+        >
+          <DialogTitle>New Job Opening</DialogTitle>
+          <DialogContent>
+            <NewJobOpening
+              onSaved={() => {
+                setOpenAdd(false);
+                refresh();
+              }}
+            />
+          </DialogContent>
+        </Dialog>
       </ErrorBoundary>
     </div>
   );

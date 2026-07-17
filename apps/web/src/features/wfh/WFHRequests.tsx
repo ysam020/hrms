@@ -13,6 +13,7 @@ import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import { ErrorBoundary } from "react-error-boundary";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -32,9 +33,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import RemoveCircleIcon from "@mui/icons-material/RemoveCircle";
 import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
+import Person from "@mui/icons-material/Person";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
+import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   Pending: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
@@ -90,6 +93,12 @@ function WFHRequests() {
   const [statusFilter, setStatusFilter] = useState("All");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    id: string;
+    action: "approve" | "reject" | "cancel";
+    label?: string;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const isApprover =
     isHrOrAbove(user) ||
@@ -221,10 +230,21 @@ function WFHRequests() {
         label: "Employee",
         primary: true,
         hideLabel: true,
-        render: (row: any) =>
-          row.employee
-            ? `${row.employee.first_name} ${row.employee.last_name}`
-            : "—",
+        render: (row: any) => (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Person
+              sx={{ fontSize: 14, color: "text.secondary", opacity: 0.6 }}
+            />
+            <Typography variant="body2" fontSize="0.8rem" fontWeight={500}>
+              {row.employee
+                ? formatEmployeeLabel(
+                    `${row.employee.first_name ?? ""} ${row.employee.last_name ?? ""}`,
+                    row.employee.username,
+                  )
+                : "—"}
+            </Typography>
+          </Box>
+        ),
       },
       {
         key: "date",
@@ -260,19 +280,24 @@ function WFHRequests() {
       // Superusers may approve/reject their own request — everyone else
       // must not be the requester (backend enforces this too, via the
       // approval-engine's allowOverride flag on superuser actions).
+      const label = row.employee
+        ? `${row.employee.first_name} ${row.employee.last_name}`
+        : undefined;
       if (isApprover && (!isOwn || user?.isSuperUser)) {
         actions.push(
           {
             icon: <CheckIcon sx={{ fontSize: 16 }} />,
             label: "Approve",
             color: "success" as const,
-            onClick: () => handleAction(row.id, "approve"),
+            onClick: () =>
+              setConfirmTarget({ id: row.id, action: "approve", label }),
           },
           {
             icon: <CloseIcon sx={{ fontSize: 16 }} />,
             label: "Reject",
             color: "error" as const,
-            onClick: () => handleAction(row.id, "reject"),
+            onClick: () =>
+              setConfirmTarget({ id: row.id, action: "reject", label }),
           },
         );
       }
@@ -280,13 +305,30 @@ function WFHRequests() {
         actions.push({
           icon: <RemoveCircleIcon sx={{ fontSize: 16 }} />,
           label: "Cancel",
-          onClick: () => handleAction(row.id, "cancel"),
+          onClick: () =>
+            setConfirmTarget({ id: row.id, action: "cancel", label }),
         });
       }
       return actions;
     },
-    [isApprover, user?.id, handleAction],
+    [isApprover, user?.id],
   );
+
+  const handleConfirmAction = useCallback(async () => {
+    if (!confirmTarget) return;
+    setConfirmLoading(true);
+    try {
+      await handleAction(confirmTarget.id, confirmTarget.action);
+      setConfirmTarget(null);
+    } finally {
+      setConfirmLoading(false);
+    }
+  }, [confirmTarget, handleAction]);
+
+  const handleCancelConfirm = useCallback(() => {
+    if (confirmLoading) return;
+    setConfirmTarget(null);
+  }, [confirmLoading]);
 
   const memoizedData = useMemo(() => data || [], [data]);
 
@@ -417,6 +459,35 @@ function WFHRequests() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmationDialog
+        open={!!confirmTarget}
+        onClose={handleCancelConfirm}
+        onConfirm={handleConfirmAction}
+        title={
+          confirmTarget?.action === "approve"
+            ? "Approve WFH Request"
+            : confirmTarget?.action === "reject"
+              ? "Reject WFH Request"
+              : "Cancel WFH Request"
+        }
+        message={
+          confirmTarget?.action === "approve"
+            ? `Are you sure you want to approve the WFH request${confirmTarget?.label ? ` for ${confirmTarget.label}` : ""}?`
+            : confirmTarget?.action === "reject"
+              ? `Are you sure you want to reject the WFH request${confirmTarget?.label ? ` for ${confirmTarget.label}` : ""}?`
+              : `Are you sure you want to cancel this WFH request${confirmTarget?.label ? ` for ${confirmTarget.label}` : ""}?`
+        }
+        confirmText={
+          confirmTarget?.action === "approve"
+            ? "Approve"
+            : confirmTarget?.action === "reject"
+              ? "Reject"
+              : "Cancel Request"
+        }
+        loading={confirmLoading}
+        variant={confirmTarget?.action === "approve" ? "default" : "danger"}
+      />
     </ErrorBoundary>
   );
 }

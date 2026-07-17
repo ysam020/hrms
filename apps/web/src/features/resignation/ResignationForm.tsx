@@ -5,7 +5,6 @@ import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid2";
-import ExitToApp from "@mui/icons-material/ExitToApp";
 import Comment from "@mui/icons-material/Comment";
 import { useFormik } from "formik";
 import Button from "@web/shared/components/Button";
@@ -28,7 +27,7 @@ const validationSchema = toFormikValidationSchema(
   }),
 );
 
-function ResignationForm() {
+function ResignationForm({ onSuccess }: { onSuccess?: () => void }) {
   const { setAlert } = useContext(AlertContext);
 
   const formik = useFormik({
@@ -45,6 +44,7 @@ function ResignationForm() {
           severity: "success",
         });
         resetForm();
+        onSuccess?.();
       } catch (error) {
         setAlert({
           open: true,
@@ -61,19 +61,8 @@ function ResignationForm() {
   return (
     <Card sx={{ maxWidth: 600, mx: "auto", boxShadow: 2 }}>
       <CardContent sx={{ p: 2 }}>
-        {/* Header */}
         <Box mb={2}>
-          <Box display="flex" alignItems="center" gap={1}>
-            <ExitToApp color="primary" />
-            <Typography variant="h6" fontWeight="600">
-              Resignation Request
-            </Typography>
-          </Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: "block", mt: 0.5 }}
-          >
+          <Typography variant="caption" color="text.secondary">
             Submitted today, with your last working day calculated automatically
             from your organisation's standard notice period.
           </Typography>

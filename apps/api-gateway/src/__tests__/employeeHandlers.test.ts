@@ -28,6 +28,9 @@ jest.mock("@hrms/db", () => {
       aggregateRaw: jest.fn(),
       findMany: jest.fn(),
     },
+    tenantMembership: {
+      findFirst: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -86,6 +89,8 @@ const mockUserGroupBy = (prisma as any).user.groupBy as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserAggregateRaw = (prisma as any).user.aggregateRaw as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
+const mockMembershipFindFirst = (prisma as any).tenantMembership
+  .findFirst as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: any = {}) =>
@@ -243,6 +248,7 @@ describe("employeeHandlers", () => {
         dateOfAbscond: null,
         isSuperUser: false,
       });
+      mockMembershipFindFirst.mockResolvedValue(null);
       const res = makeRes();
       await getEmployeeDetails(makeReq({ params: { username: "alice" } }), res);
       expect(mockUserFindUnique).toHaveBeenCalledWith(
@@ -252,6 +258,45 @@ describe("employeeHandlers", () => {
         res,
         RESPONSE_STATUS.SUCCESS,
         expect.any(Object),
+      );
+    });
+
+    it("includes the employee's tenantRole, resolved from TenantMembership (not User.role)", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: "u1",
+        username: "alice",
+        isSuperUser: false,
+      });
+      mockMembershipFindFirst.mockResolvedValue({ role: "owner" });
+      const res = makeRes();
+      await getEmployeeDetails(makeReq({ params: { username: "alice" } }), res);
+      expect(mockMembershipFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "t1", userId: "u1" } }),
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: expect.objectContaining({ tenantRole: "owner" }),
+        }),
+      );
+    });
+
+    it("returns tenantRole: null when the employee has no TenantMembership row", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: "u1",
+        username: "alice",
+        isSuperUser: false,
+      });
+      mockMembershipFindFirst.mockResolvedValue(null);
+      const res = makeRes();
+      await getEmployeeDetails(makeReq({ params: { username: "alice" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: expect.objectContaining({ tenantRole: null }),
+        }),
       );
     });
 

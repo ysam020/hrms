@@ -14,32 +14,56 @@ export const listCycles = async (
     // reviewer), instead of every cycle the tenant has ever run.
     const requesterId: string | undefined =
       call.request?.requesterId || undefined;
+    const { search, status: statusFilter } = call.request as {
+      search?: string;
+      status?: string;
+    };
+    const page = parseInt(String(call.request?.page)) || 1;
+    const limit = parseInt(String(call.request?.limit)) || 10;
+    const skip = (page - 1) * limit;
 
-    const cycles = await prisma.performanceReviewCycle.findMany({
-      where: {
-        tenantId: getTenantId()!,
-        status: { not: "deleted" },
-        ...(requesterId && {
-          reviews: {
-            some: {
-              OR: [{ userId: requesterId }, { reviewerId: requesterId }],
-            },
+    const normalizedStatus = (statusFilter || "").toLowerCase();
+
+    const where: any = {
+      tenantId: getTenantId()!,
+      ...(!normalizedStatus || normalizedStatus === "all"
+        ? { status: { not: "deleted" } }
+        : { status: normalizedStatus }),
+      ...(requesterId && {
+        reviews: {
+          some: {
+            OR: [{ userId: requesterId }, { reviewerId: requesterId }],
           },
-        }),
-      },
-      orderBy: { createdAt: "desc" },
-    });
+        },
+      }),
+      ...(search && {
+        name: { contains: search, mode: "insensitive" },
+      }),
+    };
+
+    const [cycles, total] = await Promise.all([
+      prisma.performanceReviewCycle.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.performanceReviewCycle.count({ where }),
+    ]);
 
     return callback(null, {
       message: MESSAGES.CYCLES_FETCHED,
       status: status.OK,
       data: cycles.map(toPerformanceReviewCycleProto),
+      total,
     });
   } catch (err) {
     logger.error("ListCycles error:", { err });
     return callback(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,
+      data: [],
+      total: 0,
     });
   }
 };

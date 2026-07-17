@@ -28,6 +28,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 const WEBHOOK_EVENTS = [
   "employee.created",
@@ -62,6 +63,11 @@ function WebhookEndpoints() {
     success: boolean;
     error?: string;
   } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    action: "delete" | "rotate";
+    id: string;
+  } | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,8 +111,7 @@ function WebhookEndpoints() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!confirm("Delete this webhook endpoint and all delivery history?"))
-        return;
+      setProcessingId(id);
       try {
         await apiClient.delete(API_ENDPOINTS.DELETE_WEBHOOK_ENDPOINT(id));
         load();
@@ -121,6 +126,9 @@ function WebhookEndpoints() {
           message: err?.response?.data?.message || "Delete failed",
           severity: "error",
         });
+      } finally {
+        setProcessingId(null);
+        setConfirmAction(null);
       }
     },
     [load, setAlert],
@@ -142,6 +150,7 @@ function WebhookEndpoints() {
 
   const handleRotate = useCallback(
     async (id: string) => {
+      setProcessingId(id);
       try {
         const res = await apiClient.patch(
           API_ENDPOINTS.UPDATE_WEBHOOK_ENDPOINT(id),
@@ -154,6 +163,9 @@ function WebhookEndpoints() {
           message: "Failed to rotate secret",
           severity: "error",
         });
+      } finally {
+        setProcessingId(null);
+        setConfirmAction(null);
       }
     },
     [setAlert],
@@ -334,7 +346,9 @@ function WebhookEndpoints() {
                         color: "#d97706",
                         backgroundColor: "rgba(217,119,6,0.12)",
                       }}
-                      onClick={() => handleRotate(ep.id)}
+                      onClick={() =>
+                        setConfirmAction({ action: "rotate", id: ep.id })
+                      }
                     >
                       <RefreshIcon sx={{ fontSize: 16 }} />
                     </IconButton>
@@ -349,7 +363,9 @@ function WebhookEndpoints() {
                         color: "#dc2626",
                         backgroundColor: "rgba(220,38,38,0.12)",
                       }}
-                      onClick={() => handleDelete(ep.id)}
+                      onClick={() =>
+                        setConfirmAction({ action: "delete", id: ep.id })
+                      }
                     >
                       <DeleteIcon sx={{ fontSize: 16 }} />
                     </IconButton>
@@ -501,6 +517,39 @@ function WebhookEndpoints() {
           )}
         </DialogActions>
       </Dialog>
+
+      <ConfirmationDialog
+        open={!!confirmAction}
+        onClose={() => {
+          if (!processingId) setConfirmAction(null);
+        }}
+        onConfirm={() => {
+          if (!confirmAction) return;
+          if (confirmAction.action === "delete") {
+            handleDelete(confirmAction.id);
+          } else {
+            handleRotate(confirmAction.id);
+          }
+        }}
+        title={
+          confirmAction?.action === "delete"
+            ? "Delete Webhook Endpoint"
+            : "Rotate Secret"
+        }
+        message={
+          confirmAction?.action === "delete"
+            ? "Delete this webhook endpoint and all delivery history?"
+            : "Rotate this endpoint's secret?"
+        }
+        description={
+          confirmAction?.action === "rotate"
+            ? "The old secret will become invalid immediately and any integrations using it will stop working until updated."
+            : undefined
+        }
+        confirmText={confirmAction?.action === "delete" ? "Delete" : "Rotate"}
+        loading={!!processingId}
+        variant="danger"
+      />
     </Box>
   );
 }

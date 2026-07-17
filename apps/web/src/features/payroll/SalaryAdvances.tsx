@@ -1,4 +1,11 @@
-import { memo, useCallback, useContext, useMemo, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dayjs from "dayjs";
 import { Dropdown } from "primereact/dropdown";
 import DataList from "@web/shared/components/DataList";
@@ -6,6 +13,7 @@ import useServerPagination from "@web/shared/hooks/useServerPagination";
 import apiClient from "@web/core/http/axiosConfig";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
+import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { canApproveAdvances as canApproveAdvancesAccess } from "@web/shared/utils/permissions/navAccess";
@@ -69,16 +77,27 @@ function SalaryAdvances() {
   const [form, setForm] = useState({ amount: "", emiMonths: 3, reason: "" });
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [globalFilter, setGlobalFilter] = useState("");
+  const searchRef = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    id: string;
+    action: "approve" | "reject";
+    label?: string;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const canApproveAdvances = canApproveAdvancesAccess(user);
 
   const fetchAdvances = useCallback(
     async ({ page, limit }) => {
       try {
-        const params =
+        const search = searchRef.current;
+        let params =
           statusFilter && statusFilter !== "All"
             ? `&status=${statusFilter}`
             : "";
+        if (search) params += `&search=${encodeURIComponent(search)}`;
         const res = await apiClient(
           API_ENDPOINTS.SALARY_ADVANCES(page, limit, params),
         );
@@ -108,10 +127,21 @@ function SalaryAdvances() {
     handlePaginationChange,
     handlePageSizeChange,
     refresh,
+    resetPagination,
   } = useServerPagination(fetchAdvances, {
     initialPageSize: 10,
     deps: [statusFilter],
   });
+
+  const handleGlobalFilterChange = useCallback(
+    (value: string) => {
+      searchRef.current = value ?? "";
+      setGlobalFilter(value ?? "");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => resetPagination(), 400);
+    },
+    [resetPagination],
+  );
 
   const handleAction = useCallback(
     async (advanceId: string, action: "approve" | "reject") => {
@@ -226,23 +256,44 @@ function SalaryAdvances() {
     (row: any) => {
       if (!canApproveAdvances || row.status?.toLowerCase() !== "pending")
         return [];
+      const label = row.employee?.first_name
+        ? `${row.employee.first_name} ${row.employee.last_name ?? ""}`.trim()
+        : row.employee?.username || row.userId;
       return [
         {
           icon: <CheckIcon sx={{ fontSize: 16 }} />,
           label: "Approve",
           color: "success" as const,
-          onClick: () => handleAction(row.id, "approve"),
+          onClick: () =>
+            setConfirmTarget({ id: row.id, action: "approve", label }),
         },
         {
           icon: <CloseIcon sx={{ fontSize: 16 }} />,
           label: "Reject",
           color: "error" as const,
-          onClick: () => handleAction(row.id, "reject"),
+          onClick: () =>
+            setConfirmTarget({ id: row.id, action: "reject", label }),
         },
       ];
     },
-    [canApproveAdvances, handleAction],
+    [canApproveAdvances],
   );
+
+  const handleConfirmAction = useCallback(async () => {
+    if (!confirmTarget) return;
+    setConfirmLoading(true);
+    try {
+      await handleAction(confirmTarget.id, confirmTarget.action);
+      setConfirmTarget(null);
+    } finally {
+      setConfirmLoading(false);
+    }
+  }, [confirmTarget, handleAction]);
+
+  const handleCancelConfirm = useCallback(() => {
+    if (confirmLoading) return;
+    setConfirmTarget(null);
+  }, [confirmLoading]);
 
   const memoizedData = useMemo(() => data || [], [data]);
 
@@ -255,6 +306,11 @@ function SalaryAdvances() {
         actions={rowActions}
         loading={loading}
         emptyMessage="No salary advances found"
+        search={{
+          value: globalFilter,
+          onChange: handleGlobalFilterChange,
+          placeholder: "Search employees…",
+        }}
         toolbarActions={
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -364,6 +420,25 @@ function SalaryAdvances() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmationDialog
+        open={!!confirmTarget}
+        onClose={handleCancelConfirm}
+        onConfirm={handleConfirmAction}
+        title={
+          confirmTarget?.action === "approve"
+            ? "Approve Salary Advance"
+            : "Reject Salary Advance"
+        }
+        message={
+          confirmTarget?.action === "approve"
+            ? `Are you sure you want to approve the salary advance request${confirmTarget?.label ? ` for ${confirmTarget.label}` : ""}?`
+            : `Are you sure you want to reject the salary advance request${confirmTarget?.label ? ` for ${confirmTarget.label}` : ""}?`
+        }
+        confirmText={confirmTarget?.action === "approve" ? "Approve" : "Reject"}
+        loading={confirmLoading}
+        variant={confirmTarget?.action === "approve" ? "default" : "danger"}
+      />
     </ErrorBoundary>
   );
 }
