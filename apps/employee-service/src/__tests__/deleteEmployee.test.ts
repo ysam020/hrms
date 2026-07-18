@@ -1,5 +1,5 @@
 import { status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prisma, checkUserHasHistoricalRecords } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { deleteEmployee } from "../handlers/deleteEmployee";
 import { MESSAGES } from "../constants/messages";
@@ -11,15 +11,12 @@ jest.mock("@hrms/db", () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
-    attendanceRecord: { count: jest.fn() },
-    leaveApplication: { count: jest.fn() },
-    salaryStructure: { count: jest.fn() },
-    payrollLineItem: { count: jest.fn() },
   };
   return {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    checkUserHasHistoricalRecords: jest.fn(),
   };
 });
 
@@ -42,20 +39,17 @@ const mockUpdate = prisma.user.update as jest.Mock;
 const mockDelete = prisma.user.delete as jest.Mock;
 const mockCacheInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockCacheDelete = cacheManager.delete as jest.Mock;
-const mockAttendanceCount = (prisma as any).attendanceRecord.count as jest.Mock;
-const mockLeaveCount = (prisma as any).leaveApplication.count as jest.Mock;
-const mockSalaryCount = (prisma as any).salaryStructure.count as jest.Mock;
-const mockPayrollCount = (prisma as any).payrollLineItem.count as jest.Mock;
+const mockCheckHistoricalRecords = checkUserHasHistoricalRecords as jest.Mock;
 
 describe("deleteEmployee", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCacheInvalidate.mockResolvedValue(undefined);
     mockCacheDelete.mockResolvedValue(undefined);
-    mockAttendanceCount.mockResolvedValue(0);
-    mockLeaveCount.mockResolvedValue(0);
-    mockSalaryCount.mockResolvedValue(0);
-    mockPayrollCount.mockResolvedValue(0);
+    mockCheckHistoricalRecords.mockResolvedValue({
+      hasRecords: false,
+      models: [],
+    });
   });
 
   it("returns INVALID_ARGUMENT when id is missing", async () => {
@@ -67,10 +61,24 @@ describe("deleteEmployee", () => {
     });
   });
 
+  // Regression coverage: DeleteEmployeeRequest's only field is `employeeId`
+  // (see employee.proto) — this handler used to destructure a non-existent
+  // `id` field instead, so every real gRPC call (request.id always
+  // undefined) hit the "missing id" branch below regardless of what the
+  // caller actually sent.
+  it("does not find the employee id under a bare `id` field — only employeeId is a real wire field", async () => {
+    const cb = makeCallback();
+    await deleteEmployee(makeCall({ id: "emp-1" } as any), cb);
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.EMPLOYEE_ID_REQUIRED,
+      status: status.INVALID_ARGUMENT,
+    });
+  });
+
   it("returns NOT_FOUND when employee does not exist", async () => {
     mockFindUnique.mockResolvedValue(null);
     const cb = makeCallback();
-    await deleteEmployee(makeCall({ id: "emp-1" }), cb);
+    await deleteEmployee(makeCall({ employeeId: "emp-1" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.EMPLOYEE_NOT_FOUND,
       status: status.NOT_FOUND,
@@ -86,7 +94,10 @@ describe("deleteEmployee", () => {
     mockUpdate.mockResolvedValue({ id: "emp-1", employeeStatus: "Terminated" });
 
     const cb = makeCallback();
-    await deleteEmployee(makeCall({ id: "emp-1", hardDelete: false }), cb);
+    await deleteEmployee(
+      makeCall({ employeeId: "emp-1", hardDelete: false }),
+      cb,
+    );
 
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "emp-1" },
@@ -108,7 +119,10 @@ describe("deleteEmployee", () => {
     mockDelete.mockResolvedValue(undefined);
 
     const cb = makeCallback();
-    await deleteEmployee(makeCall({ id: "emp-1", hardDelete: true }), cb);
+    await deleteEmployee(
+      makeCall({ employeeId: "emp-1", hardDelete: true }),
+      cb,
+    );
 
     expect(mockDelete).toHaveBeenCalledWith({ where: { id: "emp-1" } });
     expect(mockUpdate).not.toHaveBeenCalled();
@@ -118,16 +132,22 @@ describe("deleteEmployee", () => {
     });
   });
 
-  it("blocks hard-delete when the employee has historical attendance/leave/payroll records", async () => {
+  it("blocks hard-delete when the employee has historical records", async () => {
     mockFindUnique.mockResolvedValue({
       id: "emp-1",
       username: "john",
       tenantId: "t1",
     });
-    mockAttendanceCount.mockResolvedValue(3);
+    mockCheckHistoricalRecords.mockResolvedValue({
+      hasRecords: true,
+      models: ["attendanceRecord"],
+    });
 
     const cb = makeCallback();
-    await deleteEmployee(makeCall({ id: "emp-1", hardDelete: true }), cb);
+    await deleteEmployee(
+      makeCall({ employeeId: "emp-1", hardDelete: true }),
+      cb,
+    );
 
     expect(mockDelete).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, {
@@ -144,13 +164,11 @@ describe("deleteEmployee", () => {
     });
     mockUpdate.mockResolvedValue({});
 
-    await deleteEmployee(makeCall({ id: "emp-1" }), makeCallback());
+    await deleteEmployee(makeCall({ employeeId: "emp-1" }), makeCallback());
 
     expect(mockCacheInvalidate).toHaveBeenCalledWith("t:t1:employees:*");
     expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:employee:emp-1");
-    expect(mockCacheDelete).toHaveBeenCalledWith(
-      "t:t1:employee-details:john",
-    );
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:employee-details:john");
     expect(mockCacheDelete).toHaveBeenCalledWith(
       "t:t1:dashboard:employee-insights",
     );
@@ -159,7 +177,7 @@ describe("deleteEmployee", () => {
   it("returns INTERNAL on database error", async () => {
     mockFindUnique.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await deleteEmployee(makeCall({ id: "emp-1" }), cb);
+    await deleteEmployee(makeCall({ employeeId: "emp-1" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,

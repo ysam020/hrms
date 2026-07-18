@@ -1,5 +1,7 @@
 import jwt from "jsonwebtoken";
 
+process.env.ACCESS_JWT_TOKEN = "test-jwt-secret";
+
 const capturedOptions: any[] = [];
 
 jest.mock("express-rate-limit", () => {
@@ -16,6 +18,22 @@ jest.mock("express-rate-limit", () => {
   };
 });
 
+// Without these mocks, constructing rateLimiters.ts's module-level
+// RedisStore instances would call the real getRedisClient(), which
+// attempts an actual network connection to Redis and hangs the test file
+// (there's no Redis reachable in this environment). RedisStore's own
+// correctness is rate-limit-redis's responsibility, not this module's.
+const capturedStoreOptions: any[] = [];
+jest.mock("rate-limit-redis", () => ({
+  RedisStore: jest.fn((options: any) => {
+    capturedStoreOptions.push(options);
+    return { __options: options };
+  }),
+}));
+jest.mock("@hrms/cache", () => ({
+  getRedisClient: jest.fn(() => ({ call: jest.fn() })),
+}));
+
 import { authLimiter, applyRateLimiters } from "../config/rateLimiters";
 
 function makeReq(overrides: Partial<any> = {}) {
@@ -27,14 +45,17 @@ describe("rateLimiters key generator (userOrIpKey)", () => {
   // hold the shared `userOrIpKey` keyGenerator every limiter in this module uses.
   const keyGenerator = (authLimiter as any).__options.keyGenerator;
 
-  it("uses the JWT payload's userId when a valid Bearer token is present", () => {
-    const token = jwt.sign({ userId: "u123" }, "any-secret");
+  const sign = (payload: object) =>
+    jwt.sign(payload, "test-jwt-secret", { algorithm: "HS256" });
+
+  it("uses the JWT payload's userId when a valid, correctly-signed Bearer token is present", () => {
+    const token = sign({ userId: "u123" });
     const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
     expect(keyGenerator(req)).toBe("user:u123");
   });
 
   it("uses the JWT payload's userId when the token comes from a cookie", () => {
-    const token = jwt.sign({ userId: "u456" }, "any-secret");
+    const token = sign({ userId: "u456" });
     const req = makeReq({ cookies: { access_token: token } });
     expect(keyGenerator(req)).toBe("user:u456");
   });
@@ -50,7 +71,7 @@ describe("rateLimiters key generator (userOrIpKey)", () => {
   });
 
   it("falls back to IP when the decoded payload has no userId", () => {
-    const token = jwt.sign({ someOtherField: true }, "any-secret");
+    const token = sign({ someOtherField: true });
     const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
     expect(keyGenerator(req)).toBe("ip:normalized:1.2.3.4");
   });
@@ -60,12 +81,53 @@ describe("rateLimiters key generator (userOrIpKey)", () => {
     expect(keyGenerator(req)).toBe("ip:unknown");
   });
 
-  it("does not use the JWT signature for trust — decodes without verifying", () => {
-    // jwt.decode (not verify) is used intentionally to partition rate-limit
-    // buckets only, so an unsigned/forged token still yields a stable key.
-    const forged = jwt.sign({ userId: "attacker" }, "wrong-secret-entirely");
+  // Regression coverage for a real vulnerability: these limiters guard
+  // unauthenticated routes (login, credential-check, public job
+  // applications), so an attacker fully controls the Authorization header.
+  // The key generator must verify the signature — a forged token with a
+  // rotating fake userId must NOT be trusted into its own rate-limit
+  // bucket, or it defeats the limiter entirely.
+  it("falls back to IP for a token signed with the wrong secret (forged)", () => {
+    const forged = jwt.sign({ userId: "attacker" }, "wrong-secret-entirely", {
+      algorithm: "HS256",
+    });
     const req = makeReq({ headers: { authorization: `Bearer ${forged}` } });
-    expect(keyGenerator(req)).toBe("user:attacker");
+    expect(keyGenerator(req)).toBe("ip:normalized:1.2.3.4");
+  });
+
+  it("falls back to IP for an unsigned (alg: none) token", () => {
+    const unsigned = jwt.sign({ userId: "attacker" }, "", {
+      algorithm: "none",
+    });
+    const req = makeReq({ headers: { authorization: `Bearer ${unsigned}` } });
+    expect(keyGenerator(req)).toBe("ip:normalized:1.2.3.4");
+  });
+
+  it("falls back to IP for an expired token", () => {
+    const expired = jwt.sign({ userId: "u789" }, "test-jwt-secret", {
+      algorithm: "HS256",
+      expiresIn: -10,
+    });
+    const req = makeReq({ headers: { authorization: `Bearer ${expired}` } });
+    expect(keyGenerator(req)).toBe("ip:normalized:1.2.3.4");
+  });
+});
+
+describe("Redis-backed store", () => {
+  // Regression coverage: in-process counters are meaningless the moment
+  // the gateway scales past one replica (max × N effective limit, reset
+  // on every deploy). Every limiter must share a durable, Redis-backed
+  // store instead of express-rate-limit's default in-memory Map.
+  it("gives every limiter a RedisStore instance with a distinct key prefix", () => {
+    expect(capturedStoreOptions.length).toBeGreaterThanOrEqual(4);
+    const prefixes = capturedStoreOptions.map((o) => o.prefix);
+    expect(new Set(prefixes).size).toBe(prefixes.length); // all distinct
+    for (const options of capturedOptions) {
+      expect(options.store).toBeDefined();
+      expect(options.store.__options.prefix).toEqual(
+        expect.stringMatching(/^rl:/),
+      );
+    }
   });
 });
 

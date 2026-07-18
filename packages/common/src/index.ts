@@ -19,3 +19,5 @@ export {
   type ComponentAmountInput,
 } from "./salaryComponents";
 export { isSafeUrl, isSafeHostname } from "./ssrfGuard";
+export { isValidPermission, partitionPermissions } from "./permissionCatalog";
+export { BoundedCache, type BoundedCacheOptions } from "./boundedCache";

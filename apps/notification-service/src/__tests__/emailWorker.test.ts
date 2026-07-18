@@ -7,6 +7,7 @@ jest.mock("@hrms/queue", () => ({
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+  requestIdStorage: { run: jest.fn((_id: string, fn: () => any) => fn()) },
 }));
 
 jest.mock("@hrms/common", () => ({
@@ -31,7 +32,7 @@ jest.mock("bullmq", () => ({
     }),
 }));
 
-import { logger } from "@hrms/logger";
+import { logger, requestIdStorage } from "@hrms/logger";
 import { sendEmail } from "@hrms/common";
 import { startEmailWorker } from "../workers/emailWorker";
 
@@ -125,6 +126,36 @@ describe("startEmailWorker", () => {
 
     expect(logger.error).toHaveBeenCalledWith("Failed to forward job to DLQ:", {
       dlqErr: expect.any(Error),
+    });
+  });
+
+  describe("correlation ID propagation", () => {
+    it("runs the job inside the producer's requestId context when the job carries one", async () => {
+      startEmailWorker();
+      await capturedProcessor({
+        id: "j1",
+        data: {
+          to: "a@b.com",
+          subject: "Hi",
+          html: "x",
+          requestId: "req-abc-123",
+        },
+      });
+
+      expect(requestIdStorage.run).toHaveBeenCalledWith(
+        "req-abc-123",
+        expect.any(Function),
+      );
+    });
+
+    it("does not touch requestIdStorage when the job carries no requestId", async () => {
+      startEmailWorker();
+      await capturedProcessor({
+        id: "j1",
+        data: { to: "a@b.com", subject: "Hi", html: "x" },
+      });
+
+      expect(requestIdStorage.run).not.toHaveBeenCalled();
     });
   });
 

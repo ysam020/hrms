@@ -18,10 +18,27 @@ interface PoolEntry {
 
 const pool = new Map<string, PoolEntry>();
 
+// Prisma's Mongo connector defaults connection_limit to num_cpus*2+1 per
+// client with no cap awareness of how many OTHER clients share the process —
+// fine for the single shared client in prismaClient.ts, but here up to
+// MAX_POOL_SIZE (50) tenant clients can be live in one process at once, each
+// silently opening that same per-CPU-count default. Left untuned, a process
+// on this repo's 2-vCPU prod host (m7i-flex.large) could open up to
+// 50 x 5 = 250 MongoDB connections, and that multiplies again across every
+// backend service process hitting the same replica set. Capping it small and
+// explicit here makes the real ceiling MAX_POOL_SIZE x CONNECTION_LIMIT (150)
+// — predictable and independent of host core count.
+const CONNECTION_LIMIT = 3;
+
 function buildUrl(dbName: string): string {
   const base = process.env.DEV_MONGODB_URI!;
   // Replace the database name segment (between last "/" and "?" or end of string)
-  return base.replace(/\/([^/?]+)(\?|$)/, `/${dbName}$2`);
+  const withDbName = base.replace(/\/([^/?]+)(\?|$)/, `/${dbName}$2`);
+  const separator = withDbName.includes("?") ? "&" : "?";
+  // Prisma's MongoDB connector passes the connection string straight through
+  // to the MongoDB driver, which uses `maxPoolSize` (not the relational
+  // connectors' `connection_limit`) to cap pool size.
+  return `${withDbName}${separator}maxPoolSize=${CONNECTION_LIMIT}`;
 }
 
 function evict(dbName: string, entry: PoolEntry): void {

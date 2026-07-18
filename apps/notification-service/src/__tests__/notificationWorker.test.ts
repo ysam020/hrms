@@ -1,4 +1,5 @@
 import { prisma } from "@hrms/db";
+import { requestIdStorage } from "@hrms/logger";
 import { startNotificationWorker } from "../workers/notificationWorker";
 
 let capturedProcessor: (job: any) => Promise<any>;
@@ -19,7 +20,7 @@ jest.mock("bullmq", () => ({
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findMany: jest.fn() },
-    notification: { create: jest.fn() },
+    notification: { create: jest.fn(), findFirst: jest.fn() },
     tenant: {
       findUnique: jest.fn().mockResolvedValue({ dbName: "hrms-test-tenant" }),
     },
@@ -40,6 +41,7 @@ jest.mock("@hrms/queue", () => ({
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+  requestIdStorage: { run: jest.fn((_id: string, fn: () => any) => fn()) },
 }));
 
 jest.mock("@hrms/firebase", () => ({
@@ -60,8 +62,36 @@ jest.mock("@hrms/websocket", () => ({
   })),
 }));
 
+// Minimal fake Redis backing withNotificationJobLock's SET NX / compare-and-
+// delete eval, so the lock behaves like the real thing (only one concurrent
+// SET NX wins, release only succeeds for the token that set it) without a
+// real Redis server.
+const fakeRedisStore = new Map<string, string>();
+const mockRedisSet = jest.fn(
+  async (key: string, value: string, ...rest: any[]) => {
+    const nx = rest.includes("NX");
+    if (nx && fakeRedisStore.has(key)) return null;
+    fakeRedisStore.set(key, value);
+    return "OK";
+  },
+);
+const mockRedisEval = jest.fn(
+  async (_script: string, _numKeys: number, key: string, token: string) => {
+    if (fakeRedisStore.get(key) === token) {
+      fakeRedisStore.delete(key);
+      return 1;
+    }
+    return 0;
+  },
+);
+jest.mock("@hrms/cache", () => ({
+  getRedisClient: jest.fn(() => ({ set: mockRedisSet, eval: mockRedisEval })),
+}));
+
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockNotificationCreate = (prisma as any).notification.create as jest.Mock;
+const mockNotificationFindFirst = (prisma as any).notification
+  .findFirst as jest.Mock;
 
 const runProcessor = (data: Record<string, any>) =>
   capturedProcessor({ id: "job-1", data, opts: {} } as any);
@@ -69,7 +99,9 @@ const runProcessor = (data: Record<string, any>) =>
 describe("notificationWorker", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    fakeRedisStore.clear();
     mockNotificationCreate.mockResolvedValue({ id: "notif-1", recipients: [] });
+    mockNotificationFindFirst.mockResolvedValue(null);
     startNotificationWorker();
   });
 
@@ -164,6 +196,176 @@ describe("notificationWorker", () => {
 
     expect(mockSendToUser).not.toHaveBeenCalled();
     expect(mockSendNotification).toHaveBeenCalled();
+  });
+
+  describe("correlation ID propagation", () => {
+    it("runs the job inside the producer's requestId context when the job carries one", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "KYC",
+        message: "hi",
+        recipients: ["id-1"],
+        requestId: "req-abc-123",
+      });
+
+      expect(requestIdStorage.run).toHaveBeenCalledWith(
+        "req-abc-123",
+        expect.any(Function),
+      );
+    });
+
+    it("does not touch requestIdStorage when the job carries no requestId (older producer, or direct enqueue)", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "KYC",
+        message: "hi",
+        recipients: ["id-1"],
+      });
+
+      expect(requestIdStorage.run).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("idempotency on BullMQ retry", () => {
+    it("tags the created notification with the job's id", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "KYC",
+        message: "hi",
+        recipients: ["id-1"],
+      });
+
+      expect(mockNotificationFindFirst).toHaveBeenCalledWith({
+        where: { jobId: "job-1" },
+        include: { recipients: true },
+      });
+      expect(mockNotificationCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ jobId: "job-1" }),
+        }),
+      );
+    });
+
+    it("is a no-op on a retried job that already completed — no duplicate create, WS broadcast, or push", async () => {
+      mockNotificationFindFirst.mockResolvedValue({
+        id: "notif-existing",
+        recipients: [{ userId: "id-1" }],
+      });
+
+      const result = await runProcessor({
+        tenantId: "tenant-1",
+        title: "KYC",
+        message: "hi",
+        recipients: ["id-1"],
+        sendPushNotification: true,
+      });
+
+      expect(mockNotificationCreate).not.toHaveBeenCalled();
+      expect(mockSendToUser).not.toHaveBeenCalled();
+      expect(mockSendNotification).not.toHaveBeenCalled();
+      expect(mockSendPushNotifications).not.toHaveBeenCalled();
+      expect(result).toEqual(
+        expect.objectContaining({
+          success: true,
+          deduped: true,
+          notificationId: "notif-existing",
+        }),
+      );
+    });
+  });
+
+  describe("concurrent attempts at the same job (BullMQ stalled-job reassignment)", () => {
+    it("acquires a per-jobId lock before the idempotency check, and releases it once done", async () => {
+      await runProcessor({
+        tenantId: "tenant-1",
+        title: "KYC",
+        message: "hi",
+        recipients: ["id-1"],
+      });
+
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        "lock:notification-job:job-1",
+        expect.any(String),
+        "EX",
+        expect.any(Number),
+        "NX",
+      );
+      // Released (eval'd) after the critical section, not left held for its
+      // full TTL — a later legitimate retry (real failure, not a race)
+      // shouldn't have to wait out the lock.
+      expect(mockRedisEval).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
+        "lock:notification-job:job-1",
+        expect.any(String),
+      );
+      expect(fakeRedisStore.has("lock:notification-job:job-1")).toBe(false);
+    });
+
+    it("serializes two concurrent attempts for the same job so only one create happens, not two duplicate sends", async () => {
+      let created = false;
+      mockNotificationFindFirst.mockImplementation(async () =>
+        created ? { id: "notif-1", recipients: [{ userId: "id-1" }] } : null,
+      );
+      mockNotificationCreate.mockImplementation(async () => {
+        // Real DB latency, so the second attempt's first lock-acquire
+        // genuinely lands while the first attempt is still inside its
+        // critical section — without this, the two calls wouldn't overlap
+        // and the test wouldn't exercise the race at all.
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        created = true;
+        return { id: "notif-1", recipients: [{ userId: "id-1" }] };
+      });
+
+      const data = {
+        tenantId: "tenant-1",
+        title: "KYC",
+        message: "hi",
+        recipients: ["id-1"],
+      };
+
+      const [first, second] = await Promise.all([
+        runProcessor(data),
+        (async () => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return runProcessor(data);
+        })(),
+      ]);
+
+      expect(mockNotificationCreate).toHaveBeenCalledTimes(1);
+      expect(mockSendToUser).toHaveBeenCalledTimes(1); // exactly one broadcast, not two
+      expect(first.notificationId).toBe("notif-1");
+      expect(second.notificationId).toBe("notif-1");
+      // exactly one of the two attempts actually created it; the other found
+      // it already there and deduped instead of sending a second time
+      const dedupedCount = [first.deduped, second.deduped].filter(
+        Boolean,
+      ).length;
+      expect(dedupedCount).toBe(1);
+    }, 10_000);
+
+    it("fails (for BullMQ to retry later) rather than proceeding unguarded if a concurrent holder never releases the lock in time", async () => {
+      jest.useFakeTimers();
+      try {
+        // Simulate another attempt already holding the lock indefinitely.
+        fakeRedisStore.set("lock:notification-job:job-1", "someone-else");
+
+        const result = runProcessor({
+          tenantId: "tenant-1",
+          title: "KYC",
+          message: "hi",
+          recipients: ["id-1"],
+        });
+        const assertion = expect(result).rejects.toThrow(/timed out waiting/);
+
+        await jest.advanceTimersByTimeAsync(50 * 200); // exhaust the bounded wait
+        await assertion;
+
+        expect(mockNotificationCreate).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe("tenant safety guards", () => {

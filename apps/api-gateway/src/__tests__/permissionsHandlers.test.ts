@@ -50,6 +50,7 @@ jest.mock("@hrms/db", () => {
 });
 
 jest.mock("@hrms/common", () => ({
+  ...jest.requireActual("@hrms/common"),
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
   ),
@@ -326,16 +327,36 @@ describe("permissionsHandlers", () => {
       await updateRolePermissions(
         makeReq({
           params: { _id: "r-1" },
-          body: { permissions: ["view_employees"] },
+          body: { permissions: ["EmployeeManagement:view"] },
         }),
         res,
       );
       expect(mockRoleUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { permissions: ["view_employees"] } }),
+        expect.objectContaining({
+          data: { permissions: ["EmployeeManagement:view"] },
+        }),
       );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST and does not write when permissions contain an unknown string", async () => {
+      mockRoleFindUnique.mockResolvedValue({ id: "r-1", name: "HR" });
+      const res = makeRes();
+      await updateRolePermissions(
+        makeReq({
+          params: { _id: "r-1" },
+          body: { permissions: ["EmployeeManagement:view", "totally_made_up"] },
+        }),
+        res,
+      );
+      expect(mockRoleUpdate).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
         expect.any(Object),
       );
     });
@@ -426,7 +447,7 @@ describe("permissionsHandlers", () => {
         makeReq({
           body: {
             selectedUser: "john",
-            permissions: ["view_employees"],
+            permissions: ["EmployeeManagement:view"],
             selectedRole: null,
           },
         }),
@@ -436,6 +457,36 @@ describe("permissionsHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST and does not write when permissions contain an unknown string", async () => {
+      const user = {
+        id: "u1",
+        username: "john",
+        role: [],
+        permissions: [],
+        first_name: "John",
+        last_name: "Doe",
+        employee_photo: null,
+      };
+      mockUserFindFirst.mockResolvedValue(user);
+      const res = makeRes();
+      await saveUserPermissions(
+        makeReq({
+          body: {
+            selectedUser: "john",
+            permissions: ["EmployeeManagement:view", "*:admin:everything"],
+            selectedRole: null,
+          },
+        }),
+        res,
+      );
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
         expect.any(Object),
       );
     });
@@ -466,7 +517,7 @@ describe("permissionsHandlers", () => {
         makeReq({
           body: {
             selectedUser: "john",
-            permissions: ["view_employees"],
+            permissions: ["EmployeeManagement:view"],
             selectedRole: "HR",
           },
         }),

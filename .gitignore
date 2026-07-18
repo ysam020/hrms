@@ -29,6 +29,7 @@ packages/database/src/generated/
 
 # ── Local secrets (never commit real values) ─────────────────────────────────
 secrets.json
+monitoring/secrets/
 
 # ── Logs ─────────────────────────────────────────────────────────────────────
 *.log

@@ -69,4 +69,36 @@ describe("registerGracefulShutdown", () => {
     closeCallback!();
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
+
+  describe("hard-exit timeout", () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it("force-exits with a non-zero code if server.close() never calls back (e.g. a long-lived WebSocket connection holding it open)", async () => {
+      const server: any = { close: jest.fn() }; // never invokes its callback
+      const redisAdapter = { cleanup: jest.fn().mockResolvedValue(undefined) };
+
+      registerGracefulShutdown(server, redisAdapter);
+      await sigtermHandler!();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(15_000);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it("does not force-exit once the server has already closed cleanly", async () => {
+      const server: any = {
+        close: jest.fn((cb: () => void) => cb()),
+      };
+      const redisAdapter = { cleanup: jest.fn().mockResolvedValue(undefined) };
+
+      registerGracefulShutdown(server, redisAdapter);
+      await sigtermHandler!();
+
+      expect(exitSpy).toHaveBeenCalledWith(0);
+      exitSpy.mockClear();
+      jest.advanceTimersByTime(15_000);
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+  });
 });

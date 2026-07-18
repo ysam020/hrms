@@ -399,6 +399,53 @@ describe("setupChatSocket", () => {
   });
 
   describe("chat:delete-message / chat:pin-message / chat:unpin-message", () => {
+    it("rejects chat:delete-message from a non-participant", async () => {
+      (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
+        participants: ["u2", "u3"],
+      });
+      const { handlers, socket, redisAdapter } = setup();
+
+      await handlers["chat:delete-message"]({ messageId: "m1", roomId: "r1" });
+
+      expect(socket.emit).toHaveBeenCalledWith("chat:error", {
+        message: "Not a participant of this room",
+      });
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+    });
+
+    it("rejects chat:pin-message from a non-participant", async () => {
+      (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
+        participants: ["u2", "u3"],
+      });
+      const { handlers, socket, redisAdapter } = setup();
+
+      await handlers["chat:pin-message"]({
+        messageId: "m1",
+        roomId: "r1",
+        pinnedAt: "2026-01-01",
+        pinnedBy: "u2",
+      });
+
+      expect(socket.emit).toHaveBeenCalledWith("chat:error", {
+        message: "Not a participant of this room",
+      });
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+    });
+
+    it("rejects chat:unpin-message from a non-participant", async () => {
+      (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
+        participants: ["u2", "u3"],
+      });
+      const { handlers, socket, redisAdapter } = setup();
+
+      await handlers["chat:unpin-message"]({ messageId: "m1", roomId: "r1" });
+
+      expect(socket.emit).toHaveBeenCalledWith("chat:error", {
+        message: "Not a participant of this room",
+      });
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+    });
+
     it("relays a delete event to all participants including the sender", async () => {
       (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
         participants: ["u1", "u2"],

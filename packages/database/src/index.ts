@@ -20,6 +20,10 @@ export {
 export type { AuditActor } from "./tenantContext";
 export { prismaWithTenant } from "./prismaWithTenant";
 export { getClientForDb, closeAllTenantClients } from "./tenantClientPool";
+export {
+  checkUserHasHistoricalRecords,
+  type UserHistoricalRecordsResult,
+} from "./userDeletionGuard";
 export { canonicalizeEmail, getEmailDomain } from "./email";
 export {
   isPublicEmailDomain,

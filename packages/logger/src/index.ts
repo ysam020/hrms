@@ -1,4 +1,5 @@
 import http from "http";
+import { randomUUID } from "crypto";
 import winston from "winston";
 import WinstonCloudWatch from "winston-cloudwatch";
 import {
@@ -7,6 +8,9 @@ import {
   Counter,
   Histogram,
 } from "prom-client";
+import { requestIdStorage, getRequestId } from "./requestContext";
+
+export { requestIdStorage, getRequestId } from "./requestContext";
 
 const env = process.env.NODE_ENV === "production" ? "production" : "dev";
 const serviceName =
@@ -113,6 +117,18 @@ const serializeErrors = winston.format((info) => {
   return info;
 })();
 
+// Auto-attaches the ambient requestId (see requestContext.ts) to every log
+// line without requiring each call site to pass it explicitly — this is
+// what makes correlation-ID propagation actually usable across hundreds of
+// existing logger.info/error/warn calls instead of a change nobody adopts.
+const attachRequestId = winston.format((info) => {
+  const requestId = getRequestId();
+  if (requestId && info.requestId === undefined) {
+    info.requestId = requestId;
+  }
+  return info;
+})();
+
 // ── Logger ───────────────────────────────────────────────────────────────────
 export const logger = winston.createLogger({
   level:
@@ -121,6 +137,7 @@ export const logger = winston.createLogger({
       : process.env.LOG_LEVEL || "info",
   format: winston.format.combine(
     winston.format.timestamp(),
+    attachRequestId,
     serializeErrors,
     winston.format.errors({ stack: true }),
     winston.format.json(),
@@ -156,30 +173,43 @@ if (metricsPort) {
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+// Generates (or forwards, if a caller/proxy already set one) the
+// correlation ID for this request, echoes it back as a response header, and
+// runs the rest of the request — including every downstream gRPC call (see
+// grpcCall in api-gateway/src/grpc/clients.ts, which forwards it as gRPC
+// metadata) and every log line emitted during it — inside its
+// AsyncLocalStorage context.
 export const apiRequestLogger = (req: any, res: any, next: any) => {
   const start = Date.now();
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    const route = (req.route?.path ??
-      req.path ??
-      req.url ??
-      "unknown") as string;
-    const labels = {
-      method: req.method as string,
-      route,
-      status: String(res.statusCode),
-      service: serviceName,
-    };
-    httpRequestDuration.observe(labels, duration);
-    httpRequestsTotal.inc(labels);
-    logger.info("HTTP Request", {
-      method: req.method,
-      url: req.url,
-      status: res.statusCode,
-      duration: `${duration}ms`,
+  const requestId = (req.headers?.["x-request-id"] as string) || randomUUID();
+  req.requestId = requestId;
+  res.setHeader("x-request-id", requestId);
+
+  requestIdStorage.run(requestId, () => {
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      const route = (req.route?.path ??
+        req.path ??
+        req.url ??
+        "unknown") as string;
+      const labels = {
+        method: req.method as string,
+        route,
+        status: String(res.statusCode),
+        service: serviceName,
+      };
+      httpRequestDuration.observe(labels, duration);
+      httpRequestsTotal.inc(labels);
+      logger.info("HTTP Request", {
+        method: req.method,
+        url: req.url,
+        status: res.statusCode,
+        duration: `${duration}ms`,
+        requestId,
+      });
     });
+    next();
   });
-  next();
 };
 
 // Field-name substrings (case-insensitive) that mark a value as sensitive.
@@ -213,16 +243,27 @@ export const grpcApiRequestLogger = async (
   call: any,
   next: () => Promise<any>,
 ) => {
-  const start = Date.now();
-  const method = (call.getPath ? call.getPath() : "unknown") as string;
-  logger.info("gRPC Request", {
-    method,
-    request: redactSensitive(call.request),
+  // Continue the correlation ID the gateway generated in apiRequestLogger,
+  // forwarded as gRPC metadata by grpcCall (api-gateway/src/grpc/clients.ts)
+  // alongside x-tenant-id. Falls back to generating one so a call that
+  // somehow bypasses the gateway (a direct service-to-service call, a test)
+  // still gets a traceable id instead of silently having none.
+  const requestId =
+    (call.metadata?.get("x-request-id") ?? [])[0] || randomUUID();
+
+  return requestIdStorage.run(requestId, async () => {
+    const start = Date.now();
+    const method = (call.getPath ? call.getPath() : "unknown") as string;
+    logger.info("gRPC Request", {
+      method,
+      requestId,
+      request: redactSensitive(call.request),
+    });
+    const result = await next();
+    const duration = Date.now() - start;
+    grpcRequestDuration.observe({ method, service: serviceName }, duration);
+    grpcRequestsTotal.inc({ method, service: serviceName });
+    logger.info("gRPC Response", { duration: `${duration}ms`, requestId });
+    return result;
   });
-  const result = await next();
-  const duration = Date.now() - start;
-  grpcRequestDuration.observe({ method, service: serviceName }, duration);
-  grpcRequestsTotal.inc({ method, service: serviceName });
-  logger.info("gRPC Response", { duration: `${duration}ms` });
-  return result;
 };

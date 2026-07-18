@@ -8,6 +8,7 @@ import {
   httpRequestsTotal,
   grpcRequestDuration,
   grpcRequestsTotal,
+  getRequestId,
 } from "../index";
 
 describe("apiRequestLogger", () => {
@@ -26,6 +27,7 @@ describe("apiRequestLogger", () => {
     };
     const res: any = {
       statusCode: 200,
+      setHeader: jest.fn(),
       on: jest.fn((event: string, cb: () => void) => {
         if (event === "finish") finishCb = cb;
       }),
@@ -70,6 +72,7 @@ describe("apiRequestLogger", () => {
     let finishCb: () => void = () => {};
     const res: any = {
       statusCode: 200,
+      setHeader: jest.fn(),
       on: (_e: string, cb: any) => (finishCb = cb),
     };
     apiRequestLogger({ method: "GET" } as any, res, jest.fn());
@@ -82,6 +85,55 @@ describe("apiRequestLogger", () => {
     observeSpy.mockRestore();
     (httpRequestsTotal.inc as any).mockRestore?.();
     (logger.info as any).mockRestore?.();
+  });
+
+  describe("correlation ID (requestId)", () => {
+    function makeReqRes(headers: Record<string, string> = {}) {
+      let finishCb: () => void = () => {};
+      const req: any = { method: "GET", url: "/x", headers };
+      const res: any = {
+        statusCode: 200,
+        setHeader: jest.fn(),
+        on: jest.fn((event: string, cb: () => void) => {
+          if (event === "finish") finishCb = cb;
+        }),
+      };
+      return { req, res, runFinish: () => finishCb() };
+    }
+
+    it("generates a requestId when the incoming request has none, and echoes it as a response header", () => {
+      const { req, res, runFinish } = makeReqRes();
+      apiRequestLogger(req, res, jest.fn());
+      runFinish();
+
+      expect(req.requestId).toEqual(expect.any(String));
+      expect(res.setHeader).toHaveBeenCalledWith("x-request-id", req.requestId);
+    });
+
+    it("forwards an incoming x-request-id instead of generating a new one", () => {
+      const { req, res, runFinish } = makeReqRes({
+        "x-request-id": "incoming-id-123",
+      });
+      apiRequestLogger(req, res, jest.fn());
+      runFinish();
+
+      expect(req.requestId).toBe("incoming-id-123");
+      expect(res.setHeader).toHaveBeenCalledWith(
+        "x-request-id",
+        "incoming-id-123",
+      );
+    });
+
+    it("makes the requestId available via getRequestId() to code running inside the request (e.g. grpcCall)", () => {
+      const { req, res } = makeReqRes({ "x-request-id": "ambient-id" });
+      let capturedDuringRequest: string | undefined;
+      apiRequestLogger(req, res, () => {
+        capturedDuringRequest = getRequestId();
+      });
+
+      expect(capturedDuringRequest).toBe("ambient-id");
+      expect(getRequestId()).toBeUndefined(); // not leaked outside the request
+    });
   });
 });
 

@@ -54,8 +54,10 @@ export function deriveFromComponents(components: ComponentAmountInput[]) {
 // through a gRPC callback silently loses componentBreakdown on the wire —
 // every salary-service handler that returns a SalaryStructure row must
 // route it through this before handing it to `callback()`.
-export function toWireSalaryStructure<
-  T extends { componentBreakdown?: unknown },
->(row: T): T & { components: unknown } {
-  return { ...row, components: row.componentBreakdown ?? [] };
+export function toWireSalaryStructure<T extends object>(
+  row: T,
+): T & { components: unknown } {
+  const componentBreakdown = (row as { componentBreakdown?: unknown })
+    .componentBreakdown;
+  return { ...row, components: componentBreakdown ?? [] };
 }

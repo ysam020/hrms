@@ -26,6 +26,11 @@ payrollRouter.patch(
   validate(updatePayrollRunStatusSchema),
   h.updatePayrollRunStatus,
 );
+payrollRouter.post(
+  "/runs/:runId/retry-payouts",
+  authenticate,
+  h.retryFailedPayouts,
+);
 
 // ── Salary Advances ───────────────────────────────────────────────────────────
 payrollRouter.post(

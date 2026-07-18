@@ -26,12 +26,12 @@ A multi-stage build using Turborepo pruning to produce minimal images:
 
 ## Compose Files
 
-| File                       | Use case                                                |
-| -------------------------- | ------------------------------------------------------- |
-| `docker-compose.local.yml` | Full local stack including MongoDB and Redis containers |
-| `docker-compose.dev.yml`   | Services only — connects to external/remote infra       |
-| `docker-compose.ci.yml`    | Build and smoke-test images in CI                       |
-| `docker-compose.prod.yml`  | Pull pre-built images from the container registry       |
+| File                       | Use case                                                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker-compose.local.yml` | Full local stack including MongoDB and Redis containers                                                                                        |
+| `docker-compose.dev.yml`   | Services only — connects to external/remote infra                                                                                              |
+| `docker-compose.ci.yml`    | Build and smoke-test all service images — run both locally and as a required step in `.github/workflows/ci.yml` on every PR; see "CI/CD" below |
+| `docker-compose.prod.yml`  | Pull pre-built images from the container registry                                                                                              |
 
 ### Local development
 
@@ -147,6 +147,36 @@ Because each tenant gets its own MongoDB database, production deployments should
 - **Migrations:** `pnpm db:push` (`prisma db push`) only targets the single database `DEV_MONGODB_URI` resolves to — it does **not** fan out to tenant databases. Run `pnpm db:migrate` after every schema change to push the schema to every tenant database (`packages/database/src/push-to-all-tenants.ts`). For production, apply schema changes in a rolling deployment and verify backward compatibility first.
 - **Monitoring:** Add per-tenant tags to metrics and logs to identify slow tenants.
 
+### MongoDB HA and backups — action required before launch
+
+This repository connects to MongoDB purely via the `MONGO_URI` (and per-tenant
+database) connection strings — there is no MongoDB resource anywhere in
+`cloudformation/hrms-deploy.yaml` or any Docker Compose file. That's not an
+oversight to fix in code: it means MongoDB is provisioned and operated
+entirely outside this repository, on infrastructure this codebase has no
+visibility into. Concretely, that means:
+
+- **Replication/HA cannot be verified or added from here.** Whoever
+  provisioned the database (MongoDB Atlas, a self-managed replica set, AWS
+  DocumentDB, or a single standalone `mongod`) needs to confirm directly
+  against that system whether it's actually running as a replica set. A
+  standalone instance means a single node failure is unrecoverable data loss
+  for every tenant's data — this is the one item severe enough to block
+  launch on its own if it turns out to be true.
+- **Automated backups cannot be added from here either**, for the same
+  reason. If on Atlas: enable Continuous Cloud Backup (point-in-time
+  restore) in the Atlas project settings. If self-managed: schedule
+  `mongodump --uri="$MONGO_URI" --gzip --archive=...` (or, better, filesystem
+  / EBS snapshots if the data directory is on EBS) via cron or AWS Backup,
+  shipped to S3 with a lifecycle policy, and **test a real restore** —
+  an unverified backup is not a backup.
+- **What this means operationally:** before production launch, get written
+  (or at minimum Slack-message-level) confirmation from whoever owns the
+  Mongo deployment that both replication and backups are in place, and keep
+  that confirmation somewhere durable (this file, or a runbook). Do not infer
+  it from the absence of a finding in this repo — the repo genuinely cannot
+  see it either way.
+
 ---
 
 ## Health Checks
@@ -169,18 +199,46 @@ Docker Compose healthchecks use this endpoint to determine when the gateway is r
 - **MongoDB** can be scaled by moving high-traffic tenant databases to dedicated MongoDB Atlas clusters.
 - **Redis** can be scaled with Redis Cluster or Redis Sentinel for HA.
 
+### Monitoring host — residual single point of failure
+
+`MonitoringInstance` in `cloudformation/hrms-deploy.yaml` runs Prometheus,
+Grafana, and Alertmanager co-located on one `t3.micro`, deliberately outside
+the auto-scaling group it monitors. Two mitigations are in place:
+
+- **Auto-recovery** (`MonitoringInstanceRecoveryAlarm`): if the instance
+  fails its EC2 system status check for 5 consecutive minutes, AWS
+  automatically recovers it on the same host. This self-heals a hardware
+  fault in a few minutes without a human noticing first — but it can't help
+  with an AZ-wide outage, since the instance and its EBS volume stay pinned
+  to their current AZ.
+- **Daily EBS snapshots** (`MonitoringBackupPolicy`, via AWS DLM, 14-day
+  retention): if the instance or its volume is lost outright, 90 days of
+  Prometheus history and every Grafana dashboard aren't gone with it —
+  restorable from the most recent snapshot instead.
+
+Neither mitigation eliminates the SPOF — during any outage of this instance
+(recovery included), alerting and dashboards are unavailable, which is
+precisely when they're needed most. Actually eliminating it means one of:
+
+- A **warm-standby instance** in a second AZ behind Route 53 health-check
+  failover — straightforward to add, but Prometheus's local TSDB isn't
+  natively clusterable, so the standby would start with an empty history on
+  failover unless it's also restoring from the DLM snapshots above.
+- Migrating to a **managed/clustered backend** (Grafana Cloud, or
+  self-hosted Thanos/Cortex/Mimir in front of Prometheus) for real HA and
+  cross-AZ durability — the correct long-term fix, but a real infrastructure
+  and cost decision, not a one-line CloudFormation change, so it's
+  deliberately not made unilaterally here.
+
 ---
 
 ## CI/CD
 
-The recommended pipeline:
+**Current state:** `.github/workflows/ci.yml` runs on every pull request and push to `main` — lint, backend typecheck (`turbo run build --filter=!web`), frontend typecheck (`pnpm ts:check`), the full test suite (`pnpm test`), and a `docker-compose.ci.yml build --parallel` smoke build of all 14 service images. This is a required gate, not just a local pre-commit hook (which remains in place as a faster first line of defense, but is bypassable — the CI workflow is what actually blocks a broken merge). Separately, `build-and-push.yml` builds and pushes production images on push to `main` or manual dispatch, and `deploy-ec2.yml` handles the EC2 rollout.
 
-1. **On push to `main`:**
-   - `pnpm lint`
-   - `pnpm build`
-   - `docker compose -f docker-compose.ci.yml build`
-2. **On success:**
-   - Tag and push images to the container registry
+1. **On every PR / push to `main`:** the `ci.yml` gate above.
+2. **On push to `main`, after the gate passes:**
+   - Tag and push images to the container registry (`build-and-push.yml`)
    - Deploy to staging: `TAG_NAME=<sha> docker compose -f docker-compose.prod.yml up -d`
 3. **After staging smoke tests:**
    - Promote to production

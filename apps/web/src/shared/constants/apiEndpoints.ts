@@ -306,6 +306,9 @@ const PAYROLL = {
     `/payroll/runs?page=${page}&limit=${limit}${params}`,
   INITIATE_PAYROLL_RUN: "/payroll/runs",
   UPDATE_PAYROLL_RUN_STATUS: "/payroll/runs/status",
+  GET_PAYROLL_RUN: (runId: string) => `/payroll/runs/${runId}`,
+  RETRY_PAYROLL_PAYOUTS: (runId: string) =>
+    `/payroll/runs/${runId}/retry-payouts`,
   SALARY_ADVANCES: (page: number, limit: number, params = "") =>
     `/payroll/advances?page=${page}&limit=${limit}${params}`,
   REQUEST_SALARY_ADVANCE: "/payroll/advances",

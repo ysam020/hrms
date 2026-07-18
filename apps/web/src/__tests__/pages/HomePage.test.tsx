@@ -27,7 +27,7 @@ vi.mock("@web/app/router/routesConfig", () => ({
     {
       path: "/",
       element: <div>Stub Dashboard</div>,
-      allowedModules: [],
+      moduleTags: [],
       spotlightOnly: false,
     },
   ],

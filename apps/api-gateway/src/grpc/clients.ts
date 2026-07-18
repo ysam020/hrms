@@ -142,18 +142,60 @@ export const performanceReviewClient =
   );
 
 import { Metadata } from "@grpc/grpc-js";
+import { getRequestId } from "@hrms/logger";
+import { isRetryableGrpcCode, grpcRetryDelayMs } from "@hrms/grpc-client";
 import { gatewayTenantStorage } from "../middleware/tenantContext";
+
+// Default per-call deadline. Without one, a hung downstream service hangs
+// the gateway request indefinitely — bounded only by OS/keepalive timers
+// rather than an application-level limit — risking request/connection
+// pile-up during a partial outage. Overridable per call for known-slow RPCs
+// (e.g. payroll init) via the deadlineMs parameter.
+const DEFAULT_GRPC_DEADLINE_MS = 8_000;
+
+// Extra attempts made after the first failure, applied to every call site on
+// this path by default. Safe to apply blanket rather than per-call because
+// the retry itself is scoped to UNAVAILABLE only (see isRetryableGrpcCode in
+// @hrms/grpc-client) — a connection-level failure that never reached a
+// server able to act on it, so retrying can't double-execute a mutation.
+// Overridable per call (e.g. to 0) for an RPC where even that should be
+// avoided.
+const DEFAULT_GRPC_RETRIES = 2;
+
+const callOnce = <Req, Res>(
+  client: any,
+  method: string,
+  request: Req,
+  meta: Metadata,
+  deadlineMs: number,
+): Promise<Res> =>
+  new Promise((resolve, reject) => {
+    client[method](
+      request,
+      meta,
+      { deadline: Date.now() + deadlineMs },
+      (error: ServiceError | null, response: Res) => {
+        if (error) reject(error);
+        else resolve(response);
+      },
+    );
+  });
 
 // Promisify a unary gRPC call; annotates rejected errors with httpStatus so
 // handlers can return the correct HTTP code without inspecting gRPC internals.
 // Automatically forwards the request-scoped tenantId as gRPC metadata so every
 // handler gets tenant isolation for free without any per-call changes.
+// Retries connection-level (UNAVAILABLE) failures with backoff+jitter using
+// the same policy as @hrms/grpc-client's BaseGrpcClient — every other error
+// code is deterministic and is surfaced to the caller on the first attempt.
 export const grpcCall = <Req, Res>(
   client: any,
   method: string,
   request: Req,
   // Explicit override — only needed in the auth flow (before tenant is known)
   tenantIdOverride?: string | null,
+  deadlineMs: number = DEFAULT_GRPC_DEADLINE_MS,
+  retries: number = DEFAULT_GRPC_RETRIES,
 ): Promise<Res> => {
   const meta = new Metadata();
   const store = gatewayTenantStorage.getStore();
@@ -161,6 +203,12 @@ export const grpcCall = <Req, Res>(
   const dbName = store?.dbName;
   if (tenantId) meta.add("x-tenant-id", tenantId);
   if (dbName) meta.add("x-tenant-db-name", dbName);
+
+  // Correlation ID set by apiRequestLogger — forwarded so the downstream
+  // service's own logs (via grpcApiRequestLogger) can be joined back to this
+  // exact HTTP request instead of correlating by timestamp/tenant.
+  const requestId = getRequestId();
+  if (requestId) meta.add("x-request-id", requestId);
 
   // Forward who's making this call so a downstream service's own audit-log
   // writes (see packages/grpc-server/src/base-server.ts) can still attribute
@@ -172,19 +220,32 @@ export const grpcCall = <Req, Res>(
   if (actor?.ipAddress) meta.add("x-actor-ip", actor.ipAddress);
   if (actor?.userAgent) meta.add("x-actor-user-agent", actor.userAgent);
 
-  return new Promise((resolve, reject) => {
-    client[method](
-      request,
-      meta,
-      (error: ServiceError | null, response: Res) => {
-        if (error) {
+  const attempt = async (): Promise<Res> => {
+    for (let n = 0; n <= retries; n++) {
+      try {
+        return await callOnce<Req, Res>(
+          client,
+          method,
+          request,
+          meta,
+          deadlineMs,
+        );
+      } catch (error: any) {
+        const isLastAttempt = n === retries;
+        if (isLastAttempt || !isRetryableGrpcCode(error?.code)) {
           (error as ServiceError & { httpStatus: number }).httpStatus =
-            grpcToHttpStatus(error.code ?? GrpcStatus.UNKNOWN);
-          reject(error);
-        } else {
-          resolve(response);
+            grpcToHttpStatus(error?.code ?? GrpcStatus.UNKNOWN);
+          throw error;
         }
-      },
-    );
-  });
+        await new Promise((resolve) =>
+          setTimeout(resolve, grpcRetryDelayMs(n)),
+        );
+      }
+    }
+    // Unreachable: the loop above always returns or throws; TypeScript can't
+    // prove that since `retries` is a runtime value, not a literal.
+    throw new Error("unreachable");
+  };
+
+  return attempt();
 };

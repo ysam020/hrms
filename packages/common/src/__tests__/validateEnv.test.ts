@@ -8,7 +8,7 @@ describe("validateEnv", () => {
   beforeEach(() => {
     exitSpy = jest.spyOn(process, "exit").mockImplementation((() => {
       throw new Error("process.exit called");
-    }) as unknown as (code?: number) => never);
+    }) as unknown as (code?: string | number | null) => never);
     errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
   });
 

@@ -1,16 +1,26 @@
 import { Response, NextFunction, Request } from "express";
 import { prisma, runWithTenant, getClientForDb } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, BoundedCache } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { gatewayTenantStorage } from "./tenantContext";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 
 // In-memory cache: slug → { id, dbName } (avoids a DB lookup on every
-// anonymous careers-page view). Mirrors authenticate.ts's dbNameCache.
-const tenantBySlugCache = new Map<
+// anonymous careers-page view). Mirrors authenticate.ts's dbNameCache —
+// bounded LRU + idle-TTL so it doesn't accumulate entries forever.
+//
+// isActive is checked only on the DB read below, not on every cache hit —
+// so a tenant deactivated after being cached would otherwise stay resolvable
+// through this cache for as long as its careers page keeps getting hit,
+// since BoundedCache's idle-TTL resets on every access rather than expiring
+// on a fixed schedule. cachedAt enforces a hard ceiling on that regardless
+// of access pattern, so a deactivation takes effect within a bounded window.
+const SLUG_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+
+const tenantBySlugCache = new BoundedCache<
   string,
-  { id: string; dbName: string | null }
+  { id: string; dbName: string | null; cachedAt: number }
 >();
 
 /**
@@ -38,6 +48,9 @@ export async function resolvePublicTenant(
 
   try {
     let tenant = tenantBySlugCache.get(slug);
+    if (tenant && Date.now() - tenant.cachedAt > SLUG_CACHE_MAX_AGE_MS) {
+      tenant = undefined; // force a fresh isActive check below
+    }
     if (!tenant) {
       const row = await prisma.tenant.findUnique({
         where: { slug },
@@ -49,7 +62,7 @@ export async function resolvePublicTenant(
         });
         return;
       }
-      tenant = { id: row.id, dbName: row.dbName };
+      tenant = { id: row.id, dbName: row.dbName, cachedAt: Date.now() };
       tenantBySlugCache.set(slug, tenant);
     }
 

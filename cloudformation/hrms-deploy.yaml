@@ -56,6 +56,25 @@ Parameters:
     Description: >
       Name (not ARN) of the existing Secrets Manager secret holding runtime env
       vars. Must already exist — this stack only grants read access to it.
+  AlertmanagerSlackWebhookSecretName:
+    Type: String
+    Description: >
+      Name (not ARN) of the existing Secrets Manager secret whose value is the
+      Slack incoming-webhook URL Alertmanager pages on. Must already exist —
+      this stack only grants read access to it. MonitoringInstance's deploy.sh
+      writes it to monitoring/secrets/slack_webhook_url at boot/redeploy (see
+      monitoring/alertmanager.yml).
+  AlertmanagerCriticalSlackWebhookSecretName:
+    Type: String
+    Default: ""
+    Description: >
+      Optional. Name of a distinct existing Secrets Manager secret holding a
+      separate Slack webhook URL that critical-severity alerts should page
+      instead of AlertmanagerSlackWebhookSecretName's — e.g. a webhook bound to
+      a smaller, always-on-call channel. Leave blank to route critical alerts
+      through the same webhook as everything else (deploy.sh then mirrors the
+      default webhook into the critical secret's file, so alertmanager.yml's
+      config never has to change either way).
   EcrRepositoryPrefix:
     Type: String
     Default: dev
@@ -368,6 +387,15 @@ Resources:
                 Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref GrafanaAdminSecret
+              # The critical-webhook ARN resolves to a harmless, no-such-secret
+              # pattern (".../secret:-*") when AlertmanagerCriticalSlackWebhookSecretName
+              # is left blank — granting read on it is a no-op in that case.
+              - Sid: AlertmanagerSlackWebhookRead
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${AlertmanagerSlackWebhookSecretName}-*"
+                  - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${AlertmanagerCriticalSlackWebhookSecretName}-*"
               # Backs the Grafana CloudWatch datasource (monitoring/grafana/provisioning-prod)
               # used for logs, since every service already ships logs to
               # CloudWatch (packages/logger) rather than to Loki in prod.
@@ -776,6 +804,24 @@ Resources:
   Asg:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn: HttpsListener
+    # Separate concern from the batched/health-checked/auto-rollback rollout
+    # in .github/workflows/deploy-ec2.yml: that workflow deploys new app image
+    # tags to already-running instances in place (via SSM + docker compose)
+    # and never touches this template. This UpdatePolicy instead governs the
+    # rarer case of a stack update that changes the LaunchTemplate itself
+    # (AMI, instance type, UserData) — without it, CloudFormation leaves
+    # existing instances on the old launch config indefinitely, requiring a
+    # manual, unstaged instance-by-instance replacement. Reuses the same
+    # TargetGroup ELB health check the ASG already has (HealthCheckType: ELB,
+    # HealthCheckGracePeriod: 180 below) to replace one instance at a time and
+    # confirm it's healthy before moving to the next — PauseTime matches that
+    # same 180s grace period.
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT3M
+        WaitOnResourceSignals: false
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
@@ -856,6 +902,33 @@ Resources:
             --query 'SecretString' --output text)
           printf 'GF_SECURITY_ADMIN_PASSWORD=%s\n' "$GF_ADMIN_SECRET" > /opt/hrms-monitoring/.env
 
+          # Written here (after the s3 sync --delete above, not before) since
+          # --delete removes local files under monitoring/ that aren't present
+          # in S3 — writing these first would just have them wiped on every
+          # redeploy. slack_webhook_url_critical always exists so alertmanager.yml
+          # never fails to load a receiver: it holds its own dedicated webhook
+          # when AlertmanagerCriticalSlackWebhookSecretName is set, otherwise it's
+          # a mirror of the default webhook (same channel/webhook, no config change
+          # needed either way).
+          mkdir -p /opt/hrms-monitoring/monitoring/secrets
+          aws secretsmanager get-secret-value \
+            --secret-id "${AlertmanagerSlackWebhookSecretName}" --region "$AWS_REGION" \
+            --query 'SecretString' --output text \
+            > /opt/hrms-monitoring/monitoring/secrets/slack_webhook_url
+
+          CRITICAL_SECRET_NAME="${AlertmanagerCriticalSlackWebhookSecretName}"
+          if [ -n "$CRITICAL_SECRET_NAME" ]; then
+            aws secretsmanager get-secret-value \
+              --secret-id "$CRITICAL_SECRET_NAME" --region "$AWS_REGION" \
+              --query 'SecretString' --output text \
+              > /opt/hrms-monitoring/monitoring/secrets/slack_webhook_url_critical
+          else
+            cp /opt/hrms-monitoring/monitoring/secrets/slack_webhook_url \
+              /opt/hrms-monitoring/monitoring/secrets/slack_webhook_url_critical
+          fi
+          chmod 600 /opt/hrms-monitoring/monitoring/secrets/slack_webhook_url \
+            /opt/hrms-monitoring/monitoring/secrets/slack_webhook_url_critical
+
           cd /opt/hrms-monitoring
           docker compose -f docker-compose.monitoring-prod.yml pull --quiet
           docker compose -f docker-compose.monitoring-prod.yml up -d --remove-orphans
@@ -881,6 +954,78 @@ Resources:
 
           systemctl daemon-reload
           systemctl enable --now hrms-monitoring.service
+
+  # MonitoringInstance is a known single point of failure (see its comment
+  # above) — a real fix is either a warm-standby instance behind DNS
+  # failover or migrating to a managed/clustered observability backend
+  # (e.g. Thanos/Mimir, or Grafana Cloud), both real architecture decisions
+  # with meaningful cost and operational tradeoffs that this stack
+  # deliberately doesn't make unilaterally. What follows are two safe,
+  # additive mitigations that reduce (not eliminate) the blast radius of
+  # that SPOF without changing the architecture:
+  #  1. auto-recovery on the underlying hardware failing its status check
+  #     (turns "someone notices Grafana is down and manually intervenes"
+  #     into an automatic few-minutes self-heal, for that failure class only
+  #     — it can't help with an AZ-wide outage, since the instance and its
+  #     EBS volume stay pinned to their current AZ)
+  #  2. daily EBS snapshots of its root volume, so a lost/corrupted
+  #     instance doesn't also mean losing 90 days of Prometheus history and
+  #     every Grafana dashboard — there was previously no backup path for
+  #     this data at all.
+  MonitoringInstanceRecoveryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: >
+        Auto-recovers MonitoringInstance (stop/start on the same host) after
+        5 consecutive minutes of failing its EC2 system status check.
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref MonitoringInstance
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Sub "arn:aws:automate:${AWS::Region}:ec2:recover"
+
+  MonitoringBackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: dlm.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole
+
+  MonitoringBackupPolicy:
+    Type: AWS::DLM::LifecyclePolicy
+    Properties:
+      Description: Daily EBS snapshots of the monitoring host (Prometheus TSDB + Grafana state) — see the comment above MonitoringInstanceRecoveryAlarm.
+      State: ENABLED
+      ExecutionRoleArn: !GetAtt MonitoringBackupRole.Arn
+      PolicyDetails:
+        ResourceTypes:
+          - INSTANCE
+        TargetTags:
+          - Key: Name
+            Value: hrms-monitoring
+        Schedules:
+          - Name: DailySnapshot
+            TagsToAdd:
+              - Key: SnapshotType
+                Value: hrms-monitoring-daily
+            CreateRule:
+              CronExpression: "cron(0 3 * * ? *)"
+            RetainRule:
+              Count: 14
+            CopyTags: true
 
   # ─────────────────────────── DNS ───────────────────────────
   ApiDnsRecord:

@@ -13,6 +13,44 @@ x-backend-service: &backend-service
   depends_on:
     redis:
       condition: service_healthy
+  # Every service already exposes /health on METRICS_PORT (see
+  # packages/logger/src/index.ts's metrics HTTP server) — this just wires it
+  # in. Uses `node` directly (no curl/wget baked into the slim runner image)
+  # and reads METRICS_PORT from the container's own env rather than baking a
+  # port number into the shared anchor, since each service sets a different
+  # one. Without this, `depends_on: condition: service_healthy` was never
+  # usable between app services, and a bad image could go live before
+  # anyone/anything noticed.
+  healthcheck:
+    test:
+      - "CMD"
+      - "node"
+      - "-e"
+      - "require('http').get('http://localhost:'+process.env.METRICS_PORT+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
+  # Unbounded containers let one runaway service (e.g. a payroll disbursement
+  # batch) starve every other service sharing the host. Sized generously for
+  # a Node gRPC microservice at today's scale — tune per-service if profiling
+  # shows a service running close to these under normal load.
+  #
+  # Memory budget (this host is m7i-flex.large: 8 GiB total, per
+  # cloudformation/hrms-deploy.yaml): redis (256M) + api-gateway (768M) +
+  # 12 backend services x 384M = 5,632M, leaving ~2,560M (~31%) of headroom
+  # for the OS, dockerd, and the CloudWatch/SSM agents. `web` runs under a
+  # separate compose profile and isn't part of this host's default `up -d`,
+  # so it's excluded from this budget. Unlike memory, cpus limits are
+  # deliberately left oversubscribed (0.5 x 12 + 1.0 = 7.0 against 2 vCPUs) —
+  # CFS quota throttling degrades a container gracefully under contention,
+  # it doesn't OOM-kill it, so bursting past the host's core count when
+  # siblings are idle is the intended behavior, not a bug.
+  deploy:
+    resources:
+      limits:
+        cpus: "0.5"
+        memory: 384M
 
 services:
   redis:
@@ -27,6 +65,11 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   api-gateway:
     container_name: hrms-prod-api-gateway
@@ -50,6 +93,17 @@ services:
       - "19002:9002"
       - "19003:9003"
     <<: *backend-service
+    # Overrides the shared anchor's limits — api-gateway fronts every HTTP/WS
+    # client directly and now also runs the payroll disbursement BullMQ
+    # worker in-process (see payrollDisbursementWorker.ts), so it carries
+    # more load than a pure gRPC microservice. Still 2x the backend default
+    # (768M vs 384M), not 2x the OLD default (1024M vs 512M) — see the memory
+    # budget note on x-backend-service above for the host-wide math.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
 
   # Metrics ports below are published on the host (not just the compose
   # network) so the monitoring EC2 host can scrape them over the VPC — see
@@ -185,6 +239,11 @@ services:
     volumes:
       - ./packages/certificates:/app/packages/certificates:ro
     restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 volumes:
   redis-data:

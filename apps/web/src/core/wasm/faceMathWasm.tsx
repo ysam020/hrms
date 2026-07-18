@@ -45,6 +45,16 @@ let _getHeap: any = null;
  * Each call region is non-overlapping as long as they are released before the
  * next call — which all exported wrappers guarantee because they are sync.
  */
+// Slot counts backing each REGION's size below — every wrapper function
+// asserts its input length against these before writing to the heap. Without
+// that check, a future tuning change to a caller-side constant (e.g.
+// faceRecognition.worker.ts's HEAD_MOVEMENT_SAMPLES) that isn't mirrored here
+// would silently overwrite the next region in this bump-allocated memory
+// instead of failing loudly.
+const MAX_LANDMARKS = 68;
+const MAX_POSES = 8;
+const MAX_DESCRIPTOR_LEN = 128;
+
 const REGION = {
   LM: { offset: 0, size: 136 * 4 }, // 68 landmarks × 2 floats
   OUT3: { offset: 136 * 4, size: 3 * 4 }, // 3-float result
@@ -63,6 +73,11 @@ const REGION = {
  * @returns {{ horizontal: number, vertical: number, roll: number }}
  */
 export function calculateHeadPose(landmarks) {
+  if (landmarks.length > MAX_LANDMARKS) {
+    throw new RangeError(
+      `calculateHeadPose: got ${landmarks.length} landmarks, region only fits ${MAX_LANDMARKS}`,
+    );
+  }
   const heap = _getHeap();
 
   // Write landmarks into WASM memory [x0,y0, x1,y1, …]
@@ -95,6 +110,11 @@ export function calculateHeadPose(landmarks) {
  */
 export function euclideanDistance(d1, d2) {
   const n = d1.length;
+  if (n > MAX_DESCRIPTOR_LEN || d2.length > MAX_DESCRIPTOR_LEN) {
+    throw new RangeError(
+      `euclideanDistance: descriptor length ${Math.max(n, d2.length)} exceeds the ${MAX_DESCRIPTOR_LEN}-slot region`,
+    );
+  }
   const heap = _getHeap();
 
   const aBase = REGION.A.offset / 4;
@@ -118,6 +138,11 @@ export function euclideanDistance(d1, d2) {
  * @returns {number}
  */
 export function maxHeadMovement(poses) {
+  if (poses.length > MAX_POSES) {
+    throw new RangeError(
+      `maxHeadMovement: got ${poses.length} poses, region only fits ${MAX_POSES}`,
+    );
+  }
   const heap = _getHeap();
   const pBase = REGION.POSE.offset / 4;
 

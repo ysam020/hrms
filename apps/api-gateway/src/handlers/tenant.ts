@@ -128,6 +128,7 @@ async function buildTenant(
         refreshToken,
         existingTenant.id,
         existingMembership.role,
+        undefined,
         existingTenant.dbName ?? null,
         false,
       );
@@ -334,6 +335,7 @@ async function buildTenant(
     refreshToken,
     tenant.id,
     "owner",
+    undefined,
     tenant.dbName ?? null,
     false,
   );
@@ -540,6 +542,7 @@ export async function selectTenant(req: AuthRequest, res: Response) {
       refreshToken,
       tenantId,
       membership.role,
+      undefined,
       tenant.dbName ?? null,
       true,
     );

@@ -37,11 +37,13 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
+const mockUserFindFirst = (prisma as any).user.findFirst as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: any = {}) =>
   ({
-    user: { userId: "user-1" },
+    user: { userId: "user-1", tenantRole: "employee" },
     query: {},
     params: {},
     body: {},
@@ -54,6 +56,8 @@ describe("userHandlers", () => {
     jest.clearAllMocks();
     mockGrpcCall.mockResolvedValue({ data: null, message: "OK", status: 0 });
     mockTenantFindUnique.mockResolvedValue({ workState: null });
+    mockUserFindFirst.mockResolvedValue(null);
+    mockUserFindUnique.mockResolvedValue({ isSuperUser: false });
   });
 
   describe("getAllUsers", () => {
@@ -181,6 +185,103 @@ describe("userHandlers", () => {
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
+    });
+
+    // Regression coverage for a real bug: this endpoint used to leak salary
+    // data unconditionally (never stripped for anyone) and gated
+    // aadhar/bank/pan on a broken "isSuperUser only" + "userId === username"
+    // self-check that could never be true (userId is a database id, the
+    // route param is a username) — any authenticated employee could read
+    // any other employee's full salary breakdown by visiting this endpoint.
+    describe("PII/compensation data exposure", () => {
+      const targetUser = { id: "target-1", role: "", isSuperUser: false };
+      const salaryRow = {
+        salary: 90000,
+        salaryBasicPay: 45000,
+        salaryHra: 20000,
+        salaryConveyance: 5000,
+        salaryPf: 5000,
+        salaryEsi: 1000,
+        salaryPt: 200,
+        salaryComponentBreakdown: [],
+      };
+
+      beforeEach(() => {
+        mockGrpcCall.mockResolvedValue({
+          data: {
+            ...targetUser,
+            aadhar_no: "1234-5678-9012",
+            bank_account_no: "ACC123",
+            pan_no: "ABCDE1234F",
+          },
+          message: "OK",
+          status: 0,
+        });
+        mockUserFindFirst.mockResolvedValue(salaryRow);
+      });
+
+      it("strips aadhar/bank/pan/salary for a non-owner, non-privileged caller", async () => {
+        const res = makeRes();
+        await getUserData(
+          makeReq({
+            user: { userId: "caller-1", tenantRole: "employee" },
+            params: { username: "target" },
+          }),
+          res,
+        );
+        const [, , payload] = mockApiResponse.mock.calls[0];
+        expect(payload.data.aadhar_no).toBeUndefined();
+        expect(payload.data.bank_account_no).toBeUndefined();
+        expect(payload.data.pan_no).toBeUndefined();
+        expect(payload.data.salary).toBeUndefined();
+        expect(payload.data.salaryStructure).toBeUndefined();
+      });
+
+      it("keeps full data when the caller is viewing their own record", async () => {
+        const res = makeRes();
+        await getUserData(
+          makeReq({
+            user: { userId: "target-1", tenantRole: "employee" },
+            params: { username: "target" },
+          }),
+          res,
+        );
+        const [, , payload] = mockApiResponse.mock.calls[0];
+        expect(payload.data.aadhar_no).toBe("1234-5678-9012");
+        expect(payload.data.salary).toBe(90000);
+      });
+
+      it.each(["owner", "admin", "hr"])(
+        "keeps full data for another employee when caller's tenant role is '%s'",
+        async (tenantRole) => {
+          const res = makeRes();
+          await getUserData(
+            makeReq({
+              user: { userId: "caller-1", tenantRole },
+              params: { username: "target" },
+            }),
+            res,
+          );
+          const [, , payload] = mockApiResponse.mock.calls[0];
+          expect(payload.data.bank_account_no).toBe("ACC123");
+          expect(payload.data.salary).toBe(90000);
+        },
+      );
+
+      it("keeps full data for another employee when the caller is a superuser", async () => {
+        mockUserFindUnique.mockResolvedValue({ isSuperUser: true });
+        const res = makeRes();
+        await getUserData(
+          makeReq({
+            user: { userId: "caller-1", tenantRole: "employee" },
+            params: { username: "target" },
+          }),
+          res,
+        );
+        const [, , payload] = mockApiResponse.mock.calls[0];
+        expect(payload.data.pan_no).toBe("ABCDE1234F");
+        expect(payload.data.salary).toBe(90000);
+      });
     });
   });
 

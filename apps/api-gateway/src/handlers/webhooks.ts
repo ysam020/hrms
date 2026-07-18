@@ -72,9 +72,10 @@ async function assertAdminRole(userId: string): Promise<boolean> {
 // service) re-runs this exact check again immediately before every actual
 // delivery, which is the check that matters for that attack.
 async function isSafeWebhookUrl(url: string): Promise<boolean> {
-  if (
-    !isSafeUrl(url, { requireHttps: process.env.NODE_ENV === "production" })
-  ) {
+  // requireHttps defaults to true and is intentionally NOT gated on
+  // NODE_ENV — a misconfigured staging deployment (a common failure mode)
+  // must not silently downgrade to accepting plaintext http:// targets.
+  if (!isSafeUrl(url)) {
     return false;
   }
   return isSafeHostname(new URL(url).hostname);

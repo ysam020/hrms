@@ -7,6 +7,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@hrms/cache": "workspace:*",
     "@hrms/common": "workspace:*",
     "@hrms/db": "workspace:*",
     "@hrms/firebase": "workspace:*",

@@ -7,6 +7,7 @@ jest.mock("@hrms/queue", () => ({
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+  requestIdStorage: { run: jest.fn((_id: string, fn: () => any) => fn()) },
 }));
 
 jest.mock("@hrms/db", () => ({
@@ -42,7 +43,7 @@ jest.mock("bullmq", () => ({
   }),
 }));
 
-import { logger } from "@hrms/logger";
+import { logger, requestIdStorage } from "@hrms/logger";
 import { prisma } from "@hrms/db";
 import pdfParse from "pdf-parse";
 import { startResumeParserWorker } from "../workers/resumeParser";
@@ -278,6 +279,31 @@ describe("startResumeParserWorker", () => {
     capturedWorker!.handlers.error(new Error("conn lost"));
     expect(logger.error).toHaveBeenCalledWith("[resumeParser] Worker error:", {
       err: expect.any(Error),
+    });
+  });
+
+  describe("correlation ID propagation", () => {
+    it("runs the job inside the producer's requestId context when the job carries one", async () => {
+      (prisma.jobApplication.findUnique as jest.Mock).mockResolvedValue(null);
+      startResumeParserWorker();
+
+      await capturedWorker!.processor({
+        data: { applicationId: "app1", requestId: "req-3" },
+      });
+
+      expect(requestIdStorage.run).toHaveBeenCalledWith(
+        "req-3",
+        expect.any(Function),
+      );
+    });
+
+    it("does not touch requestIdStorage when the job carries no requestId", async () => {
+      (prisma.jobApplication.findUnique as jest.Mock).mockResolvedValue(null);
+      startResumeParserWorker();
+
+      await capturedWorker!.processor({ data: { applicationId: "app1" } });
+
+      expect(requestIdStorage.run).not.toHaveBeenCalled();
     });
   });
 });

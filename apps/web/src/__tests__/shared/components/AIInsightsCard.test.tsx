@@ -11,12 +11,19 @@ import { getAccessToken, fetchCsrfToken } from "@web/core/http/axiosConfig";
 // The mocked stream reader resolves every chunk on the microtask queue with
 // no real I/O in between, so RTL's findBy*/waitFor polling (interval-timer
 // based) can race ahead of React's own scheduling of the resulting state
-// updates. A short real macrotask delay lets everything settle before we
-// assert with a plain getBy*/queryBy*.
+// updates. Fake timers + advanceTimersByTimeAsync (which flushes microtasks
+// between each simulated tick) let everything settle deterministically
+// instead of adding real wall-clock time to the suite via a plain
+// setTimeout wait — a plausible source of flakiness under CI load.
 async function flush(ms = 50) {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-  });
+  vi.useFakeTimers();
+  try {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 vi.mock("@web/core/http/axiosConfig", () => ({

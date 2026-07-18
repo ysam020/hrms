@@ -8,10 +8,17 @@ import dns from "dns";
 // outbound-URL feature (chat link previews, tenant webhooks, ...) gets the
 // same coverage instead of each reinventing its own subset.
 const PRIVATE_IP_RE =
-  /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|::1|::ffff:|fc00:|fe80:)/i;
+  /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|::1|::ffff:|fe80:)/i;
+
+// IPv6 Unique Local Address block fc00::/7 — every address in range has a
+// first group between 0xfc00 and 0xfdff, i.e. starting with hex "fc" or
+// "fd". A literal "fc00:" prefix match (the previous check) missed the far
+// more common "fd00::/8" half of the block that Kubernetes/Cilium/Docker/
+// Tailscale actually default to.
+const IPV6_ULA_RE = /^(fc|fd)[0-9a-f]{2}:/i;
 
 function isPrivateIp(host: string): boolean {
-  if (PRIVATE_IP_RE.test(host)) return true;
+  if (PRIVATE_IP_RE.test(host) || IPV6_ULA_RE.test(host)) return true;
   // 172.16.0.0/12
   const m = host.match(/^172\.(\d+)\./);
   return !!m && parseInt(m[1], 10) >= 16 && parseInt(m[1], 10) <= 31;

@@ -21,6 +21,7 @@ import { googleAuthCallback } from "./handlers/auth";
 import { handleWebhook } from "./handlers/payment";
 import { handleRazorpayXWebhook } from "./handlers/razorpayxWebhook";
 import { startSubscriptionReconciler } from "./services/subscriptionReconciler";
+import { startPayrollDisbursementWorker } from "./workers/payrollDisbursementWorker";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -129,6 +130,7 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   setupChatSocket(io, redisAdapter);
 
   startSubscriptionReconciler();
+  startPayrollDisbursementWorker();
 
   server.listen(PORT, () => {
     const protocol = server instanceof http.Server ? "http" : "https";

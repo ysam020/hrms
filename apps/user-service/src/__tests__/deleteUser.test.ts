@@ -1,5 +1,5 @@
 import { status } from "@grpc/grpc-js";
-import { prisma } from "@hrms/db";
+import { prisma, checkUserHasHistoricalRecords } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { deleteUser } from "../handlers/deleteUser";
 import { MESSAGES } from "../constants/messages";
@@ -7,15 +7,12 @@ import { MESSAGES } from "../constants/messages";
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn(), delete: jest.fn() },
-    attendanceRecord: { count: jest.fn() },
-    leaveApplication: { count: jest.fn() },
-    salaryStructure: { count: jest.fn() },
-    payrollLineItem: { count: jest.fn() },
   };
   return {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    checkUserHasHistoricalRecords: jest.fn(),
   };
 });
 
@@ -31,10 +28,7 @@ const mockFindUnique = prisma.user.findUnique as jest.Mock;
 const mockDelete = prisma.user.delete as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockCacheDelete = cacheManager.delete as jest.Mock;
-const mockAttendanceCount = (prisma as any).attendanceRecord.count as jest.Mock;
-const mockLeaveCount = (prisma as any).leaveApplication.count as jest.Mock;
-const mockSalaryCount = (prisma as any).salaryStructure.count as jest.Mock;
-const mockPayrollCount = (prisma as any).payrollLineItem.count as jest.Mock;
+const mockCheckHistoricalRecords = checkUserHasHistoricalRecords as jest.Mock;
 
 const makeCall = (req: any) => ({ request: req }) as any;
 const makeCallback = () => jest.fn();
@@ -45,10 +39,10 @@ describe("deleteUser", () => {
     mockInvalidate.mockResolvedValue(undefined);
     mockCacheDelete.mockResolvedValue(undefined);
     mockDelete.mockResolvedValue(undefined);
-    mockAttendanceCount.mockResolvedValue(0);
-    mockLeaveCount.mockResolvedValue(0);
-    mockSalaryCount.mockResolvedValue(0);
-    mockPayrollCount.mockResolvedValue(0);
+    mockCheckHistoricalRecords.mockResolvedValue({
+      hasRecords: false,
+      models: [],
+    });
   });
 
   it("returns NOT_FOUND when user does not exist", async () => {
@@ -75,9 +69,12 @@ describe("deleteUser", () => {
     );
   });
 
-  it("blocks hard-delete when the user has historical attendance/leave/payroll records", async () => {
+  it("blocks hard-delete when the user has historical records", async () => {
     mockFindUnique.mockResolvedValue({ id: "u1", username: "john" });
-    mockLeaveCount.mockResolvedValue(2);
+    mockCheckHistoricalRecords.mockResolvedValue({
+      hasRecords: true,
+      models: ["leaveApplication"],
+    });
     const cb = makeCallback();
     await deleteUser(makeCall({ userId: "u1" }), cb);
     expect(mockDelete).not.toHaveBeenCalled();

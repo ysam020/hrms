@@ -9,6 +9,7 @@ jest.mock("@hrms/queue", () => ({
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+  requestIdStorage: { run: jest.fn((_id: string, fn: () => any) => fn()) },
 }));
 
 // Capture the processor fn + registered event handlers for each `new Worker(...)`.
@@ -75,7 +76,7 @@ jest.mock("../jobs/deliverWebhook", () => ({
   deliverWebhook: mockDeliverWebhook,
 }));
 
-import { logger } from "@hrms/logger";
+import { logger, requestIdStorage } from "@hrms/logger";
 import { startSchedulerWorker, startWebhookWorker } from "../worker";
 
 describe("startSchedulerWorker", () => {
@@ -160,6 +161,31 @@ describe("startSchedulerWorker", () => {
     handlers.failed({ id: "j9" }, new Error("boom"));
     expect(logger.error).toHaveBeenCalledWith("Scheduler job j9 failed:", {
       err: expect.any(Error),
+    });
+  });
+
+  describe("correlation ID propagation", () => {
+    it("runs the job inside the producer's requestId context when present (a manually-triggered job)", async () => {
+      startSchedulerWorker();
+      const { processor } = capturedWorkers[0];
+
+      await processor({
+        data: { jobName: "updateExpiredHrActivities", requestId: "req-1" },
+      });
+
+      expect(requestIdStorage.run).toHaveBeenCalledWith(
+        "req-1",
+        expect.any(Function),
+      );
+    });
+
+    it("does not touch requestIdStorage for the normal timer-driven case (no requestId)", async () => {
+      startSchedulerWorker();
+      const { processor } = capturedWorkers[0];
+
+      await processor({ data: { jobName: "updateExpiredHrActivities" } });
+
+      expect(requestIdStorage.run).not.toHaveBeenCalled();
     });
   });
 });
@@ -274,6 +300,29 @@ describe("startWebhookWorker", () => {
     handlers.error(new Error("conn lost"));
     expect(logger.error).toHaveBeenCalledWith("Webhook worker error:", {
       err: expect.any(Error),
+    });
+  });
+
+  describe("correlation ID propagation", () => {
+    it("runs the job inside the producer's requestId context when the job carries one", async () => {
+      startWebhookWorker();
+      const { processor } = capturedWorkers[0];
+
+      await processor({ data: { deliveryId: "d-1", requestId: "req-2" } });
+
+      expect(requestIdStorage.run).toHaveBeenCalledWith(
+        "req-2",
+        expect.any(Function),
+      );
+    });
+
+    it("does not touch requestIdStorage when the job carries no requestId", async () => {
+      startWebhookWorker();
+      const { processor } = capturedWorkers[0];
+
+      await processor({ data: { deliveryId: "d-1" } });
+
+      expect(requestIdStorage.run).not.toHaveBeenCalled();
     });
   });
 });

@@ -40,13 +40,25 @@ describe("tenantClientPool", () => {
     nowSpy.mockRestore();
   });
 
-  it("creates a new client with a dbName-substituted datasource URL, and audit-instruments it", () => {
+  it("creates a new client with a dbName-substituted datasource URL plus a bounded maxPoolSize, and audit-instruments it", () => {
     const client = tenantClientPool.getClientForDb("tenant-a");
 
-    expect(client.__opts.datasourceUrl).toBe(
-      "mongodb://host:27017/tenant-a?retryWrites=true",
+    expect((client as any).__opts.datasourceUrl).toBe(
+      "mongodb://host:27017/tenant-a?retryWrites=true&maxPoolSize=3",
     );
     expect(mockAttachAuditLogging).toHaveBeenCalledWith(client);
+  });
+
+  it("appends maxPoolSize with a leading '?' when the base URI has no existing query string", () => {
+    process.env.DEV_MONGODB_URI = "mongodb://host:27017/masterdb";
+    jest.resetModules();
+    tenantClientPool = require("../tenantClientPool");
+
+    const client = tenantClientPool.getClientForDb("tenant-a");
+
+    expect((client as any).__opts.datasourceUrl).toBe(
+      "mongodb://host:27017/tenant-a?maxPoolSize=3",
+    );
   });
 
   it("returns the same cached client instance on a repeat call for the same dbName", () => {

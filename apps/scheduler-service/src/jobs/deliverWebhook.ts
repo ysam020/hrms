@@ -69,9 +69,9 @@ export async function deliverWebhook({
   let urlSafe = false;
   try {
     const hostname = new URL(url).hostname;
-    urlSafe =
-      isSafeUrl(url, { requireHttps: process.env.NODE_ENV === "production" }) &&
-      (await isSafeHostname(hostname));
+    // requireHttps defaults to true and is intentionally NOT gated on
+    // NODE_ENV — see isSafeWebhookUrl in api-gateway/handlers/webhooks.ts.
+    urlSafe = isSafeUrl(url) && (await isSafeHostname(hostname));
   } catch {
     urlSafe = false;
   }

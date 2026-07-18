@@ -97,134 +97,6 @@ const SLA_HOURS: Record<string, number> = {
 export { SLA_HOURS };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RazorpayX Payouts helpers
-//
-// RazorpayX is a SEPARATE product from Razorpay Payment Gateway:
-//   Existing vars (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)  → PG, collects money FROM tenants
-//   New vars below                                          → X,  sends money   TO employees
-//
-// Required env vars for live payouts:
-//   RAZORPAY_X_KEY_ID          – RazorpayX dashboard key
-//   RAZORPAY_X_KEY_SECRET      – RazorpayX dashboard secret
-//   RAZORPAY_X_ACCOUNT_NUMBER  – your RazorpayX current account number
-//   RAZORPAY_X_WEBHOOK_SECRET  – for verifying async payout webhooks
-//
-// If RAZORPAY_X_KEY_ID is absent the disburse step is flag-only (test/dev mode).
-// ─────────────────────────────────────────────────────────────────────────────
-
-const RZP_X_BASE = "https://api.razorpay.com/v1";
-
-function getRzpXAuth(): string | null {
-  const key = process.env.RAZORPAY_X_KEY_ID;
-  const secret = process.env.RAZORPAY_X_KEY_SECRET;
-  if (!key || !secret) return null;
-  return "Basic " + Buffer.from(`${key}:${secret}`).toString("base64");
-}
-
-/**
- * Returns the RazorpayX contact_id for an employee.
- * Tries existing contact by reference_id (userId) first; creates if missing.
- * Contacts are reused across payroll runs — one per employee for life.
- */
-async function getOrCreateRzpContact(
-  auth: string,
-  userId: string,
-  name: string,
-): Promise<string> {
-  const listRes = await fetch(
-    `${RZP_X_BASE}/contacts?reference_id=${encodeURIComponent(userId)}&count=1`,
-    { headers: { Authorization: auth } },
-  );
-  if (listRes.ok) {
-    const list = (await listRes.json()) as any;
-    if (list.count > 0 && list.items?.[0]?.id)
-      return list.items[0].id as string;
-  }
-  const createRes = await fetch(`${RZP_X_BASE}/contacts`, {
-    method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/json" },
-    body: JSON.stringify({ name, type: "employee", reference_id: userId }),
-  });
-  const body = (await createRes.json()) as any;
-  if (!createRes.ok)
-    throw new Error(
-      body.error?.description ?? "RazorpayX contact creation failed",
-    );
-  return body.id as string;
-}
-
-/**
- * Creates a fund_account (bank account) under a contact.
- * A fresh fund_account is created each run so bank-detail changes are picked up.
- */
-async function createRzpFundAccount(
-  auth: string,
-  contactId: string,
-  holderName: string,
-  bankAccountNo: string,
-  ifsc: string,
-): Promise<string> {
-  const res = await fetch(`${RZP_X_BASE}/fund_accounts`, {
-    method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contact_id: contactId,
-      account_type: "bank_account",
-      bank_account: { name: holderName, ifsc, account_number: bankAccountNo },
-    }),
-  });
-  const body = (await res.json()) as any;
-  if (!res.ok)
-    throw new Error(
-      body.error?.description ?? "RazorpayX fund account creation failed",
-    );
-  return body.id as string;
-}
-
-/**
- * Creates a RazorpayX payout and returns { id, status }.
- * X-Payout-Idempotency = runId_userId prevents double-payment on retry.
- */
-async function createRzpPayout(
-  auth: string,
-  params: {
-    accountNumber: string;
-    fundAccountId: string;
-    amountPaise: number;
-    runId: string;
-    userId: string;
-    month: number;
-    year: number;
-  },
-): Promise<{ id: string; status: string }> {
-  const res = await fetch(`${RZP_X_BASE}/payouts`, {
-    method: "POST",
-    headers: {
-      Authorization: auth,
-      "Content-Type": "application/json",
-      "X-Payout-Idempotency": `${params.runId}_${params.userId}`,
-    },
-    body: JSON.stringify({
-      account_number: params.accountNumber,
-      fund_account_id: params.fundAccountId,
-      amount: params.amountPaise, // in paise
-      currency: "INR",
-      mode: "IMPS", // instant; falls back to NEFT automatically
-      purpose: "salary",
-      queue_if_low_balance: true,
-      reference_id: `${params.runId}_${params.userId}`,
-      narration: `Salary ${String(params.month).padStart(2, "0")}/${params.year}`,
-    }),
-  });
-  const body = (await res.json()) as any;
-  if (!res.ok)
-    throw new Error(
-      body.error?.description ?? "RazorpayX payout creation failed",
-    );
-  return { id: body.id as string, status: body.status as string };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Payroll Run Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -998,9 +870,15 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
         toStatus: "approved",
         roles: ["owner", "admin", "hr"],
       },
+      // toStatus is "disbursing", not "disbursed" — disbursement now runs as
+      // a background job (see payrollDisbursementWorker.ts); the job itself
+      // moves the run to "disbursed" once the RazorpayX payout loop and
+      // payslip generation actually complete. Retrying after a failure goes
+      // through the dedicated retry-payouts endpoint below, not this one —
+      // "disbursing"/"disbursement_failed" are deliberately not in `from`.
       disburse: {
         from: ["approved"],
-        toStatus: "disbursed",
+        toStatus: "disbursing",
         roles: ["owner", "admin"],
       },
       cancel: {
@@ -1088,262 +966,97 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
       updateData.approvedBy = user!.userId;
       updateData.approvedAt = new Date();
     }
-    if (action === "disburse") {
-      updateData.disbursedBy = user!.userId;
-      updateData.disbursedAt = new Date();
+    // disbursedBy/disbursedAt are stamped by payrollDisbursementWorker.ts
+    // once the job actually completes, not here — this CAS update only
+    // moves the run into the in-flight "disbursing" state.
+
+    // Update the run status (sequential — MongoDB standalone has no multi-doc
+    // transactions). The `status` clause below is a compare-and-swap guard —
+    // without it, two concurrent requests both pass the transition.from
+    // check above and both proceed to run the effects further down (real
+    // bank payouts for disburse), i.e. the same run gets processed twice.
+    // If another request already won the race, Prisma throws P2025 (record
+    // not found) since the where clause no longer matches.
+    try {
+      await prisma.payrollRun.update({
+        where: { id: run.id, status: (run as any).status },
+        data: updateData,
+      });
+    } catch (err: any) {
+      if (err?.code === "P2025") {
+        return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+          message:
+            "This payroll run was already updated by another request. Please refresh and try again.",
+        });
+      }
+      throw err;
     }
 
-    // Update the run status (sequential — MongoDB standalone has no multi-doc transactions).
-    await prisma.payrollRun.update({ where: { id: run.id }, data: updateData });
-
-    // On disburse: initiate bank payouts → reconcile advances → generate payslips → notify.
+    // Disbursement itself (RazorpayX payout loop, advance reconciliation,
+    // payslip generation) runs as a background job — see
+    // payrollDisbursementWorker.ts. For a real employee count this is
+    // 1,000+ sequential external calls, far too slow for this
+    // request/response cycle; enqueue it and return immediately.
     if (action === "disburse") {
-      const tenantId = getTenantId();
-      const runMonth = (run as any).month as number;
-      const runYear = (run as any).year as number;
+      try {
+        const { getPayrollDisbursementQueue } = await import("@hrms/queue");
+        await getPayrollDisbursementQueue().add("disburse", {
+          tenantId: getTenantId()!,
+          runId: run.id,
+          disbursedBy: user!.userId,
+        });
+      } catch (enqueueErr) {
+        // The CAS update above already committed status: "disbursing", but
+        // no job was actually queued to process it — left as-is, the run
+        // would be stranded forever (retry-payouts only accepts
+        // disbursed/disbursement_failed, not disbursing). Roll the status
+        // back to "approved" so the caller can safely retry the disburse
+        // action itself. Safe without its own CAS guard: only this request
+        // could have just set the run to "disbursing" (transition.from is
+        // exclusively ["approved"], and no other code path writes
+        // "disbursing"), so there's no concurrent writer to race with here.
+        logger.error(
+          `Payroll run ${run.id} failed to enqueue disburse job — rolling status back to approved`,
+          { err: enqueueErr },
+        );
+        await prisma.payrollRun
+          .update({
+            where: { id: run.id, status: "disbursing" },
+            data: { status: "approved" },
+          })
+          .catch((rollbackErr) => {
+            logger.error(
+              `Payroll run ${run.id} rollback to approved also failed — stuck in disbursing, needs manual intervention`,
+              { err: rollbackErr },
+            );
+          });
 
-      // Fetch all line items (id included for payout status updates).
-      const allLineItems = await prisma.payrollLineItem.findMany({
-        where: { payrollRunId: run.id },
-        select: {
-          id: true,
-          userId: true,
-          advanceDeduction: true,
-          grossSalary: true,
-          basicPay: true,
-          hra: true,
-          conveyance: true,
-          pf: true,
-          esi: true,
-          pt: true,
-          tds: true,
-          totalDeductions: true,
-          netPayable: true,
-        },
+        return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+          message:
+            "Failed to start payroll disbursement. The run was not changed — please try again.",
+        });
+      }
+
+      logger.info(`Payroll run ${run.id} → disbursing (job enqueued)`, {
+        userId: user!.userId,
       });
 
-      // ── 0. RazorpayX Payouts ─────────────────────────────────────────────────
-      // Initiate a bank transfer per employee via RazorpayX.
-      // If RAZORPAY_X_KEY_ID is not set we skip and do flag-only (dev/test mode).
-      const rzpXAuth = getRzpXAuth();
-      const rzpXAccount = process.env.RAZORPAY_X_ACCOUNT_NUMBER;
-      if (rzpXAuth && rzpXAccount) {
-        // Fetch employee bank details in one shot.
-        const empIds = (allLineItems as any[]).map((li: any) => li.userId);
-        const employees = await prisma.user.findMany({
-          where: { id: { in: empIds } },
-          select: {
-            id: true,
-            first_name: true,
-            last_name: true,
-            username: true,
-            bank_account_no: true,
-            ifsc_code: true,
-          },
-        });
-        const empMap = new Map(employees.map((e) => [e.id, e]));
-
-        let payoutOk = 0,
-          payoutFail = 0;
-        for (const li of allLineItems as any[]) {
-          const emp = empMap.get(li.userId);
-          if (!emp || !emp.bank_account_no || !emp.ifsc_code) {
-            // Should never reach here after the pre-flight check, but be safe.
-            await prisma.payrollLineItem.update({
-              where: { id: li.id },
-              data: {
-                payoutStatus: "failed",
-                payoutFailureReason: "Missing bank details",
-                payoutInitiatedAt: new Date(),
-              },
-            });
-            payoutFail++;
-            continue;
-          }
-
-          const holderName =
-            `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() ||
-            emp.username;
-          const amountPaise = Math.round(li.netPayable * 100); // RazorpayX expects paise
-
-          // Skip zero/negative net (e.g. full advance deduction month).
-          if (amountPaise <= 0) {
-            await prisma.payrollLineItem.update({
-              where: { id: li.id },
-              data: {
-                payoutStatus: "skipped",
-                payoutFailureReason: "Net payable is zero",
-                payoutInitiatedAt: new Date(),
-              },
-            });
-            continue;
-          }
-
-          try {
-            const contactId = await getOrCreateRzpContact(
-              rzpXAuth,
-              li.userId,
-              holderName,
-            );
-            const fundAccountId = await createRzpFundAccount(
-              rzpXAuth,
-              contactId,
-              holderName,
-              emp.bank_account_no!,
-              emp.ifsc_code!,
-            );
-            const payout = await createRzpPayout(rzpXAuth, {
-              accountNumber: rzpXAccount,
-              fundAccountId,
-              amountPaise,
-              runId: run.id,
-              userId: li.userId,
-              month: runMonth,
-              year: runYear,
-            });
-            // The RazorpayX webhook fires with no auth/tenant context, so it
-            // has no way to know which tenant's physical DB to look this
-            // payout up in — this master-DB index is what lets it resolve
-            // that before touching PayrollLineItem (see razorpayxWebhook.ts).
-            await prisma.payoutTenantIndex.create({
-              data: { payoutId: payout.id, tenantId: tenantId! },
-            });
-            await prisma.payrollLineItem.update({
-              where: { id: li.id },
-              data: {
-                payoutId: payout.id,
-                payoutStatus: payout.status, // "processing" usually at this point
-                payoutInitiatedAt: new Date(),
-              },
-            });
-            payoutOk++;
-          } catch (payoutErr: any) {
-            logger.error(`RazorpayX payout failed for user ${li.userId}`, {
-              runId: run.id,
-              err: payoutErr.message,
-            });
-            await prisma.payrollLineItem.update({
-              where: { id: li.id },
-              data: {
-                payoutStatus: "failed",
-                payoutFailureReason: payoutErr.message ?? "Unknown error",
-                payoutInitiatedAt: new Date(),
-              },
-            });
-            payoutFail++;
-          }
-        }
-        logger.info(
-          `RazorpayX payouts: ${payoutOk} initiated, ${payoutFail} failed`,
-          { runId: run.id },
-        );
-      } else {
-        logger.warn(
-          "RAZORPAY_X_KEY_ID not configured — disburse is flag-only (no real bank transfers)",
-        );
-      }
-
-      // 1. Reconcile salary advance repayments.
-      for (const item of allLineItems as any[]) {
-        if (!item.advanceDeduction || item.advanceDeduction <= 0) continue;
-        const adv = await prisma.salaryAdvance.findFirst({
-          where: {
-            userId: item.userId,
-            status: { in: ["Approved", "Repaying"] },
-          },
-        });
-        if (!adv) continue;
-        const newPaid = (adv as any).paidMonths + 1;
-        const newRemaining =
-          ((adv as any).remainingAmount ?? 0) - item.advanceDeduction;
-        const isDone =
-          newRemaining <= 0 || newPaid >= ((adv as any).emiMonths ?? 1);
-        await prisma.salaryAdvance.update({
-          where: { id: adv.id },
-          data: {
-            paidMonths: newPaid,
-            remainingAmount: Math.max(0, newRemaining),
-            status: isDone ? "Repaid" : "Repaying",
-          },
-        });
-      }
-
-      // 2. Generate payslips — upsert a SalaryStructure record per employee so that
-      //    GET /payroll/my-payslips shows the disbursed salary immediately.
-      for (const li of allLineItems as any[]) {
-        const payslipData = {
-          tenantId: tenantId ?? undefined,
-          userId: li.userId,
-          month: runMonth,
-          year: runYear,
-          grossSalary: li.grossSalary,
-          basicPay: li.basicPay ?? null,
-          hra: li.hra ?? null,
-          conveyance: li.conveyance ?? null,
-          pf: li.pf ?? null,
-          esi: li.esi ?? null,
-          pt: li.pt ?? null,
-          tds: li.tds ?? null,
-          deductions: li.totalDeductions,
-          advanceDeduction: li.advanceDeduction ?? 0,
-          grossEarnings: li.grossSalary,
-          netPayable: li.netPayable,
-        };
-        // No @@unique on SalaryStructure — guard manually to avoid duplicates.
-        const existing = await prisma.salaryStructure.findFirst({
-          where: { userId: li.userId, month: runMonth, year: runYear },
-          select: { id: true },
-        });
-        if (existing) {
-          await prisma.salaryStructure.update({
-            where: { id: existing.id },
-            data: payslipData,
-          });
-        } else {
-          await prisma.salaryStructure.create({ data: payslipData });
-        }
-      }
-
-      // 3. Broadcast an in-app notification to every disbursed employee.
-      if (allLineItems.length > 0) {
-        const notif = await prisma.notification.create({
-          data: {
-            tenantId: tenantId ?? undefined,
-            title: "Salary Disbursed 🎉",
-            message: `Your salary for ${String(runMonth).padStart(2, "0")}/${runYear} has been processed and disbursed.`,
-            eventType: "payroll",
-            priority: "high",
-          },
-        });
-        await prisma.notificationRecipient.createMany({
-          data: (allLineItems as any[]).map((li: any) => ({
-            tenantId: tenantId ?? undefined,
-            notificationId: notif.id,
-            userId: li.userId,
-          })),
-        });
-        logger.info(
-          `Payroll disburse: ${allLineItems.length} payslips generated, notifications sent`,
-          {
-            runId: run.id,
-            month: runMonth,
-            year: runYear,
-          },
-        );
-      }
+      return apiResponse(res, RESPONSE_STATUS.ACCEPTED, {
+        message:
+          "Payroll disbursement started. Poll GET /payroll/runs/:runId for progress.",
+        data: { runId: run.id, status: "disbursing" },
+      });
     }
 
-    // Fire webhook.
-    if (action === "disburse" || action === "approve") {
-      await emitWebhookEvent(
-        `payroll.${action === "disburse" ? "disbursed" : "approved"}`,
-        {
-          runId: run.id,
-          month: (run as any).month,
-          year: (run as any).year,
-          employeeCount: (run as any).employeeCount,
-        },
-      );
+    // Fire webhook (disburse's own "payroll.disbursed" event fires from the
+    // worker once the job actually completes, not here).
+    if (action === "approve") {
+      await emitWebhookEvent("payroll.approved", {
+        runId: run.id,
+        month: (run as any).month,
+        year: (run as any).year,
+        employeeCount: (run as any).employeeCount,
+      });
     }
 
     logger.info(`Payroll run ${run.id} → ${transition.toStatus}`, {
@@ -1351,14 +1064,152 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      message:
-        action === "disburse"
-          ? `Payroll disbursed. Payslips generated and employees notified.`
-          : `Payroll run ${action}d successfully`,
+      message: `Payroll run ${action}d successfully`,
       data: { runId: run.id, status: transition.toStatus },
     });
   } catch (error) {
     logger.error("PATCH /payroll/runs/:runId/status error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * POST /payroll/runs/:runId/retry-payouts
+ * Re-runs disbursement for a run whose bank payouts didn't fully complete —
+ * either some individual line items are still "failed" (run status stayed
+ * "disbursed"), or the whole background job crashed/exhausted its BullMQ
+ * retries (run status is "disbursement_failed"). Reuses the same
+ * payrollDisbursementQueue job/worker: runPayrollDisbursement() only
+ * (re-)processes line items not yet in a terminal payout state, so this is
+ * safe to call repeatedly without double-paying anyone already paid.
+ */
+export async function retryFailedPayouts(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const allowed = await assertRole(user!.userId, user!.tenantRole, [
+      "owner",
+      "admin",
+    ]);
+    if (!allowed) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Only owner/admin can retry payroll payouts",
+      });
+    }
+
+    const runId = String(req.params.runId);
+    const run = await prisma.payrollRun.findFirst({
+      where: { id: runId, tenantId: getTenantId() },
+    });
+    if (!run) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Payroll run not found",
+      });
+    }
+
+    // "disbursing" is deliberately excluded — a job is already in flight for
+    // that state; enqueueing a second one would race the first.
+    const retryableStatuses = ["disbursed", "disbursement_failed"];
+    const previousStatus = (run as any).status;
+    if (!retryableStatuses.includes(previousStatus)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Cannot retry payouts for a run with status '${previousStatus}'. Only ${retryableStatuses.join("/")} runs can be retried.`,
+      });
+    }
+
+    const outstanding = await prisma.payrollLineItem.count({
+      where: {
+        payrollRunId: runId,
+        OR: [
+          { payoutStatus: "failed" },
+          { payoutStatus: null },
+          { payoutStatus: "pending" },
+        ],
+      },
+    });
+    if (outstanding === 0) {
+      // A permanently_failed item (exhausted its automatic retry budget —
+      // see payrollDisbursement.ts) deliberately does NOT count as
+      // "outstanding" here, since re-enqueueing the same automatic retry
+      // that already failed 5 times in a row isn't going to help. But it
+      // also isn't "completed" — money never reached that employee, and
+      // saying so here would hide a real problem from the admin calling
+      // this endpoint.
+      const permanentlyFailed = await prisma.payrollLineItem.count({
+        where: { payrollRunId: runId, payoutStatus: "permanently_failed" },
+      });
+      if (permanentlyFailed > 0) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `${permanentlyFailed} line item(s) have permanently failed after repeated attempts and need manual correction (e.g. fixing bank details) before they can be retried. Every other line item's payout already completed.`,
+          data: { permanentlyFailed },
+        });
+      }
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Nothing to retry — every line item's payout already completed.",
+      });
+    }
+
+    // CAS the run to "disbursing" before enqueueing — the same in-flight
+    // state the main disburse path uses. Without this, two concurrent
+    // retry-payouts calls (two tabs, or two gateway instances behind a
+    // load balancer) both pass the retryableStatuses check above and both
+    // enqueue a job, racing each other's payout creation.
+    try {
+      await prisma.payrollRun.update({
+        where: { id: run.id, status: previousStatus },
+        data: { status: "disbursing" },
+      });
+    } catch (err: any) {
+      if (err?.code === "P2025") {
+        return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+          message:
+            "This payroll run is already being retried by another request. Please refresh and try again.",
+        });
+      }
+      throw err;
+    }
+
+    try {
+      const { getPayrollDisbursementQueue } = await import("@hrms/queue");
+      await getPayrollDisbursementQueue().add("disburse", {
+        tenantId: getTenantId()!,
+        runId: run.id,
+        disbursedBy: user!.userId,
+      });
+    } catch (enqueueErr) {
+      logger.error(
+        `Payroll run ${run.id} failed to enqueue retry-payouts job — rolling status back to ${previousStatus}`,
+        { err: enqueueErr },
+      );
+      await prisma.payrollRun
+        .update({
+          where: { id: run.id, status: "disbursing" },
+          data: { status: previousStatus },
+        })
+        .catch((rollbackErr) => {
+          logger.error(
+            `Payroll run ${run.id} rollback to ${previousStatus} also failed — stuck in disbursing, needs manual intervention`,
+            { err: rollbackErr },
+          );
+        });
+
+      return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
+        message:
+          "Failed to retry payroll disbursement. The run was not changed — please try again.",
+      });
+    }
+
+    logger.info(`Payroll run ${run.id}: retry-payouts enqueued`, {
+      userId: user!.userId,
+      outstanding,
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.ACCEPTED, {
+      message: `Retrying ${outstanding} outstanding payout(s). Poll GET /payroll/runs/:runId for progress.`,
+      data: { runId: run.id, outstanding },
+    });
+  } catch (error) {
+    logger.error("POST /payroll/runs/:runId/retry-payouts error:", { error });
     return handleError(res, error);
   }
 }
@@ -1520,33 +1371,44 @@ export async function updateSalaryAdvanceStatus(req: Request, res: Response) {
       });
     }
 
+    let updateData: any;
     if (action === "approve" && emiAmount !== undefined) {
       // HR can override the EMI amount.
       const months = Math.ceil((advance as any).amount / emiAmount);
-      await prisma.salaryAdvance.update({
-        where: { id: advanceId },
-        data: {
-          status: "Approved",
-          approvedBy: user!.userId,
-          approvedAt: new Date(),
-          emiAmount,
-          emiMonths: months,
-        },
-      });
+      updateData = {
+        status: "Approved",
+        approvedBy: user!.userId,
+        approvedAt: new Date(),
+        emiAmount,
+        emiMonths: months,
+      };
     } else if (action === "approve") {
-      await prisma.salaryAdvance.update({
-        where: { id: advanceId },
-        data: {
-          status: "Approved",
-          approvedBy: user!.userId,
-          approvedAt: new Date(),
-        },
-      });
+      updateData = {
+        status: "Approved",
+        approvedBy: user!.userId,
+        approvedAt: new Date(),
+      };
     } else {
+      updateData = { status: "Rejected" };
+    }
+
+    // Compare-and-swap guard — same TOCTOU as payroll run status updates
+    // (see updatePayrollRunStatus above): without the `status: "Pending"`
+    // clause, two concurrent approve/reject requests both pass the check
+    // above and both apply.
+    try {
       await prisma.salaryAdvance.update({
-        where: { id: advanceId },
-        data: { status: "Rejected" },
+        where: { id: advanceId, status: "Pending" },
+        data: updateData,
       });
+    } catch (err: any) {
+      if (err?.code === "P2025") {
+        return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+          message:
+            "This advance was already updated by another request. Please refresh and try again.",
+        });
+      }
+      throw err;
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

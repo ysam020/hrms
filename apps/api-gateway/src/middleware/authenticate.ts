@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma, runWithTenant, getClientForDb, AuditActor } from "@hrms/db";
+import { BoundedCache } from "@hrms/common";
 import { gatewayTenantStorage } from "./tenantContext";
 
 export interface AuthUser {
@@ -19,8 +20,10 @@ export interface AuthRequest extends Request {
   user?: AuthUser;
 }
 
-// In-memory cache: tenantId → dbName (avoids a DB lookup on every request for old tokens)
-const dbNameCache = new Map<string, string>();
+// In-memory cache: tenantId → dbName (avoids a DB lookup on every request for
+// old tokens). Bounded LRU + idle-TTL, same pattern as tenantClientPool.ts,
+// so a long-running gateway process doesn't accumulate entries forever.
+const dbNameCache = new BoundedCache<string, string>();
 
 async function resolveDbName(
   tenantId: string,
@@ -39,7 +42,7 @@ async function resolveDbName(
 // In-memory cache: userId → username, purely for labelling audit log rows —
 // not security-sensitive, and (like dbNameCache above) tolerates serving a
 // stale value for the rare case a user renames themselves mid-session.
-const usernameCache = new Map<string, string | null>();
+const usernameCache = new BoundedCache<string, string | null>();
 
 async function resolveUsername(userId: string): Promise<string | null> {
   if (usernameCache.has(userId)) return usernameCache.get(userId)!;

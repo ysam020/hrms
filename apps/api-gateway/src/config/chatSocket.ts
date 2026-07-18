@@ -278,6 +278,12 @@ export function setupChatSocket(
       async ({ messageId, roomId }: { messageId: string; roomId: string }) => {
         try {
           const participants = await getParticipants(roomId);
+          if (!participants.includes(userId)) {
+            socket.emit("chat:error", {
+              message: "Not a participant of this room",
+            });
+            return;
+          }
           await Promise.all(
             participants.map((p) =>
               redisAdapter.sendToUser(p, "chat:message-deleted", {
@@ -310,6 +316,12 @@ export function setupChatSocket(
       }) => {
         try {
           const participants = await getParticipants(roomId);
+          if (!participants.includes(userId)) {
+            socket.emit("chat:error", {
+              message: "Not a participant of this room",
+            });
+            return;
+          }
           await Promise.all(
             participants.map((p) =>
               redisAdapter.sendToUser(p, "chat:message-pinned", {
@@ -332,6 +344,12 @@ export function setupChatSocket(
       async ({ messageId, roomId }: { messageId: string; roomId: string }) => {
         try {
           const participants = await getParticipants(roomId);
+          if (!participants.includes(userId)) {
+            socket.emit("chat:error", {
+              message: "Not a participant of this room",
+            });
+            return;
+          }
           await Promise.all(
             participants.map((p) =>
               redisAdapter.sendToUser(p, "chat:message-unpinned", {

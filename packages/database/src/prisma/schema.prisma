@@ -727,7 +727,13 @@ model SalaryStructure {
 
   user            User?    @relation(fields: [userId], references: [id])
 
-  @@index([tenantId, userId, year, month])
+  // Was a plain @@index — payslip de-duplication (see updatePayrollRunStatus's
+  // disburse branch in payroll.ts) relied on a manual findFirst-then-create/
+  // update guard with no atomicity, so concurrent execution touching the
+  // same (tenant, user, month, year) — e.g. a crash-and-rerun of
+  // disbursement — could create duplicate payslip rows. A real @@unique
+  // lets that guard become a single atomic upsert instead.
+  @@unique([tenantId, userId, year, month])
   @@map("salarystructures")
 }
 
@@ -864,10 +870,19 @@ model Notification {
   eventType  String                  @default("general")
   activityId String?                 @db.ObjectId
   priority   String                  @default("medium")
+  // BullMQ job id — set only for notifications created by
+  // notificationWorker.ts, used to make a stalled/retried job a no-op
+  // instead of creating (and re-broadcasting/re-pushing) a duplicate.
+  // Intentionally NOT @unique: Prisma does not emit sparse:true for optional
+  // @unique fields on MongoDB (prisma/prisma#12827) — see Tenant.domain
+  // above for the same caveat. Idempotency is enforced in application code
+  // (a findFirst-before-create guard in notificationWorker.ts) instead.
+  jobId      String?
 
   recipients NotificationRecipient[]
 
   @@index([tenantId])
+  @@index([jobId])
   @@map("notifications")
 }
 
@@ -1301,7 +1316,11 @@ model PayrollRun {
   tenantId        String?   @db.ObjectId
   month           Int       // 1–12
   year            Int
-  // draft → processing → approved → disbursed | cancelled
+  // draft → processing → approved → disbursing → disbursed | disbursement_failed | cancelled
+  // "disbursing"/"disbursement_failed" exist because disbursement now runs
+  // as a resumable background job (see payrollDisbursementWorker.ts) instead
+  // of synchronously in the status-update request — see the identical note
+  // on PayrollLineItem.postProcessed below for why resumability matters.
   status          String    @default("draft")
   initiatedBy     String    @db.ObjectId
   approvedBy      String?   @db.ObjectId
@@ -1354,9 +1373,23 @@ model PayrollLineItem {
 
   // RazorpayX payout tracking — populated on disburse.
   payoutId            String?   // RazorpayX payout_id (e.g. "pout_xxx")
-  payoutStatus        String?   // pending | processing | processed | failed
+  payoutStatus        String?   // pending | processing | processed | skipped | failed | permanently_failed
   payoutFailureReason String?
   payoutInitiatedAt   DateTime?
+  // Incremented on every failed payout attempt (see payrollDisbursement.ts).
+  // Once it reaches MAX_PAYOUT_ATTEMPTS, payoutStatus moves from "failed" to
+  // the distinct terminal "permanently_failed" instead of staying "failed"
+  // forever — without this, a payout that will never succeed on its own
+  // (bad bank details, a suspended RazorpayX account) got silently
+  // re-attempted on every disbursement pass indefinitely.
+  payoutAttempts      Int       @default(0)
+  // Set once salary-advance reconciliation + payslip generation have run for
+  // this item (see payrollDisbursement.ts). Disbursement runs as a resumable
+  // background job — without this flag, retrying a crashed/partially-failed
+  // job would double-decrement SalaryAdvance.remainingAmount for items
+  // already reconciled in an earlier attempt (payslip regeneration itself is
+  // safe — see SalaryStructure's @@unique — but the advance ledger isn't).
+  postProcessed       Boolean   @default(false)
 
   payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
 

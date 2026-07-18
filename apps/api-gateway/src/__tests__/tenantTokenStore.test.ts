@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { prisma } from "@hrms/db";
 import {
   storeRefreshToken,
@@ -32,6 +33,8 @@ jest.mock("@hrms/logger", () => ({
 }));
 
 const db: any = prisma;
+const hash = (token: string) =>
+  createHash("sha256").update(token).digest("hex");
 
 describe("tenantTokenStore", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -39,12 +42,20 @@ describe("tenantTokenStore", () => {
   describe("storeRefreshToken", () => {
     it("writes token metadata to Redis and mirrors it onto the User row", async () => {
       db.user.update.mockResolvedValue({});
-      await storeRefreshToken("u1", "tok-1", "t1", "owner", "hrms-acme", false);
+      await storeRefreshToken(
+        "u1",
+        "tok-1",
+        "t1",
+        "owner",
+        undefined,
+        "hrms-acme",
+        false,
+      );
       expect(mockRedisInstance.setex).toHaveBeenCalledWith(
         "refresh:u1",
         30 * 24 * 60 * 60,
         JSON.stringify({
-          token: "tok-1",
+          tokenHash: hash("tok-1"),
           tenantId: "t1",
           tenantRole: "owner",
           dbName: "hrms-acme",
@@ -53,7 +64,7 @@ describe("tenantTokenStore", () => {
       );
       expect(db.user.update).toHaveBeenCalledWith({
         where: { id: "u1" },
-        data: { refreshToken: "tok-1" },
+        data: { refreshToken: hash("tok-1") },
       });
     });
   });
@@ -140,7 +151,7 @@ describe("tenantTokenStore", () => {
     it("flips orgSetupComplete to true and rewrites the metadata", async () => {
       mockRedisInstance.get.mockResolvedValue(
         JSON.stringify({
-          token: "tok-1",
+          tokenHash: hash("tok-1"),
           tenantId: "t1",
           tenantRole: "owner",
           dbName: null,
@@ -152,7 +163,7 @@ describe("tenantTokenStore", () => {
         "refresh:u1",
         30 * 24 * 60 * 60,
         JSON.stringify({
-          token: "tok-1",
+          tokenHash: hash("tok-1"),
           tenantId: "t1",
           tenantRole: "owner",
           dbName: null,

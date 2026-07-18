@@ -19,7 +19,7 @@ RUN set -e; \
     exit 1
 
 FROM slim AS base
-RUN npm install -g pnpm@8.15.6 turbo
+RUN npm install -g pnpm@8.15.6 turbo@2.10.5
 RUN pnpm config set store-dir /root/.pnpm-store
 RUN pnpm config set manage-package-manager-versions false
 RUN pnpm config set fetch-retries 5

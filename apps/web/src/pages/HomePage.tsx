@@ -190,12 +190,18 @@ function HomePage(props) {
                   <Routes location={location}>
                     {filteredRoutes
                       .filter((r) => !r.spotlightOnly)
-                      .map(({ path, element, allowedModules }, index) => (
+                      .map(({ path, element, moduleTags }, index) => (
                         <Route
                           key={index}
                           path={path}
+                          // moduleTags only decides Suspense/ErrorBoundary
+                          // wrapping here — it is NOT an access-control
+                          // check. Actual route gating is checkAccess/
+                          // <RequireAccess> in routesConfig.tsx (see the
+                          // comment there) and/or each page's own internal
+                          // role check.
                           element={
-                            allowedModules.length === 0 ? (
+                            moduleTags.length === 0 ? (
                               element
                             ) : (
                               <Suspense

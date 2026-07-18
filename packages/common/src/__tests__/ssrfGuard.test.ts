@@ -33,9 +33,21 @@ describe("isSafeUrl", () => {
     ["IPv6 loopback ::1", "https://[::1]/x"],
     ["IPv4-mapped IPv6", "https://[::ffff:127.0.0.1]/x"],
     ["fc00: unique-local", "https://[fc00::1]/x"],
+    [
+      "fd00::/8 unique-local (Docker/Cilium/Tailscale default)",
+      "https://[fd12:3456::1]/x",
+    ],
+    ["fdff: end of ULA block", "https://[fdff:ffff::1]/x"],
     ["fe80: link-local", "https://[fe80::1]/x"],
   ])("rejects %s", (_label, url) => {
     expect(isSafeUrl(url)).toBe(false);
+  });
+
+  it.each([
+    ["fbff::1", true],
+    ["fe00::1", true],
+  ])("fc00::/7 boundary: %s -> safe=%s", (host, expectedSafe) => {
+    expect(isSafeUrl(`https://[${host}]/x`)).toBe(expectedSafe);
   });
 
   it.each([

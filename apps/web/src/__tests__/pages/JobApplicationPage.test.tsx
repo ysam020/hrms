@@ -55,10 +55,16 @@ const fillRequiredFields = async () => {
   // The filename label updates synchronously in handleFileChange, but the
   // "resume" field itself (required by validation) is only populated once
   // jsdom's FileReader.readAsDataURL finishes asynchronously via its own
-  // onloadend callback. Without waiting a tick here, submitting can race
-  // ahead of that callback and silently fail validation, hanging the test
-  // on a mockPost call that never happens.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // onloadend callback. Waiting on the Submit button's real disabled state
+  // (see the race-condition fix in JobApplicationPage.tsx) ties this to the
+  // actual condition instead of a blind fixed-duration timer, which would
+  // add real wall-clock time to the suite and risks being too short under
+  // CI load anyway.
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: /submit application/i }),
+    ).not.toBeDisabled(),
+  );
 };
 
 describe("JobApplicationPage", () => {
@@ -170,5 +176,125 @@ describe("JobApplicationPage", () => {
       await screen.findByText("This job opening could not be found."),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
+  });
+
+  describe("resume upload", () => {
+    it("disables Submit while the file is still being read, closing the race window", async () => {
+      // jsdom's real FileReader resolves too fast (within the same
+      // microtask flush userEvent.upload awaits) to ever observe the
+      // "still reading" window directly — replace it with a
+      // controllable one so the test can assert on that exact moment,
+      // the same way a slow device in the field would experience it.
+      const RealFileReader = global.FileReader;
+      let resolveRead: () => void;
+      class DelayedFileReader {
+        result: string | null = null;
+        onloadend: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        readAsDataURL() {
+          new Promise<void>((resolve) => {
+            resolveRead = resolve;
+          }).then(() => {
+            this.result = "data:application/pdf;base64,ZmFrZQ==";
+            this.onloadend?.();
+          });
+        }
+      }
+      // @ts-expect-error - test double, not a full FileReader
+      global.FileReader = DelayedFileReader;
+
+      try {
+        renderPage();
+        const file = new File(["resume"], "resume.pdf", {
+          type: "application/pdf",
+        });
+        const input = document.getElementById(
+          "resume-upload",
+        ) as HTMLInputElement;
+
+        await userEvent.upload(input, file);
+
+        const submitButton = screen.getByRole("button", {
+          name: /submit application/i,
+        });
+        expect(submitButton).toBeDisabled();
+
+        resolveRead!();
+        await waitFor(() => expect(submitButton).not.toBeDisabled());
+      } finally {
+        global.FileReader = RealFileReader;
+      }
+    });
+
+    it("rejects a non-PDF file with a client-side error, without touching formik's resume field", async () => {
+      renderPage();
+      const file = new File(["not a pdf"], "resume.docx", {
+        type: "application/msword",
+      });
+      const input = document.getElementById(
+        "resume-upload",
+      ) as HTMLInputElement;
+
+      // applyAccept: false — a real browser's accept=".pdf" filter is a UI
+      // hint only; a drag-and-drop (or "All Files" picker option) can still
+      // deliver a non-matching file, which is exactly the bypass this
+      // client-side type check guards against.
+      await userEvent.upload(input, file, { applyAccept: false });
+
+      expect(
+        await screen.findByText("Only PDF files are accepted."),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("resume.docx")).not.toBeInTheDocument();
+    });
+
+    it("rejects a PDF over 5MB with a client-side error", async () => {
+      renderPage();
+      const bigContent = new Uint8Array(5 * 1024 * 1024 + 1);
+      const file = new File([bigContent], "big-resume.pdf", {
+        type: "application/pdf",
+      });
+      const input = document.getElementById(
+        "resume-upload",
+      ) as HTMLInputElement;
+
+      await userEvent.upload(input, file);
+
+      expect(
+        await screen.findByText("Resume must be smaller than 5MB."),
+      ).toBeInTheDocument();
+    });
+
+    it("marks the file input aria-invalid and links it to the error message once a required-field validation error is touched", async () => {
+      renderPage();
+      await userEvent.type(screen.getByLabelText(/full name/i), "Jane Doe");
+      await userEvent.type(
+        screen.getByLabelText(/mobile number/i),
+        "9876543210",
+      );
+      await userEvent.type(
+        screen.getByLabelText(/email address/i),
+        "jane@example.com",
+      );
+      await userEvent.type(
+        screen.getByLabelText(/aadhar number/i),
+        "123456789012",
+      );
+
+      const submitButton = screen.getByRole("button", {
+        name: /submit application/i,
+      });
+      await userEvent.click(submitButton);
+
+      const input = document.getElementById(
+        "resume-upload",
+      ) as HTMLInputElement;
+      await waitFor(() =>
+        expect(input).toHaveAttribute("aria-invalid", "true"),
+      );
+      expect(input).toHaveAttribute("aria-describedby", "resume-error");
+      const errorEl = document.getElementById("resume-error");
+      expect(errorEl).not.toBeNull();
+      expect(errorEl?.textContent).toBeTruthy();
+    });
   });
 });
