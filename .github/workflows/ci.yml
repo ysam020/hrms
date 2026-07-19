@@ -71,7 +71,7 @@ jobs:
       # scan reads pnpm-lock.yaml directly against its own vulnerability DB
       # instead, so it isn't affected by that.
       - name: Scan dependencies for known vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
