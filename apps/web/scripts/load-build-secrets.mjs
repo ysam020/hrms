@@ -36,5 +36,4 @@ await run("node", ["scripts/build-wasm.js"]);
 await run("node", ["./node_modules/vite/bin/vite.js", "build"]);
 await run("node", ["scripts/optimize-images.js"]);
 await run("node", [workboxBin, "injectManifest", "workbox-config.cjs"]);
-await run("node", ["scripts/optimize-css-loading.js"]);
 await run("node", ["scripts/purge-css.js"]);

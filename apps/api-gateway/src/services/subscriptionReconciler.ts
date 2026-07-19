@@ -12,10 +12,32 @@
  */
 
 import { prisma } from "@hrms/db";
+import { getRedisClient } from "@hrms/cache";
 import { getRazorpay } from "../handlers/payment";
 import { logger } from "@hrms/logger";
 
 const RECONCILE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+// This is a setInterval running in every gateway process — with N replicas,
+// N reconcilers would otherwise poll Razorpay for every tenant on the same
+// schedule and race writes to the same Tenant rows. A short-lived Redis
+// lease (SET NX) makes only one replica actually run each cycle; the rest
+// see the key already held and skip. The lease's own TTL is the safety net
+// if the winning replica dies mid-run — it expires well before the next
+// scheduled tick, so a crash never permanently blocks reconciliation.
+const LOCK_KEY = "lock:subscription-reconciler";
+const LOCK_TTL_SECONDS = 30 * 60; // well under the 6h interval, well over a run's expected duration
+
+async function acquireLock(): Promise<boolean> {
+  const result = await getRedisClient().set(
+    LOCK_KEY,
+    "1",
+    "EX",
+    LOCK_TTL_SECONDS,
+    "NX",
+  );
+  return result === "OK";
+}
 
 export function startSubscriptionReconciler(): void {
   // Kick off the first run after a short delay so the server finishes booting.
@@ -31,6 +53,24 @@ export function startSubscriptionReconciler(): void {
 }
 
 async function reconcile(): Promise<void> {
+  let gotLock = false;
+  try {
+    gotLock = await acquireLock();
+  } catch (err) {
+    // Redis unavailable — fail closed (skip) rather than risk every replica
+    // running unguarded because the lock check itself couldn't be made.
+    logger.warn("Subscription reconciler: lock check failed, skipping run", {
+      err,
+    });
+    return;
+  }
+  if (!gotLock) {
+    logger.info(
+      "Subscription reconciler: another replica holds the lock, skipping this run",
+    );
+    return;
+  }
+
   logger.info("Subscription reconciler: starting run");
   try {
     const tenants = await prisma.tenant.findMany({

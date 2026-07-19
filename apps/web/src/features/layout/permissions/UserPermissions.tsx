@@ -24,6 +24,7 @@ import useFetchData from "@web/shared/hooks/useFetchData";
 import debounce from "lodash/debounce";
 import { permissionStructure } from "@web/assets/data/permissionStructure";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import handleRoleChange from "@web/shared/utils/permissions/handleRoleChange";
 import saveUserPermissions from "@web/shared/utils/permissions/saveUserPermissions";
 import togglePermission from "@web/shared/utils/permissions/togglePermission";
 import Button from "@web/shared/components/Button";
@@ -198,32 +199,19 @@ function UserPermissions() {
     }
   }, [userPermissionsData, fetchingPermissions, selectedUser]);
 
-  // Role change handler
+  // Role change handler — delegates to the shared util (see
+  // handleRoleChange.tsx) instead of a hand-copied duplicate, so this live
+  // code path gets the same originalUserPermissions null-guard and doesn't
+  // silently drift from it again.
   const handleRoleChangeWrapper = (e) => {
-    const selectedRoleObj = e.value;
-
-    setSelectedRole(selectedRoleObj);
-
-    let newPermissions;
-
-    if (selectedRoleObj && selectedRoleObj.permissions) {
-      // Merge original user permissions with role permissions and remove duplicates
-      const rolePermissions = selectedRoleObj.permissions;
-      const mergedPermissions = [
-        ...new Set([...originalUserPermissions, ...rolePermissions]),
-      ];
-
-      newPermissions = mergedPermissions;
-      setPermissions(mergedPermissions);
-
-      setIsSuperUser(mergedPermissions.includes("*:*:*"));
-    } else {
-      // Role deselected - filter back to only original user permissions
-      newPermissions = [...originalUserPermissions];
-      setPermissions(newPermissions);
-
-      setIsSuperUser(originalUserPermissions.includes("*:*:*"));
-    }
+    handleRoleChange(
+      e,
+      setSelectedRole,
+      setPermissions,
+      setIsSuperUser,
+      setHasChanges,
+      originalUserPermissions,
+    );
   };
 
   const arraysEqual = (a, b) => {

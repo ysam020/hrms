@@ -13,6 +13,39 @@ export interface GrpcClientConfig {
   };
 }
 
+// Shared retry policy, exported so any gRPC call site — not just
+// BaseGrpcClient's own makeCall — can apply the same retryable-code
+// decision and backoff schedule instead of reimplementing it. UNAVAILABLE
+// is the one gRPC status that reliably means the request never reached a
+// server that could act on it (a connection-level failure), so retrying it
+// can't double-execute a non-idempotent mutation the way retrying
+// DEADLINE_EXCEEDED could (the server may have received and be processing
+// that one slowly). Every other code (INVALID_ARGUMENT, PERMISSION_DENIED,
+// NOT_FOUND, ...) is deterministic — retrying it wastes latency without any
+// chance of a different outcome.
+export const RETRYABLE_GRPC_CODES: ReadonlySet<grpc.status> = new Set([
+  grpc.status.UNAVAILABLE,
+]);
+const RETRY_BASE_DELAY_MS = 100;
+const RETRY_MAX_DELAY_MS = 2_000;
+
+export function isRetryableGrpcCode(
+  code: grpc.status | undefined | null,
+): boolean {
+  return code != null && RETRYABLE_GRPC_CODES.has(code);
+}
+
+// Full jitter (AWS's "Exponential Backoff And Jitter" — the delay is
+// uniformly random between 0 and the capped exponential value, not the
+// capped value itself. Plain exponential backoff has every replica retrying
+// on the same schedule; under a real transient outage that means every
+// caller re-collides with the recovering service at once. Jitter spreads
+// those retries out instead of synchronizing them.
+export function grpcRetryDelayMs(attempt: number): number {
+  const cap = Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
+  return Math.random() * cap;
+}
+
 export class BaseGrpcClient {
   protected client: any;
   protected config: GrpcClientConfig;
@@ -58,22 +91,66 @@ export class BaseGrpcClient {
       "grpc.keepalive_permit_without_calls": 1,
     };
 
+    // timeout/retries are call-level concerns (see makeCall below), not
+    // grpc.js channel options — keep them out of the channel-options object
+    // passed to the native channel constructor.
+    const {
+      timeout: _timeout,
+      retries: _retries,
+      ...channelOptions
+    } = this.config.options ?? {};
+
     this.client = new grpc.Client(
       this.config.address,
       this.config.credentials ?? this.buildDefaultCredentials(),
       {
         ...options,
-        ...this.config.options,
+        ...channelOptions,
       },
     );
   }
 
-  async makeCall(method: string, request: any): Promise<any> {
+  private callOnce(
+    method: string,
+    request: any,
+    deadlineMs: number,
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
-      this.client[method](request, (error: any, response: any) => {
-        if (error) reject(error);
-        else resolve(response);
-      });
+      this.client[method](
+        request,
+        { deadline: Date.now() + deadlineMs },
+        (error: any, response: any) => {
+          if (error) reject(error);
+          else resolve(response);
+        },
+      );
     });
+  }
+
+  // Previously: config.options.timeout/retries were accepted but never
+  // read — a caller configuring { retries: 3 } got silent no-op behavior, a
+  // false sense of resilience. Both are now applied: timeout becomes the
+  // per-call deadline, retries is the number of additional attempts made
+  // after the first failure, using the shared retry policy above.
+  async makeCall(method: string, request: any): Promise<any> {
+    const deadlineMs = this.config.options?.timeout ?? 8_000;
+    const retries = this.config.options?.retries ?? 0;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await this.callOnce(method, request, deadlineMs);
+      } catch (error: any) {
+        const isLastAttempt = attempt === retries;
+        if (isLastAttempt || !isRetryableGrpcCode(error?.code)) throw error;
+        await new Promise((resolve) =>
+          setTimeout(resolve, grpcRetryDelayMs(attempt)),
+        );
+      }
+    }
+    // Unreachable: the loop above always either returns or throws, but
+    // TypeScript can't prove that (attempt is bounded by a runtime value,
+    // not a literal), so a function typed to return Promise<any> needs an
+    // explicit terminal statement here to satisfy noImplicitReturns.
+    throw new Error("unreachable");
   }
 }

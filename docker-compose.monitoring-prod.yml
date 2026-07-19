@@ -13,7 +13,9 @@ name: hrms-monitoring
 services:
   prometheus:
     container_name: hrms-monitoring-prometheus
-    image: prom/prometheus:latest
+    # Pinned like grafana below — :latest on the alerting path itself risks
+    # a surprise break with no warning, exactly where you least want one.
+    image: prom/prometheus:v3.11.3
     ports:
       - "9090:9090"
     volumes:
@@ -25,6 +27,30 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=90d"
       - "--web.enable-lifecycle"
+    depends_on:
+      - alertmanager
+    restart: unless-stopped
+
+  # Receives firing alerts from Prometheus (alert-rules.yml) and pages via
+  # Slack — see alertmanager.yml for why the webhooks themselves aren't in
+  # this file. `/opt/hrms-monitoring/deploy.sh` (same script that writes
+  # grafana's .env) writes both ./monitoring/secrets/slack_webhook_url and
+  # ./monitoring/secrets/slack_webhook_url_critical from Secrets Manager
+  # before this comes up (see AlertmanagerSlackWebhookSecretName /
+  # AlertmanagerCriticalSlackWebhookSecretName in cloudformation/hrms-deploy.yaml);
+  # both files are gitignored and never committed.
+  alertmanager:
+    container_name: hrms-monitoring-alertmanager
+    image: prom/alertmanager:v0.33.1
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
     restart: unless-stopped
 
   grafana:
@@ -53,6 +79,8 @@ services:
 
 volumes:
   prometheus-data:
+    driver: local
+  alertmanager-data:
     driver: local
   grafana-data:
     driver: local

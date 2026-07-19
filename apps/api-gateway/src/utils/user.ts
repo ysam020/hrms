@@ -12,3 +12,18 @@ export async function isSuperUser(userId: string): Promise<boolean> {
   });
   return user?.isSuperUser === true;
 }
+
+/**
+ * Owner/admin/hr tenant role, or a global superuser. Used to gate
+ * cross-employee visibility of compensation and identity-document fields
+ * (salary, aadhar/bank/pan, PF/UAN/ESIC) — HR staff need this for their
+ * job, not just superusers. Centralised so employee-detail endpoints don't
+ * each hand-roll a slightly different version of the same check.
+ */
+export async function isHrOrAboveCaller(
+  userId: string,
+  tenantRole: string | null | undefined,
+): Promise<boolean> {
+  if (["owner", "admin", "hr"].includes(tenantRole ?? "")) return true;
+  return isSuperUser(userId);
+}

@@ -66,9 +66,17 @@ describe("tenantContext", () => {
   });
 
   it("propagates context across an async callback (AsyncLocalStorage survives awaits)", async () => {
-    await runWithTenant("t1", null, async () => {
-      await new Promise((r) => setTimeout(r, 0));
-      expect(getTenantId()).toBe("t1");
-    });
+    // Fake timers here still exercise the real thing under test — that
+    // AsyncLocalStorage's context survives a macrotask boundary — without
+    // adding a real wall-clock wait to the suite.
+    jest.useFakeTimers();
+    try {
+      await runWithTenant("t1", null, async () => {
+        await jest.advanceTimersByTimeAsync(0);
+        expect(getTenantId()).toBe("t1");
+      });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

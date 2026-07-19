@@ -9,6 +9,7 @@ import { parsePagination } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
 import { safeDecrypt } from "@hrms/crypto";
 import { isPrivileged } from "./approvalChains";
+import { isHrOrAboveCaller } from "../utils/user";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
   const authReq = req as AuthRequest;
@@ -89,7 +90,47 @@ export async function editEmployeeDetails(req: Request, res: Response) {
   }
 }
 
+// Fields only the employee themselves or HR-and-above may see. Stripped at
+// response time (not baked into what gets cached — the cache key isn't
+// scoped by caller, so caching a privilege-dependent payload under a
+// privilege-independent key would leak the first requester's access level
+// to every subsequent requester regardless of their own role).
+const RESTRICTED_EMPLOYEE_DETAIL_FIELDS = [
+  "pf_no",
+  "uan_no",
+  "esic_no",
+  "salary",
+  "salaryBasicPay",
+  "salaryHra",
+  "salaryConveyance",
+  "salaryPf",
+  "salaryEsi",
+  "salaryPt",
+  "salaryComponentBreakdown",
+  "salaryStructure",
+  "reasonForTermination",
+  "dateOfTermination",
+  "dateOfAbscond",
+] as const;
+
+async function scopeEmployeeDetails(
+  authReq: AuthRequest,
+  targetUserId: string,
+  data: Record<string, any>,
+): Promise<Record<string, any>> {
+  if (authReq.user!.userId === targetUserId) return data;
+  const allowed = await isHrOrAboveCaller(
+    authReq.user!.userId,
+    authReq.user!.tenantRole,
+  );
+  if (allowed) return data;
+  const scoped = { ...data };
+  for (const field of RESTRICTED_EMPLOYEE_DETAIL_FIELDS) delete scoped[field];
+  return scoped;
+}
+
 export async function getEmployeeDetails(req: Request, res: Response) {
+  const authReq = req as AuthRequest;
   try {
     const username = req.params.username as string;
     const tenantId = getTenantId() ?? "global";
@@ -99,7 +140,7 @@ export async function getEmployeeDetails(req: Request, res: Response) {
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         message: "Employee details fetched",
-        data: cached,
+        data: await scopeEmployeeDetails(authReq, cached.id, cached),
       });
     }
 
@@ -165,7 +206,7 @@ export async function getEmployeeDetails(req: Request, res: Response) {
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Employee details fetched",
-      data,
+      data: await scopeEmployeeDetails(authReq, user.id, data),
     });
   } catch (error: unknown) {
     logger.error("GET /get-employee-details/:username error:", { error });

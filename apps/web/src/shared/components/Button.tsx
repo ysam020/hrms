@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import CircularProgress from "@mui/material/CircularProgress";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 
@@ -46,6 +46,8 @@ function Button({
 }) {
   const appTheme = useContext(ThemeContext).theme;
   theme = theme ?? appTheme ?? "light";
+  const [isHovered, setIsHovered] = useState(false);
+  const hoverable = !disabled && !loading;
 
   const getVariantStyles = () => {
     const variants: Record<
@@ -58,7 +60,14 @@ function Button({
       }
     > = {
       primary: {
-        backgroundColor: theme === "light" ? "#111b21" : "#0c3f61",
+        backgroundColor:
+          theme === "light"
+            ? isHovered && hoverable
+              ? "#376f67"
+              : "#41837a"
+            : isHovered && hoverable
+              ? "#2d8176"
+              : "#006658",
         color: "#fff",
       },
       secondary: {
@@ -207,6 +216,8 @@ function Button({
       className={`btn ${className}`.trim()}
       style={combinedStyle}
       onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       disabled={disabled || loading}
       {...props}
     >

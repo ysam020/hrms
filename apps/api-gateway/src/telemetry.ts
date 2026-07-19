@@ -19,11 +19,11 @@ import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { PrometheusExporter } from "@opentelemetry/exporter-prometheus";
 import {
-  Resource,
-  detectResourcesSync,
-  envDetectorSync,
-  hostDetectorSync,
-  processDetectorSync,
+  resourceFromAttributes,
+  detectResources,
+  envDetector,
+  hostDetector,
+  processDetector,
 } from "@opentelemetry/resources";
 import {
   ATTR_SERVICE_NAME,
@@ -43,11 +43,11 @@ const OTLP_ENDPOINT =
 const METRICS_PORT = parseInt(process.env.OTEL_METRICS_PORT ?? "9464", 10);
 
 if (ENABLED) {
-  const detectedResources = detectResourcesSync({
-    detectors: [envDetectorSync, hostDetectorSync, processDetectorSync],
+  const detectedResources = detectResources({
+    detectors: [envDetector, hostDetector, processDetector],
   });
 
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: SERVICE_NAME,
     [ATTR_SERVICE_VERSION]: SERVICE_VERSION,
     [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: process.env.NODE_ENV ?? "development",
@@ -75,7 +75,7 @@ if (ENABLED) {
           }),
         ]
       : [],
-    metricReader: new PrometheusExporter({ port: METRICS_PORT }),
+    metricReaders: [new PrometheusExporter({ port: METRICS_PORT })],
     instrumentations: [
       getNodeAutoInstrumentations({
         "@opentelemetry/instrumentation-http": {

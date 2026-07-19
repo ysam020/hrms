@@ -2,13 +2,18 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { authenticate, authorize } from "../middleware/authenticate";
 import * as h from "../handlers/analytics";
+import { redisStore } from "../config/rateLimiters";
 
+// Redis-backed, like every other limiter on this path — an in-process
+// counter here would allow max × replica-count requests fleet-wide instead
+// of the intended per-window ceiling.
 const analyticsLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
+  store: redisStore("rl:analytics:"),
 });
 
 export const analyticsRouter: Router = Router();

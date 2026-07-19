@@ -1,4 +1,5 @@
 import { prisma } from "@hrms/db";
+import { getRedisClient } from "@hrms/cache";
 import { getRazorpay } from "../handlers/payment";
 import { startSubscriptionReconciler } from "../services/subscriptionReconciler";
 
@@ -8,6 +9,11 @@ jest.mock("@hrms/db", () => ({
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+const mockRedisSet = jest.fn();
+jest.mock("@hrms/cache", () => ({
+  getRedisClient: jest.fn(() => ({ set: mockRedisSet })),
 }));
 
 const mockFetch = jest.fn();
@@ -36,6 +42,7 @@ describe("startSubscriptionReconciler", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     db.tenant.update.mockResolvedValue({});
+    mockRedisSet.mockResolvedValue("OK"); // lock acquired by default
   });
 
   afterEach(() => {
@@ -188,5 +195,40 @@ describe("startSubscriptionReconciler", () => {
     await jest.advanceTimersByTimeAsync(6 * 60 * 60 * 1000);
     expect(db.tenant.findMany).toHaveBeenCalledTimes(2);
     jest.useRealTimers();
+  });
+
+  // Regression coverage for a real bug: with N gateway replicas, each ran
+  // this reconciler independently on the same schedule, polling Razorpay
+  // for every tenant N times over and racing writes to the same Tenant
+  // rows. A Redis SET NX lease now ensures only one replica's run actually
+  // executes per cycle.
+  describe("distributed lock", () => {
+    it("acquires the lock with the expected key, TTL, and NX flag before running", async () => {
+      db.tenant.findMany.mockResolvedValue([]);
+      await runReconcilerOnce();
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        "lock:subscription-reconciler",
+        "1",
+        "EX",
+        30 * 60,
+        "NX",
+      );
+      expect(getRazorpay).not.toHaveBeenCalled(); // no tenants, but lock path exercised
+    });
+
+    it("skips the run entirely when another replica already holds the lock", async () => {
+      mockRedisSet.mockResolvedValue(null); // NX: key already exists
+      db.tenant.findMany.mockResolvedValue([{ ...BASE_TENANT }]);
+      await runReconcilerOnce();
+      expect(db.tenant.findMany).not.toHaveBeenCalled();
+      expect(getRazorpay).not.toHaveBeenCalled();
+    });
+
+    it("fails closed (skips the run) when the lock check itself throws, rather than running unguarded", async () => {
+      mockRedisSet.mockRejectedValue(new Error("Redis unavailable"));
+      db.tenant.findMany.mockResolvedValue([{ ...BASE_TENANT }]);
+      await runReconcilerOnce();
+      expect(db.tenant.findMany).not.toHaveBeenCalled();
+    });
   });
 });

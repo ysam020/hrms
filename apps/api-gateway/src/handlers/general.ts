@@ -663,15 +663,28 @@ export async function getFileViewUrl(req: AuthRequest, res: Response) {
     const segments = key.split("/");
     const ownerUsername = segments.length >= 4 ? segments[2] : segments[1];
 
-    const { userId, tenantRole } = req.user!;
+    const { userId, tenantId, tenantRole } = req.user!;
     const caller = await prisma.user.findUnique({
       where: { id: userId },
       select: { username: true, isSuperUser: true },
     });
     const isOwner = !!caller && caller.username === ownerUsername;
-    const isPrivileged =
+    const isPrivilegedRole =
       caller?.isSuperUser ||
       ["owner", "admin", "hr"].includes(tenantRole ?? "");
+
+    let isPrivileged = false;
+    if (!isOwner && isPrivilegedRole) {
+      // Usernames are globally unique, so a valid fileUrl for another
+      // tenant's employee would otherwise satisfy the privileged branch —
+      // require the target file's owner to be in the caller's own tenant.
+      const owner = await prisma.user.findUnique({
+        where: { username: ownerUsername },
+        select: { tenantId: true },
+      });
+      isPrivileged = !!owner && owner.tenantId === tenantId;
+    }
+
     if (!isOwner && !isPrivileged) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "You don't have permission to view this file.",

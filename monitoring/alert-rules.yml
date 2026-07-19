@@ -2,12 +2,13 @@
 # which scrapes http_requests_total/grpc_requests_total/*_duration_ms from
 # every service's prom-client /metrics endpoint — packages/logger/src/index.ts).
 #
-# These rules make problems visible in Prometheus/Grafana's own alert views
-# even without Alertmanager wired up. To actually page someone, deploy
-# Alertmanager and point Prometheus's `alerting.alertmanagers` config at it,
-# then configure a receiver (Slack/PagerDuty/etc) — that wiring is
-# infra/credentials work that has to happen outside this repo and is not
-# done here.
+# Forwarded to the alertmanager service (docker-compose.monitoring-prod.yml)
+# via prometheus-prod.yml's `alerting.alertmanagers` config, which pages
+# #hrms-alerts on Slack (see alertmanager.yml). The monitoring host's
+# deploy.sh (cloudformation/hrms-deploy.yaml) writes the real Slack webhook(s)
+# to ./monitoring/secrets/ from Secrets Manager on every boot/redeploy —
+# until those files exist, Alertmanager fails to deliver (visibly, in its own
+# logs) rather than silently paging nowhere.
 groups:
   - name: service-availability
     rules:

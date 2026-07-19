@@ -1,17 +1,26 @@
 import { Worker } from "bullmq";
 import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import { sendEmail } from "@hrms/common";
-import { logger } from "@hrms/logger";
+import { logger, requestIdStorage } from "@hrms/logger";
 import type { EmailJobData } from "@hrms/queue";
+import type { Job } from "bullmq";
+
+async function processJob(job: Job<EmailJobData>) {
+  const { to, subject, html, from } = job.data;
+  await sendEmail({ to, subject, html, from });
+  logger.info(`Email sent to ${to}`, { jobId: job.id });
+}
 
 export function startEmailWorker(): Worker {
   const worker = new Worker<EmailJobData>(
     "emailQueue",
-    async (job) => {
-      const { to, subject, html, from } = job.data;
-      await sendEmail({ to, subject, html, from });
-      logger.info(`Email sent to ${to}`, { jobId: job.id });
-    },
+    (job) =>
+      // Continue the correlation ID the producer attached (see
+      // wrapAddWithRequestId in @hrms/queue) so this worker's own log lines
+      // can be traced back to the HTTP/gRPC request that enqueued it.
+      job.data.requestId
+        ? requestIdStorage.run(job.data.requestId, () => processJob(job))
+        : processJob(job),
     {
       connection: getBullMQConnection(),
       concurrency: 5,

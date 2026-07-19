@@ -1,48 +1,21 @@
-import Redis from "ioredis";
-import { logger } from "@hrms/logger";
-import { prisma } from "@hrms/db";
+import { getRedisClient } from "@hrms/cache";
 
-let redis: Redis | null = null;
+// Refresh-token storage now lives in @hrms/cache (single implementation
+// shared with auth-service — see packages/cache/src/refreshTokenStore.ts).
+// Previously hand-copied here with a drifted 6-param signature (no
+// previousToken) that silently shifted dbName if ever called with
+// auth-service's 7-param convention; re-exporting the shared function
+// closes that gap instead of re-copying it a third time.
+export { storeRefreshToken, markOrgSetupComplete } from "@hrms/cache";
 
-function getClient(): Redis {
-  if (!redis) {
-    redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
-    redis.on("error", (err) => logger.error("Redis error (gateway):", { err }));
-  }
-  return redis;
+function getClient() {
+  return getRedisClient();
 }
 
-const REFRESH_TTL = 30 * 24 * 60 * 60; // 30 days — matches REFRESH_TOKEN_EXPIRE default
 const PENDING_SUB_TTL = 7 * 24 * 60 * 60;
 // Razorpay replays a webhook up to 5 times over ~24 hours; 48 h is enough
 // headroom to deduplicate any duplicate delivery.
 const WEBHOOK_EVENT_TTL = 48 * 60 * 60;
-
-// Keeps refresh token metadata in sync with what the auth-service stores so
-// that token rotation in the auth-service picks up the correct tenantId.
-export async function storeRefreshToken(
-  userId: string,
-  token: string,
-  tenantId: string,
-  tenantRole: string,
-  dbName: string | null = null,
-  orgSetupComplete: boolean = true,
-): Promise<void> {
-  const meta = JSON.stringify({
-    token,
-    tenantId,
-    tenantRole,
-    dbName,
-    orgSetupComplete,
-  });
-  await Promise.all([
-    getClient().setex(`refresh:${userId}`, REFRESH_TTL, meta),
-    prisma.user.update({
-      where: { id: userId },
-      data: { refreshToken: token },
-    }),
-  ]);
-}
 
 export async function storePendingSubscription(
   userId: string,
@@ -102,20 +75,4 @@ export async function setRazorpayPlanId(
   planId: string,
 ): Promise<void> {
   await getClient().set(`razorpay_plan:${billing}`, planId);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function markOrgSetupComplete(userId: string): Promise<void> {
-  const client = getClient();
-  const raw = await client.get(`refresh:${userId}`);
-  if (!raw) return;
-  let meta: any;
-  try {
-    meta = JSON.parse(raw);
-  } catch {
-    return;
-  }
-  meta.orgSetupComplete = true;
-  await client.setex(`refresh:${userId}`, REFRESH_TTL, JSON.stringify(meta));
 }

@@ -448,7 +448,7 @@ pnpm monitoring:stop
 │   └── nginx.conf              # nginx config for web container
 │
 ├── docker-compose.dev.yml          # Dev (no infra — uses remote MongoDB/Redis)
-├── docker-compose.ci.yml           # CI build and smoke test
+├── docker-compose.ci.yml           # Build/smoke-test all images — run in CI on every PR (.github/workflows/ci.yml, see wiki/Deployment.md)
 ├── docker-compose.prod.yml         # Production (pulls from registry)
 ├── docker-compose.monitoring.yml   # Prometheus + Loki + Grafana stack
 ├── turbo.json                      # Turborepo task graph

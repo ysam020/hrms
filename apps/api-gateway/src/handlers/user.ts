@@ -6,7 +6,7 @@ import { camelToSnake, apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
-import { isSuperUser } from "../utils/user";
+import { isHrOrAboveCaller } from "../utils/user";
 
 export async function getAllUsers(req: Request, res: Response) {
   try {
@@ -96,14 +96,23 @@ export async function getUserData(req: Request, res: Response) {
       snake.workState = tenant?.workState ?? null;
     }
 
-    // Strip PII that only the owner or a superuser may see
-    const callerIsOwner = user?.userId === req.params.username;
+    // Strip PII/compensation data that only the owner or HR-and-above may
+    // see. `u.id` is the target's real database id — `req.params.username`
+    // is a username string, so comparing it directly against user.userId
+    // (also a database id) would never match; resolve the owner check
+    // against the fetched record's actual id instead.
+    const callerIsOwner = user?.userId === u.id;
     if (!callerIsOwner) {
-      const callerIsSuperUser = await isSuperUser(user!.userId);
-      if (!callerIsSuperUser) {
+      const callerIsHrOrAbove = await isHrOrAboveCaller(
+        user!.userId,
+        user!.tenantRole,
+      );
+      if (!callerIsHrOrAbove) {
         delete snake.aadhar_no;
         delete snake.bank_account_no;
         delete snake.pan_no;
+        delete snake.salary;
+        delete snake.salaryStructure;
       }
     }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

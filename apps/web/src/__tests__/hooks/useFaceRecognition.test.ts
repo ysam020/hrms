@@ -67,16 +67,28 @@ describe("useFaceRecognition", () => {
       expect(result.current.faceRecognitionState.progress).toBe(0);
     });
 
-    it("applies a same-step update once the throttle window has elapsed", async () => {
-      const { result } = renderHook(() => useFaceRecognition());
-      act(() =>
-        result.current.updateFaceRecognitionState({ step: "face_detection" }),
-      );
+    it("applies a same-step update once the throttle window has elapsed", () => {
+      // The throttle check is a plain Date.now() diff (see
+      // useFaceRecognition.tsx), not a scheduled setTimeout — fake timers
+      // let this test move the clock past the 200ms boundary instantly
+      // instead of a real 210ms wait sitting right on that boundary, which
+      // was a plausible source of flakiness under CI load.
+      vi.useFakeTimers();
+      try {
+        const { result } = renderHook(() => useFaceRecognition());
+        act(() =>
+          result.current.updateFaceRecognitionState({
+            step: "face_detection",
+          }),
+        );
 
-      await new Promise((r) => setTimeout(r, 210));
-      act(() => result.current.updateFaceRecognitionState({ progress: 75 }));
+        vi.advanceTimersByTime(210);
+        act(() => result.current.updateFaceRecognitionState({ progress: 75 }));
 
-      expect(result.current.faceRecognitionState.progress).toBe(75);
+        expect(result.current.faceRecognitionState.progress).toBe(75);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

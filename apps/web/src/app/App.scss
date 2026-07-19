@@ -126,6 +126,14 @@
   color: var(--btn-color);
 }
 
+// The global MuiSvgIcon override pins every icon to a fixed grey by default,
+// which breaks a button icon's natural currentColor inheritance (e.g. a
+// white icon on a colored .btn). Mirrors the same fix already applied to
+// real MUI Buttons in useMuiTheme.tsx's MuiButton.root override.
+.btn .MuiSvgIcon-root {
+  color: inherit;
+}
+
 .link {
   color: var(--link-color);
   cursor: pointer;

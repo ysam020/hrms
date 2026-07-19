@@ -1,20 +1,46 @@
 import rateLimit, {
   ipKeyGenerator,
   type RateLimitRequestHandler,
+  type Store,
 } from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
 import { Application } from "express";
 import jwt from "jsonwebtoken";
+import { getRedisClient } from "@hrms/cache";
+
+// Every limiter shares one Redis-backed store (prefixed per limiter so
+// their counters don't collide) instead of express-rate-limit's default
+// in-process Map. In-process counters are meaningless the moment the
+// gateway runs more than one replica: with N replicas each enforces `max`
+// independently, so the real effective limit is max × N, and every deploy
+// silently resets every counter to zero. Redis makes the limit actually
+// shared and durable across the fleet.
+export function redisStore(prefix: string): Store {
+  return new RedisStore({
+    prefix,
+    sendCommand: (...args: string[]) => {
+      const [command, ...rest] = args;
+      return getRedisClient().call(command, ...rest) as any;
+    },
+  });
+}
 
 // Use the authenticated user's ID when available, fall back to IP.
 // Prevents a single corporate NAT address from exhausting the pool for an entire office.
-// jwt.decode (not verify) is intentional here — we're only partitioning rate-limit
-// buckets, not trusting the payload for authorization decisions.
+// Must be jwt.verify, not jwt.decode: these limiters guard unauthenticated
+// routes (login, credential-check, public job applications), so the
+// Authorization header is fully attacker-controlled. Trusting an unverified
+// payload lets an attacker mint a fresh, syntactically-valid-looking JWT
+// with a rotating fake userId on every request and land in a brand-new
+// rate-limit bucket each time — a complete bypass of the abuse control.
 const userOrIpKey = (req: any): string => {
   const token =
     req.headers.authorization?.split(" ")[1] || req.cookies?.access_token;
   if (token) {
     try {
-      const payload = jwt.decode(token) as { userId?: string } | null;
+      const payload = jwt.verify(token, process.env.ACCESS_JWT_TOKEN!, {
+        algorithms: ["HS256"],
+      }) as { userId?: string };
       if (payload?.userId) return `user:${payload.userId}`;
     } catch {}
   }
@@ -34,6 +60,7 @@ export const authLimiter: RateLimitRequestHandler = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
+  store: redisStore("rl:auth:"),
 });
 
 // Profile returns full PII — apply a dedicated limit instead of exempting it.
@@ -44,6 +71,7 @@ const profileLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
+  store: redisStore("rl:profile:"),
 });
 
 const generalLimiter = rateLimit({
@@ -53,6 +81,7 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
+  store: redisStore("rl:general:"),
 });
 
 const publicLimiter = rateLimit({
@@ -62,6 +91,7 @@ const publicLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
+  store: redisStore("rl:public:"),
 });
 
 export function applyRateLimiters(app: Application) {

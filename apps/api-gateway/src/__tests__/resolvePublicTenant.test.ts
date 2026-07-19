@@ -13,6 +13,7 @@ jest.mock("@hrms/db", () => {
 });
 
 jest.mock("@hrms/common", () => ({
+  ...jest.requireActual("@hrms/common"),
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
   ),
@@ -110,6 +111,49 @@ describe("resolvePublicTenant", () => {
     await resolvePublicTenant(makeReq("cache-test-co"), makeRes(), jest.fn());
     await resolvePublicTenant(makeReq("cache-test-co"), makeRes(), jest.fn());
     expect(mockTenantFindUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-checks isActive after the cache entry's max age, even though continued traffic keeps it from idling out", async () => {
+    // Regression coverage: BoundedCache's idle-TTL resets on every get(), so
+    // without a separate hard ceiling here, a tenant deactivated after being
+    // cached would stay resolvable indefinitely as long as its careers page
+    // kept getting hit. cachedAt enforces that ceiling independent of access
+    // pattern — 5 minutes, matching the constant in resolvePublicTenant.ts.
+    jest.useFakeTimers();
+    try {
+      mockTenantFindUnique.mockResolvedValue({
+        id: "t4",
+        dbName: "tenant_db_4",
+        isActive: true,
+      });
+      await resolvePublicTenant(
+        makeReq("staleness-test-co"),
+        makeRes(),
+        jest.fn(),
+      );
+      expect(mockTenantFindUnique).toHaveBeenCalledTimes(1);
+
+      // Well within the cache's idle-TTL (30 min default) but past the 5 min
+      // freshness ceiling — and the tenant has since been deactivated.
+      jest.advanceTimersByTime(5 * 60 * 1000 + 1);
+      mockTenantFindUnique.mockResolvedValue({
+        id: "t4",
+        dbName: "tenant_db_4",
+        isActive: false,
+      });
+
+      const res = makeRes();
+      const next = jest.fn();
+      await resolvePublicTenant(makeReq("staleness-test-co"), res, next);
+
+      expect(mockTenantFindUnique).toHaveBeenCalledTimes(2); // re-checked, not served from the stale cache entry
+      expect(next).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 404 }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("handles a tenant with no dbName by passing a null client (hybrid multi-tenancy fallback)", async () => {

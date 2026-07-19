@@ -129,13 +129,65 @@ describe("PayrollRuns", () => {
     expect(screen.queryByLabelText("Cancel")).not.toBeInTheDocument();
   });
 
-  it("shows no row actions for a disbursed run", async () => {
+  it("shows only 'Retry Payouts' for a disbursed run (in case some individual payouts failed)", async () => {
     renderWith(HR_USER, [
       makeRun({ status: "disbursed", disbursedAt: "2024-06-10T00:00:00Z" }),
     ]);
     await screen.findByText("June 2024");
     expect(screen.queryByLabelText("Mark Disbursed")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Cancel")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Retry Payouts")).toBeInTheDocument();
+  });
+
+  it("shows 'Retry Payouts' for a run whose disbursement job failed entirely", async () => {
+    renderWith(HR_USER, [makeRun({ status: "disbursement_failed" })]);
+    await screen.findByText("June 2024");
+    expect(screen.getByLabelText("Retry Payouts")).toBeInTheDocument();
+  });
+
+  it("shows no row actions for a run currently disbursing", async () => {
+    renderWith(HR_USER, [makeRun({ status: "disbursing" })]);
+    await screen.findByText("June 2024");
+    expect(screen.queryByLabelText("Retry Payouts")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Mark Disbursed")).not.toBeInTheDocument();
+  });
+
+  it("confirms and triggers a payout retry, showing the in-progress info alert", async () => {
+    mocks.instance.post.mockResolvedValue({
+      data: { message: "Retrying 2 outstanding payout(s)." },
+    });
+    const setAlert = vi.fn();
+    mockApiClient.mockResolvedValue({
+      data: {
+        data: { runs: [makeRun({ status: "disbursed" })], total: 1 },
+      },
+    });
+    render(
+      <AlertContext.Provider value={{ setAlert } as any}>
+        <UserContext.Provider value={{ user: HR_USER } as any}>
+          <PayrollRuns />
+        </UserContext.Provider>
+      </AlertContext.Provider>,
+    );
+    await screen.findByText("June 2024");
+
+    fireEvent.click(screen.getByLabelText("Retry Payouts"));
+    expect(screen.getByText("Retry Payroll Payouts")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Retry Payouts"));
+
+    await waitFor(() =>
+      expect(mocks.instance.post).toHaveBeenCalledWith(
+        expect.stringContaining("/retry-payouts"),
+      ),
+    );
+    await waitFor(() =>
+      expect(setAlert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: "info",
+          message: "Retrying 2 outstanding payout(s).",
+        }),
+      ),
+    );
   });
 
   it("submits a draft run for approval directly (no confirmation dialog)", async () => {
@@ -176,6 +228,122 @@ describe("PayrollRuns", () => {
       }),
     );
   });
+
+  it("shows an in-progress info alert (not a success alert) once disbursement is triggered, since it now completes in the background", async () => {
+    mocks.instance.patch.mockResolvedValue({
+      data: { message: "Payroll disbursement started." },
+    });
+    const setAlert = vi.fn();
+    mockApiClient.mockResolvedValue({
+      data: {
+        data: {
+          runs: [
+            makeRun({ status: "approved", approvedAt: "2024-06-05T00:00:00Z" }),
+          ],
+          total: 1,
+        },
+      },
+    });
+    render(
+      <AlertContext.Provider value={{ setAlert } as any}>
+        <UserContext.Provider value={{ user: HR_USER } as any}>
+          <PayrollRuns />
+        </UserContext.Provider>
+      </AlertContext.Provider>,
+    );
+    await screen.findByText("June 2024");
+
+    fireEvent.click(screen.getByLabelText("Mark Disbursed"));
+    fireEvent.click(screen.getByText("Mark Disbursed"));
+
+    await waitFor(() =>
+      expect(setAlert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: "info",
+          message: "Payroll disbursement started.",
+        }),
+      ),
+    );
+  });
+
+  it("polls two disbursing runs independently — starting the second poll doesn't cancel the first", async () => {
+    mocks.instance.patch.mockResolvedValue({
+      data: { message: "Payroll disbursement started." },
+    });
+    const setAlert = vi.fn();
+    const runs = [
+      makeRun({
+        id: "r1",
+        status: "approved",
+        approvedAt: "2024-06-05T00:00:00Z",
+      }),
+      makeRun({
+        id: "r2",
+        month: 7,
+        status: "approved",
+        approvedAt: "2024-07-05T00:00:00Z",
+      }),
+    ];
+    mockApiClient.mockImplementation((url: string) => {
+      if (url === "/payroll/runs/r1") {
+        return Promise.resolve({ data: { data: { status: "disbursed" } } });
+      }
+      if (url === "/payroll/runs/r2") {
+        return Promise.resolve({
+          data: { data: { status: "disbursement_failed" } },
+        });
+      }
+      return Promise.resolve({ data: { data: { runs, total: runs.length } } });
+    });
+    render(
+      <AlertContext.Provider value={{ setAlert } as any}>
+        <UserContext.Provider value={{ user: HR_USER } as any}>
+          <PayrollRuns />
+        </UserContext.Provider>
+      </AlertContext.Provider>,
+    );
+    await screen.findByText("June 2024");
+    await screen.findByText("July 2024");
+
+    const disburseButtons = screen.getAllByLabelText("Mark Disbursed");
+    expect(disburseButtons).toHaveLength(2);
+
+    // Trigger run r1's poll, then — before it fires — trigger run r2's
+    // poll. Without the per-run timeout map, starting r2's poll cancels
+    // r1's pending timer and r1 never gets its settled-status toast.
+    fireEvent.click(disburseButtons[0]);
+    fireEvent.click(await screen.findByText("Mark Disbursed"));
+    await waitFor(() => expect(mocks.instance.patch).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getAllByLabelText("Mark Disbursed")[1]);
+    fireEvent.click(await screen.findByText("Mark Disbursed"));
+    await waitFor(() => expect(mocks.instance.patch).toHaveBeenCalledTimes(2));
+
+    await waitFor(
+      () => {
+        expect(mockApiClient).toHaveBeenCalledWith("/payroll/runs/r1");
+        expect(mockApiClient).toHaveBeenCalledWith("/payroll/runs/r2");
+      },
+      { timeout: 4000 },
+    );
+    await waitFor(
+      () => {
+        expect(setAlert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: "success",
+            message: expect.stringContaining("Payroll disbursed"),
+          }),
+        );
+        expect(setAlert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            severity: "error",
+            message: expect.stringContaining("failed"),
+          }),
+        );
+      },
+      { timeout: 4000 },
+    );
+  }, 10000);
 
   it("cancels a run via the confirmation dialog and shows a success alert", async () => {
     mocks.instance.patch.mockResolvedValue({});

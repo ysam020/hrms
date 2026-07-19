@@ -2,7 +2,11 @@ import { Request, Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { AuthRequest } from "../middleware/authenticate";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  partitionPermissions,
+} from "@hrms/common";
 import { handleError } from "../utils/handleError";
 
 export async function getRoles(_req: Request, res: Response) {
@@ -89,9 +93,16 @@ export async function updateRolePermissions(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Role not found",
       });
+
+    const { valid, invalid } = partitionPermissions(permissions ?? []);
+    if (invalid.length > 0)
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Unknown permission(s): ${invalid.join(", ")}`,
+      });
+
     await prisma.role.update({
       where: { id: String(req.params._id) },
-      data: { permissions: permissions ?? [] },
+      data: { permissions: valid },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Role permissions updated successfully",
@@ -151,6 +162,13 @@ export async function saveUserPermissions(req: Request, res: Response) {
         message: "User not found",
       });
 
+    const { valid: validPermissions, invalid: invalidPermissions } =
+      partitionPermissions(permissions ?? []);
+    if (invalidPermissions.length > 0)
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Unknown permission(s): ${invalidPermissions.join(", ")}`,
+      });
+
     const newRoleName: string | null = selectedRole
       ? typeof selectedRole === "string"
         ? selectedRole
@@ -164,7 +182,7 @@ export async function saveUserPermissions(req: Request, res: Response) {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { permissions: permissions ?? [], role: updatedRole },
+      data: { permissions: validPermissions, role: updatedRole },
     });
 
     if (newRoleName) {
@@ -195,11 +213,11 @@ export async function saveUserPermissions(req: Request, res: Response) {
     }
 
     const oldPerms = user.permissions || [];
-    const addedCount = (permissions ?? []).filter(
+    const addedCount = validPermissions.filter(
       (p: string) => !oldPerms.includes(p),
     ).length;
     const removedCount = oldPerms.filter(
-      (p: string) => !(permissions ?? []).includes(p),
+      (p: string) => !validPermissions.includes(p),
     ).length;
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "User permissions updated successfully",

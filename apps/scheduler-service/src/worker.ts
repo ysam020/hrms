@@ -1,10 +1,10 @@
-import { Worker } from "bullmq";
+import { Worker, Job } from "bullmq";
 import {
   getBullMQConnection,
   getWebhookQueue,
   getDeadLetterQueue,
 } from "@hrms/queue";
-import { logger } from "@hrms/logger";
+import { logger, requestIdStorage } from "@hrms/logger";
 import type {
   SchedulerJobData,
   SchedulerJobName,
@@ -36,27 +36,35 @@ const jobHandlers: Record<SchedulerJobName, (data?: any) => Promise<void>> = {
   retryFailedWebhooks,
 };
 
+async function processSchedulerJob(job: Job<SchedulerJobData>) {
+  const { jobName, ticketId } = job.data;
+  const handler = jobHandlers[jobName];
+
+  if (!handler) {
+    logger.warn(`Unknown scheduler job: ${jobName}`);
+    return;
+  }
+
+  logger.info(`Running scheduled job: ${jobName}`);
+  const start = Date.now();
+  // Pass extra job data (e.g. ticketId for checkTicketSla).
+  await handler({ ticketId });
+  logger.info(`Completed scheduled job: ${jobName} in ${Date.now() - start}ms`);
+}
+
 /** Cron / scheduler queue worker (serial, concurrency=1). */
 export function startSchedulerWorker(): Worker {
   const worker = new Worker<SchedulerJobData>(
     "schedulerQueue",
-    async (job) => {
-      const { jobName, ticketId } = job.data;
-      const handler = jobHandlers[jobName];
-
-      if (!handler) {
-        logger.warn(`Unknown scheduler job: ${jobName}`);
-        return;
-      }
-
-      logger.info(`Running scheduled job: ${jobName}`);
-      const start = Date.now();
-      // Pass extra job data (e.g. ticketId for checkTicketSla).
-      await handler({ ticketId });
-      logger.info(
-        `Completed scheduled job: ${jobName} in ${Date.now() - start}ms`,
-      );
-    },
+    // Almost always undefined here — these are timer-driven, not enqueued
+    // from a request — but a manually-triggered job (if one is ever added)
+    // gets its correlation ID threaded through for free.
+    (job) =>
+      job.data.requestId
+        ? requestIdStorage.run(job.data.requestId, () =>
+            processSchedulerJob(job),
+          )
+        : processSchedulerJob(job),
     {
       connection: getBullMQConnection(),
       concurrency: 1, // cron jobs run serially to avoid DB contention
@@ -82,6 +90,15 @@ export function startSchedulerWorker(): Worker {
   return worker;
 }
 
+async function processWebhookJob(job: Job<WebhookDeliveryJobData>) {
+  const { deliveryId } = job.data;
+  if (!deliveryId) {
+    logger.warn(`webhookWorker: job ${job.id} missing deliveryId`);
+    return;
+  }
+  await deliverWebhook({ deliveryId });
+}
+
 /**
  * Webhook delivery worker (high-concurrency, separate queue).
  * Processes deliverWebhook jobs enqueued by webhookEmitter.ts.
@@ -90,14 +107,10 @@ export function startSchedulerWorker(): Worker {
 export function startWebhookWorker(): Worker {
   const worker = new Worker<WebhookDeliveryJobData>(
     "webhookQueue",
-    async (job) => {
-      const { deliveryId } = job.data;
-      if (!deliveryId) {
-        logger.warn(`webhookWorker: job ${job.id} missing deliveryId`);
-        return;
-      }
-      await deliverWebhook({ deliveryId });
-    },
+    (job) =>
+      job.data.requestId
+        ? requestIdStorage.run(job.data.requestId, () => processWebhookJob(job))
+        : processWebhookJob(job),
     {
       connection: getBullMQConnection(),
       concurrency: 10, // webhooks are I/O-bound HTTP calls — safe to parallelise

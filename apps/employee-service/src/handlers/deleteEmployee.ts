@@ -1,5 +1,9 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  getTenantId,
+  checkUserHasHistoricalRecords,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -9,7 +13,15 @@ export const deleteEmployee = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { id, hardDelete } = call.request;
+    // The wire field is `employeeId` (see DeleteEmployeeRequest in
+    // employee.proto) — destructured to `id` here purely so the rest of
+    // this handler doesn't need renaming. Note `hardDelete` isn't a field
+    // on DeleteEmployeeRequest at all yet, so it's always undefined from a
+    // real gRPC call today; every real invocation takes the soft-delete
+    // branch below until that's added to the proto and wired through a
+    // gateway route (neither exists yet — this RPC currently has no caller
+    // in apps/api-gateway at all).
+    const { employeeId: id, hardDelete } = call.request;
 
     if (!id) {
       return callback(null, {
@@ -38,32 +50,21 @@ export const deleteEmployee = async (
       ]);
 
     if (hardDelete) {
-      // A hard delete would silently orphan this user's historical
-      // attendance/leave/payroll rows (no FK cascade at the DB level for
-      // MongoDB) — block it if any exist and point the caller at the
-      // soft-delete path instead, which is always safe.
-      const recordTenantId = existingUser.tenantId;
-      const [attendanceCount, leaveCount, salaryCount, payrollCount] =
-        await Promise.all([
-          prisma.attendanceRecord.count({
-            where: { tenantId: recordTenantId, userId: id },
-          }),
-          prisma.leaveApplication.count({
-            where: { tenantId: recordTenantId, userId: id },
-          }),
-          prisma.salaryStructure.count({
-            where: { tenantId: recordTenantId, userId: id },
-          }),
-          prisma.payrollLineItem.count({
-            where: { tenantId: recordTenantId, userId: id },
-          }),
-        ]);
-      if (
-        attendanceCount > 0 ||
-        leaveCount > 0 ||
-        salaryCount > 0 ||
-        payrollCount > 0
-      ) {
+      // A hard delete would silently orphan this user's historical records
+      // (no FK cascade at the DB level for MongoDB) — block it if any exist
+      // across every tenant-scoped model that references userId, and point
+      // the caller at the soft-delete path instead, which is always safe.
+      // See userDeletionGuard.ts — this used to be a hand-picked 4-model
+      // subset here, independently hand-copied (and just as incomplete) in
+      // user-service's deleteUser.ts.
+      const { hasRecords, models } = await checkUserHasHistoricalRecords(
+        existingUser.tenantId,
+        id,
+      );
+      if (hasRecords) {
+        logger.info("DeleteEmployee blocked: historical records exist", {
+          models,
+        });
         return callback(null, {
           message: MESSAGES.EMPLOYEE_HAS_HISTORICAL_RECORDS,
           status: status.FAILED_PRECONDITION,

@@ -908,15 +908,14 @@ describe("generalHandlers", () => {
       );
     });
 
-    it("allows a privileged HR user to view someone else's KYC file", async () => {
-      mockUserFindUnique.mockResolvedValue({
-        username: "hr-bob",
-        isSuperUser: false,
-      });
+    it("allows a privileged HR user to view someone else's KYC file in the same tenant", async () => {
+      mockUserFindUnique
+        .mockResolvedValueOnce({ username: "hr-bob", isSuperUser: false })
+        .mockResolvedValueOnce({ tenantId: "t1" });
       const res = makeRes();
       await getFileViewUrl(
         makeReq({
-          user: { userId: "hr-id", tenantRole: "hr" },
+          user: { userId: "hr-id", tenantId: "t1", tenantRole: "hr" },
           body: { fileUrl: kycUrl },
         }),
         res,
@@ -924,6 +923,25 @@ describe("generalHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("returns FORBIDDEN when a privileged user tries to view another tenant's KYC file (cross-tenant IDOR)", async () => {
+      mockUserFindUnique
+        .mockResolvedValueOnce({ username: "hr-bob", isSuperUser: false })
+        .mockResolvedValueOnce({ tenantId: "t2" });
+      const res = makeRes();
+      await getFileViewUrl(
+        makeReq({
+          user: { userId: "hr-id", tenantId: "t1", tenantRole: "hr" },
+          body: { fileUrl: kycUrl },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
         expect.any(Object),
       );
     });

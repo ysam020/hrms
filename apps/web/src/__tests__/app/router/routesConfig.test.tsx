@@ -49,6 +49,9 @@ describe("routesConfig", () => {
     ["/analytics/workforce", canViewAnalytics],
     ["/analytics/recruitment", canViewAnalytics],
     ["/analytics/salary", canViewAnalytics],
+    ["/employee-management", isHrOrAbove],
+    ["/employee-management/employee-list", isHrOrAbove],
+    ["/employee-management/insights", isHrOrAbove],
   ])(
     "gates %s behind the correct permission predicate",
     (path, expectedCheck) => {
@@ -64,6 +67,32 @@ describe("routesConfig", () => {
       "/help",
       "/chat",
       "/holidays",
+    ]) {
+      expect(findRoute(path).checkAccess).toBeUndefined();
+    }
+  });
+
+  // Deliberate design decision (see the comment above routesConfig's
+  // definition): these routes mix a genuine self-service tab with
+  // internally-gated HR-only tabs, so the ROUTE stays open — gating it
+  // would block the self-service tab for every regular employee. Locked in
+  // as a regression test so a future pass doesn't "fix" these by accident
+  // in either direction (over-gating breaks self-service; silently
+  // removing the internal tab-level gating would be a real regression).
+  it("deliberately leaves self-service routes with internally-gated HR tabs ungated at the route level", () => {
+    for (const path of [
+      "/employee-management/:username",
+      "/kyc/*",
+      "/view-kyc/:username",
+      "/edit-kyc/:username",
+      "/attendance/*",
+      "/payroll/*",
+      "/performance-reviews/*",
+      "/assets/*",
+      "/helpdesk",
+      "/helpdesk/:ticketId",
+      "/resignation-process/*",
+      "/hr-activities/*",
     ]) {
       expect(findRoute(path).checkAccess).toBeUndefined();
     }

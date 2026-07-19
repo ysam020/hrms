@@ -53,6 +53,14 @@ function JobApplicationPage() {
   const navigate = useNavigate();
   const { slug, id } = useParams();
   const [resumeFileName, setResumeFileName] = useState("");
+  // True while FileReader is still base64-encoding the selected file — the
+  // filename is set synchronously but formik's "resume" field only updates
+  // in reader.onloadend, asynchronously. A fast click on Submit right after
+  // choosing a file could race ahead of that callback: the filename looks
+  // set, but formik still sees an empty "resume" and rejects with "Resume is
+  // required" even though the applicant just picked one.
+  const [resumeReading, setResumeReading] = useState(false);
+  const [resumeFileError, setResumeFileError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState("");
   const [job, setJob] = useState<any>(null);
@@ -104,14 +112,45 @@ function JobApplicationPage() {
     },
   });
 
+  const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024; // 5MB — base64 (~+33%) still comfortably under the 10mb JSON body limit
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // "accept=.pdf" on the input is a UI hint only — browsers don't enforce
+    // it, so an unauthenticated caller could otherwise base64-encode any
+    // file/size into this public endpoint's JSON body.
+    if (file.type !== "application/pdf") {
+      setResumeFileError("Only PDF files are accepted.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > MAX_RESUME_SIZE_BYTES) {
+      setResumeFileError("Resume must be smaller than 5MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setResumeFileError("");
     setResumeFileName(file.name);
+    setResumeReading(true);
     const reader = new FileReader();
-    reader.onloadend = () => formik.setFieldValue("resume", reader.result);
+    reader.onloadend = () => {
+      formik.setFieldValue("resume", reader.result);
+      setResumeReading(false);
+    };
+    reader.onerror = () => {
+      setResumeFileError("Couldn't read that file. Please try again.");
+      setResumeFileName("");
+      setResumeReading(false);
+    };
     reader.readAsDataURL(file);
   };
+
+  const resumeHasError =
+    Boolean(resumeFileError) ||
+    Boolean(formik.touched.resume && formik.errors.resume);
 
   if (submitted) {
     return (
@@ -399,10 +438,9 @@ function JobApplicationPage() {
                       alignItems: "center",
                       gap: 1.5,
                       border: "1.5px dashed",
-                      borderColor:
-                        formik.touched.resume && formik.errors.resume
-                          ? "#f44336"
-                          : "var(--text-input-border, #ccc)",
+                      borderColor: resumeHasError
+                        ? "#f44336"
+                        : "var(--text-input-border, #ccc)",
                       borderRadius: "8px",
                       p: 2,
                       cursor: "pointer",
@@ -418,7 +456,7 @@ function JobApplicationPage() {
                         {resumeFileName || "Click to upload PDF"}
                       </Typography>
                       <Typography variant="caption" sx={{ opacity: 0.5 }}>
-                        PDF only
+                        PDF only, up to 5MB
                       </Typography>
                     </Box>
                     <input
@@ -427,14 +465,19 @@ function JobApplicationPage() {
                       accept=".pdf"
                       style={{ display: "none" }}
                       onChange={handleFileChange}
+                      aria-invalid={resumeHasError}
+                      aria-describedby={
+                        resumeHasError ? "resume-error" : undefined
+                      }
                     />
                   </Box>
-                  {formik.touched.resume && formik.errors.resume && (
+                  {resumeHasError && (
                     <Typography
+                      id="resume-error"
                       variant="caption"
                       sx={{ color: "#f44336", mt: 0.5, display: "block" }}
                     >
-                      {formik.errors.resume}
+                      {resumeFileError || formik.errors.resume}
                     </Typography>
                   )}
                 </Box>
@@ -443,7 +486,7 @@ function JobApplicationPage() {
                   type="submit"
                   fullWidth
                   variant="primary"
-                  disabled={formik.isSubmitting}
+                  disabled={formik.isSubmitting || resumeReading}
                   loading={formik.isSubmitting}
                   style={{
                     marginTop: 8,

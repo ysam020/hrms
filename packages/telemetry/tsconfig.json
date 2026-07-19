@@ -9,7 +9,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": true
+    "composite": true,
+    "types": ["node", "jest"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

@@ -28,6 +28,30 @@ jest.mock("@grpc/grpc-js", () => {
     credentials: {
       createSsl: (...args: any[]) => mockCreateSsl(...args),
     },
+    // makeCall's RETRYABLE_CODES set is built from grpc.status at class-load
+    // time — without real enum values here, that static initializer would
+    // read `undefined.UNAVAILABLE` and throw. Inlined (rather than pulled in
+    // via jest.requireActual) since the real module needs more of `fs` than
+    // this file's minimal fs mock provides.
+    status: {
+      OK: 0,
+      CANCELLED: 1,
+      UNKNOWN: 2,
+      INVALID_ARGUMENT: 3,
+      DEADLINE_EXCEEDED: 4,
+      NOT_FOUND: 5,
+      ALREADY_EXISTS: 6,
+      PERMISSION_DENIED: 7,
+      RESOURCE_EXHAUSTED: 8,
+      FAILED_PRECONDITION: 9,
+      ABORTED: 10,
+      OUT_OF_RANGE: 11,
+      UNIMPLEMENTED: 12,
+      INTERNAL: 13,
+      UNAVAILABLE: 14,
+      DATA_LOSS: 15,
+      UNAUTHENTICATED: 16,
+    },
   };
 });
 
@@ -95,7 +119,7 @@ describe("BaseGrpcClient", () => {
     new BaseGrpcClient({
       serviceName: "leave",
       address: "leave-service:50051",
-      options: { timeout: 5000, "grpc.keepalive_time_ms": 999 },
+      options: { "grpc.keepalive_time_ms": 999 },
     });
 
     const instance = mockClientInstances[0];
@@ -104,10 +128,21 @@ describe("BaseGrpcClient", () => {
       expect.objectContaining({
         "grpc.keepalive_timeout_ms": 20000,
         "grpc.http2.max_pings_without_data": 0,
-        timeout: 5000,
         "grpc.keepalive_time_ms": 999, // custom option overrides the default
       }),
     );
+  });
+
+  it("excludes timeout/retries from the channel options passed to grpc.Client — they're call-level concerns, not channel options", () => {
+    new BaseGrpcClient({
+      serviceName: "leave",
+      address: "leave-service:50051",
+      options: { timeout: 5000, retries: 2 },
+    });
+
+    const instance = mockClientInstances[0];
+    expect(instance.options).not.toHaveProperty("timeout");
+    expect(instance.options).not.toHaveProperty("retries");
   });
 
   it("makeCall resolves with the response on success", async () => {
@@ -117,7 +152,8 @@ describe("BaseGrpcClient", () => {
       credentials: {} as any,
     });
     const rawClient = mockClientInstances[0];
-    rawClient.getLeaves = (_req: any, cb: any) => cb(null, { data: "ok" });
+    rawClient.getLeaves = (_req: any, _options: any, cb: any) =>
+      cb(null, { data: "ok" });
 
     await expect(
       (client as any).makeCall("getLeaves", { id: "1" }),
@@ -134,25 +170,170 @@ describe("BaseGrpcClient", () => {
     });
     const rawClient = mockClientInstances[0];
     const err = new Error("unavailable");
-    rawClient.getLeaves = (_req: any, cb: any) => cb(err, null);
+    rawClient.getLeaves = (_req: any, _options: any, cb: any) => cb(err, null);
 
     await expect(
       (client as any).makeCall("getLeaves", { id: "1" }),
     ).rejects.toBe(err);
   });
 
-  it("makeCall passes the request through to the underlying method", async () => {
+  it("makeCall passes the request and a deadline through to the underlying method", async () => {
     const client = new BaseGrpcClient({
       serviceName: "leave",
       address: "localhost:50051",
       credentials: {} as any,
     });
     const rawClient = mockClientInstances[0];
-    const spy = jest.fn((_req: any, cb: any) => cb(null, {}));
+    const spy = jest.fn((_req: any, _options: any, cb: any) => cb(null, {}));
     rawClient.getLeaves = spy;
 
+    const before = Date.now();
     await (client as any).makeCall("getLeaves", { id: "42" });
 
-    expect(spy).toHaveBeenCalledWith({ id: "42" }, expect.any(Function));
+    expect(spy).toHaveBeenCalledWith(
+      { id: "42" },
+      expect.objectContaining({ deadline: expect.any(Number) }),
+      expect.any(Function),
+    );
+    const deadline = spy.mock.calls[0][1].deadline;
+    expect(deadline).toBeGreaterThanOrEqual(before + 8_000);
+  });
+
+  it("makeCall uses config.options.timeout as the deadline instead of the 8s default", async () => {
+    const client = new BaseGrpcClient({
+      serviceName: "leave",
+      address: "localhost:50051",
+      credentials: {} as any,
+      options: { timeout: 2_000 },
+    });
+    const rawClient = mockClientInstances[0];
+    const spy = jest.fn((_req: any, _options: any, cb: any) => cb(null, {}));
+    rawClient.getLeaves = spy;
+
+    const before = Date.now();
+    await (client as any).makeCall("getLeaves", { id: "1" });
+
+    const deadline = spy.mock.calls[0][1].deadline;
+    expect(deadline).toBeGreaterThanOrEqual(before + 2_000);
+    expect(deadline).toBeLessThan(before + 8_000);
+  });
+
+  it("makeCall retries config.options.retries additional times before giving up", async () => {
+    const client = new BaseGrpcClient({
+      serviceName: "leave",
+      address: "localhost:50051",
+      credentials: {} as any,
+      options: { retries: 2 },
+    });
+    const rawClient = mockClientInstances[0];
+    const err = Object.assign(new Error("unavailable"), {
+      code: grpc.status.UNAVAILABLE,
+    });
+    const spy = jest
+      .fn()
+      .mockImplementationOnce((_req: any, _options: any, cb: any) =>
+        cb(err, null),
+      )
+      .mockImplementationOnce((_req: any, _options: any, cb: any) =>
+        cb(err, null),
+      )
+      .mockImplementationOnce((_req: any, _options: any, cb: any) =>
+        cb(null, { data: "ok" }),
+      );
+    rawClient.getLeaves = spy;
+
+    await expect(
+      (client as any).makeCall("getLeaves", { id: "1" }),
+    ).resolves.toEqual({ data: "ok" });
+    expect(spy).toHaveBeenCalledTimes(3);
+  });
+
+  it("makeCall rejects with the last error once retries are exhausted", async () => {
+    const client = new BaseGrpcClient({
+      serviceName: "leave",
+      address: "localhost:50051",
+      credentials: {} as any,
+      options: { retries: 1 },
+    });
+    const rawClient = mockClientInstances[0];
+    const err = Object.assign(new Error("still unavailable"), {
+      code: grpc.status.UNAVAILABLE,
+    });
+    const spy = jest.fn((_req: any, _options: any, cb: any) => cb(err, null));
+    rawClient.getLeaves = spy;
+
+    await expect(
+      (client as any).makeCall("getLeaves", { id: "1" }),
+    ).rejects.toBe(err);
+    expect(spy).toHaveBeenCalledTimes(2); // 1 initial attempt + 1 retry
+  });
+
+  it("makeCall does not retry a non-retryable (deterministic) error code even when retries > 0", async () => {
+    const client = new BaseGrpcClient({
+      serviceName: "leave",
+      address: "localhost:50051",
+      credentials: {} as any,
+      options: { retries: 3 },
+    });
+    const rawClient = mockClientInstances[0];
+    const err = Object.assign(new Error("bad request"), {
+      code: grpc.status.INVALID_ARGUMENT,
+    });
+    const spy = jest.fn((_req: any, _options: any, cb: any) => cb(err, null));
+    rawClient.getLeaves = spy;
+
+    await expect(
+      (client as any).makeCall("getLeaves", { id: "1" }),
+    ).rejects.toBe(err);
+    expect(spy).toHaveBeenCalledTimes(1); // no retries for a deterministic failure
+  });
+
+  it("makeCall waits with escalating backoff between retryable attempts", async () => {
+    jest.useFakeTimers();
+    // grpcRetryDelayMs applies full jitter (Math.random() * cap) so the
+    // actual delay is only ever <= the cap, never exactly it — pin
+    // Math.random to 1 so this test can assert deterministic wait times
+    // instead of racing the real randomness.
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(1);
+    try {
+      const client = new BaseGrpcClient({
+        serviceName: "leave",
+        address: "localhost:50051",
+        credentials: {} as any,
+        options: { retries: 2 },
+      });
+      const rawClient = mockClientInstances[0];
+      const err = Object.assign(new Error("unavailable"), {
+        code: grpc.status.UNAVAILABLE,
+      });
+      const spy = jest
+        .fn()
+        .mockImplementationOnce((_req: any, _options: any, cb: any) =>
+          cb(err, null),
+        )
+        .mockImplementationOnce((_req: any, _options: any, cb: any) =>
+          cb(err, null),
+        )
+        .mockImplementationOnce((_req: any, _options: any, cb: any) =>
+          cb(null, { data: "ok" }),
+        );
+      rawClient.getLeaves = spy;
+
+      const result = (client as any).makeCall("getLeaves", { id: "1" });
+
+      await Promise.resolve(); // let the first attempt's rejection settle
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      await jest.advanceTimersByTimeAsync(100); // first backoff: 100ms
+      expect(spy).toHaveBeenCalledTimes(2);
+
+      await jest.advanceTimersByTimeAsync(200); // second backoff: 200ms
+      expect(spy).toHaveBeenCalledTimes(3);
+
+      await expect(result).resolves.toEqual({ data: "ok" });
+    } finally {
+      randomSpy.mockRestore();
+      jest.useRealTimers();
+    }
   });
 });

@@ -15,7 +15,7 @@
  *   { id, error: string }
  */
 
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 const formatFieldName = (str) => {
   let formatted = str.replace(/_/g, " ");
@@ -37,7 +37,7 @@ const transformDataForExport = (data) => {
   });
 };
 
-self.onmessage = ({ data }) => {
+self.onmessage = async ({ data }) => {
   const {
     id,
     rawData,
@@ -56,21 +56,30 @@ self.onmessage = ({ data }) => {
       ? transformDataForExport(rawData)
       : rawData;
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(exportData);
+    const hasColumnWidths = Object.keys(columnWidths).length > 0;
+    const headers = Object.keys(exportData[0] || {});
 
-    if (Object.keys(columnWidths).length > 0) {
-      const headers = Object.keys(exportData[0] || {});
-      ws["!cols"] = headers.map((h) => ({ wch: columnWidths[h] || 15 }));
-    }
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(sheetName);
+    worksheet.columns = headers.map((h) => ({
+      header: h,
+      key: h,
+      width: hasColumnWidths ? columnWidths[h] || 15 : undefined,
+    }));
+    worksheet.addRows(exportData);
 
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    // Write to ArrayBuffer so it is transferable (zero-copy). ExcelJS's
+    // browser build may return a Uint8Array whose underlying ArrayBuffer
+    // is larger than the view (pooled allocation) — slice to the view's
+    // exact bytes before transferring, or the extra bytes get detached too.
+    const raw = await workbook.xlsx.writeBuffer();
+    const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    );
 
-    // Write to ArrayBuffer so it is transferable (zero-copy)
-    const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-
-    // buffer is a Uint8Array — transfer its underlying ArrayBuffer
-    (self as any).postMessage({ id, buffer: buffer.buffer }, [buffer.buffer]);
+    (self as any).postMessage({ id, buffer }, [buffer]);
   } catch (err) {
     self.postMessage({ id, error: err.message });
   }

@@ -321,6 +321,106 @@ describe("employeeHandlers", () => {
         expect.any(Object),
       );
     });
+
+    // Regression coverage for a real bug: this endpoint used to return full
+    // salary, PF/UAN/ESIC, and termination data to ANY authenticated caller
+    // for ANY employee — no owner/HR check at all. The response is also
+    // cached under a key that isn't scoped by caller, so the fix must strip
+    // fields at response time (for both the cache-hit and fresh-fetch
+    // paths), not bake the decision into what gets cached.
+    describe("compensation/PII exposure", () => {
+      const targetUser = {
+        id: "u1",
+        username: "alice",
+        employeeStatus: "Active",
+        pf_no: "PF123",
+        uan_no: "UAN123",
+        esic_no: "ESIC123",
+        salary: 90000,
+        salaryBasicPay: 45000,
+        salaryHra: 20000,
+        salaryConveyance: 5000,
+        salaryPf: 5000,
+        salaryEsi: 1000,
+        salaryPt: 200,
+        salaryComponentBreakdown: [],
+        reasonForTermination: null,
+        dateOfTermination: null,
+        dateOfAbscond: null,
+        isSuperUser: false,
+      };
+
+      beforeEach(() => {
+        mockUserFindUnique.mockResolvedValue(targetUser);
+        mockMembershipFindFirst.mockResolvedValue(null);
+      });
+
+      it("strips salary/PF/UAN/ESIC for a non-owner, non-HR caller", async () => {
+        const res = makeRes();
+        await getEmployeeDetails(
+          makeReq({
+            user: { userId: "caller-1", tenantRole: "employee" },
+            params: { username: "alice" },
+          }),
+          res,
+        );
+        const [, , payload] = mockApiResponse.mock.calls[0];
+        expect(payload.data.salary).toBeUndefined();
+        expect(payload.data.salaryStructure).toBeUndefined();
+        expect(payload.data.pf_no).toBeUndefined();
+        expect(payload.data.uan_no).toBeUndefined();
+        expect(payload.data.esic_no).toBeUndefined();
+      });
+
+      it("keeps full data when the caller is viewing their own record", async () => {
+        const res = makeRes();
+        await getEmployeeDetails(
+          makeReq({
+            user: { userId: "u1", tenantRole: "employee" },
+            params: { username: "alice" },
+          }),
+          res,
+        );
+        const [, , payload] = mockApiResponse.mock.calls[0];
+        expect(payload.data.salary).toBe(90000);
+        expect(payload.data.pf_no).toBe("PF123");
+      });
+
+      it.each(["owner", "admin", "hr"])(
+        "keeps full data for another employee when caller's tenant role is '%s'",
+        async (tenantRole) => {
+          const res = makeRes();
+          await getEmployeeDetails(
+            makeReq({
+              user: { userId: "caller-1", tenantRole },
+              params: { username: "alice" },
+            }),
+            res,
+          );
+          const [, , payload] = mockApiResponse.mock.calls[0];
+          expect(payload.data.salary).toBe(90000);
+          expect(payload.data.esic_no).toBe("ESIC123");
+        },
+      );
+
+      it("re-applies the strip on a cache hit, using the cached record's own id (not the caller's)", async () => {
+        (cacheManager.get as jest.Mock).mockResolvedValue(targetUser);
+        const res = makeRes();
+        await getEmployeeDetails(
+          makeReq({
+            user: { userId: "caller-1", tenantRole: "employee" },
+            params: { username: "alice" },
+          }),
+          res,
+        );
+        // Cache hit skips the target-by-username DB read entirely.
+        expect(mockUserFindUnique).not.toHaveBeenCalledWith(
+          expect.objectContaining({ where: { username: "alice" } }),
+        );
+        const [, , payload] = mockApiResponse.mock.calls[0];
+        expect(payload.data.salary).toBeUndefined();
+      });
+    });
   });
 
   describe("employeeInsights", () => {

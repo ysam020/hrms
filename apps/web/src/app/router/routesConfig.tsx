@@ -118,26 +118,55 @@ const Settings = lazy(() => import("@web/features/settings/Settings"));
 
 const canAccessWfh = (u) => Boolean(u?.wfhEnabled);
 
+// moduleTags (formerly "allowedModules") is NOT an access-control mechanism —
+// it previously read that way to anyone skimming this file, which is exactly
+// how a new sensitive route added by copying an existing entry could ship
+// with zero client-side gating. It only decides whether HomePage.tsx wraps
+// the route in Suspense/ErrorBoundary; it is never checked against the
+// caller's role or permissions. Real gating is `checkAccess`/<RequireAccess>
+// below, applied per-route.
+//
+// Routes below WITHOUT a checkAccess (holidays, kyc, attendance, payroll
+// base, performance-reviews, assets, helpdesk, resignation-process,
+// hr-activities, view/edit-kyc) are deliberately left open to every
+// authenticated user, not overlooked: each one mixes a genuine self-service
+// tab (apply for leave, request an advance, view your own payslip/KYC/
+// assigned assets, raise a helpdesk ticket, file your own resignation) with
+// HR-only tabs that already gate themselves internally (isHrOrAbove/
+// hasPermission — see Insights/Summary/Review Cycles/Tax Declarations tabs
+// inside these same components). Gating the whole route would block that
+// self-service tab for every regular employee, which is a regression, not
+// a fix. The server independently re-verifies this: every list/detail
+// endpoint these pages call scopes non-privileged callers to their own
+// data (see e.g. viewAllKycs, getAllAttendances, listAssets, listTickets,
+// getUserData/getEmployeeDetails in apps/api-gateway) — client-side gating
+// here would be pure UI redundancy, not a real security boundary, and
+// verified case-by-case rather than assumed.
+//
+// employee-management is the one route in this file that DID get gated
+// (isHrOrAbove, below): unlike the routes above, it has no self-service
+// tab distinct from the separate /profile route, so there was no
+// legitimate reason for a regular employee to land there at all.
 const routesConfig = () => {
   return [
     {
       path: "/profile/*",
       element: <Profile />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Profile",
       category: null,
     },
     {
       path: "/",
       element: <Dashboard />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Dashboard",
       category: null,
     },
     {
       path: "/calendar",
       element: <Calendar />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Calendar",
       category: null,
     },
@@ -148,7 +177,7 @@ const routesConfig = () => {
           <Analytics />
         </RequireAccess>
       ),
-      allowedModules: [],
+      moduleTags: [],
       name: "Analytics",
       category: null,
       checkAccess: canViewAnalytics,
@@ -160,7 +189,7 @@ const routesConfig = () => {
           <Permissions />
         </RequireAccess>
       ),
-      allowedModules: [],
+      moduleTags: [],
       name: "Permissions",
       category: null,
       checkAccess: canManagePermissions,
@@ -168,21 +197,21 @@ const routesConfig = () => {
     {
       path: "/organization-tree",
       element: <OrganizationTree />,
-      allowedModules: [],
+      moduleTags: [],
       name: "OrganizationTree",
       category: null,
     },
     {
       path: "/help",
       element: <Help />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Help",
       category: null,
     },
     {
       path: "/chat",
       element: <Chat />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Chat",
       category: null,
     },
@@ -193,7 +222,7 @@ const routesConfig = () => {
           <Subscription />
         </RequireAccess>
       ),
-      allowedModules: [],
+      moduleTags: [],
       name: "Subscription",
       category: null,
       checkAccess: hasSubscriptionAccess,
@@ -205,7 +234,7 @@ const routesConfig = () => {
           <Settings />
         </RequireAccess>
       ),
-      allowedModules: [],
+      moduleTags: [],
       name: "Settings",
       category: null,
       checkAccess: canAccessSettings,
@@ -218,7 +247,7 @@ const routesConfig = () => {
           <CompanyInfo />
         </RequireAccess>
       ),
-      allowedModules: [],
+      moduleTags: [],
       name: "Company Information",
       category: null,
       checkAccess: canAccessSettings,
@@ -230,7 +259,7 @@ const routesConfig = () => {
           <OrgSettings />
         </RequireAccess>
       ),
-      allowedModules: [],
+      moduleTags: [],
       name: "Organisation Settings",
       category: null,
       checkAccess: canAccessSettings,
@@ -238,71 +267,97 @@ const routesConfig = () => {
     {
       path: "/policy/*",
       element: <Policy />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Policy",
       category: null,
     },
     {
       path: "/hr-activities/*",
       element: <HrActivities />,
-      allowedModules: ["HR Activities"],
+      moduleTags: ["HR Activities"],
       name: "HR Activities",
       category: "HR & Management",
     },
     {
       path: "/kyc/*",
       element: <EmployeeKYC />,
-      allowedModules: ["Basic KYC Details"],
+      moduleTags: ["Basic KYC Details"],
       name: "Basic KYC Details",
       category: "HR & Management",
     },
     {
       path: "/view-kyc/:username",
       element: <ViewIndividualKyc />,
-      allowedModules: ["Basic KYC Details"],
+      moduleTags: ["Basic KYC Details"],
       name: "View KYC Details",
       category: "HR & Management",
     },
     {
       path: "/edit-kyc/:username",
       element: <EditEmployeeKyc />,
-      allowedModules: ["Basic KYC Details"],
+      moduleTags: ["Basic KYC Details"],
       name: "Edit KYC Details",
       category: "HR & Management",
     },
     // Employee Management: explicit tab routes take priority over /:username
+    //
+    // Gated to isHrOrAbove — unlike Payroll/Attendance/Assets/etc. below,
+    // this page has no genuine self-service tab (self-profile already has
+    // its own dedicated /profile route); a regular employee landing here
+    // previously just saw a confusing "list of one" (themselves, via the
+    // server's own defense-in-depth scoping) rather than any real feature.
+    // /employee-management/:username (ViewDetails) is deliberately left
+    // ungated below — it's still safe (the server scopes non-owner/non-HR
+    // callers to stripped fields) and may be the only place some employees
+    // can see their own salary/PF/bank details, so gating it risked
+    // removing real functionality rather than just cosmetic access.
     {
       path: "/employee-management",
-      element: <EmployeeManagement />,
-      allowedModules: ["Employee Management"],
+      element: (
+        <RequireAccess check={isHrOrAbove}>
+          <EmployeeManagement />
+        </RequireAccess>
+      ),
+      moduleTags: ["Employee Management"],
       name: "Employee Management",
       category: "HR & Management",
+      checkAccess: isHrOrAbove,
     },
     {
       path: "/employee-management/employee-list",
-      element: <EmployeeManagement />,
-      allowedModules: ["Employee Management"],
+      element: (
+        <RequireAccess check={isHrOrAbove}>
+          <EmployeeManagement />
+        </RequireAccess>
+      ),
+      moduleTags: ["Employee Management"],
       name: "Employee Management",
       category: "HR & Management",
+      checkAccess: isHrOrAbove,
     },
     {
       path: "/employee-management/insights",
-      element: <EmployeeManagement />,
-      allowedModules: ["Employee Management"],
+      element: (
+        <RequireAccess check={isHrOrAbove}>
+          <EmployeeManagement />
+        </RequireAccess>
+      ),
+      moduleTags: ["Employee Management"],
       name: "Employee Management",
       category: "HR & Management",
+      checkAccess: isHrOrAbove,
     },
     {
       path: "/employee-management/:username",
       element: <ViewDetails />,
-      allowedModules: ["Employee Management"],
+      moduleTags: ["Employee Management"],
       name: "Employee Management",
       category: "HR & Management",
     },
     {
       path: "/holidays",
       element: <Holidays />,
-      allowedModules: ["Holidays"],
+      moduleTags: ["Holidays"],
       name: "Holidays",
       category: "HR & Management",
     },
@@ -313,7 +368,7 @@ const routesConfig = () => {
           <JobOpenings />
         </RequireAccess>
       ),
-      allowedModules: ["Job Openings"],
+      moduleTags: ["Job Openings"],
       name: "Job Openings",
       category: "HR & Management",
       checkAccess: canAccessJobOpenings,
@@ -325,7 +380,7 @@ const routesConfig = () => {
           <ViewIndividualJob />
         </RequireAccess>
       ),
-      allowedModules: ["Job Openings"],
+      moduleTags: ["Job Openings"],
       name: "View Job",
       category: "HR & Management",
       checkAccess: canAccessJobOpenings,
@@ -333,14 +388,14 @@ const routesConfig = () => {
     {
       path: "/attendance/*",
       element: <Attendance />,
-      allowedModules: ["Attendance & Leaves"],
+      moduleTags: ["Attendance & Leaves"],
       name: "Attendance & Leaves",
       category: "HR & Management",
     },
     {
       path: "/resignation-process/*",
       element: <Resignation />,
-      allowedModules: ["Resignation Process"],
+      moduleTags: ["Resignation Process"],
       name: "Resignation Process",
       category: "HR & Management",
     },
@@ -354,7 +409,7 @@ const routesConfig = () => {
           <EditSalaryStructure />
         </RequireAccess>
       ),
-      allowedModules: ["Salary Management"],
+      moduleTags: ["Salary Management"],
       name: "Edit Salary Structure",
       category: "HR & Management",
       checkAccess: canManageSalary,
@@ -366,7 +421,7 @@ const routesConfig = () => {
           <ViewIndividualTaxDeclaration />
         </RequireAccess>
       ),
-      allowedModules: ["Payroll Management"],
+      moduleTags: ["Payroll Management"],
       name: "Review Tax Declaration",
       category: "HR & Management",
       checkAccess: isHrOrAbove,
@@ -374,21 +429,21 @@ const routesConfig = () => {
     {
       path: "/payroll/*",
       element: <Payroll />,
-      allowedModules: ["Payroll Management"],
+      moduleTags: ["Payroll Management"],
       name: "Payroll Management",
       category: "HR & Management",
     },
     {
       path: "/performance-reviews/*",
       element: <PerformanceReview />,
-      allowedModules: ["Performance Review"],
+      moduleTags: ["Performance Review"],
       name: "Performance Review",
       category: "HR & Management",
     },
     {
       path: "/assets/*",
       element: <AssetManagement />,
-      allowedModules: ["Asset Management"],
+      moduleTags: ["Asset Management"],
       name: "Asset Management",
       category: "HR & Management",
     },
@@ -399,7 +454,7 @@ const routesConfig = () => {
           <WFH />
         </RequireAccess>
       ),
-      allowedModules: ["WFH Requests"],
+      moduleTags: ["WFH Requests"],
       name: "WFH Requests",
       category: "HR & Management",
       checkAccess: canAccessWfh,
@@ -407,28 +462,28 @@ const routesConfig = () => {
     {
       path: "/approvals",
       element: <ApprovalsInbox />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Pending Approvals",
       category: "HR & Management",
     },
     {
       path: "/helpdesk",
       element: <Helpdesk />,
-      allowedModules: [],
+      moduleTags: [],
       name: "HR Helpdesk",
       category: "HR & Management",
     },
     {
       path: "/helpdesk/:ticketId",
       element: <TicketDetail />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Ticket Detail",
       category: "HR & Management",
     },
     {
       path: "/webhooks/*",
       element: <Webhooks />,
-      allowedModules: [],
+      moduleTags: [],
       name: "Webhooks",
       category: null,
     },
@@ -439,7 +494,7 @@ const routesConfig = () => {
           <Reports />
         </RequireAccess>
       ),
-      allowedModules: [],
+      moduleTags: [],
       name: "Reports",
       category: "HR & Management",
       checkAccess: isHrOrAbove,
@@ -448,7 +503,7 @@ const routesConfig = () => {
     {
       path: "/profile/basic-info",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Basic Info",
       category: "Profile",
       spotlightOnly: true,
@@ -456,7 +511,7 @@ const routesConfig = () => {
     {
       path: "/profile/logged-in-devices",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Logged in Devices",
       category: "Profile",
       spotlightOnly: true,
@@ -464,7 +519,7 @@ const routesConfig = () => {
     {
       path: "/profile/two-factor-auth",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Two Factor Authentication",
       category: "Profile",
       spotlightOnly: true,
@@ -472,7 +527,7 @@ const routesConfig = () => {
     {
       path: "/profile/push-notifications",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Push Notifications",
       category: "Profile",
       spotlightOnly: true,
@@ -480,7 +535,7 @@ const routesConfig = () => {
     {
       path: "/profile/reset-password",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Reset Password",
       category: "Profile",
       spotlightOnly: true,
@@ -488,7 +543,7 @@ const routesConfig = () => {
     {
       path: "/profile/backup-codes",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Backup Codes",
       category: "Profile",
       spotlightOnly: true,
@@ -497,7 +552,7 @@ const routesConfig = () => {
     {
       path: "/permissions/manage-roles",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Manage Roles",
       category: "Permissions",
       spotlightOnly: true,
@@ -506,7 +561,7 @@ const routesConfig = () => {
     {
       path: "/permissions/user-permissions",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "User Permissions",
       category: "Permissions",
       spotlightOnly: true,
@@ -515,7 +570,7 @@ const routesConfig = () => {
     {
       path: "/permissions/teams",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Teams",
       category: "Permissions",
       spotlightOnly: true,
@@ -524,7 +579,7 @@ const routesConfig = () => {
     {
       path: "/analytics/workforce",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Workforce Analytics",
       category: "Analytics",
       spotlightOnly: true,
@@ -533,7 +588,7 @@ const routesConfig = () => {
     {
       path: "/analytics/leave-attendance",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Leave & Attendance Analytics",
       category: "Analytics",
       spotlightOnly: true,
@@ -542,7 +597,7 @@ const routesConfig = () => {
     {
       path: "/analytics/recruitment",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Recruitment Analytics",
       category: "Analytics",
       spotlightOnly: true,
@@ -551,7 +606,7 @@ const routesConfig = () => {
     {
       path: "/analytics/salary",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Salary Analytics",
       category: "Analytics",
       spotlightOnly: true,
@@ -560,7 +615,7 @@ const routesConfig = () => {
     {
       path: "/attendance/view-all-attendances",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "View All Attendances",
       category: "Attendance & Leaves",
       spotlightOnly: true,
@@ -568,7 +623,7 @@ const routesConfig = () => {
     {
       path: "/attendance/view-leave-applications",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "View Leave Applications",
       category: "Attendance & Leaves",
       spotlightOnly: true,
@@ -576,7 +631,7 @@ const routesConfig = () => {
     {
       path: "/attendance/attendance-correction",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Attendance Correction",
       category: "Attendance & Leaves",
       spotlightOnly: true,
@@ -584,7 +639,7 @@ const routesConfig = () => {
     {
       path: "/attendance/insights",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Attendance Insights",
       category: "Attendance & Leaves",
       spotlightOnly: true,
@@ -592,7 +647,7 @@ const routesConfig = () => {
     {
       path: "/employee-management/employee-list",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Employee List",
       category: "Employee Management",
       spotlightOnly: true,
@@ -600,7 +655,7 @@ const routesConfig = () => {
     {
       path: "/employee-management/insights",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Employee Insights",
       category: "Employee Management",
       spotlightOnly: true,
@@ -608,7 +663,7 @@ const routesConfig = () => {
     {
       path: "/job-openings/view-job-openings",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "View Job Openings",
       category: "Job Openings",
       spotlightOnly: true,
@@ -616,7 +671,7 @@ const routesConfig = () => {
     {
       path: "/job-openings/insights",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Job Openings Insights",
       category: "Job Openings",
       spotlightOnly: true,
@@ -624,7 +679,7 @@ const routesConfig = () => {
     {
       path: "/hr-activities/view-activities",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "View Activities",
       category: "HR Activities",
       spotlightOnly: true,
@@ -632,7 +687,7 @@ const routesConfig = () => {
     {
       path: "/kyc/view-employee-kycs",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "View Employee KYCs",
       category: "KYC",
       spotlightOnly: true,
@@ -640,7 +695,7 @@ const routesConfig = () => {
     {
       path: "/kyc/complete-kyc",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Complete KYC",
       category: "KYC",
       spotlightOnly: true,
@@ -648,7 +703,7 @@ const routesConfig = () => {
     {
       path: "/kyc/insights",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "KYC Insights",
       category: "KYC",
       spotlightOnly: true,
@@ -656,7 +711,7 @@ const routesConfig = () => {
     {
       path: "/resignation-process/view-resignations",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "View Resignations",
       category: "Resignation Process",
       spotlightOnly: true,
@@ -664,7 +719,7 @@ const routesConfig = () => {
     {
       path: "/resignation-process/exit-feedback",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Exit Feedback",
       category: "Resignation Process",
       spotlightOnly: true,
@@ -672,7 +727,7 @@ const routesConfig = () => {
     {
       path: "/resignation-process/insights",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Resignation Insights",
       category: "Resignation Process",
       spotlightOnly: true,
@@ -681,7 +736,7 @@ const routesConfig = () => {
     {
       path: "/payroll/payroll-runs",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Payroll Runs",
       category: "Payroll Management",
       spotlightOnly: true,
@@ -689,7 +744,7 @@ const routesConfig = () => {
     {
       path: "/payroll/salary-management",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Salary Management",
       category: "Payroll Management",
       spotlightOnly: true,
@@ -697,7 +752,7 @@ const routesConfig = () => {
     {
       path: "/payroll/salary-advances",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Salary Advances",
       category: "Payroll Management",
       spotlightOnly: true,
@@ -705,7 +760,7 @@ const routesConfig = () => {
     {
       path: "/payroll/my-payslips",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "My Payslips",
       category: "Payroll Management",
       spotlightOnly: true,
@@ -714,7 +769,7 @@ const routesConfig = () => {
     {
       path: "/performance-reviews/review-cycles",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Review Cycles",
       category: "Performance Review",
       spotlightOnly: true,
@@ -722,7 +777,7 @@ const routesConfig = () => {
     {
       path: "/performance-reviews/reviews",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Reviews",
       category: "Performance Review",
       spotlightOnly: true,
@@ -731,7 +786,7 @@ const routesConfig = () => {
     {
       path: "/assets/inventory",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Asset Inventory",
       category: "Asset Management",
       spotlightOnly: true,
@@ -739,7 +794,7 @@ const routesConfig = () => {
     {
       path: "/assets/summary",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Asset Summary",
       category: "Asset Management",
       spotlightOnly: true,
@@ -748,7 +803,7 @@ const routesConfig = () => {
     {
       path: "/wfh/requests",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "WFH Requests",
       category: "WFH",
       spotlightOnly: true,
@@ -758,7 +813,7 @@ const routesConfig = () => {
     {
       path: "/helpdesk/all-tickets",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "All Tickets",
       category: "HR Helpdesk",
       spotlightOnly: true,
@@ -767,7 +822,7 @@ const routesConfig = () => {
     {
       path: "/webhooks/endpoints",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Webhook Endpoints",
       category: "Webhooks",
       spotlightOnly: true,
@@ -775,7 +830,7 @@ const routesConfig = () => {
     {
       path: "/webhooks/delivery-log",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Delivery Log",
       category: "Webhooks",
       spotlightOnly: true,
@@ -784,7 +839,7 @@ const routesConfig = () => {
     {
       path: "/reports/report-builder",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Report Builder",
       category: "Reports",
       spotlightOnly: true,
@@ -793,7 +848,7 @@ const routesConfig = () => {
     {
       path: "/reports/saved-reports",
       element: null,
-      allowedModules: [],
+      moduleTags: [],
       name: "Saved Reports",
       category: "Reports",
       spotlightOnly: true,

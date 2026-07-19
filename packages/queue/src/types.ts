@@ -3,6 +3,9 @@ export interface EmailJobData {
   subject: string;
   html: string;
   from?: string;
+  /** Correlation ID from the HTTP/gRPC request that enqueued this job — see
+   * NotificationJobData.requestId below for why. */
+  requestId?: string;
 }
 
 export interface NotificationJobData {
@@ -29,6 +32,11 @@ export interface NotificationJobData {
    */
   socketEvent?: string;
   socketPayload?: Record<string, unknown>;
+  /** Correlation ID from the HTTP request that enqueued this job (see
+   * @hrms/logger's requestIdStorage/getRequestId) — threaded into the
+   * worker's log lines so a request that fans out into a queued job can
+   * still be traced end-to-end, not just across HTTP -> gRPC. */
+  requestId?: string;
 }
 
 export type SchedulerJobName =
@@ -48,13 +56,31 @@ export interface SchedulerJobData {
   jobName: SchedulerJobName;
   // Optional extra context for non-standard jobs (e.g. ticketId for SLA check)
   ticketId?: string;
+  /** Set only for the (rare) manually-triggered case; absent for the normal
+   * timer-driven cron adds, which have no originating request to trace. */
+  requestId?: string;
 }
 
 export interface ResumeParsingJobData {
   applicationId: string;
+  requestId?: string;
 }
 
 // Webhook delivery – dispatched by webhookEmitter.ts, processed by deliverWebhook.ts
 export interface WebhookDeliveryJobData {
   deliveryId: string;
+  requestId?: string;
+}
+
+// Payroll disbursement — dispatched by updatePayrollRunStatus/retryFailedPayouts
+// (api-gateway), processed by payrollDisbursementWorker.ts. Moved out of the
+// HTTP handler because it can be 1,000+ sequential external RazorpayX calls
+// for a real employee count — far too slow for a single request/response
+// cycle. The worker re-derives everything else (line items, run month/year)
+// from runId, so the job payload stays minimal.
+export interface PayrollDisbursementJobData {
+  tenantId: string;
+  runId: string;
+  disbursedBy: string;
+  requestId?: string;
 }

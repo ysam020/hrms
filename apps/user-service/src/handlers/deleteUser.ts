@@ -1,5 +1,9 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  getTenantId,
+  checkUserHasHistoricalRecords,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -19,30 +23,27 @@ export const deleteUser = async (
       });
     }
 
-    // A hard delete would silently orphan this user's historical
-    // attendance/leave/payroll rows (no FK cascade at the DB level for
-    // MongoDB) — block it if any exist.
-    const [attendanceCount, leaveCount, salaryCount, payrollCount] =
-      await Promise.all([
-        prisma.attendanceRecord.count({
-          where: { tenantId: user.tenantId, userId },
-        }),
-        prisma.leaveApplication.count({
-          where: { tenantId: user.tenantId, userId },
-        }),
-        prisma.salaryStructure.count({
-          where: { tenantId: user.tenantId, userId },
-        }),
-        prisma.payrollLineItem.count({
-          where: { tenantId: user.tenantId, userId },
-        }),
-      ]);
-    if (
-      attendanceCount > 0 ||
-      leaveCount > 0 ||
-      salaryCount > 0 ||
-      payrollCount > 0
-    ) {
+    // A hard delete would silently orphan this user's historical records
+    // (no FK cascade at the DB level for MongoDB) — block it if any exist
+    // across every tenant-scoped model that references userId, not just a
+    // hand-picked subset (see userDeletionGuard.ts for why that subset drifts,
+    // and for why the check-then-delete gap below isn't wrapped in a
+    // transaction — it spans two separate database connections and can't be).
+    //
+    // Unlike deleteEmployee.ts (which offers a soft-delete path via
+    // employeeStatus: "Terminated" for HR lifecycle continuity), this
+    // handler only ever hard-deletes: DeleteUserRequest has no hardDelete
+    // field, and "delete user" here means removing a login account
+    // entirely, not transitioning an employee's status — there's no
+    // equivalent soft state for a User row outside the employee context.
+    // That's an intentional difference in what the two RPCs represent, not
+    // configuration drift between two implementations of the same thing.
+    const { hasRecords, models } = await checkUserHasHistoricalRecords(
+      user.tenantId,
+      userId,
+    );
+    if (hasRecords) {
+      logger.info("DeleteUser blocked: historical records exist", { models });
       return callback(null, {
         message: MESSAGES.USER_HAS_HISTORICAL_RECORDS,
         status: status.FAILED_PRECONDITION,

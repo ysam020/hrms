@@ -31,7 +31,12 @@ jest.mock("../RedisWebSocketAdapter", () => ({
 
 import { configureSocketIO } from "../socketio";
 
-function makeSocket(auth: Record<string, any> = {}) {
+function makeSocket(auth: Record<string, any> = {}): {
+  handshake: { auth: Record<string, any> };
+  userId?: string;
+  tenantId?: string | null;
+  dbName?: string | null;
+} {
   return { handshake: { auth } };
 }
 

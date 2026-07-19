@@ -1,8 +1,8 @@
-import { Worker } from "bullmq";
+import { Worker, Job } from "bullmq";
 import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import type { ResumeParsingJobData } from "@hrms/queue";
 import { prisma } from "@hrms/db";
-import { logger } from "@hrms/logger";
+import { logger, requestIdStorage } from "@hrms/logger";
 import pdfParse from "pdf-parse";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
@@ -66,77 +66,80 @@ Respond with ONLY valid JSON in this exact format (no other text):
   return { score, notes };
 }
 
+async function processJob(job: Job<ResumeParsingJobData>) {
+  const { applicationId } = job.data;
+
+  const application = await prisma.jobApplication.findUnique({
+    where: { id: applicationId },
+    select: {
+      id: true,
+      resume: true,
+      jobTitleId: true,
+      jobOpening: {
+        select: {
+          jobTitle: true,
+          requiredSkills: true,
+          jobDescription: true,
+          experience: true,
+        },
+      },
+    },
+  });
+
+  if (!application) {
+    logger.warn(`[resumeParser] Application ${applicationId} not found`);
+    return;
+  }
+  if (!application.resume) {
+    logger.warn(`[resumeParser] No resume for application ${applicationId}`);
+    return;
+  }
+
+  const job_ = application.jobOpening;
+  if (!job_) {
+    logger.warn(
+      `[resumeParser] No job opening linked to application ${applicationId}`,
+    );
+    return;
+  }
+
+  logger.info(`[resumeParser] Scoring application ${applicationId}`);
+
+  const resumeText = await extractTextFromBase64Pdf(application.resume);
+  if (!resumeText) {
+    logger.warn(
+      `[resumeParser] Empty PDF text for application ${applicationId}`,
+    );
+    return;
+  }
+
+  const { score, notes } = await scoreResumeWithLlm(
+    resumeText,
+    job_.jobTitle,
+    job_.requiredSkills,
+    job_.jobDescription,
+    job_.experience,
+  );
+
+  const newStatus = score < SCORE_THRESHOLD ? "Rejected" : "Applied";
+
+  await prisma.jobApplication.update({
+    where: { id: applicationId },
+    data: { resumeScore: score, aiNotes: notes, status: newStatus },
+  });
+
+  logger.info(
+    `[resumeParser] Application ${applicationId} scored ${score}/10 → ${newStatus}`,
+  );
+}
+
 export function startResumeParserWorker(): Worker {
   const worker = new Worker<ResumeParsingJobData>(
     "resumeParsingQueue",
-    async (job) => {
-      const { applicationId } = job.data;
-
-      const application = await prisma.jobApplication.findUnique({
-        where: { id: applicationId },
-        select: {
-          id: true,
-          resume: true,
-          jobTitleId: true,
-          jobOpening: {
-            select: {
-              jobTitle: true,
-              requiredSkills: true,
-              jobDescription: true,
-              experience: true,
-            },
-          },
-        },
-      });
-
-      if (!application) {
-        logger.warn(`[resumeParser] Application ${applicationId} not found`);
-        return;
-      }
-      if (!application.resume) {
-        logger.warn(
-          `[resumeParser] No resume for application ${applicationId}`,
-        );
-        return;
-      }
-
-      const job_ = application.jobOpening;
-      if (!job_) {
-        logger.warn(
-          `[resumeParser] No job opening linked to application ${applicationId}`,
-        );
-        return;
-      }
-
-      logger.info(`[resumeParser] Scoring application ${applicationId}`);
-
-      const resumeText = await extractTextFromBase64Pdf(application.resume);
-      if (!resumeText) {
-        logger.warn(
-          `[resumeParser] Empty PDF text for application ${applicationId}`,
-        );
-        return;
-      }
-
-      const { score, notes } = await scoreResumeWithLlm(
-        resumeText,
-        job_.jobTitle,
-        job_.requiredSkills,
-        job_.jobDescription,
-        job_.experience,
-      );
-
-      const newStatus = score < SCORE_THRESHOLD ? "Rejected" : "Applied";
-
-      await prisma.jobApplication.update({
-        where: { id: applicationId },
-        data: { resumeScore: score, aiNotes: notes, status: newStatus },
-      });
-
-      logger.info(
-        `[resumeParser] Application ${applicationId} scored ${score}/10 → ${newStatus}`,
-      );
-    },
+    (job) =>
+      job.data.requestId
+        ? requestIdStorage.run(job.data.requestId, () => processJob(job))
+        : processJob(job),
     {
       connection: getBullMQConnection(),
       concurrency: 2,
