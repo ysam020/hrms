@@ -40,7 +40,7 @@
     "exceljs": "^4.4.0",
     "leaflet": "^1.9.4",
     "lodash": "^4.18.1",
-    "primeicons": "^7.0.0",
+    "primeicons": "^8.0.0",
     "primereact": "^10.9.5",
     "prop-types": "^15.8.1",
     "quill": "^2.0.3",
