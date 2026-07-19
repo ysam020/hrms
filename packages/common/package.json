@@ -27,6 +27,6 @@
     "@hrms/typescript-config": "workspace:*",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.7",
-    "@types/nodemailer": "^6.4.17"
+    "@types/nodemailer": "^8.0.1"
   }
 }
