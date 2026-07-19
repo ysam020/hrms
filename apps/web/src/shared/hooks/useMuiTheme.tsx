@@ -131,10 +131,10 @@ function useMuiTheme(theme) {
             },
           },
           containedPrimary: {
-            backgroundColor: theme === "light" ? "#111b21" : "#0c3f61",
+            backgroundColor: theme === "light" ? "#41837a" : "#006658",
             color: "#fff",
             "&:hover": {
-              backgroundColor: theme === "light" ? "#0f1a1f" : "#0a3555",
+              backgroundColor: theme === "light" ? "#376f67" : "#2d8176",
             },
           },
         },

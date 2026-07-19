@@ -290,6 +290,11 @@ describe("BaseGrpcClient", () => {
 
   it("makeCall waits with escalating backoff between retryable attempts", async () => {
     jest.useFakeTimers();
+    // grpcRetryDelayMs applies full jitter (Math.random() * cap) so the
+    // actual delay is only ever <= the cap, never exactly it — pin
+    // Math.random to 1 so this test can assert deterministic wait times
+    // instead of racing the real randomness.
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(1);
     try {
       const client = new BaseGrpcClient({
         serviceName: "leave",
@@ -327,6 +332,7 @@ describe("BaseGrpcClient", () => {
 
       await expect(result).resolves.toEqual({ data: "ok" });
     } finally {
+      randomSpy.mockRestore();
       jest.useRealTimers();
     }
   });

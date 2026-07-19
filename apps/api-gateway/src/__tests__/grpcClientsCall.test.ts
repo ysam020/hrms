@@ -252,6 +252,12 @@ describe("grpcCall retries", () => {
 
   it("gives up after exhausting the default retry budget and rejects with the last error, annotated with httpStatus", async () => {
     jest.useFakeTimers();
+    // grpcRetryDelayMs applies full jitter (Math.random() * cap), so the
+    // actual delay is only ever <= the cap, never exactly it. This test
+    // advances timers in two separate steps to check the call count after
+    // each retry individually, which needs a deterministic delay — pin
+    // Math.random to 1 so each wait equals its cap exactly.
+    const randomSpy = jest.spyOn(Math, "random").mockReturnValue(1);
     try {
       mockGrpcToHttpStatus.mockReturnValue(503);
       const spy = jest.fn((_req, _meta, _options, cb) =>
@@ -274,6 +280,7 @@ describe("grpcCall retries", () => {
 
       await assertion;
     } finally {
+      randomSpy.mockRestore();
       jest.useRealTimers();
     }
   });

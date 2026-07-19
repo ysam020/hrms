@@ -58,8 +58,8 @@ export default function Chatbot() {
 
   const isDark = muiTheme.palette.mode === "dark";
 
-  const BRAND = isDark ? "#0c3f61" : "#111b21";
-  const BRAND_HOVER = isDark ? "#0a3555" : "#0f1a1f";
+  const BRAND = isDark ? "#006658" : "#41837a";
+  const BRAND_HOVER = isDark ? "#2d8176" : "#376f67";
 
   const c = {
     panelBg: muiTheme.palette.background.paper,
