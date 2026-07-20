@@ -233,7 +233,7 @@ function AppbarComponent({
               sx={{ flex: 1, display: "flex", alignItems: "center", gap: 1.5 }}
             >
               <Box
-                sx={{ width: 200, height: 60 }}
+                sx={{ width: 230, height: 69 }}
                 role="img"
                 aria-label="Praesto logo"
               >
@@ -243,8 +243,8 @@ function AppbarComponent({
                       display: "block",
                       transition: "opacity 0.3s ease",
                       filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1))",
-                      maxWidth: 200,
-                      height: 60,
+                      maxWidth: 230,
+                      height: 69,
                     }}
                   />
                 ) : (
@@ -253,8 +253,8 @@ function AppbarComponent({
                       display: "block",
                       transition: "opacity 0.3s ease",
                       filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1))",
-                      maxWidth: 200,
-                      height: 60,
+                      maxWidth: 230,
+                      height: 69,
                     }}
                   />
                 )}
@@ -293,11 +293,17 @@ function AppbarComponent({
               )}
             </Box>
 
-            {/* Desktop action items - hidden on small screens */}
+            {/* Desktop action items - hidden on small screens.
+                flex: 1 + justifyContent: flex-end mirrors the logo Box's
+                flex: 1 above, so both sides claim equal width and the logo
+                lands at the true center of the toolbar instead of the
+                center of its own (left-packed) half. */}
             <Box
               sx={{
                 display: { xs: "none", md: "flex" },
+                flex: 1,
                 alignItems: "center",
+                justifyContent: "flex-end",
                 gap: "6px",
               }}
               role="toolbar"
