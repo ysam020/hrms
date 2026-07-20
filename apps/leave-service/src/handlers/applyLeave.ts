@@ -439,6 +439,9 @@ export const applyLeave = async (
           pushTargets: uniqueUsernames,
           eventType: "leave_notification",
           priority: exhaustionInfo ? "high" : "medium",
+          // Already surfaced in Pending Approvals via instantiateApproval
+          // above — silent avoids duplicating it as a bell notification too.
+          silent: true,
         });
       })
       .catch((err) =>

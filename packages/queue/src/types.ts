@@ -32,6 +32,17 @@ export interface NotificationJobData {
    */
   socketEvent?: string;
   socketPayload?: Record<string, unknown>;
+  /**
+   * When true, this job is a live-refresh ping, not a user-facing
+   * notification: the worker still broadcasts on the "notification" socket
+   * channel (so listeners like the Pending Approvals badge still refetch)
+   * and can still send a push, but it does NOT persist a Notification row
+   * or appear in the bell/notifications list. Use this for events that
+   * already have a home elsewhere in the UI (e.g. a new leave/resignation/
+   * KYC/join-request submission, which already shows up in Pending
+   * Approvals) so they aren't duplicated as a separate notification.
+   */
+  silent?: boolean;
   /** Correlation ID from the HTTP request that enqueued this job (see
    * @hrms/logger's requestIdStorage/getRequestId) — threaded into the
    * worker's log lines so a request that fans out into a queued job can

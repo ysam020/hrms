@@ -984,6 +984,10 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
               eventType: "join_request_notification",
               priority: "medium",
               sendPushNotification: false,
+              // Already surfaced in Pending Approvals via
+              // getPendingJoinRequestItems — silent avoids duplicating it as
+              // a bell notification too (the email above already alerts).
+              silent: true,
             })
             .catch((e) =>
               logger.warn("join-request queue notification failed", {

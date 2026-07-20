@@ -29,6 +29,11 @@ import type { Job } from "bullmq";
 const NOTIFICATION_LOCK_TTL_SECONDS = 60; // generous vs. a real send (DB write + WS fan-out + FCM to many devices); self-heals if a holder crashes without releasing
 const LOCK_WAIT_RETRY_MS = 200;
 const LOCK_WAIT_MAX_ATTEMPTS = 50; // ~10s bounded wait for a concurrent attempt to finish, before failing this attempt back to BullMQ's own retry/backoff
+// Silent jobs (see NotificationJobData.silent) persist nothing, so they have
+// no DB row to dedupe a BullMQ retry against like the normal path does via
+// jobId — this Redis marker stands in for that, long enough to outlast the
+// queue's retry/backoff window.
+const SILENT_JOB_DEDUPE_TTL_SECONDS = 60 * 60;
 
 const RELEASE_LOCK_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -144,6 +149,7 @@ async function processJob(job: Job<NotificationJobData>) {
     priority = "medium",
     socketEvent,
     socketPayload,
+    silent = false,
   } = job.data;
 
   if (!tenantId) {
@@ -171,6 +177,20 @@ async function processJob(job: Job<NotificationJobData>) {
   const tenantClient = getClientForDb(tenant.dbName);
 
   const process = async () => {
+    if (silent) {
+      return processSilentJob(job, {
+        recipients,
+        pushTargets,
+        targetUser,
+        title,
+        message,
+        eventType,
+        sendPushNotification,
+        socketEvent,
+        socketPayload,
+      });
+    }
+
     // Idempotency guard: a BullMQ retry (transient failure after the DB
     // write but before job completion — e.g. an FCM timeout) would
     // otherwise re-run the create, re-send the WebSocket message, and
@@ -314,4 +334,135 @@ async function processJob(job: Job<NotificationJobData>) {
     // prior behavior for that edge case exactly.
     job.id ? withNotificationJobLock(String(job.id), process) : process(),
   );
+}
+
+async function processSilentJob(
+  job: Job<NotificationJobData>,
+  data: Required<
+    Pick<
+      NotificationJobData,
+      | "recipients"
+      | "pushTargets"
+      | "title"
+      | "message"
+      | "eventType"
+      | "sendPushNotification"
+    >
+  > &
+    Pick<NotificationJobData, "targetUser" | "socketEvent" | "socketPayload">,
+) {
+  const {
+    recipients,
+    pushTargets,
+    targetUser,
+    title,
+    message,
+    eventType,
+    sendPushNotification,
+    socketEvent,
+    socketPayload,
+  } = data;
+
+  const dedupeKey = job.id ? `notification-job-done:${job.id}` : null;
+  if (dedupeKey && (await getRedisClient().get(dedupeKey))) {
+    logger.info(
+      `Silent notification job ${job.id} already processed — skipping duplicate broadcast/push`,
+      { deduped: true },
+    );
+    return {
+      success: true,
+      deduped: true,
+      dbRecipients: 0,
+      pushNotificationResult: { sentCount: 0, failedCount: 0, success: true },
+    };
+  }
+
+  let resolvedRecipients = [...recipients];
+  if (resolvedRecipients.length === 0) {
+    const targetUsernames =
+      pushTargets.length > 0
+        ? pushTargets
+        : targetUser
+          ? Array.isArray(targetUser)
+            ? targetUser
+            : [targetUser]
+          : [];
+    if (targetUsernames.length > 0) {
+      const users = await prismaWithTenant.user.findMany({
+        where: { username: { in: targetUsernames } },
+        select: { id: true },
+      });
+      resolvedRecipients = users.map((u) => u.id);
+    }
+  }
+
+  if (resolvedRecipients.length > 0) {
+    const wsPublisher = getNotificationPublisher();
+    // Unpersisted payload on the same "notification" channel the bell
+    // (useNotifications.tsx) and the Pending Approvals badge
+    // (ApprovalsBadgeContext.tsx) both listen on. The badge refetches on
+    // any message here; the bell recognizes `silent` and ignores it — this
+    // event already has its own home in Pending Approvals and must not
+    // also appear as a bell entry.
+    const pingPayload = {
+      silent: true,
+      eventType,
+      title,
+      message,
+      timeStamp: new Date(),
+    };
+    await Promise.all(
+      resolvedRecipients.map((userId) =>
+        wsPublisher.sendToUser(userId, "notification", pingPayload),
+      ),
+    );
+    if (socketEvent) {
+      await Promise.all(
+        resolvedRecipients.map((userId) =>
+          wsPublisher.sendToUser(
+            userId,
+            socketEvent,
+            socketPayload ?? pingPayload,
+          ),
+        ),
+      );
+    }
+  }
+
+  let fcmResult = { sentCount: 0, failedCount: 0, success: false };
+  if (sendPushNotification) {
+    let targets: string[] = pushTargets;
+    if (!targets.length && targetUser) {
+      targets = Array.isArray(targetUser) ? targetUser : [targetUser];
+    }
+    const result =
+      targets.length > 0
+        ? await sendPushNotifications(targets, title, message)
+        : await sendPushNotifications("ALL_USERS", title, message);
+    fcmResult = {
+      sentCount: result.sentCount,
+      failedCount: result.failedCount,
+      success: result.success,
+    };
+  }
+
+  if (dedupeKey) {
+    await getRedisClient().set(
+      dedupeKey,
+      "1",
+      "EX",
+      SILENT_JOB_DEDUPE_TTL_SECONDS,
+    );
+  }
+
+  logger.info(`Silent notification job ${job.id} processed`, {
+    dbRecipients: 0,
+    fcmSent: fcmResult.sentCount,
+  });
+
+  return {
+    success: true,
+    dbRecipients: 0,
+    pushNotificationResult: fcmResult,
+  };
 }
