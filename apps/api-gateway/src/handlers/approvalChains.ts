@@ -21,6 +21,7 @@ import {
   grpcCall,
 } from "../grpc/clients";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
+import { getNotificationQueue } from "@hrms/queue";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { getWorkingDays, isHoliday, eachDate } from "../utils/workingDays";
@@ -647,6 +648,26 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
         toDate: wfhReq.toDate,
       });
     }
+
+    // Informs the requester of the decision — unlike the submission itself
+    // (which only ever lived in Pending Approvals, never the bell), this is
+    // a status update with nowhere else to surface, same as leave/
+    // resignation approve/reject notifications.
+    getNotificationQueue()
+      .add("wfhDecision", {
+        tenantId,
+        title: "WFH Request",
+        message:
+          finalStatus === "approved"
+            ? "Your work-from-home request has been approved"
+            : "Your work-from-home request has been rejected",
+        targetUser: wfhReq.userId,
+        eventType: "wfh_notification",
+        priority: "medium",
+      })
+      .catch((err) =>
+        logger.warn("[wfh approval] Notification enqueue failed:", { err }),
+      );
   },
   // Performance reviews are a separate gRPC service (performance-review-service).
   // No microservice in this codebase calls another microservice's gRPC client

@@ -174,6 +174,10 @@ export const submitKyc = async (
             eventType: "kyc_notification",
             priority: "medium",
             sendPushNotification: true,
+            // Already surfaced in Pending Approvals via getPendingKycItems —
+            // silent avoids duplicating it as a bell notification too, while
+            // still pushing and refetching the badge/inbox live.
+            silent: true,
             // Live-refresh signal for the Pending Approvals widget/badge/
             // inbox — mirrors kyc-edit-requested in requestKycEditAccess.ts.
             socketEvent: "kyc-submitted",

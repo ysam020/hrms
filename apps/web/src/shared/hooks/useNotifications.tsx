@@ -11,7 +11,9 @@ import {
 } from "@web/core/db";
 
 function useNotifications() {
-  const [notifications, setNotifications] = useState<import("@web/app/providers/NotificationContext").NotificationItem[]>([]);
+  const [notifications, setNotifications] = useState<
+    import("@web/app/providers/NotificationContext").NotificationItem[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   const { user } = useContext(UserContext);
@@ -20,25 +22,35 @@ function useNotifications() {
   // prevents stale async overwrite
   const requestIdRef = useRef(0);
 
-  const handleNotification = useCallback((data: import("@web/app/providers/NotificationContext").NotificationItem) => {
-    setNotifications((prev) => {
-      const exists = prev.some(
-        (notif) =>
-          notif._id === data._id ||
-          (notif.title === data.title &&
-            notif.message === data.message &&
-            Math.abs(
-              new Date(notif.timeStamp ?? 0).getTime() -
-                new Date(data.timeStamp ?? 0).getTime(),
-            ) < 1000),
-      );
-      return exists ? prev : [data, ...prev];
-    });
+  const handleNotification = useCallback(
+    (
+      data: import("@web/app/providers/NotificationContext").NotificationItem,
+    ) => {
+      // Silent pings (see NotificationJobData.silent) exist only to tell
+      // listeners like ApprovalsBadgeContext to refetch — the event they
+      // represent already has its own home in Pending Approvals, so it must
+      // not also show up here as a bell entry.
+      if ((data as { silent?: boolean })?.silent) return;
+      setNotifications((prev) => {
+        const exists = prev.some(
+          (notif) =>
+            notif._id === data._id ||
+            (notif.title === data.title &&
+              notif.message === data.message &&
+              Math.abs(
+                new Date(notif.timeStamp ?? 0).getTime() -
+                  new Date(data.timeStamp ?? 0).getTime(),
+              ) < 1000),
+        );
+        return exists ? prev : [data, ...prev];
+      });
 
-    saveNotification(data)
-      .then(() => pruneNotifications(200))
-      .catch(console.error);
-  }, []);
+      saveNotification(data)
+        .then(() => pruneNotifications(200))
+        .catch(console.error);
+    },
+    [],
+  );
 
   const handleResignationAlert = useCallback(
     (data) => {

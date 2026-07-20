@@ -157,6 +157,9 @@ export const submitResignation = async (
           pushTargets: uniqueUsernames,
           eventType: "resignation_notification",
           priority: "medium",
+          // Already surfaced in Pending Approvals via instantiateApproval
+          // above — silent avoids duplicating it as a bell notification too.
+          silent: true,
         });
       })
       .catch((err) =>
