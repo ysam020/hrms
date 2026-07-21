@@ -2,11 +2,22 @@ import { writeFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
+import { networkInterfaces } from "os";
 
 const certsDir = join(
   dirname(fileURLToPath(import.meta.url)),
   "../packages/certificates"
 );
+
+// Physical phones (Expo Go, dev builds) hit the gateway over the LAN, not
+// localhost — the dev cert needs the machine's LAN IP(s) in its SAN list or
+// TLS hostname verification fails ("This Connection Is Not Private") even
+// once the phone trusts the root CA. Re-run this script (after deleting the
+// existing cert.pem/key.pem/rootCA.pem) whenever your LAN IP changes.
+const lanIps = Object.values(networkInterfaces())
+  .flat()
+  .filter((iface) => iface && iface.family === "IPv4" && !iface.internal)
+  .map((iface) => iface.address);
 
 mkdirSync(certsDir, { recursive: true });
 
@@ -41,8 +52,10 @@ try {
   // Install the mkcert CA into all browser trust stores (idempotent)
   execSync("mkcert -install", { stdio: "inherit" });
 
-  // Generate cert for localhost and 127.0.0.1 directly into certsDir
-  execSync(`mkcert -key-file "${keyFile}" -cert-file "${certFile}" localhost 127.0.0.1`, {
+  // Generate cert for localhost, 127.0.0.1, and any LAN IPs (for phones on
+  // the same network) directly into certsDir
+  const mkcertHosts = ["localhost", "127.0.0.1", ...lanIps].join(" ");
+  execSync(`mkcert -key-file "${keyFile}" -cert-file "${certFile}" ${mkcertHosts}`, {
     stdio: "inherit",
   });
 
@@ -80,6 +93,7 @@ if (!usedMkcert) {
         altNames: [
           { type: 2, value: "localhost" },
           { type: 7, ip: "127.0.0.1" },
+          ...lanIps.map((ip) => ({ type: 7, ip })),
         ],
       },
     ],

@@ -180,20 +180,29 @@ export async function getProfile(req: Request, res: Response) {
 
 export async function refreshToken(req: Request, res: Response) {
   try {
+    // Mobile clients have no cookie jar shared with the OAuth browser session,
+    // so they carry their SecureStore-persisted refresh token in the body
+    // instead of relying on the httpOnly cookie the web app uses.
+    const bodyToken: string | undefined = req.body?.refreshToken;
     const rawCookie = req.cookies?.refresh_token;
-    if (!rawCookie) {
+
+    let token: string;
+    if (bodyToken) {
+      token = bodyToken;
+    } else if (rawCookie) {
+      try {
+        token = aesDecrypt(rawCookie);
+      } catch {
+        return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+          message: "Invalid refresh token",
+        });
+      }
+    } else {
       return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
         message: "No refresh token provided",
       });
     }
-    let token: string;
-    try {
-      token = aesDecrypt(rawCookie);
-    } catch {
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-        message: "Invalid refresh token",
-      });
-    }
+
     const response = await grpcCall<any, any>(authClient, "refreshToken", {
       refreshToken: token,
     });
@@ -202,7 +211,7 @@ export async function refreshToken(req: Request, res: Response) {
         message: response.message,
       });
     }
-    // Rotate the refresh token cookie
+    // Rotate the refresh token cookie (web) — harmless no-op for mobile callers.
     if (response.refreshToken) {
       res.cookie(
         "refresh_token",
@@ -211,7 +220,12 @@ export async function refreshToken(req: Request, res: Response) {
       );
     }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { accessToken: response.accessToken },
+      // refreshToken (plain) is only meaningful to mobile clients, which must
+      // rotate their SecureStore copy on every use; the web client ignores it.
+      data: {
+        accessToken: response.accessToken,
+        refreshToken: bodyToken ? response.refreshToken : undefined,
+      },
       message: response.message,
     });
   } catch (error: unknown) {
@@ -491,10 +505,33 @@ export async function webAuthnLogin(req: Request, res: Response) {
   }
 }
 
+// Only these schemes may receive tokens via the mobile deep-link redirect —
+// exp:// covers Expo Go / dev-client (Linking.createURL() there produces an
+// exp://<lan-ip>/--/... URL, not our custom scheme), hrms:// covers
+// standalone/production builds. Anything else is a potential open-redirect
+// (a crafted ".../auth/google?platform=mobile&redirect_uri=https://evil.com"
+// link would otherwise hand a real user's tokens to an attacker's domain).
+const MOBILE_REDIRECT_SCHEME_RE = /^exps?:\/\/|^hrms:\/\//i;
+const DEFAULT_MOBILE_REDIRECT = "hrms://auth-callback";
+
 export function googleAuthRedirect(req: Request, res: Response) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
   const scope = "profile email";
+
+  // The mobile app opens this endpoint in an in-app browser and has no
+  // cookie jar shared with the callback — it passes its own deep-link
+  // redirect URI through `state` (Google echoes state back verbatim) so
+  // googleAuthCallback knows to hand tokens back via Linking instead of
+  // the web app's httpOnly cookie + query-string redirect.
+  let state = "";
+  if (req.query.platform === "mobile") {
+    const requested = String(req.query.redirect_uri || "");
+    const target = MOBILE_REDIRECT_SCHEME_RE.test(requested)
+      ? requested
+      : DEFAULT_MOBILE_REDIRECT;
+    state = `mobile:${encodeURIComponent(target)}`;
+  }
 
   const url =
     `https://accounts.google.com/o/oauth2/v2/auth` +
@@ -502,19 +539,34 @@ export function googleAuthRedirect(req: Request, res: Response) {
     `&redirect_uri=${encodeURIComponent(callbackUrl!)}` +
     `&response_type=code` +
     `&scope=${encodeURIComponent(scope)}` +
-    `&access_type=offline`;
+    `&access_type=offline` +
+    (state ? `&state=${encodeURIComponent(state)}` : "");
   res.redirect(url);
 }
 
 export async function googleAuthCallback(req: Request, res: Response) {
   const rawClientUrl = process.env.CLIENT_URL || "https://localhost:5173";
   const clientUrl = rawClientUrl.split(",")[0].trim();
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
+  const rawState = typeof state === "string" ? state : "";
+  const isMobile = rawState.startsWith("mobile:");
+  // `state` is attacker-influenceable (anyone can hit Google's authorize URL
+  // directly with their own state), so re-validate the scheme here too —
+  // see MOBILE_REDIRECT_SCHEME_RE comment above.
+  const requestedMobileRedirect = isMobile
+    ? decodeURIComponent(rawState.slice("mobile:".length))
+    : "";
+  const mobileScheme = MOBILE_REDIRECT_SCHEME_RE.test(requestedMobileRedirect)
+    ? requestedMobileRedirect
+    : DEFAULT_MOBILE_REDIRECT;
 
   if (error || !code) {
+    const message = String(error || "Authentication cancelled");
     return jsRedirect(
       res,
-      `${clientUrl}/login?error=${encodeURIComponent(String(error || "Authentication cancelled"))}`,
+      isMobile
+        ? `${mobileScheme}?error=${encodeURIComponent(message)}`
+        : `${clientUrl}/login?error=${encodeURIComponent(message)}`,
     );
   }
 
@@ -528,12 +580,19 @@ export async function googleAuthCallback(req: Request, res: Response) {
     );
 
     if (!response.accessToken) {
+      const message = encodeURIComponent("Authentication failed");
       return jsRedirect(
         res,
-        `${clientUrl}/login?error=${encodeURIComponent("Authentication failed")}`,
+        isMobile
+          ? `${mobileScheme}?error=${message}`
+          : `${clientUrl}/login?error=${message}`,
       );
     }
 
+    // Mobile has no shared cookie jar with this in-app browser session, so it
+    // receives the refresh token directly in the deep link below instead and
+    // persists it itself (SecureStore). Setting the cookie here too is a
+    // harmless no-op for mobile callers.
     if (response.refreshToken) {
       res.cookie(
         "refresh_token",
@@ -565,6 +624,9 @@ export async function googleAuthCallback(req: Request, res: Response) {
       oauth_success: "1",
       access_token: response.accessToken,
     });
+    if (isMobile && response.refreshToken) {
+      redirectParams.set("refresh_token", response.refreshToken);
+    }
     if (response.needsTenantSetup) redirectParams.set("tenant_setup", "1");
     if (response.tenants?.length > 0) {
       redirectParams.set("tenant_picker", "1");
@@ -573,14 +635,22 @@ export async function googleAuthCallback(req: Request, res: Response) {
         Buffer.from(JSON.stringify(response.tenants)).toString("base64"),
       );
     }
-    return jsRedirect(res, `${clientUrl}/?${redirectParams.toString()}`);
+    return jsRedirect(
+      res,
+      isMobile
+        ? `${mobileScheme}?${redirectParams.toString()}`
+        : `${clientUrl}/?${redirectParams.toString()}`,
+    );
   } catch (error: unknown) {
     logger.error("[OAuth callback error]", {
       message: error instanceof Error ? error.message : error,
     });
+    const message = encodeURIComponent("Login failed");
     return jsRedirect(
       res,
-      `${clientUrl}/login?error=${encodeURIComponent("Login failed")}`,
+      isMobile
+        ? `${mobileScheme}?error=${message}`
+        : `${clientUrl}/login?error=${message}`,
     );
   }
 }

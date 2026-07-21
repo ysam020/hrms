@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "HRMS",
+    "slug": "hrms-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "hrms",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "cloud.praesto.hrms",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Use Face ID to sign in to your HRMS account quickly and securely."
+      }
+    },
+    "android": {
+      "package": "cloud.praesto.hrms",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to sign in to your HRMS account quickly and securely."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#111b21",
+          "image": "./assets/icon.png",
+          "imageWidth": 160
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
