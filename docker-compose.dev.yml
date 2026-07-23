@@ -43,6 +43,15 @@ services:
       - PERFORMANCE_REVIEW_SERVICE_HOST=performance-review-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
       - SERVICE_NAME=api-gateway
+      # Caps cluster.ts's per-service worker fork count for local dev (see
+      # apps/api-gateway/src/bootstrap.ts) — defaulting to cpus().length
+      # workers per service across all 12 clustered services on one machine
+      # oversubscribes real CPU cores badly (confirmed: ~195 processes on a
+      # 15-core box measurably worse than fewer, well-sized ones) and adds a
+      # ~40-60s AWS SDK CloudWatch-retention-policy throttling storm to
+      # every boot. 2 is enough to exercise clustering locally; a real
+      # deployment should set this per its own actual core allocation.
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9003
       - LOKI_URL=http://loki:3100
       - OLLAMA_URL=http://host.docker.internal:11434
@@ -69,6 +78,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=auth-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9101
       - LOKI_URL=http://loki:3100
     ports:
@@ -94,6 +104,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=user-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9102
       - LOKI_URL=http://loki:3100
     ports:
@@ -119,6 +130,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=employee-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9103
       - LOKI_URL=http://loki:3100
     ports:
@@ -144,6 +156,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=attendance-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9104
       - LOKI_URL=http://loki:3100
     ports:
@@ -169,6 +182,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=leave-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9105
       - LOKI_URL=http://loki:3100
     ports:
@@ -194,6 +208,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=recruitment-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9106
       - LOKI_URL=http://loki:3100
       - OLLAMA_URL=http://host.docker.internal:11434
@@ -220,6 +235,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=hrm-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9107
       - LOKI_URL=http://loki:3100
     ports:
@@ -245,6 +261,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=salary-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9108
       - LOKI_URL=http://loki:3100
     ports:
@@ -270,6 +287,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=analytics-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9109
       - LOKI_URL=http://loki:3100
     ports:
@@ -295,6 +313,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=notification-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9110
       - LOKI_URL=http://loki:3100
     ports:
@@ -320,6 +339,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - SERVICE_NAME=performance-review-service
+      - WEB_CONCURRENCY=2
       - METRICS_PORT=9112
       - LOKI_URL=http://loki:3100
     ports:

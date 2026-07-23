@@ -42,6 +42,15 @@ Parameters:
       Instance type for the dedicated Prometheus/Grafana host (see
       MonitoringInstance below). t3.micro is free-tier eligible and plenty for
       scraping ~12 targets every 15s.
+  RedisNodeType:
+    Type: String
+    Default: cache.t4g.micro
+    Description: >
+      ElastiCache node type for RedisCluster — one shared Redis every ASG
+      instance connects to (see RedisCluster below). t4g.micro comfortably
+      covers today's usage (rate limiting, cache, Socket.IO pub/sub, BullMQ
+      queues combined) at a small multiple of what the single 256M docker
+      Redis container this replaces was given.
   MinSize:
     Type: Number
     Default: 1
@@ -588,6 +597,49 @@ Resources:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
 
+  # ─────────────────────────── ElastiCache ───────────────────────────
+  # One Redis every ASG instance shares, replacing each instance's own local
+  # docker-compose.prod.yml `redis` container. That per-instance setup meant
+  # cached reads, Redis-backed rate-limit counters, the Socket.IO Redis
+  # adapter (cross-instance WebSocket broadcast), and BullMQ queues were all
+  # only consistent *within* one instance — invisible with DesiredCapacity=1,
+  # but this stack's own default is 2. TargetGroup's ALB stickiness
+  # (see its own comment) was a partial workaround for one symptom of this
+  # (multi-step flows like WebAuthn breaking if the ALB round-robined
+  # requests) — it didn't address the others, and doesn't need to be removed
+  # now that the underlying cause is fixed, since pinning a session to one
+  # instance for its cookie's lifetime is still reasonable on its own merits.
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HRMS shared Redis - reachable only from the app instances
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnets RedisCluster may be placed in
+      SubnetIds: !Ref PublicSubnetIds
+
+  RedisCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      Engine: redis
+      EngineVersion: "7.1"
+      CacheNodeType: !Ref RedisNodeType
+      NumCacheNodes: 1
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref RedisSecurityGroup
+
   # ─────────────────────────── ACM ───────────────────────────
   ApiCertificate:
     Type: AWS::CertificateManager::Certificate
@@ -632,12 +684,14 @@ Resources:
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
-      # Each ASG instance runs its own local Redis (docker-compose.prod.yml),
-      # not a shared cache — multi-step flows that stash state there
-      # server-side (e.g. the WebAuthn login challenge) break if the ALB
-      # round-robins the two requests to different instances. Pin a browser
-      # session to one instance for the cookie's lifetime so those steps land
-      # on the same backend.
+      # Originally worked around each ASG instance running its own local
+      # Redis (pinning a session to one instance so multi-step flows like
+      # the WebAuthn login challenge, which stash state server-side, didn't
+      # break when the ALB round-robined the two requests to different
+      # instances). Now that RedisCluster is shared across every instance
+      # that workaround isn't strictly load-bearing anymore, but stickiness
+      # is still reasonable to keep on its own merits (steadier per-instance
+      # connection pools, marginally better cache locality), so it stays.
       TargetGroupAttributes:
         - Key: stickiness.enabled
           Value: "true"
@@ -1060,6 +1114,13 @@ Outputs:
     Value: !GetAtt Alb.DNSName
   AsgName:
     Value: !Ref Asg
+  RedisEndpoint:
+    Description: >
+      Set REDIS_URL in the SecretsManagerSecretName secret to
+      redis://<this>:6379 after this stack finishes creating/updating —
+      CloudFormation can't populate another secret's value from a resource
+      this same stack just created.
+    Value: !GetAtt RedisCluster.RedisEndpoint.Address
   MonitoringInstanceId:
     Description: >
       Target for SSM port-forwarding to reach Prometheus (:9090) directly -

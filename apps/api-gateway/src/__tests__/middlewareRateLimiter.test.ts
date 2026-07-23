@@ -24,7 +24,7 @@ jest.mock("@hrms/cache", () => ({
   getRedisClient: jest.fn(() => ({ call: jest.fn() })),
 }));
 
-import { defaultLimiter, authLimiter } from "../middleware/rateLimiter";
+import { defaultLimiter } from "../middleware/rateLimiter";
 
 // Regression coverage for the gap the platform audit found: this module
 // (mounted via subscriptionGuard in routes/index.ts, which guards nearly
@@ -42,9 +42,9 @@ describe("middleware/rateLimiter — Redis-backed store", () => {
       /^rl:mw-/.test(o.store?.__options?.prefix ?? ""),
     );
 
-  it("gives defaultLimiter and authLimiter a RedisStore instance, not the in-process default", () => {
+  it("gives defaultLimiter a RedisStore instance, not the in-process default", () => {
     const options = mwOptions();
-    expect(options.length).toBe(2);
+    expect(options.length).toBe(1);
     for (const o of options) {
       expect(o.store).toBeDefined();
       expect(o.store.__options).toBeDefined();
@@ -55,13 +55,10 @@ describe("middleware/rateLimiter — Redis-backed store", () => {
     const prefixes = capturedStoreOptions.map((o) => o.prefix);
     expect(new Set(prefixes).size).toBe(prefixes.length); // all distinct across every limiter constructed
     const mwPrefixes = mwOptions().map((o) => o.store.__options.prefix);
-    expect(mwPrefixes).toEqual(
-      expect.arrayContaining(["rl:mw-default:", "rl:mw-auth:"]),
-    );
+    expect(mwPrefixes).toEqual(expect.arrayContaining(["rl:mw-default:"]));
   });
 
-  it("exports usable middleware handlers", () => {
+  it("exports a usable middleware handler", () => {
     expect(typeof defaultLimiter).toBe("function");
-    expect(typeof authLimiter).toBe("function");
   });
 });

@@ -16,23 +16,63 @@ const mockGetRedisClient = getRedisClient as jest.Mock;
 // instances, each with its own subscriber connection) sharing one Redis.
 function makeFakeRedis() {
   const store = new Map<string, string>();
+  // Backs the "idx:<prefix>" SADD/SMEMBERS index set() maintains so
+  // invalidatePattern() can look keys up instead of scanning for them.
+  const sets = new Map<string, Set<string>>();
   const listenersByClient: Array<Map<string, Array<(...args: any[]) => void>>> =
     [];
 
   function makeClient(): any {
     const listeners = new Map<string, Array<(...args: any[]) => void>>();
     listenersByClient.push(listeners);
-    return {
+    const client: any = {
       get: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
       set: jest.fn((key: string, value: string) => {
         store.set(key, value);
         return Promise.resolve("OK");
       }),
       del: jest.fn((...keys: string[]) => {
-        keys.forEach((k) => store.delete(k));
+        keys.forEach((k) => {
+          store.delete(k);
+          sets.delete(k);
+        });
         return Promise.resolve(keys.length);
       }),
       scan: jest.fn(() => Promise.resolve(["0", []])),
+      sadd: jest.fn((key: string, member: string) => {
+        if (!sets.has(key)) sets.set(key, new Set());
+        sets.get(key)!.add(member);
+        return Promise.resolve(1);
+      }),
+      smembers: jest.fn((key: string) =>
+        Promise.resolve(Array.from(sets.get(key) ?? [])),
+      ),
+      expire: jest.fn(() => Promise.resolve(1)),
+      // Minimal fluent multi() covering just what CacheManager.set() calls.
+      multi: jest.fn(() => {
+        const ops: Array<() => Promise<unknown>> = [];
+        const chain: any = {
+          set: (...args: any[]) => {
+            ops.push(() => client.set(...args));
+            return chain;
+          },
+          sadd: (...args: any[]) => {
+            ops.push(() => client.sadd(...args));
+            return chain;
+          },
+          expire: (...args: any[]) => {
+            ops.push(() => client.expire(...args));
+            return chain;
+          },
+          exec: async () => {
+            for (const op of ops) {
+              await op();
+            }
+            return [];
+          },
+        };
+        return chain;
+      }),
       publish: jest.fn((channel: string, message: string) => {
         // Deliver synchronously to every subscribed client's "message"
         // listeners, simulating Redis fanning a publish out to every
@@ -50,9 +90,10 @@ function makeFakeRedis() {
       }),
       duplicate: jest.fn(() => makeClient()),
     };
+    return client;
   }
 
-  return { base: makeClient(), store };
+  return { base: makeClient(), store, sets };
 }
 
 describe("CacheManager", () => {
@@ -377,42 +418,95 @@ describe("CacheManager", () => {
   });
 
   describe("invalidatePattern", () => {
-    it("pages through SCAN cursors and deletes every matched key", async () => {
+    // Regression coverage for: invalidatePattern() used to SCAN the entire
+    // Redis keyspace on every call regardless of how narrow the pattern was
+    // (SCAN's MATCH filter is applied after iterating every key — Redis has
+    // no prefix index of its own). Under real write volume that meant a
+    // single mutation could cost O(every key across every tenant, every
+    // rate limiter, every BullMQ job), confirmed via `INFO commandstats`
+    // showing 43M+ SCAN calls and Redis pegged at ~190% CPU. For any
+    // pattern of the simple "<prefix>:*" shape (every real call site in
+    // this codebase), set() now maintains a per-prefix index set so
+    // invalidatePattern() can look keys up directly instead.
+    it("deletes exactly the keys indexed under that prefix, without calling SCAN", async () => {
       const { base, store } = makeFakeRedis();
-      store.set("t:t1:employees:1", "x");
-      store.set("t:t1:employees:2", "x");
-      base.scan
-        .mockResolvedValueOnce(["17", ["t:t1:employees:1"]])
-        .mockResolvedValueOnce(["0", ["t:t1:employees:2"]]);
       mockGetRedisClient.mockReturnValue(base);
       const manager = new CacheManager();
 
+      await manager.set("t:t1:employees:1", { a: 1 }, "employee");
+      await manager.set("t:t1:employees:2", { a: 2 }, "employee");
+      // A key under an unrelated prefix must survive.
+      await manager.set("t:t1:users:1", { a: 3 }, "user");
+
       await manager.invalidatePattern("t:t1:employees:*");
+
+      expect(base.scan).not.toHaveBeenCalled();
+      expect(store.has("t:t1:employees:1")).toBe(false);
+      expect(store.has("t:t1:employees:2")).toBe(false);
+      expect(store.has("t:t1:users:1")).toBe(true);
+    });
+
+    it("is a no-op (not an error) when nothing was ever indexed under that prefix", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await expect(
+        manager.invalidatePattern("t:t1:nomatch:*"),
+      ).resolves.toBeUndefined();
+      expect(base.scan).not.toHaveBeenCalled();
+    });
+
+    it("logs (but does not throw) when the index lookup itself fails", async () => {
+      const { base } = makeFakeRedis();
+      base.smembers.mockRejectedValue(new Error("redis down"));
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await expect(
+        manager.invalidatePattern("t:t1:employees:*"),
+      ).resolves.toBeUndefined();
+    });
+
+    // Any pattern that ISN'T the simple "<prefix>:*" shape falls back to
+    // the original SCAN sweep, so a future caller using a different glob
+    // shape can't silently under-invalidate.
+    it("falls back to SCAN for a pattern with a wildcard that isn't a single trailing one", async () => {
+      const { base, store } = makeFakeRedis();
+      store.set("t:t1:employees:1", "x");
+      store.set("t:t2:employees:1", "x");
+      base.scan
+        .mockResolvedValueOnce(["17", ["t:t1:employees:1"]])
+        .mockResolvedValueOnce(["0", ["t:t2:employees:1"]]);
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+
+      await manager.invalidatePattern("t:*:employees:1");
 
       expect(base.scan).toHaveBeenCalledTimes(2);
       expect(base.del).toHaveBeenCalledWith("t:t1:employees:1");
-      expect(base.del).toHaveBeenCalledWith("t:t1:employees:2");
+      expect(base.del).toHaveBeenCalledWith("t:t2:employees:1");
     });
 
-    it("skips the del() call for a SCAN page with no matches", async () => {
+    it("skips the del() call for a SCAN page with no matches (fallback path)", async () => {
       const { base } = makeFakeRedis();
       base.scan.mockResolvedValue(["0", []]);
       mockGetRedisClient.mockReturnValue(base);
       const manager = new CacheManager();
 
-      await manager.invalidatePattern("t:t1:nomatch:*");
+      await manager.invalidatePattern("t:*:nomatch:1");
 
       expect(base.del).not.toHaveBeenCalled();
     });
 
-    it("logs (but does not throw) when SCAN itself fails", async () => {
+    it("logs (but does not throw) when SCAN itself fails (fallback path)", async () => {
       const { base } = makeFakeRedis();
       base.scan.mockRejectedValue(new Error("redis down"));
       mockGetRedisClient.mockReturnValue(base);
       const manager = new CacheManager();
 
       await expect(
-        manager.invalidatePattern("t:t1:*"),
+        manager.invalidatePattern("t:*:broken:1"),
       ).resolves.toBeUndefined();
     });
 

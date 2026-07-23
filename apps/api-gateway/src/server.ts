@@ -7,6 +7,7 @@ import http2 from "http2";
 import http from "http";
 import fs from "fs";
 import path from "path";
+import cluster from "node:cluster";
 import { apiRequestLogger, logger } from "@hrms/logger";
 import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
@@ -129,8 +130,15 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   );
   setupChatSocket(io, redisAdapter);
 
-  startSubscriptionReconciler();
-  startPayrollDisbursementWorker();
+  // Under cluster mode (see bootstrap.ts) every forked worker would otherwise
+  // run these on its own schedule — harmless for the reconciler, but
+  // startPayrollDisbursementWorker actually disburses payroll, so running it
+  // once per CPU core risks duplicate disbursements. Restrict both to a
+  // single designated worker (or the sole process outside cluster mode).
+  if (!cluster.isWorker || cluster.worker?.id === 1) {
+    startSubscriptionReconciler();
+    startPayrollDisbursementWorker();
+  }
 
   server.listen(PORT, () => {
     const protocol = server instanceof http.Server ? "http" : "https";

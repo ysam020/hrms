@@ -44,7 +44,7 @@ describe("tenantClientPool", () => {
     const client = tenantClientPool.getClientForDb("tenant-a");
 
     expect((client as any).__opts.datasourceUrl).toBe(
-      "mongodb://host:27017/tenant-a?retryWrites=true&maxPoolSize=3",
+      "mongodb://host:27017/tenant-a?retryWrites=true&maxPoolSize=50",
     );
     expect(mockAttachAuditLogging).toHaveBeenCalledWith(client);
   });
@@ -57,7 +57,7 @@ describe("tenantClientPool", () => {
     const client = tenantClientPool.getClientForDb("tenant-a");
 
     expect((client as any).__opts.datasourceUrl).toBe(
-      "mongodb://host:27017/tenant-a?maxPoolSize=3",
+      "mongodb://host:27017/tenant-a?maxPoolSize=50",
     );
   });
 

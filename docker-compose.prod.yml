@@ -10,9 +10,6 @@ x-backend-service: &backend-service
   volumes:
     - ./packages/certificates:/app/packages/certificates:ro
   restart: on-failure
-  depends_on:
-    redis:
-      condition: service_healthy
   # Every service already exposes /health on METRICS_PORT (see
   # packages/logger/src/index.ts's metrics HTTP server) — this just wires it
   # in. Uses `node` directly (no curl/wget baked into the slim runner image)
@@ -37,15 +34,19 @@ x-backend-service: &backend-service
   # shows a service running close to these under normal load.
   #
   # Memory budget (this host is m7i-flex.large: 8 GiB total, per
-  # cloudformation/hrms-deploy.yaml): redis (256M) + api-gateway (768M) +
-  # 12 backend services x 384M = 5,632M, leaving ~2,560M (~31%) of headroom
-  # for the OS, dockerd, and the CloudWatch/SSM agents. `web` runs under a
-  # separate compose profile and isn't part of this host's default `up -d`,
-  # so it's excluded from this budget. Unlike memory, cpus limits are
-  # deliberately left oversubscribed (0.5 x 12 + 1.0 = 7.0 against 2 vCPUs) —
-  # CFS quota throttling degrades a container gracefully under contention,
-  # it doesn't OOM-kill it, so bursting past the host's core count when
-  # siblings are idle is the intended behavior, not a bug.
+  # cloudformation/hrms-deploy.yaml): api-gateway (768M) + 12 backend
+  # services x 384M = 5,376M, leaving ~2,816M (~34%) of headroom for the OS,
+  # dockerd, and the CloudWatch/SSM agents. Redis no longer runs on this host
+  # at all — every instance connects to the shared RedisCluster ElastiCache
+  # endpoint (see cloudformation/hrms-deploy.yaml) instead of its own local
+  # container, so it isn't part of this host's budget anymore either.
+  # `web` runs under a separate compose profile and isn't part of this
+  # host's default `up -d`, so it's excluded from this budget. Unlike
+  # memory, cpus limits are deliberately left oversubscribed (0.5 x 12 + 1.0
+  # = 7.0 against 2 vCPUs) — CFS quota throttling degrades a container
+  # gracefully under contention, it doesn't OOM-kill it, so bursting past
+  # the host's core count when siblings are idle is the intended behavior,
+  # not a bug.
   deploy:
     resources:
       limits:
@@ -53,24 +54,6 @@ x-backend-service: &backend-service
         memory: 384M
 
 services:
-  redis:
-    container_name: hrms-prod-redis
-    image: redis:7-alpine
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
-
   api-gateway:
     container_name: hrms-prod-api-gateway
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/api-gateway:${TAG_NAME:-latest}
@@ -244,6 +227,3 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
-
-volumes:
-  redis-data:

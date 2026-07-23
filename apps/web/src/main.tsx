@@ -6,6 +6,9 @@ import { BrowserRouter } from "react-router-dom";
 import "primereact/resources/themes/lara-light-cyan/theme.css";
 import "primeicons/primeicons.css";
 import { PrimeReactProvider } from "primereact/api";
+import { watchForServiceWorkerUpdates } from "@web/core/config/serviceWorkerUpdate";
+
+watchForServiceWorkerUpdates();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <BrowserRouter
