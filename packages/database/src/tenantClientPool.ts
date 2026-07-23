@@ -26,9 +26,21 @@ const pool = new Map<string, PoolEntry>();
 // on this repo's 2-vCPU prod host (m7i-flex.large) could open up to
 // 50 x 5 = 250 MongoDB connections, and that multiplies again across every
 // backend service process hitting the same replica set. Capping it small and
-// explicit here makes the real ceiling MAX_POOL_SIZE x CONNECTION_LIMIT (150)
+// explicit here makes the real ceiling MAX_POOL_SIZE x CONNECTION_LIMIT
 // — predictable and independent of host core count.
-const CONNECTION_LIMIT = 3;
+//
+// Raised 3 -> 50 (2026-07-23): the old value of 3 measurably became the
+// system's throughput ceiling under load (progressive autocannon test
+// against a local 5-node replica set plateaued at ~260 req/s from 100
+// connections onward, with latency climbing until timeouts appeared at 500 —
+// classic pool-exhaustion queueing, not a database-capacity limit). 50
+// matches MAX_POOL_SIZE's own order of magnitude, keeping the ceiling
+// formula's intent (MAX_POOL_SIZE x CONNECTION_LIMIT, now 2500/process)
+// predictable rather than picking an arbitrary large number. Re-validate
+// against whatever Mongo cluster tier is actually deployed before this
+// reaches production — this was only proven out against an unconstrained
+// local replica set, not Atlas' real connection ceiling.
+const CONNECTION_LIMIT = 50;
 
 function buildUrl(dbName: string): string {
   const base = process.env.DEV_MONGODB_URI!;

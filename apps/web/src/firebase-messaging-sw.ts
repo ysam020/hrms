@@ -47,6 +47,24 @@ onBackgroundMessage(messaging, (payload) => {
 });
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
+// Take over immediately on every new version instead of sitting in "waiting"
+// until every open tab closes. Without this, a new deploy (in prod, or a
+// rebuilt web image in the docker dev stack) never actually takes effect for
+// anyone who already has a tab open — the old service worker keeps serving
+// its precached index.html + JS bundle indefinitely, and there's no
+// "new version available" UI in this app prompting a manual refresh, so it
+// silently stays stale (paired with a one-time guarded reload on the client
+// side — see main.tsx's watchForServiceWorkerUpdates() — so an open tab
+// actually picks up the new bundle when this fires, rather than continuing
+// to run old in-memory JS against a newly-activated, differently-versioned
+// cache/routing table).
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();

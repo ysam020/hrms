@@ -36,13 +36,26 @@ import { wfhRouter } from "./wfh";
 import { helpdeskRouter } from "./helpdesk";
 import { webhooksRouter } from "./webhooks";
 import { reportsRouter } from "./reports";
-import { authLimiter, defaultLimiter } from "../middleware/rateLimiter";
+import { defaultLimiter } from "../middleware/rateLimiter";
 import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
 import { authenticate, requireTenant } from "../middleware/authenticate";
 
 export const rootRouter: Router = Router();
 
-rootRouter.use(authLimiter, authRouter);
+// No limiter mounted here directly — config/rateLimiters.ts's
+// applyRateLimiters(app) (registered globally in server.ts) already covers
+// every route this router serves: AUTH_ROUTES_REGEX + a dedicated
+// /refresh-token limiter for the actual auth-abuse-prone endpoints,
+// profileLimiter for /profile, and generalLimiter as the floor for
+// everything else under /api (logout, webauthn management for an
+// already-authenticated user, etc.). A second authLimiter used to be
+// mounted here too (rootRouter.use(authLimiter, authRouter) — note no path
+// prefix, so it ran on literally every request through this router, not
+// just auth ones), which under load turned out to be one of three
+// overlapping Redis round-trips on every single request, contributing to
+// Redis becoming CPU-saturated (single-threaded) and a shared source of
+// latency across unrelated routes. Removed as pure duplication.
+rootRouter.use(authRouter);
 rootRouter.use(defaultLimiter, tenantRouter);
 rootRouter.use(defaultLimiter, paymentRouter);
 
