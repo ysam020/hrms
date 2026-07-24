@@ -13,6 +13,12 @@ jest.mock("@hrms/db", () => {
     approvalInstance: {
       findFirst: jest.fn().mockResolvedValue(null),
     },
+    user: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    team: { findMany: jest.fn().mockResolvedValue([]) },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   return {
     prisma: _db,
@@ -27,6 +33,23 @@ jest.mock("@hrms/cache", () => ({
 
 jest.mock("@hrms/approval-engine", () => ({
   cancelApproval: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("@hrms/queue", () => ({
+  getNotificationQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+  getEmailQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -45,6 +68,10 @@ describe("withdrawResignation", () => {
     jest.clearAllMocks();
     mockInvalidate.mockResolvedValue(undefined);
     (prisma as any).approvalInstance.findFirst.mockResolvedValue(null);
+    (prisma as any).user.findUnique.mockResolvedValue(null);
+    (prisma as any).user.findMany.mockResolvedValue([]);
+    (prisma as any).team.findMany.mockResolvedValue([]);
+    (prisma as any).tenant.findUnique.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when id is missing", async () => {

@@ -1,8 +1,18 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import {
+  tenantFrom,
+  tenantReplyTo,
+  renderEmailHtml,
+  formatDateOrRange,
+} from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 import {
   adjustBalance,
@@ -107,13 +117,15 @@ export const finalizeLeaveCancellation = async (
       `t:${getTenantId() ?? "global"}:leaves:*`,
     );
 
+    const notificationMessage = approved
+      ? "Your leave cancellation was approved."
+      : "Your leave cancellation request was rejected — the leave remains approved.";
+
     getNotificationQueue()
       .add(approved ? "leaveCancelled" : "leaveCancellationRejected", {
         tenantId: getTenantId()!,
         title: "Leave",
-        message: approved
-          ? "Your leave cancellation was approved."
-          : "Your leave cancellation request was rejected — the leave remains approved.",
+        message: notificationMessage,
         targetUser: updatedLeave.userId,
         eventType: "leave_notification",
         priority: "medium",
@@ -123,6 +135,45 @@ export const finalizeLeaveCancellation = async (
           "[finalizeLeaveCancellation] Notification enqueue failed:",
           { err },
         ),
+      );
+
+    Promise.all([
+      prisma.user.findUnique({
+        where: { id: updatedLeave.userId },
+        select: { email: true },
+      }),
+      masterPrisma.tenant.findUnique({
+        where: { id: getTenantId()! },
+        select: { name: true, helpEmail: true },
+      }),
+    ])
+      .then(([employee, tenant]) => {
+        if (!employee?.email) return;
+        const tenantName = tenant?.name ?? "your organisation";
+        const dateRange = formatDateOrRange(updatedLeave.from, updatedLeave.to);
+        return getEmailQueue().add(
+          approved ? "leaveCancelled" : "leaveCancellationRejected",
+          {
+            to: employee.email,
+            subject: approved
+              ? "Your leave cancellation was approved"
+              : "Your leave cancellation request was rejected",
+            html: renderEmailHtml({
+              title: approved
+                ? "Leave Cancellation Approved"
+                : "Leave Cancellation Rejected",
+              tenantName,
+              bodyHtml: `<h2>Hello,</h2><p>${notificationMessage}</p><p><strong>Dates:</strong> ${dateRange}</p>`,
+            }),
+            from: tenantFrom(tenantName),
+            replyTo: tenantReplyTo(tenant?.helpEmail),
+          },
+        );
+      })
+      .catch((err) =>
+        logger.warn("[finalizeLeaveCancellation] email enqueue failed:", {
+          err,
+        }),
       );
 
     return callback(null, {

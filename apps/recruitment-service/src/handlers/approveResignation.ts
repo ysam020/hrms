@@ -1,8 +1,13 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 
 export const approveResignation = async (
@@ -81,6 +86,37 @@ export const approveResignation = async (
         logger.error("[approveResignation] Notification enqueue failed:", {
           err,
         }),
+      );
+
+    Promise.all([
+      updatedResignation.userId
+        ? prisma.user.findUnique({
+            where: { id: updatedResignation.userId },
+            select: { email: true },
+          })
+        : null,
+      masterPrisma.tenant.findUnique({
+        where: { id: getTenantId()! },
+        select: { name: true, helpEmail: true },
+      }),
+    ])
+      .then(([employee, tenant]) => {
+        if (!employee?.email) return;
+        const tenantName = tenant?.name ?? "your organisation";
+        return getEmailQueue().add("resignationApproved", {
+          to: employee.email,
+          subject: "Your resignation was approved",
+          html: renderEmailHtml({
+            title: "Resignation Approved",
+            tenantName,
+            bodyHtml: `<h2>Hello,</h2><p>${MESSAGES.RESIGNATION_APPROVED}</p>`,
+          }),
+          from: tenantFrom(tenantName),
+          replyTo: tenantReplyTo(tenant?.helpEmail),
+        });
+      })
+      .catch((err) =>
+        logger.warn("[approveResignation] email enqueue failed:", { err }),
       );
 
     // ApproveResignation's proto response is BasicResponse (message+status

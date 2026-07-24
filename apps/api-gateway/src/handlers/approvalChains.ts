@@ -1,7 +1,13 @@
 import { Response } from "express";
 import { recruitment, salary } from "@hrms/proto";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  tenantFrom,
+  tenantReplyTo,
+  renderEmailHtml,
+  formatDateOrRange,
+} from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { logger } from "@hrms/logger";
 import {
@@ -21,7 +27,7 @@ import {
   grpcCall,
 } from "../grpc/clients";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { getWorkingDays, isHoliday, eachDate } from "../utils/workingDays";
@@ -653,20 +659,58 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
     // (which only ever lived in Pending Approvals, never the bell), this is
     // a status update with nowhere else to surface, same as leave/
     // resignation approve/reject notifications.
+    const decisionMessage =
+      finalStatus === "approved"
+        ? "Your work-from-home request has been approved"
+        : "Your work-from-home request has been rejected";
+
     getNotificationQueue()
       .add("wfhDecision", {
         tenantId,
         title: "WFH Request",
-        message:
-          finalStatus === "approved"
-            ? "Your work-from-home request has been approved"
-            : "Your work-from-home request has been rejected",
+        message: decisionMessage,
         targetUser: wfhReq.userId,
         eventType: "wfh_notification",
         priority: "medium",
       })
       .catch((err) =>
         logger.warn("[wfh approval] Notification enqueue failed:", { err }),
+      );
+
+    Promise.all([
+      (prisma as any).user.findUnique({
+        where: { id: wfhReq.userId },
+        select: { email: true },
+      }),
+      masterPrisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true, helpEmail: true },
+      }),
+    ])
+      .then(([employee, tenant]) => {
+        if (!employee?.email) return;
+        const tenantName = tenant?.name ?? "your organisation";
+        const dateRange = formatDateOrRange(wfhReq.date, wfhReq.toDate);
+        return getEmailQueue().add("wfhDecision", {
+          to: employee.email,
+          subject:
+            finalStatus === "approved"
+              ? "Your WFH request was approved"
+              : "Your WFH request was rejected",
+          html: renderEmailHtml({
+            title:
+              finalStatus === "approved"
+                ? "WFH Request Approved"
+                : "WFH Request Rejected",
+            tenantName,
+            bodyHtml: `<h2>Hello,</h2><p>${decisionMessage}</p><p><strong>Dates:</strong> ${dateRange}</p>`,
+          }),
+          from: tenantFrom(tenantName),
+          replyTo: tenantReplyTo(tenant?.helpEmail),
+        });
+      })
+      .catch((err) =>
+        logger.warn("[wfh approval] email enqueue failed:", { err }),
       );
   },
   // Performance reviews are a separate gRPC service (performance-review-service).

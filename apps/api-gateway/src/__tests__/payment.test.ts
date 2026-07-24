@@ -1,5 +1,6 @@
 import { createHmac } from "crypto";
 import { prisma } from "@hrms/db";
+import { getEmailQueue } from "@hrms/queue";
 import {
   fetchPaymentMethod,
   createSubscription,
@@ -18,6 +19,8 @@ jest.mock("@hrms/db", () => ({
       findFirst: jest.fn(),
       updateMany: jest.fn(),
     },
+    tenantMembership: { findFirst: jest.fn().mockResolvedValue(null) },
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
   },
 }));
 
@@ -34,7 +37,14 @@ jest.mock("@hrms/common", () => ({
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
   },
+  PLATFORM_FROM: '"Praesto" <noreply@praesto.cloud>',
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
+
+jest.mock("@hrms/queue", () => {
+  const emailQueue = { add: jest.fn().mockResolvedValue(undefined) };
+  return { getEmailQueue: jest.fn(() => emailQueue) };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -64,7 +74,14 @@ const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 const mockTenantUpdate = (prisma as any).tenant.update as jest.Mock;
 const mockTenantFindFirst = (prisma as any).tenant.findFirst as jest.Mock;
 const mockTenantUpdateMany = (prisma as any).tenant.updateMany as jest.Mock;
+const mockMembershipFindFirst = (prisma as any).tenantMembership
+  .findFirst as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
+const mockEmailAdd = getEmailQueue().add as jest.Mock;
 const mockTokenStore = tenantTokenStore as jest.Mocked<typeof tenantTokenStore>;
+
+// Waits for fire-and-forget owner-email lookups (getTenantOwnerEmail) to settle.
+const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 
 function makeRes() {
   const res: any = {};
@@ -516,6 +533,9 @@ describe("payment handlers", () => {
     it("subscription.charged extends planExpiresAt by one billing period from the later of now/current expiry", async () => {
       mockTenantFindFirst.mockResolvedValue({
         id: "t1",
+        name: "Acme Corp",
+        slug: "acme-corp",
+        plan: "pro",
         billing: "monthly",
         planExpiresAt: null,
       });
@@ -532,6 +552,44 @@ describe("payment handlers", () => {
         expect.objectContaining({
           where: { id: "t1" },
           data: expect.objectContaining({ subscriptionStatus: "active" }),
+        }),
+      );
+    });
+
+    it("subscription.charged emails the tenant owner an invoice when payment.entity is present", async () => {
+      mockTenantFindFirst.mockResolvedValue({
+        id: "t1",
+        name: "Acme Corp",
+        slug: "acme-corp",
+        plan: "pro",
+        billing: "monthly",
+        planExpiresAt: null,
+      });
+      mockTenantUpdate.mockResolvedValue({});
+      mockMembershipFindFirst.mockResolvedValue({ userId: "u1" });
+      mockUserFindUnique.mockResolvedValue({
+        email: "owner@example.com",
+        username: "owner1",
+      });
+      const req = makeWebhookReq({
+        event: "subscription.charged",
+        payload: {
+          subscription: { entity: { id: "sub_1" } },
+          payment: { entity: { amount: 99900, method: "card" } },
+        },
+      });
+      const res = makeRes();
+
+      await handleWebhook(req, res);
+      await flushMicrotasks();
+
+      expect(mockEmailAdd).toHaveBeenCalledWith(
+        "subscriptionRenewed",
+        expect.objectContaining({
+          to: "owner@example.com",
+          attachments: expect.arrayContaining([
+            expect.objectContaining({ content: expect.any(String) }),
+          ]),
         }),
       );
     });
@@ -567,6 +625,28 @@ describe("payment handlers", () => {
 
       expect(mockTenantUpdate).not.toHaveBeenCalled();
       expect(mockTenantUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it("subscription.payment.failed emails the tenant owner an alert", async () => {
+      mockTenantFindFirst.mockResolvedValue({ id: "t1" });
+      mockMembershipFindFirst.mockResolvedValue({ userId: "u1" });
+      mockUserFindUnique.mockResolvedValue({
+        email: "owner@example.com",
+        username: "owner1",
+      });
+      const req = makeWebhookReq({
+        event: "subscription.payment.failed",
+        payload: { subscription: { entity: { id: "sub_1" } } },
+      });
+      const res = makeRes();
+
+      await handleWebhook(req, res);
+      await flushMicrotasks();
+
+      expect(mockEmailAdd).toHaveBeenCalledWith(
+        "subscriptionPaymentFailed",
+        expect.objectContaining({ to: "owner@example.com" }),
+      );
     });
 
     it.each(["subscription.cancelled", "subscription.completed"])(

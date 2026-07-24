@@ -2,7 +2,7 @@ import LegalPageLayout from "./LegalPageLayout";
 
 function PrivacyPolicyPage() {
   return (
-    <LegalPageLayout title="Privacy Policy" lastUpdated="13 July 2026">
+    <LegalPageLayout title="Privacy Policy" lastUpdated="23 July 2026">
       <p>
         Praesto ("Praesto", "we", "us", or "our") provides a human resource
         management platform ("Service") that organisations ("Tenants") use to
@@ -26,6 +26,13 @@ function PrivacyPolicyPage() {
           phone number, employment details, and authentication identifiers (e.g.
           Google OAuth or security-key/biometric credentials) provided when a
           Tenant creates or manages a user account.
+        </li>
+        <li>
+          <strong>Google Calendar data (optional)</strong> — if you choose to
+          connect your Google Calendar, we access only the ability to create
+          calendar events on your behalf, for the sole purpose of scheduling
+          interviews and generating a Google Meet link. See Section 10 for
+          details.
         </li>
         <li>
           <strong>HR operational data</strong> — attendance records, leave and
@@ -78,7 +85,8 @@ function PrivacyPolicyPage() {
         <li>
           <strong>Service providers</strong> who process data on our behalf
           under contract, including cloud hosting, Razorpay (payments), Google
-          (OAuth sign-in), and transactional email/notification providers.
+          (OAuth sign-in and, for users who connect it, Calendar event
+          creation), and transactional email/notification providers.
         </li>
         <li>
           <strong>Legal &amp; compliance</strong> — where required by law,
@@ -125,7 +133,54 @@ function PrivacyPolicyPage() {
         will be reflected by updating the "Last updated" date above.
       </p>
 
-      <h2>9. Contact Us</h2>
+      <h2>9. Google Calendar Integration</h2>
+      <p>
+        Interview scheduling in the Service can optionally create a Google
+        Calendar event with a Google Meet link, on the calendar of the specific
+        user (typically an HR team member or recruiter) who chooses to connect
+        their account. Connecting is entirely optional and can be revoked at any
+        time from your Google Account's{" "}
+        <a
+          href="https://myaccount.google.com/permissions"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          third-party access settings
+        </a>
+        .
+      </p>
+      <ul>
+        <li>
+          <strong>Scope requested:</strong>{" "}
+          <code>https://www.googleapis.com/auth/calendar.events</code> —
+          permission to create and manage calendar events. We do not request
+          read access to your existing calendar or any other Google data.
+        </li>
+        <li>
+          <strong>What we do with it:</strong> when you schedule an interview,
+          we create a single calendar event (with a Google Meet link) on your
+          calendar and send an invite to the candidate. We do not read, browse,
+          or export any other events on your calendar.
+        </li>
+        <li>
+          <strong>Storage:</strong> we store an encrypted authorization token
+          that lets us create events on your behalf until you disconnect.
+        </li>
+      </ul>
+      <p>
+        Praesto's use and transfer of information received from Google APIs to
+        any other app will adhere to the{" "}
+        <a
+          href="https://developers.google.com/terms/api-services-user-data-policy"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Google API Services User Data Policy
+        </a>
+        , including the Limited Use requirements.
+      </p>
+
+      <h2>10. Contact Us</h2>
       <p>
         Questions about this Privacy Policy can be sent to{" "}
         <a href="mailto:support@praesto.cloud">support@praesto.cloud</a>.

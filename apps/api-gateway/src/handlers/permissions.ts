@@ -1,12 +1,20 @@
 import { Request, Response } from "express";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { AuthRequest } from "../middleware/authenticate";
 import {
   apiResponse,
   RESPONSE_STATUS,
   partitionPermissions,
+  tenantFrom,
+  tenantReplyTo,
+  renderEmailHtml,
 } from "@hrms/common";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
 import { handleError } from "../utils/handleError";
 
 export async function getRoles(_req: Request, res: Response) {
@@ -213,12 +221,58 @@ export async function saveUserPermissions(req: Request, res: Response) {
     }
 
     const oldPerms = user.permissions || [];
-    const addedCount = validPermissions.filter(
+    const addedPerms = validPermissions.filter(
       (p: string) => !oldPerms.includes(p),
-    ).length;
+    );
+    const addedCount = addedPerms.length;
     const removedCount = oldPerms.filter(
       (p: string) => !validPermissions.includes(p),
     ).length;
+
+    // Notify the employee when a new permission is granted (fire-and-forget,
+    // in-app + email) — not on removal, which is a lower-visibility change.
+    const tenantId = getTenantId();
+    if (addedCount > 0 && tenantId) {
+      const message = `You've been granted ${addedCount} new permission${addedCount === 1 ? "" : "s"}: ${addedPerms.join(", ")}`;
+      getNotificationQueue()
+        .add("permissionsGranted", {
+          tenantId,
+          title: "Permissions Updated",
+          message,
+          targetUser: user.id,
+          eventType: "permission_notification",
+          priority: "medium",
+        })
+        .catch((error: unknown) =>
+          logger.warn("permissions-granted notification failed", { error }),
+        );
+
+      if (user.email) {
+        masterPrisma.tenant
+          .findUnique({
+            where: { id: tenantId },
+            select: { name: true, helpEmail: true },
+          })
+          .then((tenant) => {
+            const tenantName = tenant?.name ?? "your organisation";
+            return getEmailQueue().add("permissionsGranted", {
+              to: user.email!,
+              subject: "You've been granted new permissions",
+              html: renderEmailHtml({
+                title: "Permissions Updated",
+                tenantName,
+                bodyHtml: `<h2>Hello ${user.username},</h2><p>${message}</p>`,
+              }),
+              from: tenantFrom(tenantName),
+              replyTo: tenantReplyTo(tenant?.helpEmail),
+            });
+          })
+          .catch((error: unknown) =>
+            logger.warn("permissions-granted email failed", { error }),
+          );
+      }
+    }
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "User permissions updated successfully",
       data: { addedCount, removedCount },

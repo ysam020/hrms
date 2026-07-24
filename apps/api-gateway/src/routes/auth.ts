@@ -54,3 +54,19 @@ authRouter.post(
 );
 
 authRouter.get("/auth/google", h.googleAuthRedirect);
+
+// Calendar callback (googleCalendarCallback) is registered directly on `app`
+// in server.ts, not here — same reasoning as the login callback: it must
+// live outside /api/v1 to exactly match the URI registered in Google Cloud
+// Console, and it's a top-level Google redirect with no session, not an
+// authenticate-able request.
+authRouter.get(
+  "/auth/google-calendar/connect",
+  authenticate,
+  h.googleCalendarConnect,
+);
+authRouter.get(
+  "/auth/google-calendar/status",
+  authenticate,
+  h.googleCalendarStatus,
+);

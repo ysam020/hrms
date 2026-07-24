@@ -3,15 +3,25 @@ import dayjs from "dayjs";
 import { recruitment } from "@hrms/proto";
 import { recruitmentClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  grpcToHttpStatus,
+  tenantFrom,
+  tenantReplyTo,
+  renderEmailHtml,
+  buildIcsInvite,
+} from "@hrms/common";
+import { getEmailQueue } from "@hrms/queue";
 import { cacheManager } from "@hrms/cache";
 import { handleError, handleActionError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { isSuperUser } from "../utils/user";
 import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
 import { getActiveSettings, SETTINGS_DEFAULTS } from "./tenantSettings";
+import { createInterviewMeetEvent } from "../services/googleCalendar";
 
 export async function viewJobOpenings(req: Request, res: Response) {
   try {
@@ -806,6 +816,172 @@ function parseInterviewTime(value: unknown): dayjs.Dayjs | null {
   return parsed.isValid() ? parsed : null;
 }
 
+// Thrown when the scheduling user hasn't connected Google Calendar and
+// didn't supply a manual meeting link — distinct from a generic Error so the
+// handlers can attach a structured `code` the frontend uses to show a
+// "connect your calendar" prompt instead of a bare error toast (see
+// CALENDAR_NOT_CONNECTED_CODE below), rather than string-matching the
+// message. Deliberately no fallback to a fake/placeholder link: an interview
+// invite without a real, joinable meeting link is worse than blocking the
+// scheduling action outright.
+class CalendarNotConnectedError extends Error {}
+export const CALENDAR_NOT_CONNECTED_CODE = "CALENDAR_NOT_CONNECTED";
+
+/**
+ * Creates the actual Google Calendar event (with a real Meet link, on the
+ * scheduling user's own connected calendar — see services/googleCalendar.ts
+ * — per-user by design, never a shared/tenant-level identity) unless the
+ * caller supplied a manual meeting link instead. When a real event is
+ * created, Google itself emails every attendee its own native invitation
+ * (sendUpdates: "all"); only the manual-meetLink fallback (no real event to
+ * notify from) gets our own tenant-branded email with an .ics attachment.
+ * Shared by scheduleInterview and rescheduleInterview since both need
+ * identical behavior here, just triggered from different validation paths.
+ */
+async function scheduleMeetEventAndNotifyCandidate(options: {
+  schedulerUserId: string;
+  tenantId: string;
+  applicationId: string;
+  candidateEmail: string | null | undefined;
+  candidateName: string;
+  roundNumber: number;
+  startTime: dayjs.Dayjs;
+  endTime: dayjs.Dayjs;
+  interviewer?: string;
+  manualMeetLink?: string | null;
+}): Promise<string | null> {
+  const [scheduler, tenant, interviewerUser] = await Promise.all([
+    masterPrisma.user.findUnique({
+      where: { id: options.schedulerUserId },
+      select: {
+        googleCalendarRefreshToken: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+        username: true,
+      },
+    }),
+    masterPrisma.tenant.findUnique({
+      where: { id: options.tenantId },
+      select: { name: true, helpEmail: true },
+    }),
+    // interviewer is stored as a username (see getInterviewerList) — resolve
+    // it to a real name/email so they can be added as an invite guest.
+    options.interviewer
+      ? prisma.user.findFirst({
+          where: { username: options.interviewer },
+          select: { email: true, first_name: true, last_name: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const interviewerName = interviewerUser
+    ? [interviewerUser.first_name, interviewerUser.last_name]
+        .filter(Boolean)
+        .join(" ") || options.interviewer
+    : options.interviewer;
+  const interviewerEmail = interviewerUser?.email || null;
+
+  const attendeeEmails = [
+    ...(options.candidateEmail ? [options.candidateEmail] : []),
+    ...(interviewerEmail ? [interviewerEmail] : []),
+  ];
+
+  let meetLink: string | null = options.manualMeetLink?.trim() || null;
+  // True once a real event exists on the scheduler's own Google Calendar —
+  // Google then emails every attendee its own native invitation (see
+  // sendUpdates: "all" in services/googleCalendar.ts), so we skip sending
+  // our own copy below to avoid double-inviting the candidate/interviewer.
+  let invitedViaGoogleCalendar = false;
+  if (!meetLink) {
+    if (!scheduler?.googleCalendarRefreshToken) {
+      throw new CalendarNotConnectedError(
+        "Connect your Google Calendar before scheduling an interview.",
+      );
+    }
+    const { meetLink: createdLink } = await createInterviewMeetEvent({
+      encryptedRefreshToken: scheduler.googleCalendarRefreshToken,
+      summary: `Interview: ${options.candidateName} — Round ${options.roundNumber}`,
+      description: interviewerName
+        ? `Interviewer: ${interviewerName}`
+        : undefined,
+      startTime: options.startTime.toDate(),
+      endTime: options.endTime.toDate(),
+      attendeeEmails,
+    });
+    meetLink = createdLink;
+    invitedViaGoogleCalendar = true;
+  }
+
+  // Fallback path only: no real Calendar event exists (a manually pasted
+  // meetLink) for Google to send its own invitation from, so we build and
+  // send our own tenant-branded email with an .ics attachment instead.
+  if (options.candidateEmail && !invitedViaGoogleCalendar) {
+    const tenantName = tenant?.name ?? "the hiring team";
+    // The organizer is the person who actually scheduled the interview (real
+    // name + email) — this is a calendar-semantics field, distinct from the
+    // email's tenant-branded From: sender. The interviewer is added as a
+    // guest alongside the candidate so both show up under Gmail's "Guests".
+    const schedulerName =
+      [scheduler?.first_name, scheduler?.last_name].filter(Boolean).join(" ") ||
+      scheduler?.username ||
+      tenantName;
+    const schedulerEmail =
+      scheduler?.email || tenant?.helpEmail || "noreply@praesto.cloud";
+    const icsInvite = buildIcsInvite({
+      uid: `interview-${options.applicationId}-round-${options.roundNumber}@praesto.cloud`,
+      summary: `Interview: ${options.candidateName} — Round ${options.roundNumber}`,
+      description: interviewerName
+        ? `Interviewer: ${interviewerName}`
+        : undefined,
+      location: meetLink,
+      startTime: options.startTime.toDate(),
+      endTime: options.endTime.toDate(),
+      organizerEmail: schedulerEmail,
+      organizerName: schedulerName,
+      attendees: [
+        { email: options.candidateEmail, name: options.candidateName },
+        ...(interviewerEmail
+          ? [{ email: interviewerEmail, name: interviewerName }]
+          : []),
+      ],
+    });
+
+    await getEmailQueue()
+      .add("interviewInvite", {
+        to: options.candidateEmail,
+        subject: `Interview invite: Round ${options.roundNumber} — ${tenantName}`,
+        html: renderEmailHtml({
+          title: "Interview Invite",
+          tenantName,
+          bodyHtml: `<h2>Hello ${options.candidateName},</h2>
+<p>You've been scheduled for <strong>Round ${options.roundNumber}</strong> of your interview with <strong>${tenantName}</strong>.</p>
+<p><strong>When:</strong> ${options.startTime.format("DD MMM YYYY, HH:mm")} – ${options.endTime.format("HH:mm")}</p>
+${meetLink ? `<p><strong>Join via Google Meet:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ""}`,
+        }),
+        from: tenantFrom(tenantName),
+        replyTo: tenantReplyTo(tenant?.helpEmail),
+        attachments: [
+          {
+            filename: "interview-invite.ics",
+            content: Buffer.from(icsInvite, "utf8").toString("base64"),
+            // Without this, Gmail/Outlook treat it as a generic downloadable
+            // file — method=REQUEST (matching the METHOD:REQUEST already set
+            // inside the .ics itself, see buildIcsInvite) is what makes mail
+            // clients render the full interactive invite card (When/Guests/
+            // Yes-No-Maybe) instead.
+            contentType: 'text/calendar; charset="UTF-8"; method=REQUEST',
+          },
+        ],
+      })
+      .catch((e: unknown) =>
+        logger.warn("interview invite email failed to queue", { e }),
+      );
+  }
+
+  return meetLink;
+}
+
 export async function scheduleInterview(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
@@ -815,6 +991,7 @@ export async function scheduleInterview(req: Request, res: Response) {
       interviewStartTime,
       interviewEndTime,
       interviewer,
+      meetLink: manualMeetLink,
     } = req.body;
     const app = await prisma.jobApplication.findUnique({ where: { id: _id } });
     if (!app)
@@ -860,6 +1037,43 @@ export async function scheduleInterview(req: Request, res: Response) {
       }
     }
 
+    const parsedStart = parseInterviewTime(interviewStartTime);
+    const parsedEnd = parseInterviewTime(interviewEndTime);
+    if (!parsedStart || !parsedEnd) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "A valid interview start and end time are required.",
+      });
+    }
+    if (!user?.tenantId || !user.userId) {
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: "Unauthorized",
+      });
+    }
+
+    let meetLink: string | null;
+    try {
+      meetLink = await scheduleMeetEventAndNotifyCandidate({
+        schedulerUserId: user.userId,
+        tenantId: user.tenantId,
+        applicationId: _id,
+        candidateEmail: app.email,
+        candidateName: app.name ?? "Candidate",
+        roundNumber,
+        startTime: parsedStart,
+        endTime: parsedEnd,
+        interviewer,
+        manualMeetLink,
+      });
+    } catch (err) {
+      if (err instanceof CalendarNotConnectedError) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: err.message,
+          code: CALENDAR_NOT_CONNECTED_CODE,
+        });
+      }
+      throw err;
+    }
+
     // Deliberately no separate interviewDate field — interviewStartTime is
     // the single source of truth for this round's date. A previous
     // interviewDate field (redundant with interviewStartTime) could drift
@@ -871,6 +1085,7 @@ export async function scheduleInterview(req: Request, res: Response) {
       interviewEndTime,
       interviewer,
       interviewConducted: false,
+      meetLink,
     });
 
     await prisma.jobApplication.update({
@@ -882,6 +1097,7 @@ export async function scheduleInterview(req: Request, res: Response) {
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview scheduled successfully",
+      data: { meetLink },
     });
   } catch (error: unknown) {
     logger.error("schedule-interview error:", { error });
@@ -898,6 +1114,7 @@ export async function rescheduleInterview(req: Request, res: Response) {
       interviewStartTime,
       interviewEndTime,
       interviewer,
+      meetLink: manualMeetLink,
     } = req.body;
     if (!roundNumber) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
@@ -960,11 +1177,49 @@ export async function rescheduleInterview(req: Request, res: Response) {
       }
     }
 
+    const parsedStart = parseInterviewTime(interviewStartTime);
+    const parsedEnd = parseInterviewTime(interviewEndTime);
+    if (!parsedStart || !parsedEnd) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "A valid interview start and end time are required.",
+      });
+    }
+    if (!user?.tenantId || !user.userId) {
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: "Unauthorized",
+      });
+    }
+
+    let meetLink: string | null;
+    try {
+      meetLink = await scheduleMeetEventAndNotifyCandidate({
+        schedulerUserId: user.userId,
+        tenantId: user.tenantId,
+        applicationId: _id,
+        candidateEmail: app.email,
+        candidateName: app.name ?? "Candidate",
+        roundNumber,
+        startTime: parsedStart,
+        endTime: parsedEnd,
+        interviewer,
+        manualMeetLink,
+      });
+    } catch (err) {
+      if (err instanceof CalendarNotConnectedError) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: err.message,
+          code: CALENDAR_NOT_CONNECTED_CODE,
+        });
+      }
+      throw err;
+    }
+
     const interviews = upsertInterviewRound(existingInterviews, roundNumber, {
       interviewStartTime,
       interviewEndTime,
       interviewer,
       interviewConducted: false,
+      meetLink,
     });
 
     await prisma.jobApplication.update({
@@ -976,6 +1231,7 @@ export async function rescheduleInterview(req: Request, res: Response) {
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Interview rescheduled successfully",
+      data: { meetLink },
     });
   } catch (error: unknown) {
     logger.error("reschedule-interview error:", { error });

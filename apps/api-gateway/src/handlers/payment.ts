@@ -3,9 +3,35 @@ import Razorpay from "razorpay";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@hrms/db";
 import { AuthRequest } from "../middleware/authenticate";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  PLATFORM_FROM,
+  renderEmailHtml,
+} from "@hrms/common";
+import { getEmailQueue } from "@hrms/queue";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
+import { buildInvoicePdf } from "./invoice";
+
+// Resolves the tenant owner's email — the billing relationship is with
+// whoever created the org (TenantMembership role "owner"), not necessarily
+// whoever is logged in when a webhook fires.
+async function getTenantOwnerEmail(
+  tenantId: string,
+): Promise<{ email: string; username: string } | null> {
+  const membership = await prisma.tenantMembership.findFirst({
+    where: { tenantId, role: "owner" },
+    select: { userId: true },
+  });
+  if (!membership) return null;
+  const owner = await prisma.user.findUnique({
+    where: { id: membership.userId },
+    select: { email: true, username: true },
+  });
+  if (!owner?.email) return null;
+  return { email: owner.email, username: owner.username };
+}
 
 // ₹999/month · ₹9,999/year (in paise)
 const BILLING_CONFIG = {
@@ -414,6 +440,50 @@ export async function handleWebhook(req: Request, res: Response) {
               }),
             },
           });
+
+          // Platform-branded renewal email + invoice PDF — billing
+          // relationship is with Praesto, not tenant HR.
+          const amountPaise = pmEntity?.amount;
+          getTenantOwnerEmail(tenant.id)
+            .then((owner) => {
+              if (!owner || typeof amountPaise !== "number") return;
+              const invoicePdf = buildInvoicePdf({
+                tenantName: tenant.name,
+                plan: tenant.plan ?? "pro",
+                billing,
+                amountPaise,
+                paymentMethodSummary:
+                  pmInfo?.summary ?? tenant.paymentMethodSummary,
+                billingPeriodStart: base,
+                billingPeriodEnd: next,
+                invoiceDate: now,
+              });
+              return getEmailQueue().add("subscriptionRenewed", {
+                to: owner.email,
+                subject: `Your Praesto subscription has been renewed`,
+                html: renderEmailHtml({
+                  title: "Subscription Renewed",
+                  tenantName: tenant.name,
+                  // Billing relationship is with Praesto, not tenant HR —
+                  // keep the platform signature even though the tenant name
+                  // is still shown in the header for context.
+                  signature: "Praesto Team",
+                  bodyHtml: `<h2>Hello ${owner.username},</h2><p>Your Praesto subscription for <strong>${tenant.name}</strong> has been renewed. The invoice is attached.</p>`,
+                }),
+                from: PLATFORM_FROM,
+                attachments: [
+                  {
+                    filename: `invoice_${tenant.slug}_${now.toISOString().slice(0, 10)}.pdf`,
+                    content: invoicePdf.toString("base64"),
+                  },
+                ],
+              });
+            })
+            .catch((error: unknown) =>
+              logger.warn("[handleWebhook] renewal email failed:", {
+                error,
+              }),
+            );
         }
         break;
       }
@@ -434,15 +504,36 @@ export async function handleWebhook(req: Request, res: Response) {
         // Log and surface a warning so the team can monitor before halted fires.
         const failedTenant = await prisma.tenant.findFirst({
           where: { razorpaySubscriptionId: subscriptionId },
-          select: { id: true },
+          select: { id: true, name: true },
         });
         if (failedTenant) {
           logger.warn(
             `Razorpay payment attempt failed for subscription ${subscriptionId} ` +
               `(tenant ${failedTenant.id}). Razorpay will retry automatically.`,
           );
-          // TODO: send in-app notification / email to tenant owner so they can
-          // update their payment method before the subscription is halted.
+          getTenantOwnerEmail(failedTenant.id)
+            .then((owner) => {
+              if (!owner) return;
+              return getEmailQueue().add("subscriptionPaymentFailed", {
+                to: owner.email,
+                subject: "Action needed: your Praesto payment failed",
+                html: renderEmailHtml({
+                  title: "Payment Failed",
+                  tenantName: failedTenant.name,
+                  // Billing relationship is with Praesto, not tenant HR —
+                  // keep the platform signature even though the tenant name
+                  // is still shown in the header for context.
+                  signature: "Praesto Team",
+                  bodyHtml: `<h2>Hello ${owner.username},</h2><p>We couldn't process your latest Praesto subscription payment. We'll retry automatically, but please update your payment method to avoid an interruption to your subscription.</p>`,
+                }),
+                from: PLATFORM_FROM,
+              });
+            })
+            .catch((error: unknown) =>
+              logger.warn("[handleWebhook] payment-failed email failed:", {
+                error,
+              }),
+            );
         }
         break;
       }

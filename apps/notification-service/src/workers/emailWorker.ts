@@ -6,8 +6,8 @@ import type { EmailJobData } from "@hrms/queue";
 import type { Job } from "bullmq";
 
 async function processJob(job: Job<EmailJobData>) {
-  const { to, subject, html, from } = job.data;
-  await sendEmail({ to, subject, html, from });
+  const { to, subject, html, from, replyTo, attachments } = job.data;
+  await sendEmail({ to, subject, html, from, replyTo, attachments });
   logger.info(`Email sent to ${to}`, { jobId: job.id });
 }
 

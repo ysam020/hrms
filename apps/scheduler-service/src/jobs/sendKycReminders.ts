@@ -1,6 +1,8 @@
 import { prisma } from "@hrms/db";
-import { sendEmail } from "@hrms/common";
+import { sendEmail, tenantFrom, renderEmailHtml } from "@hrms/common";
 import { logger } from "@hrms/logger";
+
+const KYC_MISSING_GRACE_DAYS = 2;
 
 function getFullName(user: {
   first_name?: string | null;
@@ -19,6 +21,7 @@ function kycReminderHtml(
   fullName: string,
   status: string,
   recipient: "employee" | "hr",
+  tenantName: string,
   username = "",
 ): string {
   const employeeInfo = username ? ` (Username: ${username})` : "";
@@ -54,14 +57,11 @@ function kycReminderHtml(
     }
   }
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${title}</title></head>
-<body style="font-family:Arial,sans-serif;padding:20px">
-<h2>Hello ${recipient === "hr" ? "HR Team" : fullName},</h2>
-<p><strong>${title}</strong></p>
-<p>${message}</p>
-<p>${recipient === "hr" ? "Please take appropriate action as needed." : "Should you have any questions, please don't hesitate to ask."}</p>
-<p>Warm regards,<br/>Praesto Team</p>
-</body></html>`;
+  return renderEmailHtml({
+    title,
+    tenantName,
+    bodyHtml: `<h2>Hello ${recipient === "hr" ? "HR Team" : fullName},</h2><p><strong>${title}</strong></p><p>${message}</p><p>${recipient === "hr" ? "Please take appropriate action as needed." : "Should you have any questions, please don't hesitate to ask."}</p>`,
+  });
 }
 
 const subjectMap: Record<string, Record<string, string>> = {
@@ -88,7 +88,7 @@ async function notifyHr(
   recipients: string[],
   subject: string,
   html: string,
-  emailFrom: string | undefined,
+  emailFrom: string,
   logContext: string,
 ): Promise<void> {
   await Promise.all(
@@ -109,14 +109,24 @@ async function notifyHr(
  */
 async function processTenantKycReminders(
   tenantId: string,
-  emailFrom: string | undefined,
+  tenantName: string,
+  emailFrom: string,
 ): Promise<{ missing: number; rejected: number; pending: number }> {
+  // Only nag about a *missing* KYC once the employee has actually had time to
+  // submit it — a same-day/next-day reminder is noise, not a compliance
+  // signal. A null joining_date is excluded (Prisma's `lte` never matches
+  // null), which is the right call: without a joining date we can't know
+  // whether the 2-day grace period has elapsed.
+  const missingCutoff = new Date(
+    Date.now() - KYC_MISSING_GRACE_DAYS * 24 * 60 * 60 * 1000,
+  );
   const [missingUsers, rejectedUsers, pendingUsers, hrUsers] =
     await Promise.all([
       prisma.user.findMany({
         where: {
           tenantId,
           OR: [{ kyc_approval: null }, { kyc_approval: "" }],
+          joining_date: { lte: missingCutoff },
         },
         select: KYC_USER_SELECT,
       }),
@@ -149,7 +159,7 @@ async function processTenantKycReminders(
       await sendEmail({
         to: user.email,
         subject: subjectMap.employee.missing,
-        html: kycReminderHtml(fullName, "missing", "employee"),
+        html: kycReminderHtml(fullName, "missing", "employee", tenantName),
         from: emailFrom,
       }).catch((e: unknown) =>
         logger.warn(`KYC email to ${user.email} failed`, { e }),
@@ -158,7 +168,7 @@ async function processTenantKycReminders(
     await notifyHr(
       hrRecipients,
       `${subjectMap.hr.missing} - ${fullName} (${user.username})`,
-      kycReminderHtml(fullName, "missing", "hr", user.username),
+      kycReminderHtml(fullName, "missing", "hr", tenantName, user.username),
       emailFrom,
       user.username,
     );
@@ -171,7 +181,7 @@ async function processTenantKycReminders(
       await sendEmail({
         to: user.email,
         subject: subjectMap.employee.rejected,
-        html: kycReminderHtml(fullName, "rejected", "employee"),
+        html: kycReminderHtml(fullName, "rejected", "employee", tenantName),
         from: emailFrom,
       }).catch((e: unknown) =>
         logger.warn(`KYC email to ${user.email} failed`, { e }),
@@ -180,7 +190,7 @@ async function processTenantKycReminders(
     await notifyHr(
       hrRecipients,
       `${subjectMap.hr.rejected} - ${fullName} (${user.username})`,
-      kycReminderHtml(fullName, "rejected", "hr", user.username),
+      kycReminderHtml(fullName, "rejected", "hr", tenantName, user.username),
       emailFrom,
       user.username,
     );
@@ -192,7 +202,7 @@ async function processTenantKycReminders(
     await notifyHr(
       hrRecipients,
       `${subjectMap.hr.pending} - ${fullName} (${user.username})`,
-      kycReminderHtml(fullName, "pending", "hr", user.username),
+      kycReminderHtml(fullName, "pending", "hr", tenantName, user.username),
       emailFrom,
       user.username,
     );
@@ -207,16 +217,19 @@ async function processTenantKycReminders(
 
 export async function sendKycReminders(): Promise<void> {
   try {
-    const emailFrom = process.env.EMAIL_FROM;
     const tenants = await prisma.tenant.findMany({
       where: { isActive: true },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
     let errors = 0;
     for (const tenant of tenants) {
       try {
-        const counts = await processTenantKycReminders(tenant.id, emailFrom);
+        const counts = await processTenantKycReminders(
+          tenant.id,
+          tenant.name,
+          tenantFrom(tenant.name),
+        );
         logger.info(
           `sendKycReminders[tenant ${tenant.id}]: processed missing=${counts.missing} rejected=${counts.rejected} pending=${counts.pending}`,
         );

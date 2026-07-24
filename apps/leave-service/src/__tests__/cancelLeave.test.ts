@@ -19,6 +19,7 @@ jest.mock("@hrms/db", () => {
       findUnique: jest.fn(),
       findMany: jest.fn(),
     },
+    tenant: { findUnique: jest.fn() },
   };
   return {
     prisma: _db,
@@ -35,6 +36,17 @@ jest.mock("@hrms/queue", () => ({
   getNotificationQueue: jest
     .fn()
     .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+  getEmailQueue: jest
+    .fn()
+    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 jest.mock("@hrms/approval-engine", () => ({

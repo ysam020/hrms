@@ -1,9 +1,14 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import dayjs from "dayjs";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 
 // Interview date/time is stored as a "YYYYMMDDTHHmmss" string (see
@@ -202,6 +207,37 @@ export const updateApplicationStatus = async (
           err,
         }),
       );
+
+    // Notify the candidate (fire-and-forget) — same status update, seen
+    // from their side.
+    if (updatedApplication.email) {
+      masterPrisma.tenant
+        .findUnique({
+          where: { id: tenantId! },
+          select: { name: true, helpEmail: true },
+        })
+        .then((tenant) => {
+          const tenantName = tenant?.name ?? "the hiring team";
+          return getEmailQueue().add("applicationStatusUpdated", {
+            to: updatedApplication.email!,
+            subject: `Your application status has been updated — ${tenantName}`,
+            html: renderEmailHtml({
+              title: "Application Status Update",
+              tenantName,
+              bodyHtml: `<h2>Hello ${updatedApplication.name ?? "there"},</h2>
+<p>There's an update on your application with <strong>${tenantName}</strong>.</p>
+<p><strong>Status:</strong> ${applicationStatus}</p>`,
+            }),
+            from: tenantFrom(tenantName),
+            replyTo: tenantReplyTo(tenant?.helpEmail),
+          });
+        })
+        .catch((e: unknown) =>
+          logger.warn("[updateApplicationStatus] candidate email failed", {
+            e,
+          }),
+        );
+    }
 
     return callback(null, {
       message: MESSAGES.APPLICATION_STATUS_UPDATED,

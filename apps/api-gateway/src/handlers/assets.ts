@@ -14,14 +14,24 @@
  */
 
 import { Request, Response } from "express";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  tenantFrom,
+  tenantReplyTo,
+  renderEmailHtml,
+} from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
 
 // Prisma's MongoDB connector treats an explicit `null` and "field was never
 // set" as different states — `{ returnedOn: null }` alone only matches rows
@@ -383,7 +393,7 @@ export async function assignAsset(req: Request, res: Response) {
     // Validate target employee exists.
     const employee = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, username: true, employeeStatus: true },
+      select: { id: true, username: true, employeeStatus: true, email: true },
     });
     if (!employee) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
@@ -450,6 +460,50 @@ export async function assignAsset(req: Request, res: Response) {
         assignedBy: user!.userId,
       },
     );
+
+    // Notify the assignee (in-app + email) — fire-and-forget, mirrors
+    // reportAssetIssue's notification pattern a few functions down.
+    const tenantId = getTenantId();
+    if (tenantId) {
+      const assetCode = (asset as any).assetCode;
+      getNotificationQueue()
+        .add("assetAssigned", {
+          tenantId,
+          title: "Asset assigned",
+          message: `${assetCode} has been assigned to you`,
+          targetUser: userId,
+          eventType: "asset_notification",
+          priority: "medium",
+        })
+        .catch((error: unknown) =>
+          logger.warn("asset-assigned notification failed", { error }),
+        );
+
+      if (employee.email) {
+        masterPrisma.tenant
+          .findUnique({
+            where: { id: tenantId },
+            select: { name: true, helpEmail: true },
+          })
+          .then((tenant) => {
+            const tenantName = tenant?.name ?? "your organisation";
+            return getEmailQueue().add("assetAssigned", {
+              to: employee.email!,
+              subject: `Asset assigned: ${assetCode}`,
+              html: renderEmailHtml({
+                title: "Asset Assigned",
+                tenantName,
+                bodyHtml: `<h2>Hello ${employee.username},</h2><p><strong>${assetCode}</strong> has been assigned to you.${notes ? ` Notes: ${notes}` : ""}</p>`,
+              }),
+              from: tenantFrom(tenantName),
+              replyTo: tenantReplyTo(tenant?.helpEmail),
+            });
+          })
+          .catch((error: unknown) =>
+            logger.warn("asset-assigned email failed", { error }),
+          );
+      }
+    }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: `Asset assigned to ${employee.username}`,

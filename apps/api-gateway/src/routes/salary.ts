@@ -3,7 +3,10 @@ import { authenticate } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import { updateSalarySchema } from "../schemas";
 import * as h from "../handlers/salary";
-import { generateTdsWorksheet } from "../handlers/tdsWorksheet";
+import {
+  generateTdsWorksheet,
+  emailTdsWorksheet,
+} from "../handlers/tdsWorksheet";
 import { generateForm16 } from "../handlers/form16";
 
 export const salaryRouter: Router = Router();
@@ -31,6 +34,8 @@ salaryRouter.get(
   authenticate,
   generateTdsWorksheet,
 );
+salaryRouter.post("/email-salary-slip", authenticate, h.emailSalarySlip);
+salaryRouter.post("/email-tds-worksheet", authenticate, emailTdsWorksheet);
 salaryRouter.get(
   "/generate-form16/:userId/:financialYear",
   authenticate,

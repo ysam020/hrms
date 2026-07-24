@@ -40,6 +40,8 @@ function formatMethod(method: LoginMethod): string {
   return method === "GOOGLE_OAUTH" ? "Google OAuth" : "Passkey (WebAuthn)";
 }
 
+const BRAND_FONT = "'Poppins','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
 export function buildLoginAlertEmail(opts: LoginAlertEmailOptions): string {
   const {
     timestamp,
@@ -94,41 +96,55 @@ export function buildLoginAlertEmail(opts: LoginAlertEmailOptions): string {
   <meta charset="UTF-8" />
   <title>${headerText}</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:32px 0;">
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:${BRAND_FONT};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(17,24,39,0.08);">
 
-          <!-- Header -->
+          <!-- Brand header -->
           <tr>
-            <td style="background:${headerColor};padding:28px 32px;">
-              <p style="margin:0;color:#ffffff;font-size:20px;font-weight:bold;">${headerText}</p>
+            <td style="padding:20px 32px;border-bottom:1px solid #eef0f2;">
+              <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                <tr>
+                  <td style="padding:0 3px 0 0;"><table cellpadding="0" cellspacing="0"><tr><td style="width:7px;height:7px;line-height:7px;font-size:0;background:#fd7624;border-radius:50%;">&nbsp;</td></tr></table></td>
+                  <td style="padding:0 3px 0 0;"><table cellpadding="0" cellspacing="0"><tr><td style="width:7px;height:7px;line-height:7px;font-size:0;background:#25b37b;border-radius:50%;">&nbsp;</td></tr></table></td>
+                  <td style="padding:0 3px 0 0;"><table cellpadding="0" cellspacing="0"><tr><td style="width:7px;height:7px;line-height:7px;font-size:0;background:#f03933;border-radius:50%;">&nbsp;</td></tr></table></td>
+                  <td style="padding:0 0 0 8px;font-family:${BRAND_FONT};font-size:18px;font-weight:600;color:#111827;letter-spacing:0.2px;">Praesto</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Alert banner -->
+          <tr>
+            <td style="background:${headerColor};padding:20px 32px;">
+              <p style="margin:0;color:#ffffff;font-size:18px;font-weight:600;">${headerText}</p>
             </td>
           </tr>
 
           <!-- Body -->
           <tr>
             <td style="padding:28px 32px;">
-              <p style="margin:0 0 20px 0;font-size:15px;color:#444;line-height:1.6;">${intro}</p>
+              <p style="margin:0 0 20px 0;font-size:15px;color:#374151;line-height:1.6;">${intro}</p>
 
               <!-- Details table -->
               <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
-                <tr style="border-bottom:1px solid #eee;">
-                  <td style="padding:10px 0;color:#888;width:130px;">Time</td>
-                  <td style="padding:10px 0;color:#222;">${formatTimestamp(timestamp)}</td>
+                <tr style="border-bottom:1px solid #eef0f2;">
+                  <td style="padding:10px 0;color:#8a94a6;width:130px;">Time</td>
+                  <td style="padding:10px 0;color:#111827;">${formatTimestamp(timestamp)}</td>
                 </tr>
-                <tr style="border-bottom:1px solid #eee;">
-                  <td style="padding:10px 0;color:#888;">Location</td>
-                  <td style="padding:10px 0;color:#222;">${formatLocation(ip, city, country)}</td>
+                <tr style="border-bottom:1px solid #eef0f2;">
+                  <td style="padding:10px 0;color:#8a94a6;">Location</td>
+                  <td style="padding:10px 0;color:#111827;">${formatLocation(ip, city, country)}</td>
                 </tr>
-                <tr style="border-bottom:1px solid #eee;">
-                  <td style="padding:10px 0;color:#888;">Device</td>
-                  <td style="padding:10px 0;color:#222;word-break:break-word;">${escapeHtml(userAgent)}</td>
+                <tr style="border-bottom:1px solid #eef0f2;">
+                  <td style="padding:10px 0;color:#8a94a6;">Device</td>
+                  <td style="padding:10px 0;color:#111827;word-break:break-word;">${escapeHtml(userAgent)}</td>
                 </tr>
-                <tr style="border-bottom:1px solid #eee;">
-                  <td style="padding:10px 0;color:#888;">Method</td>
-                  <td style="padding:10px 0;color:#222;">${formatMethod(loginMethod)}</td>
+                <tr style="border-bottom:1px solid #eef0f2;">
+                  <td style="padding:10px 0;color:#8a94a6;">Method</td>
+                  <td style="padding:10px 0;color:#111827;">${formatMethod(loginMethod)}</td>
                 </tr>
                 ${reasonsBlock}
               </table>
@@ -139,10 +155,9 @@ export function buildLoginAlertEmail(opts: LoginAlertEmailOptions): string {
 
           <!-- Footer -->
           <tr>
-            <td style="background:#f8f9fa;padding:18px 32px;border-top:1px solid #eee;">
-              <p style="margin:0;font-size:13px;color:#999;line-height:1.5;">
-                This is an automated security notification from Praesto.<br/>
-                Do not reply to this email.
+            <td style="background:#f8f9fa;padding:18px 32px;border-top:1px solid #eef0f2;">
+              <p style="margin:0;font-family:${BRAND_FONT};font-size:12px;color:#8a94a6;line-height:1.5;">
+                This is an automated security notification from Praesto. Please do not reply directly to this email.
               </p>
             </td>
           </tr>
