@@ -1,8 +1,13 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
 import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
@@ -401,7 +406,7 @@ export const applyLeave = async (
       }),
       prisma.user.findMany({
         where: { department: "HUMAN RESOURCES" },
-        select: { id: true, username: true },
+        select: { id: true, username: true, email: true },
       }),
       prisma.team.findMany({
         where: {
@@ -409,8 +414,12 @@ export const applyLeave = async (
         },
         select: { teamLeaderId: true },
       }),
+      masterPrisma.tenant.findUnique({
+        where: { id: getTenantId()! },
+        select: { name: true, helpEmail: true },
+      }),
     ])
-      .then(async ([applicant, hrUsers, teams]) => {
+      .then(async ([applicant, hrUsers, teams, tenant]) => {
         const applicantUsername = applicant?.username || userId;
         const teamLeaderIds = [
           ...new Set(
@@ -421,7 +430,7 @@ export const applyLeave = async (
           teamLeaderIds.length > 0
             ? await prisma.user.findMany({
                 where: { id: { in: teamLeaderIds } },
-                select: { id: true, username: true },
+                select: { id: true, username: true, email: true },
               })
             : [];
         const allTargets = [...hrUsers, ...teamLeaderUsers];
@@ -431,10 +440,11 @@ export const applyLeave = async (
         const shortfallNote = exhaustionInfo
           ? ` — exceeds balance by ${exhaustionInfo.shortfallDays} day(s) (${exhaustionInfo.remaining} remaining); ${exhaustionInfo.onExhaustion === "manager_override" ? "approver must decide" : "will be treated as loss-of-pay"}.`
           : "";
+        const message = `${applicantUsername} has applied for leave from ${fromStr} to ${toStr}${shortfallNote}`;
         await getNotificationQueue().add("leaveApplied", {
           tenantId: getTenantId()!,
           title: "Leave",
-          message: `${applicantUsername} has applied for leave from ${fromStr} to ${toStr}${shortfallNote}`,
+          message,
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           eventType: "leave_notification",
@@ -443,6 +453,34 @@ export const applyLeave = async (
           // above — silent avoids duplicating it as a bell notification too.
           silent: true,
         });
+
+        const tenantName = tenant?.name ?? "your organisation";
+        const from = tenantFrom(tenantName);
+        const replyTo = tenantReplyTo(tenant?.helpEmail);
+        const uniqueEmails = [
+          ...new Set(
+            allTargets.map((u) => u.email).filter((e): e is string => !!e),
+          ),
+        ];
+        await Promise.all(
+          uniqueEmails.map((to) =>
+            getEmailQueue()
+              .add("leaveApplied", {
+                to,
+                subject: `Leave request from ${applicantUsername}`,
+                html: renderEmailHtml({
+                  title: "Leave Request",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
+                }),
+                from,
+                replyTo,
+              })
+              .catch((e: unknown) =>
+                logger.warn("[applyLeave] email enqueue failed", { e }),
+              ),
+          ),
+        );
       })
       .catch((err) =>
         logger.warn("[applyLeave] Notification enqueue failed:", { err }),

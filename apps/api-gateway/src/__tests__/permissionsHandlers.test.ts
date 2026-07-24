@@ -41,6 +41,7 @@ jest.mock("@hrms/db", () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   return {
     prisma: _db,
@@ -48,6 +49,15 @@ jest.mock("@hrms/db", () => {
     getTenantId: jest.fn().mockReturnValue("t1"),
   };
 });
+
+jest.mock("@hrms/queue", () => ({
+  getNotificationQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+  getEmailQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
 
 jest.mock("@hrms/common", () => ({
   ...jest.requireActual("@hrms/common"),

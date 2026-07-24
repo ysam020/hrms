@@ -218,6 +218,15 @@ model User {
   reference_by                String?
   // Auth
   refreshToken                String?
+  // AES-encrypted (see @hrms/crypto's aesEncrypt/aesDecrypt, same pattern as
+  // other sensitive fields) offline refresh token from the "Connect Google
+  // Calendar" consent flow (distinct from the login OAuth flow — see
+  // apps/api-gateway/src/services/googleCalendar.ts) — lets recruitment
+  // create real Calendar events with a Google Meet link on this user's own
+  // calendar when they schedule an interview. Per-user by design: each
+  // connected user's events are created on their own calendar, never a
+  // shared/tenant-level identity.
+  googleCalendarRefreshToken  String?
   webAuthnCredentials         Json?
   fcmTokens                   Json?
   events                      Json?

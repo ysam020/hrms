@@ -22,6 +22,8 @@ import UserAutoComplete from "@web/shared/components/UserAutoComplete";
 import { Calendar } from "primereact/calendar";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import useFetchData from "@web/shared/hooks/useFetchData";
+import { useConnectGoogleCalendar } from "./useConnectGoogleCalendar";
+import ConnectGoogleCalendarPrompt from "./ConnectGoogleCalendarPrompt";
 
 // This modal only ever schedules the NEXT new round. Rescheduling an
 // existing (not-yet-conducted) round is a per-round action in InfoModal,
@@ -38,6 +40,8 @@ function ScheduleInterviewModal({
 }) {
   const { setAlert } = useContext(AlertContext);
   const { name, email, status } = applicantData || {};
+  const { promptOpen, requestConnect, startConnectFlow, closePrompt } =
+    useConnectGoogleCalendar();
 
   const { data: orgSettings } = useFetchData(
     API_ENDPOINTS.GET_ORG_SETTINGS,
@@ -129,6 +133,10 @@ function ScheduleInterviewModal({
           severity: "success",
         });
       } catch (err) {
+        if (err.response?.data?.code === "CALENDAR_NOT_CONNECTED") {
+          requestConnect(() => formik.handleSubmit());
+          return;
+        }
         setAlert({
           open: true,
           message:
@@ -147,231 +155,239 @@ function ScheduleInterviewModal({
   };
 
   return (
-    <CustomModal
-      open={open}
-      handleClose={handleClose}
-      modalStyle={modalStyle}
-      disablePortal
-    >
-      {/* Header */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          p: 2.5,
-          pb: 2,
-        }}
+    <>
+      <CustomModal
+        open={open}
+        handleClose={handleClose}
+        modalStyle={modalStyle}
+        disablePortal
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Avatar
-            sx={{
-              width: 40,
-              height: 40,
-              bgcolor: "info.main",
-              color: "white",
-            }}
-          >
-            <ScheduleIcon fontSize="small" />
-          </Avatar>
-          <Box>
-            <Typography
-              variant="h6"
-              fontWeight={600}
-              sx={{ fontSize: "1.1rem" }}
+        {/* Header */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            p: 2.5,
+            pb: 2,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Avatar
+              sx={{
+                width: 40,
+                height: 40,
+                bgcolor: "info.main",
+                color: "white",
+              }}
             >
-              Schedule Interview
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                Round {roundNumber} Interview
+              <ScheduleIcon fontSize="small" />
+            </Avatar>
+            <Box>
+              <Typography
+                variant="h6"
+                fontWeight={600}
+                sx={{ fontSize: "1.1rem" }}
+              >
+                Schedule Interview
               </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Round {roundNumber} Interview
+                </Typography>
+              </Box>
             </Box>
           </Box>
         </Box>
-      </Box>
 
-      {/* Candidate Information */}
-      <Box sx={{ p: 1.5, pb: 0 }}>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          Candidate Information
-        </Typography>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Chip
-            icon={<PersonIcon />}
-            label={name || "N/A"}
-            variant="outlined"
-            size="small"
-          />
-          <Chip
-            icon={<EmailIcon />}
-            label={email || "N/A"}
-            variant="outlined"
-            size="small"
-          />
-        </Stack>
-      </Box>
-
-      {/* Block scheduling past the tenant's configured round limit */}
-      {isTerminal ? (
-        <Box sx={{ p: 2 }}>
-          <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            <Typography variant="body2">
-              This candidate has already been <strong>{status}</strong> and
-              cannot be scheduled for another interview.
-            </Typography>
-          </Alert>
+        {/* Candidate Information */}
+        <Box sx={{ p: 1.5, pb: 0 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Candidate Information
+          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Chip
+              icon={<PersonIcon />}
+              label={name || "N/A"}
+              variant="outlined"
+              size="small"
+            />
+            <Chip
+              icon={<EmailIcon />}
+              label={email || "N/A"}
+              variant="outlined"
+              size="small"
+            />
+          </Stack>
         </Box>
-      ) : roundLimitReached ? (
-        <Box sx={{ p: 2 }}>
-          <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            <Typography variant="body2">
-              This tenant allows a maximum of{" "}
-              <strong>{maxInterviewRounds}</strong> interview round
-              {maxInterviewRounds === 1 ? "" : "s"}. Adjust it under Settings →
-              HR if this candidate needs another round.
-            </Typography>
-          </Alert>
-        </Box>
-      ) : !prevRoundCleared ? (
-        <Box sx={{ p: 2 }}>
-          <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            <Typography variant="body2">
-              Round {roundNumber - 1} must be <strong>Cleared</strong> before
-              scheduling Round {roundNumber}. Current status:{" "}
-              <strong>{status || "—"}</strong>
-            </Typography>
-          </Alert>
-        </Box>
-      ) : (
-        <Box sx={{ p: 1.5 }}>
-          <form onSubmit={formik.handleSubmit}>
-            <Stack spacing={1}>
-              {/* Interviewer Selection */}
-              <Box>
-                <Typography
-                  variant="h6"
-                  color="text.secondary"
-                  gutterBottom
-                  sx={{ mb: 1 }}
-                >
-                  <PersonIcon
-                    sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                  />
-                  Select Interviewer
-                </Typography>
-                {interviewersLoading ? (
-                  <Typography variant="caption" color="text.secondary">
-                    Loading eligible interviewers…
-                  </Typography>
-                ) : interviewerUsernames.length === 0 ? (
-                  <Alert severity="warning" sx={{ borderRadius: 2 }}>
-                    No users currently have interview-taking permission. Grant
-                    "Take Interview" under Settings → Permissions.
-                  </Alert>
-                ) : (
-                  <UserAutoComplete
-                    formik={formik}
-                    userList={interviewerUsernames}
-                    placeholder="Choose interviewer from the list"
-                  />
-                )}
-                {formik.touched.username && formik.errors.username && (
-                  <Typography
-                    variant="caption"
-                    color="error"
-                    sx={{ mt: 0.5, display: "block" }}
-                  >
-                    {formik.errors.username}
-                  </Typography>
-                )}
-              </Box>
 
-              {/* Date and Time Selection */}
-              <Box>
-                <Typography
-                  variant="h6"
-                  color="text.secondary"
-                  gutterBottom
-                  sx={{ mb: 1 }}
-                >
-                  <CalendarTodayIcon
-                    sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                  />
-                  Interview Date & Time
-                </Typography>
-                <Calendar
-                  value={formik.values.dateTime}
-                  onChange={(e) => formik.setFieldValue("dateTime", e.value)}
-                  showTime
-                  hourFormat="24"
-                  dateFormat="dd/mm/yy"
-                  // appendTo="self" gets clipped by the modal Paper's
-                  // overflow:auto (see InputWrapper.tsx's date Calendar
-                  // for the same established fix) — portal to the app
-                  // root instead so the popup isn't bounded by it.
-                  appendTo={() =>
-                    document.querySelector("#root .App") as HTMLElement
-                  }
-                  minDate={minScheduleDate}
-                  disabledDays={[0]} // Disable Sundays
-                  timeOnly={false}
-                  showButtonBar
-                  stepMinute={15}
-                  style={{ width: "100%" }}
-                  placeholder="Select interview date and time"
-                />
-                {formik.touched.dateTime && formik.errors.dateTime && (
+        {/* Block scheduling past the tenant's configured round limit */}
+        {isTerminal ? (
+          <Box sx={{ p: 2 }}>
+            <Alert severity="warning" sx={{ borderRadius: 2 }}>
+              <Typography variant="body2">
+                This candidate has already been <strong>{status}</strong> and
+                cannot be scheduled for another interview.
+              </Typography>
+            </Alert>
+          </Box>
+        ) : roundLimitReached ? (
+          <Box sx={{ p: 2 }}>
+            <Alert severity="warning" sx={{ borderRadius: 2 }}>
+              <Typography variant="body2">
+                This tenant allows a maximum of{" "}
+                <strong>{maxInterviewRounds}</strong> interview round
+                {maxInterviewRounds === 1 ? "" : "s"}. Adjust it under Settings
+                → HR if this candidate needs another round.
+              </Typography>
+            </Alert>
+          </Box>
+        ) : !prevRoundCleared ? (
+          <Box sx={{ p: 2 }}>
+            <Alert severity="warning" sx={{ borderRadius: 2 }}>
+              <Typography variant="body2">
+                Round {roundNumber - 1} must be <strong>Cleared</strong> before
+                scheduling Round {roundNumber}. Current status:{" "}
+                <strong>{status || "—"}</strong>
+              </Typography>
+            </Alert>
+          </Box>
+        ) : (
+          <Box sx={{ p: 1.5 }}>
+            <form onSubmit={formik.handleSubmit}>
+              <Stack spacing={1}>
+                {/* Interviewer Selection */}
+                <Box>
                   <Typography
-                    variant="caption"
-                    color="error"
-                    sx={{ mt: 0.5, display: "block" }}
-                  >
-                    {formik.errors.dateTime}
-                  </Typography>
-                )}
-
-                {/* Time Info */}
-                <Box
-                  sx={{
-                    mt: 1.5,
-                    p: 1.5,
-                    bgcolor: "action.hover",
-                    borderRadius: 1,
-                  }}
-                >
-                  <Typography
-                    variant="caption"
+                    variant="h6"
                     color="text.secondary"
-                    sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                    gutterBottom
+                    sx={{ mb: 1 }}
                   >
-                    <AccessTimeIcon sx={{ fontSize: 14 }} />
-                    Interview duration: 1 hour • Sundays are disabled •
-                    15-minute intervals
+                    <PersonIcon
+                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                    />
+                    Select Interviewer
                   </Typography>
-                  {previousRoundEnd && previousRoundEnd > new Date() && (
+                  {interviewersLoading ? (
+                    <Typography variant="caption" color="text.secondary">
+                      Loading eligible interviewers…
+                    </Typography>
+                  ) : interviewerUsernames.length === 0 ? (
+                    <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                      No users currently have interview-taking permission. Grant
+                      "Take Interview" under Settings → Permissions.
+                    </Alert>
+                  ) : (
+                    <UserAutoComplete
+                      formik={formik}
+                      userList={interviewerUsernames}
+                      placeholder="Choose interviewer from the list"
+                    />
+                  )}
+                  {formik.touched.username && formik.errors.username && (
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block", mt: 0.5 }}
+                      color="error"
+                      sx={{ mt: 0.5, display: "block" }}
                     >
-                      Must be after Round {roundNumber - 1}'s interview ends (
-                      {dayjs(previousRoundEnd).format("DD MMM YYYY, HH:mm")})
+                      {formik.errors.username}
                     </Typography>
                   )}
                 </Box>
-              </Box>
 
-              <Box sx={{ mt: 0 }}>
-                <Button type="submit" disabled={formik.isSubmitting}>
-                  Schedule Interview
-                </Button>
-              </Box>
-            </Stack>
-          </form>
-        </Box>
-      )}
-    </CustomModal>
+                {/* Date and Time Selection */}
+                <Box>
+                  <Typography
+                    variant="h6"
+                    color="text.secondary"
+                    gutterBottom
+                    sx={{ mb: 1 }}
+                  >
+                    <CalendarTodayIcon
+                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                    />
+                    Interview Date & Time
+                  </Typography>
+                  <Calendar
+                    value={formik.values.dateTime}
+                    onChange={(e) => formik.setFieldValue("dateTime", e.value)}
+                    showTime
+                    hourFormat="24"
+                    dateFormat="dd/mm/yy"
+                    // appendTo="self" gets clipped by the modal Paper's
+                    // overflow:auto (see InputWrapper.tsx's date Calendar
+                    // for the same established fix) — portal to the app
+                    // root instead so the popup isn't bounded by it.
+                    appendTo={() =>
+                      document.querySelector("#root .App") as HTMLElement
+                    }
+                    minDate={minScheduleDate}
+                    disabledDays={[0]} // Disable Sundays
+                    timeOnly={false}
+                    showButtonBar
+                    stepMinute={15}
+                    style={{ width: "100%" }}
+                    placeholder="Select interview date and time"
+                  />
+                  {formik.touched.dateTime && formik.errors.dateTime && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.5, display: "block" }}
+                    >
+                      {formik.errors.dateTime}
+                    </Typography>
+                  )}
+
+                  {/* Time Info */}
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1.5,
+                      bgcolor: "action.hover",
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                    >
+                      <AccessTimeIcon sx={{ fontSize: 14 }} />
+                      Interview duration: 1 hour • Sundays are disabled •
+                      15-minute intervals
+                    </Typography>
+                    {previousRoundEnd && previousRoundEnd > new Date() && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block", mt: 0.5 }}
+                      >
+                        Must be after Round {roundNumber - 1}'s interview ends (
+                        {dayjs(previousRoundEnd).format("DD MMM YYYY, HH:mm")})
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+
+                <Box sx={{ mt: 0 }}>
+                  <Button type="submit" disabled={formik.isSubmitting}>
+                    Schedule Interview
+                  </Button>
+                </Box>
+              </Stack>
+            </form>
+          </Box>
+        )}
+      </CustomModal>
+
+      <ConnectGoogleCalendarPrompt
+        open={promptOpen}
+        onConnect={startConnectFlow}
+        onClose={closePrompt}
+      />
+    </>
   );
 }
 

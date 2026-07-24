@@ -11,12 +11,37 @@ jest.mock("@hrms/db", () => {
     notification: { create: jest.fn() },
     notificationRecipient: { createMany: jest.fn() },
     payoutTenantIndex: { upsert: jest.fn() },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
   };
-  return { prismaWithTenant: _db, getTenantId: jest.fn(() => "t1") };
+  return {
+    prismaWithTenant: _db,
+    prisma: _db,
+    getTenantId: jest.fn(() => "t1"),
+  };
 });
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/queue", () => ({
+  getEmailQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
+}));
+
+jest.mock("../handlers/salary", () => ({
+  buildSalarySlipPdf: jest
+    .fn()
+    .mockResolvedValue({ error: "not under test", status: "NOT_FOUND" }),
 }));
 
 const db: any = prisma;

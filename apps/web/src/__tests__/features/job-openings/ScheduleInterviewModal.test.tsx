@@ -4,8 +4,11 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
 
-vi.mock("@web/core/http/axiosConfig", () => ({ default: { put: vi.fn() } }));
+vi.mock("@web/core/http/axiosConfig", () => ({
+  default: { put: vi.fn(), get: vi.fn() },
+}));
 const mockPut = apiClient.put as unknown as ReturnType<typeof vi.fn>;
+const mockGet = apiClient.get as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock("@web/shared/hooks/useFetchData");
 const mockUseFetchData = useFetchData as unknown as ReturnType<typeof vi.fn>;
@@ -83,6 +86,7 @@ function renderModal(overrides: Partial<any> = {}, setAlert = vi.fn()) {
 describe("ScheduleInterviewModal", () => {
   beforeEach(() => {
     mockPut.mockReset();
+    mockGet.mockReset();
     setupFetch();
   });
 
@@ -211,5 +215,36 @@ describe("ScheduleInterviewModal", () => {
     );
     expect(handleClose).toHaveBeenCalled();
     expect(getJobApplications).toHaveBeenCalled();
+  });
+
+  it("shows the Connect Google Calendar prompt instead of an error toast when scheduling reports CALENDAR_NOT_CONNECTED", async () => {
+    mockPut.mockRejectedValue({
+      response: {
+        data: {
+          message:
+            "Connect your Google Calendar before scheduling an interview.",
+          code: "CALENDAR_NOT_CONNECTED",
+        },
+      },
+    });
+    const { setAlert } = renderModal();
+
+    fireEvent.change(
+      screen.getByLabelText("Choose interviewer from the list"),
+      { target: { value: "jsmith" } },
+    );
+    fireEvent.change(screen.getByLabelText("Select interview date and time"), {
+      target: { value: "2030-01-01T10:00" },
+    });
+    fireEvent.click(
+      screen.getByText("Schedule Interview", { selector: "span" }),
+    );
+
+    expect(
+      await screen.findByText("Connect Google Calendar", { selector: "h6" }),
+    ).toBeInTheDocument();
+    expect(setAlert).not.toHaveBeenCalledWith(
+      expect.objectContaining({ severity: "error" }),
+    );
   });
 });

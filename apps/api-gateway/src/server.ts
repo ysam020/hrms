@@ -18,7 +18,7 @@ import { resolveSocketUserId } from "./config/socketAuth";
 import { registerGracefulShutdown } from "./config/gracefulShutdown";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
-import { googleAuthCallback } from "./handlers/auth";
+import { googleAuthCallback, googleCalendarCallback } from "./handlers/auth";
 import { handleWebhook } from "./handlers/payment";
 import { handleRazorpayXWebhook } from "./handlers/razorpayxWebhook";
 import { startSubscriptionReconciler } from "./services/subscriptionReconciler";
@@ -96,6 +96,13 @@ app.get("/api/v1/csrf-token", (req, res) => {
 // Callback URL must match the URI registered in Google Cloud Console exactly.
 // It intentionally lives outside /api/v1 so it never needs a version bump.
 app.get("/api/auth/google/callback", authLimiter, googleAuthCallback);
+// Same reasoning as the login callback above — must match the URI
+// registered in Google Cloud Console exactly (see GOOGLE_CALENDAR_CALLBACK_URL).
+app.get(
+  "/api/auth/google-calendar/callback",
+  authLimiter,
+  googleCalendarCallback,
+);
 app.use("/api/v1", rootRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "healthy" }));

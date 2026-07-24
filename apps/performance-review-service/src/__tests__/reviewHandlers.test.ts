@@ -8,8 +8,8 @@ import { getReview } from "../handlers/getReview";
 import { listReviews } from "../handlers/listReviews";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prismaWithTenant: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     performanceReview: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -17,13 +17,38 @@ jest.mock("@hrms/db", () => ({
       count: jest.fn(),
     },
     performanceReviewCycle: { findMany: jest.fn() },
-    user: { findMany: jest.fn() },
-  },
-  getTenantId: jest.fn(() => "t1"),
-}));
+    user: {
+      findMany: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
+  };
+  return {
+    prismaWithTenant: _db,
+    prisma: _db,
+    getTenantId: jest.fn(() => "t1"),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/queue", () => ({
+  getNotificationQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+  getEmailQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 jest.mock("@hrms/approval-engine", () => ({
@@ -258,6 +283,10 @@ describe("finalizeReview", () => {
         finalizedAt: expect.any(Date),
       }),
     });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: status.OK }),
+    );
   });
 
   it("marks the review rejected with a null salary structure id", async () => {
@@ -277,6 +306,10 @@ describe("finalizeReview", () => {
         salaryStructureId: null,
       }),
     });
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: status.OK }),
+    );
   });
 });
 

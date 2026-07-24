@@ -5,6 +5,8 @@ import { rejectLeave } from "../handlers/rejectLeave";
 jest.mock("@hrms/db", () => {
   const _db = {
     leaveApplication: { findUnique: jest.fn(), update: jest.fn() },
+    user: { findUnique: jest.fn() },
+    tenant: { findUnique: jest.fn() },
   };
   return {
     prisma: _db,
@@ -21,6 +23,17 @@ jest.mock("@hrms/queue", () => ({
   getNotificationQueue: jest.fn(() => ({
     add: jest.fn().mockResolvedValue(undefined),
   })),
+  getEmailQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 jest.mock("@hrms/logger", () => ({

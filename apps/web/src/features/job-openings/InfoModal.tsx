@@ -17,11 +17,15 @@ import StatusTimeline, {
 import { CandidateHeader } from "./info-modal/CandidateHeader";
 import { RoundExtra } from "./info-modal/RoundExtra";
 import { buildApplicationStages, validationSchema } from "./info-modal/helpers";
+import { useConnectGoogleCalendar } from "./useConnectGoogleCalendar";
+import ConnectGoogleCalendarPrompt from "./ConnectGoogleCalendarPrompt";
 
 function InfoModal(props) {
   const { setAlert } = useContext(AlertContext);
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
+  const { promptOpen, requestConnect, startConnectFlow, closePrompt } =
+    useConnectGoogleCalendar();
   const canReassign = hasPermission(
     "JobOpenings",
     "reassign_interviewer",
@@ -197,6 +201,10 @@ function InfoModal(props) {
       setRescheduleDateTime(null);
       props.getJobApplications && props.getJobApplications();
     } catch (error) {
+      if (error.response?.data?.code === "CALENDAR_NOT_CONNECTED") {
+        requestConnect(() => handleRescheduleSubmit(index));
+        return;
+      }
       setAlert({
         open: true,
         message:
@@ -334,30 +342,38 @@ function InfoModal(props) {
   };
 
   return (
-    <CustomModal
-      open={props.open}
-      handleClose={props.handleClose}
-      modalStyle={modalStyle}
-      theme={theme}
-      disablePortal
-    >
-      <Box>
-        <CandidateHeader
-          jobTitle={props.jobTitle}
-          name={name}
-          email={email}
-          status={status}
-        />
+    <>
+      <CustomModal
+        open={props.open}
+        handleClose={props.handleClose}
+        modalStyle={modalStyle}
+        theme={theme}
+        disablePortal
+      >
+        <Box>
+          <CandidateHeader
+            jobTitle={props.jobTitle}
+            name={name}
+            email={email}
+            status={status}
+          />
 
-        {/* Status Timeline */}
-        <Box sx={{ p: 2, pt: 0 }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Timeline
-          </Typography>
-          <StatusTimeline stages={stages} />
+          {/* Status Timeline */}
+          <Box sx={{ p: 2, pt: 0 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Timeline
+            </Typography>
+            <StatusTimeline stages={stages} />
+          </Box>
         </Box>
-      </Box>
-    </CustomModal>
+      </CustomModal>
+
+      <ConnectGoogleCalendarPrompt
+        open={promptOpen}
+        onConnect={startConnectFlow}
+        onClose={closePrompt}
+      />
+    </>
   );
 }
 

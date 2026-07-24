@@ -105,6 +105,8 @@ const JOB_OPENINGS = {
   JOB_OPENINGS_INSIGHTS: "/job-openings-insights",
   LIST_DESIGNATIONS: "/designations",
   CREATE_DESIGNATION: "/designations",
+  GOOGLE_CALENDAR_CONNECT: "/auth/google-calendar/connect",
+  GOOGLE_CALENDAR_STATUS: "/auth/google-calendar/status",
 };
 
 const RESIGNATION = {

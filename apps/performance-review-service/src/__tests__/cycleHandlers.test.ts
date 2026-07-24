@@ -11,8 +11,8 @@ import { getCycle } from "../handlers/getCycle";
 import { listCycles } from "../handlers/listCycles";
 import { MESSAGES } from "../constants/messages";
 
-jest.mock("@hrms/db", () => ({
-  prismaWithTenant: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     performanceReviewCycle: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -28,13 +28,36 @@ jest.mock("@hrms/db", () => ({
       findFirst: jest.fn(),
     },
     team: { findFirst: jest.fn() },
-  },
-  getTenantId: jest.fn(() => "t1"),
-  getAuditActor: jest.fn(() => ({ userId: "hr1" })),
-}));
+    user: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn() },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
+  };
+  return {
+    prismaWithTenant: _db,
+    prisma: _db,
+    getTenantId: jest.fn(() => "t1"),
+    getAuditActor: jest.fn(() => ({ userId: "hr1" })),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/queue", () => ({
+  getNotificationQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+  getEmailQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 const db: any = prisma;

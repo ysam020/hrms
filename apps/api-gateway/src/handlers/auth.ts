@@ -654,3 +654,138 @@ export async function googleAuthCallback(req: Request, res: Response) {
     );
   }
 }
+
+// ─── Google Calendar connect (for interview scheduling) ───────────────────────
+// Separate consent flow from the login OAuth above — see the comment on
+// getCalendarAuthUrl() in services/googleCalendar.ts for why. This handler
+// is called via XHR (protected by `authenticate`, so it has the caller's
+// identity), unlike the login redirect which is a plain top-level navigation
+// with no session yet — it returns the authorize URL as JSON and lets the
+// frontend open it in a popup window itself, rather than the backend
+// redirecting the XHR request (which browsers don't follow the way a page
+// navigation does).
+//
+// The callback below runs inside that popup (Google redirects the popup
+// there directly) with no Authorization header or session cookie available
+// — the connecting user's ID is threaded through via a short-lived signed
+// `state` param instead (mirroring the existing mobile-redirect `state`
+// pattern above), not trusted unverified since `state` is otherwise
+// attacker-influenceable. Rather than redirecting the popup to a client
+// page, it posts the result back to window.opener and closes itself, so the
+// page that triggered the connect (e.g. an in-progress Schedule Interview
+// form) never navigates away and loses its state.
+export async function googleCalendarConnect(req: AuthRequest, res: Response) {
+  if (!req.user?.userId) {
+    return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+      message: "Unauthorized",
+    });
+  }
+  const state = jwt.sign(
+    { userId: req.user.userId },
+    process.env.ACCESS_JWT_TOKEN!,
+    { algorithm: "HS256", expiresIn: "10m" },
+  );
+  const { getCalendarAuthUrl } = await import("../services/googleCalendar");
+  return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+    data: { url: getCalendarAuthUrl(state) },
+  });
+}
+
+// Polled by the frontend (useConnectGoogleCalendar.ts) once it detects the
+// connect popup has closed — the reliable way to learn whether the connect
+// flow actually succeeded, since the popup itself can't reliably report
+// back (see the comment on popupResultPage below).
+export async function googleCalendarStatus(req: AuthRequest, res: Response) {
+  if (!req.user?.userId) {
+    return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+      message: "Unauthorized",
+    });
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.userId },
+    select: { googleCalendarRefreshToken: true },
+  });
+  return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+    data: { connected: !!user?.googleCalendarRefreshToken },
+  });
+}
+
+// Best-effort only — window.opener is NOT a reliable channel here.
+// accounts.google.com sets its own Cross-Origin-Opener-Policy header, which
+// permanently severs this popup's window.opener the moment it navigates
+// there, before it ever reaches this page — a well-known issue with "connect
+// via Google" popup flows, not fixable from our side (our own COOP override
+// below only helps in the minority of cases where the browser/flow didn't
+// already sever it). The actual reliable signal is GET
+// /auth/google-calendar/status, which useConnectGoogleCalendar.ts polls for
+// once it detects the popup has closed — see that hook for the real
+// completion-detection logic. This page's job is just: best-effort notify,
+// then leave a clear message + manual close button — no auto window.close(),
+// since browsers (Brave especially) routinely block script-initiated tab
+// closes anyway, and a silently-failed auto-close just leaves the user
+// staring at a tab that already tried and gave up.
+function popupResultPage(
+  res: Response,
+  clientUrl: string,
+  payload: { type: string; message?: string },
+) {
+  const success = payload.type === "google-calendar-connected";
+  const displayMessage = success
+    ? "Google Calendar connected."
+    : payload.message || "Connection failed. Please try again.";
+
+  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
+  res.setHeader("Content-Type", "text/html");
+  return res.send(`<!DOCTYPE html>
+<html><body>
+<p id="msg">${displayMessage}</p>
+<button id="close-btn" onclick="window.close()">Close this tab</button>
+<script>
+  try {
+    if (window.opener) {
+      window.opener.postMessage(${JSON.stringify(payload)}, ${JSON.stringify(clientUrl)});
+    }
+  } catch (e) {}
+</script>
+</body></html>`);
+}
+
+export async function googleCalendarCallback(req: Request, res: Response) {
+  const rawClientUrl = process.env.CLIENT_URL || "https://localhost:5173";
+  const clientUrl = rawClientUrl.split(",")[0].trim();
+  const { code, state, error } = req.query;
+
+  if (error || typeof code !== "string" || typeof state !== "string") {
+    return popupResultPage(res, clientUrl, {
+      type: "google-calendar-error",
+      message: "Google Calendar connection was cancelled or failed.",
+    });
+  }
+
+  try {
+    const payload = jwt.verify(state, process.env.ACCESS_JWT_TOKEN!, {
+      algorithms: ["HS256"],
+    }) as { userId?: string };
+    if (!payload.userId) throw new Error("state missing userId");
+
+    const { exchangeCalendarCode } = await import("../services/googleCalendar");
+    const refreshToken = await exchangeCalendarCode(code);
+
+    await prisma.user.update({
+      where: { id: payload.userId },
+      data: { googleCalendarRefreshToken: aesEncrypt(refreshToken) },
+    });
+
+    return popupResultPage(res, clientUrl, {
+      type: "google-calendar-connected",
+    });
+  } catch (err) {
+    logger.error("[Google Calendar callback error]", {
+      message: err instanceof Error ? err.message : err,
+    });
+    return popupResultPage(res, clientUrl, {
+      type: "google-calendar-error",
+      message: "Google Calendar connection failed. Please try again.",
+    });
+  }
+}

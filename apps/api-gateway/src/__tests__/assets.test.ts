@@ -48,8 +48,13 @@ jest.mock("@hrms/db", () => {
     assetCategory: { findMany: jest.fn(), create: jest.fn() },
     user: { findUnique: jest.fn(), findMany: jest.fn() },
     tenantMembership: { findMany: jest.fn() },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
   };
-  return { prismaWithTenant: _db, getTenantId: jest.fn(() => "t1") };
+  return {
+    prismaWithTenant: _db,
+    prisma: _db,
+    getTenantId: jest.fn(() => "t1"),
+  };
 });
 
 jest.mock("@hrms/common", () => ({
@@ -64,6 +69,11 @@ jest.mock("@hrms/common", () => ({
     NOT_FOUND: 404,
     CONFLICT: 409,
   },
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -75,9 +85,14 @@ jest.mock("../utils/webhookEmitter", () => ({
 }));
 
 const mockQueueAdd = jest.fn().mockResolvedValue(undefined);
+const mockEmailAdd = jest.fn().mockResolvedValue(undefined);
 jest.mock("@hrms/queue", () => ({
   getNotificationQueue: jest.fn(() => ({ add: mockQueueAdd })),
+  getEmailQueue: jest.fn(() => ({ add: mockEmailAdd })),
 }));
+
+// Waits for the fire-and-forget assign-notification promise chain to settle.
+const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 
 const db: any = prisma;
 
@@ -391,6 +406,41 @@ describe("assets handlers", () => {
       expect(emitWebhookEvent).toHaveBeenCalledWith(
         "asset.assigned",
         expect.objectContaining({ assetId: "a1", assignedTo: "jdoe" }),
+      );
+      expect(mockQueueAdd).toHaveBeenCalledWith(
+        "assetAssigned",
+        expect.objectContaining({ targetUser: "u2" }),
+      );
+    });
+
+    it("emails the assignee when they have an email on file", async () => {
+      db.user.findUnique.mockResolvedValue({
+        id: "u2",
+        username: "jdoe",
+        employeeStatus: "Active",
+        email: "jdoe@example.com",
+      });
+      db.asset.findUnique.mockResolvedValue({
+        id: "a1",
+        status: "available",
+        assetCode: "LAP-01",
+        condition: "good",
+      });
+      db.asset.updateMany.mockResolvedValue({ count: 1 });
+      db.assetAssignment.create.mockResolvedValue({});
+      db.tenant.findUnique.mockResolvedValue({
+        name: "Acme Corp",
+        helpEmail: "hr@acme.example.com",
+      });
+      const req = makeReq({ body });
+      const res = makeRes();
+
+      await assignAsset(req, res);
+      await flushMicrotasks();
+
+      expect(mockEmailAdd).toHaveBeenCalledWith(
+        "assetAssigned",
+        expect.objectContaining({ to: "jdoe@example.com" }),
       );
     });
   });

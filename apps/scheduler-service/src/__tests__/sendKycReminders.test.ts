@@ -15,6 +15,12 @@ jest.mock("@hrms/db", () => {
 
 jest.mock("@hrms/common", () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  renderEmailHtml: jest.fn(
+    ({ bodyHtml }: { bodyHtml: string }) => `<html>${bodyHtml}</html>`,
+  ),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -72,14 +78,12 @@ function mockTenantQueries({
 describe("sendKycReminders", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockTenantFindMany.mockResolvedValue([{ id: "t1" }]);
+    mockTenantFindMany.mockResolvedValue([{ id: "t1", name: "Acme Corp" }]);
     process.env.HR_EMAIL = "hr@company.com";
-    process.env.EMAIL_FROM = "noreply@company.com";
   });
 
   afterEach(() => {
     delete process.env.HR_EMAIL;
-    delete process.env.EMAIL_FROM;
   });
 
   it("sends no emails when all KYC lists are empty", async () => {
@@ -191,8 +195,39 @@ describe("sendKycReminders", () => {
     );
   });
 
+  it("only flags missing KYC once joining_date is at least 2 days in the past", async () => {
+    mockTenantQueries({ missing: [missingUser] });
+
+    await sendKycReminders();
+
+    const missingQueryArgs = mockUserFindMany.mock.calls[0][0];
+    expect(missingQueryArgs.where.joining_date).toEqual({
+      lte: expect.any(Date),
+    });
+    const cutoff = missingQueryArgs.where.joining_date.lte as Date;
+    const twoDaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    // Allow a small tolerance for test execution time between Date.now()
+    // calls, rather than asserting exact millisecond equality.
+    expect(Math.abs(cutoff.getTime() - twoDaysAgo)).toBeLessThan(5000);
+  });
+
+  it("uses the tenant-branded from-address for every email in that tenant's sweep", async () => {
+    mockTenantQueries({ missing: [missingUser] });
+
+    await sendKycReminders();
+
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: '"Acme Corp HR" <hr@notifications.praesto.cloud>',
+      }),
+    );
+  });
+
   it("scopes each tenant's queries by that tenant's id and keeps tenants' HR alerts separate", async () => {
-    mockTenantFindMany.mockResolvedValue([{ id: "t1" }, { id: "t2" }]);
+    mockTenantFindMany.mockResolvedValue([
+      { id: "t1", name: "Tenant One" },
+      { id: "t2", name: "Tenant Two" },
+    ]);
     mockUserFindMany
       // tenant t1
       .mockResolvedValueOnce([missingUser])
@@ -250,7 +285,10 @@ describe("sendKycReminders", () => {
   });
 
   it("continues processing other tenants when one tenant's queries fail", async () => {
-    mockTenantFindMany.mockResolvedValue([{ id: "t1" }, { id: "t2" }]);
+    mockTenantFindMany.mockResolvedValue([
+      { id: "t1", name: "Tenant One" },
+      { id: "t2", name: "Tenant Two" },
+    ]);
     mockUserFindMany
       // tenant t1 fails entirely
       .mockRejectedValueOnce(new Error("DB error"))

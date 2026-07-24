@@ -11,12 +11,19 @@ import {
 import { randomBytes, createHmac } from "crypto";
 import jwt from "jsonwebtoken";
 import { AuthRequest } from "../middleware/authenticate";
-import { apiResponse, RESPONSE_STATUS, sendEmail } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  sendEmail,
+  tenantFrom,
+  PLATFORM_FROM,
+  renderEmailHtml,
+} from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { aesEncrypt } from "@hrms/crypto";
 import { fetchPaymentMethod, getRazorpay } from "./payment";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -340,6 +347,29 @@ async function buildTenant(
     false,
   );
   res.cookie("refresh_token", aesEncrypt(refreshToken), REFRESH_COOKIE_OPTIONS);
+
+  // Platform-branded welcome — Praesto welcoming a new customer, not tenant
+  // HR (no tenant HR identity exists at this point anyway).
+  if (creator?.email) {
+    getEmailQueue()
+      .add("tenantWelcome", {
+        to: creator.email,
+        subject: `Welcome to Praesto, ${tenant.name}!`,
+        html: renderEmailHtml({
+          title: "Welcome to Praesto",
+          tenantName: tenant.name,
+          // Praesto welcoming a new customer, not tenant HR — keep the
+          // platform signature even though the tenant name is still shown
+          // in the header for context.
+          signature: "Praesto Team",
+          bodyHtml: `<h2>Welcome, ${creator.username ?? "there"}!</h2><p>Your organisation <strong>${tenant.name}</strong> is now set up on Praesto. You can log in and start inviting your team.</p>`,
+        }),
+        from: PLATFORM_FROM,
+      })
+      .catch((error: unknown) =>
+        logger.warn("[buildTenant] welcome email failed:", { error }),
+      );
+  }
 
   return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
     data: {
@@ -965,7 +995,12 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
               sendEmail({
                 to: u.email!,
                 subject: `New request to join ${tenant.name}`,
-                html: `<p>${email} has requested to join <strong>${tenant.name}</strong> on Praesto.</p><p>Review it under Settings &gt; Join Requests.</p>`,
+                html: renderEmailHtml({
+                  title: "New Join Request",
+                  tenantName: tenant.name,
+                  bodyHtml: `<h2>New join request</h2><p>${email} has requested to join <strong>${tenant.name}</strong> on Praesto.</p><p>Review it under Settings &gt; Join Requests.</p>`,
+                }),
+                from: tenantFrom(tenant.name),
               }).catch((e) =>
                 logger.warn("join-request notification email failed", {
                   error: e,
@@ -1127,7 +1162,12 @@ export async function approveJoinRequest(req: AuthRequest, res: Response) {
         sendEmail({
           to: request.email,
           subject: `Your request to join ${tenant?.name ?? "the organisation"} was approved`,
-          html: `<p>You've been added to <strong>${tenant?.name ?? "the organisation"}</strong>. Sign in to get started.</p>`,
+          html: renderEmailHtml({
+            title: "Request Approved",
+            tenantName: tenant?.name,
+            bodyHtml: `<h2>You're in!</h2><p>You've been added to <strong>${tenant?.name ?? "the organisation"}</strong>. Sign in to get started.</p>`,
+          }),
+          from: tenantFrom(tenant?.name ?? "Praesto"),
         }).catch((e) =>
           logger.warn("join-request approval email failed", { error: e }),
         );
@@ -1193,7 +1233,12 @@ export async function rejectJoinRequest(req: AuthRequest, res: Response) {
         sendEmail({
           to: request.email,
           subject: `Your request to join ${tenant?.name ?? "the organisation"} was declined`,
-          html: `<p>Your request to join <strong>${tenant?.name ?? "the organisation"}</strong> was declined.</p>`,
+          html: renderEmailHtml({
+            title: "Request Declined",
+            tenantName: tenant?.name,
+            bodyHtml: `<h2>Request declined</h2><p>Your request to join <strong>${tenant?.name ?? "the organisation"}</strong> was declined.</p>`,
+          }),
+          from: tenantFrom(tenant?.name ?? "Praesto"),
         }).catch((e) =>
           logger.warn("join-request rejection email failed", { error: e }),
         );

@@ -14,6 +14,9 @@ import {
   webAuthnLogin,
   googleAuthRedirect,
   googleAuthCallback,
+  googleCalendarConnect,
+  googleCalendarCallback,
+  googleCalendarStatus,
 } from "../handlers/auth";
 
 jest.mock("../grpc/clients", () => ({
@@ -26,6 +29,7 @@ jest.mock("@hrms/db", () => {
     user: {
       aggregateRaw: jest.fn(),
       update: jest.fn(),
+      findUnique: jest.fn(),
     },
   };
   return {
@@ -66,11 +70,20 @@ jest.mock("jsonwebtoken", () => ({
   default: {
     verify: jest.fn(),
     decode: jest.fn().mockReturnValue(null),
+    sign: jest.fn().mockReturnValue("signed-state-token"),
   },
 }));
 
 jest.mock("../services/loginEventService", () => ({
   recordLoginEvent: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../services/googleCalendar", () => ({
+  getCalendarAuthUrl: jest.fn(
+    (state: string) =>
+      `https://accounts.google.com/o/oauth2/v2/auth?state=${state}`,
+  ),
+  exchangeCalendarCode: jest.fn(),
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -84,6 +97,7 @@ const mockAesDecrypt = aesDecrypt as jest.Mock;
 const mockJwtVerify = (jwt as any).verify as jest.Mock;
 const mockAggregateRaw = (prisma as any).user.aggregateRaw as jest.Mock;
 const mockUserUpdate = (prisma as any).user.update as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 
 const makeRes = () =>
   ({
@@ -91,6 +105,8 @@ const makeRes = () =>
     cookie: jest.fn(),
     clearCookie: jest.fn(),
     redirect: jest.fn(),
+    setHeader: jest.fn(),
+    send: jest.fn(),
   }) as any;
 
 const makeReq = (overrides: any = {}) =>
@@ -673,6 +689,183 @@ describe("authHandlers", () => {
         302,
         expect.stringContaining("error="),
       );
+    });
+  });
+
+  describe("googleCalendarConnect", () => {
+    it("returns UN_AUTHORIZED when there's no authenticated user", async () => {
+      const res = makeRes();
+      await googleCalendarConnect(makeReq({ user: undefined }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.UN_AUTHORIZED,
+        expect.any(Object),
+      );
+    });
+
+    it("signs a short-lived state token and returns the Google authorize URL", async () => {
+      process.env.ACCESS_JWT_TOKEN = "test-jwt-secret";
+      const mockJwtSign = (jwt as any).sign as jest.Mock;
+      const { getCalendarAuthUrl } = jest.requireMock(
+        "../services/googleCalendar",
+      ) as any;
+      const res = makeRes();
+      await googleCalendarConnect(makeReq({ user: { userId: "user-1" } }), res);
+
+      expect(mockJwtSign).toHaveBeenCalledWith(
+        { userId: "user-1" },
+        "test-jwt-secret",
+        expect.objectContaining({ algorithm: "HS256", expiresIn: "10m" }),
+      );
+      expect(getCalendarAuthUrl).toHaveBeenCalledWith("signed-state-token");
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: {
+            url: "https://accounts.google.com/o/oauth2/v2/auth?state=signed-state-token",
+          },
+        }),
+      );
+    });
+  });
+
+  describe("googleCalendarStatus", () => {
+    it("returns UN_AUTHORIZED when there's no authenticated user", async () => {
+      const res = makeRes();
+      await googleCalendarStatus(makeReq({ user: undefined }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.UN_AUTHORIZED,
+        expect.any(Object),
+      );
+    });
+
+    it("reports connected: true when the user has a stored refresh token", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        googleCalendarRefreshToken: "encrypted-token",
+      });
+      const res = makeRes();
+      await googleCalendarStatus(makeReq({ user: { userId: "user-1" } }), res);
+      expect(mockUserFindUnique).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        select: { googleCalendarRefreshToken: true },
+      });
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({ data: { connected: true } }),
+      );
+    });
+
+    it("reports connected: false when there's no stored refresh token", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        googleCalendarRefreshToken: null,
+      });
+      const res = makeRes();
+      await googleCalendarStatus(makeReq({ user: { userId: "user-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({ data: { connected: false } }),
+      );
+    });
+  });
+
+  describe("googleCalendarCallback", () => {
+    beforeEach(() => {
+      process.env.CLIENT_URL = "https://app.praesto.cloud";
+    });
+
+    it("posts an error message and closes the popup when Google reports an error", async () => {
+      const res = makeRes();
+      await googleCalendarCallback(
+        makeReq({ query: { error: "access_denied" } }),
+        res,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        "Cross-Origin-Opener-Policy",
+        "unsafe-none",
+      );
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining("google-calendar-error"),
+      );
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining("window.close()"),
+      );
+    });
+
+    it("posts an error message when code or state is missing", async () => {
+      const res = makeRes();
+      await googleCalendarCallback(makeReq({ query: {} }), res);
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining("google-calendar-error"),
+      );
+    });
+
+    it("posts an error message when the state JWT fails verification", async () => {
+      mockJwtVerify.mockImplementation(() => {
+        throw new Error("invalid signature");
+      });
+      const res = makeRes();
+      await googleCalendarCallback(
+        makeReq({ query: { code: "auth-code", state: "bad-state" } }),
+        res,
+      );
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining("google-calendar-error"),
+      );
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("exchanges the code, stores the encrypted refresh token, and posts success", async () => {
+      const { exchangeCalendarCode } = jest.requireMock(
+        "../services/googleCalendar",
+      ) as any;
+      mockJwtVerify.mockReturnValue({ userId: "user-1" });
+      exchangeCalendarCode.mockResolvedValue("refresh-token-abc");
+      mockUserUpdate.mockResolvedValue({});
+      const res = makeRes();
+      await googleCalendarCallback(
+        makeReq({ query: { code: "auth-code", state: "good-state" } }),
+        res,
+      );
+
+      expect(exchangeCalendarCode).toHaveBeenCalledWith("auth-code");
+      expect(mockUserUpdate).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: { googleCalendarRefreshToken: "enc:refresh-token-abc" },
+      });
+      expect(res.setHeader).toHaveBeenCalledWith(
+        "Cross-Origin-Opener-Policy",
+        "unsafe-none",
+      );
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining("google-calendar-connected"),
+      );
+      // postMessage's targetOrigin must be the frontend origin, not "*".
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining("https://app.praesto.cloud"),
+      );
+    });
+
+    it("posts an error message when the token exchange throws", async () => {
+      const { exchangeCalendarCode } = jest.requireMock(
+        "../services/googleCalendar",
+      ) as any;
+      mockJwtVerify.mockReturnValue({ userId: "user-1" });
+      exchangeCalendarCode.mockRejectedValue(
+        new Error("token exchange failed"),
+      );
+      const res = makeRes();
+      await googleCalendarCallback(
+        makeReq({ query: { code: "auth-code", state: "good-state" } }),
+        res,
+      );
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining("google-calendar-error"),
+      );
+      expect(mockUserUpdate).not.toHaveBeenCalled();
     });
   });
 });

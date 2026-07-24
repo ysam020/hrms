@@ -1,8 +1,13 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
 import { resolveNoticePeriodDays } from "./noticePeriod";
@@ -122,7 +127,7 @@ export const submitResignation = async (
       }),
       prisma.user.findMany({
         where: { department: "HUMAN RESOURCES" },
-        select: { id: true, username: true },
+        select: { id: true, username: true, email: true },
       }),
       prisma.team.findMany({
         where: {
@@ -130,8 +135,12 @@ export const submitResignation = async (
         },
         select: { teamLeaderId: true },
       }),
+      masterPrisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true, helpEmail: true },
+      }),
     ])
-      .then(async ([applicant, hrUsers, teams]) => {
+      .then(async ([applicant, hrUsers, teams, tenant]) => {
         const applicantUsername = applicant?.username || userId;
         const teamLeaderIds = [
           ...new Set(
@@ -142,17 +151,18 @@ export const submitResignation = async (
           teamLeaderIds.length > 0
             ? await prisma.user.findMany({
                 where: { id: { in: teamLeaderIds } },
-                select: { id: true, username: true },
+                select: { id: true, username: true, email: true },
               })
             : [];
         const allTargets = [...hrUsers, ...teamLeaderUsers];
         const uniqueIds = [...new Set(allTargets.map((u) => u.id))];
         const uniqueUsernames = [...new Set(allTargets.map((u) => u.username))];
         if (uniqueUsernames.length === 0) return;
+        const message = `${applicantUsername} has submitted resignation form`;
         await getNotificationQueue().add("resignationSubmitted", {
           tenantId: getTenantId()!,
           title: "Resignation",
-          message: `${applicantUsername} has submitted resignation form`,
+          message,
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           eventType: "resignation_notification",
@@ -161,6 +171,34 @@ export const submitResignation = async (
           // above — silent avoids duplicating it as a bell notification too.
           silent: true,
         });
+
+        const tenantName = tenant?.name ?? "your organisation";
+        const from = tenantFrom(tenantName);
+        const replyTo = tenantReplyTo(tenant?.helpEmail);
+        const uniqueEmails = [
+          ...new Set(
+            allTargets.map((u) => u.email).filter((e): e is string => !!e),
+          ),
+        ];
+        await Promise.all(
+          uniqueEmails.map((to) =>
+            getEmailQueue()
+              .add("resignationSubmitted", {
+                to,
+                subject: `Resignation submitted by ${applicantUsername}`,
+                html: renderEmailHtml({
+                  title: "Resignation Submitted",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
+                }),
+                from,
+                replyTo,
+              })
+              .catch((e: unknown) =>
+                logger.warn("[submitResignation] email enqueue failed", { e }),
+              ),
+          ),
+        );
       })
       .catch((err) =>
         logger.error("[submitResignation] Notification enqueue failed:", {

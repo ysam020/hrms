@@ -30,9 +30,15 @@
  */
 
 import { Request, Response, NextFunction } from "express";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
+import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
 import { handleError, handleActionError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
@@ -201,6 +207,98 @@ export async function requestWfh(req: Request, res: Response) {
       date: date,
       toDate: toDateStr ?? date,
     });
+
+    // Notify HR + team leaders (fire-and-forget, in-app + email).
+    Promise.all([
+      prisma.user.findUnique({
+        where: { id: user!.userId },
+        select: { username: true },
+      }),
+      prisma.user.findMany({
+        where: { department: "HUMAN RESOURCES" },
+        select: { id: true, username: true, email: true },
+      }),
+      prisma.team.findMany({
+        where: {
+          OR: [
+            { members: { has: user!.userId } },
+            { teamLeaderId: user!.userId },
+          ],
+        },
+        select: { teamLeaderId: true },
+      }),
+      masterPrisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true, helpEmail: true },
+      }),
+    ])
+      .then(async ([applicant, hrUsers, teams, tenant]) => {
+        const applicantUsername = applicant?.username || user!.userId;
+        const teamLeaderIds = [
+          ...new Set(
+            teams
+              .map((t) => t.teamLeaderId)
+              .filter((id): id is string => !!id && id !== user!.userId),
+          ),
+        ];
+        const teamLeaderUsers =
+          teamLeaderIds.length > 0
+            ? await prisma.user.findMany({
+                where: { id: { in: teamLeaderIds } },
+                select: { id: true, username: true, email: true },
+              })
+            : [];
+        const allTargets = [...hrUsers, ...teamLeaderUsers];
+        const uniqueIds = [...new Set(allTargets.map((u) => u.id))];
+        const uniqueUsernames = [...new Set(allTargets.map((u) => u.username))];
+        if (uniqueUsernames.length === 0) return;
+
+        const rangeStr =
+          toDateStr && toDateStr !== date ? `${date} to ${toDateStr}` : date;
+        const message = `${applicantUsername} has requested work-from-home for ${rangeStr}`;
+
+        await getNotificationQueue().add("wfhRequested", {
+          tenantId,
+          title: "WFH Request",
+          message,
+          recipients: uniqueIds,
+          pushTargets: uniqueUsernames,
+          eventType: "wfh_notification",
+          priority: "medium",
+          silent: true,
+        });
+
+        const tenantName = tenant?.name ?? "your organisation";
+        const from = tenantFrom(tenantName);
+        const replyTo = tenantReplyTo(tenant?.helpEmail);
+        const uniqueEmails = [
+          ...new Set(
+            allTargets.map((u) => u.email).filter((e): e is string => !!e),
+          ),
+        ];
+        await Promise.all(
+          uniqueEmails.map((to) =>
+            getEmailQueue()
+              .add("wfhRequested", {
+                to,
+                subject: `WFH request from ${applicantUsername}`,
+                html: renderEmailHtml({
+                  title: "WFH Request",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
+                }),
+                from,
+                replyTo,
+              })
+              .catch((e: unknown) =>
+                logger.warn("[requestWfh] email enqueue failed", { e }),
+              ),
+          ),
+        );
+      })
+      .catch((err) =>
+        logger.warn("[requestWfh] Notification enqueue failed:", { err }),
+      );
 
     logger.info(
       `WFH request created: ${wfhReq.id} for ${date}${toDateStr ? ` to ${toDateStr}` : ""}`,

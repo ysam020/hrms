@@ -22,6 +22,8 @@ jest.mock("@hrms/db", () => {
       findMany: jest.fn(),
       updateMany: jest.fn(),
     },
+    user: { findUnique: jest.fn() },
+    tenant: { findUnique: jest.fn() },
   };
   // The status flip + balance debit run inside prisma.$transaction(async
   // (tx) => ...) — the mock passes the same mocked delegates back as `tx` so
@@ -47,6 +49,17 @@ jest.mock("@hrms/queue", () => ({
   getNotificationQueue: jest
     .fn()
     .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+  getEmailQueue: jest
+    .fn()
+    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 jest.mock("@hrms/logger", () => ({

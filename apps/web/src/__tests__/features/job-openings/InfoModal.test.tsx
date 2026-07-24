@@ -5,7 +5,9 @@ import { UserContext } from "@web/app/providers/UserContext";
 import apiClient from "@web/core/http/axiosConfig";
 import useFetchData from "@web/shared/hooks/useFetchData";
 
-vi.mock("@web/core/http/axiosConfig", () => ({ default: { put: vi.fn() } }));
+vi.mock("@web/core/http/axiosConfig", () => ({
+  default: { put: vi.fn(), get: vi.fn() },
+}));
 const mockPut = apiClient.put as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock("@web/shared/hooks/useFetchData");
@@ -194,6 +196,32 @@ describe("InfoModal", () => {
         severity: "success",
         message: "Interview rescheduled",
       }),
+    );
+  });
+
+  it("shows the Connect Google Calendar prompt instead of an error toast when rescheduling reports CALENDAR_NOT_CONNECTED", async () => {
+    mockPut.mockRejectedValue({
+      response: {
+        data: {
+          message:
+            "Connect your Google Calendar before scheduling an interview.",
+          code: "CALENDAR_NOT_CONNECTED",
+        },
+      },
+    });
+    const { setAlert } = renderModal();
+    fireEvent.click(screen.getByText("Reschedule"));
+
+    fireEvent.change(screen.getByLabelText("Select new date and time"), {
+      target: { value: "2030-01-01T10:00" },
+    });
+    fireEvent.click(screen.getByText("Confirm"));
+
+    expect(
+      await screen.findByText("Connect Google Calendar", { selector: "h6" }),
+    ).toBeInTheDocument();
+    expect(setAlert).not.toHaveBeenCalledWith(
+      expect.objectContaining({ severity: "error" }),
     );
   });
 

@@ -65,6 +65,30 @@ describe("startEmailWorker", () => {
     });
   });
 
+  it("forwards replyTo and attachments through to sendEmail", async () => {
+    startEmailWorker();
+    await capturedProcessor({
+      id: "j1",
+      data: {
+        to: "a@b.com",
+        subject: "Payslip",
+        html: "<p>attached</p>",
+        from: '"Acme Corp HR" <hr@notifications.praesto.cloud>',
+        replyTo: "hr@acme.example",
+        attachments: [{ filename: "payslip.pdf", content: "base64" }],
+      },
+    });
+
+    expect(sendEmail).toHaveBeenCalledWith({
+      to: "a@b.com",
+      subject: "Payslip",
+      html: "<p>attached</p>",
+      from: '"Acme Corp HR" <hr@notifications.praesto.cloud>',
+      replyTo: "hr@acme.example",
+      attachments: [{ filename: "payslip.pdf", content: "base64" }],
+    });
+  });
+
   it("propagates a sendEmail failure so BullMQ can retry the job", async () => {
     (sendEmail as jest.Mock).mockRejectedValue(new Error("SMTP down"));
     startEmailWorker();

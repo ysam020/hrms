@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import geoip from "geoip-lite";
 import { prisma } from "@hrms/db";
-import { sendEmail } from "@hrms/common";
+import { sendEmail, PLATFORM_FROM } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import {
   analyzeLoginRisk,
@@ -137,7 +137,12 @@ export async function recordLoginEvent(input: LoginEventInput): Promise<void> {
     riskReasons: reasons,
   });
 
-  await sendEmail({ to: userEmail, subject, html }).catch((err) =>
+  await sendEmail({
+    to: userEmail,
+    subject,
+    html,
+    from: PLATFORM_FROM,
+  }).catch((err) =>
     logger.error("Login alert email failed to send", { userId, err }),
   );
 }

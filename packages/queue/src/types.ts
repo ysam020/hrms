@@ -2,7 +2,17 @@ export interface EmailJobData {
   to: string;
   subject: string;
   html: string;
-  from?: string;
+  /** Required — resolve via @hrms/common's tenantFrom()/PLATFORM_FROM so every
+   * email uses one of the two verified Resend sending identities. */
+  from: string;
+  replyTo?: string;
+  /** Base64-encoded file content — BullMQ job data is JSON (no Buffers), and
+   * Resend's API accepts base64 attachment content directly, so no decode
+   * step is needed on the consumer side either. contentType matters beyond
+   * file correctness — e.g. a calendar invite needs
+   * `text/calendar; method=REQUEST` for Gmail/Outlook to render it as an
+   * interactive invite card instead of a plain attachment. */
+  attachments?: { filename: string; content: string; contentType?: string }[];
   /** Correlation ID from the HTTP/gRPC request that enqueued this job — see
    * NotificationJobData.requestId below for why. */
   requestId?: string;

@@ -9,6 +9,7 @@ jest.mock("@hrms/db", () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   const { Prisma } = jest.requireActual("@prisma/client");
   return {
@@ -21,6 +22,20 @@ jest.mock("@hrms/db", () => {
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/queue", () => ({
+  getEmailQueue: jest.fn(() => ({
+    add: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock("@hrms/common", () => ({
+  tenantFrom: jest.fn(
+    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+  ),
+  tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
+  renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
 const makeCall = (request: Record<string, any>) => ({ request }) as any;

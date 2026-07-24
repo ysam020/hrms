@@ -18,8 +18,15 @@
  * (runWithTenant) — see payrollDisbursementWorker.ts.
  */
 
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  getTenantId,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { getEmailQueue } from "@hrms/queue";
+import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
+import { buildSalarySlipPdf } from "../handlers/salary";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RazorpayX Payouts helpers
@@ -523,6 +530,75 @@ export async function runPayrollDisbursement(
         userId,
       })),
     });
+
+    // Email each newly-processed employee their salary slip as a PDF
+    // attachment — fire-and-forget, same as the in-app notification above;
+    // a failure here shouldn't roll back post-processing that already
+    // committed (the payout genuinely happened).
+    Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: justProcessedUserIds } },
+        select: { id: true, email: true },
+      }),
+      tenantId
+        ? masterPrisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { name: true, helpEmail: true },
+          })
+        : Promise.resolve(null),
+    ])
+      .then(async ([employees, tenant]) => {
+        const tenantName = tenant?.name ?? "your organisation";
+        const from = tenantFrom(tenantName);
+        const replyTo = tenantReplyTo(tenant?.helpEmail);
+        const monthLabel = `${String(runMonth).padStart(2, "0")}/${runYear}`;
+        await Promise.all(
+          employees
+            .filter((e): e is { id: string; email: string } => !!e.email)
+            .map(async (e) => {
+              const slip = await buildSalarySlipPdf(
+                e.id,
+                runYear,
+                runMonth,
+                tenantId,
+              );
+              if ("error" in slip) {
+                logger.warn(
+                  `[payrollDisbursement] skipping payslip email for ${e.id}: ${slip.error}`,
+                );
+                return;
+              }
+              await getEmailQueue()
+                .add("salarySlip", {
+                  to: e.email,
+                  subject: `Salary slip — ${monthLabel}`,
+                  html: renderEmailHtml({
+                    title: "Salary Slip",
+                    tenantName,
+                    bodyHtml: `<h2>Hello ${slip.employeeName},</h2><p>Your salary for <strong>${monthLabel}</strong> has been disbursed. Your salary slip is attached — the PDF is password-protected with your PAN followed by your date of birth (DDMMYYYY).</p>`,
+                  }),
+                  from,
+                  replyTo,
+                  attachments: [
+                    {
+                      filename: `salary_slip_${slip.employeeUsername}_${runYear}_${String(runMonth).padStart(2, "0")}.pdf`,
+                      content: slip.buffer.toString("base64"),
+                    },
+                  ],
+                })
+                .catch((err: unknown) =>
+                  logger.warn("[payrollDisbursement] email enqueue failed", {
+                    err,
+                  }),
+                );
+            }),
+        );
+      })
+      .catch((err) =>
+        logger.warn("[payrollDisbursement] payslip email batch failed:", {
+          err,
+        }),
+      );
   }
 
   logger.info(`Payroll disburse run ${runId} pass complete`, {

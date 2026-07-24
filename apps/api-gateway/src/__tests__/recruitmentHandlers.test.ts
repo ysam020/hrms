@@ -41,7 +41,8 @@ jest.mock("../handlers/approvalChains", () => ({
 
 jest.mock("@hrms/db", () => {
   const _db = {
-    user: { findUnique: jest.fn(), findMany: jest.fn() },
+    user: { findUnique: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
+    tenant: { findUnique: jest.fn() },
     jobOpening: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
     jobApplication: {
       findUnique: jest.fn(),
@@ -74,6 +75,7 @@ jest.mock("@hrms/common", () => ({
     NOT_FOUND: 404,
     CREATED: 201,
     FORBIDDEN: 403,
+    UN_AUTHORIZED: 401,
     INTERNAL_SERVER_ERROR: 500,
   },
   // Real implementation (pure, no side effects) — handlers like
@@ -81,10 +83,34 @@ jest.mock("@hrms/common", () => ({
   // field through this to pick the HTTP status, so tests need the real
   // mapping rather than a stub that would just throw when called.
   grpcToHttpStatus: jest.requireActual("@hrms/common").grpcToHttpStatus,
+  tenantFrom: jest.fn((name: string) => `"${name}" <hr@praesto.cloud>`),
+  tenantReplyTo: jest.fn((helpEmail?: string | null) => helpEmail || undefined),
+  renderEmailHtml: jest.fn(
+    ({ bodyHtml }: { bodyHtml: string }) => `<html>${bodyHtml}</html>`,
+  ),
+  // Real implementation (pure, no side effects) — verifies scheduleInterview/
+  // rescheduleInterview actually thread a real ICS invite through, not just
+  // that some attachment exists.
+  buildIcsInvite: jest.requireActual("@hrms/common").buildIcsInvite,
 }));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/queue", () => {
+  // A stable singleton (not a fresh object per call) so a test's own
+  // getEmailQueue().add assertion refers to the exact same mock the
+  // handler code called, not a lookalike from a second invocation.
+  const emailQueue = { add: jest.fn().mockResolvedValue(undefined) };
+  return { getEmailQueue: jest.fn(() => emailQueue) };
+});
+
+jest.mock("../services/googleCalendar", () => ({
+  createInterviewMeetEvent: jest.fn().mockResolvedValue({
+    meetLink: "https://meet.google.com/abc-defg-hij",
+    eventId: "evt-1",
+  }),
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -100,6 +126,7 @@ const mockActOnApprovalForEntity = actOnApprovalForEntity as jest.Mock;
 const mockIsPrivileged = isPrivileged as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
+const mockUserFindFirst = prisma.user.findFirst as jest.Mock;
 const mockJobCount = (prisma as any).jobOpening.count as jest.Mock;
 const mockJobGroupBy = (prisma as any).jobOpening.groupBy as jest.Mock;
 const mockJobFindMany = (prisma as any).jobOpening.findMany as jest.Mock;
@@ -115,6 +142,7 @@ const mockResignFindMany = (prisma as any).resignation.findMany as jest.Mock;
 const mockResignFindFirst = (prisma as any).resignation.findFirst as jest.Mock;
 const mockTenantSettingsFindFirst = (prisma as any).tenantSettings
   .findFirst as jest.Mock;
+const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: any = {}) =>
@@ -140,8 +168,23 @@ describe("recruitmentHandlers", () => {
     mockUserFindUnique.mockResolvedValue({
       username: "admin",
       isSuperUser: false,
+      // Default to "has connected Google Calendar" so scheduleInterview/
+      // rescheduleInterview tests don't each need to set this up — the
+      // "not connected" path gets its own explicit test instead.
+      googleCalendarRefreshToken: "encrypted-refresh-token",
+      email: "admin@acme.example",
+      first_name: "Admin",
+      last_name: "User",
+    });
+    mockTenantFindUnique.mockResolvedValue({
+      name: "Acme Corp",
+      helpEmail: null,
     });
     mockUserFindMany.mockResolvedValue([]);
+    // Default to "interviewer username doesn't resolve to a real user" so
+    // existing tests that pass a plain interviewer string don't need their
+    // own setup — tests that care about the resolved guest set it explicitly.
+    mockUserFindFirst.mockResolvedValue(null);
     mockJobCount.mockResolvedValue(5);
     mockJobGroupBy.mockResolvedValue([]);
     mockJobFindMany.mockResolvedValue([]);
@@ -727,6 +770,8 @@ describe("recruitmentHandlers", () => {
             _id: "app-1",
             roundNumber: 1,
             interviewer: "Alice",
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
           },
         }),
         res,
@@ -764,7 +809,13 @@ describe("recruitmentHandlers", () => {
       const res = makeRes();
       await scheduleInterview(
         makeReq({
-          body: { _id: "app-1", roundNumber: 1, interviewer: "Carol" },
+          body: {
+            _id: "app-1",
+            roundNumber: 1,
+            interviewer: "Carol",
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
+          },
         }),
         res,
       );
@@ -866,6 +917,271 @@ describe("recruitmentHandlers", () => {
         res,
         RESPONSE_STATUS.BAD_REQUEST,
         expect.any(Object),
+      );
+      expect(mockAppUpdate).not.toHaveBeenCalled();
+    });
+
+    it("returns BAD_REQUEST when interview start/end time are missing", async () => {
+      mockAppFindUnique.mockResolvedValue({ id: "app-1", interviews: [] });
+      const res = makeRes();
+      await scheduleInterview(
+        makeReq({ body: { _id: "app-1", roundNumber: 1 } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+      expect(mockAppUpdate).not.toHaveBeenCalled();
+    });
+
+    it("stores the returned Meet link on the interview round and does NOT queue our own candidate invite email — Google sends its own native invitation (calendar connected)", async () => {
+      const { getEmailQueue } = jest.requireMock("@hrms/queue") as any;
+      const { createInterviewMeetEvent } = jest.requireMock(
+        "../services/googleCalendar",
+      ) as any;
+      createInterviewMeetEvent.mockResolvedValueOnce({
+        meetLink: "https://meet.google.com/xyz-abcd-efg",
+        eventId: "evt-42",
+      });
+      mockAppFindUnique.mockResolvedValue({
+        id: "app-1",
+        name: "Jordan Candidate",
+        email: "jordan@candidate.example",
+        interviews: [],
+      });
+      mockAppUpdate.mockResolvedValue({});
+      const res = makeRes();
+      await scheduleInterview(
+        makeReq({
+          body: {
+            _id: "app-1",
+            roundNumber: 1,
+            interviewer: "Alice",
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
+          },
+        }),
+        res,
+      );
+
+      expect(createInterviewMeetEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          encryptedRefreshToken: "encrypted-refresh-token",
+        }),
+      );
+
+      const updateData = mockAppUpdate.mock.calls[0][0].data;
+      expect(updateData.interviews[0]).toEqual(
+        expect.objectContaining({
+          meetLink: "https://meet.google.com/xyz-abcd-efg",
+        }),
+      );
+
+      // A real event now exists on the scheduler's own Calendar — Google
+      // emails the candidate/interviewer its own native invitation, so we
+      // must not also queue our own tenant-branded copy (double invite).
+      const queuedJob = getEmailQueue().add as jest.Mock;
+      expect(queuedJob).not.toHaveBeenCalled();
+
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: { meetLink: "https://meet.google.com/xyz-abcd-efg" },
+        }),
+      );
+    });
+
+    it("resolves the interviewer's username to a real email/name and adds them (and the candidate) to the real Calendar event as attendees", async () => {
+      const { createInterviewMeetEvent } = jest.requireMock(
+        "../services/googleCalendar",
+      ) as any;
+      createInterviewMeetEvent.mockResolvedValueOnce({
+        meetLink: "https://meet.google.com/xyz-abcd-efg",
+        eventId: "evt-42",
+      });
+      mockUserFindFirst.mockResolvedValueOnce({
+        email: "alice@acme.example",
+        first_name: "Alice",
+        last_name: "Interviewer",
+      });
+      mockAppFindUnique.mockResolvedValue({
+        id: "app-1",
+        name: "Jordan Candidate",
+        email: "jordan@candidate.example",
+        interviews: [],
+      });
+      mockAppUpdate.mockResolvedValue({});
+      const res = makeRes();
+      await scheduleInterview(
+        makeReq({
+          body: {
+            _id: "app-1",
+            roundNumber: 1,
+            interviewer: "alice.interviewer",
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
+          },
+        }),
+        res,
+      );
+
+      expect(mockUserFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { username: "alice.interviewer" },
+        }),
+      );
+      expect(createInterviewMeetEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attendeeEmails: ["jordan@candidate.example", "alice@acme.example"],
+          // The event description shows the interviewer's real name, not
+          // their raw username.
+          description: "Interviewer: Alice Interviewer",
+        }),
+      );
+    });
+
+    it("uses the manually-supplied meetLink and skips Calendar API entirely, even when the scheduler hasn't connected their calendar", async () => {
+      const { getEmailQueue } = jest.requireMock("@hrms/queue") as any;
+      const { createInterviewMeetEvent } = jest.requireMock(
+        "../services/googleCalendar",
+      ) as any;
+      mockUserFindUnique.mockResolvedValue({
+        username: "admin",
+        isSuperUser: false,
+        googleCalendarRefreshToken: null,
+      });
+      mockAppFindUnique.mockResolvedValue({
+        id: "app-1",
+        name: "Jordan Candidate",
+        email: "jordan@candidate.example",
+        interviews: [],
+      });
+      mockAppUpdate.mockResolvedValue({});
+      const res = makeRes();
+      await scheduleInterview(
+        makeReq({
+          body: {
+            _id: "app-1",
+            roundNumber: 1,
+            interviewer: "Alice",
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
+            meetLink: "https://meet.google.com/manually-pasted",
+          },
+        }),
+        res,
+      );
+
+      expect(createInterviewMeetEvent).not.toHaveBeenCalled();
+
+      const updateData = mockAppUpdate.mock.calls[0][0].data;
+      expect(updateData.interviews[0]).toEqual(
+        expect.objectContaining({
+          meetLink: "https://meet.google.com/manually-pasted",
+        }),
+      );
+
+      const queuedJob = getEmailQueue().add as jest.Mock;
+      expect(queuedJob).toHaveBeenCalledWith(
+        "interviewInvite",
+        expect.objectContaining({
+          to: "jordan@candidate.example",
+          attachments: expect.arrayContaining([
+            expect.objectContaining({
+              filename: "interview-invite.ics",
+              contentType: 'text/calendar; charset="UTF-8"; method=REQUEST',
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it("sets the scheduling user as ICS organizer and adds the resolved interviewer as a guest alongside the candidate — manual meetLink fallback (no real Calendar event, so we send our own invite)", async () => {
+      const { getEmailQueue } = jest.requireMock("@hrms/queue") as any;
+      mockUserFindUnique.mockResolvedValue({
+        username: "admin",
+        isSuperUser: false,
+        googleCalendarRefreshToken: null,
+        email: "admin@acme.example",
+        first_name: "Admin",
+        last_name: "User",
+      });
+      mockUserFindFirst.mockResolvedValueOnce({
+        email: "alice@acme.example",
+        first_name: "Alice",
+        last_name: "Interviewer",
+      });
+      mockAppFindUnique.mockResolvedValue({
+        id: "app-1",
+        name: "Jordan Candidate",
+        email: "jordan@candidate.example",
+        interviews: [],
+      });
+      mockAppUpdate.mockResolvedValue({});
+      const res = makeRes();
+      await scheduleInterview(
+        makeReq({
+          body: {
+            _id: "app-1",
+            roundNumber: 1,
+            interviewer: "alice.interviewer",
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
+            meetLink: "https://meet.google.com/manually-pasted",
+          },
+        }),
+        res,
+      );
+
+      const queuedJob = getEmailQueue().add as jest.Mock;
+      const attachment = queuedJob.mock.calls[0][1].attachments[0];
+      // RFC 5545 §3.1 line folding wraps long lines with a CRLF + leading
+      // space — undo it before asserting on logical line content.
+      const ics = Buffer.from(attachment.content, "base64")
+        .toString("utf8")
+        .replace(/\r\n /g, "");
+      // Organizer is the scheduling user's own identity, not the tenant.
+      expect(ics).toContain(
+        "ORGANIZER;CN=Admin User:mailto:admin@acme.example",
+      );
+      // Both the candidate and the interviewer show up as guests.
+      expect(ics).toContain(
+        "ATTENDEE;CN=Jordan Candidate;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:jordan@candidate.example",
+      );
+      expect(ics).toContain(
+        "ATTENDEE;CN=Alice Interviewer;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:alice@acme.example",
+      );
+    });
+
+    it("returns BAD_REQUEST with the CALENDAR_NOT_CONNECTED code when the scheduling user hasn't connected Google Calendar and supplied no manual link", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        username: "admin",
+        isSuperUser: false,
+        googleCalendarRefreshToken: null,
+      });
+      mockAppFindUnique.mockResolvedValue({ id: "app-1", interviews: [] });
+      const res = makeRes();
+      await scheduleInterview(
+        makeReq({
+          body: {
+            _id: "app-1",
+            roundNumber: 1,
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
+          },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.objectContaining({
+          message: expect.stringContaining("Connect your Google Calendar"),
+          code: "CALENDAR_NOT_CONNECTED",
+        }),
       );
       expect(mockAppUpdate).not.toHaveBeenCalled();
     });
@@ -1142,6 +1458,8 @@ describe("recruitmentHandlers", () => {
             _id: "app-1",
             roundNumber: 1,
             interviewer: "Bob",
+            interviewStartTime: "20260625T150000",
+            interviewEndTime: "20260625T160000",
           },
         }),
         res,
@@ -1224,8 +1542,8 @@ describe("recruitmentHandlers", () => {
           body: {
             _id: "app-1",
             roundNumber: 2,
-            interviewStartTime: "10:00",
-            interviewEndTime: "11:00",
+            interviewStartTime: "20260626T100000",
+            interviewEndTime: "20260626T110000",
             interviewer: "Bob",
           },
         }),
