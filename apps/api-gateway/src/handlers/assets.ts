@@ -31,7 +31,7 @@ import { handleError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 
 // Prisma's MongoDB connector treats an explicit `null` and "field was never
 // set" as different states — `{ returnedOn: null }` alone only matches rows
@@ -466,43 +466,41 @@ export async function assignAsset(req: Request, res: Response) {
     const tenantId = getTenantId();
     if (tenantId) {
       const assetCode = (asset as any).assetCode;
-      getNotificationQueue()
-        .add("assetAssigned", {
-          tenantId,
-          title: "Asset assigned",
-          message: `${assetCode} has been assigned to you`,
-          targetUser: userId,
-          eventType: "asset_notification",
-          priority: "medium",
+      masterPrisma.tenant
+        .findUnique({
+          where: { id: tenantId },
+          select: { name: true, helpEmail: true },
+        })
+        .then((tenant) => {
+          const tenantName = tenant?.name ?? "your organisation";
+          return notify({
+            tenantId,
+            event: "assetAssigned",
+            targetUser: userId,
+            inApp: {
+              title: "Asset assigned",
+              message: `${assetCode} has been assigned to you`,
+              eventType: "asset_notification",
+              priority: "medium",
+            },
+            email: employee.email
+              ? {
+                  to: employee.email,
+                  subject: `Asset assigned: ${assetCode}`,
+                  html: renderEmailHtml({
+                    title: "Asset Assigned",
+                    tenantName,
+                    bodyHtml: `<h2>Hello ${employee.username},</h2><p><strong>${assetCode}</strong> has been assigned to you.${notes ? ` Notes: ${notes}` : ""}</p>`,
+                  }),
+                  from: tenantFrom(tenantName),
+                  replyTo: tenantReplyTo(tenant?.helpEmail),
+                }
+              : undefined,
+          });
         })
         .catch((error: unknown) =>
-          logger.warn("asset-assigned notification failed", { error }),
+          logger.warn("asset-assigned notify failed", { error }),
         );
-
-      if (employee.email) {
-        masterPrisma.tenant
-          .findUnique({
-            where: { id: tenantId },
-            select: { name: true, helpEmail: true },
-          })
-          .then((tenant) => {
-            const tenantName = tenant?.name ?? "your organisation";
-            return getEmailQueue().add("assetAssigned", {
-              to: employee.email!,
-              subject: `Asset assigned: ${assetCode}`,
-              html: renderEmailHtml({
-                title: "Asset Assigned",
-                tenantName,
-                bodyHtml: `<h2>Hello ${employee.username},</h2><p><strong>${assetCode}</strong> has been assigned to you.${notes ? ` Notes: ${notes}` : ""}</p>`,
-              }),
-              from: tenantFrom(tenantName),
-              replyTo: tenantReplyTo(tenant?.helpEmail),
-            });
-          })
-          .catch((error: unknown) =>
-            logger.warn("asset-assigned email failed", { error }),
-          );
-      }
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -798,18 +796,21 @@ export async function reportAssetIssue(req: Request, res: Response) {
         });
 
         const issuePriority = (issue as any).priority as string;
-        await getNotificationQueue().add("assetIssueReported", {
+        await notify({
           tenantId,
-          title: "Asset issue reported",
-          message: `${(asset as any).assetCode} — ${title} (${type})`,
+          event: "assetIssueReported",
           recipients: recipientUsers.map((u) => u.id),
           pushTargets: recipientUsers.map((u) => u.username),
-          eventType: "asset_notification",
-          priority:
-            issuePriority === "critical"
-              ? "high"
-              : (issuePriority as "high" | "medium" | "low"),
-          sendPushNotification: true,
+          inApp: {
+            title: "Asset issue reported",
+            message: `${(asset as any).assetCode} — ${title} (${type})`,
+            eventType: "asset_notification",
+            priority:
+              issuePriority === "critical"
+                ? "high"
+                : (issuePriority as "high" | "medium" | "low"),
+          },
+          push: { enabled: true },
         });
       } catch (error) {
         logger.warn("asset-issue notification failed", { error });

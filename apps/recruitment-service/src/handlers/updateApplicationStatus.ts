@@ -7,7 +7,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 
@@ -184,60 +184,54 @@ export const updateApplicationStatus = async (
     if (applicationStatus === "Hired")
       await cacheManager.invalidatePattern(`t:${tenantId}:jobOpenings:*`);
 
-    // Notify HR (fire-and-forget)
-    prisma.user
-      .findMany({
+    // Notify HR (in-app) and the candidate (email) — two different
+    // audiences for the same underlying status-change event, fire-and-forget.
+    Promise.all([
+      prisma.user.findMany({
         where: { department: "HUMAN RESOURCES" },
         select: { id: true, username: true },
-      })
-      .then((hrUsers) => {
-        if (hrUsers.length === 0) return;
-        return getNotificationQueue().add("applicationStatusUpdated", {
-          tenantId: getTenantId()!,
-          title: "Recruitment",
-          message: `Interview status updated: ${updatedApplication.name} - ${applicationStatus}`,
+      }),
+      masterPrisma.tenant.findUnique({
+        where: { id: tenantId! },
+        select: { name: true, helpEmail: true },
+      }),
+    ])
+      .then(([hrUsers, tenant]) => {
+        const tenantName = tenant?.name ?? "the hiring team";
+        return notify({
+          tenantId: tenantId!,
+          event: "applicationStatusUpdated",
           recipients: hrUsers.map((u) => u.id),
           pushTargets: hrUsers.map((u) => u.username),
-          eventType: "interview_status_update",
-          priority: "medium",
+          inApp:
+            hrUsers.length > 0
+              ? {
+                  title: "Recruitment",
+                  message: `Interview status updated: ${updatedApplication.name} - ${applicationStatus}`,
+                  eventType: "interview_status_update",
+                  priority: "medium",
+                }
+              : undefined,
+          email: updatedApplication.email
+            ? {
+                to: updatedApplication.email,
+                subject: `Your application status has been updated — ${tenantName}`,
+                html: renderEmailHtml({
+                  title: "Application Status Update",
+                  tenantName,
+                  bodyHtml: `<h2>Hello ${updatedApplication.name ?? "there"},</h2>
+<p>There's an update on your application with <strong>${tenantName}</strong>.</p>
+<p><strong>Status:</strong> ${applicationStatus}</p>`,
+                }),
+                from: tenantFrom(tenantName),
+                replyTo: tenantReplyTo(tenant?.helpEmail),
+              }
+            : undefined,
         });
       })
       .catch((err) =>
-        logger.error("[updateApplicationStatus] Notification enqueue failed:", {
-          err,
-        }),
+        logger.error("[updateApplicationStatus] notify failed:", { err }),
       );
-
-    // Notify the candidate (fire-and-forget) — same status update, seen
-    // from their side.
-    if (updatedApplication.email) {
-      masterPrisma.tenant
-        .findUnique({
-          where: { id: tenantId! },
-          select: { name: true, helpEmail: true },
-        })
-        .then((tenant) => {
-          const tenantName = tenant?.name ?? "the hiring team";
-          return getEmailQueue().add("applicationStatusUpdated", {
-            to: updatedApplication.email!,
-            subject: `Your application status has been updated — ${tenantName}`,
-            html: renderEmailHtml({
-              title: "Application Status Update",
-              tenantName,
-              bodyHtml: `<h2>Hello ${updatedApplication.name ?? "there"},</h2>
-<p>There's an update on your application with <strong>${tenantName}</strong>.</p>
-<p><strong>Status:</strong> ${applicationStatus}</p>`,
-            }),
-            from: tenantFrom(tenantName),
-            replyTo: tenantReplyTo(tenant?.helpEmail),
-          });
-        })
-        .catch((e: unknown) =>
-          logger.warn("[updateApplicationStatus] candidate email failed", {
-            e,
-          }),
-        );
-    }
 
     return callback(null, {
       message: MESSAGES.APPLICATION_STATUS_UPDATED,

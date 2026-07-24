@@ -1,7 +1,7 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 import { toPerformanceReviewProto } from "./serializers";
@@ -49,49 +49,46 @@ export const finalizeReview = async (
       ? "Your performance review has been finalized and approved."
       : "Your performance review has been finalized and rejected.";
 
-    getNotificationQueue()
-      .add("performanceReviewFinalized", {
-        tenantId: updated.tenantId,
-        title: "Performance Review",
-        message: decisionMessage,
-        targetUser: updated.userId,
-        eventType: "performance_review_notification",
-        priority: "medium",
-      })
-      .catch((err) =>
-        logger.warn("[finalizeReview] Notification enqueue failed:", { err }),
-      );
-
     Promise.all([
       prisma.user.findUnique({
         where: { id: updated.userId },
         select: { email: true },
       }),
       masterPrisma.tenant.findUnique({
-        where: { id: updated.tenantId },
+        where: { id: updated.tenantId! },
         select: { name: true, helpEmail: true },
       }),
     ])
       .then(([employee, tenant]) => {
-        if (!employee?.email) return;
         const tenantName = tenant?.name ?? "your organisation";
-        return getEmailQueue().add("performanceReviewFinalized", {
-          to: employee.email,
-          subject: approved
-            ? "Your performance review was approved"
-            : "Your performance review was rejected",
-          html: renderEmailHtml({
-            title: "Performance Review Finalized",
-            tenantName,
-            bodyHtml: `<h2>Hello,</h2><p>${decisionMessage}</p>`,
-          }),
-          from: tenantFrom(tenantName),
-          replyTo: tenantReplyTo(tenant?.helpEmail),
+        return notify({
+          tenantId: updated.tenantId!,
+          event: "performanceReviewFinalized",
+          targetUser: updated.userId,
+          inApp: {
+            title: "Performance Review",
+            message: decisionMessage,
+            eventType: "performance_review_notification",
+            priority: "medium",
+          },
+          email: employee?.email
+            ? {
+                to: employee.email,
+                subject: approved
+                  ? "Your performance review was approved"
+                  : "Your performance review was rejected",
+                html: renderEmailHtml({
+                  title: "Performance Review Finalized",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>${decisionMessage}</p>`,
+                }),
+                from: tenantFrom(tenantName),
+                replyTo: tenantReplyTo(tenant?.helpEmail),
+              }
+            : undefined,
         });
       })
-      .catch((err) =>
-        logger.warn("[finalizeReview] email enqueue failed:", { err }),
-      );
+      .catch((err) => logger.warn("[finalizeReview] notify failed:", { err }));
 
     return callback(null, {
       message: MESSAGES.REVIEW_FINALIZED,

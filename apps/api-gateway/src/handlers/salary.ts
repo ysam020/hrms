@@ -10,7 +10,7 @@ import {
   tenantReplyTo,
   renderEmailHtml,
 } from "@hrms/common";
-import { getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { cacheManager } from "@hrms/cache";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
@@ -1077,22 +1077,26 @@ export async function emailSalarySlip(req: Request, res: Response) {
 
     const monthLabel = `${MONTH_NAMES[(month - 1) % 12]} ${year}`;
     const tenantName = tenant?.name ?? "your organisation";
-    await getEmailQueue().add("salarySlip", {
-      to: employee.email,
-      subject: `Salary slip — ${monthLabel}`,
-      html: renderEmailHtml({
-        title: "Salary Slip",
-        tenantName,
-        bodyHtml: `<h2>Hello ${result.employeeName},</h2><p>Your salary slip for <strong>${monthLabel}</strong> is attached. The PDF is password-protected — use your PAN followed by your date of birth (DDMMYYYY) to open it.</p>`,
-      }),
-      from: tenantFrom(tenantName),
-      replyTo: tenantReplyTo(tenant?.helpEmail),
-      attachments: [
-        {
-          filename: `salary_slip_${result.employeeUsername}_${year}_${String(month).padStart(2, "0")}.pdf`,
-          content: result.buffer.toString("base64"),
-        },
-      ],
+    await notify({
+      tenantId: user!.tenantId!,
+      event: "salarySlip",
+      email: {
+        to: employee.email,
+        subject: `Salary slip — ${monthLabel}`,
+        html: renderEmailHtml({
+          title: "Salary Slip",
+          tenantName,
+          bodyHtml: `<h2>Hello ${result.employeeName},</h2><p>Your salary slip for <strong>${monthLabel}</strong> is attached. The PDF is password-protected — use your PAN followed by your date of birth (DDMMYYYY) to open it.</p>`,
+        }),
+        from: tenantFrom(tenantName),
+        replyTo: tenantReplyTo(tenant?.helpEmail),
+        attachments: [
+          {
+            filename: `salary_slip_${result.employeeUsername}_${year}_${String(month).padStart(2, "0")}.pdf`,
+            content: result.buffer.toString("base64"),
+          },
+        ],
+      },
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

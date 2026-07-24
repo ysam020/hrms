@@ -6,7 +6,7 @@ import {
   getTenantId,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 
@@ -68,20 +68,24 @@ export const createEmployee = async (
         .then((tenant) => {
           const tenantName = tenant?.name ?? "your organisation";
           const displayName = firstName || username;
-          return getEmailQueue().add("employeeWelcome", {
-            to: newUser.email!,
-            subject: `Welcome to ${tenantName}`,
-            html: renderEmailHtml({
-              title: "Welcome",
-              tenantName,
-              bodyHtml: `<h2>Welcome, ${displayName}!</h2><p>Your employee account with <strong>${tenantName}</strong> has been created. You can now log in and get started.</p>`,
-            }),
-            from: tenantFrom(tenantName),
-            replyTo: tenantReplyTo(tenant?.helpEmail),
+          return notify({
+            tenantId,
+            event: "employeeWelcome",
+            email: {
+              to: newUser.email!,
+              subject: `Welcome to ${tenantName}`,
+              html: renderEmailHtml({
+                title: "Welcome",
+                tenantName,
+                bodyHtml: `<h2>Welcome, ${displayName}!</h2><p>Your employee account with <strong>${tenantName}</strong> has been created. You can now log in and get started.</p>`,
+              }),
+              from: tenantFrom(tenantName),
+              replyTo: tenantReplyTo(tenant?.helpEmail),
+            },
           });
         })
         .catch((err: unknown) =>
-          logger.warn("[createEmployee] welcome email failed:", { err }),
+          logger.warn("[createEmployee] welcome notify failed:", { err }),
         );
     }
 

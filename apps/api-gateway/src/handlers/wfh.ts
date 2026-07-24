@@ -38,7 +38,7 @@ import {
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { handleError, handleActionError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
@@ -256,49 +256,42 @@ export async function requestWfh(req: Request, res: Response) {
         const rangeStr =
           toDateStr && toDateStr !== date ? `${date} to ${toDateStr}` : date;
         const message = `${applicantUsername} has requested work-from-home for ${rangeStr}`;
-
-        await getNotificationQueue().add("wfhRequested", {
-          tenantId,
-          title: "WFH Request",
-          message,
-          recipients: uniqueIds,
-          pushTargets: uniqueUsernames,
-          eventType: "wfh_notification",
-          priority: "medium",
-          silent: true,
-        });
-
         const tenantName = tenant?.name ?? "your organisation";
-        const from = tenantFrom(tenantName);
-        const replyTo = tenantReplyTo(tenant?.helpEmail);
         const uniqueEmails = [
           ...new Set(
             allTargets.map((u) => u.email).filter((e): e is string => !!e),
           ),
         ];
-        await Promise.all(
-          uniqueEmails.map((to) =>
-            getEmailQueue()
-              .add("wfhRequested", {
-                to,
-                subject: `WFH request from ${applicantUsername}`,
-                html: renderEmailHtml({
-                  title: "WFH Request",
-                  tenantName,
-                  bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
-                }),
-                from,
-                replyTo,
-              })
-              .catch((e: unknown) =>
-                logger.warn("[requestWfh] email enqueue failed", { e }),
-              ),
-          ),
-        );
+
+        await notify({
+          tenantId,
+          event: "wfhRequested",
+          recipients: uniqueIds,
+          pushTargets: uniqueUsernames,
+          inApp: {
+            title: "WFH Request",
+            message,
+            eventType: "wfh_notification",
+            priority: "medium",
+            silent: true,
+          },
+          email:
+            uniqueEmails.length > 0
+              ? {
+                  to: uniqueEmails,
+                  subject: `WFH request from ${applicantUsername}`,
+                  html: renderEmailHtml({
+                    title: "WFH Request",
+                    tenantName,
+                    bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
+                  }),
+                  from: tenantFrom(tenantName),
+                  replyTo: tenantReplyTo(tenant?.helpEmail),
+                }
+              : undefined,
+        });
       })
-      .catch((err) =>
-        logger.warn("[requestWfh] Notification enqueue failed:", { err }),
-      );
+      .catch((err) => logger.warn("[requestWfh] notify failed:", { err }));
 
     logger.info(
       `WFH request created: ${wfhReq.id} for ${date}${toDateStr ? ` to ${toDateStr}` : ""}`,

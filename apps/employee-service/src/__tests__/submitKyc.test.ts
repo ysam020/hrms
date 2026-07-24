@@ -1,5 +1,6 @@
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
+import { notify } from "@hrms/notifications";
 import { submitKyc } from "../handlers/submitKyc";
 
 jest.mock("@hrms/db", () => {
@@ -19,10 +20,10 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn(), delete: jest.fn() },
 }));
 
-const mockQueueAdd = jest.fn().mockResolvedValue(undefined);
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({ add: mockQueueAdd })),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
+const mockNotify = notify as jest.Mock;
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -48,7 +49,7 @@ const user = { id: "u1", username: "john", kyc_approval: "Pending" };
 describe("submitKyc", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockQueueAdd.mockClear();
+    mockNotify.mockResolvedValue({ notificationId: "n1", jobIds: {} });
     mockUpdate.mockResolvedValue({
       ...user,
       kyc_approval: "Pending",
@@ -224,24 +225,26 @@ describe("submitKyc", () => {
       where: { tenantId: "t1", role: { in: ["owner", "admin", "hr"] } },
       select: { userId: true },
     });
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "kycSubmitted",
+    expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({
+        event: "kycSubmitted",
         recipients: expect.arrayContaining(["super-1", "perm-1", "owner-1"]),
         pushTargets: expect.arrayContaining([
           "super_admin",
           "kyc_reviewer",
           "owner_bob",
         ]),
-        sendPushNotification: true,
-        socketEvent: "kyc-submitted",
-        socketPayload: expect.objectContaining({
-          userId: "u1",
-          username: "john",
+        push: { enabled: true },
+        inApp: expect.objectContaining({
+          socketEvent: "kyc-submitted",
+          socketPayload: expect.objectContaining({
+            userId: "u1",
+            username: "john",
+          }),
         }),
       }),
     );
-    const [, payload] = mockQueueAdd.mock.calls[0];
+    const [payload] = mockNotify.mock.calls[0];
     expect(payload.recipients).toHaveLength(3);
   });
 
@@ -254,7 +257,7 @@ describe("submitKyc", () => {
     await submitKyc(makeCall({ userId: "u1", panNo: "ABCDE1234F" }), cb);
     await flushMicrotasks();
 
-    expect(mockQueueAdd).not.toHaveBeenCalled();
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
   it("does not enqueue a notification when the resulting kyc_approval is not Pending (e.g. an HR correction on an already-decided record)", async () => {
@@ -268,7 +271,7 @@ describe("submitKyc", () => {
     await submitKyc(makeCall({ username: "john", panNo: "ABCDE1234F" }), cb);
     await flushMicrotasks();
 
-    expect(mockQueueAdd).not.toHaveBeenCalled();
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
   it("returns INTERNAL on database error", async () => {

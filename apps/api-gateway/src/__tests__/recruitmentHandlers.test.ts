@@ -98,13 +98,9 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-jest.mock("@hrms/queue", () => {
-  // A stable singleton (not a fresh object per call) so a test's own
-  // getEmailQueue().add assertion refers to the exact same mock the
-  // handler code called, not a lookalike from a second invocation.
-  const emailQueue = { add: jest.fn().mockResolvedValue(undefined) };
-  return { getEmailQueue: jest.fn(() => emailQueue) };
-});
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
+}));
 
 jest.mock("../services/googleCalendar", () => ({
   createInterviewMeetEvent: jest.fn().mockResolvedValue({
@@ -115,11 +111,13 @@ jest.mock("../services/googleCalendar", () => ({
 
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { notify } from "@hrms/notifications";
 import {
   actOnApprovalForEntity,
   isPrivileged,
 } from "../handlers/approvalChains";
 
+const mockNotify = notify as jest.Mock;
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockActOnApprovalForEntity = actOnApprovalForEntity as jest.Mock;
@@ -937,7 +935,6 @@ describe("recruitmentHandlers", () => {
     });
 
     it("stores the returned Meet link on the interview round and does NOT queue our own candidate invite email — Google sends its own native invitation (calendar connected)", async () => {
-      const { getEmailQueue } = jest.requireMock("@hrms/queue") as any;
       const { createInterviewMeetEvent } = jest.requireMock(
         "../services/googleCalendar",
       ) as any;
@@ -982,8 +979,7 @@ describe("recruitmentHandlers", () => {
       // A real event now exists on the scheduler's own Calendar — Google
       // emails the candidate/interviewer its own native invitation, so we
       // must not also queue our own tenant-branded copy (double invite).
-      const queuedJob = getEmailQueue().add as jest.Mock;
-      expect(queuedJob).not.toHaveBeenCalled();
+      expect(mockNotify).not.toHaveBeenCalled();
 
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
@@ -1044,7 +1040,6 @@ describe("recruitmentHandlers", () => {
     });
 
     it("uses the manually-supplied meetLink and skips Calendar API entirely, even when the scheduler hasn't connected their calendar", async () => {
-      const { getEmailQueue } = jest.requireMock("@hrms/queue") as any;
       const { createInterviewMeetEvent } = jest.requireMock(
         "../services/googleCalendar",
       ) as any;
@@ -1084,23 +1079,23 @@ describe("recruitmentHandlers", () => {
         }),
       );
 
-      const queuedJob = getEmailQueue().add as jest.Mock;
-      expect(queuedJob).toHaveBeenCalledWith(
-        "interviewInvite",
+      expect(mockNotify).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: "jordan@candidate.example",
-          attachments: expect.arrayContaining([
-            expect.objectContaining({
-              filename: "interview-invite.ics",
-              contentType: 'text/calendar; charset="UTF-8"; method=REQUEST',
-            }),
-          ]),
+          event: "interviewInvite",
+          email: expect.objectContaining({
+            to: "jordan@candidate.example",
+            attachments: expect.arrayContaining([
+              expect.objectContaining({
+                filename: "interview-invite.ics",
+                contentType: 'text/calendar; charset="UTF-8"; method=REQUEST',
+              }),
+            ]),
+          }),
         }),
       );
     });
 
     it("sets the scheduling user as ICS organizer and adds the resolved interviewer as a guest alongside the candidate — manual meetLink fallback (no real Calendar event, so we send our own invite)", async () => {
-      const { getEmailQueue } = jest.requireMock("@hrms/queue") as any;
       mockUserFindUnique.mockResolvedValue({
         username: "admin",
         isSuperUser: false,
@@ -1136,8 +1131,8 @@ describe("recruitmentHandlers", () => {
         res,
       );
 
-      const queuedJob = getEmailQueue().add as jest.Mock;
-      const attachment = queuedJob.mock.calls[0][1].attachments[0];
+      const notifyCall = mockNotify.mock.calls[0][0];
+      const attachment = notifyCall.email.attachments[0];
       // RFC 5545 §3.1 line folding wraps long lines with a CRLF + leading
       // space — undo it before asserting on logical line content.
       const ics = Buffer.from(attachment.content, "base64")

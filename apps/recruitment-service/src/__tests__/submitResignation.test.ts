@@ -27,13 +27,8 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },
 }));
 
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn().mockReturnValue({
-    add: jest.fn().mockResolvedValue(undefined),
-  }),
-  getEmailQueue: jest.fn().mockReturnValue({
-    add: jest.fn().mockResolvedValue(undefined),
-  }),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
 
 jest.mock("@hrms/common", () => ({
@@ -44,7 +39,7 @@ jest.mock("@hrms/common", () => ({
   renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -72,7 +67,7 @@ const mockTenantSettingsFindFirst = (prisma as any).tenantSettings
 const mockNoticePeriodPolicyFindMany = (prisma as any).noticePeriodPolicy
   .findMany as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
-const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
+const mockNotify = notify as jest.Mock;
 
 const validRequest = {
   userId: "john",
@@ -280,25 +275,21 @@ describe("submitResignation", () => {
   });
 
   it("enqueues notification when HR users exist", async () => {
-    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
-    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
-
     mockResignationCreate.mockResolvedValue({ id: "res-1" });
     mockUserFindMany.mockResolvedValue([{ id: "u1", username: "hr1" }]);
 
     await submitResignation(makeCall(validRequest), makeCallback());
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(mockQueue.add).toHaveBeenCalledWith(
-      "resignationSubmitted",
-      expect.objectContaining({ recipients: ["u1"] }),
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "resignationSubmitted",
+        recipients: ["u1"],
+      }),
     );
   });
 
   it("includes team leader in notification when team has a leader", async () => {
-    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
-    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
-
     mockResignationCreate.mockResolvedValue({ id: "res-1" });
     mockUserFindMany
       .mockResolvedValueOnce([]) // HR users (first findMany call)
@@ -308,9 +299,11 @@ describe("submitResignation", () => {
     await submitResignation(makeCall(validRequest), makeCallback());
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(mockQueue.add).toHaveBeenCalledWith(
-      "resignationSubmitted",
-      expect.objectContaining({ recipients: ["tl1"] }),
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "resignationSubmitted",
+        recipients: ["tl1"],
+      }),
     );
   });
 });

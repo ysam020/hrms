@@ -199,6 +199,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
@@ -338,6 +341,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
@@ -430,6 +436,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
@@ -464,6 +473,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
@@ -504,6 +516,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
@@ -648,6 +663,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
@@ -688,6 +706,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/proto":
         specifier: workspace:^
         version: link:../../packages/proto-definitions
@@ -1223,6 +1244,19 @@ importers:
       "@hrms/typescript-config":
         specifier: workspace:*
         version: link:../typescript-config
+
+  packages/notifications:
+    dependencies:
+      "@hrms/queue":
+        specifier: workspace:*
+        version: link:../queue
+    devDependencies:
+      "@hrms/typescript-config":
+        specifier: workspace:*
+        version: link:../typescript-config
+      "@types/node":
+        specifier: ^22.8.7
+        version: 22.19.17
 
   packages/proto-definitions:
     dependencies:

@@ -10,7 +10,7 @@ import {
   tenantReplyTo,
   renderEmailHtml,
 } from "@hrms/common";
-import { getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
@@ -752,22 +752,26 @@ export async function emailTdsWorksheet(req: Request, res: Response) {
 
     const monthLabel = `${MONTH_NAMES[(month - 1) % 12]} ${year}`;
     const tenantName = tenant?.name ?? "your organisation";
-    await getEmailQueue().add("tdsWorksheet", {
-      to: employee.email,
-      subject: `TDS worksheet — ${monthLabel}`,
-      html: renderEmailHtml({
-        title: "TDS Worksheet",
-        tenantName,
-        bodyHtml: `<h2>Hello ${result.employeeName},</h2><p>Your TDS worksheet for <strong>${monthLabel}</strong> is attached. The PDF is password-protected — use your PAN followed by your date of birth (DDMMYYYY) to open it.</p>`,
-      }),
-      from: tenantFrom(tenantName),
-      replyTo: tenantReplyTo(tenant?.helpEmail),
-      attachments: [
-        {
-          filename: `tds_worksheet_${MONTH_NAMES[(month - 1) % 12]}_${year}.pdf`,
-          content: result.buffer.toString("base64"),
-        },
-      ],
+    await notify({
+      tenantId: user!.tenantId!,
+      event: "tdsWorksheet",
+      email: {
+        to: employee.email,
+        subject: `TDS worksheet — ${monthLabel}`,
+        html: renderEmailHtml({
+          title: "TDS Worksheet",
+          tenantName,
+          bodyHtml: `<h2>Hello ${result.employeeName},</h2><p>Your TDS worksheet for <strong>${monthLabel}</strong> is attached. The PDF is password-protected — use your PAN followed by your date of birth (DDMMYYYY) to open it.</p>`,
+        }),
+        from: tenantFrom(tenantName),
+        replyTo: tenantReplyTo(tenant?.helpEmail),
+        attachments: [
+          {
+            filename: `tds_worksheet_${MONTH_NAMES[(month - 1) % 12]}_${year}.pdf`,
+            content: result.buffer.toString("base64"),
+          },
+        ],
+      },
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

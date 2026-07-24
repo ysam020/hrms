@@ -6,7 +6,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import {
   tenantFrom,
   tenantReplyTo,
@@ -55,19 +55,6 @@ export const rejectLeave = async (
       `t:${getTenantId() ?? "global"}:leaves:*`,
     );
 
-    getNotificationQueue()
-      .add("leaveRejected", {
-        tenantId: getTenantId()!,
-        title: "Leave",
-        message: MESSAGES.LEAVE_REJECTED,
-        targetUser: updatedLeave.userId,
-        eventType: "leave_notification",
-        priority: "medium",
-      })
-      .catch((err) =>
-        logger.warn("[rejectLeave] Notification enqueue failed:", { err }),
-      );
-
     Promise.all([
       prisma.user.findUnique({
         where: { id: updatedLeave.userId },
@@ -79,24 +66,34 @@ export const rejectLeave = async (
       }),
     ])
       .then(([employee, tenant]) => {
-        if (!employee?.email) return;
         const tenantName = tenant?.name ?? "your organisation";
         const dateRange = formatDateOrRange(updatedLeave.from, updatedLeave.to);
-        return getEmailQueue().add("leaveRejected", {
-          to: employee.email,
-          subject: "Your leave request was rejected",
-          html: renderEmailHtml({
-            title: "Leave Rejected",
-            tenantName,
-            bodyHtml: `<h2>Hello,</h2><p>Your <strong>${updatedLeave.leaveType}</strong> leave request has been rejected.</p><p><strong>Dates:</strong> ${dateRange}</p>`,
-          }),
-          from: tenantFrom(tenantName),
-          replyTo: tenantReplyTo(tenant?.helpEmail),
+        return notify({
+          tenantId: getTenantId()!,
+          event: "leaveRejected",
+          targetUser: updatedLeave.userId,
+          inApp: {
+            title: "Leave",
+            message: MESSAGES.LEAVE_REJECTED,
+            eventType: "leave_notification",
+            priority: "medium",
+          },
+          email: employee?.email
+            ? {
+                to: employee.email,
+                subject: "Your leave request was rejected",
+                html: renderEmailHtml({
+                  title: "Leave Rejected",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>Your <strong>${updatedLeave.leaveType}</strong> leave request has been rejected.</p><p><strong>Dates:</strong> ${dateRange}</p>`,
+                }),
+                from: tenantFrom(tenantName),
+                replyTo: tenantReplyTo(tenant?.helpEmail),
+              }
+            : undefined,
         });
       })
-      .catch((err) =>
-        logger.warn("[rejectLeave] email enqueue failed:", { err }),
-      );
+      .catch((err) => logger.warn("[rejectLeave] notify failed:", { err }));
 
     return callback(null, {
       message: MESSAGES.LEAVE_REJECTED,

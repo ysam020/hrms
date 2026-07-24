@@ -24,7 +24,7 @@ import {
   getTenantId,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { buildSalarySlipPdf } from "../handlers/salary";
 
@@ -568,8 +568,10 @@ export async function runPayrollDisbursement(
                 );
                 return;
               }
-              await getEmailQueue()
-                .add("salarySlip", {
+              await notify({
+                tenantId: tenantId!,
+                event: "salarySlip",
+                email: {
                   to: e.email,
                   subject: `Salary slip — ${monthLabel}`,
                   html: renderEmailHtml({
@@ -585,12 +587,12 @@ export async function runPayrollDisbursement(
                       content: slip.buffer.toString("base64"),
                     },
                   ],
-                })
-                .catch((err: unknown) =>
-                  logger.warn("[payrollDisbursement] email enqueue failed", {
-                    err,
-                  }),
-                );
+                },
+              }).catch((err: unknown) =>
+                logger.warn("[payrollDisbursement] email enqueue failed", {
+                  err,
+                }),
+              );
             }),
         );
       })

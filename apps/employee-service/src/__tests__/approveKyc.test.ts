@@ -1,5 +1,6 @@
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
+import { notify } from "@hrms/notifications";
 import { approveKyc } from "../handlers/approveKyc";
 
 jest.mock("@hrms/db", () => {
@@ -17,10 +18,10 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn(), delete: jest.fn() },
 }));
 
-const mockQueueAdd = jest.fn().mockResolvedValue(undefined);
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({ add: mockQueueAdd })),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
+const mockNotify = notify as jest.Mock;
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -93,11 +94,11 @@ describe("approveKyc", () => {
       null,
       expect.objectContaining({ status: 0, kycStatus: "Approved" }),
     );
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "kycApproved",
+    expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({
+        event: "kycApproved",
         targetUser: "john",
-        sendPushNotification: true,
+        push: { enabled: true },
       }),
     );
   });

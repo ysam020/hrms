@@ -6,7 +6,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 import { getKycApprovers } from "../utils/kycApprovers";
 
@@ -165,32 +165,33 @@ export const submitKyc = async (
       getKycApprovers(tenantId, "approve_kyc")
         .then((approvers) => {
           if (approvers.length === 0) return;
-          return getNotificationQueue().add("kycSubmitted", {
+          return notify({
             tenantId: getTenantId()!,
-            title: "KYC",
-            message: `${user.username} filled out their KYC form`,
+            event: "kycSubmitted",
             recipients: approvers.map((u) => u.id),
             pushTargets: approvers.map((u) => u.username),
-            eventType: "kyc_notification",
-            priority: "medium",
-            sendPushNotification: true,
-            // Already surfaced in Pending Approvals via getPendingKycItems —
-            // silent avoids duplicating it as a bell notification too, while
-            // still pushing and refetching the badge/inbox live.
-            silent: true,
-            // Live-refresh signal for the Pending Approvals widget/badge/
-            // inbox — mirrors kyc-edit-requested in requestKycEditAccess.ts.
-            socketEvent: "kyc-submitted",
-            socketPayload: {
-              userId: user.id,
-              username: user.username,
-              submittedAt: updatedUser.kyc_date,
+            inApp: {
+              title: "KYC",
+              message: `${user.username} filled out their KYC form`,
+              eventType: "kyc_notification",
+              priority: "medium",
+              // Already surfaced in Pending Approvals via getPendingKycItems —
+              // silent avoids duplicating it as a bell notification too, while
+              // still pushing and refetching the badge/inbox live.
+              silent: true,
+              // Live-refresh signal for the Pending Approvals widget/badge/
+              // inbox — mirrors kyc-edit-requested in requestKycEditAccess.ts.
+              socketEvent: "kyc-submitted",
+              socketPayload: {
+                userId: user.id,
+                username: user.username,
+                submittedAt: updatedUser.kyc_date,
+              },
             },
+            push: { enabled: true },
           });
         })
-        .catch((err) =>
-          logger.error("[submitKyc] Notification enqueue failed:", { err }),
-        );
+        .catch((err) => logger.error("[submitKyc] notify failed:", { err }));
     }
 
     return callback(null, {

@@ -41,13 +41,8 @@ jest.mock("@hrms/cache", () => ({
   },
 }));
 
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest
-    .fn()
-    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
-  getEmailQueue: jest
-    .fn()
-    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
 
 jest.mock("@hrms/common", () => ({

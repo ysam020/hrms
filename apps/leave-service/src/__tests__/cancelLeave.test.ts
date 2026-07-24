@@ -1,7 +1,7 @@
 import { status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { cancelLeave } from "../handlers/cancelLeave";
 import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
@@ -32,13 +32,8 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },
 }));
 
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest
-    .fn()
-    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
-  getEmailQueue: jest
-    .fn()
-    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
 
 jest.mock("@hrms/common", () => ({
@@ -70,7 +65,7 @@ const mockUpdate = prisma.leaveApplication.update as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
-const mockNotificationAdd = getNotificationQueue().add as jest.Mock;
+const mockNotify = notify as jest.Mock;
 
 // Waits for the fire-and-forget notification promise chain (kicked off but
 // not awaited by the handler) to settle before assertions run against it.
@@ -82,7 +77,7 @@ describe("cancelLeave", () => {
     mockInvalidate.mockResolvedValue(undefined);
     mockUserFindUnique.mockResolvedValue(null);
     mockUserFindMany.mockResolvedValue([]);
-    mockNotificationAdd.mockResolvedValue(undefined);
+    mockNotify.mockResolvedValue({ notificationId: "n1", jobIds: {} });
   });
 
   it("returns INVALID_ARGUMENT when id is missing", async () => {
@@ -164,13 +159,15 @@ describe("cancelLeave", () => {
     );
     await flushMicrotasks();
 
-    expect(mockNotificationAdd).toHaveBeenCalledWith(
-      "leaveCancellationRequested",
+    expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "Leave",
+        event: "leaveCancellationRequested",
         recipients: expect.arrayContaining(["hr-1", "manager-1"]),
         pushTargets: expect.arrayContaining(["hr1", "manager1"]),
-        eventType: "leave_notification",
+        inApp: expect.objectContaining({
+          title: "Leave",
+          eventType: "leave_notification",
+        }),
       }),
     );
   });

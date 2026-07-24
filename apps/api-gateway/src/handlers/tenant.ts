@@ -23,7 +23,7 @@ import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { aesEncrypt } from "@hrms/crypto";
 import { fetchPaymentMethod, getRazorpay } from "./payment";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -351,8 +351,10 @@ async function buildTenant(
   // Platform-branded welcome — Praesto welcoming a new customer, not tenant
   // HR (no tenant HR identity exists at this point anyway).
   if (creator?.email) {
-    getEmailQueue()
-      .add("tenantWelcome", {
+    notify({
+      tenantId: tenant.id,
+      event: "tenantWelcome",
+      email: {
         to: creator.email,
         subject: `Welcome to Praesto, ${tenant.name}!`,
         html: renderEmailHtml({
@@ -365,10 +367,10 @@ async function buildTenant(
           bodyHtml: `<h2>Welcome, ${creator.username ?? "there"}!</h2><p>Your organisation <strong>${tenant.name}</strong> is now set up on Praesto. You can log in and start inviting your team.</p>`,
         }),
         from: PLATFORM_FROM,
-      })
-      .catch((error: unknown) =>
-        logger.warn("[buildTenant] welcome email failed:", { error }),
-      );
+      },
+    }).catch((error: unknown) =>
+      logger.warn("[buildTenant] welcome notify failed:", { error }),
+    );
   }
 
   return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -1010,25 +1012,24 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
         );
 
         if (recipientIds.length > 0) {
-          getNotificationQueue()
-            .add("joinRequestSubmitted", {
-              tenantId,
+          notify({
+            tenantId,
+            event: "joinRequestSubmitted",
+            recipients: recipientIds,
+            inApp: {
               title: "Join request",
               message: `${email} requested to join ${tenant.name}`,
-              recipients: recipientIds,
               eventType: "join_request_notification",
               priority: "medium",
-              sendPushNotification: false,
               // Already surfaced in Pending Approvals via
               // getPendingJoinRequestItems — silent avoids duplicating it as
               // a bell notification too (the email above already alerts).
               silent: true,
-            })
-            .catch((e) =>
-              logger.warn("join-request queue notification failed", {
-                error: e,
-              }),
-            );
+            },
+            push: { enabled: false },
+          }).catch((e) =>
+            logger.warn("join-request notify failed:", { error: e }),
+          );
         }
       } catch (error: unknown) {
         logger.warn("join-request notification lookup failed", { error });

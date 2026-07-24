@@ -36,6 +36,7 @@ module.exports = {
     "^@hrms/firebase$": "<rootDir>/packages/firebase/dist/index.js",
     "^@hrms/common$": "<rootDir>/packages/common/dist/index.js",
     "^@hrms/grpc-client$": "<rootDir>/packages/grpc-client/dist/index.js",
+    "^@hrms/notifications$": "<rootDir>/packages/notifications/dist/index.js",
   },
   clearMocks: true,
   testTimeout: 10000,

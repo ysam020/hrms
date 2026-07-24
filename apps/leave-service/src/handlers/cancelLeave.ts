@@ -7,7 +7,7 @@ import {
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { instantiateApproval, cancelApproval } from "@hrms/approval-engine";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 import { toLeaveApplicationProto } from "./leaveApplicationSerializer";
@@ -39,51 +39,49 @@ async function notifyCancellationRequested(
   ]);
 
   const targets = approver ? [...hrUsers, approver] : hrUsers;
-  const uniqueIds = [...new Set(targets.map((u: any) => u.id))];
-  const uniqueUsernames = [...new Set(targets.map((u: any) => u.username))];
+  const uniqueIds = [...new Set<string>(targets.map((u: any) => u.id))];
+  const uniqueUsernames = [
+    ...new Set<string>(targets.map((u: any) => u.username)),
+  ];
   if (uniqueUsernames.length === 0) return;
 
   const fromStr = leave.from.toISOString().split("T")[0];
   const toStr = leave.to.toISOString().split("T")[0];
   const message = `${requester?.username || requestedByUserId} has requested to cancel their approved leave from ${fromStr} to ${toStr}.`;
 
-  await getNotificationQueue().add("leaveCancellationRequested", {
-    tenantId,
-    title: "Leave",
-    message,
-    recipients: uniqueIds,
-    pushTargets: uniqueUsernames,
-    eventType: "leave_notification",
-    priority: "medium",
-  });
-
   const tenantName = tenant?.name ?? "your organisation";
-  const from = tenantFrom(tenantName);
-  const replyTo = tenantReplyTo(tenant?.helpEmail);
   const uniqueEmails = [
-    ...new Set(
+    ...new Set<string>(
       targets.map((u: any) => u.email).filter((e: unknown): e is string => !!e),
     ),
   ];
-  await Promise.all(
-    uniqueEmails.map((to) =>
-      getEmailQueue()
-        .add("leaveCancellationRequested", {
-          to,
-          subject: "Leave cancellation requested",
-          html: renderEmailHtml({
-            title: "Leave Cancellation Requested",
-            tenantName,
-            bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
-          }),
-          from,
-          replyTo,
-        })
-        .catch((err: unknown) =>
-          logger.warn("[cancelLeave] email enqueue failed:", { err }),
-        ),
-    ),
-  );
+
+  await notify({
+    tenantId,
+    event: "leaveCancellationRequested",
+    recipients: uniqueIds,
+    pushTargets: uniqueUsernames,
+    inApp: {
+      title: "Leave",
+      message,
+      eventType: "leave_notification",
+      priority: "medium",
+    },
+    email:
+      uniqueEmails.length > 0
+        ? {
+            to: uniqueEmails,
+            subject: "Leave cancellation requested",
+            html: renderEmailHtml({
+              title: "Leave Cancellation Requested",
+              tenantName,
+              bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
+            }),
+            from: tenantFrom(tenantName),
+            replyTo: tenantReplyTo(tenant?.helpEmail),
+          }
+        : undefined,
+  });
 }
 
 export const cancelLeave = async (

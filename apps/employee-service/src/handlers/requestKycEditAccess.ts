@@ -2,7 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 import { getKycApprovers } from "../utils/kycApprovers";
 
@@ -74,29 +74,32 @@ export const requestKycEditAccess = async (
     getKycApprovers(tenantId, "request_kyc_revision")
       .then((approvers) => {
         if (approvers.length === 0) return;
-        return getNotificationQueue().add("kycEditAccessRequested", {
+        return notify({
           tenantId: getTenantId()!,
-          title: "KYC",
-          message: `${user.username} requested to edit their approved KYC: ${reason}`,
+          event: "kycEditAccessRequested",
           recipients: approvers.map((u) => u.id),
           pushTargets: approvers.map((u) => u.username),
-          eventType: "kyc_notification",
-          priority: "medium",
-          sendPushNotification: true,
-          // Live-refresh signal for anyone with this employee's KYC page
-          // open, and for the Pending Approvals widget — see
-          // useSocketEvent consumers in apps/web.
-          socketEvent: "kyc-edit-requested",
-          socketPayload: {
-            userId,
-            username: user.username,
-            reason,
-            requestedAt: requestedAt.toISOString(),
+          inApp: {
+            title: "KYC",
+            message: `${user.username} requested to edit their approved KYC: ${reason}`,
+            eventType: "kyc_notification",
+            priority: "medium",
+            // Live-refresh signal for anyone with this employee's KYC page
+            // open, and for the Pending Approvals widget — see
+            // useSocketEvent consumers in apps/web.
+            socketEvent: "kyc-edit-requested",
+            socketPayload: {
+              userId,
+              username: user.username,
+              reason,
+              requestedAt: requestedAt.toISOString(),
+            },
           },
+          push: { enabled: true },
         });
       })
       .catch((err) =>
-        logger.error("[requestKycEditAccess] Notification enqueue failed:", {
+        logger.error("[requestKycEditAccess] notify failed:", {
           err,
         }),
       );

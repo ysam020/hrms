@@ -2,7 +2,8 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getResumeParsingQueue } from "@hrms/queue";
+import { getResumeParsingQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 
 export const applyForJob = async (
@@ -123,14 +124,17 @@ export const applyForJob = async (
             allTargets.push(hmUser);
         }
         if (allTargets.length === 0) return;
-        return getNotificationQueue().add("jobApplicationReceived", {
+        return notify({
           tenantId,
-          title: "Recruitment",
-          message: `New job application: ${name} has applied for ${jobOpening.jobTitle}`,
+          event: "jobApplicationReceived",
           recipients: allTargets.map((u) => u.id),
           pushTargets: allTargets.map((u) => u.username),
-          eventType: "job_application",
-          priority: "medium",
+          inApp: {
+            title: "Recruitment",
+            message: `New job application: ${name} has applied for ${jobOpening.jobTitle}`,
+            eventType: "job_application",
+            priority: "medium",
+          },
         });
       })
       .catch((err) =>
