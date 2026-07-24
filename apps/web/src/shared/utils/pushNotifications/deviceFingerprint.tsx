@@ -1,5 +1,37 @@
 import { UAParser } from "ua-parser-js";
 
+const DEVICE_ID_STORAGE_KEY = "hrms_device_id";
+
+// A stable, persisted identifier for this browser profile — used as the
+// dedup key when registering/removing FCM tokens (server-side keyed by
+// deviceFingerprint, see registerFcmToken.ts/removeFcmToken.ts). Previously
+// the fingerprint below was derived entirely from browser version, OS
+// version, screen resolution, timezone, and language — several of which
+// change for the exact same physical device (a browser auto-update bumping
+// browserVersion being the most common case). That silently orphaned the
+// old fcmTokens entry and registered a new one on every such change,
+// accumulating duplicate/stale devices, and made "Enable on this device"
+// incorrectly offer to re-enable a device that was already enrolled under
+// the old, now-mismatched id. A random id persisted in localStorage doesn't
+// have that problem — it only changes if the user clears site data.
+function getOrCreateStableDeviceId(): string | null {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (existing) return existing;
+    const id =
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `id_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(DEVICE_ID_STORAGE_KEY, id);
+    return id;
+  } catch {
+    // localStorage unavailable (private browsing, storage disabled, etc.) —
+    // no persistent identity is possible here anyway, so the caller falls
+    // back to the UA-derived hash below.
+    return null;
+  }
+}
+
 export const generateDeviceFingerprint = async () => {
   try {
     const parser = new UAParser();
@@ -56,7 +88,17 @@ export const generateDeviceFingerprint = async () => {
       pixelDepth: window.screen.pixelDepth || 24,
     };
 
-    // Create a consistent fingerprint string using key identifying features
+    const stableId = getOrCreateStableDeviceId();
+    if (stableId) {
+      return {
+        deviceFingerprint: stableId,
+        deviceInfo,
+      };
+    }
+
+    // No persistent storage available — fall back to a UA-derived hash so
+    // registration still works, just without stability across browser/OS
+    // updates (matches the previous behavior of this function entirely).
     const fingerprintData = [
       deviceInfo.browser,
       deviceInfo.browserVersion,
@@ -106,9 +148,13 @@ export const generateDeviceFingerprint = async () => {
     };
 
     return {
-      deviceFingerprint: `fallback_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`,
+      // Still prefer the stable persisted id here too — otherwise a device
+      // that hits this catch (e.g. UAParser throws) gets a brand new random
+      // id on every single call, never matching a previously-registered
+      // entry at all.
+      deviceFingerprint:
+        getOrCreateStableDeviceId() ??
+        `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       deviceInfo: fallbackInfo,
     };
   }

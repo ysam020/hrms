@@ -54,6 +54,143 @@ export type TokenValidation =
       orgSetupComplete: boolean;
     };
 
+// Atomically checks the presented token against the current record (and the
+// grace-period record) and, if it's the current one, rotates it — all as a
+// single Redis script execution. This used to be two separate round-trips
+// (validateRefreshToken, then storeRefreshToken) with a gap in between where
+// two concurrent refreshes presenting the same still-valid token could BOTH
+// read "I'm current" before either wrote, then each mint and store their own
+// new token — the second write clobbers the first everywhere it's recorded
+// (the current-token key *and* the one grace slot), permanently orphaning the
+// first caller's new token with nothing left to validate it against. Its very
+// next use then fails as "revoked" even though it was never actually
+// compromised — just a normal race between two tabs/components refreshing
+// around the same moment. Doing the compare-and-rotate inside one atomic
+// script closes the gap: Redis serializes script executions, so whichever
+// request runs second sees the *other's* already-rotated record and correctly
+// defers to it via the grace slot instead of racing to overwrite it.
+//
+// Return shape (via EVAL): [flag, token, meta]
+//   flag  1 -> presented token was current; rotated, `token`/`meta` are new
+//   flag  0 -> presented token matched the grace slot; rotation already
+//              happened elsewhere, `token`/`meta` are whatever that was
+//   flag -1 -> no current record cached (missing or unparseable) — caller
+//              should try the Mongo fallback and retry once
+//   flag -2 -> a current record exists but the token matches neither it nor
+//              the grace slot — genuinely invalid, no Mongo retry
+const ROTATE_SCRIPT = `
+local raw = redis.call('GET', KEYS[1])
+if not raw then
+  return {-1, '', ''}
+end
+local ok, meta = pcall(cjson.decode, raw)
+if not ok then
+  return {-1, '', ''}
+end
+if meta.tokenHash == ARGV[1] then
+  meta.tokenHash = ARGV[2]
+  local newMetaJson = cjson.encode(meta)
+  redis.call('SETEX', KEYS[1], tonumber(ARGV[3]), newMetaJson)
+  local grace = cjson.encode({prevTokenHash = ARGV[1], newToken = ARGV[4]})
+  redis.call('SETEX', KEYS[2], tonumber(ARGV[5]), grace)
+  return {1, ARGV[4], newMetaJson}
+end
+local graceRaw = redis.call('GET', KEYS[2])
+if graceRaw then
+  local gok, grace2 = pcall(cjson.decode, graceRaw)
+  if gok and grace2.prevTokenHash == ARGV[1] then
+    return {0, grace2.newToken, raw}
+  end
+end
+return {-2, '', ''}
+`;
+
+const evalRotate = (
+  client: ReturnType<typeof getRedisClient>,
+  userId: string,
+  presentedHash: string,
+  newHash: string,
+  newToken: string,
+) =>
+  client.eval(
+    ROTATE_SCRIPT,
+    2,
+    `refresh:${userId}`,
+    `refresh-prev:${userId}`,
+    presentedHash,
+    newHash,
+    String(REFRESH_TTL),
+    newToken,
+    String(PREV_TOKEN_GRACE_SECONDS),
+  ) as Promise<[number, string, string]>;
+
+export const rotateRefreshToken = async (
+  userId: string,
+  presentedToken: string,
+  newToken: string,
+): Promise<TokenValidation> => {
+  const client = getRedisClient();
+  const presentedHash = hashToken(presentedToken);
+  const newHash = hashToken(newToken);
+
+  let [flag, tokenOut, metaJson] = await evalRotate(
+    client,
+    userId,
+    presentedHash,
+    newHash,
+    newToken,
+  );
+
+  if (flag === -1) {
+    // No usable cache entry — fall back to MongoDB once (cold cache, or a
+    // pre-hash-migration miss), warm the cache, then retry the atomic rotate.
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { refreshToken: true, tenantId: true },
+    });
+    if (user?.refreshToken) {
+      const seedMeta: RefreshTokenMeta = {
+        tokenHash: user.refreshToken,
+        tenantId: user.tenantId ?? null,
+        tenantRole: null,
+        dbName: null,
+      };
+      await client
+        .setex(`refresh:${userId}`, REFRESH_TTL, JSON.stringify(seedMeta))
+        .catch(() => {});
+      [flag, tokenOut, metaJson] = await evalRotate(
+        client,
+        userId,
+        presentedHash,
+        newHash,
+        newToken,
+      );
+    }
+  }
+
+  if (flag !== 1 && flag !== 0) return { ok: false };
+
+  const meta = JSON.parse(metaJson) as RefreshTokenMeta;
+  meta.dbName ??= null;
+  meta.orgSetupComplete ??= true;
+
+  if (flag === 1) {
+    // We won the rotation — mirror the new hash onto the Mongo fallback column.
+    await prisma.user
+      .update({ where: { id: userId }, data: { refreshToken: newHash } })
+      .catch(() => {});
+  }
+
+  return {
+    ok: true,
+    currentToken: tokenOut,
+    tenantId: meta.tenantId,
+    tenantRole: meta.tenantRole,
+    dbName: meta.dbName,
+    orgSetupComplete: meta.orgSetupComplete,
+  };
+};
+
 export const storeRefreshToken = async (
   userId: string,
   token: string,
@@ -94,85 +231,6 @@ export const storeRefreshToken = async (
     );
   }
   await Promise.all(ops);
-};
-
-export const validateRefreshToken = async (
-  userId: string,
-  token: string,
-): Promise<TokenValidation> => {
-  const client = getRedisClient();
-  const raw = await client.get(`refresh:${userId}`);
-  const tokenHash = hashToken(token);
-
-  let meta: RefreshTokenMeta | null = null;
-
-  if (raw !== null) {
-    try {
-      meta = JSON.parse(raw) as RefreshTokenMeta;
-      meta.dbName ??= null;
-      meta.orgSetupComplete ??= true;
-    } catch {
-      // Unparseable entry (or a pre-hash-migration plaintext value) — never
-      // trust it as a token match. Treated as a cache miss below rather
-      // than falling through to Mongo, since Mongo's own refreshToken
-      // column is keyed by this same migration and would fail identically.
-      meta = null;
-    }
-  }
-
-  if (meta === null) {
-    // Redis miss — fall back to MongoDB
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { refreshToken: true, tenantId: true },
-    });
-    if (user?.refreshToken) {
-      meta = {
-        tokenHash: user.refreshToken,
-        tenantId: user.tenantId ?? null,
-        tenantRole: null,
-        dbName: null,
-      };
-      await client
-        .setex(`refresh:${userId}`, REFRESH_TTL, JSON.stringify(meta))
-        .catch(() => {});
-    }
-  }
-
-  if (!meta) return { ok: false };
-
-  if (meta.tokenHash === tokenHash) {
-    return {
-      ok: true,
-      currentToken: token,
-      tenantId: meta.tenantId,
-      tenantRole: meta.tenantRole,
-      dbName: meta.dbName,
-      orgSetupComplete: meta.orgSetupComplete ?? true,
-    };
-  }
-
-  // Grace-period check
-  const graceRaw = await client.get(`refresh-prev:${userId}`);
-  if (graceRaw) {
-    try {
-      const grace = JSON.parse(graceRaw) as PrevTokenGrace;
-      if (grace.prevTokenHash === tokenHash) {
-        return {
-          ok: true,
-          currentToken: grace.newToken,
-          tenantId: meta.tenantId,
-          tenantRole: meta.tenantRole,
-          dbName: meta.dbName,
-          orgSetupComplete: meta.orgSetupComplete ?? true,
-        };
-      }
-    } catch {
-      // Unparseable grace record — fall through to rejection.
-    }
-  }
-
-  return { ok: false };
 };
 
 export const revokeRefreshToken = async (userId: string): Promise<void> => {

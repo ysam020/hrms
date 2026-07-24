@@ -1,4 +1,4 @@
-// Full behavioral coverage for storeRefreshToken/validateRefreshToken/
+// Full behavioral coverage for storeRefreshToken/rotateRefreshToken/
 // revokeRefreshToken/markOrgSetupComplete now lives in
 // packages/cache/src/__tests__/refreshTokenStore.test.ts — this file is the
 // single shared implementation both auth-service and api-gateway import.
@@ -10,7 +10,7 @@ import * as redisReexport from "../services/redis";
 jest.mock("@hrms/cache", () => ({
   getRedisClient: jest.fn(),
   storeRefreshToken: jest.fn(),
-  validateRefreshToken: jest.fn(),
+  rotateRefreshToken: jest.fn(),
   revokeRefreshToken: jest.fn(),
   markOrgSetupComplete: jest.fn(),
 }));
@@ -19,8 +19,8 @@ describe("services/redis re-export", () => {
   it("re-exports every refresh-token function from @hrms/cache", () => {
     expect(redisReexport.getRedisClient).toBe(cacheModule.getRedisClient);
     expect(redisReexport.storeRefreshToken).toBe(cacheModule.storeRefreshToken);
-    expect(redisReexport.validateRefreshToken).toBe(
-      cacheModule.validateRefreshToken,
+    expect(redisReexport.rotateRefreshToken).toBe(
+      cacheModule.rotateRefreshToken,
     );
     expect(redisReexport.revokeRefreshToken).toBe(
       cacheModule.revokeRefreshToken,

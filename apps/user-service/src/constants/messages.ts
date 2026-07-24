@@ -7,6 +7,8 @@ export const MESSAGES = {
   USERS_FETCHED: "Users fetched",
   USER_UPDATED: "User updated",
   FCM_TOKEN_REGISTERED: "FCM token registered",
+  FCM_TOKEN_AND_FINGERPRINT_REQUIRED:
+    "token and deviceFingerprint are required",
   NO_NOTIFICATION_TOKEN: "No notification token found for this device",
   DEVICE_FINGERPRINT_OR_DISABLE_ALL_REQUIRED:
     "Device fingerprint or disableAll flag required",

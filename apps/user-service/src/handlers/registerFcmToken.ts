@@ -18,6 +18,19 @@ export const registerFcmToken = async (
       ipAddress,
     } = call.request;
 
+    // Defense in depth — api-gateway's saveFcmToken already rejects an
+    // empty token/deviceFingerprint before this ever gets called, but this
+    // is the layer that actually writes to the DB and shouldn't trust that
+    // every caller validated first. An empty token can't receive pushes;
+    // an empty deviceFingerprint would collide with any other request that
+    // also lacks one, since the dedup below is keyed on it.
+    if (!token || !deviceFingerprint) {
+      return callback(null, {
+        message: MESSAGES.FCM_TOKEN_AND_FINGERPRINT_REQUIRED,
+        status: status.INVALID_ARGUMENT,
+      });
+    }
+
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user)
       return callback(null, {

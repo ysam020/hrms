@@ -130,10 +130,21 @@ export async function saveFcmToken(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const { fcmToken, deviceFingerprint, deviceInfo } = req.body;
+    // Both are required for a meaningful registration — an empty token
+    // can't receive pushes, and an empty/missing deviceFingerprint would
+    // collide with any other request that also lacks one, since
+    // registerFcmToken dedupes existing entries by deviceFingerprint.
+    // Silently coercing either to "" here used to let a client-side bug
+    // corrupt an existing device's entry instead of failing loudly.
+    if (!fcmToken || !deviceFingerprint) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "fcmToken and deviceFingerprint are required",
+      });
+    }
     const response = await grpcCall(userClient, "registerFcmToken", {
       userId: user!.userId,
-      token: fcmToken || "",
-      deviceFingerprint: deviceFingerprint || "",
+      token: fcmToken,
+      deviceFingerprint,
       browser: deviceInfo?.browser || "",
       os: deviceInfo?.os || "",
       deviceType: deviceInfo?.deviceType || "",

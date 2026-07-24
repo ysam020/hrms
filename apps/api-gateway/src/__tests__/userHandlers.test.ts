@@ -28,7 +28,11 @@ jest.mock("@hrms/common", () => ({
     res.json({ status, ...data }),
   ),
   camelToSnake: jest.fn((obj: any) => obj),
-  RESPONSE_STATUS: { SUCCESS: 200, INTERNAL_SERVER_ERROR: 500 },
+  RESPONSE_STATUS: {
+    SUCCESS: 200,
+    INTERNAL_SERVER_ERROR: 500,
+    BAD_REQUEST: 400,
+  },
 }));
 
 import { grpcCall } from "../grpc/clients";
@@ -322,10 +326,46 @@ describe("userHandlers", () => {
     it("returns INTERNAL on error", async () => {
       mockGrpcCall.mockRejectedValue(new Error("gRPC error"));
       const res = makeRes();
-      await saveFcmToken(makeReq({ body: {} }), res);
+      await saveFcmToken(
+        makeReq({ body: { fcmToken: "tok-123", deviceFingerprint: "fp-1" } }),
+        res,
+      );
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST without calling registerFcmToken when fcmToken is missing", async () => {
+      const res = makeRes();
+      await saveFcmToken(makeReq({ body: { deviceFingerprint: "fp-1" } }), res);
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST without calling registerFcmToken when deviceFingerprint is missing", async () => {
+      const res = makeRes();
+      await saveFcmToken(makeReq({ body: { fcmToken: "tok-123" } }), res);
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+    });
+
+    it("returns BAD_REQUEST when the body is empty", async () => {
+      const res = makeRes();
+      await saveFcmToken(makeReq({ body: {} }), res);
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
         expect.any(Object),
       );
     });

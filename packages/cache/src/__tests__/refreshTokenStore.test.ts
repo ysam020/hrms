@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { prisma } from "@hrms/db";
 import {
   storeRefreshToken,
-  validateRefreshToken,
+  rotateRefreshToken,
   revokeRefreshToken,
   markOrgSetupComplete,
 } from "../refreshTokenStore";
@@ -14,6 +14,7 @@ const mockRedisInstance = {
   setex: jest.fn().mockResolvedValue("OK"),
   get: jest.fn(),
   del: jest.fn().mockResolvedValue(1),
+  eval: jest.fn(),
 };
 
 jest.mock("../client", () => ({
@@ -103,52 +104,108 @@ describe("storeRefreshToken", () => {
   });
 });
 
-describe("validateRefreshToken", () => {
+describe("rotateRefreshToken", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("returns ok:true when the presented token's hash matches the current stored hash", async () => {
-    mockRedisInstance.get.mockResolvedValue(
-      JSON.stringify({
-        tokenHash: hash("tok-1"),
-        tenantId: "t1",
-        tenantRole: "owner",
-        dbName: "db1",
-      }),
-    );
-    const result = await validateRefreshToken("u1", "tok-1");
+  it("rotates and returns the new token when the presented token is current, mirroring the hash onto Mongo", async () => {
+    const newMeta = {
+      tokenHash: hash("new-tok"),
+      tenantId: "t1",
+      tenantRole: "owner",
+      dbName: "db1",
+      orgSetupComplete: true,
+    };
+    mockRedisInstance.eval.mockResolvedValueOnce([
+      1,
+      "new-tok",
+      JSON.stringify(newMeta),
+    ]);
+    db.user.update.mockResolvedValue({});
+
+    const result = await rotateRefreshToken("u1", "old-tok", "new-tok");
+
     expect(result).toEqual({
       ok: true,
-      currentToken: "tok-1",
+      currentToken: "new-tok",
       tenantId: "t1",
       tenantRole: "owner",
       dbName: "db1",
       orgSetupComplete: true,
     });
-  });
-
-  it("rejects a pre-migration plaintext Redis value rather than trusting it", async () => {
-    // Before this fix, a raw token string (no JSON, no hash) would have
-    // been accepted directly. JSON.parse on it throws, and the fix must
-    // treat that as a miss — never fall back to comparing the presented
-    // token against unparsed raw Redis content.
-    mockRedisInstance.get.mockResolvedValueOnce("plain-legacy-token");
-    db.user.findUnique.mockResolvedValue({
-      refreshToken: null,
-      tenantId: null,
+    expect(mockRedisInstance.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      2,
+      "refresh:u1",
+      "refresh-prev:u1",
+      hash("old-tok"),
+      hash("new-tok"),
+      String(30 * 24 * 60 * 60),
+      "new-tok",
+      "60",
+    );
+    // Only the winning rotation should mirror the new hash onto Mongo.
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { refreshToken: hash("new-tok") },
     });
-    const result = await validateRefreshToken("u1", "plain-legacy-token");
-    expect(result).toEqual({ ok: false });
   });
 
-  it("falls back to MongoDB (comparing hashes) on a Redis miss and re-warms the cache with a hash", async () => {
-    mockRedisInstance.get.mockResolvedValueOnce(null);
+  it("returns the already-rotated token — without touching Mongo — when this call lost the race", async () => {
+    const currentMeta = {
+      tokenHash: hash("winner-tok"),
+      tenantId: "t1",
+      tenantRole: "owner",
+      dbName: null,
+      orgSetupComplete: true,
+    };
+    // flag 0: presented token matched the grace slot, not current — another
+    // concurrent request already won the rotation.
+    mockRedisInstance.eval.mockResolvedValueOnce([
+      0,
+      "winner-tok",
+      JSON.stringify(currentMeta),
+    ]);
+
+    const result = await rotateRefreshToken("u1", "old-tok", "my-candidate");
+
+    expect(result).toEqual(
+      expect.objectContaining({ ok: true, currentToken: "winner-tok" }),
+    );
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a token that matches neither the current nor the grace-period one, without a Mongo retry", async () => {
+    mockRedisInstance.eval.mockResolvedValueOnce([-2, "", ""]);
+
+    const result = await rotateRefreshToken("u1", "unrelated-tok", "new-tok");
+
+    expect(result).toEqual({ ok: false });
+    expect(db.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("falls back to MongoDB on a cold cache, warms Redis, and retries the atomic rotate", async () => {
+    mockRedisInstance.eval
+      .mockResolvedValueOnce([-1, "", ""])
+      .mockResolvedValueOnce([
+        1,
+        "new-tok",
+        JSON.stringify({
+          tokenHash: hash("new-tok"),
+          tenantId: "t1",
+          tenantRole: null,
+          dbName: null,
+        }),
+      ]);
     db.user.findUnique.mockResolvedValue({
       refreshToken: hash("db-token"),
       tenantId: "t1",
     });
-    const result = await validateRefreshToken("u1", "db-token");
+    db.user.update.mockResolvedValue({});
+
+    const result = await rotateRefreshToken("u1", "db-token", "new-tok");
+
     expect(result).toEqual(
-      expect.objectContaining({ ok: true, currentToken: "db-token" }),
+      expect.objectContaining({ ok: true, currentToken: "new-tok" }),
     );
     expect(mockRedisInstance.setex).toHaveBeenCalledWith(
       "refresh:u1",
@@ -160,55 +217,20 @@ describe("validateRefreshToken", () => {
         dbName: null,
       }),
     );
+    expect(mockRedisInstance.eval).toHaveBeenCalledTimes(2);
   });
 
-  it("returns ok:false when there is no token anywhere", async () => {
-    mockRedisInstance.get.mockResolvedValue(null);
+  it("returns ok:false when there is no record in Redis or MongoDB", async () => {
+    mockRedisInstance.eval.mockResolvedValueOnce([-1, "", ""]);
     db.user.findUnique.mockResolvedValue({
       refreshToken: null,
       tenantId: null,
     });
-    const result = await validateRefreshToken("u1", "anything");
-    expect(result).toEqual({ ok: false });
-  });
 
-  it("accepts a stale token still within the grace-period window and returns the real rotated token", async () => {
-    mockRedisInstance.get
-      .mockResolvedValueOnce(
-        JSON.stringify({
-          tokenHash: hash("new-tok"),
-          tenantId: "t1",
-          tenantRole: "owner",
-          dbName: null,
-        }),
-      )
-      .mockResolvedValueOnce(
-        JSON.stringify({ prevTokenHash: hash("old-tok"), newToken: "new-tok" }),
-      );
-    const result = await validateRefreshToken("u1", "old-tok");
-    expect(result).toEqual(
-      expect.objectContaining({ ok: true, currentToken: "new-tok" }),
-    );
-  });
+    const result = await rotateRefreshToken("u1", "anything", "new-tok");
 
-  it("rejects a token that matches neither the current nor the grace-period one", async () => {
-    mockRedisInstance.get
-      .mockResolvedValueOnce(
-        JSON.stringify({
-          tokenHash: hash("new-tok"),
-          tenantId: "t1",
-          tenantRole: "owner",
-          dbName: null,
-        }),
-      )
-      .mockResolvedValueOnce(
-        JSON.stringify({
-          prevTokenHash: hash("some-other-old-tok"),
-          newToken: "new-tok",
-        }),
-      );
-    const result = await validateRefreshToken("u1", "totally-unrelated-tok");
     expect(result).toEqual({ ok: false });
+    expect(mockRedisInstance.eval).toHaveBeenCalledTimes(1);
   });
 });
 
