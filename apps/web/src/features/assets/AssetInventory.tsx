@@ -154,7 +154,7 @@ function AssetInventory() {
         const res = await apiClient(API_ENDPOINTS.ASSETS(page, limit, params));
         return {
           data: res.data.data?.assets || res.data.data || [],
-          totalCount: res.data.data?.total || 0,
+          totalCount: res.data.total || 0,
         };
       } catch (err) {
         if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError")

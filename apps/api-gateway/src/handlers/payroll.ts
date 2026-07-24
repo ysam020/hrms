@@ -1436,6 +1436,9 @@ export async function updateSalaryAdvanceStatus(req: Request, res: Response) {
 export async function getMyPayslips(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
+    const { page, limit } = parsePagination(req.query);
+    const skip = (page - 1) * limit;
+
     const disbursedRuns = await prisma.payrollRun.findMany({
       where: { status: "disbursed" },
       select: { year: true, month: true },
@@ -1448,13 +1451,15 @@ export async function getMyPayslips(req: Request, res: Response) {
       where: { userId: user!.userId },
       orderBy: [{ year: "desc" }, { month: "desc" }],
     });
-    const payslips = structures
-      .filter((s) => disbursedPeriods.has(`${s.year}-${s.month}`))
-      .slice(0, 24);
+    const allPayslips = structures.filter((s) =>
+      disbursedPeriods.has(`${s.year}-${s.month}`),
+    );
+    const payslips = allPayslips.slice(skip, skip + limit);
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Payslips retrieved",
       data: payslips,
+      total: allPayslips.length,
     });
   } catch (error) {
     logger.error("GET /payroll/my-payslips error:", { error });

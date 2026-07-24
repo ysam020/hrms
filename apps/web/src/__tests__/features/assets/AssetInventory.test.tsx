@@ -73,7 +73,7 @@ function renderWith(
   { user = { tenantRole: "employee" }, setAlert = vi.fn() } = {},
 ) {
   mockApiClient.mockResolvedValue({
-    data: { data: { assets, total: assets.length } },
+    data: { data: { assets }, total: assets.length },
   });
   return render(
     <AlertContext.Provider value={{ setAlert } as any}>

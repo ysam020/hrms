@@ -79,7 +79,7 @@ function MyPayslips() {
         const res = await apiClient(API_ENDPOINTS.MY_PAYSLIPS(page, limit));
         return {
           data: res.data.data?.payslips || res.data.data || [],
-          totalCount: res.data.data?.total || 0,
+          totalCount: res.data.total || 0,
         };
       } catch (err) {
         if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError")

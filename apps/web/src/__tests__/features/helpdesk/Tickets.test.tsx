@@ -56,7 +56,7 @@ function renderWith(
   { setAlert = vi.fn(), totalCount = tickets.length } = {},
 ) {
   mockApiClient.mockResolvedValue({
-    data: { data: { tickets, total: totalCount } },
+    data: { data: { tickets }, total: totalCount },
   });
   return render(
     <AlertContext.Provider value={{ setAlert } as any}>
