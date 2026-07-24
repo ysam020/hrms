@@ -113,10 +113,36 @@ describe("registerFcmToken", () => {
   it("returns INTERNAL on database error", async () => {
     mockFindUnique.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
-    await registerFcmToken(makeCall({ userId: "u1", token: "tok" }), cb);
+    await registerFcmToken(
+      makeCall({ userId: "u1", token: "tok", deviceFingerprint: "fp-1" }),
+      cb,
+    );
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 13 }),
     );
+  });
+
+  it("returns INVALID_ARGUMENT when token is missing", async () => {
+    const cb = makeCallback();
+    await registerFcmToken(
+      makeCall({ userId: "u1", deviceFingerprint: "fp-1" }),
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 3 }),
+    );
+    expect(mockFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("returns INVALID_ARGUMENT when deviceFingerprint is missing", async () => {
+    const cb = makeCallback();
+    await registerFcmToken(makeCall({ userId: "u1", token: "tok" }), cb);
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 3 }),
+    );
+    expect(mockFindUnique).not.toHaveBeenCalled();
   });
 });

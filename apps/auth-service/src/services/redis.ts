@@ -6,7 +6,7 @@
 export {
   getRedisClient,
   storeRefreshToken,
-  validateRefreshToken,
+  rotateRefreshToken,
   revokeRefreshToken,
   markOrgSetupComplete,
   type RefreshTokenMeta,

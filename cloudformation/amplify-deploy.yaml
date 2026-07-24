@@ -28,6 +28,15 @@ Parameters:
   BranchName:
     Type: String
     Default: main
+  VapidKey:
+    Type: String
+    NoEcho: true
+    Description: >
+      Firebase Cloud Messaging Web Push certificate public key (Firebase
+      Console -> Project Settings -> Cloud Messaging -> Web Push certificates)
+      — required for apps/web/src/core/config/firebase.tsx's getToken() call
+      to register a push subscription at all. Without it, FCM token
+      generation fails silently for every user.
 
 Resources:
   AmplifyApp:
@@ -42,6 +51,8 @@ Resources:
           Value: !Sub "https://${ApiSubdomain}.${DomainName}"
         - Name: VITE_API_STRING
           Value: !Sub "https://${ApiSubdomain}.${DomainName}/api/v1"
+        - Name: VITE_VAPID_KEY
+          Value: !Ref VapidKey
         - Name: AMPLIFY_MONOREPO_APP_ROOT
           Value: apps/web
         - Name: AMPLIFY_DIFF_DEPLOY

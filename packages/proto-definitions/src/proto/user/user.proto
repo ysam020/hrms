@@ -1,8 +1,6 @@
 syntax = "proto3";
 package user;
 
-import "google/protobuf/empty.proto";
-
 message User {
   string id = 1;
   string email = 2;
@@ -147,6 +145,4 @@ service UserService {
   rpc RegisterFcmToken (RegisterFcmTokenRequest) returns (FcmTokenResponse);
   // Removes an FCM device token for a user.
   rpc RemoveFcmToken (RemoveFcmTokenRequest) returns (FcmTokenResponse);
-  // Removes expired FCM tokens for all users.
-  rpc CleanupExpiredFcmTokens (google.protobuf.Empty) returns (FcmTokenResponse);
 }

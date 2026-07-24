@@ -4,7 +4,7 @@ import {
   signAccessToken,
   signRefreshToken,
 } from "../services/jwt";
-import { validateRefreshToken, storeRefreshToken } from "../services/redis";
+import { rotateRefreshToken } from "../services/redis";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -25,8 +25,20 @@ export const refreshToken = async (
       });
     }
 
-    const validation = await validateRefreshToken(payload.userId, token);
-    if (!validation.ok) {
+    // The candidate token is generated up front and handed to
+    // rotateRefreshToken(), which atomically decides whether this request
+    // is the one that actually gets to rotate (see refreshTokenStore.ts) —
+    // a concurrent refresh (another tab, a retried request) presenting the
+    // same token can't race this into two independently-stored tokens with
+    // one left orphaned. If this call loses that race, the candidate below
+    // is simply discarded and the winner's token is returned instead.
+    const candidateRefreshToken = signRefreshToken(payload.userId);
+    const rotation = await rotateRefreshToken(
+      payload.userId,
+      token,
+      candidateRefreshToken,
+    );
+    if (!rotation.ok) {
       return callback(null, {
         message: MESSAGES.REFRESH_TOKEN_REVOKED,
         status: status.UNAUTHENTICATED,
@@ -37,45 +49,18 @@ export const refreshToken = async (
 
     const newAccessToken = signAccessToken({
       userId: payload.userId,
-      tenantId: validation.tenantId,
-      tenantRole: validation.tenantRole,
-      pendingSetup: !validation.tenantId,
-      orgSetupComplete: validation.orgSetupComplete ?? true,
-      dbName: validation.dbName,
+      tenantId: rotation.tenantId,
+      tenantRole: rotation.tenantRole,
+      pendingSetup: !rotation.tenantId,
+      orgSetupComplete: rotation.orgSetupComplete ?? true,
+      dbName: rotation.dbName,
     });
-
-    if (validation.currentToken !== token) {
-      // Grace-period retry: re-serve without rotating again.
-      return callback(null, {
-        message: MESSAGES.TOKEN_REFRESHED,
-        status: status.OK,
-        accessToken: newAccessToken,
-        refreshToken: validation.currentToken,
-      });
-    }
-
-    // Normal path: rotate — issue new pair. storeRefreshToken() overwrites
-    // the current-token key and sets the grace-period prev-token key itself;
-    // an explicit revoke here would delete both keys (and null the Mongo
-    // fallback) in the gap before they're rewritten, so a concurrent refresh
-    // (another tab, a retried request) landing in that gap would fail with
-    // no grace fallback at all.
-    const newRefreshToken = signRefreshToken(payload.userId);
-    await storeRefreshToken(
-      payload.userId,
-      newRefreshToken,
-      validation.tenantId,
-      validation.tenantRole,
-      token,
-      validation.dbName,
-      validation.orgSetupComplete ?? true,
-    );
 
     return callback(null, {
       message: MESSAGES.TOKEN_REFRESHED,
       status: status.OK,
       accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
+      refreshToken: rotation.currentToken,
     });
   } catch (err) {
     logger.error("RefreshToken error:", { err });

@@ -232,6 +232,80 @@ describe("sendPushNotifications", () => {
     expect(db.user.update).not.toHaveBeenCalled();
   });
 
+  it("sends to a legacy string-format token entry, and upgrades it to object form with a lastUsed timestamp on success", async () => {
+    db.user.findMany.mockResolvedValue([
+      { id: "u1", fcmTokens: ["legacy-tok"] },
+    ]);
+    mockSend.mockResolvedValue({});
+    db.user.findUnique.mockResolvedValue({ fcmTokens: ["legacy-tok"] });
+    db.user.update.mockResolvedValue({});
+
+    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "legacy-tok" }),
+    );
+    expect(result.sentCount).toBe(1);
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: {
+        fcmTokens: [{ token: "legacy-tok", lastUsed: expect.any(String) }],
+      },
+    });
+  });
+
+  it("removes a legacy string-format token entry after an invalid-token failure", async () => {
+    db.user.findMany.mockResolvedValue([
+      { id: "u1", fcmTokens: ["bad-legacy-tok"] },
+    ]);
+    const err: any = new Error("invalid token");
+    err.code = "messaging/invalid-registration-token";
+    mockSend.mockRejectedValue(err);
+    db.user.findUnique.mockResolvedValue({ fcmTokens: ["bad-legacy-tok"] });
+    db.user.update.mockResolvedValue({});
+
+    await sendPushNotifications("ALL_USERS", "Title", "Body");
+
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { fcmTokens: [] },
+    });
+  });
+
+  it("batches a multi-device user's lastUsed updates into a single read-modify-write instead of one per device", async () => {
+    db.user.findMany.mockResolvedValue([
+      {
+        id: "u1",
+        fcmTokens: [
+          tokenEntry({ token: "device-a", deviceFingerprint: "fp-a" }),
+          tokenEntry({ token: "device-b", deviceFingerprint: "fp-b" }),
+        ],
+      },
+    ]);
+    mockSend.mockResolvedValue({});
+    db.user.findUnique.mockResolvedValue({
+      fcmTokens: [
+        tokenEntry({ token: "device-a", deviceFingerprint: "fp-a" }),
+        tokenEntry({ token: "device-b", deviceFingerprint: "fp-b" }),
+      ],
+    });
+    db.user.update.mockResolvedValue({});
+
+    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+
+    expect(result.sentCount).toBe(2);
+    // One combined read and one combined write for both of this user's
+    // devices, not one per device — avoids the two concurrent sends racing
+    // to read-modify-write the same array and clobbering each other.
+    expect(db.user.findUnique).toHaveBeenCalledTimes(1);
+    expect(db.user.update).toHaveBeenCalledTimes(1);
+    const written = db.user.update.mock.calls[0][0].data.fcmTokens;
+    expect(written).toHaveLength(2);
+    expect(written.every((t: any) => typeof t.lastUsed === "string")).toBe(
+      true,
+    );
+  });
+
   it("passes the title/body through as the FCM notification payload", async () => {
     db.user.findMany.mockResolvedValue([
       { id: "u1", fcmTokens: [tokenEntry()] },

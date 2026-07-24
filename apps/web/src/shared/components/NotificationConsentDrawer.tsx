@@ -9,8 +9,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import UpdateIcon from "@mui/icons-material/Update";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { UserContext } from "@web/app/providers/UserContext";
 import { useBottomDrawer } from "@web/app/providers/BottomDrawerContext";
 import { generateToken } from "@web/shared/utils/pushNotifications/generateFcmToken";
+import { generateDeviceFingerprint } from "@web/shared/utils/pushNotifications/deviceFingerprint";
+import { upsertFcmTokenInUser } from "@web/shared/utils/pushNotifications/upsertFcmTokenInUser";
 
 function NotificationConsentDrawer({
   showConsentDrawer,
@@ -26,6 +29,7 @@ function NotificationConsentDrawer({
   }) => void;
 }) {
   const { theme } = useContext(ThemeContext);
+  const { setUser } = useContext(UserContext);
   const { setDrawerOpen } = useBottomDrawer();
   useEffect(() => {
     setDrawerOpen(showConsentDrawer);
@@ -34,7 +38,19 @@ function NotificationConsentDrawer({
 
   const handleAllow = async () => {
     setShowConsentDrawer(false);
-    await generateToken(setAlert);
+    const token = await generateToken(setAlert);
+    // Keep UserContext.user.fcmTokens in sync immediately — without this,
+    // granting consent here (as opposed to the Profile > Push Notifications
+    // "Enable on this device" button, which already did this) left the
+    // in-memory user stale until the next full /profile refetch, so the
+    // device list wouldn't show this device as enabled until reload.
+    if (token) {
+      const { deviceFingerprint, deviceInfo } =
+        await generateDeviceFingerprint();
+      setUser((prev: any) =>
+        upsertFcmTokenInUser(prev, token, deviceFingerprint, deviceInfo),
+      );
+    }
   };
 
   const handleDeny = () => {

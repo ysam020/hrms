@@ -20,6 +20,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { generateDeviceFingerprint } from "@web/shared/utils/pushNotifications/deviceFingerprint";
 import { generateToken } from "@web/shared/utils/pushNotifications/generateFcmToken";
+import { upsertFcmTokenInUser } from "@web/shared/utils/pushNotifications/upsertFcmTokenInUser";
 import apiClient from "@web/core/http/axiosConfig";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
@@ -59,6 +60,23 @@ function PushNotifications() {
     getCurrentDeviceFingerprint();
   }, []);
 
+  // Profile.tsx only fetches /profile once, when the Profile page itself
+  // first mounts — switching between its tabs re-renders but doesn't
+  // remount Profile, so it never refetches. This component IS unmounted
+  // and remounted on every tab switch (Profile conditionally renders it,
+  // rather than just hiding it), so a fetch here keeps the device list
+  // current every time this tab is actually viewed — e.g. after a device's
+  // token expired/got removed server-side since the last full page load.
+  useEffect(() => {
+    apiClient(API_ENDPOINTS.GET_PROFILE)
+      .then((res) => {
+        if (res.data?.success) {
+          setUser((prev) => ({ ...prev, ...res.data.data.user }));
+        }
+      })
+      .catch((error) => console.error("Error refreshing profile:", error));
+  }, [setUser]);
+
   const handleEnablePushNotifications = async () => {
     setLoading(true);
     try {
@@ -71,24 +89,9 @@ function PushNotifications() {
       if (token) {
         const { deviceFingerprint, deviceInfo } =
           await generateDeviceFingerprint();
-        setUser((prev) => {
-          const existing = Array.isArray(prev.fcmTokens) ? prev.fcmTokens : [];
-          const idx = existing.findIndex(
-            (t) => t.deviceFingerprint === deviceFingerprint,
-          );
-          const newEntry = {
-            token,
-            deviceFingerprint,
-            deviceInfo,
-            lastUsed: new Date(),
-            isActive: true,
-          };
-          const updated =
-            idx >= 0
-              ? existing.map((t, i) => (i === idx ? { ...t, ...newEntry } : t))
-              : [...existing, newEntry];
-          return { ...prev, fcmTokens: updated };
-        });
+        setUser((prev) =>
+          upsertFcmTokenInUser(prev, token, deviceFingerprint, deviceInfo),
+        );
         setAlert({
           open: true,
           message: "Push notifications enabled on this device",

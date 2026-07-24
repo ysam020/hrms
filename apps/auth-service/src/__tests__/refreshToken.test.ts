@@ -9,8 +9,7 @@ jest.mock("../services/jwt", () => ({
 }));
 
 jest.mock("../services/redis", () => ({
-  validateRefreshToken: jest.fn(),
-  storeRefreshToken: jest.fn(),
+  rotateRefreshToken: jest.fn(),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -22,13 +21,12 @@ import {
   signAccessToken,
   signRefreshToken,
 } from "../services/jwt";
-import { validateRefreshToken, storeRefreshToken } from "../services/redis";
+import { rotateRefreshToken } from "../services/redis";
 
 const mockVerifyRefreshToken = verifyRefreshToken as jest.Mock;
 const mockSignAccessToken = signAccessToken as jest.Mock;
 const mockSignRefreshToken = signRefreshToken as jest.Mock;
-const mockValidateRefreshToken = validateRefreshToken as jest.Mock;
-const mockStoreRefreshToken = storeRefreshToken as jest.Mock;
+const mockRotateRefreshToken = rotateRefreshToken as jest.Mock;
 
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
@@ -50,12 +48,12 @@ describe("refreshToken", () => {
       accessToken: "",
       refreshToken: "",
     });
-    expect(mockValidateRefreshToken).not.toHaveBeenCalled();
+    expect(mockRotateRefreshToken).not.toHaveBeenCalled();
   });
 
   it("returns UNAUTHENTICATED when token is valid but revoked in Redis", async () => {
     mockVerifyRefreshToken.mockReturnValue({ userId: "user-1" });
-    mockValidateRefreshToken.mockResolvedValue({ ok: false });
+    mockRotateRefreshToken.mockResolvedValue({ ok: false });
 
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "revoked-token" }), cb);
@@ -70,29 +68,28 @@ describe("refreshToken", () => {
 
   it("rotates tokens and returns new pair on happy path", async () => {
     mockVerifyRefreshToken.mockReturnValue({ userId: "user-1" });
-    mockValidateRefreshToken.mockResolvedValue({
+    mockSignRefreshToken.mockReturnValue("new-refresh-token");
+    mockRotateRefreshToken.mockResolvedValue({
       ok: true,
-      currentToken: "valid-token",
+      currentToken: "new-refresh-token",
+      tenantId: null,
+      tenantRole: null,
+      dbName: null,
+      orgSetupComplete: true,
     });
     mockSignAccessToken.mockReturnValue("new-access-token");
-    mockSignRefreshToken.mockReturnValue("new-refresh-token");
-    mockStoreRefreshToken.mockResolvedValue(undefined);
 
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "valid-token" }), cb);
 
+    expect(mockSignRefreshToken).toHaveBeenCalledWith("user-1");
+    expect(mockRotateRefreshToken).toHaveBeenCalledWith(
+      "user-1",
+      "valid-token",
+      "new-refresh-token",
+    );
     expect(mockSignAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user-1" }),
-    );
-    expect(mockSignRefreshToken).toHaveBeenCalledWith("user-1");
-    expect(mockStoreRefreshToken).toHaveBeenCalledWith(
-      "user-1",
-      "new-refresh-token",
-      undefined,
-      undefined,
-      "valid-token",
-      undefined,
-      true,
     );
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.TOKEN_REFRESHED,
@@ -102,21 +99,24 @@ describe("refreshToken", () => {
     });
   });
 
-  it("re-serves current token without rotating during grace period retry", async () => {
+  it("re-serves the winning token when this request lost the rotation race", async () => {
     mockVerifyRefreshToken.mockReturnValue({ userId: "user-1" });
-    // currentToken differs from the incoming token — this is the grace-period case
-    mockValidateRefreshToken.mockResolvedValue({
+    mockSignRefreshToken.mockReturnValue("discarded-candidate-token");
+    // rotateRefreshToken's currentToken differs from our candidate — another
+    // concurrent request won the atomic rotation; ours was never persisted.
+    mockRotateRefreshToken.mockResolvedValue({
       ok: true,
       currentToken: "already-rotated-token",
+      tenantId: null,
+      tenantRole: null,
+      dbName: null,
+      orgSetupComplete: true,
     });
     mockSignAccessToken.mockReturnValue("new-access-token");
 
     const cb = makeCallback();
     await refreshToken(makeCall({ refreshToken: "old-token" }), cb);
 
-    // Must NOT rotate again
-    expect(mockSignRefreshToken).not.toHaveBeenCalled();
-    expect(mockStoreRefreshToken).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.TOKEN_REFRESHED,
       status: status.OK,
@@ -125,24 +125,28 @@ describe("refreshToken", () => {
     });
   });
 
-  it("validates token with correct userId extracted from payload", async () => {
+  it("calls rotateRefreshToken with the correct userId extracted from payload", async () => {
     mockVerifyRefreshToken.mockReturnValue({ userId: "user-42" });
-    mockValidateRefreshToken.mockResolvedValue({
+    mockSignRefreshToken.mockReturnValue("new-refresh-token");
+    mockRotateRefreshToken.mockResolvedValue({
       ok: true,
-      currentToken: "valid-token",
+      currentToken: "new-refresh-token",
+      tenantId: null,
+      tenantRole: null,
+      dbName: null,
+      orgSetupComplete: true,
     });
     mockSignAccessToken.mockReturnValue("at");
-    mockSignRefreshToken.mockReturnValue("rt");
-    mockStoreRefreshToken.mockResolvedValue(undefined);
 
     await refreshToken(
       makeCall({ refreshToken: "valid-token" }),
       makeCallback(),
     );
 
-    expect(mockValidateRefreshToken).toHaveBeenCalledWith(
+    expect(mockRotateRefreshToken).toHaveBeenCalledWith(
       "user-42",
       "valid-token",
+      "new-refresh-token",
     );
   });
 

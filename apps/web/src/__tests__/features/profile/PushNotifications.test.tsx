@@ -9,7 +9,15 @@ import { generateDeviceFingerprint } from "@web/shared/utils/pushNotifications/d
 import { generateToken } from "@web/shared/utils/pushNotifications/generateFcmToken";
 import { disablePushNotifications } from "@web/shared/utils/pushNotifications/disablePushNotifications";
 
-vi.mock("@web/core/http/axiosConfig", () => ({ default: { delete: vi.fn() } }));
+vi.mock("@web/core/http/axiosConfig", () => {
+  // Called both as a function (apiClient(url) — the GET shorthand this
+  // component's own mount-time profile refresh uses) and via .delete
+  // (device removal) — mirror both call shapes on the same mock.
+  const callable: any = vi.fn();
+  callable.delete = vi.fn();
+  return { default: callable };
+});
+const mockGet = apiClient as unknown as ReturnType<typeof vi.fn>;
 const mockDelete = apiClient.delete as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock("@web/shared/utils/pushNotifications/deviceFingerprint", () => ({
@@ -65,11 +73,39 @@ function renderPush({ user = {}, setUser = vi.fn(), setAlert = vi.fn() } = {}) {
 describe("PushNotifications", () => {
   beforeEach(() => {
     mockDelete.mockReset();
+    // Defaults to an unsuccessful response so this mount-time refresh never
+    // calls setUser in tests that don't care about it — leaving each test's
+    // own setUser.mock.calls assertions targeting only their own updater.
+    mockGet.mockReset().mockResolvedValue({ data: { success: false } });
     mockFingerprint
       .mockReset()
       .mockResolvedValue({ deviceFingerprint: "fp-current", deviceInfo: {} });
     mockGenerateToken.mockReset();
     mockDisableAll.mockReset();
+  });
+
+  it("refreshes the profile on mount so a device removed elsewhere (e.g. directly in the DB) doesn't keep showing as enabled", async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: { user: { fcmTokens: [] } },
+      },
+    });
+    const { setUser } = renderPush({
+      user: {
+        fcmTokens: [{ deviceFingerprint: "fp-current", deviceInfo: {} }],
+      },
+    });
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalled());
+    const updater = setUser.mock.calls.find(
+      (c) => typeof c[0] === "function",
+    )![0];
+    expect(
+      updater({
+        fcmTokens: [{ deviceFingerprint: "fp-current" }],
+      }).fcmTokens,
+    ).toEqual([]);
   });
 
   it("shows an empty state when there are no registered devices", async () => {
