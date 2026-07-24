@@ -18,6 +18,7 @@
     "@hrms/firebase": "workspace:*",
     "@hrms/grpc-client": "workspace:*",
     "@hrms/logger": "workspace:*",
+    "@hrms/notifications": "workspace:*",
     "@hrms/proto": "workspace:^",
     "@hrms/queue": "workspace:*",
     "@hrms/websocket": "workspace:*",

@@ -2,7 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 import { getKycApprovers } from "../utils/kycApprovers";
 
@@ -79,21 +79,20 @@ export const allowKycEdit = async (
     ]);
 
     // Notify employee (fire-and-forget)
-    getNotificationQueue()
-      .add("kycEditAllowed", {
-        tenantId: getTenantId()!,
+    notify({
+      tenantId: getTenantId()!,
+      event: "kycEditAllowed",
+      targetUser: updatedUser!.username,
+      inApp: {
         title: "KYC",
         message: MESSAGES.KYC_EDIT_ALLOWED,
-        targetUser: updatedUser!.username,
         eventType: "kyc_notification",
         priority: "medium",
-        sendPushNotification: true,
         socketEvent: "kyc-edit-allowed",
         socketPayload: { userId: employeeId, username: updatedUser!.username },
-      })
-      .catch((err) =>
-        logger.error("[allowKycEdit] Notification enqueue failed:", { err }),
-      );
+      },
+      push: { enabled: true },
+    }).catch((err) => logger.error("[allowKycEdit] notify failed:", { err }));
 
     // Tell every OTHER eligible approver this is resolved, so it disappears
     // live from their pending list instead of surfacing a stale, already-
@@ -102,23 +101,26 @@ export const allowKycEdit = async (
       .then((approvers) => {
         const others = approvers.filter((a) => a.id !== actorUserId);
         if (others.length === 0) return;
-        return getNotificationQueue().add("kycEditResolved", {
+        return notify({
           tenantId: getTenantId()!,
-          title: "KYC",
-          message: `${updatedUser!.username}'s KYC edit-access request was already handled.`,
+          event: "kycEditResolved",
           pushTargets: others.map((u) => u.username),
-          eventType: "kyc_notification",
-          priority: "low",
-          sendPushNotification: false,
-          socketEvent: "kyc-edit-resolved",
-          socketPayload: {
-            userId: employeeId,
-            username: updatedUser!.username,
+          inApp: {
+            title: "KYC",
+            message: `${updatedUser!.username}'s KYC edit-access request was already handled.`,
+            eventType: "kyc_notification",
+            priority: "low",
+            socketEvent: "kyc-edit-resolved",
+            socketPayload: {
+              userId: employeeId,
+              username: updatedUser!.username,
+            },
           },
+          push: { enabled: false },
         });
       })
       .catch((err) =>
-        logger.error("[allowKycEdit] Resolved-notification enqueue failed:", {
+        logger.error("[allowKycEdit] resolved-notify failed:", {
           err,
         }),
       );

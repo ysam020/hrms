@@ -1,5 +1,6 @@
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
+import { notify } from "@hrms/notifications";
 import { requestKycRevision } from "../handlers/requestKycRevision";
 
 jest.mock("@hrms/db", () => {
@@ -17,10 +18,10 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn(), delete: jest.fn() },
 }));
 
-const mockQueueAdd = jest.fn().mockResolvedValue(undefined);
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({ add: mockQueueAdd })),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
+const mockNotify = notify as jest.Mock;
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -154,11 +155,11 @@ describe("requestKycRevision", () => {
         kycStatus: "Revision Requested",
       }),
     );
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "kycRevisionRequested",
+    expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({
+        event: "kycRevisionRequested",
         targetUser: "john",
-        sendPushNotification: true,
+        push: { enabled: true },
       }),
     );
   });

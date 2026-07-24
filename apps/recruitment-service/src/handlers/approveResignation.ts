@@ -6,7 +6,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 
@@ -73,21 +73,6 @@ export const approveResignation = async (
     await cacheManager.invalidatePattern(`t:${getTenantId()}:resignations:*`);
 
     // Notify employee (fire-and-forget)
-    getNotificationQueue()
-      .add("resignationApproved", {
-        tenantId: getTenantId()!,
-        title: "Resignation",
-        message: MESSAGES.RESIGNATION_APPROVED,
-        targetUser: updatedResignation.userId,
-        eventType: "resignation_notification",
-        priority: "medium",
-      })
-      .catch((err) =>
-        logger.error("[approveResignation] Notification enqueue failed:", {
-          err,
-        }),
-      );
-
     Promise.all([
       updatedResignation.userId
         ? prisma.user.findUnique({
@@ -101,22 +86,34 @@ export const approveResignation = async (
       }),
     ])
       .then(([employee, tenant]) => {
-        if (!employee?.email) return;
         const tenantName = tenant?.name ?? "your organisation";
-        return getEmailQueue().add("resignationApproved", {
-          to: employee.email,
-          subject: "Your resignation was approved",
-          html: renderEmailHtml({
-            title: "Resignation Approved",
-            tenantName,
-            bodyHtml: `<h2>Hello,</h2><p>${MESSAGES.RESIGNATION_APPROVED}</p>`,
-          }),
-          from: tenantFrom(tenantName),
-          replyTo: tenantReplyTo(tenant?.helpEmail),
+        return notify({
+          tenantId: getTenantId()!,
+          event: "resignationApproved",
+          targetUser: updatedResignation.userId ?? undefined,
+          inApp: {
+            title: "Resignation",
+            message: MESSAGES.RESIGNATION_APPROVED,
+            eventType: "resignation_notification",
+            priority: "medium",
+          },
+          email: employee?.email
+            ? {
+                to: employee.email,
+                subject: "Your resignation was approved",
+                html: renderEmailHtml({
+                  title: "Resignation Approved",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>${MESSAGES.RESIGNATION_APPROVED}</p>`,
+                }),
+                from: tenantFrom(tenantName),
+                replyTo: tenantReplyTo(tenant?.helpEmail),
+              }
+            : undefined,
         });
       })
       .catch((err) =>
-        logger.warn("[approveResignation] email enqueue failed:", { err }),
+        logger.warn("[approveResignation] notify failed:", { err }),
       );
 
     // ApproveResignation's proto response is BasicResponse (message+status

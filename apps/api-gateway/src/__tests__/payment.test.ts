@@ -1,6 +1,6 @@
 import { createHmac } from "crypto";
 import { prisma } from "@hrms/db";
-import { getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import {
   fetchPaymentMethod,
   createSubscription,
@@ -41,10 +41,9 @@ jest.mock("@hrms/common", () => ({
   renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
-jest.mock("@hrms/queue", () => {
-  const emailQueue = { add: jest.fn().mockResolvedValue(undefined) };
-  return { getEmailQueue: jest.fn(() => emailQueue) };
-});
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
+}));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -77,7 +76,7 @@ const mockTenantUpdateMany = (prisma as any).tenant.updateMany as jest.Mock;
 const mockMembershipFindFirst = (prisma as any).tenantMembership
   .findFirst as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
-const mockEmailAdd = getEmailQueue().add as jest.Mock;
+const mockNotify = notify as jest.Mock;
 const mockTokenStore = tenantTokenStore as jest.Mocked<typeof tenantTokenStore>;
 
 // Waits for fire-and-forget owner-email lookups (getTenantOwnerEmail) to settle.
@@ -583,13 +582,15 @@ describe("payment handlers", () => {
       await handleWebhook(req, res);
       await flushMicrotasks();
 
-      expect(mockEmailAdd).toHaveBeenCalledWith(
-        "subscriptionRenewed",
+      expect(mockNotify).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: "owner@example.com",
-          attachments: expect.arrayContaining([
-            expect.objectContaining({ content: expect.any(String) }),
-          ]),
+          event: "subscriptionRenewed",
+          email: expect.objectContaining({
+            to: "owner@example.com",
+            attachments: expect.arrayContaining([
+              expect.objectContaining({ content: expect.any(String) }),
+            ]),
+          }),
         }),
       );
     });
@@ -643,9 +644,11 @@ describe("payment handlers", () => {
       await handleWebhook(req, res);
       await flushMicrotasks();
 
-      expect(mockEmailAdd).toHaveBeenCalledWith(
-        "subscriptionPaymentFailed",
-        expect.objectContaining({ to: "owner@example.com" }),
+      expect(mockNotify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "subscriptionPaymentFailed",
+          email: expect.objectContaining({ to: "owner@example.com" }),
+        }),
       );
     });
 

@@ -2,7 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 import dayjs from "dayjs";
 
@@ -47,18 +47,21 @@ export const createHrActivity = async (
       .findMany({ select: { id: true, username: true } })
       .then((users) => {
         if (users.length === 0) return;
-        return getNotificationQueue().add("hrActivityCreated", {
+        return notify({
           tenantId: getTenantId()!,
-          title: "HR Activity",
-          message: `There is an activity- ${activity.title} on ${displayDate} at ${displayTime}`,
+          event: "hrActivityCreated",
           recipients: users.map((u) => u.id),
           pushTargets: users.map((u) => u.username),
-          eventType: "hr_activity_notification",
-          priority: "medium",
+          inApp: {
+            title: "HR Activity",
+            message: `There is an activity- ${activity.title} on ${displayDate} at ${displayTime}`,
+            eventType: "hr_activity_notification",
+            priority: "medium",
+          },
         });
       })
       .catch((err) =>
-        logger.warn("[createHrActivity] Notification enqueue failed:", { err }),
+        logger.warn("[createHrActivity] notify failed:", { err }),
       );
 
     return callback(null, {

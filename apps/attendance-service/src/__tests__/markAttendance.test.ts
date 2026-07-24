@@ -1,7 +1,7 @@
 import { status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { markAttendance } from "../handlers/markAttendance";
 import { MESSAGES } from "../constants/messages";
 
@@ -53,10 +53,8 @@ jest.mock("@hrms/cache", () => ({
   },
 }));
 
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest
-    .fn()
-    .mockReturnValue({ add: jest.fn().mockResolvedValue(undefined) }),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -88,7 +86,7 @@ const mockLeaveBalanceUpdateMany = (prisma as any).leaveBalance
 const mockCompOffUpdateMany = (prisma as any).compOffCredit
   .updateMany as jest.Mock;
 const mockWfhFindFirst = (prisma as any).wfhRequest.findFirst as jest.Mock;
-const mockNotificationAdd = getNotificationQueue().add as jest.Mock;
+const mockNotify = notify as jest.Mock;
 
 const DEFAULT_ATTENDANCE_SETTINGS = {
   workStartHour: 9,
@@ -131,7 +129,7 @@ describe("markAttendance", () => {
     mockLeaveBalanceUpdateMany.mockResolvedValue({ count: 1 });
     mockCompOffUpdateMany.mockResolvedValue({ count: 1 });
     mockUserFindMany.mockResolvedValue([]);
-    mockNotificationAdd.mockResolvedValue(undefined);
+    mockNotify.mockResolvedValue({ notificationId: "n1", jobIds: {} });
     // No approved WFH request for today by default.
     mockWfhFindFirst.mockResolvedValue(null);
   });
@@ -228,7 +226,7 @@ describe("markAttendance", () => {
         data: { balances: { PL: 6 } },
       });
       expect(mockCompOffUpdateMany).not.toHaveBeenCalled();
-      expect(mockNotificationAdd).toHaveBeenCalled();
+      expect(mockNotify).toHaveBeenCalled();
       expect(mockCreate).toHaveBeenCalled();
       expect(cb).toHaveBeenCalledWith(
         null,

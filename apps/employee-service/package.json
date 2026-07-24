@@ -12,6 +12,7 @@
     "@hrms/db": "workspace:*",
     "@hrms/grpc-server": "workspace:*",
     "@hrms/logger": "workspace:*",
+    "@hrms/notifications": "workspace:*",
     "@hrms/proto": "workspace:^",
     "@hrms/queue": "workspace:*",
     "zod": "^3.23.8"

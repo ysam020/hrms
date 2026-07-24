@@ -1,6 +1,6 @@
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 
 const COMP_OFF_TYPE = "COMP_OFF";
 
@@ -144,17 +144,22 @@ async function notifyLeaveAutoCancelled(
   ]);
 
   const targets = approver ? [...hrUsers, approver] : hrUsers;
-  const uniqueIds = [...new Set(targets.map((u: any) => u.id))];
-  const uniqueUsernames = [...new Set(targets.map((u: any) => u.username))];
+  const uniqueIds = [...new Set<string>(targets.map((u: any) => u.id))];
+  const uniqueUsernames = [
+    ...new Set<string>(targets.map((u: any) => u.username)),
+  ];
   if (uniqueUsernames.length === 0) return;
 
-  await getNotificationQueue().add("leaveAutoCancelled", {
+  await notify({
     tenantId: getTenantId()!,
-    title: "Leave",
-    message: `${employee?.username || userId}'s approved leave for today was auto-cancelled — they checked in instead.`,
+    event: "leaveAutoCancelled",
     recipients: uniqueIds,
     pushTargets: uniqueUsernames,
-    eventType: "leave_notification",
-    priority: "medium",
+    inApp: {
+      title: "Leave",
+      message: `${employee?.username || userId}'s approved leave for today was auto-cancelled — they checked in instead.`,
+      eventType: "leave_notification",
+      priority: "medium",
+    },
   });
 }

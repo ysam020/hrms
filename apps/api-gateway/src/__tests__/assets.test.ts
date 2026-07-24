@@ -1,6 +1,6 @@
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import {
   createAsset,
   listAssets,
@@ -84,12 +84,10 @@ jest.mock("../utils/webhookEmitter", () => ({
   emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
-const mockQueueAdd = jest.fn().mockResolvedValue(undefined);
-const mockEmailAdd = jest.fn().mockResolvedValue(undefined);
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({ add: mockQueueAdd })),
-  getEmailQueue: jest.fn(() => ({ add: mockEmailAdd })),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
+const mockNotify = notify as jest.Mock;
 
 // Waits for the fire-and-forget assign-notification promise chain to settle.
 const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
@@ -407,9 +405,11 @@ describe("assets handlers", () => {
         "asset.assigned",
         expect.objectContaining({ assetId: "a1", assignedTo: "jdoe" }),
       );
-      expect(mockQueueAdd).toHaveBeenCalledWith(
-        "assetAssigned",
-        expect.objectContaining({ targetUser: "u2" }),
+      expect(mockNotify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "assetAssigned",
+          targetUser: "u2",
+        }),
       );
     });
 
@@ -438,9 +438,11 @@ describe("assets handlers", () => {
       await assignAsset(req, res);
       await flushMicrotasks();
 
-      expect(mockEmailAdd).toHaveBeenCalledWith(
-        "assetAssigned",
-        expect.objectContaining({ to: "jdoe@example.com" }),
+      expect(mockNotify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "assetAssigned",
+          email: expect.objectContaining({ to: "jdoe@example.com" }),
+        }),
       );
     });
   });

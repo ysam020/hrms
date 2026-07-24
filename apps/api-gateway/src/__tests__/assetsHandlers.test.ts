@@ -35,8 +35,8 @@ jest.mock("../utils/webhookEmitter", () => ({
   emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
 
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;

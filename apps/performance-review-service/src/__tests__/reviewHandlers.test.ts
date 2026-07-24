@@ -34,13 +34,8 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({
-    add: jest.fn().mockResolvedValue(undefined),
-  })),
-  getEmailQueue: jest.fn(() => ({
-    add: jest.fn().mockResolvedValue(undefined),
-  })),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
 
 jest.mock("@hrms/common", () => ({

@@ -14,7 +14,7 @@ import {
   renderEmailHtml,
   buildIcsInvite,
 } from "@hrms/common";
-import { getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { cacheManager } from "@hrms/cache";
 import { handleError, handleActionError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
@@ -947,8 +947,10 @@ async function scheduleMeetEventAndNotifyCandidate(options: {
       ],
     });
 
-    await getEmailQueue()
-      .add("interviewInvite", {
+    await notify({
+      tenantId: options.tenantId,
+      event: "interviewInvite",
+      email: {
         to: options.candidateEmail,
         subject: `Interview invite: Round ${options.roundNumber} — ${tenantName}`,
         html: renderEmailHtml({
@@ -973,10 +975,10 @@ ${meetLink ? `<p><strong>Join via Google Meet:</strong> <a href="${meetLink}">${
             contentType: 'text/calendar; charset="UTF-8"; method=REQUEST',
           },
         ],
-      })
-      .catch((e: unknown) =>
-        logger.warn("interview invite email failed to queue", { e }),
-      );
+      },
+    }).catch((e: unknown) =>
+      logger.warn("interview invite notify failed:", { e }),
+    );
   }
 
   return meetLink;

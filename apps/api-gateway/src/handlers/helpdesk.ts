@@ -22,7 +22,8 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
-import { getSchedulerQueue, getNotificationQueue } from "@hrms/queue";
+import { getSchedulerQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
 import dayjs from "dayjs";
 
@@ -100,15 +101,18 @@ async function notifyTicketEvent(
     select: { id: true, username: true },
   });
   if (users.length === 0) return;
-  await getNotificationQueue().add("helpdeskNotification", {
+  await notify({
     tenantId,
-    title,
-    message,
+    event: "helpdeskNotification",
     recipients: users.map((u) => u.id),
     pushTargets: users.map((u) => u.username),
-    eventType: "helpdesk_notification",
-    priority,
-    sendPushNotification: true,
+    inApp: {
+      title,
+      message,
+      eventType: "helpdesk_notification",
+      priority,
+    },
+    push: { enabled: true },
   });
 }
 

@@ -27,7 +27,7 @@ import {
   grpcCall,
 } from "../grpc/clients";
 import { emitWebhookEvent } from "../utils/webhookEmitter";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { getWorkingDays, isHoliday, eachDate } from "../utils/workingDays";
@@ -664,19 +664,6 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
         ? "Your work-from-home request has been approved"
         : "Your work-from-home request has been rejected";
 
-    getNotificationQueue()
-      .add("wfhDecision", {
-        tenantId,
-        title: "WFH Request",
-        message: decisionMessage,
-        targetUser: wfhReq.userId,
-        eventType: "wfh_notification",
-        priority: "medium",
-      })
-      .catch((err) =>
-        logger.warn("[wfh approval] Notification enqueue failed:", { err }),
-      );
-
     Promise.all([
       (prisma as any).user.findUnique({
         where: { id: wfhReq.userId },
@@ -688,30 +675,40 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
       }),
     ])
       .then(([employee, tenant]) => {
-        if (!employee?.email) return;
         const tenantName = tenant?.name ?? "your organisation";
         const dateRange = formatDateOrRange(wfhReq.date, wfhReq.toDate);
-        return getEmailQueue().add("wfhDecision", {
-          to: employee.email,
-          subject:
-            finalStatus === "approved"
-              ? "Your WFH request was approved"
-              : "Your WFH request was rejected",
-          html: renderEmailHtml({
-            title:
-              finalStatus === "approved"
-                ? "WFH Request Approved"
-                : "WFH Request Rejected",
-            tenantName,
-            bodyHtml: `<h2>Hello,</h2><p>${decisionMessage}</p><p><strong>Dates:</strong> ${dateRange}</p>`,
-          }),
-          from: tenantFrom(tenantName),
-          replyTo: tenantReplyTo(tenant?.helpEmail),
+        return notify({
+          tenantId,
+          event: "wfhDecision",
+          targetUser: wfhReq.userId,
+          inApp: {
+            title: "WFH Request",
+            message: decisionMessage,
+            eventType: "wfh_notification",
+            priority: "medium",
+          },
+          email: employee?.email
+            ? {
+                to: employee.email,
+                subject:
+                  finalStatus === "approved"
+                    ? "Your WFH request was approved"
+                    : "Your WFH request was rejected",
+                html: renderEmailHtml({
+                  title:
+                    finalStatus === "approved"
+                      ? "WFH Request Approved"
+                      : "WFH Request Rejected",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>${decisionMessage}</p><p><strong>Dates:</strong> ${dateRange}</p>`,
+                }),
+                from: tenantFrom(tenantName),
+                replyTo: tenantReplyTo(tenant?.helpEmail),
+              }
+            : undefined,
         });
       })
-      .catch((err) =>
-        logger.warn("[wfh approval] email enqueue failed:", { err }),
-      );
+      .catch((err) => logger.warn("[wfh approval] notify failed:", { err }));
   },
   // Performance reviews are a separate gRPC service (performance-review-service).
   // No microservice in this codebase calls another microservice's gRPC client

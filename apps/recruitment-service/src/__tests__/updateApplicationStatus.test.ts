@@ -20,15 +20,9 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn() },
 }));
 
-jest.mock("@hrms/queue", () => {
-  const emailQueue = { add: jest.fn().mockResolvedValue(undefined) };
-  return {
-    getNotificationQueue: jest.fn(() => ({
-      add: jest.fn().mockResolvedValue(undefined),
-    })),
-    getEmailQueue: jest.fn(() => emailQueue),
-  };
-});
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
+}));
 
 jest.mock("@hrms/common", () => ({
   tenantFrom: jest.fn(
@@ -38,7 +32,7 @@ jest.mock("@hrms/common", () => ({
   renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -50,8 +44,7 @@ const mockJobOpeningUpdate = (prisma as any).jobOpening.update as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
-const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
-const mockEmailAdd = getEmailQueue().add as jest.Mock;
+const mockNotify = notify as jest.Mock;
 
 // Waits for the fire-and-forget candidate-email promise chain to settle.
 const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
@@ -159,9 +152,11 @@ describe("updateApplicationStatus", () => {
       cb,
     );
     await flushMicrotasks();
-    expect(mockEmailAdd).toHaveBeenCalledWith(
-      "applicationStatusUpdated",
-      expect.objectContaining({ to: "candidate@example.com" }),
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "applicationStatusUpdated",
+        email: expect.objectContaining({ to: "candidate@example.com" }),
+      }),
     );
   });
 
@@ -174,7 +169,9 @@ describe("updateApplicationStatus", () => {
       cb,
     );
     await flushMicrotasks();
-    expect(mockEmailAdd).not.toHaveBeenCalled();
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({ email: undefined }),
+    );
   });
 
   it("increments candidatesHired when status is Hired", async () => {
@@ -551,9 +548,6 @@ describe("updateApplicationStatus", () => {
   });
 
   it("enqueues notification when HR users exist", async () => {
-    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
-    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
-
     mockFindUnique.mockResolvedValue(application);
     mockUpdate.mockResolvedValue({ ...application, status: "Shortlisted" });
     mockUserFindMany.mockResolvedValue([{ id: "u1", username: "hr1" }]);
@@ -564,9 +558,8 @@ describe("updateApplicationStatus", () => {
     );
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(mockQueue.add).toHaveBeenCalledWith(
-      "applicationStatusUpdated",
-      expect.any(Object),
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "applicationStatusUpdated" }),
     );
   });
 });

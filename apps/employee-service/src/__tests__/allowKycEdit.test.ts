@@ -1,5 +1,6 @@
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
+import { notify } from "@hrms/notifications";
 import { allowKycEdit } from "../handlers/allowKycEdit";
 
 jest.mock("@hrms/db", () => {
@@ -22,10 +23,10 @@ jest.mock("@hrms/cache", () => ({
   cacheManager: { invalidatePattern: jest.fn(), delete: jest.fn() },
 }));
 
-const mockQueueAdd = jest.fn().mockResolvedValue(undefined);
-jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({ add: mockQueueAdd })),
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));
+const mockNotify = notify as jest.Mock;
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -114,7 +115,7 @@ describe("allowKycEdit", () => {
       null,
       expect.objectContaining({ status: 9, kycStatus: "Pending" }),
     );
-    expect(mockQueueAdd).not.toHaveBeenCalled();
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
   it("sets Pending, clears the reason, and invalidates cache", async () => {
@@ -138,13 +139,15 @@ describe("allowKycEdit", () => {
       null,
       expect.objectContaining({ status: 0, kycStatus: "Pending" }),
     );
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "kycEditAllowed",
+    expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({
+        event: "kycEditAllowed",
         targetUser: "john",
-        sendPushNotification: true,
-        socketEvent: "kyc-edit-allowed",
-        socketPayload: { userId: "u1", username: "john" },
+        push: { enabled: true },
+        inApp: expect.objectContaining({
+          socketEvent: "kyc-edit-allowed",
+          socketPayload: { userId: "u1", username: "john" },
+        }),
       }),
     );
   });
@@ -161,13 +164,15 @@ describe("allowKycEdit", () => {
     );
     await flushMicrotasks();
 
-    expect(mockQueueAdd).toHaveBeenCalledWith(
-      "kycEditResolved",
+    expect(mockNotify).toHaveBeenCalledWith(
       expect.objectContaining({
+        event: "kycEditResolved",
         pushTargets: ["hr-bob"],
-        sendPushNotification: false,
-        socketEvent: "kyc-edit-resolved",
-        socketPayload: { userId: "u1", username: "john" },
+        push: { enabled: false },
+        inApp: expect.objectContaining({
+          socketEvent: "kyc-edit-resolved",
+          socketPayload: { userId: "u1", username: "john" },
+        }),
       }),
     );
   });
@@ -181,9 +186,8 @@ describe("allowKycEdit", () => {
     );
     await flushMicrotasks();
 
-    expect(mockQueueAdd).not.toHaveBeenCalledWith(
-      "kycEditResolved",
-      expect.anything(),
+    expect(mockNotify).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: "kycEditResolved" }),
     );
   });
 

@@ -14,7 +14,7 @@ import {
   tenantReplyTo,
   renderEmailHtml,
 } from "@hrms/common";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { handleError } from "../utils/handleError";
 
 export async function getRoles(_req: Request, res: Response) {
@@ -234,43 +234,41 @@ export async function saveUserPermissions(req: Request, res: Response) {
     const tenantId = getTenantId();
     if (addedCount > 0 && tenantId) {
       const message = `You've been granted ${addedCount} new permission${addedCount === 1 ? "" : "s"}: ${addedPerms.join(", ")}`;
-      getNotificationQueue()
-        .add("permissionsGranted", {
-          tenantId,
-          title: "Permissions Updated",
-          message,
-          targetUser: user.id,
-          eventType: "permission_notification",
-          priority: "medium",
+      masterPrisma.tenant
+        .findUnique({
+          where: { id: tenantId },
+          select: { name: true, helpEmail: true },
+        })
+        .then((tenant) => {
+          const tenantName = tenant?.name ?? "your organisation";
+          return notify({
+            tenantId,
+            event: "permissionsGranted",
+            targetUser: user.id,
+            inApp: {
+              title: "Permissions Updated",
+              message,
+              eventType: "permission_notification",
+              priority: "medium",
+            },
+            email: user.email
+              ? {
+                  to: user.email,
+                  subject: "You've been granted new permissions",
+                  html: renderEmailHtml({
+                    title: "Permissions Updated",
+                    tenantName,
+                    bodyHtml: `<h2>Hello ${user.username},</h2><p>${message}</p>`,
+                  }),
+                  from: tenantFrom(tenantName),
+                  replyTo: tenantReplyTo(tenant?.helpEmail),
+                }
+              : undefined,
+          });
         })
         .catch((error: unknown) =>
-          logger.warn("permissions-granted notification failed", { error }),
+          logger.warn("permissions-granted notify failed", { error }),
         );
-
-      if (user.email) {
-        masterPrisma.tenant
-          .findUnique({
-            where: { id: tenantId },
-            select: { name: true, helpEmail: true },
-          })
-          .then((tenant) => {
-            const tenantName = tenant?.name ?? "your organisation";
-            return getEmailQueue().add("permissionsGranted", {
-              to: user.email!,
-              subject: "You've been granted new permissions",
-              html: renderEmailHtml({
-                title: "Permissions Updated",
-                tenantName,
-                bodyHtml: `<h2>Hello ${user.username},</h2><p>${message}</p>`,
-              }),
-              from: tenantFrom(tenantName),
-              replyTo: tenantReplyTo(tenant?.helpEmail),
-            });
-          })
-          .catch((error: unknown) =>
-            logger.warn("permissions-granted email failed", { error }),
-          );
-      }
     }
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

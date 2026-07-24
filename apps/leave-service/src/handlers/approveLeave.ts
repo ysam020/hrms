@@ -6,7 +6,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import {
   tenantFrom,
   tenantReplyTo,
@@ -125,19 +125,6 @@ export const approveLeave = async (
       `t:${getTenantId() ?? "global"}:leaves:*`,
     );
 
-    getNotificationQueue()
-      .add("leaveApproved", {
-        tenantId: getTenantId()!,
-        title: "Leave",
-        message: MESSAGES.LEAVE_APPROVED,
-        targetUser: updatedLeave.userId,
-        eventType: "leave_notification",
-        priority: "medium",
-      })
-      .catch((err) =>
-        logger.error("[approveLeave] Notification enqueue failed:", { err }),
-      );
-
     Promise.all([
       prisma.user.findUnique({
         where: { id: updatedLeave.userId },
@@ -149,24 +136,34 @@ export const approveLeave = async (
       }),
     ])
       .then(([employee, tenant]) => {
-        if (!employee?.email) return;
         const tenantName = tenant?.name ?? "your organisation";
         const dateRange = formatDateOrRange(updatedLeave.from, updatedLeave.to);
-        return getEmailQueue().add("leaveApproved", {
-          to: employee.email,
-          subject: "Your leave request was approved",
-          html: renderEmailHtml({
-            title: "Leave Approved",
-            tenantName,
-            bodyHtml: `<h2>Hello,</h2><p>Your <strong>${updatedLeave.leaveType}</strong> leave request has been approved.</p><p><strong>Dates:</strong> ${dateRange}</p>`,
-          }),
-          from: tenantFrom(tenantName),
-          replyTo: tenantReplyTo(tenant?.helpEmail),
+        return notify({
+          tenantId: getTenantId()!,
+          event: "leaveApproved",
+          targetUser: updatedLeave.userId,
+          inApp: {
+            title: "Leave",
+            message: MESSAGES.LEAVE_APPROVED,
+            eventType: "leave_notification",
+            priority: "medium",
+          },
+          email: employee?.email
+            ? {
+                to: employee.email,
+                subject: "Your leave request was approved",
+                html: renderEmailHtml({
+                  title: "Leave Approved",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>Your <strong>${updatedLeave.leaveType}</strong> leave request has been approved.</p><p><strong>Dates:</strong> ${dateRange}</p>`,
+                }),
+                from: tenantFrom(tenantName),
+                replyTo: tenantReplyTo(tenant?.helpEmail),
+              }
+            : undefined,
         });
       })
-      .catch((err) =>
-        logger.warn("[approveLeave] email enqueue failed:", { err }),
-      );
+      .catch((err) => logger.error("[approveLeave] notify failed:", { err }));
 
     return callback(null, {
       message: MESSAGES.LEAVE_APPROVED,

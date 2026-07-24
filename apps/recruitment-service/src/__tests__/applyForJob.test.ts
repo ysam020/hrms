@@ -26,15 +26,16 @@ jest.mock("@hrms/cache", () => ({
 }));
 
 jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn().mockReturnValue({
-    add: jest.fn().mockResolvedValue(undefined),
-  }),
   getResumeParsingQueue: jest.fn().mockReturnValue({
     add: jest.fn().mockResolvedValue(undefined),
   }),
 }));
 
-import { getNotificationQueue } from "@hrms/queue";
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
+}));
+
+import { notify } from "@hrms/notifications";
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -51,7 +52,7 @@ const mockUserFindFirst = prisma.user.findFirst as jest.Mock;
 const mockPipelineTemplateFindFirst = (prisma as any).interviewPipelineTemplate
   .findFirst as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
-const mockGetNotificationQueue = getNotificationQueue as jest.Mock;
+const mockNotify = notify as jest.Mock;
 
 const openJob = {
   id: "job-1",
@@ -270,9 +271,6 @@ describe("applyForJob", () => {
   });
 
   it("enqueues notification when HR users exist", async () => {
-    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
-    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
-
     mockJobFindUnique.mockResolvedValue(openJob);
     mockAppFindFirst.mockResolvedValue(null);
     mockAppCreate.mockResolvedValue({
@@ -285,16 +283,15 @@ describe("applyForJob", () => {
     await applyForJob(makeCall(validRequest), makeCallback());
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(mockQueue.add).toHaveBeenCalledWith(
-      "jobApplicationReceived",
-      expect.objectContaining({ recipients: ["u1"] }),
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "jobApplicationReceived",
+        recipients: ["u1"],
+      }),
     );
   });
 
   it("includes hiring manager in notification when hiringManager is set and found", async () => {
-    const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
-    mockGetNotificationQueue.mockReturnValueOnce(mockQueue);
-
     const jobWithManager = { ...openJob, hiringManager: "manager1" };
     mockJobFindUnique.mockResolvedValue(jobWithManager);
     mockAppFindFirst.mockResolvedValue(null);
@@ -310,9 +307,11 @@ describe("applyForJob", () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(mockUserFindFirst).toHaveBeenCalled();
-    expect(mockQueue.add).toHaveBeenCalledWith(
-      "jobApplicationReceived",
-      expect.objectContaining({ recipients: ["hm1"] }),
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "jobApplicationReceived",
+        recipients: ["hm1"],
+      }),
     );
   });
 });

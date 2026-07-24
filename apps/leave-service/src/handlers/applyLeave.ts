@@ -6,7 +6,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
@@ -441,50 +441,44 @@ export const applyLeave = async (
           ? ` — exceeds balance by ${exhaustionInfo.shortfallDays} day(s) (${exhaustionInfo.remaining} remaining); ${exhaustionInfo.onExhaustion === "manager_override" ? "approver must decide" : "will be treated as loss-of-pay"}.`
           : "";
         const message = `${applicantUsername} has applied for leave from ${fromStr} to ${toStr}${shortfallNote}`;
-        await getNotificationQueue().add("leaveApplied", {
-          tenantId: getTenantId()!,
-          title: "Leave",
-          message,
-          recipients: uniqueIds,
-          pushTargets: uniqueUsernames,
-          eventType: "leave_notification",
-          priority: exhaustionInfo ? "high" : "medium",
-          // Already surfaced in Pending Approvals via instantiateApproval
-          // above — silent avoids duplicating it as a bell notification too.
-          silent: true,
-        });
-
         const tenantName = tenant?.name ?? "your organisation";
-        const from = tenantFrom(tenantName);
-        const replyTo = tenantReplyTo(tenant?.helpEmail);
         const uniqueEmails = [
           ...new Set(
             allTargets.map((u) => u.email).filter((e): e is string => !!e),
           ),
         ];
-        await Promise.all(
-          uniqueEmails.map((to) =>
-            getEmailQueue()
-              .add("leaveApplied", {
-                to,
-                subject: `Leave request from ${applicantUsername}`,
-                html: renderEmailHtml({
-                  title: "Leave Request",
-                  tenantName,
-                  bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
-                }),
-                from,
-                replyTo,
-              })
-              .catch((e: unknown) =>
-                logger.warn("[applyLeave] email enqueue failed", { e }),
-              ),
-          ),
-        );
+
+        await notify({
+          tenantId: getTenantId()!,
+          event: "leaveApplied",
+          recipients: uniqueIds,
+          pushTargets: uniqueUsernames,
+          inApp: {
+            title: "Leave",
+            message,
+            eventType: "leave_notification",
+            priority: exhaustionInfo ? "high" : "medium",
+            // Already surfaced in Pending Approvals via instantiateApproval
+            // above — silent avoids duplicating it as a bell notification too.
+            silent: true,
+          },
+          email:
+            uniqueEmails.length > 0
+              ? {
+                  to: uniqueEmails,
+                  subject: `Leave request from ${applicantUsername}`,
+                  html: renderEmailHtml({
+                    title: "Leave Request",
+                    tenantName,
+                    bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
+                  }),
+                  from: tenantFrom(tenantName),
+                  replyTo: tenantReplyTo(tenant?.helpEmail),
+                }
+              : undefined,
+        });
       })
-      .catch((err) =>
-        logger.warn("[applyLeave] Notification enqueue failed:", { err }),
-      );
+      .catch((err) => logger.warn("[applyLeave] notify failed:", { err }));
 
     return callback(null, {
       message: MESSAGES.LEAVE_APPLIED,

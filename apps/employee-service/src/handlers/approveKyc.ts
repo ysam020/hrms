@@ -2,7 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 
 export const approveKyc = async (
@@ -55,19 +55,18 @@ export const approveKyc = async (
     ]);
 
     // Notify employee (fire-and-forget)
-    getNotificationQueue()
-      .add("kycApproved", {
-        tenantId: getTenantId()!,
+    notify({
+      tenantId: getTenantId()!,
+      event: "kycApproved",
+      targetUser: updatedUser.username,
+      inApp: {
         title: "KYC",
         message: MESSAGES.KYC_APPROVED,
-        targetUser: updatedUser.username,
         eventType: "kyc_notification",
         priority: "medium",
-        sendPushNotification: true,
-      })
-      .catch((err) =>
-        logger.error("[approveKyc] Notification enqueue failed:", { err }),
-      );
+      },
+      push: { enabled: true },
+    }).catch((err) => logger.error("[approveKyc] notify failed:", { err }));
 
     return callback(null, {
       message: MESSAGES.KYC_APPROVED,

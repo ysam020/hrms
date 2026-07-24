@@ -2,7 +2,7 @@ import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 
 export const requestKycRevision = async (
@@ -73,21 +73,22 @@ export const requestKycRevision = async (
 
     // Notify employee (fire-and-forget)
     const fieldList = Object.keys(fieldIssues).join(", ");
-    getNotificationQueue()
-      .add("kycRevisionRequested", {
-        tenantId: getTenantId()!,
+    notify({
+      tenantId: getTenantId()!,
+      event: "kycRevisionRequested",
+      targetUser: updatedUser.username,
+      inApp: {
         title: "KYC",
         message: `${MESSAGES.KYC_REVISION_REQUESTED}: ${fieldList}`,
-        targetUser: updatedUser.username,
         eventType: "kyc_notification",
         priority: "medium",
-        sendPushNotification: true,
-      })
-      .catch((err) =>
-        logger.error("[requestKycRevision] Notification enqueue failed:", {
-          err,
-        }),
-      );
+      },
+      push: { enabled: true },
+    }).catch((err) =>
+      logger.error("[requestKycRevision] notify failed:", {
+        err,
+      }),
+    );
 
     return callback(null, {
       message: MESSAGES.KYC_REVISION_REQUESTED,

@@ -6,7 +6,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 
@@ -60,21 +60,6 @@ export const rejectResignation = async (
     await cacheManager.invalidatePattern(`t:${getTenantId()}:resignations:*`);
 
     // Notify employee (fire-and-forget)
-    getNotificationQueue()
-      .add("resignationRejected", {
-        tenantId: getTenantId()!,
-        title: "Resignation",
-        message: MESSAGES.RESIGNATION_REJECTED,
-        targetUser: updatedResignation.userId,
-        eventType: "resignation_notification",
-        priority: "medium",
-      })
-      .catch((err) =>
-        logger.error("[rejectResignation] Notification enqueue failed:", {
-          err,
-        }),
-      );
-
     Promise.all([
       updatedResignation.userId
         ? prisma.user.findUnique({
@@ -88,22 +73,34 @@ export const rejectResignation = async (
       }),
     ])
       .then(([employee, tenant]) => {
-        if (!employee?.email) return;
         const tenantName = tenant?.name ?? "your organisation";
-        return getEmailQueue().add("resignationRejected", {
-          to: employee.email,
-          subject: "Your resignation was rejected",
-          html: renderEmailHtml({
-            title: "Resignation Rejected",
-            tenantName,
-            bodyHtml: `<h2>Hello,</h2><p>${MESSAGES.RESIGNATION_REJECTED}</p>`,
-          }),
-          from: tenantFrom(tenantName),
-          replyTo: tenantReplyTo(tenant?.helpEmail),
+        return notify({
+          tenantId: getTenantId()!,
+          event: "resignationRejected",
+          targetUser: updatedResignation.userId ?? undefined,
+          inApp: {
+            title: "Resignation",
+            message: MESSAGES.RESIGNATION_REJECTED,
+            eventType: "resignation_notification",
+            priority: "medium",
+          },
+          email: employee?.email
+            ? {
+                to: employee.email,
+                subject: "Your resignation was rejected",
+                html: renderEmailHtml({
+                  title: "Resignation Rejected",
+                  tenantName,
+                  bodyHtml: `<h2>Hello,</h2><p>${MESSAGES.RESIGNATION_REJECTED}</p>`,
+                }),
+                from: tenantFrom(tenantName),
+                replyTo: tenantReplyTo(tenant?.helpEmail),
+              }
+            : undefined,
         });
       })
       .catch((err) =>
-        logger.warn("[rejectResignation] email enqueue failed:", { err }),
+        logger.warn("[rejectResignation] notify failed:", { err }),
       );
 
     // RejectResignation's proto response is BasicResponse (message+status

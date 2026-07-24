@@ -6,7 +6,7 @@ import {
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
-import { getNotificationQueue, getEmailQueue } from "@hrms/queue";
+import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { instantiateApproval } from "@hrms/approval-engine";
 import { MESSAGES } from "../constants/messages";
@@ -159,51 +159,45 @@ export const submitResignation = async (
         const uniqueUsernames = [...new Set(allTargets.map((u) => u.username))];
         if (uniqueUsernames.length === 0) return;
         const message = `${applicantUsername} has submitted resignation form`;
-        await getNotificationQueue().add("resignationSubmitted", {
-          tenantId: getTenantId()!,
-          title: "Resignation",
-          message,
-          recipients: uniqueIds,
-          pushTargets: uniqueUsernames,
-          eventType: "resignation_notification",
-          priority: "medium",
-          // Already surfaced in Pending Approvals via instantiateApproval
-          // above — silent avoids duplicating it as a bell notification too.
-          silent: true,
-        });
-
         const tenantName = tenant?.name ?? "your organisation";
-        const from = tenantFrom(tenantName);
-        const replyTo = tenantReplyTo(tenant?.helpEmail);
         const uniqueEmails = [
           ...new Set(
             allTargets.map((u) => u.email).filter((e): e is string => !!e),
           ),
         ];
-        await Promise.all(
-          uniqueEmails.map((to) =>
-            getEmailQueue()
-              .add("resignationSubmitted", {
-                to,
-                subject: `Resignation submitted by ${applicantUsername}`,
-                html: renderEmailHtml({
-                  title: "Resignation Submitted",
-                  tenantName,
-                  bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
-                }),
-                from,
-                replyTo,
-              })
-              .catch((e: unknown) =>
-                logger.warn("[submitResignation] email enqueue failed", { e }),
-              ),
-          ),
-        );
+
+        await notify({
+          tenantId: getTenantId()!,
+          event: "resignationSubmitted",
+          recipients: uniqueIds,
+          pushTargets: uniqueUsernames,
+          inApp: {
+            title: "Resignation",
+            message,
+            eventType: "resignation_notification",
+            priority: "medium",
+            // Already surfaced in Pending Approvals via instantiateApproval
+            // above — silent avoids duplicating it as a bell notification too.
+            silent: true,
+          },
+          email:
+            uniqueEmails.length > 0
+              ? {
+                  to: uniqueEmails,
+                  subject: `Resignation submitted by ${applicantUsername}`,
+                  html: renderEmailHtml({
+                    title: "Resignation Submitted",
+                    tenantName,
+                    bodyHtml: `<h2>Hello,</h2><p>${message}</p>`,
+                  }),
+                  from: tenantFrom(tenantName),
+                  replyTo: tenantReplyTo(tenant?.helpEmail),
+                }
+              : undefined,
+        });
       })
       .catch((err) =>
-        logger.error("[submitResignation] Notification enqueue failed:", {
-          err,
-        }),
+        logger.error("[submitResignation] notify failed:", { err }),
       );
 
     return callback(null, {
