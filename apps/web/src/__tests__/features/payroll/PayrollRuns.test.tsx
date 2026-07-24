@@ -42,7 +42,7 @@ function makeRun(overrides: Partial<any> = {}) {
 
 function renderWith(user: any, runs: any[]) {
   mockApiClient.mockResolvedValue({
-    data: { data: { runs, total: runs.length } },
+    data: { data: { runs }, total: runs.length },
   });
   return render(
     <AlertContext.Provider value={{ setAlert: vi.fn() } as any}>
@@ -159,7 +159,8 @@ describe("PayrollRuns", () => {
     const setAlert = vi.fn();
     mockApiClient.mockResolvedValue({
       data: {
-        data: { runs: [makeRun({ status: "disbursed" })], total: 1 },
+        data: { runs: [makeRun({ status: "disbursed" })] },
+        total: 1,
       },
     });
     render(
@@ -240,8 +241,8 @@ describe("PayrollRuns", () => {
           runs: [
             makeRun({ status: "approved", approvedAt: "2024-06-05T00:00:00Z" }),
           ],
-          total: 1,
         },
+        total: 1,
       },
     });
     render(
@@ -293,7 +294,9 @@ describe("PayrollRuns", () => {
           data: { data: { status: "disbursement_failed" } },
         });
       }
-      return Promise.resolve({ data: { data: { runs, total: runs.length } } });
+      return Promise.resolve({
+        data: { data: { runs }, total: runs.length },
+      });
     });
     render(
       <AlertContext.Provider value={{ setAlert } as any}>
@@ -349,7 +352,7 @@ describe("PayrollRuns", () => {
     mocks.instance.patch.mockResolvedValue({});
     const setAlert = vi.fn();
     mockApiClient.mockResolvedValue({
-      data: { data: { runs: [makeRun({ status: "draft" })], total: 1 } },
+      data: { data: { runs: [makeRun({ status: "draft" })] }, total: 1 },
     });
     render(
       <AlertContext.Provider value={{ setAlert } as any}>
@@ -380,7 +383,7 @@ describe("PayrollRuns", () => {
     });
     const setAlert = vi.fn();
     mockApiClient.mockResolvedValue({
-      data: { data: { runs: [makeRun({ status: "draft" })], total: 1 } },
+      data: { data: { runs: [makeRun({ status: "draft" })] }, total: 1 },
     });
     render(
       <AlertContext.Provider value={{ setAlert } as any}>

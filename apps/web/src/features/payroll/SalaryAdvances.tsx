@@ -103,7 +103,7 @@ function SalaryAdvances() {
         );
         return {
           data: res.data.data?.advances || res.data.data || [],
-          totalCount: res.data.data?.total || 0,
+          totalCount: res.data.total || 0,
         };
       } catch (err) {
         if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError")

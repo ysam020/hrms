@@ -35,7 +35,7 @@ function makeAdvance(overrides: Partial<any> = {}) {
 
 function renderWith(user: any, advances: any[]) {
   mockApiClient.mockResolvedValue({
-    data: { data: { advances, total: advances.length } },
+    data: { data: { advances }, total: advances.length },
   });
   return render(
     <AlertContext.Provider value={{ setAlert: vi.fn() } as any}>
@@ -122,7 +122,7 @@ describe("SalaryAdvances", () => {
     mocks.instance.patch.mockResolvedValue({});
     const setAlert = vi.fn();
     mockApiClient.mockResolvedValue({
-      data: { data: { advances: [makeAdvance()], total: 1 } },
+      data: { data: { advances: [makeAdvance()] }, total: 1 },
     });
     render(
       <AlertContext.Provider value={{ setAlert } as any}>
@@ -177,7 +177,7 @@ describe("SalaryAdvances", () => {
     });
     const setAlert = vi.fn();
     mockApiClient.mockResolvedValue({
-      data: { data: { advances: [makeAdvance()], total: 1 } },
+      data: { data: { advances: [makeAdvance()] }, total: 1 },
     });
     render(
       <AlertContext.Provider value={{ setAlert } as any}>

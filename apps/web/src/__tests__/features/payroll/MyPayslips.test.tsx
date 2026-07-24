@@ -40,7 +40,7 @@ describe("MyPayslips", () => {
 
   it("fetches and renders payslip rows with formatted money and period", async () => {
     mockApiClient.mockResolvedValue({
-      data: { data: { payslips: [makePayslip()], total: 1 } },
+      data: { data: { payslips: [makePayslip()] }, total: 1 },
     });
     renderPage();
 
@@ -62,8 +62,8 @@ describe("MyPayslips", () => {
       data: {
         data: {
           payslips: [makePayslip({ tds: null, advanceDeduction: null })],
-          total: 1,
         },
+        total: 1,
       },
     });
     renderPage();
@@ -74,7 +74,7 @@ describe("MyPayslips", () => {
 
   it("shows the empty state when there are no payslips", async () => {
     mockApiClient.mockResolvedValue({
-      data: { data: { payslips: [], total: 0 } },
+      data: { data: { payslips: [] }, total: 0 },
     });
     renderPage();
     expect(await screen.findByText("No payslips found")).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("MyPayslips", () => {
     mockApiClient.mockImplementation((url: string) => {
       if (url === "/payroll/my-payslips?page=1&limit=12")
         return Promise.resolve({
-          data: { data: { payslips: [makePayslip()], total: 1 } },
+          data: { data: { payslips: [makePayslip()] }, total: 1 },
         });
       if (url === "/generate-salary-slip/u1/2025/6")
         return Promise.resolve({ data: new Blob(["pdf"]) });
@@ -121,7 +121,7 @@ describe("MyPayslips", () => {
     mockApiClient.mockImplementation((url: string) => {
       if (url === "/payroll/my-payslips?page=1&limit=12")
         return Promise.resolve({
-          data: { data: { payslips: [makePayslip()], total: 1 } },
+          data: { data: { payslips: [makePayslip()] }, total: 1 },
         });
       if (url === "/generate-salary-slip/u1/2025/6") {
         const blob = new Blob([
@@ -150,7 +150,7 @@ describe("MyPayslips", () => {
     mockApiClient.mockImplementation((url: string) => {
       if (url === "/payroll/my-payslips?page=1&limit=12")
         return Promise.resolve({
-          data: { data: { payslips: [makePayslip()], total: 1 } },
+          data: { data: { payslips: [makePayslip()] }, total: 1 },
         });
       if (url === "/generate-tds-worksheet/u1/2025/6")
         return Promise.resolve({ data: new Blob(["pdf"]) });
@@ -172,7 +172,7 @@ describe("MyPayslips", () => {
 
   it("blocks Form 16 download and shows an alert when there are no payslips yet", async () => {
     mockApiClient.mockResolvedValue({
-      data: { data: { payslips: [], total: 0 } },
+      data: { data: { payslips: [] }, total: 0 },
     });
     const { setAlert } = renderPage();
 
@@ -193,7 +193,7 @@ describe("MyPayslips", () => {
     mockApiClient.mockImplementation((url: string) => {
       if (url === "/payroll/my-payslips?page=1&limit=12")
         return Promise.resolve({
-          data: { data: { payslips: [makePayslip()], total: 1 } },
+          data: { data: { payslips: [makePayslip()] }, total: 1 },
         });
       if (url.startsWith("/generate-form16/"))
         return Promise.resolve({ data: new Blob(["pdf"]) });
@@ -223,7 +223,7 @@ describe("MyPayslips", () => {
 
   it("re-fetches the next page when pagination changes", async () => {
     mockApiClient.mockResolvedValue({
-      data: { data: { payslips: [makePayslip()], total: 30 } },
+      data: { data: { payslips: [makePayslip()] }, total: 30 },
     });
     renderPage();
     await screen.findByText("Jun 2025");
