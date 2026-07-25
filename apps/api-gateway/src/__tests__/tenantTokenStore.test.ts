@@ -5,8 +5,7 @@ import {
   storePendingSubscription,
   getPendingSubscription,
   clearPendingSubscription,
-  isWebhookEventProcessed,
-  markWebhookEventProcessed,
+  tryReserveWebhookEvent,
   getRazorpayPlanId,
   setRazorpayPlanId,
   markOrgSetupComplete,
@@ -102,23 +101,21 @@ describe("tenantTokenStore", () => {
   });
 
   describe("webhook idempotency", () => {
-    it("reports unprocessed when the key is missing", async () => {
-      mockRedisInstance.get.mockResolvedValue(null);
-      expect(await isWebhookEventProcessed("evt_1")).toBe(false);
-    });
-
-    it("reports processed once the key exists", async () => {
-      mockRedisInstance.get.mockResolvedValue("1");
-      expect(await isWebhookEventProcessed("evt_1")).toBe(true);
-    });
-
-    it("marks an event processed with the 48h dedup TTL", async () => {
-      await markWebhookEventProcessed("evt_1");
-      expect(mockRedisInstance.setex).toHaveBeenCalledWith(
+    it("wins the reservation and sets the key with the 48h dedup TTL when unclaimed", async () => {
+      mockRedisInstance.set.mockResolvedValue("OK");
+      expect(await tryReserveWebhookEvent("evt_1")).toBe(true);
+      expect(mockRedisInstance.set).toHaveBeenCalledWith(
         "webhook_event:evt_1",
-        48 * 60 * 60,
         "1",
+        "EX",
+        48 * 60 * 60,
+        "NX",
       );
+    });
+
+    it("loses the reservation when another delivery already claimed the key", async () => {
+      mockRedisInstance.set.mockResolvedValue(null);
+      expect(await tryReserveWebhookEvent("evt_1")).toBe(false);
     });
   });
 

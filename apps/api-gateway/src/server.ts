@@ -23,6 +23,7 @@ import { handleWebhook } from "./handlers/payment";
 import { handleRazorpayXWebhook } from "./handlers/razorpayxWebhook";
 import { startSubscriptionReconciler } from "./services/subscriptionReconciler";
 import { startPayrollDisbursementWorker } from "./workers/payrollDisbursementWorker";
+import { ensureMasterIndexes } from "@hrms/db";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -143,6 +144,7 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   // once per CPU core risks duplicate disbursements. Restrict both to a
   // single designated worker (or the sole process outside cluster mode).
   if (!cluster.isWorker || cluster.worker?.id === 1) {
+    void ensureMasterIndexes();
     startSubscriptionReconciler();
     startPayrollDisbursementWorker();
   }

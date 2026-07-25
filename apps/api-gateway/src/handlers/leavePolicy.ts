@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, hasPrivilegedRole } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -40,7 +40,7 @@ export async function updateLeavePolicy(req: AuthRequest, res: Response) {
   }
   const superUser = await isSuperUser(userId);
   const isPrivileged =
-    superUser || ["owner", "admin"].includes(req.user!.tenantRole ?? "");
+    superUser || hasPrivilegedRole(req.user!.tenantRole ?? "");
   if (!isPrivileged) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
       message: "Only owners and admins can update leave policy.",

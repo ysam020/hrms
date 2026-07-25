@@ -29,3 +29,5 @@ export {
   isPublicEmailDomain,
   PUBLIC_EMAIL_DOMAINS,
 } from "./publicEmailDomains";
+export { ensureMasterIndexes } from "./ensureIndexes";
+export { recordAuditEntry } from "./auditMiddleware";

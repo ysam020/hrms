@@ -47,17 +47,22 @@ export async function clearPendingSubscription(userId: string): Promise<void> {
 
 // ─── Webhook idempotency ──────────────────────────────────────────────────────
 
-export async function isWebhookEventProcessed(
+// Atomically reserves the event ID: returns true only for the caller that
+// wins the race (first to set the key). SET NX EX is a single Redis round
+// trip, so two concurrent deliveries of the same event can never both win —
+// unlike a separate GET-then-SETEX, which has a window where both checks
+// pass before either write lands.
+export async function tryReserveWebhookEvent(
   eventId: string,
 ): Promise<boolean> {
-  const result = await getClient().get(`webhook_event:${eventId}`);
-  return result !== null;
-}
-
-export async function markWebhookEventProcessed(
-  eventId: string,
-): Promise<void> {
-  await getClient().setex(`webhook_event:${eventId}`, WEBHOOK_EVENT_TTL, "1");
+  const result = await getClient().set(
+    `webhook_event:${eventId}`,
+    "1",
+    "EX",
+    WEBHOOK_EVENT_TTL,
+    "NX",
+  );
+  return result === "OK";
 }
 
 // ─── Razorpay plan ID cache (survives process restarts) ───────────────────────

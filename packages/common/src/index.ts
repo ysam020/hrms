@@ -7,7 +7,12 @@ export { renderEmailHtml } from "./emailTemplate";
 export { buildIcsInvite, type IcsInviteOptions } from "./ics";
 export { formatDateOrRange } from "./dateRange";
 export { healthCheck } from "./healthCheck";
-export { UserRoleEnum } from "./constants";
+export {
+  UserRoleEnum,
+  PRIVILEGED_ROLES,
+  HR_ROLES,
+  hasPrivilegedRole,
+} from "./constants";
 export {
   removeEmptyFields,
   cleanObject,

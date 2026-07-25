@@ -74,10 +74,22 @@ export const updateApplicationStatus = async (
       const existingInterviews = Array.isArray(application.interviews)
         ? (application.interviews as any[])
         : [];
-      const hasClearedRound = existingInterviews.some(
+      const hasClearedLegacyRound = existingInterviews.some(
         (i: any) => i.interviewConducted === true && i.cleared === true,
       );
-      if (!hasClearedRound) {
+      // A candidate progressed entirely through the newer pipeline-template
+      // flow (advanceApplicationStage/applicationStages.ts) never gets an
+      // entry written to the legacy `interviews` field — that flow tracks
+      // everything through ApplicationStageEvent instead. Without also
+      // checking there, this gate is wired only to a field those tenants
+      // never populate, and no candidate on the new pipeline could ever be
+      // hired.
+      const hasClearedPipelineStage =
+        !hasClearedLegacyRound &&
+        (await (prisma as any).applicationStageEvent.findFirst({
+          where: { applicationId: id, outcome: "pass" },
+        })) !== null;
+      if (!hasClearedLegacyRound && !hasClearedPipelineStage) {
         return callback(null, {
           message:
             "This candidate cannot be hired until at least one interview round has been Completed and Cleared.",

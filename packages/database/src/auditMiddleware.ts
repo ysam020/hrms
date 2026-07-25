@@ -105,7 +105,7 @@ interface AuditWriteTarget {
   };
 }
 
-function recordAuditEntry(
+export function recordAuditEntry(
   target: AuditWriteTarget | null | undefined,
   model: string,
   prismaAction: string,

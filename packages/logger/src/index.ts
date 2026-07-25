@@ -45,6 +45,28 @@ export const grpcRequestsTotal = new Counter({
   labelNames: ["method", "service"],
 });
 
+// A failed publish here means a cross-instance WebSocket event (a direct
+// message, a broadcast, or a notification) never reaches the user on
+// another worker/process — previously only logged, with nothing to alert
+// on. See packages/websocket/src/RedisWebSocketAdapter.ts and
+// RedisNotificationPublisher.ts.
+export const websocketPublishFailuresTotal = new Counter({
+  name: "websocket_publish_failures_total",
+  help: "Total number of failed Redis pub/sub publishes for WebSocket delivery",
+  labelNames: ["method", "service"],
+});
+
+// Redis pub/sub can't replay messages sent while a subscriber connection was
+// down, so any invalidation published during that window is missed forever
+// for this process — see packages/cache/src/CacheManager.ts, which reacts
+// to each reconnect by flushing its whole in-process cache rather than
+// leaving it to expire naturally via TTL (up to 4h for salary-tagged keys).
+export const cacheInvalidationSubscriberReconnectsTotal = new Counter({
+  name: "cache_invalidation_subscriber_reconnects_total",
+  help: "Total number of times a CacheManager's invalidation subscriber reconnected to Redis",
+  labelNames: ["service"],
+});
+
 // ── Transports ───────────────────────────────────────────────────────────────
 const logGroupName =
   process.env.AWS_CLOUDWATCH_LOG_GROUP || `/hrms/${serviceName}/${env}`;

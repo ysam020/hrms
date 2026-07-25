@@ -1,6 +1,12 @@
 import type Redis from "ioredis";
-import { logger } from "@hrms/logger";
+import {
+  logger,
+  cacheInvalidationSubscriberReconnectsTotal,
+} from "@hrms/logger";
 import { getRedisClient } from "./client";
+
+const SERVICE_LABEL =
+  process.env.SERVICE_NAME || process.env.npm_package_name || "unknown";
 
 // Each microservice is a separate Node.js process with its own CacheManager
 // instance and its own in-process memoryCache — delete()/invalidatePattern()
@@ -43,6 +49,15 @@ export class CacheManager {
   private memoryCache: Map<string, unknown>;
   private memoryTTL: Map<string, number>;
   private subscriber: Redis | null = null;
+  // Pub/sub can't replay messages published while this connection was down,
+  // so an invalidation fired during that window is permanently missed by
+  // this process. Rather than track exactly which keys were missed (we
+  // can't — the messages are gone), flush the whole in-process cache on
+  // every reconnect after the first. False positives (flushing when nothing
+  // was actually missed) just cost a few extra Redis round trips on the
+  // next reads; a false negative would mean silently stale data for up to
+  // this cache's full TTL (up to 4h for salary-tagged keys).
+  private hasConnectedBefore = false;
 
   constructor() {
     this.memoryCache = new Map();
@@ -58,6 +73,21 @@ export class CacheManager {
       this.subscriber.on("error", (err) =>
         logger.error("CacheManager subscriber error:", { err }),
       );
+      this.subscriber.on("ready", () => {
+        if (this.hasConnectedBefore) {
+          const flushed = this.memoryCache.size;
+          this.memoryCache.clear();
+          this.memoryTTL.clear();
+          cacheInvalidationSubscriberReconnectsTotal.inc({
+            service: SERVICE_LABEL,
+          });
+          logger.warn(
+            "CacheManager subscriber reconnected — flushed in-process cache to avoid serving invalidations missed while disconnected",
+            { flushedEntries: flushed },
+          );
+        }
+        this.hasConnectedBefore = true;
+      });
       this.subscriber.on("message", (_channel: string, message: string) => {
         try {
           const payload = JSON.parse(message) as InvalidationMessage;

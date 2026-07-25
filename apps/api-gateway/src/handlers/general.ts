@@ -2,7 +2,12 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { randomBytes } from "crypto";
@@ -670,8 +675,7 @@ export async function getFileViewUrl(req: AuthRequest, res: Response) {
     });
     const isOwner = !!caller && caller.username === ownerUsername;
     const isPrivilegedRole =
-      caller?.isSuperUser ||
-      ["owner", "admin", "hr"].includes(tenantRole ?? "");
+      caller?.isSuperUser || hasPrivilegedRole(tenantRole ?? "", HR_ROLES);
 
     let isPrivileged = false;
     if (!isOwner && isPrivilegedRole) {

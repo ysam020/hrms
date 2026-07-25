@@ -11,6 +11,7 @@
     "@hrms/common": "workspace:*",
     "@hrms/db": "workspace:*",
     "@hrms/logger": "workspace:*",
+    "@hrms/notifications": "workspace:*",
     "@hrms/queue": "workspace:*",
     "@hrms/telemetry": "workspace:*",
     "bullmq": "^5.41.7",

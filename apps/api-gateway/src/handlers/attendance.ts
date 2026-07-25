@@ -3,7 +3,13 @@ import { attendanceClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  grpcToHttpStatus,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
 import { isPrivileged } from "./approvalChains";
@@ -219,7 +225,7 @@ export async function attendanceCorrection(req: Request, res: Response) {
     const requestingUserIsSuperUser = await isSuperUser(user!.userId);
     const isPrivileged =
       requestingUserIsSuperUser ||
-      ["owner", "admin", "hr"].includes(user!.tenantRole ?? "");
+      hasPrivilegedRole(user!.tenantRole ?? "", HR_ROLES);
     if (!requestingUserIsSuperUser && user!.userId !== targetUserId)
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",

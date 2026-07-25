@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma, runWithTenant, getClientForDb, AuditActor } from "@hrms/db";
-import { BoundedCache } from "@hrms/common";
+import { BoundedCache, hasPrivilegedRole, HR_ROLES } from "@hrms/common";
 import { gatewayTenantStorage } from "./tenantContext";
 
 export interface AuthUser {
@@ -176,7 +176,7 @@ export const requirePrivileged = async (
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
-  if (["owner", "admin"].includes(req.user.tenantRole ?? "")) {
+  if (hasPrivilegedRole(req.user.tenantRole ?? "")) {
     next();
     return;
   }
@@ -209,7 +209,7 @@ export const requireHrPrivileged = async (
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
-  if (["owner", "admin", "hr"].includes(req.user.tenantRole ?? "")) {
+  if (hasPrivilegedRole(req.user.tenantRole ?? "", HR_ROLES)) {
     next();
     return;
   }

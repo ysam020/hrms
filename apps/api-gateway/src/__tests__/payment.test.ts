@@ -455,8 +455,7 @@ describe("payment handlers", () => {
 
     beforeEach(() => {
       process.env.RAZORPAY_WEBHOOK_SECRET = "webhook_secret";
-      mockTokenStore.isWebhookEventProcessed.mockResolvedValue(false);
-      mockTokenStore.markWebhookEventProcessed.mockResolvedValue(undefined);
+      mockTokenStore.tryReserveWebhookEvent.mockResolvedValue(true);
     });
 
     it("returns 500 when the webhook secret is not configured", async () => {
@@ -502,7 +501,7 @@ describe("payment handlers", () => {
     });
 
     it("skips already-processed events (idempotency)", async () => {
-      mockTokenStore.isWebhookEventProcessed.mockResolvedValue(true);
+      mockTokenStore.tryReserveWebhookEvent.mockResolvedValue(false);
       const req = makeWebhookReq({
         event: "subscription.charged",
         payload: { subscription: { entity: { id: "sub_1" } } },

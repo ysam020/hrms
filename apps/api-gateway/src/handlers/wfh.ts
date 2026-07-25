@@ -36,7 +36,12 @@ import {
   getTenantId,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { notify } from "@hrms/notifications";
 import { handleError, handleActionError } from "../utils/handleError";
@@ -61,7 +66,7 @@ async function isWfhPrivileged(
   authUser: AuthUser | undefined,
 ): Promise<boolean> {
   if (!authUser) return false;
-  if (["owner", "admin", "hr"].includes(authUser.tenantRole ?? "")) return true;
+  if (hasPrivilegedRole(authUser.tenantRole ?? "", HR_ROLES)) return true;
   const user = await prisma.user.findUnique({
     where: { id: authUser.userId },
     select: { isSuperUser: true, permissions: true },
@@ -476,6 +481,29 @@ export async function updateWfhStatus(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         message: "WFH request cancelled",
       });
+    }
+
+    // Symmetric to the check in leave-service's approveLeave.ts — a leave
+    // application submitted and approved after this WFH request was raised
+    // wouldn't have been caught by requestWfh's own overlap check at
+    // creation time.
+    if (action === "approve") {
+      const overlappingApprovedLeave = await (
+        prisma as any
+      ).leaveApplication.findFirst({
+        where: {
+          userId: (wfhReq as any).userId,
+          status: "Approved",
+          from: { lte: (wfhReq as any).toDate },
+          to: { gte: (wfhReq as any).date },
+        },
+      });
+      if (overlappingApprovedLeave) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message:
+            "This WFH request overlaps an already-approved leave application for the same date(s)",
+        });
+      }
     }
 
     const privileged = await isWfhPrivileged(user);

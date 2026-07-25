@@ -24,6 +24,7 @@ jest.mock("@hrms/db", () => {
     },
     user: { findUnique: jest.fn() },
     tenant: { findUnique: jest.fn() },
+    wfhRequest: { findFirst: jest.fn() },
   };
   // The status flip + balance debit run inside prisma.$transaction(async
   // (tx) => ...) — the mock passes the same mocked delegates back as `tx` so
@@ -73,6 +74,7 @@ const mockBalanceFindFirst = (prisma as any).leaveBalance
   .findFirst as jest.Mock;
 const mockBalanceUpdateMany = (prisma as any).leaveBalance
   .updateMany as jest.Mock;
+const mockWfhFindFirst = (prisma as any).wfhRequest.findFirst as jest.Mock;
 
 describe("approveLeave", () => {
   beforeEach(() => {
@@ -80,6 +82,7 @@ describe("approveLeave", () => {
     mockInvalidate.mockResolvedValue(undefined);
     // Happy-path default: the conditional transition succeeds.
     mockUpdateMany.mockResolvedValue({ count: 1 });
+    mockWfhFindFirst.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when id is missing", async () => {

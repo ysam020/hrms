@@ -375,20 +375,19 @@ export async function handleWebhook(req: Request, res: Response) {
 
     // ── Idempotency — skip already-processed events ─────────────────────────
     // Razorpay retries on non-2xx. We ack early (200) then do nothing.
-    // Operations below are all naturally idempotent, so a crash-before-mark
-    // is safe: the retry will re-process with the same outcome.
+    // tryReserveWebhookEvent is an atomic SET NX: only one concurrent
+    // delivery of the same event ID can ever win this check, closing the
+    // race a separate GET-then-SETEX would leave open. Operations below are
+    // all naturally idempotent, so a crash after reserving but before
+    // finishing is safe: the key's TTL eventually expires and a later retry
+    // (if Razorpay sends one) re-processes with the same outcome.
     if (eventId) {
-      const { isWebhookEventProcessed, markWebhookEventProcessed } =
+      const { tryReserveWebhookEvent } =
         await import("../services/tenantTokenStore");
-      if (await isWebhookEventProcessed(eventId)) {
+      if (!(await tryReserveWebhookEvent(eventId))) {
         logger.info(`Razorpay webhook: duplicate event ${eventId} — skipped`);
         return res.json({ ok: true });
       }
-      // Mark AFTER processing so a crash mid-handler still allows a retry.
-      // We register the cleanup at the end of the switch.
-      void markWebhookEventProcessed(eventId).catch((e) =>
-        logger.warn("markWebhookEventProcessed failed", { e }),
-      );
     }
 
     // ── Parse body ──────────────────────────────────────────────────────────

@@ -2,7 +2,12 @@ import { Request, Response } from "express";
 import { performanceReviewClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
@@ -16,7 +21,7 @@ async function canManageReviews(
   userId: string,
   tenantRole: string | null | undefined,
 ): Promise<boolean> {
-  if (["owner", "admin", "hr"].includes(tenantRole ?? "")) return true;
+  if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isSuperUser: true, permissions: true },

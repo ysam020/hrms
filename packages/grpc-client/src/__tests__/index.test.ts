@@ -336,4 +336,40 @@ describe("BaseGrpcClient", () => {
       jest.useRealTimers();
     }
   });
+
+  it("opens the circuit after a sustained pattern of failures and fails fast without calling the service again", async () => {
+    const client = new BaseGrpcClient({
+      serviceName: "leave",
+      address: "localhost:50051",
+      credentials: {} as any,
+      options: { retries: 0 },
+    });
+    const rawClient = mockClientInstances[0];
+    const err = Object.assign(new Error("unavailable"), {
+      code: grpc.status.UNAVAILABLE,
+    });
+    const spy = jest.fn((_req: any, _options: any, cb: any) => cb(err, null));
+    rawClient.getLeaves = spy;
+
+    // volumeThreshold is 5 — below that, individual failures must still
+    // propagate as themselves (covered by the "rejects with the last
+    // error" test above). Drive 5 separate failing calls to cross the
+    // threshold at a 100% error rate.
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        (client as any).makeCall("getLeaves", { id: "1" }),
+      ).rejects.toBe(err);
+    }
+    expect(spy).toHaveBeenCalledTimes(5);
+
+    // The circuit is now open — the next call must fail fast (no new call
+    // to the underlying grpc method) with a distinct breaker-open error.
+    await expect(
+      (client as any).makeCall("getLeaves", { id: "1" }),
+    ).rejects.toMatchObject({
+      code: grpc.status.UNAVAILABLE,
+      message: expect.stringContaining("Circuit breaker open"),
+    });
+    expect(spy).toHaveBeenCalledTimes(5);
+  });
 });

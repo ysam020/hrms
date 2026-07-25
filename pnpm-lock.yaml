@@ -780,6 +780,9 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../../packages/logger
+      "@hrms/notifications":
+        specifier: workspace:*
+        version: link:../../packages/notifications
       "@hrms/queue":
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1196,10 +1199,16 @@ importers:
       "@hrms/logger":
         specifier: workspace:*
         version: link:../logger
+      opossum:
+        specifier: ^10.0.0
+        version: 10.0.0
     devDependencies:
       "@hrms/typescript-config":
         specifier: workspace:*
         version: link:../typescript-config
+      "@types/opossum":
+        specifier: ^8.1.9
+        version: 8.1.9
 
   packages/grpc-server:
     dependencies:
@@ -13257,6 +13266,15 @@ packages:
       }
     dev: false
 
+  /@types/opossum@8.1.9:
+    resolution:
+      {
+        integrity: sha512-Jm/tYxuJFefiwRYs+/EOsUP3ktk0c8siMgAHPLnA4PXF4wKghzcjqf88dY+Xii5jId5Txw4JV0FMKTpjbd7KJA==,
+      }
+    dependencies:
+      "@types/node": 22.19.17
+    dev: true
+
   /@types/oracledb@6.5.2:
     resolution:
       {
@@ -22670,6 +22688,14 @@ packages:
       {
         integrity: sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==,
       }
+    dev: false
+
+  /opossum@10.0.0:
+    resolution:
+      {
+        integrity: sha512-sghtqL8Usj+et06Zui0nyn0R6FFsl7cyuoU+d7MctYU0nbS7Htzjleh+tWohFqk1Rp1srrFwbFa8Vxd0O64w6A==,
+      }
+    engines: { node: ^26 || ^24 || ^22 }
     dev: false
 
   /optionator@0.9.4:

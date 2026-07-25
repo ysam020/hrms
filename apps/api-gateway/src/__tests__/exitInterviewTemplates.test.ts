@@ -32,6 +32,12 @@ jest.mock("@hrms/cache", () => ({
 }));
 
 jest.mock("@hrms/common", () => ({
+  hasPrivilegedRole: (
+    role: string | null | undefined,
+    allowed: readonly string[] = ["owner", "admin"],
+  ) => !!role && allowed.includes(role),
+  HR_ROLES: ["owner", "admin", "hr"],
+  PRIVILEGED_ROLES: ["owner", "admin"],
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
   ),

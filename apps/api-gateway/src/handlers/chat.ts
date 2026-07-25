@@ -279,21 +279,19 @@ export async function markMessagesRead(req: Request, res: Response) {
         message: "Forbidden",
       });
 
-    // Single MongoDB bulk update — replaces findMany + N individual updates
-    await (prisma as any).$runCommandRaw({
-      update: "messages",
-      updates: [
-        {
-          q: {
-            chatRoomId: roomId,
-            isDeleted: false,
-            senderId: { $ne: { $oid: userId } },
-            readBy: { $not: { $elemMatch: { $eq: { $oid: userId } } } },
-          },
-          u: { $addToSet: { readBy: { $oid: userId } } },
-          multi: true,
-        },
-      ],
+    // Single Prisma bulk update — replaces findMany + N individual updates.
+    // Previously a raw $runCommandRaw (bypassed attachAuditLogging, which
+    // only hooks Prisma model actions). The `NOT: { readBy: { has: userId } }`
+    // filter guarantees `push` can't create a duplicate, since every matched
+    // doc is one where userId isn't already in readBy.
+    await prisma.message.updateMany({
+      where: {
+        chatRoomId: roomId,
+        isDeleted: false,
+        senderId: { not: userId },
+        NOT: { readBy: { has: userId } },
+      },
+      data: { readBy: { push: userId } },
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

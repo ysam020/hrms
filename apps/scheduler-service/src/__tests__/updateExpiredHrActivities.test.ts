@@ -3,7 +3,8 @@ import { updateExpiredHrActivities } from "../jobs/updateExpiredHrActivities";
 
 jest.mock("@hrms/db", () => {
   const _db = {
-    hrActivity: { updateMany: jest.fn() },
+    hrActivity: { findMany: jest.fn(), updateMany: jest.fn() },
+    user: { findUnique: jest.fn() },
   };
   return {
     prisma: _db,
@@ -16,28 +17,49 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
+}));
+
+const mockFindMany = (prisma as any).hrActivity.findMany as jest.Mock;
 const mockUpdateMany = (prisma as any).hrActivity.updateMany as jest.Mock;
+const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
+
+const expiringActivity = {
+  id: "a1",
+  tenantId: "t1",
+  title: "Team offsite",
+  createdBy: "u1",
+};
 
 describe("updateExpiredHrActivities", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2024, 2, 15, 12, 0, 0)); // March 15, 2024 noon
+    mockFindMany.mockResolvedValue([]);
+    mockUserFindUnique.mockResolvedValue(null);
   });
 
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  it("calls updateMany with correct where clause targeting past Active activities", async () => {
-    mockUpdateMany.mockResolvedValue({ count: 3 });
+  it("finds Active activities scheduled in the past, then updates just those by id", async () => {
+    mockFindMany.mockResolvedValue([expiringActivity]);
+    mockUpdateMany.mockResolvedValue({ count: 1 });
+
     await updateExpiredHrActivities();
 
-    expect(mockUpdateMany).toHaveBeenCalledWith({
+    expect(mockFindMany).toHaveBeenCalledWith({
       where: {
         status: "Active",
         scheduledAt: { lt: expect.any(Date) },
       },
+      select: expect.any(Object),
+    });
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["a1"] } },
       data: expect.objectContaining({
         status: "Expired",
         lastUpdatedBy: "System",
@@ -47,7 +69,8 @@ describe("updateExpiredHrActivities", () => {
   });
 
   it("sets status to 'Expired' and lastUpdatedBy to 'System'", async () => {
-    mockUpdateMany.mockResolvedValue({ count: 2 });
+    mockFindMany.mockResolvedValue([expiringActivity]);
+    mockUpdateMany.mockResolvedValue({ count: 1 });
     await updateExpiredHrActivities();
 
     const updateData = mockUpdateMany.mock.calls[0][0].data;
@@ -55,21 +78,22 @@ describe("updateExpiredHrActivities", () => {
     expect(updateData.lastUpdatedBy).toBe("System");
   });
 
-  it("completes successfully when no activities need expiring (count 0)", async () => {
-    mockUpdateMany.mockResolvedValue({ count: 0 });
+  it("completes successfully when no activities need expiring", async () => {
+    mockFindMany.mockResolvedValue([]);
     await expect(updateExpiredHrActivities()).resolves.toBeUndefined();
+    expect(mockUpdateMany).not.toHaveBeenCalled();
   });
 
   it("uses a Date object for the scheduledAt lt filter", async () => {
-    mockUpdateMany.mockResolvedValue({ count: 0 });
+    mockFindMany.mockResolvedValue([]);
     await updateExpiredHrActivities();
 
-    const where = mockUpdateMany.mock.calls[0][0].where;
+    const where = mockFindMany.mock.calls[0][0].where;
     expect(where.scheduledAt.lt).toBeInstanceOf(Date);
   });
 
   it("throws when the database call fails", async () => {
-    mockUpdateMany.mockRejectedValue(new Error("DB error"));
+    mockFindMany.mockRejectedValue(new Error("DB error"));
     await expect(updateExpiredHrActivities()).rejects.toThrow("DB error");
   });
 });
