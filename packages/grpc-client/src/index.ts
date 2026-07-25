@@ -1,6 +1,8 @@
 import * as grpc from "@grpc/grpc-js";
+import CircuitBreaker from "opossum";
 import fs from "fs";
 import path from "path";
+import { logger } from "@hrms/logger";
 
 export interface GrpcClientConfig {
   serviceName: string;
@@ -49,10 +51,66 @@ export function grpcRetryDelayMs(attempt: number): number {
 export class BaseGrpcClient {
   protected client: any;
   protected config: GrpcClientConfig;
+  // Per-instance (i.e. per downstream service, since each BaseGrpcClient
+  // talks to exactly one) — a hard-down service trips this open so callers
+  // fail fast instead of every request paying the full retry budget
+  // (up to retries×timeout) only to find out the service is unreachable.
+  // errorFilter keeps non-connectivity errors (INVALID_ARGUMENT, NOT_FOUND,
+  // ...) from counting toward the trip threshold — those are the calling
+  // code's fault, not the downstream service being unhealthy.
+  private breaker: CircuitBreaker<[string, any, number], any>;
 
   constructor(config: GrpcClientConfig) {
     this.config = config;
     this.setupClient();
+    this.breaker = new CircuitBreaker(
+      (method: string, request: any, deadlineMs: number) =>
+        this.callOnce(method, request, deadlineMs),
+      {
+        name: `grpc:${config.serviceName}`,
+        // Deadline is already enforced natively via the grpc call's own
+        // `deadline` option in callOnce — a second, opossum-level timeout
+        // racing it would just add a confusing second failure mode.
+        timeout: false,
+        errorThresholdPercentage: 50,
+        // Without a volume floor, opossum will trip on a single failed call
+        // (100% error rate over a sample size of 1) — which is exactly what
+        // one client's own retry-after-UNAVAILABLE burst looks like. Require
+        // a real pattern across multiple calls (this client's own retries
+        // plus other concurrent callers) before tripping, so retrying a
+        // single transient blip can't itself open the breaker.
+        volumeThreshold: 5,
+        rollingCountTimeout: 10_000,
+        resetTimeout: 30_000,
+        errorFilter: (err: any) => !isRetryableGrpcCode(err?.code),
+      },
+    );
+    // opossum invokes the fallback on *every* unfiltered failure, not only
+    // when the breaker is actually open (it's also opossum's generic
+    // "replace the rejection" hook for a single failed call) — so this must
+    // check for the specific error opossum itself throws when short-
+    // circuiting an open breaker (code "EOPENBREAKER") and only replace
+    // *that* one. Any other failure is a real call that reached the
+    // service and got a real error back; rethrow it unchanged so callers
+    // keep seeing the original grpc status/message.
+    this.breaker.fallback(
+      (_method: string, _request: any, _deadlineMs: number, err: any) => {
+        if (err?.code === "EOPENBREAKER") {
+          const breakerErr: any = new Error(
+            `Circuit breaker open for "${config.serviceName}" — too many recent failures, failing fast instead of waiting on a call that's unlikely to succeed.`,
+          );
+          breakerErr.code = grpc.status.UNAVAILABLE;
+          throw breakerErr;
+        }
+        throw err;
+      },
+    );
+    this.breaker.on("open", () =>
+      logger.warn(`gRPC circuit breaker opened for "${config.serviceName}"`),
+    );
+    this.breaker.on("close", () =>
+      logger.info(`gRPC circuit breaker closed for "${config.serviceName}"`),
+    );
   }
 
   private buildDefaultCredentials(): grpc.ChannelCredentials {
@@ -138,7 +196,7 @@ export class BaseGrpcClient {
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        return await this.callOnce(method, request, deadlineMs);
+        return await this.breaker.fire(method, request, deadlineMs);
       } catch (error: any) {
         const isLastAttempt = attempt === retries;
         if (isLastAttempt || !isRetryableGrpcCode(error?.code)) throw error;

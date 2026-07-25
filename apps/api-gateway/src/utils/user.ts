@@ -1,4 +1,5 @@
 import { prismaWithTenant as prisma } from "@hrms/db";
+import { hasPrivilegedRole, HR_ROLES } from "@hrms/common";
 
 /**
  * Returns true if the given userId belongs to a super-user.
@@ -24,6 +25,6 @@ export async function isHrOrAboveCaller(
   userId: string,
   tenantRole: string | null | undefined,
 ): Promise<boolean> {
-  if (["owner", "admin", "hr"].includes(tenantRole ?? "")) return true;
+  if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
   return isSuperUser(userId);
 }

@@ -2,6 +2,7 @@ let capturedServerArgs: { server: any; options: any } | null = null;
 let capturedMiddleware:
   | ((socket: any, next: (err?: Error) => void) => Promise<void>)
   | null = null;
+let capturedConnectionHandler: ((socket: any) => void) | null = null;
 
 jest.mock("socket.io", () => ({
   Server: jest.fn().mockImplementation(function (
@@ -12,6 +13,9 @@ jest.mock("socket.io", () => ({
     capturedServerArgs = { server, options };
     this.use = (fn: any) => {
       capturedMiddleware = fn;
+    };
+    this.on = (event: string, fn: (socket: any) => void) => {
+      if (event === "connection") capturedConnectionHandler = fn;
     };
     return this;
   }),
@@ -121,6 +125,59 @@ describe("configureSocketIO", () => {
       verifyToken.mockRejectedValue(new Error("jwks fetch failed"));
       const err = await runMiddleware(makeSocket({ token: "any-token" }));
       expect(err?.message).toBe("Authentication failed");
+    });
+
+    it("schedules a disconnect at the token's exp and emits session-expired when it fires", async () => {
+      jest.useFakeTimers();
+      try {
+        const expSeconds = Math.floor(Date.now() / 1000) + 10;
+        verifyToken.mockResolvedValue({
+          userId: "u1",
+          tenantId: "t1",
+          exp: expSeconds,
+        });
+        const socket: any = makeSocket({ token: "good-token" });
+        socket.emit = jest.fn();
+        socket.disconnect = jest.fn();
+        socket.on = jest.fn();
+        await runMiddleware(socket);
+
+        capturedConnectionHandler!(socket);
+        expect(socket.disconnect).not.toHaveBeenCalled();
+
+        jest.advanceTimersByTime(10_000);
+        expect(socket.emit).toHaveBeenCalledWith("session-expired");
+        expect(socket.disconnect).toHaveBeenCalledWith(true);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("disconnects immediately if the token is already expired by connection time", async () => {
+      verifyToken.mockResolvedValue({
+        userId: "u1",
+        tenantId: "t1",
+        exp: Math.floor(Date.now() / 1000) - 5,
+      });
+      const socket: any = makeSocket({ token: "good-token" });
+      socket.emit = jest.fn();
+      socket.disconnect = jest.fn();
+      socket.on = jest.fn();
+      await runMiddleware(socket);
+
+      capturedConnectionHandler!(socket);
+      expect(socket.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it("does not schedule a disconnect when the payload has no exp", async () => {
+      verifyToken.mockResolvedValue({ userId: "u1", tenantId: "t1" });
+      const socket: any = makeSocket({ token: "good-token" });
+      socket.disconnect = jest.fn();
+      socket.on = jest.fn();
+      await runMiddleware(socket);
+
+      capturedConnectionHandler!(socket);
+      expect(socket.disconnect).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,11 @@
 import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -20,7 +25,7 @@ function requireTenantId(req: AuthRequest, res: Response): string | null {
 async function isPrivileged(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   const superUser = await isSuperUser(userId);
-  return superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "");
+  return superUser || hasPrivilegedRole(tenantRole ?? "", HR_ROLES);
 }
 
 /**
@@ -95,6 +100,22 @@ export async function advanceApplicationStage(req: AuthRequest, res: Response) {
           if (outcome && outcome !== "pending" && !bgvResult) {
             return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
               message: `"${configuredStage.name}" is a background-verification stage — bgvResult is required to record an outcome.`,
+            });
+          }
+        } else if (configuredStage.interviewerRole) {
+          // Interview stage (has an interviewerRole, per the template's own
+          // shape) reaching a terminal outcome without ever recording
+          // scorecards/notes was the gap this closes: the legacy
+          // `interviews` flow has always required feedback to mark a round
+          // Completed (updateApplicationStatus.ts), but this newer
+          // event-trail flow never touches that field, so nothing enforced
+          // the same requirement here.
+          const hasScorecards =
+            Array.isArray(scorecards) && scorecards.length > 0;
+          const hasNotes = typeof notes === "string" && notes.trim().length > 0;
+          if (outcome && outcome !== "pending" && !hasScorecards && !hasNotes) {
+            return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+              message: `"${configuredStage.name}" is an interview stage — scorecards or notes are required to record an outcome.`,
             });
           }
         }

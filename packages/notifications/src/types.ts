@@ -33,6 +33,7 @@ export type NotificationEventType =
   | "assetAssigned"
   | "assetIssueReported"
   | "helpdeskNotification"
+  | "helpdeskSlaBreach"
   // performance-review-service
   | "performanceReviewAssigned"
   | "performanceReviewFinalized"
@@ -60,7 +61,8 @@ export type NotificationEventType =
   | "kycRevisionRequested"
   // hrm-service
   | "hrActivityCreated"
-  | "hrActivityUpdated";
+  | "hrActivityUpdated"
+  | "hrActivityExpired"; // scheduler-service — expiry job, not hrm-service itself
 
 /** In-app channel — persisted to Mongo and broadcast over WebSocket by notificationWorker.ts. Omit entirely to skip in-app for this event. */
 export interface NotifyInAppChannel {

@@ -101,10 +101,18 @@ export function classifyImpliedNonWorkingDays(
   workingDays: number[],
   holidayDateKeys: Set<string>,
   recordedDateKeys: Set<string>,
+  // Inclusive 1-indexed day range to actually credit — defaults to the
+  // whole month. A mid-month joiner/leaver passes their active window here
+  // so a weekend/holiday before they joined (or after they left) isn't
+  // counted as a paid day just because no AttendanceRecord exists for it —
+  // there's no record for those dates because they weren't employed yet,
+  // not because reconcileAttendance.ts hasn't backfilled it.
+  startDay = 1,
+  endDay = totalMonthDays,
 ): { impliedHolidays: number; impliedWeekOffs: number } {
   let impliedHolidays = 0;
   let impliedWeekOffs = 0;
-  for (let day = 1; day <= totalMonthDays; day++) {
+  for (let day = startDay; day <= endDay; day++) {
     const d = new Date(Date.UTC(year, month - 1, day));
     const key = d.toISOString().slice(0, 10);
     if (recordedDateKeys.has(key)) continue; // already has a real AttendanceRecord

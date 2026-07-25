@@ -10,6 +10,7 @@ jest.mock("../connection", () => ({
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+  websocketPublishFailuresTotal: { inc: jest.fn() },
 }));
 
 const mockClient = { hget: jest.fn() };

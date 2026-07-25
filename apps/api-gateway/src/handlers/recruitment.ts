@@ -1251,6 +1251,12 @@ export async function reassignInterviewer(req: Request, res: Response) {
         message: "Application not found",
       });
 
+    if (app.status === "Hired" || app.status === "Rejected") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `This candidate has already been ${app.status} and cannot be reassigned.`,
+      });
+    }
+
     const interviews = Array.isArray(app.interviews)
       ? (app.interviews as any[])
       : [];
@@ -1259,6 +1265,16 @@ export async function reassignInterviewer(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: `Interview round ${interviewRound} not found`,
       });
+
+    // Same defense-in-depth as reschedule-interview above — the frontend
+    // already hides reassignment once a round is marked conducted, but a
+    // direct API call could otherwise silently swap the interviewer after
+    // the interview already happened (and any feedback was recorded).
+    if (round.interviewConducted) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Round ${interviewRound} has already been conducted and cannot be reassigned.`,
+      });
+    }
 
     round.interviewer = interviewer;
     await prisma.jobApplication.update({

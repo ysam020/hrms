@@ -271,6 +271,24 @@ export const applyLeave = async (
       });
     }
 
+    // Mirror the equivalent check wfh.ts's requestWfh already does for the
+    // reverse direction — without this, WFH-then-leave (for the same day)
+    // could get both independently approved with no punch either way.
+    const existingWfh = await (prisma as any).wfhRequest.findFirst({
+      where: {
+        userId,
+        status: { in: ["Pending", "Approved"] },
+        date: { lte: endDay.toDate() },
+        toDate: { gte: startDay.toDate() },
+      },
+    });
+    if (existingWfh) {
+      return callback(null, {
+        message: MESSAGES.WFH_OVERLAPS_LEAVE_RANGE,
+        status: status.ALREADY_EXISTS,
+      });
+    }
+
     let days: number;
     if (unit === "half_day") {
       days = 0.5;

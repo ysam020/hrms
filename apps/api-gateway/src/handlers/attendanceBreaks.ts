@@ -1,6 +1,11 @@
 import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -36,7 +41,7 @@ export async function startBreak(req: AuthRequest, res: Response) {
     }
     const superUser = await isSuperUser(userId);
     const isPrivileged =
-      superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "");
+      superUser || hasPrivilegedRole(tenantRole ?? "", HR_ROLES);
     if (!isPrivileged && record.userId !== userId) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "You can only log breaks on your own attendance record.",
@@ -99,7 +104,7 @@ export async function endBreak(req: AuthRequest, res: Response) {
     });
     const superUser = await isSuperUser(userId);
     const isPrivileged =
-      superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "");
+      superUser || hasPrivilegedRole(tenantRole ?? "", HR_ROLES);
     if (!isPrivileged && record?.userId !== userId) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "You can only end your own break.",

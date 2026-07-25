@@ -1,6 +1,11 @@
 import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { instantiateApproval } from "@hrms/approval-engine";
 import { handleError } from "../utils/handleError";
@@ -90,7 +95,7 @@ export async function listOvertimeRequests(req: AuthRequest, res: Response) {
     const { userId: queryUserId } = req.query as { userId?: string };
     const superUser = await isSuperUser(requesterId);
     const isPrivileged =
-      superUser || ["owner", "admin", "hr"].includes(tenantRole ?? "");
+      superUser || hasPrivilegedRole(tenantRole ?? "", HR_ROLES);
     const targetUserId =
       isPrivileged && queryUserId ? queryUserId : requesterId;
 

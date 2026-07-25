@@ -21,7 +21,12 @@
 import { Request, Response } from "express";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 
@@ -259,7 +264,7 @@ async function assertHrRole(userId: string): Promise<boolean> {
   });
   if (!user) return false;
   if (user.isSuperUser) return true;
-  return user.role.some((r) => ["owner", "admin", "hr"].includes(r));
+  return user.role.some((r) => hasPrivilegedRole(r, HR_ROLES));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

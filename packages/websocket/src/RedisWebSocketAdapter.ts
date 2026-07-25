@@ -1,9 +1,11 @@
 import type { Server as SocketServer, Socket } from "socket.io";
-import { logger } from "@hrms/logger";
+import { logger, websocketPublishFailuresTotal } from "@hrms/logger";
 import {
   getWebSocketRedis,
   closeWebSocketRedisConnections,
 } from "./connection";
+
+const SERVICE_LABEL = process.env.SERVICE_NAME || "api-gateway";
 
 type AuthenticatedSocket = Socket & { userId: string };
 
@@ -156,29 +158,54 @@ export class RedisWebSocketAdapter {
     }
 
     // User is on a different worker/process — route via pub/sub
-    await publisher.publish(
-      `socket:worker-${pid}`,
-      JSON.stringify({ userId, eventName, payload }),
-    );
+    try {
+      await publisher.publish(
+        `socket:worker-${pid}`,
+        JSON.stringify({ userId, eventName, payload }),
+      );
+    } catch (err) {
+      websocketPublishFailuresTotal.inc({
+        method: "sendToUser",
+        service: SERVICE_LABEL,
+      });
+      logger.error(`[sendToUser] publish failed for ${userId}:`, { err });
+      return false;
+    }
     return true;
   }
 
   /** Broadcast an event to every connected socket across all workers. */
   async broadcast(eventName: string, payload: unknown): Promise<void> {
     const publisher = getWebSocketRedis("publisher");
-    await publisher.publish(
-      "socket:broadcast",
-      JSON.stringify({ eventName, payload }),
-    );
+    try {
+      await publisher.publish(
+        "socket:broadcast",
+        JSON.stringify({ eventName, payload }),
+      );
+    } catch (err) {
+      websocketPublishFailuresTotal.inc({
+        method: "broadcast",
+        service: SERVICE_LABEL,
+      });
+      logger.error("[broadcast] publish failed:", { err });
+    }
   }
 
   /** Publish a notification to all workers which emit it to all their sockets. */
   async sendNotification(notification: unknown): Promise<void> {
     const publisher = getWebSocketRedis("publisher");
-    await publisher.publish(
-      "socket:notification",
-      JSON.stringify({ notification }),
-    );
+    try {
+      await publisher.publish(
+        "socket:notification",
+        JSON.stringify({ notification }),
+      );
+    } catch (err) {
+      websocketPublishFailuresTotal.inc({
+        method: "sendNotification",
+        service: SERVICE_LABEL,
+      });
+      logger.error("[sendNotification] publish failed:", { err });
+    }
   }
 
   async cleanup(): Promise<void> {

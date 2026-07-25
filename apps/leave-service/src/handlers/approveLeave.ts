@@ -52,6 +52,26 @@ export const approveLeave = async (
       });
     }
 
+    // applyLeave already rejects a *new* leave request that overlaps a
+    // pending/approved WFH, but a WFH request submitted after this leave
+    // was applied for (and independently approved since) wouldn't have
+    // been caught then — re-check here, at the point this leave is about
+    // to become the second approved thing covering the same day.
+    const overlappingApprovedWfh = await (prisma as any).wfhRequest.findFirst({
+      where: {
+        userId: leave.userId,
+        status: "Approved",
+        date: { lte: leave.to },
+        toDate: { gte: leave.from },
+      },
+    });
+    if (overlappingApprovedWfh) {
+      return callback(null, {
+        message: MESSAGES.LEAVE_OVERLAPS_APPROVED_WFH,
+        status: status.FAILED_PRECONDITION,
+      });
+    }
+
     // Resolved before the transaction — a read-through cache lookup, not a
     // write, so it doesn't need to participate in it. isCompOffLeaveType
     // needs leavePolicies to recognize a tenant-defined comp-off type (not

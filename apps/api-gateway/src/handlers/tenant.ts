@@ -1,11 +1,13 @@
 import { Response } from "express";
 import {
   prisma,
+  Prisma,
   getClientForDb,
   canonicalizeEmail,
   getEmailDomain,
   isPublicEmailDomain,
   runWithTenant,
+  recordAuditEntry,
   AuditActor,
 } from "@hrms/db";
 import { randomBytes, createHmac } from "crypto";
@@ -18,6 +20,7 @@ import {
   tenantFrom,
   PLATFORM_FROM,
   renderEmailHtml,
+  hasPrivilegedRole,
 } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
@@ -82,6 +85,59 @@ function verifySubscriptionSignature(
   return expected === signature;
 }
 
+// Shared by the idempotency check at the top of buildTenant and by the
+// unique-constraint-conflict fallback below: if a tenant already exists for
+// this subscription and the caller already has a membership on it, re-issue
+// tokens and respond instead of erroring. Returns true if it handled the
+// response (caller should return immediately), false if there's nothing to
+// resume (caller should proceed with tenant creation, or rethrow).
+async function tryReissueTokensForSubscription(
+  razorpaySubscriptionId: string,
+  userId: string,
+  res: Response,
+): Promise<boolean> {
+  const existingTenant = await prisma.tenant.findFirst({
+    where: { razorpaySubscriptionId },
+  });
+  if (!existingTenant) return false;
+
+  const existingMembership = await prisma.tenantMembership.findFirst({
+    where: { tenantId: existingTenant.id, userId },
+  });
+  if (!existingMembership) return false;
+
+  const { accessToken, refreshToken } = issueTokenPair(
+    userId,
+    existingTenant.id,
+    existingMembership.role,
+    existingTenant.dbName ?? null,
+    false,
+  );
+  const { storeRefreshToken } = await import("../services/tenantTokenStore");
+  await storeRefreshToken(
+    userId,
+    refreshToken,
+    existingTenant.id,
+    existingMembership.role,
+    undefined,
+    existingTenant.dbName ?? null,
+    false,
+  );
+  res.cookie("refresh_token", aesEncrypt(refreshToken), REFRESH_COOKIE_OPTIONS);
+  apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+    data: {
+      accessToken,
+      tenant: {
+        id: existingTenant.id,
+        name: existingTenant.name,
+        slug: existingTenant.slug,
+      },
+    },
+    message: "Organisation setup resumed.",
+  });
+  return true;
+}
+
 // Shared tenant provisioning — called after payment is verified (either via
 // client-side signature in createTenant or Razorpay API in completePendingSetup).
 async function buildTenant(
@@ -113,49 +169,10 @@ async function buildTenant(
 
   // Idempotency: if a tenant was already created for this subscription (e.g.
   // the client retries after a tab-close mid-request), re-issue tokens.
-  const existingTenant = await prisma.tenant.findFirst({
-    where: { razorpaySubscriptionId },
-  });
-  if (existingTenant) {
-    const existingMembership = await prisma.tenantMembership.findFirst({
-      where: { tenantId: existingTenant.id, userId },
-    });
-    if (existingMembership) {
-      const { accessToken, refreshToken } = issueTokenPair(
-        userId,
-        existingTenant.id,
-        existingMembership.role,
-        existingTenant.dbName ?? null,
-        false,
-      );
-      const { storeRefreshToken } =
-        await import("../services/tenantTokenStore");
-      await storeRefreshToken(
-        userId,
-        refreshToken,
-        existingTenant.id,
-        existingMembership.role,
-        undefined,
-        existingTenant.dbName ?? null,
-        false,
-      );
-      res.cookie(
-        "refresh_token",
-        aesEncrypt(refreshToken),
-        REFRESH_COOKIE_OPTIONS,
-      );
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-        data: {
-          accessToken,
-          tenant: {
-            id: existingTenant.id,
-            name: existingTenant.name,
-            slug: existingTenant.slug,
-          },
-        },
-        message: "Organisation setup resumed.",
-      });
-    }
+  if (
+    await tryReissueTokensForSubscription(razorpaySubscriptionId, userId, res)
+  ) {
+    return;
   }
 
   let slug = slugify(name);
@@ -217,8 +234,9 @@ async function buildTenant(
     ? await fetchPaymentMethod(razorpayPaymentId)
     : null;
 
-  const [tenant] = await Promise.all([
-    prisma.tenant.create({
+  let tenant;
+  try {
+    tenant = await prisma.tenant.create({
       data: {
         name: name.trim(),
         slug,
@@ -237,8 +255,27 @@ async function buildTenant(
           paymentMethodSummary: pmInfo.summary,
         }),
       },
-    }),
-  ]);
+    });
+  } catch (error: unknown) {
+    // A concurrent request for the same subscription won the race — the
+    // partial unique index on razorpaySubscriptionId (ensureIndexes.ts)
+    // rejected this insert. Fall back to the idempotent re-issue path
+    // instead of failing the request outright.
+    const isDuplicateSubscription =
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002";
+    if (
+      isDuplicateSubscription &&
+      (await tryReissueTokensForSubscription(
+        razorpaySubscriptionId,
+        userId,
+        res,
+      ))
+    ) {
+      return;
+    }
+    throw error;
+  }
 
   // Attribute audit rows written during provisioning (tenantSettings.create,
   // the User/TenantMembership writes below) to the tenant + user creating
@@ -252,23 +289,27 @@ async function buildTenant(
   };
 
   // Force Atlas to materialise the tenant database, then seed default settings.
-  // Fire-and-forget: failures are logged but must not block the main setup flow.
+  // Awaited (not fire-and-forget) so a client that immediately hits a
+  // tenant-scoped endpoint after this response can't land before seeding
+  // finishes. Failures are still only logged, not thrown — a seeding hiccup
+  // must not block the response, it just means TenantSettings backfills lazily.
   const tenantClient = getClientForDb(dbName);
-  void runWithTenant(
+  await runWithTenant(
     tenant.id,
     tenantClient,
     async () => {
       try {
+        const initDoc = {
+          tenantId: tenant.id,
+          initializedAt: new Date(),
+        };
         await (tenantClient.$runCommandRaw as any)({
           insert: "_init",
-          documents: [
-            {
-              _id: { $oid: tenant.id },
-              tenantId: tenant.id,
-              initializedAt: new Date(),
-            },
-          ],
+          documents: [{ _id: { $oid: tenant.id }, ...initDoc }],
         });
+        // $runCommandRaw bypasses attachAuditLogging (no Prisma model/action
+        // for the middleware to key off), so record it manually.
+        recordAuditEntry(tenantClient as any, "_init", "create", null, initDoc);
         // Seed the initial TenantSettings version so services always have a DB record.
         // workWeekPattern defaults to Mon-Fri if the signup step was skipped —
         // never blocks tenant creation.
@@ -1053,7 +1094,7 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
 // doesn't carry either, hence the lookup).
 async function canApproveJoinRequests(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
-  if (["owner", "admin"].includes(tenantRole ?? "")) return true;
+  if (hasPrivilegedRole(tenantRole ?? "")) return true;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isSuperUser: true, permissions: true },

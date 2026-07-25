@@ -24,6 +24,7 @@ import {
   RESPONSE_STATUS,
   isSafeUrl,
   isSafeHostname,
+  hasPrivilegedRole,
 } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -57,7 +58,7 @@ async function assertAdminRole(userId: string): Promise<boolean> {
   });
   if (!user) return false;
   if (user.isSuperUser) return true;
-  return user.role.some((r) => ["owner", "admin"].includes(r));
+  return user.role.some((r) => hasPrivilegedRole(r));
 }
 
 // SSRF guard: reject private/loopback/link-local/metadata IP ranges in

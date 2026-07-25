@@ -22,6 +22,7 @@ jest.mock("@hrms/db", () => {
     payCycle: { findFirst: jest.fn() },
     tenantSettings: { findFirst: jest.fn() },
     holiday: { findMany: jest.fn() },
+    resignation: { findMany: jest.fn() },
   };
   return {
     prisma: _db,
@@ -91,6 +92,8 @@ const mockTenantSettingsFindFirst = (prisma as any).tenantSettings
   .findFirst as jest.Mock;
 const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
 const mockPayCycleFindFirst = (prisma as any).payCycle.findFirst as jest.Mock;
+const mockResignationFindMany = (prisma as any).resignation
+  .findMany as jest.Mock;
 
 const makeReq = (overrides: any = {}) =>
   ({
@@ -131,6 +134,7 @@ describe("initiatePayrollRun", () => {
     mockTaxDeclarationFindMany.mockResolvedValue([]);
     mockLineItemFindMany.mockResolvedValue([]);
     mockRunFindManyForTds.mockResolvedValue([]);
+    mockResignationFindMany.mockResolvedValue([]);
   });
 
   it("uses the employee's own configured Basic/HRA/Conveyance, prorated by attendance, instead of the fixed 50/25/25 split", async () => {
@@ -205,6 +209,92 @@ describe("initiatePayrollRun", () => {
         }),
       ]),
     });
+  });
+
+  it("skips an employee with no salary structure instead of creating a ₹0 payslip", async () => {
+    mockUserFindMany.mockResolvedValue([
+      {
+        id: "emp-no-salary",
+        salary: null,
+        salaryBasicPay: null,
+        salaryHra: null,
+        salaryConveyance: null,
+      },
+      {
+        id: "emp-4",
+        salary: 20000,
+        salaryBasicPay: 10000,
+        salaryHra: 5000,
+        salaryConveyance: 5000,
+      },
+    ]);
+    mockAttendanceFindMany.mockResolvedValue(
+      Array.from({ length: 31 }, (_, i) => ({
+        userId: "emp-4",
+        status: "Present",
+        date: new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, i + 1)),
+      })),
+    );
+
+    const res = makeRes();
+    await initiatePayrollRun(
+      makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+      res,
+    );
+
+    const [[createManyArg]] = mockLineItemCreateMany.mock.calls;
+    expect(createManyArg.data).toHaveLength(1);
+    expect(createManyArg.data[0]).toEqual(
+      expect.objectContaining({ userId: "emp-4" }),
+    );
+
+    const responseArg = res.json.mock.calls[0][0];
+    expect(responseArg.data.skippedEmployees).toEqual([
+      { userId: "emp-no-salary", reason: "No salary structure" },
+    ]);
+    expect(responseArg.data.employeeCount).toBe(1);
+  });
+
+  it("includes and prorates an employee who resigned mid-month instead of silently dropping them from the run", async () => {
+    // No currently-active employees — this user's employeeStatus already
+    // flipped away from "Active" the day after their lastWorkingDay.
+    mockUserFindMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: "emp-exited",
+        salary: 30000,
+        salaryBasicPay: 20000,
+        salaryHra: 6000,
+        salaryConveyance: 4000,
+        joining_date: null,
+      },
+    ]);
+    mockResignationFindMany.mockResolvedValue([
+      {
+        userId: "emp-exited",
+        lastWorkingDay: new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, 15)),
+      },
+    ]);
+    mockAttendanceFindMany.mockResolvedValue(
+      Array.from({ length: 15 }, (_, i) => ({
+        userId: "emp-exited",
+        status: "Present",
+        date: new Date(Date.UTC(PAST_YEAR, PAST_MONTH - 1, i + 1)),
+      })),
+    );
+
+    const res = makeRes();
+    await initiatePayrollRun(
+      makeReq({ body: { month: PAST_MONTH, year: PAST_YEAR } }),
+      res,
+    );
+
+    const [[createManyArg]] = mockLineItemCreateMany.mock.calls;
+    expect(createManyArg.data).toHaveLength(1);
+    const lineItem = createManyArg.data[0];
+    expect(lineItem.userId).toBe("emp-exited");
+    // Prorated for ~half the month, not silently zero and not full salary.
+    expect(lineItem.grossSalary).toBeGreaterThan(0);
+    expect(lineItem.grossSalary).toBeLessThan(30000);
   });
 
   it("uses the tenant's configured PF/ESI rates instead of the 12%/1.75% defaults", async () => {

@@ -34,6 +34,15 @@ model Tenant {
   billing                String?
   industry               String?
   companySize            String?
+  // Intentionally NOT @unique here for the same reason as `domain` below:
+  // Prisma's MongoDB connector doesn't emit sparse:true for optional
+  // @unique fields (prisma/prisma#12827), so a plain unique index throws
+  // E11000 on the second tenant ever created with this left null (e.g. a
+  // seed script). Uniqueness is instead enforced by a partial unique index
+  // created directly against the driver — see ensureMasterIndexes() in
+  // packages/database/src/ensureIndexes.ts, called once at gateway boot.
+  // Prisma still maps the resulting duplicate-key error to P2002 on
+  // tenant.create() even though the index isn't declared here.
   razorpaySubscriptionId String?
   subscriptionStatus     String    @default("active") // active | grace_period | expired
   planActivatedAt        DateTime?

@@ -32,6 +32,7 @@ jest.mock("@hrms/db", () => {
       count: jest.fn(),
       groupBy: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
   };
   return {
@@ -80,6 +81,7 @@ const mockMessageFindMany = (prisma as any).message.findMany as jest.Mock;
 const mockMessageFindUnique = (prisma as any).message.findUnique as jest.Mock;
 const mockMessageGroupBy = (prisma as any).message.groupBy as jest.Mock;
 const mockMessageUpdate = (prisma as any).message.update as jest.Mock;
+const mockMessageUpdateMany = (prisma as any).message.updateMany as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = (overrides: any = {}) =>
@@ -286,19 +288,23 @@ describe("chatHandlers", () => {
   });
 
   describe("markMessagesRead", () => {
-    it("marks messages read via single $runCommandRaw bulk update", async () => {
+    it("marks messages read via a single Prisma updateMany (audited, not a raw command)", async () => {
       mockChatRoomFindUnique.mockResolvedValue({
         id: "r1",
         participants: ["user-1"],
       });
-      (prisma as any).$runCommandRaw = jest
-        .fn()
-        .mockResolvedValue({ n: 2, ok: 1 });
+      mockMessageUpdateMany.mockResolvedValue({ count: 2 });
       const res = makeRes();
       await markMessagesRead(makeReq({ params: { roomId: "r1" } }), res);
-      expect((prisma as any).$runCommandRaw).toHaveBeenCalledWith(
-        expect.objectContaining({ update: "messages" }),
-      );
+      expect(mockMessageUpdateMany).toHaveBeenCalledWith({
+        where: {
+          chatRoomId: "r1",
+          isDeleted: false,
+          senderId: { not: "user-1" },
+          NOT: { readBy: { has: "user-1" } },
+        },
+        data: { readBy: { push: "user-1" } },
+      });
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,

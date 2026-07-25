@@ -3,7 +3,12 @@ import { employeeClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
@@ -287,7 +292,7 @@ async function canManageKyc(
   action: "edit_kyc" | "approve_kyc" | "request_kyc_revision",
 ): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
-  if (["owner", "admin", "hr"].includes(tenantRole ?? "")) return true;
+  if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isSuperUser: true, permissions: true },

@@ -181,21 +181,64 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       });
     }
 
+    // ── Month boundaries ────────────────────────────────────────────────────
+    // Date range: midnight on the 1st → 23:59:59.999 on the last day.
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+    const totalMonthDays = new Date(year, month, 0).getDate(); // e.g. 28/29/30/31
+
     // Fetch all active employees — their base (full-month) gross salary and,
     // when configured (Employee/Salary module), their own Basic/HRA/Conveyance
     // breakdown, which is prorated by attendance below instead of being
     // re-derived from a fixed split.
-    const employees = await prisma.user.findMany({
-      where: { employeeStatus: "Active" },
-      select: {
-        id: true,
-        salary: true,
-        salaryBasicPay: true,
-        salaryHra: true,
-        salaryConveyance: true,
-        salaryComponentBreakdown: true,
-      },
-    });
+    //
+    // Also fetch anyone who resigned/exited during this month: payroll can
+    // only be initiated for a past month (guard above), so by the time this
+    // runs, updateEmployeeStatus.ts has already flipped their employeeStatus
+    // away from "Active" the day after lastWorkingDay — the plain "Active"
+    // filter alone would silently drop them from the run entirely, even
+    // though they worked part of the month and are owed a prorated payslip
+    // for it (payroll running through lastWorkingDay is the documented
+    // intent — see the Resignation.relievedFromDutyOn schema comment).
+    const employeeSelect = {
+      id: true,
+      salary: true,
+      salaryBasicPay: true,
+      salaryHra: true,
+      salaryConveyance: true,
+      salaryComponentBreakdown: true,
+      joining_date: true,
+    } as const;
+
+    const [activeEmployees, exitedThisMonth] = await Promise.all([
+      prisma.user.findMany({
+        where: { employeeStatus: "Active" },
+        select: employeeSelect,
+      }),
+      (prisma as any).resignation.findMany({
+        where: { lastWorkingDay: { gte: monthStart, lte: monthEnd } },
+        select: { userId: true, lastWorkingDay: true },
+      }),
+    ]);
+
+    const lastWorkingDayByUser = new Map<string, Date>();
+    for (const r of exitedThisMonth as any[]) {
+      if (r.userId)
+        lastWorkingDayByUser.set(r.userId, new Date(r.lastWorkingDay));
+    }
+
+    const activeIds = new Set(activeEmployees.map((e) => e.id));
+    const exitedIds = [...lastWorkingDayByUser.keys()].filter(
+      (id) => !activeIds.has(id),
+    );
+    const exitedEmployees = exitedIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: exitedIds } },
+          select: employeeSelect,
+        })
+      : [];
+
+    const employees = [...activeEmployees, ...exitedEmployees];
 
     if (employees.length === 0) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
@@ -206,11 +249,6 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     const empIds = employees.map((e) => e.id);
 
     // ── Attendance data for the payroll month ─────────────────────────────────
-    // Date range: midnight on the 1st → 23:59:59.999 on the last day.
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-    const totalMonthDays = new Date(year, month, 0).getDate(); // e.g. 28/29/30/31
-
     const [attendanceRecords, leaveBalances, tenantSettings, holidayRecords] =
       await Promise.all([
         prisma.attendanceRecord.findMany({
@@ -288,6 +326,33 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     for (const emp of employees) {
       const agg = attByUser.get(emp.id)!;
       const recorded = recordedDatesByUser.get(emp.id) ?? new Set<string>();
+
+      // Bound implied-day crediting to the employee's actual employment
+      // window within this month — otherwise a mid-month joiner/leaver gets
+      // credited paid weekends/holidays for dates before they joined or
+      // after they left, purely because no AttendanceRecord exists for a
+      // date they were never employed on.
+      let startDay = 1;
+      const joinDate = (emp as any).joining_date
+        ? new Date((emp as any).joining_date)
+        : null;
+      if (
+        joinDate &&
+        joinDate.getFullYear() === year &&
+        joinDate.getMonth() + 1 === month
+      ) {
+        startDay = joinDate.getDate();
+      }
+      let endDay = totalMonthDays;
+      const exitDate = lastWorkingDayByUser.get(emp.id);
+      if (
+        exitDate &&
+        exitDate.getFullYear() === year &&
+        exitDate.getMonth() + 1 === month
+      ) {
+        endDay = exitDate.getDate();
+      }
+
       const { impliedHolidays, impliedWeekOffs } =
         classifyImpliedNonWorkingDays(
           year,
@@ -296,6 +361,8 @@ export async function initiatePayrollRun(req: Request, res: Response) {
           workingDays,
           holidayDateKeys,
           recorded,
+          startDay,
+          endDay,
         );
       agg.holiday += impliedHolidays;
       agg.weekOff += impliedWeekOffs;
@@ -455,185 +522,204 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     let totalGross = 0;
     let totalNet = 0;
     let totalDeductions = 0;
+    const skippedEmployees: { userId: string; reason: string }[] = [];
 
-    const lineItems = employees.map((emp) => {
-      const fullGross = emp.salary ?? 0;
+    const lineItems = employees
+      .map((emp) => {
+        const fullGross = emp.salary ?? 0;
+        const hasComponentBreakdown =
+          Array.isArray(emp.salaryComponentBreakdown) &&
+          emp.salaryComponentBreakdown.length > 0;
 
-      // Paid days = present + late + halfDays×0.5 + holidays + weekly offs
-      // + WFH days + paid leaves.
-      const att = attByUser.get(emp.id) ?? {
-        present: 0,
-        late: 0,
-        halfDay: 0,
-        holiday: 0,
-        weekOff: 0,
-        wfh: 0,
-      };
-      const paidLeaves = paidLeaveByUser.get(emp.id) ?? 0;
-      const paidDays = Math.min(
-        att.present +
-          att.late +
-          att.halfDay * 0.5 +
-          att.holiday +
-          att.weekOff +
-          att.wfh +
-          paidLeaves,
-        totalMonthDays, // cap at total days to avoid overrun
-      );
+        // No salary structure configured at all — a ₹0 payslip here isn't a
+        // real payout, it's a data gap. Skip and flag instead of silently
+        // recording zero gross/net for this employee.
+        if (fullGross <= 0 && !hasComponentBreakdown) {
+          skippedEmployees.push({
+            userId: emp.id,
+            reason: "No salary structure",
+          });
+          return null;
+        }
 
-      const prorationRatio = totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
-
-      let gross: number;
-      let basicPay: number;
-      let hra: number;
-      let conveyance: number;
-      let incentive = 0;
-      let pf: number;
-      let esi: number;
-      let pt: number;
-      let otherDeductions: number;
-      let componentBreakdown: Record<string, unknown>[] | undefined;
-
-      const rawBreakdown = emp.salaryComponentBreakdown;
-      if (Array.isArray(rawBreakdown) && rawBreakdown.length > 0) {
-        // Tenant-configured components (including anything beyond the
-        // standard 6 codes) — prorate every component by attendance, then
-        // override the 3 statutory codes with an authoritative recompute
-        // (prorating gross/basic first, then recomputing PF/ESI/PT off
-        // those, is more correct than prorating stale PF/ESI/PT amounts
-        // directly — e.g. ESI's ₹21,000 eligibility threshold must be
-        // checked against the prorated gross, not the full-month one).
-        const prorated = (rawBreakdown as any[]).map((c) => ({
-          code: c.code,
-          name: c.name,
-          type: c.type,
-          amount: Math.round((Number(c.amount) || 0) * prorationRatio),
-        }));
-
-        const { legacy: proratedLegacy, grossEarnings: proratedGross } =
-          deriveFromComponents(prorated);
-        gross = proratedGross;
-        basicPay = proratedLegacy.basicPay;
-
-        const statutory = calcStatutoryDeductions(
-          gross,
-          basicPay,
-          tenantWorkState,
-          ptSlabsByState,
-          componentRates,
+        // Paid days = present + late + halfDays×0.5 + holidays + weekly offs
+        // + WFH days + paid leaves.
+        const att = attByUser.get(emp.id) ?? {
+          present: 0,
+          late: 0,
+          halfDay: 0,
+          holiday: 0,
+          weekOff: 0,
+          wfh: 0,
+        };
+        const paidLeaves = paidLeaveByUser.get(emp.id) ?? 0;
+        const paidDays = Math.min(
+          att.present +
+            att.late +
+            att.halfDay * 0.5 +
+            att.holiday +
+            att.weekOff +
+            att.wfh +
+            paidLeaves,
+          totalMonthDays, // cap at total days to avoid overrun
         );
 
-        componentBreakdown = prorated.map((c) => {
-          if (c.code === "PF") return { ...c, amount: statutory.pf };
-          if (c.code === "ESI") return { ...c, amount: statutory.esi };
-          if (c.code === "PT") return { ...c, amount: statutory.pt };
-          return c;
+        const prorationRatio =
+          totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
+
+        let gross: number;
+        let basicPay: number;
+        let hra: number;
+        let conveyance: number;
+        let incentive = 0;
+        let pf: number;
+        let esi: number;
+        let pt: number;
+        let otherDeductions: number;
+        let componentBreakdown: Record<string, unknown>[] | undefined;
+
+        const rawBreakdown = emp.salaryComponentBreakdown;
+        if (Array.isArray(rawBreakdown) && rawBreakdown.length > 0) {
+          // Tenant-configured components (including anything beyond the
+          // standard 6 codes) — prorate every component by attendance, then
+          // override the 3 statutory codes with an authoritative recompute
+          // (prorating gross/basic first, then recomputing PF/ESI/PT off
+          // those, is more correct than prorating stale PF/ESI/PT amounts
+          // directly — e.g. ESI's ₹21,000 eligibility threshold must be
+          // checked against the prorated gross, not the full-month one).
+          const prorated = (rawBreakdown as any[]).map((c) => ({
+            code: c.code,
+            name: c.name,
+            type: c.type,
+            amount: Math.round((Number(c.amount) || 0) * prorationRatio),
+          }));
+
+          const { legacy: proratedLegacy, grossEarnings: proratedGross } =
+            deriveFromComponents(prorated);
+          gross = proratedGross;
+          basicPay = proratedLegacy.basicPay;
+
+          const statutory = calcStatutoryDeductions(
+            gross,
+            basicPay,
+            tenantWorkState,
+            ptSlabsByState,
+            componentRates,
+          );
+
+          componentBreakdown = prorated.map((c) => {
+            if (c.code === "PF") return { ...c, amount: statutory.pf };
+            if (c.code === "ESI") return { ...c, amount: statutory.esi };
+            if (c.code === "PT") return { ...c, amount: statutory.pt };
+            return c;
+          });
+
+          const { legacy: finalLegacy, totalDeductions: finalTotalDed } =
+            deriveFromComponents(componentBreakdown as any[]);
+          hra = finalLegacy.hra;
+          conveyance = finalLegacy.conveyance;
+          incentive = finalLegacy.incentive;
+          pf = statutory.pf;
+          esi = statutory.esi;
+          pt = statutory.pt;
+          otherDeductions = finalTotalDed - pf - esi - pt;
+        } else {
+          // Legacy fixed-column employee (componentBreakdown never saved) —
+          // exact original behavior.
+          gross =
+            totalMonthDays > 0
+              ? Math.round((fullGross * paidDays) / totalMonthDays)
+              : fullGross;
+
+          // Use the employee's own configured Basic/HRA/Conveyance (set via
+          // the Employee/Salary module, itself tenant-rate-derived) prorated
+          // by the same attendance ratio as gross — falling back to the
+          // original fixed 50/25/25 split of pro-rata gross only when
+          // nothing's been configured for this employee yet, so unconfigured
+          // tenants see no change.
+          basicPay =
+            emp.salaryBasicPay != null
+              ? Math.round(emp.salaryBasicPay * prorationRatio)
+              : Math.round(gross * 0.5);
+          hra =
+            emp.salaryHra != null
+              ? Math.round(emp.salaryHra * prorationRatio)
+              : Math.round(gross * 0.25);
+          conveyance =
+            emp.salaryConveyance != null
+              ? Math.round(emp.salaryConveyance * prorationRatio)
+              : Math.round(gross * 0.25);
+
+          const statutory = calcStatutoryDeductions(
+            gross,
+            basicPay,
+            tenantWorkState,
+            ptSlabsByState,
+            componentRates,
+          );
+          pf = statutory.pf;
+          esi = statutory.esi;
+          pt = statutory.pt;
+          otherDeductions = 0;
+        }
+
+        const adv = advanceMap.get(emp.id);
+        const advanceDeduction = adv ? Math.min(adv.emi, adv.remaining) : 0;
+
+        const declarationRow = declarationByUser.get(emp.id);
+        const thisMonthComponents = buildThisMonthComponents(
+          componentBreakdown as any,
+          { basicPay, hra, conveyance, incentive },
+          earningComponentDefs,
+        );
+        const ytdByCode = aggregateEarningsByCode(
+          priorLineItemsByUser.get(emp.id) ?? [],
+        );
+        const ytdTds = ytdTdsByUser.get(emp.id) ?? 0;
+        const tds = calcMonthlyTds({
+          regime: declarationRow ? "old" : "new",
+          components: thisMonthComponents,
+          ytdByCode,
+          ytdTds,
+          remainingMonths,
+          slabs: taxSlabs,
+          declaration: declarationRow
+            ? {
+                monthlyRent: declarationRow.monthlyRent,
+                isMetroCity: declarationRow.isMetroCity,
+                lineItems: declarationRow.lineItems ?? [],
+              }
+            : undefined,
         });
 
-        const { legacy: finalLegacy, totalDeductions: finalTotalDed } =
-          deriveFromComponents(componentBreakdown as any[]);
-        hra = finalLegacy.hra;
-        conveyance = finalLegacy.conveyance;
-        incentive = finalLegacy.incentive;
-        pf = statutory.pf;
-        esi = statutory.esi;
-        pt = statutory.pt;
-        otherDeductions = finalTotalDed - pf - esi - pt;
-      } else {
-        // Legacy fixed-column employee (componentBreakdown never saved) —
-        // exact original behavior.
-        gross =
-          totalMonthDays > 0
-            ? Math.round((fullGross * paidDays) / totalMonthDays)
-            : fullGross;
+        const totalDed =
+          pf + esi + pt + otherDeductions + advanceDeduction + tds;
+        const net = Math.max(0, gross - totalDed);
 
-        // Use the employee's own configured Basic/HRA/Conveyance (set via
-        // the Employee/Salary module, itself tenant-rate-derived) prorated
-        // by the same attendance ratio as gross — falling back to the
-        // original fixed 50/25/25 split of pro-rata gross only when
-        // nothing's been configured for this employee yet, so unconfigured
-        // tenants see no change.
-        basicPay =
-          emp.salaryBasicPay != null
-            ? Math.round(emp.salaryBasicPay * prorationRatio)
-            : Math.round(gross * 0.5);
-        hra =
-          emp.salaryHra != null
-            ? Math.round(emp.salaryHra * prorationRatio)
-            : Math.round(gross * 0.25);
-        conveyance =
-          emp.salaryConveyance != null
-            ? Math.round(emp.salaryConveyance * prorationRatio)
-            : Math.round(gross * 0.25);
+        totalGross += gross;
+        totalDeductions += totalDed;
+        totalNet += net;
 
-        const statutory = calcStatutoryDeductions(
-          gross,
+        return {
+          tenantId: tenantId ?? undefined,
+          userId: emp.id,
+          grossSalary: gross,
           basicPay,
-          tenantWorkState,
-          ptSlabsByState,
-          componentRates,
-        );
-        pf = statutory.pf;
-        esi = statutory.esi;
-        pt = statutory.pt;
-        otherDeductions = 0;
-      }
-
-      const adv = advanceMap.get(emp.id);
-      const advanceDeduction = adv ? Math.min(adv.emi, adv.remaining) : 0;
-
-      const declarationRow = declarationByUser.get(emp.id);
-      const thisMonthComponents = buildThisMonthComponents(
-        componentBreakdown as any,
-        { basicPay, hra, conveyance, incentive },
-        earningComponentDefs,
-      );
-      const ytdByCode = aggregateEarningsByCode(
-        priorLineItemsByUser.get(emp.id) ?? [],
-      );
-      const ytdTds = ytdTdsByUser.get(emp.id) ?? 0;
-      const tds = calcMonthlyTds({
-        regime: declarationRow ? "old" : "new",
-        components: thisMonthComponents,
-        ytdByCode,
-        ytdTds,
-        remainingMonths,
-        slabs: taxSlabs,
-        declaration: declarationRow
-          ? {
-              monthlyRent: declarationRow.monthlyRent,
-              isMetroCity: declarationRow.isMetroCity,
-              lineItems: declarationRow.lineItems ?? [],
-            }
-          : undefined,
-      });
-
-      const totalDed = pf + esi + pt + otherDeductions + advanceDeduction + tds;
-      const net = Math.max(0, gross - totalDed);
-
-      totalGross += gross;
-      totalDeductions += totalDed;
-      totalNet += net;
-
-      return {
-        tenantId: tenantId ?? undefined,
-        userId: emp.id,
-        grossSalary: gross,
-        basicPay,
-        hra,
-        conveyance,
-        incentive,
-        pf,
-        esi,
-        pt,
-        advanceDeduction,
-        tds,
-        otherDeductions,
-        totalDeductions: totalDed,
-        componentBreakdown,
-        netPayable: net,
-      };
-    });
+          hra,
+          conveyance,
+          incentive,
+          pf,
+          esi,
+          pt,
+          advanceDeduction,
+          tds,
+          otherDeductions,
+          totalDeductions: totalDed,
+          componentBreakdown,
+          netPayable: net,
+        };
+      })
+      .filter((li): li is NonNullable<typeof li> => li !== null);
 
     // Create run first, then line-items sequentially.
     // (MongoDB standalone does not support multi-document transactions.)
@@ -647,7 +733,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
         totalGross,
         totalNet,
         totalDeductions,
-        employeeCount: employees.length,
+        employeeCount: lineItems.length,
         notes: notes ?? null,
         payCycleId: resolvedPayCycle?.id ?? undefined,
       },
@@ -662,7 +748,8 @@ export async function initiatePayrollRun(req: Request, res: Response) {
 
     logger.info(`Payroll run initiated: ${run.id} for ${year}-${month}`, {
       initiatedBy: user!.userId,
-      employeeCount: employees.length,
+      employeeCount: lineItems.length,
+      skippedCount: skippedEmployees.length,
     });
 
     return apiResponse(res, RESPONSE_STATUS.CREATED, {
@@ -670,11 +757,12 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       data: {
         runId: run.id,
         status: run.status,
-        employeeCount: employees.length,
+        employeeCount: lineItems.length,
         totalGross,
         totalNet,
         totalDeductions,
         payCycleId: resolvedPayCycle?.id ?? null,
+        skippedEmployees,
         ...(payCycleWarning ? { warning: payCycleWarning } : {}),
       },
     });

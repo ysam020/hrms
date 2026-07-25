@@ -14,9 +14,11 @@
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.12.3",
-    "@hrms/logger": "workspace:*"
+    "@hrms/logger": "workspace:*",
+    "opossum": "^10.0.0"
   },
   "devDependencies": {
-    "@hrms/typescript-config": "workspace:*"
+    "@hrms/typescript-config": "workspace:*",
+    "@types/opossum": "^8.1.9"
   }
 }

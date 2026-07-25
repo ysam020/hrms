@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { recruitment, salary } from "@hrms/proto";
 import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, hasPrivilegedRole } from "@hrms/common";
 import {
   tenantFrom,
   tenantReplyTo,
@@ -38,7 +38,7 @@ dayjs.extend(utc);
 export async function isPrivileged(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   const superUser = await isSuperUser(userId);
-  return superUser || ["owner", "admin"].includes(tenantRole ?? "");
+  return superUser || hasPrivilegedRole(tenantRole ?? "");
 }
 
 function requireTenantId(req: AuthRequest, res: Response): string | null {
@@ -324,7 +324,7 @@ export async function deleteApprovalDelegate(req: AuthRequest, res: Response) {
     const superUser = await isSuperUser(userId);
     const canRemove =
       superUser ||
-      ["owner", "admin"].includes(tenantRole ?? "") ||
+      hasPrivilegedRole(tenantRole ?? "") ||
       existing.delegatorId === userId;
     if (!canRemove) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {

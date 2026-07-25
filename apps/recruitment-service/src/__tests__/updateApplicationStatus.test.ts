@@ -8,6 +8,7 @@ jest.mock("@hrms/db", () => {
     jobOpening: { update: jest.fn() },
     user: { findMany: jest.fn() },
     tenant: { findUnique: jest.fn().mockResolvedValue(null) },
+    applicationStageEvent: { findFirst: jest.fn() },
   };
   return {
     prisma: _db,
@@ -43,6 +44,8 @@ const mockUpdate = (prisma as any).jobApplication.update as jest.Mock;
 const mockJobOpeningUpdate = (prisma as any).jobOpening.update as jest.Mock;
 const mockUserFindMany = (prisma as any).user.findMany as jest.Mock;
 const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
+const mockStageEventFindFirst = (prisma as any).applicationStageEvent
+  .findFirst as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockNotify = notify as jest.Mock;
 
@@ -83,6 +86,7 @@ describe("updateApplicationStatus", () => {
     mockUserFindMany.mockResolvedValue([]);
     mockTenantFindUnique.mockResolvedValue(null);
     mockInvalidate.mockResolvedValue(undefined);
+    mockStageEventFindFirst.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when id is missing", async () => {

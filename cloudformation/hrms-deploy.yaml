@@ -46,11 +46,13 @@ Parameters:
     Type: String
     Default: cache.t4g.micro
     Description: >
-      ElastiCache node type for RedisCluster — one shared Redis every ASG
-      instance connects to (see RedisCluster below). t4g.micro comfortably
-      covers today's usage (rate limiting, cache, Socket.IO pub/sub, BullMQ
-      queues combined) at a small multiple of what the single 256M docker
-      Redis container this replaces was given.
+      ElastiCache node type for RedisReplicationGroup — the shared Redis
+      every ASG instance connects to (see RedisReplicationGroup below).
+      t4g.micro comfortably covers today's usage (rate limiting, cache,
+      Socket.IO pub/sub, BullMQ queues combined) at a small multiple of what
+      the single 256M docker Redis container this replaces was given. Each
+      of the two nodes (primary + replica) is sized independently at this
+      type.
   MinSize:
     Type: Number
     Default: 1
@@ -626,18 +628,28 @@ Resources:
   RedisSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
-      Description: Subnets RedisCluster may be placed in
+      Description: Subnets RedisReplicationGroup may be placed in
       SubnetIds: !Ref PublicSubnetIds
 
-  RedisCluster:
-    Type: AWS::ElastiCache::CacheCluster
+  # Was a single-node AWS::ElastiCache::CacheCluster (NumCacheNodes: 1) —
+  # one shared point of failure for cache, rate limiting, the Socket.IO
+  # pub/sub adapter, and BullMQ queues all at once, with no failover if that
+  # one node had a bad restart/AZ event. AWS::ElastiCache::ReplicationGroup
+  # with AutomaticFailoverEnabled promotes the replica automatically (Multi-AZ)
+  # if the primary becomes unreachable, instead of every one of those
+  # subsystems going down together until someone notices and replaces the node.
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
     Properties:
+      ReplicationGroupDescription: HRMS shared Redis - cache, rate limiting, Socket.IO pub/sub, BullMQ queues
       Engine: redis
       EngineVersion: "7.1"
       CacheNodeType: !Ref RedisNodeType
-      NumCacheNodes: 1
+      NumCacheClusters: 2
+      AutomaticFailoverEnabled: true
+      MultiAZEnabled: true
       CacheSubnetGroupName: !Ref RedisSubnetGroup
-      VpcSecurityGroupIds:
+      SecurityGroupIds:
         - !Ref RedisSecurityGroup
 
   # ─────────────────────────── ACM ───────────────────────────
@@ -688,8 +700,8 @@ Resources:
       # Redis (pinning a session to one instance so multi-step flows like
       # the WebAuthn login challenge, which stash state server-side, didn't
       # break when the ALB round-robined the two requests to different
-      # instances). Now that RedisCluster is shared across every instance
-      # that workaround isn't strictly load-bearing anymore, but stickiness
+      # instances). Now that RedisReplicationGroup is shared across every
+      # instance that workaround isn't strictly load-bearing anymore, but stickiness
       # is still reasonable to keep on its own merits (steadier per-instance
       # connection pools, marginally better cache locality), so it stays.
       TargetGroupAttributes:
@@ -1116,11 +1128,14 @@ Outputs:
     Value: !Ref Asg
   RedisEndpoint:
     Description: >
-      Set REDIS_URL in the SecretsManagerSecretName secret to
-      redis://<this>:6379 after this stack finishes creating/updating —
-      CloudFormation can't populate another secret's value from a resource
-      this same stack just created.
-    Value: !GetAtt RedisCluster.RedisEndpoint.Address
+      Primary (writer) endpoint. Set REDIS_URL in the SecretsManagerSecretName
+      secret to redis://<this>:6379 after this stack finishes creating/updating
+      — CloudFormation can't populate another secret's value from a resource
+      this same stack just created. ioredis/BullMQ/Socket.IO adapter clients
+      all connect to this single address; AutomaticFailoverEnabled means it
+      keeps resolving to whichever node is currently primary if the original
+      primary fails over, so nothing downstream needs to change on failover.
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
   MonitoringInstanceId:
     Description: >
       Target for SSM port-forwarding to reach Prometheus (:9090) directly -

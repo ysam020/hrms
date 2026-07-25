@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, hasPrivilegedRole } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -20,7 +20,7 @@ function requireTenantId(req: AuthRequest, res: Response): string | null {
 async function isPrivileged(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   const superUser = await isSuperUser(userId);
-  if (superUser || ["owner", "admin"].includes(tenantRole ?? "")) {
+  if (superUser || hasPrivilegedRole(tenantRole ?? "")) {
     return true;
   }
   const user = await prisma.user.findUnique({

@@ -17,10 +17,12 @@ function useNotifications() {
   const [loading, setLoading] = useState(true);
 
   const { user } = useContext(UserContext);
-  const { socketRef } = useSocket();
+  const { socketRef, connected } = useSocket();
 
   // prevents stale async overwrite
   const requestIdRef = useRef(0);
+  const prevConnectedRef = useRef(false);
+  const hasEverConnectedRef = useRef(false);
 
   const handleNotification = useCallback(
     (
@@ -119,6 +121,22 @@ function useNotifications() {
 
     return () => controller.abort();
   }, []);
+
+  // Reconnect: refetch so notifications broadcast while disconnected aren't
+  // silently lost — a socket reconnect resumes the same connection but
+  // doesn't replay anything missed while it was down.
+  useEffect(() => {
+    if (!user?.username) return;
+    const wasConnected = prevConnectedRef.current;
+    prevConnectedRef.current = connected;
+
+    if (connected && !wasConnected) {
+      if (hasEverConnectedRef.current) {
+        fetchNotifications();
+      }
+      hasEverConnectedRef.current = true;
+    }
+  }, [connected, user?.username, fetchNotifications]);
 
   useEffect(() => {
     if (!user?.username) return;

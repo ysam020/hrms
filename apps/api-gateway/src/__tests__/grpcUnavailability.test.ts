@@ -40,6 +40,12 @@ jest.mock("@hrms/common", () => ({
     GATEWAY_TIMEOUT: 504,
     UN_AUTHORIZED: 401,
   },
+  hasPrivilegedRole: (
+    role: string | null | undefined,
+    allowed: readonly string[] = ["owner", "admin"],
+  ) => !!role && allowed.includes(role),
+  HR_ROLES: ["owner", "admin", "hr"],
+  PRIVILEGED_ROLES: ["owner", "admin"],
 }));
 
 jest.mock("@hrms/logger", () => ({

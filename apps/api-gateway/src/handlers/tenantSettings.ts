@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { prismaWithTenant as prisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, hasPrivilegedRole } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
@@ -268,8 +268,7 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
 
   const superUser = await isSuperUser(userId);
 
-  let isPrivileged =
-    superUser || ["owner", "admin"].includes(req.user!.tenantRole ?? "");
+  let isPrivileged = superUser || hasPrivilegedRole(req.user!.tenantRole ?? "");
 
   if (!isPrivileged) {
     const actor = await prisma.user.findUnique({
@@ -439,7 +438,7 @@ export async function cancelPendingSettings(req: AuthRequest, res: Response) {
 
   const superUser = await isSuperUser(userId);
   const isPrivileged =
-    superUser || ["owner", "admin"].includes(req.user!.tenantRole ?? "");
+    superUser || hasPrivilegedRole(req.user!.tenantRole ?? "");
 
   if (!isPrivileged) {
     return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {

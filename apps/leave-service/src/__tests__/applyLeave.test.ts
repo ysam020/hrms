@@ -25,6 +25,7 @@ jest.mock("@hrms/db", () => {
       findMany: jest.fn(),
     },
     tenant: { findUnique: jest.fn() },
+    wfhRequest: { findFirst: jest.fn() },
   };
   return {
     prisma: _db,
@@ -81,6 +82,7 @@ const mockBalanceFindFirst = (prisma as any).leaveBalance
   .findFirst as jest.Mock;
 const mockCompOffFindMany = (prisma as any).compOffCredit.findMany as jest.Mock;
 const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
+const mockWfhFindFirst = (prisma as any).wfhRequest.findFirst as jest.Mock;
 
 const validRequest = {
   userId: "john",
@@ -103,6 +105,7 @@ describe("applyLeave", () => {
     mockCacheGet.mockResolvedValue(null);
     mockCacheSet.mockResolvedValue(undefined);
     mockSettingsFindFirst.mockResolvedValue(null);
+    mockWfhFindFirst.mockResolvedValue(null);
   });
 
   it("returns INVALID_ARGUMENT when required fields are missing", async () => {

@@ -18,7 +18,12 @@
 import { Request, Response } from "express";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  HR_ROLES,
+} from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
@@ -41,7 +46,7 @@ const SLA_HOURS: Record<string, number> = {
 // the explicit Helpdesk:manage permission grant for anyone else.
 async function assertHrRole(authUser: AuthUser | undefined): Promise<boolean> {
   if (!authUser) return false;
-  if (["owner", "admin", "hr"].includes(authUser.tenantRole ?? "")) return true;
+  if (hasPrivilegedRole(authUser.tenantRole ?? "", HR_ROLES)) return true;
   const user = await prisma.user.findUnique({
     where: { id: authUser.userId },
     select: { isSuperUser: true, permissions: true },

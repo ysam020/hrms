@@ -9,6 +9,8 @@ import {
   tenantFrom,
   tenantReplyTo,
   renderEmailHtml,
+  hasPrivilegedRole,
+  HR_ROLES,
 } from "@hrms/common";
 import { notify } from "@hrms/notifications";
 import { cacheManager } from "@hrms/cache";
@@ -33,7 +35,7 @@ async function canManageSalary(
   userId: string,
   tenantRole: string | null | undefined,
 ): Promise<boolean> {
-  if (["owner", "admin", "hr"].includes(tenantRole ?? "")) return true;
+  if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isSuperUser: true, permissions: true },

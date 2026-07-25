@@ -26,6 +26,8 @@ import {
   tenantFrom,
   tenantReplyTo,
   renderEmailHtml,
+  hasPrivilegedRole,
+  HR_ROLES,
 } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
@@ -54,7 +56,7 @@ const NOT_ACKNOWLEDGED = {
 // else (e.g. a non-HR employee given delegated asset-management access).
 async function assertHrRole(authUser: AuthUser | undefined): Promise<boolean> {
   if (!authUser) return false;
-  if (["owner", "admin", "hr"].includes(authUser.tenantRole ?? "")) {
+  if (hasPrivilegedRole(authUser.tenantRole ?? "", HR_ROLES)) {
     return true;
   }
   const user = await prisma.user.findUnique({

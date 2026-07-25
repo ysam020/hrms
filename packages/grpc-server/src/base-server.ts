@@ -62,9 +62,30 @@ export class BaseGrpcServer {
 
   protected wrapHandler(handler: grpc.handleUnaryCall<any, any>) {
     return async (call: any, callback: grpc.sendUnaryData<any>) => {
+      // The gateway gives up client-side after its own retry budget (see
+      // BaseGrpcClient.makeCall) — grpc-js flips call.cancelled and fires
+      // this event when that happens (client cancel or deadline exceeded),
+      // but nothing previously observed it, so the handler and its DB
+      // queries ran to completion anyway, doing full work for a response
+      // nobody would receive. An AbortController is exposed on the call
+      // (call.abortController / call.abortSignal) for any handler that
+      // wants to pass it through to cancellable I/O — note Prisma's
+      // stable client API (v5) has no query-cancellation hook, so this
+      // doesn't abort an in-flight Prisma query; it *does* let a handler
+      // check `call.cancelled` between steps of a multi-query flow to skip
+      // starting work that's already moot.
+      const abortController = new AbortController();
+      call.abortController = abortController;
+      call.abortSignal = abortController.signal;
+      const onCancelled = () => abortController.abort();
+      call.on?.("cancelled", onCancelled);
+
       try {
+        if (call.cancelled) return;
+
         const executeMiddlewareChain = async (index: number): Promise<any> => {
           if (index === this.middlewares.length) {
+            if (call.cancelled) return undefined;
             return new Promise((resolve, reject) => {
               try {
                 handler(call, (error: any, response: any) => {
@@ -84,11 +105,18 @@ export class BaseGrpcServer {
         };
 
         const response = await executeMiddlewareChain(0);
+        // The client already gave up — grpc-js drops a callback() on a
+        // cancelled call anyway, but skip it explicitly rather than rely
+        // on that, and avoid logging a response that was never wanted.
+        if (call.cancelled) return;
         callback(null, response);
       } catch (error) {
+        if (call.cancelled) return;
         logger.error("Error in handler:", { error });
         const { code, message, metadata } = errorHandler(error);
         callback({ code, message, metadata }, null);
+      } finally {
+        call.removeListener?.("cancelled", onCancelled);
       }
     };
   }

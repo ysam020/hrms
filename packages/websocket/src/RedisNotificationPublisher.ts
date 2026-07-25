@@ -1,5 +1,7 @@
-import { logger } from "@hrms/logger";
+import { logger, websocketPublishFailuresTotal } from "@hrms/logger";
 import { getWebSocketRedis } from "./connection";
+
+const SERVICE_LABEL = process.env.SERVICE_NAME || "notification-service";
 
 /**
  * Lightweight publisher used by the notification service (and any other service)
@@ -40,6 +42,10 @@ export class RedisNotificationPublisher {
       );
       return true;
     } catch (err) {
+      websocketPublishFailuresTotal.inc({
+        method: "sendToUser",
+        service: SERVICE_LABEL,
+      });
       logger.error("[RedisNotificationPublisher] sendToUser error:", {
         userId,
         err,
@@ -57,6 +63,10 @@ export class RedisNotificationPublisher {
         JSON.stringify({ eventName, payload }),
       );
     } catch (err) {
+      websocketPublishFailuresTotal.inc({
+        method: "broadcast",
+        service: SERVICE_LABEL,
+      });
       logger.error("[RedisNotificationPublisher] broadcast error:", { err });
     }
   }
@@ -73,6 +83,10 @@ export class RedisNotificationPublisher {
         JSON.stringify({ notification }),
       );
     } catch (err) {
+      websocketPublishFailuresTotal.inc({
+        method: "sendNotification",
+        service: SERVICE_LABEL,
+      });
       logger.error("[RedisNotificationPublisher] sendNotification error:", {
         err,
       });
