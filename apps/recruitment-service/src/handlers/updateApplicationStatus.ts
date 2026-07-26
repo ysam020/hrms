@@ -8,7 +8,12 @@ import {
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { notify } from "@hrms/notifications";
-import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
+import {
+  tenantFrom,
+  tenantReplyTo,
+  renderEmailHtml,
+  deriveFromComponents,
+} from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 
 // Interview date/time is stored as a "YYYYMMDDTHHmmss" string (see
@@ -35,6 +40,7 @@ export const updateApplicationStatus = async (
       referenceBy,
       interviewRound,
       interviewFeedback,
+      components,
     } = call.request;
 
     if (!id || !applicationStatus) {
@@ -101,7 +107,16 @@ export const updateApplicationStatus = async (
     const updateData: Record<string, any> = { status: applicationStatus };
     if (remarks) updateData.remarks = remarks;
     if (applicationStatus === "Hired") {
-      if (salary) updateData.hireSalary = parseFloat(salary);
+      if (Array.isArray(components) && components.length > 0) {
+        // Real component breakdown captured at hire time — hireSalary is
+        // derived from it (a correct monthly gross) rather than typed
+        // independently, so the two can never disagree.
+        const { grossEarnings } = deriveFromComponents(components);
+        updateData.hireSalary = grossEarnings;
+        updateData.hireSalaryComponents = components;
+      } else if (salary) {
+        updateData.hireSalary = parseFloat(salary);
+      }
       if (joiningDate) updateData.hireJoiningDate = new Date(joiningDate);
       if (referenceBy) updateData.hireReferredBy = referenceBy;
     }

@@ -242,19 +242,13 @@ describe("employeeHandlers", () => {
         pf_no: null,
         uan_no: null,
         esic_no: null,
-        salary: 0,
-        salaryBasicPay: null,
-        salaryHra: null,
-        salaryConveyance: null,
-        salaryPf: null,
-        salaryEsi: null,
-        salaryPt: null,
         reasonForTermination: null,
         dateOfTermination: null,
         dateOfAbscond: null,
         isSuperUser: false,
       });
       mockMembershipFindFirst.mockResolvedValue(null);
+      mockGrpcCall.mockResolvedValue({ data: null });
       const res = makeRes();
       await getEmployeeDetails(makeReq({ params: { username: "alice" } }), res);
       expect(mockUserFindUnique).toHaveBeenCalledWith(
@@ -342,14 +336,6 @@ describe("employeeHandlers", () => {
         pf_no: "PF123",
         uan_no: "UAN123",
         esic_no: "ESIC123",
-        salary: 90000,
-        salaryBasicPay: 45000,
-        salaryHra: 20000,
-        salaryConveyance: 5000,
-        salaryPf: 5000,
-        salaryEsi: 1000,
-        salaryPt: 200,
-        salaryComponentBreakdown: [],
         reasonForTermination: null,
         dateOfTermination: null,
         dateOfAbscond: null,
@@ -359,6 +345,20 @@ describe("employeeHandlers", () => {
       beforeEach(() => {
         mockUserFindUnique.mockResolvedValue(targetUser);
         mockMembershipFindFirst.mockResolvedValue(null);
+        // salary now comes from SalaryStructure (salary-service), not a
+        // denormalized User column — see getEmployeeDetails.
+        mockGrpcCall.mockResolvedValue({
+          data: {
+            basicPay: 45000,
+            hra: 20000,
+            conveyance: 5000,
+            pf: 5000,
+            esi: 1000,
+            pt: 200,
+            grossEarnings: 90000,
+            components: [],
+          },
+        });
       });
 
       it("strips salary/PF/UAN/ESIC for a non-owner, non-HR caller", async () => {
@@ -410,7 +410,11 @@ describe("employeeHandlers", () => {
       );
 
       it("re-applies the strip on a cache hit, using the cached record's own id (not the caller's)", async () => {
-        (cacheManager.get as jest.Mock).mockResolvedValue(targetUser);
+        (cacheManager.get as jest.Mock).mockResolvedValue({
+          ...targetUser,
+          salary: 90000,
+          salaryStructure: { basicPay: 45000 },
+        });
         const res = makeRes();
         await getEmployeeDetails(
           makeReq({

@@ -358,7 +358,7 @@ function BasicInfo({ user }: { user: any }) {
           <Section title="Contact Information" icon={<Phone />}>
             <DataField
               icon={<Email />}
-              label="Personal Email"
+              label="Login Email"
               value={user.email}
               color="success.main"
             />
@@ -366,6 +366,12 @@ function BasicInfo({ user }: { user: any }) {
               icon={<Email />}
               label="Official Email"
               value={user.official_email}
+              color="success.main"
+            />
+            <DataField
+              icon={<Email />}
+              label="Personal Email"
+              value={user.personalEmail}
               color="success.main"
             />
             <DataField

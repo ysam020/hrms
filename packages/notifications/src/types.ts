@@ -47,6 +47,7 @@ export type NotificationEventType =
   // payroll / tax documents (api-gateway)
   | "salarySlip"
   | "tdsWorksheet"
+  | "offerLetter"
   // scheduler-service
   | "kycMissing"
   | "kycRejected"

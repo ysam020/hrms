@@ -1,7 +1,13 @@
 import { Response } from "express";
 import { recruitment, salary } from "@hrms/proto";
 import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
-import { apiResponse, RESPONSE_STATUS, hasPrivilegedRole } from "@hrms/common";
+import {
+  apiResponse,
+  RESPONSE_STATUS,
+  hasPrivilegedRole,
+  legacyFieldsToComponents,
+  type ComponentAmountInput,
+} from "@hrms/common";
 import {
   tenantFrom,
   tenantReplyTo,
@@ -728,14 +734,27 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
       const review = reviewResp?.data;
 
       // The manager only recommends a % increment — resolved against the
-      // employee's current gross (User.salary) to get the new CTC.
+      // employee's latest SalaryStructure gross to get the new CTC.
+      // SalaryStructure (not a denormalized User column) is the single
+      // source of truth for salary; this same lookup doubles as the base
+      // structure to scale components from below, if the target period
+      // doesn't already have its own row.
       let newCtc = 0;
+      let currentSalary = 0;
+      let latestStructure: any = null;
       if (review?.recommendedIncrementPct) {
-        const employee = await prisma.user.findUnique({
-          where: { id: review.userId },
-          select: { salary: true },
-        });
-        const currentSalary = employee?.salary ?? 0;
+        const latestResp: any = await grpcCall(
+          salaryClient,
+          "getSalaryStructure",
+          // fromPartial zero-fills the omitted int32 year/month fields —
+          // a raw object literal leaves them `undefined`, which the
+          // generated encoder rejects with "invalid int32: undefined"
+          // (same class of bug already documented elsewhere on
+          // UpdateStatusRequest.fromPartial in handlers/recruitment.ts).
+          salary.GetSalaryRequest.fromPartial({ userId: review.userId }),
+        );
+        latestStructure = latestResp?.data ?? null;
+        currentSalary = latestStructure?.grossEarnings ?? 0;
         if (currentSalary > 0) {
           newCtc = Math.round(
             currentSalary * (1 + review.recommendedIncrementPct / 100),
@@ -749,6 +768,7 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
           : new Date();
         const month = effectiveDate.getMonth() + 1;
         const year = effectiveDate.getFullYear();
+        const ratio = 1 + review.recommendedIncrementPct / 100;
 
         // Mirror updateSalary's own find-or-create (handlers/salary.ts): a
         // SalaryStructure row already exists for this (userId, month, year)
@@ -765,26 +785,41 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
           },
         );
 
+        // The increment is a percentage on the *whole* gross, but every
+        // individual earning/deduction component needs to scale with it —
+        // dumping the new gross straight into basicPay (the old behavior)
+        // left HRA/conveyance/etc stale and made basicPay == grossSalary.
+        // Prefer the target period's own row as the base to scale from; if
+        // this is the first revision landing in that period, fall back to
+        // the latest structure already fetched above (same one used to
+        // compute currentSalary).
+        const baseStructure: any = existing?.data?.id
+          ? existing.data
+          : latestStructure;
+
+        const baseComponents: ComponentAmountInput[] = baseStructure
+          ? baseStructure.components?.length
+            ? baseStructure.components
+            : legacyFieldsToComponents(baseStructure)
+          : // No prior structure at all to scale from (shouldn't happen in
+            // practice — salary is seeded at hire) — treat the whole
+            // pre-increment gross as a single Basic bucket so scaling by
+            // `ratio` below still lands on newCtc, not newCtc-scaled-again.
+            [{ code: "BASIC", type: "earning", amount: currentSalary }];
+
+        const components = baseComponents.map((c) => ({
+          ...c,
+          amount: Math.round((parseFloat(String(c.amount)) || 0) * ratio),
+        }));
+
         let result: any;
         if (existing?.data?.id) {
-          // fromPartial fills every OMITTED numeric field with proto3's
-          // zero-value default, and updateSalaryStructure.ts treats an
-          // explicit 0 as "caller provided this" — so hra/conveyance/etc
-          // must be carried over explicitly here, or they'd get silently
-          // wiped to 0 instead of left untouched.
           result = await grpcCall(
             salaryClient,
             "updateSalaryStructure",
             salary.UpdateSalaryRequest.fromPartial({
               id: existing.data.id,
-              basicPay: newCtc,
-              hra: existing.data.hra ?? 0,
-              conveyance: existing.data.conveyance ?? 0,
-              incentive: existing.data.incentive ?? 0,
-              pf: existing.data.pf ?? 0,
-              esi: existing.data.esi ?? 0,
-              pt: existing.data.pt ?? 0,
-              deductions: existing.data.deductions ?? 0,
+              components,
             }),
           );
         } else {
@@ -793,24 +828,13 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
             "createSalaryStructure",
             salary.CreateSalaryRequest.fromPartial({
               userId: review.userId,
-              basicPay: newCtc,
+              components,
               month,
               year,
             }),
           );
         }
         salaryStructureId = result?.data?.id;
-
-        // createSalaryStructure only writes the SalaryStructure collection —
-        // it does NOT sync User.salary the way the gateway's own updateSalary
-        // handler does (handlers/salary.ts), which is what the Employees
-        // module and payroll proration actually read. Without this, the
-        // revision is invisible everywhere except payslip generation for
-        // that specific month/year.
-        await prisma.user.update({
-          where: { id: review.userId },
-          data: { salary: newCtc, salaryBasicPay: newCtc },
-        });
 
         // The Employee module's employee-details response is cached — without
         // busting it here (same as updateSalary in handlers/salary.ts does),

@@ -8,6 +8,7 @@ import {
 
 jest.mock("../grpc/clients", () => ({
   userClient: {},
+  salaryClient: {},
   grpcCall: jest.fn(),
 }));
 
@@ -205,29 +206,38 @@ describe("userHandlers", () => {
     // any other employee's full salary breakdown by visiting this endpoint.
     describe("PII/compensation data exposure", () => {
       const targetUser = { id: "target-1", role: "", isSuperUser: false };
+      // Salary now comes from SalaryStructure (salary-service gRPC), not a
+      // denormalized User column — see getUserData.
       const salaryRow = {
-        salary: 90000,
-        salaryBasicPay: 45000,
-        salaryHra: 20000,
-        salaryConveyance: 5000,
-        salaryPf: 5000,
-        salaryEsi: 1000,
-        salaryPt: 200,
-        salaryComponentBreakdown: [],
+        basicPay: 45000,
+        hra: 20000,
+        conveyance: 5000,
+        pf: 5000,
+        esi: 1000,
+        pt: 200,
+        grossEarnings: 90000,
+        components: [],
       };
 
       beforeEach(() => {
-        mockGrpcCall.mockResolvedValue({
-          data: {
-            ...targetUser,
-            aadhar_no: "1234-5678-9012",
-            bank_account_no: "ACC123",
-            pan_no: "ABCDE1234F",
-          },
-          message: "OK",
-          status: 0,
+        mockGrpcCall.mockImplementation((_client: any, method: string) => {
+          if (method === "getUser") {
+            return Promise.resolve({
+              data: {
+                ...targetUser,
+                aadhar_no: "1234-5678-9012",
+                bank_account_no: "ACC123",
+                pan_no: "ABCDE1234F",
+              },
+              message: "OK",
+              status: 0,
+            });
+          }
+          if (method === "getSalaryStructure") {
+            return Promise.resolve({ data: salaryRow });
+          }
+          return Promise.resolve({ data: null });
         });
-        mockUserFindFirst.mockResolvedValue(salaryRow);
       });
 
       it("strips aadhar/bank/pan/salary for a non-owner, non-privileged caller", async () => {

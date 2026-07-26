@@ -90,7 +90,7 @@ describe("attendanceCorrectionSchema", () => {
 describe("hiringSchema", () => {
   it("accepts valid hiring data", () => {
     const result = hiringSchema.safeParse({
-      salary: 60000,
+      grossSalary: 60000,
       joining_date: "2024-06-01",
     });
     expect(result.success).toBe(true);
@@ -98,35 +98,35 @@ describe("hiringSchema", () => {
 
   it("accepts optional reference_by", () => {
     const result = hiringSchema.safeParse({
-      salary: 60000,
+      grossSalary: 60000,
       joining_date: "2024-06-01",
       reference_by: "Jane Doe",
     });
     expect(result.success).toBe(true);
   });
 
-  it("rejects non-integer salary", () => {
+  it("accepts an optional components map", () => {
     const result = hiringSchema.safeParse({
-      salary: 60000.5,
+      grossSalary: 60000,
+      components: { BASIC: 30000, HRA: 15000, CONVEYANCE: 15000 },
+      joining_date: "2024-06-01",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing joining_date", () => {
+    const result = hiringSchema.safeParse({ grossSalary: 50000 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects zero or negative gross salary", () => {
+    const result = hiringSchema.safeParse({
+      grossSalary: 0,
       joining_date: "2024-06-01",
     });
     expect(result.success).toBe(false);
     expect(JSON.stringify(result.error?.issues)).toContain(
-      "must be an integer",
+      "must be greater than 0",
     );
-  });
-
-  it("rejects missing joining_date", () => {
-    const result = hiringSchema.safeParse({ salary: 50000 });
-    expect(result.success).toBe(false);
-  });
-
-  it("accepts negative salary (schema allows it — only integer is enforced)", () => {
-    // hiringSchema uses z.number().int() without .min(), so negatives are valid
-    const result = hiringSchema.safeParse({
-      salary: -1000,
-      joining_date: "2024-06-01",
-    });
-    expect(result.success).toBe(true);
   });
 });

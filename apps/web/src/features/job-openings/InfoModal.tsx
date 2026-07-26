@@ -47,6 +47,16 @@ function InfoModal(props) {
     user?.isSuperUser,
     user?.permissions || [],
   );
+  // Mirrors the server-side requirePrivileged gate on
+  // /update-assigned-official-email, which is the same gate /hire-candidate
+  // itself uses — this is a hire-adjacent action, not a distinct permission.
+  const canEditOfficialEmail = hasPermission(
+    "JobOpenings",
+    "hire_candidate",
+    "-",
+    user?.isSuperUser,
+    user?.permissions || [],
+  );
   const { name, email, aadharNo } = props.applicantData || {};
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [rescheduleIndex, setRescheduleIndex] = useState<number | null>(null);
@@ -58,6 +68,42 @@ function InfoModal(props) {
   const [status, setStatus] = useState(props.status || "");
   const [statusInputs, setStatusInputs] = useState({});
   const [feedbackInputs, setFeedbackInputs] = useState({});
+  const [assignedOfficialEmail, setAssignedOfficialEmail] = useState(
+    props.applicantData?.assignedOfficialEmail || "",
+  );
+  const [savingOfficialEmail, setSavingOfficialEmail] = useState(false);
+
+  const handleSaveOfficialEmail = async (value: string) => {
+    setSavingOfficialEmail(true);
+    try {
+      const res = await apiClient.put(
+        API_ENDPOINTS.UPDATE_ASSIGNED_OFFICIAL_EMAIL,
+        { id: props.applicantData.id, assignedOfficialEmail: value },
+      );
+      if (res.data?.success) {
+        setAssignedOfficialEmail(res.data.data.assignedOfficialEmail || "");
+        setAlert({
+          open: true,
+          message: "Assigned official email updated.",
+          severity: "success",
+        });
+      } else {
+        setAlert({
+          open: true,
+          message: res.data?.message || "Failed to update.",
+          severity: "error",
+        });
+      }
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message: err.response?.data?.message || "Failed to update.",
+        severity: "error",
+      });
+    } finally {
+      setSavingOfficialEmail(false);
+    }
+  };
 
   // Hired/Rejected are terminal — reassigning an interviewer or
   // rescheduling a round has no valid next step once the candidate is
@@ -80,6 +126,7 @@ function InfoModal(props) {
   useEffect(() => {
     setInterviews(props.applicantData?.interviews || []);
     setStatus(props.applicantData?.status || "");
+    setAssignedOfficialEmail(props.applicantData?.assignedOfficialEmail || "");
   }, [props.applicantData]);
 
   const formik = useFormik({
@@ -356,6 +403,10 @@ function InfoModal(props) {
             name={name}
             email={email}
             status={status}
+            assignedOfficialEmail={assignedOfficialEmail}
+            canEditOfficialEmail={canEditOfficialEmail}
+            savingOfficialEmail={savingOfficialEmail}
+            onSaveOfficialEmail={handleSaveOfficialEmail}
           />
 
           {/* Status Timeline */}

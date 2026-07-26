@@ -340,6 +340,8 @@ function ViewEditSalaryStructure() {
       mergedComponents,
       formik.values.components,
       lockedKeys,
+      ptSlabs,
+      workState,
     );
     formik.setValues({
       ...formik.values,

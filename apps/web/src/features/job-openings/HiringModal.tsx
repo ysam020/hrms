@@ -1,11 +1,13 @@
-import { memo, useContext } from "react";
+import { memo, useContext, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
+import Paper from "@mui/material/Paper";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { useFormik } from "formik";
+import { InputNumber } from "primereact/inputnumber";
 import apiClient from "@web/core/http/axiosConfig";
 import { hiringValidationSchema as validationSchema } from "./schemas";
 import FormikInputWrapper from "@web/shared/components/InputWrapper";
@@ -16,22 +18,74 @@ import PersonIcon from "@mui/icons-material/Person";
 import EmailIcon from "@mui/icons-material/Email";
 import { useParams } from "react-router-dom";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import {
+  computeSalaryComponents,
+  redistributeGross,
+  getMergedComponents,
+  type SalaryComponentDef,
+  type PtSlab,
+} from "@web/shared/utils/salaryCalc";
 
 function HiringModal(props) {
   const { setAlert } = useContext(AlertContext);
   const { name, email, aadharNo } = props.applicantData || {};
   const { _id } = useParams();
 
+  const [salaryComponents, setSalaryComponents] = useState<
+    SalaryComponentDef[]
+  >([]);
+  const [ptSlabs, setPtSlabs] = useState<PtSlab[]>([]);
+
+  // Load the tenant's configured salary components + PT slabs — same call
+  // EditSalaryStructure.tsx makes, so hiring uses the exact same component
+  // set (and derived-value rules) as post-hire salary editing.
+  useEffect(() => {
+    let isMounted = true;
+    async function loadComponents() {
+      try {
+        const [componentsRes, slabsRes] = await Promise.all([
+          apiClient.get(API_ENDPOINTS.LIST_SALARY_COMPONENTS),
+          apiClient.get(API_ENDPOINTS.LIST_PT_SLABS),
+        ]);
+        if (isMounted) {
+          setSalaryComponents(componentsRes.data?.data ?? []);
+          setPtSlabs(slabsRes.data?.data ?? []);
+        }
+      } catch (error) {
+        console.error("Error loading salary components:", error);
+      }
+    }
+    if (props.open) loadComponents();
+    return () => {
+      isMounted = false;
+    };
+  }, [props.open]);
+
+  const mergedComponents = useMemo(
+    () => getMergedComponents(salaryComponents),
+    [salaryComponents],
+  );
+
   const formik = useFormik({
     initialValues: {
-      salary: "",
+      grossSalary: 0,
+      components: {} as Record<string, number>,
       joining_date: "",
       reference_by: "",
     },
     validationSchema,
     onSubmit: async (values) => {
+      const components = mergedComponents.map((c) => ({
+        code: c.code,
+        name: c.name,
+        type: c.type,
+        amount: values.components[c.code] ?? 0,
+      }));
+
       const data = {
-        ...values,
+        components,
+        joining_date: values.joining_date,
+        reference_by: values.reference_by,
         aadharNo,
         jobTitle: props.jobTitle,
         email,
@@ -64,8 +118,58 @@ function HiringModal(props) {
     },
   });
 
+  const basicPay = formik.values.components.BASIC ?? 0;
+
+  const { locked: lockedKeys } = computeSalaryComponents({
+    basicPay,
+    grossSalary: formik.values.grossSalary,
+    components: mergedComponents,
+    ptSlabs,
+    workState: null,
+  });
+
+  useEffect(() => {
+    const { values: derived } = computeSalaryComponents({
+      basicPay,
+      grossSalary: formik.values.grossSalary,
+      components: mergedComponents,
+      ptSlabs,
+      workState: null,
+    });
+    for (const [code, value] of Object.entries(derived)) {
+      if (formik.values.components[code] !== value) {
+        formik.setFieldValue(`components.${code}`, value);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basicPay, formik.values.grossSalary, mergedComponents, ptSlabs]);
+
+  const handleGrossChange = (value: number | null | undefined) => {
+    const newGross = value ?? 0;
+    const rescaled = redistributeGross(
+      newGross,
+      mergedComponents,
+      formik.values.components,
+      lockedKeys,
+      ptSlabs,
+      null,
+    );
+    formik.setValues({
+      ...formik.values,
+      grossSalary: newGross,
+      components: rescaled,
+    });
+  };
+
+  const handleAmountChange = (
+    componentKey: string,
+    value: number | null | undefined,
+  ) => {
+    formik.setFieldValue(`components.${componentKey}`, value ?? 0);
+  };
+
   const modalStyle = {
-    width: { xs: "90%", sm: 520 },
+    width: { xs: "95%", sm: 720 },
   };
 
   return (
@@ -133,21 +237,9 @@ function HiringModal(props) {
       </Box>
 
       {/* Form */}
-      <Box sx={{ p: 2.5 }}>
+      <Box sx={{ p: 2.5, pt: 0 }}>
         <form onSubmit={formik.handleSubmit}>
           <Stack spacing={1}>
-            <FormikInputWrapper
-              type="text"
-              name="salary"
-              placeholder="Annual Salary (₹)"
-              formik={formik}
-              inputProps={{
-                keyfilter: "int",
-                minLength: 4,
-                maxLength: 10,
-              }}
-            />
-
             <FormikInputWrapper
               type="date"
               name="joining_date"
@@ -170,6 +262,84 @@ function HiringModal(props) {
               placeholder="Reference By (Optional)"
               formik={formik}
             />
+
+            <Paper
+              variant="outlined"
+              sx={{ p: 1.5, bgcolor: "background.default" }}
+            >
+              <Typography variant="subtitle2" fontWeight={500} sx={{ mb: 1 }}>
+                Monthly Gross Salary
+              </Typography>
+              <InputNumber
+                value={formik.values.grossSalary}
+                onValueChange={(e) => handleGrossChange(e.value)}
+                placeholder="Monthly Gross Salary"
+                min={0}
+                minFractionDigits={0}
+                maxFractionDigits={2}
+                style={{ width: "100%", maxWidth: 260 }}
+                inputStyle={{
+                  padding: "6px 8px",
+                  fontSize: "0.875rem",
+                  width: "100%",
+                }}
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.5 }}
+              >
+                Changing this proportionally redistributes the earning
+                components below.
+              </Typography>
+            </Paper>
+
+            <Paper
+              variant="outlined"
+              sx={{ p: 1.5, bgcolor: "background.default" }}
+            >
+              <Typography variant="subtitle2" fontWeight={500} sx={{ mb: 1 }}>
+                Salary Components
+              </Typography>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                  columnGap: 2,
+                  rowGap: 1.5,
+                }}
+              >
+                {mergedComponents.map((component) => (
+                  <Box key={component.code}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mb: 0.5 }}
+                    >
+                      {component.name}
+                    </Typography>
+                    <InputNumber
+                      aria-label={component.name}
+                      value={formik.values.components[component.code] ?? 0}
+                      onValueChange={(e) =>
+                        handleAmountChange(component.code, e.value)
+                      }
+                      placeholder="0.00"
+                      min={0}
+                      minFractionDigits={0}
+                      maxFractionDigits={2}
+                      style={{ width: "100%" }}
+                      inputStyle={{
+                        padding: "6px 8px",
+                        fontSize: "0.875rem",
+                        width: "100%",
+                      }}
+                      disabled={lockedKeys.has(component.code)}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
 
             <Button type="submit" disabled={formik.isSubmitting}>
               Hire Candidate

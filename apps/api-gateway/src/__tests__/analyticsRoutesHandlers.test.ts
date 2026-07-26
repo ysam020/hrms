@@ -35,6 +35,10 @@ jest.mock("@hrms/db", () => {
       count: jest.fn(),
       groupBy: jest.fn(),
     },
+    salaryStructure: {
+      findMany: jest.fn(),
+      aggregateRaw: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -81,6 +85,8 @@ const mockLeaveFindMany = prisma.leaveApplication.findMany as jest.Mock;
 const mockAttendanceFindMany = prisma.attendanceRecord.findMany as jest.Mock;
 const mockJobCount = prisma.jobOpening.count as jest.Mock;
 const mockJobGroupBy = prisma.jobOpening.groupBy as jest.Mock;
+const mockStructureFindMany = (prisma as any).salaryStructure
+  .findMany as jest.Mock;
 
 const makeRes = () => ({ json: jest.fn() }) as any;
 const makeReq = () => ({ query: {}, params: {}, body: {} }) as any;
@@ -452,7 +458,7 @@ describe("getSalaryBands", () => {
       { _id: 20000, count: 20, avgSalary: 30000 },
       { _id: "100K+", count: 5, avgSalary: 150000 },
     ]);
-    (prisma.user as any).aggregateRaw = aggregateRawMock;
+    (prisma as any).salaryStructure.aggregateRaw = aggregateRawMock;
 
     const res = makeRes();
     await getSalaryBands(makeReq(), res);
@@ -466,7 +472,7 @@ describe("getSalaryBands", () => {
   });
 
   it("returns 500 when aggregateRaw throws", async () => {
-    (prisma.user as any).aggregateRaw = jest
+    (prisma as any).salaryStructure.aggregateRaw = jest
       .fn()
       .mockRejectedValue(new Error("DB error"));
     const res = makeRes();
@@ -485,27 +491,28 @@ describe("getSalaryBands", () => {
 
 describe("getCompensationBreakdown", () => {
   it("rounds avg salary components and returns employeeCount", async () => {
-    mockUserAggregate.mockResolvedValue({
-      _count: { id: 50 },
-      _avg: {
-        salaryBasicPay: 20000.6,
-        salaryHra: 5000.1,
-        salaryConveyance: 1500,
-        salaryPf: 2400,
-        salaryEsi: 750,
-        salaryPt: 200,
+    mockUserFindMany.mockResolvedValue([{ id: "u1" }]);
+    mockStructureFindMany.mockResolvedValue([
+      {
+        userId: "u1",
+        basicPay: 20000.6,
+        hra: 5000.1,
+        conveyance: 1500,
+        pf: 2400,
+        esi: 750,
+        pt: 200,
       },
-    });
+    ]);
     const res = makeRes();
     await getCompensationBreakdown(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
-    expect(data.employeeCount).toBe(50);
+    expect(data.employeeCount).toBe(1);
     expect(data.avgBasicPay).toBe(20001);
     expect(data.avgHRA).toBe(5000);
   });
 
   it("returns 500 on DB error", async () => {
-    mockUserAggregate.mockRejectedValue(new Error("DB error"));
+    mockUserFindMany.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getCompensationBreakdown(makeReq(), res);
     expect(mockApiResponse).toHaveBeenCalledWith(
@@ -521,34 +528,32 @@ describe("getCompensationBreakdown", () => {
 // ─── getSalaryDistributionByDepartment ───────────────────────────────────────
 
 describe("getSalaryDistributionByDepartment", () => {
-  it("maps groupBy result to department salary stats", async () => {
-    mockUserGroupBy.mockResolvedValue([
-      {
-        department: "Engineering",
-        _min: { salary: 50000 },
-        _max: { salary: 120000 },
-        _avg: { salary: 85000.4 },
-        _count: { id: 20 },
-      },
+  it("groups by department and computes min/max/avg salary stats", async () => {
+    mockUserFindMany.mockResolvedValue([
+      { id: "u1", department: "Engineering" },
+      { id: "u2", department: "Engineering" },
+    ]);
+    mockStructureFindMany.mockResolvedValue([
+      { userId: "u1", grossEarnings: 80000 },
+      { userId: "u2", grossEarnings: 90000 },
     ]);
     const res = makeRes();
     await getSalaryDistributionByDepartment(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
     expect(data[0].department).toBe("Engineering");
+    expect(data[0].minSalary).toBe(80000);
+    expect(data[0].maxSalary).toBe(90000);
     expect(data[0].avgSalary).toBe(85000);
-    expect(data[0].employeeCount).toBe(20);
+    expect(data[0].employeeCount).toBe(2);
   });
 
-  it("filters out entries with null department", async () => {
-    mockUserGroupBy.mockResolvedValue([
-      {
-        department: null,
-        _min: { salary: 10000 },
-        _max: { salary: 20000 },
-        _avg: { salary: 15000 },
-        _count: { id: 5 },
-      },
+  it("skips a user with no salary structure and one with a null department", async () => {
+    mockUserFindMany.mockResolvedValue([
+      { id: "u1", department: null },
+      { id: "u2", department: "Sales" },
     ]);
+    // u2 has no SalaryStructure row at all.
+    mockStructureFindMany.mockResolvedValue([]);
     const res = makeRes();
     await getSalaryDistributionByDepartment(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
@@ -556,7 +561,7 @@ describe("getSalaryDistributionByDepartment", () => {
   });
 
   it("returns 500 on DB error", async () => {
-    mockUserGroupBy.mockRejectedValue(new Error("DB error"));
+    mockUserFindMany.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getSalaryDistributionByDepartment(makeReq(), res);
     expect(mockApiResponse).toHaveBeenCalledWith(

@@ -47,6 +47,33 @@ export function deriveFromComponents(components: ComponentAmountInput[]) {
   return { legacy, grossEarnings, totalDeductions };
 }
 
+const LEGACY_KEY_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(LEGACY_CODE_TO_KEY).map(([code, key]) => [key, code]),
+);
+const LEGACY_EARNING_CODES = new Set([
+  "BASIC",
+  "HRA",
+  "CONVEYANCE",
+  "INCENTIVE",
+]);
+
+// Inverse of deriveFromComponents — turns a legacy flat-column salary row
+// back into a components array. Needed by callers (e.g. the performance-
+// review salary-increment side effect) that must scale an *existing*
+// structure proportionally regardless of whether it was originally stored
+// as flat columns or as componentBreakdown.
+export function legacyFieldsToComponents(
+  data: Record<string, unknown>,
+): ComponentAmountInput[] {
+  return Object.entries(LEGACY_KEY_TO_CODE)
+    .filter(([key]) => data[key] != null)
+    .map(([key, code]) => ({
+      code,
+      type: LEGACY_EARNING_CODES.has(code) ? "earning" : "deduction",
+      amount: Number(data[key]) || 0,
+    }));
+}
+
 // The salary.proto SalaryStructure message field is named `components`
 // (matching CreateSalaryRequest/UpdateSalaryRequest), while the Prisma
 // column is `componentBreakdown`. ts-proto's generated encode() only reads

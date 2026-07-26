@@ -41,26 +41,31 @@ jest.mock("@hrms/db", () => {
     attendanceRecord: { upsert: jest.fn() },
     user: { findUnique: jest.fn(), update: jest.fn() },
   };
-  return { prismaWithTenant: _db };
+  return { prismaWithTenant: _db, prisma: _db };
 });
 
-jest.mock("@hrms/common", () => ({
-  hasPrivilegedRole: (
-    role: string | null | undefined,
-    allowed: readonly string[] = ["owner", "admin"],
-  ) => !!role && allowed.includes(role),
-  HR_ROLES: ["owner", "admin", "hr"],
-  PRIVILEGED_ROLES: ["owner", "admin"],
-  apiResponse: jest.fn((res: any, status: number, data: any) =>
-    res.json({ status, ...data }),
-  ),
-  RESPONSE_STATUS: {
-    SUCCESS: 200,
-    BAD_REQUEST: 400,
-    FORBIDDEN: 403,
-    NOT_FOUND: 404,
-  },
-}));
+jest.mock("@hrms/common", () => {
+  const actual = jest.requireActual("@hrms/common");
+  return {
+    hasPrivilegedRole: (
+      role: string | null | undefined,
+      allowed: readonly string[] = ["owner", "admin"],
+    ) => !!role && allowed.includes(role),
+    HR_ROLES: ["owner", "admin", "hr"],
+    PRIVILEGED_ROLES: ["owner", "admin"],
+    apiResponse: jest.fn((res: any, status: number, data: any) =>
+      res.json({ status, ...data }),
+    ),
+    RESPONSE_STATUS: {
+      SUCCESS: 200,
+      BAD_REQUEST: 400,
+      FORBIDDEN: 403,
+      NOT_FOUND: 404,
+    },
+    deriveFromComponents: actual.deriveFromComponents,
+    legacyFieldsToComponents: actual.legacyFieldsToComponents,
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -102,6 +107,7 @@ jest.mock("@hrms/proto", () => ({
   salary: {
     UpdateSalaryRequest: { fromPartial: (o: any) => o },
     CreateSalaryRequest: { fromPartial: (o: any) => o },
+    GetSalaryRequest: { fromPartial: (o: any) => o },
   },
 }));
 
@@ -580,7 +586,7 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
     expect(emitWebhookEvent).not.toHaveBeenCalled();
   });
 
-  it("creates a new salary structure and syncs User.salary when a performance review with an increment is finally approved", async () => {
+  it("creates a new salary structure for the target period, scaled from the employee's most recent prior structure, when a performance review with an increment is approved", async () => {
     db.approvalInstance.findFirst.mockResolvedValue({
       id: "i1",
       module: "performance_review",
@@ -592,25 +598,36 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
       isFinal: true,
       finalStatus: "approved",
     });
-    mockGrpcCall.mockImplementation((_client: any, method: string) => {
-      if (method === "getReview") {
-        return Promise.resolve({
-          data: {
-            userId: "u2",
-            recommendedIncrementPct: 10,
-            effectiveFrom: "2024-07-01",
-          },
-        });
-      }
-      if (method === "getSalaryStructure")
-        return Promise.resolve({ data: null });
-      if (method === "createSalaryStructure")
-        return Promise.resolve({ data: { id: "ss1" } });
-      if (method === "finalizeReview") return Promise.resolve({});
-      return Promise.resolve({});
-    });
-    db.user.findUnique.mockResolvedValue({ salary: 100000 });
-    db.user.update.mockResolvedValue({});
+    mockGrpcCall.mockImplementation(
+      (_client: any, method: string, req: any) => {
+        if (method === "getReview") {
+          return Promise.resolve({
+            data: {
+              userId: "u2",
+              recommendedIncrementPct: 10,
+              effectiveFrom: "2024-07-01",
+            },
+          });
+        }
+        if (method === "getSalaryStructure") {
+          // The target period (month/year in the request) has no row yet —
+          // fall back to the employee's most recent structure (queried
+          // without month/year) both for currentSalary and as the base to
+          // scale components from.
+          if (req?.month) return Promise.resolve({ data: null });
+          return Promise.resolve({
+            data: {
+              grossEarnings: 100000,
+              components: [{ code: "BASIC", type: "earning", amount: 100000 }],
+            },
+          });
+        }
+        if (method === "createSalaryStructure")
+          return Promise.resolve({ data: { id: "ss1" } });
+        if (method === "finalizeReview") return Promise.resolve({});
+        return Promise.resolve({});
+      },
+    );
     const req = makeReq({
       params: { instanceId: "i1" },
       body: { decision: "approved" },
@@ -622,12 +639,14 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "createSalaryStructure",
-      expect.objectContaining({ userId: "u2", basicPay: 110000 }),
+      expect.objectContaining({
+        userId: "u2",
+        components: [{ code: "BASIC", type: "earning", amount: 110000 }],
+      }),
     );
-    expect(db.user.update).toHaveBeenCalledWith({
-      where: { id: "u2" },
-      data: { salary: 110000, salaryBasicPay: 110000 },
-    });
+    // SalaryStructure is the only source of truth now — no denormalized
+    // User.salary* sync.
+    expect(db.user.update).not.toHaveBeenCalled();
     expect(cacheManager.invalidatePattern).toHaveBeenCalledWith(
       "t:t1:employee-details:*",
     );
@@ -642,7 +661,54 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
     );
   });
 
-  it("updates the existing salary structure in place, carrying over other components, when one already exists for the period", async () => {
+  it("does nothing (no salary work) when there is no prior salary structure at all to compute the increment from", async () => {
+    db.approvalInstance.findFirst.mockResolvedValue({
+      id: "i1",
+      module: "performance_review",
+      entityId: "pr1",
+    });
+    mockActOnStep.mockResolvedValue({
+      instanceId: "i1",
+      decision: "approved",
+      isFinal: true,
+      finalStatus: "approved",
+    });
+    mockGrpcCall.mockImplementation((_client: any, method: string) => {
+      if (method === "getReview")
+        return Promise.resolve({
+          data: { userId: "u2", recommendedIncrementPct: 10 },
+        });
+      if (method === "getSalaryStructure")
+        return Promise.resolve({ data: null });
+      if (method === "finalizeReview") return Promise.resolve({});
+      return Promise.resolve({});
+    });
+    const req = makeReq({
+      params: { instanceId: "i1" },
+      body: { decision: "approved" },
+    });
+    const res = makeRes();
+
+    await actOnApproval(req, res);
+
+    expect(mockGrpcCall).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "createSalaryStructure",
+      expect.anything(),
+    );
+    expect(db.user.update).not.toHaveBeenCalled();
+    expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
+      "finalizeReview",
+      expect.objectContaining({
+        id: "pr1",
+        approved: true,
+        salaryStructureId: undefined,
+      }),
+    );
+  });
+
+  it("scales every existing component proportionally (not just basicPay) when updating the salary structure already present for the period", async () => {
     db.approvalInstance.findFirst.mockResolvedValue({
       id: "i1",
       module: "performance_review",
@@ -661,15 +727,22 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
         });
       if (method === "getSalaryStructure")
         return Promise.resolve({
-          data: { id: "ss1", hra: 5000, conveyance: 1600 },
+          data: {
+            id: "ss1",
+            basicPay: 50000,
+            hra: 25000,
+            conveyance: 10000,
+            pf: 6000,
+            esi: 750,
+            pt: 200,
+            grossEarnings: 93500,
+          },
         });
       if (method === "updateSalaryStructure")
         return Promise.resolve({ data: { id: "ss1" } });
       if (method === "finalizeReview") return Promise.resolve({});
       return Promise.resolve({});
     });
-    db.user.findUnique.mockResolvedValue({ salary: 100000 });
-    db.user.update.mockResolvedValue({});
     const req = makeReq({
       params: { instanceId: "i1" },
       body: { decision: "approved" },
@@ -678,16 +751,25 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
 
     await actOnApproval(req, res);
 
+    // A 10% increment must scale every component, not just overwrite
+    // basicPay with the whole new gross while leaving HRA/conveyance/PF
+    // stale — that was the bug this test now guards against.
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "updateSalaryStructure",
       expect.objectContaining({
         id: "ss1",
-        basicPay: 110000,
-        hra: 5000,
-        conveyance: 1600,
+        components: [
+          { code: "BASIC", type: "earning", amount: 55000 },
+          { code: "HRA", type: "earning", amount: 27500 },
+          { code: "CONVEYANCE", type: "earning", amount: 11000 },
+          { code: "PF", type: "deduction", amount: 6600 },
+          { code: "ESI", type: "deduction", amount: 825 },
+          { code: "PT", type: "deduction", amount: 220 },
+        ],
       }),
     );
+    expect(db.user.update).not.toHaveBeenCalled();
   });
 
   it("finalizes the review without touching salary when no increment was recommended", async () => {

@@ -888,6 +888,26 @@ export async function getHiringManagerPerformance(
   }
 }
 
+// SalaryStructure (salary-service's collection) is the only source of truth
+// for salary — not a denormalized User column. Prisma's Mongo connector
+// can't express "latest row per user" inside groupBy/aggregate, so these
+// analytics endpoints resolve it in two queries (all relevant users, then
+// every SalaryStructure row for them in one findMany) and aggregate in JS —
+// still bounded by employee count, same as the old single-groupBy query.
+async function getLatestGrossByUser(
+  userIds: string[],
+): Promise<Map<string, any>> {
+  const rows = await (prisma as any).salaryStructure.findMany({
+    where: { userId: { in: userIds } },
+    orderBy: { createdAt: "desc" },
+  });
+  const latest = new Map<string, any>();
+  for (const row of rows as any[]) {
+    if (!latest.has(row.userId)) latest.set(row.userId, row);
+  }
+  return latest;
+}
+
 export async function getSalaryDistributionByDepartment(
   _req: Request,
   res: Response,
@@ -902,23 +922,36 @@ export async function getSalaryDistributionByDepartment(
         data: cached,
       });
 
-    const groups = await prisma.user.groupBy({
-      by: ["department"],
-      where: { NOT: [{ department: null }, { salary: null }] },
-      _min: { salary: true },
-      _max: { salary: true },
-      _avg: { salary: true },
-      _count: { id: true },
+    const users = await prisma.user.findMany({
+      where: { NOT: { department: null } },
+      select: { id: true, department: true },
     });
-    const data = groups
-      .filter((g: any) => g.department)
-      .map((g: any) => ({
-        department: g.department!,
-        minSalary: g._min.salary ?? 0,
-        maxSalary: g._max.salary ?? 0,
-        avgSalary: Math.round(g._avg.salary ?? 0),
-        employeeCount: g._count.id,
-      }));
+    const latestByUser = await getLatestGrossByUser(users.map((u) => u.id));
+
+    const byDept = new Map<
+      string,
+      { salaries: number[]; employeeCount: number }
+    >();
+    for (const u of users) {
+      const gross = latestByUser.get(u.id)?.grossEarnings;
+      if (gross == null || !u.department) continue;
+      const bucket = byDept.get(u.department) ?? {
+        salaries: [],
+        employeeCount: 0,
+      };
+      bucket.salaries.push(gross);
+      bucket.employeeCount++;
+      byDept.set(u.department, bucket);
+    }
+    const data = [...byDept.entries()].map(([department, bucket]) => ({
+      department,
+      minSalary: Math.min(...bucket.salaries),
+      maxSalary: Math.max(...bucket.salaries),
+      avgSalary: Math.round(
+        bucket.salaries.reduce((a, b) => a + b, 0) / bucket.salaries.length,
+      ),
+      employeeCount: bucket.employeeCount,
+    }));
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Salary distribution by department retrieved",
@@ -941,26 +974,24 @@ export async function getCompensationBreakdown(_req: Request, res: Response) {
         data: cached,
       });
 
-    const agg = await prisma.user.aggregate({
-      where: { NOT: { salary: null } },
-      _avg: {
-        salaryBasicPay: true,
-        salaryHra: true,
-        salaryConveyance: true,
-        salaryPf: true,
-        salaryEsi: true,
-        salaryPt: true,
-      },
-      _count: { id: true },
-    });
+    const users = await prisma.user.findMany({ select: { id: true } });
+    const latestByUser = await getLatestGrossByUser(users.map((u) => u.id));
+    const rows = [...latestByUser.values()];
+
+    const avg = (key: string) =>
+      rows.length
+        ? Math.round(
+            rows.reduce((sum, r) => sum + (r[key] ?? 0), 0) / rows.length,
+          )
+        : 0;
     const data = {
-      employeeCount: agg._count.id,
-      avgBasicPay: Math.round(agg._avg.salaryBasicPay ?? 0),
-      avgHRA: Math.round(agg._avg.salaryHra ?? 0),
-      avgConveyance: Math.round(agg._avg.salaryConveyance ?? 0),
-      avgPF: Math.round(agg._avg.salaryPf ?? 0),
-      avgESI: Math.round(agg._avg.salaryEsi ?? 0),
-      avgPT: Math.round(agg._avg.salaryPt ?? 0),
+      employeeCount: rows.length,
+      avgBasicPay: avg("basicPay"),
+      avgHRA: avg("hra"),
+      avgConveyance: avg("conveyance"),
+      avgPF: avg("pf"),
+      avgESI: avg("esi"),
+      avgPT: avg("pt"),
     };
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -987,24 +1018,38 @@ export async function getAverageSalaryByDesignation(
         data: cached,
       });
 
-    const groups = await prisma.user.groupBy({
-      by: ["designation"],
-      where: { NOT: [{ designation: null }, { salary: null }] },
-      _avg: { salary: true },
-      _min: { salary: true },
-      _max: { salary: true },
-      _count: { id: true },
+    const users = await prisma.user.findMany({
+      where: { NOT: { designation: null } },
+      select: { id: true, designation: true },
     });
-    const data = groups
-      .filter((g: any) => g.designation)
-      .map((g: any) => ({
-        designation: g.designation!,
-        avgSalary: Math.round(g._avg.salary ?? 0),
-        minSalary: g._min.salary ?? 0,
-        maxSalary: g._max.salary ?? 0,
-        employeeCount: g._count.id,
+    const latestByUser = await getLatestGrossByUser(users.map((u) => u.id));
+
+    const byDesignation = new Map<
+      string,
+      { salaries: number[]; employeeCount: number }
+    >();
+    for (const u of users) {
+      const gross = latestByUser.get(u.id)?.grossEarnings;
+      if (gross == null || !u.designation) continue;
+      const bucket = byDesignation.get(u.designation) ?? {
+        salaries: [],
+        employeeCount: 0,
+      };
+      bucket.salaries.push(gross);
+      bucket.employeeCount++;
+      byDesignation.set(u.designation, bucket);
+    }
+    const data = [...byDesignation.entries()]
+      .map(([designation, bucket]) => ({
+        designation,
+        avgSalary: Math.round(
+          bucket.salaries.reduce((a, b) => a + b, 0) / bucket.salaries.length,
+        ),
+        minSalary: Math.min(...bucket.salaries),
+        maxSalary: Math.max(...bucket.salaries),
+        employeeCount: bucket.employeeCount,
       }))
-      .sort((a: any, b: any) => b.avgSalary - a.avgSalary);
+      .sort((a, b) => b.avgSalary - a.avgSalary);
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Average salary by designation retrieved",
@@ -1027,25 +1072,37 @@ export async function getSalaryBands(_req: Request, res: Response) {
         data: cached,
       });
 
-    // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
-    // unlike findMany/count/etc, it must be filtered by hand, and a missing
-    // tenantId here would otherwise silently aggregate across every tenant.
+    // SalaryStructure lives in the tenant-specific DB (unlike User, which is
+    // shared across tenants) — the whole DB is already scoped to one tenant,
+    // so no tenantId match is needed here the way the old User.salary
+    // aggregate required. Each user can have many rows (one per month/year);
+    // $group down to the latest per user before bucketing, same "latest
+    // row per user" resolution used elsewhere (payroll, other analytics).
     if (tenantId === "global") {
       logger.error("analytics error: no tenant context on request");
       return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
         message: "Internal Server Error",
       });
     }
-    const tenantIdMatch = { tenantId: { $oid: tenantId } };
-    const bucketResult = await (prisma.user as any).aggregateRaw({
+    const bucketResult = await (prisma as any).salaryStructure.aggregateRaw({
       pipeline: [
-        { $match: { ...tenantIdMatch, salary: { $ne: null } } },
+        { $sort: { userId: 1, createdAt: -1 } },
+        {
+          $group: {
+            _id: "$userId",
+            grossEarnings: { $first: "$grossEarnings" },
+          },
+        },
+        { $match: { grossEarnings: { $ne: null } } },
         {
           $bucket: {
-            groupBy: "$salary",
+            groupBy: "$grossEarnings",
             boundaries: [0, 20000, 40000, 60000, 100000],
             default: "100K+",
-            output: { count: { $sum: 1 }, avgSalary: { $avg: "$salary" } },
+            output: {
+              count: { $sum: 1 },
+              avgSalary: { $avg: "$grossEarnings" },
+            },
           },
         },
       ],

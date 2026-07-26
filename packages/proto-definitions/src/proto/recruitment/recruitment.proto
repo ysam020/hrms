@@ -161,6 +161,13 @@ message BasicResponse {
   int32 status = 2;
 }
 
+message ComponentAmount {
+  string code = 1;
+  string name = 2;
+  string type = 3; // "earning" | "deduction"
+  double amount = 4;
+}
+
 message UpdateStatusRequest {
   string id = 1;
   string status = 2;
@@ -181,6 +188,8 @@ message UpdateStatusRequest {
   // Required interviewer feedback when marking interview_round
   // Completed/Cleared — stored on that round's interviews[] entry.
   string interview_feedback = 13;
+  // Hire-specific — full component breakdown captured at hire time.
+  repeated ComponentAmount components = 14;
 }
 
 message SubmitResignationRequest {

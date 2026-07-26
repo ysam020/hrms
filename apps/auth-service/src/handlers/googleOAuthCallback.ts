@@ -188,7 +188,12 @@ export const googleOAuthCallback = async (
           first_name: firstName,
           last_name: lastName,
           employee_photo: profile.picture || null,
-          employeeStatus: "Active",
+          // Not "Active" until approveJoinRequest (join an existing tenant)
+          // or buildTenant (create/own a new one) actually admits them — see
+          // BLOCKED_STATUSES above, which deliberately excludes "Pending" so
+          // they can still log in and reach tenant setup / join-request
+          // screens while awaiting that.
+          employeeStatus: "Pending",
           isSuperUser: false,
         },
       });

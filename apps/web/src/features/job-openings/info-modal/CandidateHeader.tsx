@@ -1,11 +1,16 @@
+import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid2";
+import TextField from "@mui/material/TextField";
+import IconButton from "@mui/material/IconButton";
+import CircularProgress from "@mui/material/CircularProgress";
 import InfoIcon from "@mui/icons-material/Info";
 import PersonIcon from "@mui/icons-material/Person";
 import EmailIcon from "@mui/icons-material/Email";
+import SaveIcon from "@mui/icons-material/Save";
 import { getStatusColor } from "./helpers";
 
 export function CandidateHeader({
@@ -13,12 +18,26 @@ export function CandidateHeader({
   name,
   email,
   status,
+  assignedOfficialEmail,
+  canEditOfficialEmail = false,
+  savingOfficialEmail = false,
+  onSaveOfficialEmail,
 }: {
   jobTitle: string | undefined;
   name: string | undefined;
   email: string | undefined;
   status: string;
+  assignedOfficialEmail?: string;
+  canEditOfficialEmail?: boolean;
+  savingOfficialEmail?: boolean;
+  onSaveOfficialEmail?: (value: string) => void;
 }) {
+  const [officialEmailInput, setOfficialEmailInput] = useState(
+    assignedOfficialEmail || "",
+  );
+  useEffect(() => {
+    setOfficialEmailInput(assignedOfficialEmail || "");
+  }, [assignedOfficialEmail]);
   return (
     <>
       {/* Header */}
@@ -97,6 +116,51 @@ export function CandidateHeader({
             sx={{ fontWeight: 500 }}
           />
         </Box>
+
+        {status === "Hired" && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Assigned Official Email
+            </Typography>
+            {canEditOfficialEmail ? (
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="email"
+                  placeholder="e.g. jane@yourcompany.com"
+                  value={officialEmailInput}
+                  onChange={(e) => setOfficialEmailInput(e.target.value)}
+                  disabled={savingOfficialEmail}
+                  helperText="Recorded before their first login so a join request can be matched by exact email, not name."
+                />
+                <IconButton
+                  aria-label="Save assigned official email"
+                  onClick={() => onSaveOfficialEmail?.(officialEmailInput)}
+                  disabled={
+                    savingOfficialEmail ||
+                    officialEmailInput === (assignedOfficialEmail || "")
+                  }
+                  color="primary"
+                  size="small"
+                >
+                  {savingOfficialEmail ? (
+                    <CircularProgress size={18} />
+                  ) : (
+                    <SaveIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </Box>
+            ) : (
+              <Chip
+                icon={<EmailIcon />}
+                label={assignedOfficialEmail || "Not set"}
+                variant="outlined"
+                sx={{ width: "100%", justifyContent: "flex-start" }}
+              />
+            )}
+          </Box>
+        )}
       </Box>
     </>
   );

@@ -77,6 +77,12 @@ recruitmentRouter.put(
   requirePrivileged,
   h.rejectApplication,
 );
+recruitmentRouter.put(
+  "/update-assigned-official-email",
+  authenticate,
+  requirePrivileged,
+  h.updateAssignedOfficialEmail,
+);
 recruitmentRouter.post(
   "/add-resignation",
   authenticate,

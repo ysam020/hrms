@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
+import { salary } from "@hrms/proto";
 import { salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
 import {
   apiResponse,
   RESPONSE_STATUS,
-  deriveFromComponents,
+  deriveOfferCompensationBreakup,
   tenantFrom,
   tenantReplyTo,
   renderEmailHtml,
@@ -137,46 +138,6 @@ export async function updateSalary(req: Request, res: Response) {
       });
     }
 
-    // Keep User.salary in sync with the SalaryStructure so that salary-slip
-    // generation and payroll-run proration always have a reliable CTC source
-    // even before the first payroll run.
-    let fullGross: number;
-    let syncFields: Record<string, unknown>;
-    if (components?.length) {
-      const { legacy, grossEarnings } = deriveFromComponents(components);
-      fullGross = grossEarnings;
-      syncFields = {
-        salaryBasicPay: legacy.basicPay,
-        salaryHra: legacy.hra,
-        salaryConveyance: legacy.conveyance,
-        salaryPf: legacy.pf,
-        salaryEsi: legacy.esi,
-        salaryPt: legacy.pt,
-        salaryComponentBreakdown: components,
-      };
-    } else {
-      fullGross =
-        (basicPay ?? 0) + (hra ?? 0) + (conveyance ?? 0) + (incentive ?? 0);
-      syncFields = {
-        salaryBasicPay: basicPay ?? undefined,
-        salaryHra: hra ?? undefined,
-        salaryConveyance: conveyance ?? undefined,
-        salaryPf: pf ?? undefined,
-        salaryEsi: esi ?? undefined,
-        salaryPt: pt ?? undefined,
-      };
-    }
-
-    if (fullGross > 0 && typeof (prisma.user as any)?.update === "function") {
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          salary: fullGross,
-          ...syncFields,
-        },
-      });
-    }
-
     // Bust the cached employee-details payload so the Employee module reflects
     // the new salary structure immediately instead of the previously cached one.
     if (user?.tenantId) {
@@ -191,6 +152,119 @@ export async function updateSalary(req: Request, res: Response) {
   } catch (error: unknown) {
     logger.error("updateSalary error:", { error });
     return handleError(res, error);
+  }
+}
+
+/**
+ * Seeds a new employee's salary from the single gross figure captured at
+ * hire time (JobApplication.hireSalary), for the join-request-approval
+ * linking flow (see approveJoinRequest in handlers/tenant.ts). Splits it via
+ * the same deriveOfferCompensationBreakup formula already used for the offer
+ * letter PDF, so the numbers match what the candidate already saw, then
+ * follows the exact get-then-create-or-update + User sync pattern updateSalary
+ * uses above. Best-effort: catches its own errors and returns false rather
+ * than throwing, since a failed salary seed shouldn't block the join-request
+ * approval itself — HR can always fix it up via Salary Management afterward.
+ */
+export async function seedSalaryFromHire(
+  userId: string,
+  tenantId: string,
+  hireSalary: number,
+  hireJoiningDate: Date | null,
+  hireSalaryComponents?: unknown,
+): Promise<boolean> {
+  try {
+    const joinDate = hireJoiningDate ? new Date(hireJoiningDate) : new Date();
+    const year = joinDate.getFullYear();
+    const month = joinDate.getMonth() + 1;
+    const components =
+      Array.isArray(hireSalaryComponents) && hireSalaryComponents.length > 0
+        ? hireSalaryComponents
+        : null;
+
+    const existing: any = await grpcCall(salaryClient, "getSalaryStructure", {
+      userId,
+      year,
+      month,
+    });
+
+    if (components) {
+      // Real components captured at hire time — pass them straight through.
+      // createSalaryStructure/updateSalaryStructure already derive the
+      // legacy flat fields + componentBreakdown from `components`
+      // server-side (see their own components-branch), matching exactly how
+      // updateSalary's own components path works.
+      if (existing?.data?.id) {
+        await grpcCall(
+          salaryClient,
+          "updateSalaryStructure",
+          salary.UpdateSalaryRequest.fromPartial({
+            id: existing.data.id,
+            components,
+          }),
+        );
+      } else {
+        await grpcCall(
+          salaryClient,
+          "createSalaryStructure",
+          salary.CreateSalaryRequest.fromPartial({
+            userId,
+            components,
+            month,
+            year,
+          }),
+        );
+      }
+    } else {
+      // Fallback for candidates hired before this feature existed, where
+      // only a single gross figure was captured — unchanged formula path.
+      const breakup = deriveOfferCompensationBreakup(hireSalary);
+      const flatFields = {
+        basicPay: breakup.basic,
+        hra: breakup.hra,
+        conveyance: breakup.transportAllowance,
+        incentive: breakup.specialAllowance,
+        pf: breakup.employerPF,
+        esi: 0,
+        pt: 0,
+        deductions: 0,
+      };
+
+      if (existing?.data?.id) {
+        // fromPartial zero-fills every field the caller doesn't set —
+        // including `components` (repeated ComponentAmount). Without it, the
+        // generated encoder tries to iterate `message.components` and
+        // throws "is not iterable" on the plain object's `undefined`, since
+        // this call never sends dynamic components (see the identical class
+        // of bug already documented on UpdateStatusRequest.fromPartial in
+        // handlers/recruitment.ts).
+        await grpcCall(
+          salaryClient,
+          "updateSalaryStructure",
+          salary.UpdateSalaryRequest.fromPartial({
+            id: existing.data.id,
+            ...flatFields,
+          }),
+        );
+      } else {
+        await grpcCall(
+          salaryClient,
+          "createSalaryStructure",
+          salary.CreateSalaryRequest.fromPartial({
+            userId,
+            ...flatFields,
+            month,
+            year,
+          }),
+        );
+      }
+    }
+
+    await cacheManager.invalidatePattern(`t:${tenantId}:employee-details:*`);
+    return true;
+  } catch (error: unknown) {
+    logger.error("seedSalaryFromHire error:", { error, userId, tenantId });
+    return false;
   }
 }
 

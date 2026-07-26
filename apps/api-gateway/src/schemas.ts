@@ -135,17 +135,6 @@ export const editEmployeeDetailsSchema = z.object({
   pf_no: z.string().max(64).optional(),
   uan_no: z.string().max(64).optional(),
   esic_no: z.string().max(64).optional(),
-  salary: z.number().min(0).optional(),
-  salaryStructure: z
-    .object({
-      basicPay: z.number().min(0).nullable().optional(),
-      hra: z.number().min(0).nullable().optional(),
-      conveyance: z.number().min(0).nullable().optional(),
-      pf: z.number().min(0).nullable().optional(),
-      esi: z.number().min(0).nullable().optional(),
-      pt: z.number().min(0).nullable().optional(),
-    })
-    .optional(),
   reasonForTermination: z.string().max(512).optional(),
   dateOfTermination: z.string().optional(),
   dateOfAbscond: z.string().optional(),

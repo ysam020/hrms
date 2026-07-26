@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { userClient, grpcCall } from "../grpc/clients";
+import { salary } from "@hrms/proto";
+import { userClient, salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { camelToSnake, apiResponse, RESPONSE_STATUS } from "@hrms/common";
@@ -57,30 +58,28 @@ export async function getUserData(req: Request, res: Response) {
       snake.kyc_revision_notes = {};
     }
 
-    // Append salary fields (not in the user service proto)
-    const salaryData = await prisma.user.findFirst({
-      where: { id: u.id },
-      select: {
-        salary: true,
-        salaryBasicPay: true,
-        salaryHra: true,
-        salaryConveyance: true,
-        salaryPf: true,
-        salaryEsi: true,
-        salaryPt: true,
-        salaryComponentBreakdown: true,
-      },
-    });
-    if (salaryData) {
-      snake.salary = salaryData.salary;
+    // Append salary fields (not in the user service proto) — sourced from
+    // SalaryStructure (salary-service), not a denormalized User column. One
+    // gRPC call for the single employee this request is about, no N+1 risk.
+    const salaryResp: any = await grpcCall(
+      salaryClient,
+      "getSalaryStructure",
+      // fromPartial zero-fills the omitted int32 year/month fields — a raw
+      // object literal leaves them `undefined`, which the generated encoder
+      // rejects with "invalid int32: undefined".
+      salary.GetSalaryRequest.fromPartial({ userId: u.id }),
+    );
+    const salaryRow = salaryResp?.data;
+    if (salaryRow) {
+      snake.salary = salaryRow.grossEarnings;
       snake.salaryStructure = {
-        basicPay: salaryData.salaryBasicPay,
-        hra: salaryData.salaryHra,
-        conveyance: salaryData.salaryConveyance,
-        pf: salaryData.salaryPf,
-        esi: salaryData.salaryEsi,
-        pt: salaryData.salaryPt,
-        components: salaryData.salaryComponentBreakdown ?? [],
+        basicPay: salaryRow.basicPay,
+        hra: salaryRow.hra,
+        conveyance: salaryRow.conveyance,
+        pf: salaryRow.pf,
+        esi: salaryRow.esi,
+        pt: salaryRow.pt,
+        components: salaryRow.components ?? [],
       };
     }
 

@@ -172,6 +172,36 @@ describe("googleOAuthCallback", () => {
     );
   });
 
+  it("registers a brand-new signup as Pending, not Active — approval (approveJoinRequest/buildTenant) is what activates them", async () => {
+    mockTokenExchange();
+    mockProfileFetch();
+    mockFindFirst.mockResolvedValueOnce(null).mockResolvedValue(null);
+    mockCreate.mockResolvedValue(activeUser);
+    mockMembershipFindMany.mockResolvedValue([]);
+    await googleOAuthCallback(makeCall({ code: "auth-code" }), makeCallback());
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ employeeStatus: "Pending" }),
+      }),
+    );
+  });
+
+  it("does not block a Pending user's login the way Terminated/Absconded/Resigned are blocked", async () => {
+    mockTokenExchange();
+    mockProfileFetch();
+    mockFindFirst.mockResolvedValue({
+      ...activeUser,
+      employeeStatus: "Pending",
+    });
+    mockMembershipFindMany.mockResolvedValue([]);
+    const cb = makeCallback();
+    await googleOAuthCallback(makeCall({ code: "auth-code" }), cb);
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 0 }),
+    );
+  });
+
   it("self-heals a missing TenantMembership when user.tenantId is already stamped", async () => {
     mockTokenExchange();
     mockProfileFetch();

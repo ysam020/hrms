@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { CandidateHeader } from "@web/features/job-openings/info-modal/CandidateHeader";
 
 describe("CandidateHeader", () => {
@@ -29,5 +29,71 @@ describe("CandidateHeader", () => {
     expect(screen.getByText("Name: N/A")).toBeInTheDocument();
     expect(screen.getByText("Email: N/A")).toBeInTheDocument();
     expect(screen.getByText("No Status")).toBeInTheDocument();
+  });
+
+  it("does not show the assigned-official-email section for a non-Hired candidate", () => {
+    render(
+      <CandidateHeader
+        jobTitle="Engineer"
+        name="Jane Doe"
+        email="jane@example.com"
+        status="Round 1 Scheduled"
+      />,
+    );
+    expect(
+      screen.queryByText("Assigned Official Email"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the assigned official email read-only when the caller can't edit it", () => {
+    render(
+      <CandidateHeader
+        jobTitle="Engineer"
+        name="Jane Doe"
+        email="jane@example.com"
+        status="Hired"
+        assignedOfficialEmail="jane@acme.example"
+        canEditOfficialEmail={false}
+      />,
+    );
+    expect(screen.getByText("Assigned Official Email")).toBeInTheDocument();
+    expect(screen.getByText("jane@acme.example")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("lets a privileged caller edit and save the assigned official email", () => {
+    const onSaveOfficialEmail = vi.fn();
+    render(
+      <CandidateHeader
+        jobTitle="Engineer"
+        name="Jane Doe"
+        email="jane@example.com"
+        status="Hired"
+        assignedOfficialEmail="jane@acme.example"
+        canEditOfficialEmail
+        onSaveOfficialEmail={onSaveOfficialEmail}
+      />,
+    );
+    const input = screen.getByPlaceholderText("e.g. jane@yourcompany.com");
+    fireEvent.change(input, { target: { value: "jane.doe@acme.example" } });
+    fireEvent.click(screen.getByLabelText("Save assigned official email"));
+    expect(onSaveOfficialEmail).toHaveBeenCalledWith("jane.doe@acme.example");
+  });
+
+  it("disables the save button while savingOfficialEmail is true", () => {
+    render(
+      <CandidateHeader
+        jobTitle="Engineer"
+        name="Jane Doe"
+        email="jane@example.com"
+        status="Hired"
+        assignedOfficialEmail="jane@acme.example"
+        canEditOfficialEmail
+        savingOfficialEmail
+      />,
+    );
+    expect(
+      screen.getByLabelText("Save assigned official email"),
+    ).toBeDisabled();
   });
 });

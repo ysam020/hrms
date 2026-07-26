@@ -60,6 +60,12 @@ model Tenant {
   // org setup and applied to every employee's PT deduction (see
   // apps/api-gateway/src/handlers/payroll.ts), rather than captured per employee.
   workState              String?
+  // Corporate Identification Number, and branding/signatory details used on
+  // generated documents (e.g. the offer letter PDF — see offerLetter.ts).
+  cin                    String?
+  logoUrl                String?
+  signatoryName          String?
+  signatoryDesignation   String?
   // Company email domain, used to suggest joining an existing org instead of
   // creating a duplicate. Intentionally NOT @unique: Prisma does not emit
   // sparse:true for optional @unique fields on MongoDB (prisma/prisma#12827),
@@ -131,6 +137,13 @@ model User {
   password                    String?
   email                       String?   @unique
   official_email              String?
+  // The candidate's original application email (JobApplication.email),
+  // copied over when HR links a hired candidate to this account during
+  // join-request approval — see approveJoinRequest in handlers/tenant.ts.
+  // `email` itself is the login identity (the company/OAuth email), so this
+  // is the only place the pre-hire personal email is preserved on the
+  // employee record directly.
+  personalEmail               String?
   first_name                  String?
   middle_name                 String?
   last_name                   String?
@@ -212,18 +225,6 @@ model User {
   // recomputes this to null, so the lock never outlives the reopen it
   // belongs to. See allowKycEdit.ts / submitKyc.ts.
   kyc_edit_window             String?
-  // Salary (embedded in user)
-  salary                      Float?
-  salaryBasicPay              Float?
-  salaryHra                   Float?
-  salaryConveyance            Float?
-  salaryPf                    Float?
-  salaryEsi                   Float?
-  salaryPt                    Float?
-  // [{code, name, type, amount}] — full tenant-configured component snapshot,
-  // mirrors SalaryStructure.componentBreakdown. Null until the salary
-  // structure has been saved through the componentBreakdown-aware UI.
-  salaryComponentBreakdown    Json?
   reference_by                String?
   // Auth
   refreshToken                String?
@@ -451,6 +452,17 @@ model JobApplication {
   hireSalary      Float?
   hireJoiningDate DateTime?
   hireReferredBy  String?
+  // Full component breakdown captured at hire time (same shape as
+  // SalaryStructure.componentBreakdown) — hireSalary stays as the derived
+  // monthly gross (sum of earning components) for display/back-compat.
+  // Null for candidates hired before this field existed; consumers must
+  // fall back to the old deriveOfferCompensationBreakup(hireSalary) path.
+  hireSalaryComponents Json?
+  // The company email HR/IT is provisioning for this hire, recorded before
+  // the candidate's first login — lets join-request approval match by exact
+  // email instead of guessing by name similarity. See updateAssignedOfficialEmail
+  // / listHiredCandidateMatches in handlers/{recruitment,tenant}.ts.
+  assignedOfficialEmail String?
 
   // Set when an existing employee applies internally, rather than being
   // re-entered as an external candidate.

@@ -202,11 +202,6 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     // intent — see the Resignation.relievedFromDutyOn schema comment).
     const employeeSelect = {
       id: true,
-      salary: true,
-      salaryBasicPay: true,
-      salaryHra: true,
-      salaryConveyance: true,
-      salaryComponentBreakdown: true,
       joining_date: true,
     } as const;
 
@@ -247,6 +242,32 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     }
 
     const empIds = employees.map((e) => e.id);
+
+    // Each employee's current salary structure — SalaryStructure (owned by
+    // salary-service) is the only source of truth, not a denormalized User
+    // column. Queried directly against the tenant DB rather than per-employee
+    // gRPC calls (would be N+1 across potentially hundreds of employees):
+    // one findMany ordered newest-first, reduced to the latest row per user.
+    const allSalaryStructures = await (prisma as any).salaryStructure.findMany({
+      where: { userId: { in: empIds } },
+      orderBy: { createdAt: "desc" },
+    });
+    const latestSalaryByUser = new Map<string, any>();
+    for (const s of allSalaryStructures as any[]) {
+      if (!latestSalaryByUser.has(s.userId))
+        latestSalaryByUser.set(s.userId, s);
+    }
+    const employeesWithSalary = employees.map((e) => {
+      const s = latestSalaryByUser.get(e.id);
+      return {
+        ...e,
+        salary: s?.grossEarnings ?? 0,
+        salaryBasicPay: s?.basicPay ?? null,
+        salaryHra: s?.hra ?? null,
+        salaryConveyance: s?.conveyance ?? null,
+        salaryComponentBreakdown: s?.componentBreakdown ?? null,
+      };
+    });
 
     // ── Attendance data for the payroll month ─────────────────────────────────
     const [attendanceRecords, leaveBalances, tenantSettings, holidayRecords] =
@@ -524,7 +545,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     let totalDeductions = 0;
     const skippedEmployees: { userId: string; reason: string }[] = [];
 
-    const lineItems = employees
+    const lineItems = employeesWithSalary
       .map((emp) => {
         const fullGross = emp.salary ?? 0;
         const hasComponentBreakdown =

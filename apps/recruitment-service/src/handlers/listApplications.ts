@@ -60,6 +60,7 @@ export const listApplications = async (
       aadharNo: a.aadharNo || "",
       interviews: a.interviews ?? [],
       reason: a.reason || "",
+      assignedOfficialEmail: a.assignedOfficialEmail || "",
     }));
 
     const response = {

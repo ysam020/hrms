@@ -40,7 +40,6 @@ export const updateEmployee = async (
       pfNo: "pf_no",
       uanNo: "uan_no",
       esicNo: "esic_no",
-      assets: "assets",
       joiningDate: "joining_date",
     };
 
