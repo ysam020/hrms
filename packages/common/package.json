@@ -13,7 +13,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aws-sdk/client-secrets-manager": "^3.1019.0",
+    "@aws-sdk/client-secrets-manager": "^3.1095.0",
     "@grpc/grpc-js": "^1.12.3",
     "@hrms/logger": "workspace:*",
     "bcryptjs": "^2.4.3",
