@@ -213,40 +213,27 @@ async function executeToolCall(
       }
 
       case "get_salary_info": {
-        const [user, latestSlip] = await Promise.all([
-          prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-              salary: true,
-              salaryBasicPay: true,
-              salaryHra: true,
-              salaryConveyance: true,
-              salaryPf: true,
-              salaryEsi: true,
-              salaryPt: true,
-            },
-          }),
-          prisma.salaryStructure.findFirst({
-            where: { userId },
-            orderBy: [{ year: "desc" }, { month: "desc" }],
-            select: {
-              month: true,
-              year: true,
-              grossSalary: true,
-              basicPay: true,
-              hra: true,
-              conveyance: true,
-              pf: true,
-              esi: true,
-              pt: true,
-              deductions: true,
-              grossEarnings: true,
-              netPayable: true,
-            },
-          }),
-        ]);
+        // SalaryStructure is the only source of truth for salary — not a
+        // denormalized User column.
+        const latestSlip = await prisma.salaryStructure.findFirst({
+          where: { userId },
+          orderBy: [{ year: "desc" }, { month: "desc" }],
+          select: {
+            month: true,
+            year: true,
+            grossSalary: true,
+            basicPay: true,
+            hra: true,
+            conveyance: true,
+            pf: true,
+            esi: true,
+            pt: true,
+            deductions: true,
+            grossEarnings: true,
+            netPayable: true,
+          },
+        });
         return JSON.stringify({
-          salaryConfig: user,
           latestPayslip: latestSlip,
         });
       }

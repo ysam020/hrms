@@ -13,6 +13,7 @@ import {
   viewApplications,
   updateCandidateStatus,
   hireCandidate,
+  updateAssignedOfficialEmail,
   rejectApplication,
   addResignation,
   viewResignations,
@@ -62,6 +63,7 @@ jest.mock("@hrms/db", () => {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    canonicalizeEmail: (e: string) => e.trim().toLowerCase(),
   };
 });
 
@@ -92,6 +94,12 @@ jest.mock("@hrms/common", () => ({
   // rescheduleInterview actually thread a real ICS invite through, not just
   // that some attachment exists.
   buildIcsInvite: jest.requireActual("@hrms/common").buildIcsInvite,
+  // Real implementation — offerLetter.ts derives the compensation breakup
+  // from this; a stub would make the offer letter test meaningless.
+  deriveOfferCompensationBreakup:
+    jest.requireActual("@hrms/common").deriveOfferCompensationBreakup,
+  OFFER_COMPENSATION_DISCLAIMER:
+    jest.requireActual("@hrms/common").OFFER_COMPENSATION_DISCLAIMER,
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -155,7 +163,11 @@ const makeReq = (overrides: any = {}) =>
 describe("recruitmentHandlers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGrpcCall.mockResolvedValue({ data: {} });
+    // status: 0 === GrpcStatus.OK — a realistic successful gRPC response.
+    // hireCandidate/rejectApplication/updateCandidateStatus now map this
+    // through grpcToHttpStatus rather than hardcoding SUCCESS, so tests that
+    // don't care about failure paths need a genuinely-successful mock here.
+    mockGrpcCall.mockResolvedValue({ data: {}, status: 0 });
     mockActOnApprovalForEntity.mockResolvedValue({
       instanceId: "i1",
       decision: "approved",
@@ -413,6 +425,33 @@ describe("recruitmentHandlers", () => {
     );
   });
 
+  it("hireCandidate reports the real gRPC failure instead of a false success when the hire is rejected server-side (e.g. no Cleared interview round)", async () => {
+    // Regression: this handler used to hardcode RESPONSE_STATUS.SUCCESS
+    // regardless of what updateApplicationStatus actually returned, so a
+    // hire blocked by a precondition (already Hired/Rejected, no Cleared
+    // round, etc.) still came back as HTTP 200 with success:true — the
+    // frontend showed "hired" while the DB status never changed.
+    mockGrpcCall.mockResolvedValue({
+      message:
+        "This candidate cannot be hired until at least one interview round has been Completed and Cleared.",
+      status: 9, // GrpcStatus.FAILED_PRECONDITION
+    });
+    const res = makeRes();
+    await hireCandidate(makeReq({ body: { id: "app-1" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.BAD_REQUEST,
+      expect.objectContaining({ status: 9 }),
+    );
+    expect(mockApiResponse).not.toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.anything(),
+    );
+    // A hire that was actually rejected must not trigger an offer letter.
+    expect(mockNotify).not.toHaveBeenCalled();
+  });
+
   it("hireCandidate forwards salary/joining_date/reference_by as hire details", async () => {
     await hireCandidate(
       makeReq({
@@ -436,6 +475,103 @@ describe("recruitmentHandlers", () => {
         referenceBy: "Jane Smith",
       }),
     );
+  });
+
+  it("hireCandidate forwards a real components breakdown captured at hire time", async () => {
+    const components = [
+      { code: "BASIC", name: "Basic Pay", type: "earning", amount: 30000 },
+      { code: "HRA", name: "HRA", type: "earning", amount: 15000 },
+    ];
+    await hireCandidate(
+      makeReq({
+        body: {
+          id: "app-1",
+          joining_date: "2026-08-01",
+          components,
+        },
+      }),
+      makeRes(),
+    );
+    expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
+      "updateApplicationStatus",
+      expect.objectContaining({
+        id: "app-1",
+        status: "Hired",
+        components,
+      }),
+    );
+  });
+
+  it("hireCandidate defaults components to an empty array when none are supplied", async () => {
+    await hireCandidate(makeReq({ body: { id: "app-1" } }), makeRes());
+    expect(mockGrpcCall).toHaveBeenCalledWith(
+      expect.anything(),
+      "updateApplicationStatus",
+      expect.objectContaining({ components: [] }),
+    );
+  });
+
+  describe("hireCandidate offer letter email", () => {
+    it("emails the offer letter PDF as an attachment when the application has complete hire data", async () => {
+      mockAppFindUnique.mockResolvedValue({
+        name: "Jordan Candidate",
+        email: "jordan@candidate.example",
+        hireSalary: 1200000,
+        hireJoiningDate: new Date("2026-08-01"),
+        jobOpening: { jobTitle: "Software Engineer" },
+      });
+      await hireCandidate(makeReq({ body: { id: "app-1" } }), makeRes());
+      expect(mockNotify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "t1",
+          event: "offerLetter",
+          email: expect.objectContaining({
+            to: "jordan@candidate.example",
+            attachments: expect.arrayContaining([
+              expect.objectContaining({
+                filename: expect.stringMatching(/^offer_letter_OFR-.*\.pdf$/),
+              }),
+            ]),
+          }),
+        }),
+      );
+      const attachment = mockNotify.mock.calls[0][0].email.attachments[0];
+      // A real PDF was built and base64-encoded, not a stub/placeholder.
+      expect(
+        Buffer.from(attachment.content, "base64").toString("latin1"),
+      ).toContain("%PDF");
+    });
+
+    it("still returns a successful hire response when building/emailing the offer letter fails", async () => {
+      mockAppFindUnique.mockRejectedValue(new Error("DB unavailable"));
+      const res = makeRes();
+      await hireCandidate(makeReq({ body: { id: "app-1" } }), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+      expect(mockNotify).not.toHaveBeenCalled();
+    });
+
+    it("skips the email without throwing when required hire data (salary/joining date) is missing", async () => {
+      mockAppFindUnique.mockResolvedValue({
+        name: "Jordan Candidate",
+        email: "jordan@candidate.example",
+        hireSalary: null,
+        hireJoiningDate: null,
+        jobOpening: { jobTitle: "Software Engineer" },
+      });
+      const res = makeRes();
+      await hireCandidate(makeReq({ body: { id: "app-1" } }), res);
+      expect(mockNotify).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
   });
 
   it("rejectApplication calls updateApplicationStatus with Rejected status", async () => {
@@ -471,6 +607,86 @@ describe("recruitmentHandlers", () => {
         recruitment.UpdateStatusRequest.encode(call[2]).finish(),
       ).not.toThrow();
     }
+  });
+
+  describe("updateAssignedOfficialEmail", () => {
+    it("rejects a candidate that isn't Hired", async () => {
+      mockAppFindUnique.mockResolvedValue({
+        tenantId: "t1",
+        status: "Applied",
+      });
+      const res = makeRes();
+      await updateAssignedOfficialEmail(
+        makeReq({
+          body: { id: "app-1", assignedOfficialEmail: "jane@acme.example" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.any(Object),
+      );
+      expect(mockAppUpdate).not.toHaveBeenCalled();
+    });
+
+    it("returns NOT_FOUND for an application belonging to a different tenant", async () => {
+      mockAppFindUnique.mockResolvedValue({
+        tenantId: "other-tenant",
+        status: "Hired",
+      });
+      const res = makeRes();
+      await updateAssignedOfficialEmail(
+        makeReq({
+          body: { id: "app-1", assignedOfficialEmail: "jane@acme.example" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.NOT_FOUND,
+        expect.any(Object),
+      );
+      expect(mockAppUpdate).not.toHaveBeenCalled();
+    });
+
+    it("canonicalizes and stores the assigned official email for a Hired candidate", async () => {
+      mockAppFindUnique.mockResolvedValue({ tenantId: "t1", status: "Hired" });
+      mockAppUpdate.mockResolvedValue({
+        assignedOfficialEmail: "jane@acme.example",
+      });
+      const res = makeRes();
+      await updateAssignedOfficialEmail(
+        makeReq({
+          body: { id: "app-1", assignedOfficialEmail: "  Jane@ACME.example  " },
+        }),
+        res,
+      );
+      expect(mockAppUpdate).toHaveBeenCalledWith({
+        where: { id: "app-1" },
+        data: { assignedOfficialEmail: "jane@acme.example" },
+      });
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.objectContaining({
+          data: { assignedOfficialEmail: "jane@acme.example" },
+        }),
+      );
+    });
+
+    it("clears the field when an empty string is submitted", async () => {
+      mockAppFindUnique.mockResolvedValue({ tenantId: "t1", status: "Hired" });
+      mockAppUpdate.mockResolvedValue({ assignedOfficialEmail: null });
+      await updateAssignedOfficialEmail(
+        makeReq({ body: { id: "app-1", assignedOfficialEmail: "" } }),
+        makeRes(),
+      );
+      expect(mockAppUpdate).toHaveBeenCalledWith({
+        where: { id: "app-1" },
+        data: { assignedOfficialEmail: null },
+      });
+    });
   });
 
   it("addResignation calls submitResignation with user's userId", async () => {

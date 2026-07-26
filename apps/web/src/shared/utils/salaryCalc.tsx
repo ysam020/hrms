@@ -177,24 +177,96 @@ export function computeSalaryComponents({
   return { values, locked };
 }
 
+// Fixed Basic/HRA/Conveyance split of gross used whenever there's no
+// existing structure to scale from — matches the payroll module's own
+// fallback for employees with no configured rates (see the
+// `emp.salaryBasicPay != null ? ... : Math.round(gross * 0.5)` /
+// `* 0.25` / `* 0.25` branch in payroll.ts's line-item builder), so a
+// fresh hire's default split agrees with what payroll would compute if it
+// ever had to fall back for them.
+const DEFAULT_GROSS_SHARE: Record<string, number> = {
+  BASIC: 0.5,
+  HRA: 0.25,
+  CONVEYANCE: 0.25,
+};
+
+/**
+ * Solves for the earnings total (Basic+HRA+Conveyance+...) that, once the
+ * locked/derived deductions computeSalaryComponents would compute from it
+ * are added back on, sums to exactly `targetTotal` — so "Monthly Gross
+ * Salary" means the same thing everywhere in the app: the full sum of every
+ * component (earnings AND PF/ESI/PT), not just the earnings alone.
+ *
+ * Each locked component (earning or deduction — the same rule
+ * computeSalaryComponents uses, which doesn't distinguish by type either) is
+ * linear in either `targetTotal` directly (percentOf "gross", and PT's
+ * slab/fixed lookup — both independent of how earnings get split) or in
+ * Basic (percentOf "basic", e.g. PF) — and Basic is always a fixed
+ * `basicShare` fraction of the earnings total by construction (see
+ * redistributeGross), so this reduces to one linear equation:
+ * E + independent + basicDependentRate * basicShare * E = target,
+ * i.e. E = (target - independent) / (1 + basicDependentRate * basicShare).
+ */
+function computeGrossUpEarnings(
+  targetTotal: number,
+  components: SalaryComponentDef[],
+  basicShare: number,
+  ptSlabs: PtSlab[],
+  workState: string | null | undefined,
+): number {
+  let independent = 0;
+  let basicDependentRate = 0;
+
+  for (const c of components) {
+    if (c.code === "PT" && c.calcType === "fixed") {
+      const slab = findPtSlab(ptSlabs, workState, targetTotal);
+      independent += slab ? slab.monthlyPT : (c.percentValue ?? 0);
+      continue;
+    }
+    if (c.calcType === "percent_of_basic") {
+      const rate = (c.percentValue ?? 0) / 100;
+      if (c.percentOf === "gross") {
+        independent += targetTotal * rate;
+      } else {
+        basicDependentRate += rate;
+      }
+    }
+  }
+
+  const denominator = 1 + basicDependentRate * basicShare;
+  const earnings =
+    denominator > 0
+      ? (targetTotal - independent) / denominator
+      : targetTotal - independent;
+  return Math.max(0, earnings);
+}
+
 /**
  * Redistributes a newly-typed target gross salary across the currently
- * unlocked earning components, preserving their existing relative ratios —
- * backs the editable Gross Salary field in the Employee/Salary modules. If
- * nothing is set yet (fresh structure, sum = 0), puts 100% into the first
- * earning component (by displayOrder) and leaves the rest at 0 for HR to
- * split manually, same pattern the old attendance-based default used.
+ * unlocked earning components, preserving their existing relative ratios,
+ * after first grossing up for the locked deductions (PF/ESI/PT) that will be
+ * derived from the result — so Basic+HRA+Conveyance+...+PF+ESI+PT always
+ * sums back to `newGross`, not just the earning components alone. Backs the
+ * editable Gross Salary field in the Employee/Salary modules.
+ *
+ * If nothing is set yet (fresh structure, sum = 0), seeds the standard
+ * Basic/HRA/Conveyance 50/25/25 split (see DEFAULT_GROSS_SHARE above) when
+ * those components exist; otherwise falls back to putting 100% into the
+ * first earning component (by displayOrder) and leaving the rest at 0 for
+ * HR to split manually, for tenants whose components don't include any of
+ * the standard three.
  *
  * Locked earning components (e.g. a tenant-configured percent_of_basic
  * allowance) are left untouched here — they're recomputed separately by
- * computeSalaryComponents off the resulting Basic/gross, so the actual
- * gross may drift slightly from `newGross` in that (rare) configuration.
+ * computeSalaryComponents off the resulting Basic/gross.
  */
 export function redistributeGross(
   newGross: number,
   components: SalaryComponentDef[],
   currentValues: Record<string, number>,
   lockedKeys: Set<string>,
+  ptSlabs: PtSlab[] = [],
+  workState?: string | null,
 ): Record<string, number> {
   const earningCodes = components
     .filter((c) => c.type === "earning" && !lockedKeys.has(c.code))
@@ -207,15 +279,37 @@ export function redistributeGross(
     (sum, code) => sum + (currentValues[code] ?? 0),
     0,
   );
+  const usesDefaultShare =
+    currentSum <= 0 && earningCodes.some((code) => code in DEFAULT_GROSS_SHARE);
+  const basicShare =
+    currentSum > 0
+      ? (currentValues.BASIC ?? 0) / currentSum
+      : usesDefaultShare
+        ? (DEFAULT_GROSS_SHARE.BASIC ?? 0)
+        : 0;
+
+  const earningsTotal = computeGrossUpEarnings(
+    newGross,
+    components,
+    basicShare,
+    ptSlabs,
+    workState,
+  );
 
   if (currentSum > 0) {
-    const scale = newGross / currentSum;
+    const scale = earningsTotal / currentSum;
     for (const code of earningCodes) {
       result[code] = Math.round((currentValues[code] ?? 0) * scale);
     }
+  } else if (usesDefaultShare) {
+    for (const code of earningCodes) {
+      result[code] = Math.round(
+        earningsTotal * (DEFAULT_GROSS_SHARE[code] ?? 0),
+      );
+    }
   } else {
     earningCodes.forEach((code, i) => {
-      result[code] = i === 0 ? Math.round(newGross) : 0;
+      result[code] = i === 0 ? Math.round(earningsTotal) : 0;
     });
   }
 

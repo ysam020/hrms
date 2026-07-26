@@ -24,9 +24,15 @@ export { loadSecrets } from "./loadSecrets";
 export { validateEnv } from "./validateEnv";
 export {
   deriveFromComponents,
+  legacyFieldsToComponents,
   toWireSalaryStructure,
   type ComponentAmountInput,
 } from "./salaryComponents";
 export { isSafeUrl, isSafeHostname } from "./ssrfGuard";
 export { isValidPermission, partitionPermissions } from "./permissionCatalog";
 export { BoundedCache, type BoundedCacheOptions } from "./boundedCache";
+export {
+  deriveOfferCompensationBreakup,
+  OFFER_COMPENSATION_DISCLAIMER,
+  type OfferCompensationBreakup,
+} from "./offerCompensation";

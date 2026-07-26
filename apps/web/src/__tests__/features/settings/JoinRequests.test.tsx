@@ -87,6 +87,42 @@ describe("JoinRequests", () => {
     );
   });
 
+  it("shows a warning instead of a plain success toast when linking succeeded but salary seeding failed", async () => {
+    mockGet.mockResolvedValue({
+      data: { success: true, data: { requests: [request()] } },
+    });
+    mockPost.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          linkedJobApplicationId: "app-1",
+          salarySeeded: false,
+        },
+      },
+    });
+    const { setAlert } = renderList();
+    await screen.findByText("Jane Doe");
+
+    fireEvent.click(screen.getByText("Approve", { selector: "span" }));
+    fireEvent.click(
+      screen.getAllByText("Approve", { selector: "span" }).pop()!,
+    );
+
+    await waitFor(() =>
+      expect(setAlert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: "warning",
+          message: expect.stringContaining("syncing their salary failed"),
+        }),
+      ),
+    );
+    // The request is still removed from the list — approval itself
+    // genuinely succeeded, only the salary sync needs manual follow-up.
+    await waitFor(() =>
+      expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument(),
+    );
+  });
+
   it("rejects a request through its own confirmation dialog", async () => {
     mockGet.mockResolvedValue({
       data: { success: true, data: { requests: [request()] } },

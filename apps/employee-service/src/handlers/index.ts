@@ -1,5 +1,4 @@
 import { getEmployee } from "./getEmployee";
-import { createEmployee } from "./createEmployee";
 import { updateEmployee } from "./updateEmployee";
 import { deleteEmployee } from "./deleteEmployee";
 import { listEmployees } from "./listEmployees";
@@ -12,7 +11,6 @@ import { allowKycEdit } from "./allowKycEdit";
 
 export const handlers = {
   GetEmployee: getEmployee,
-  CreateEmployee: createEmployee,
   UpdateEmployee: updateEmployee,
   DeleteEmployee: deleteEmployee,
   ListEmployees: listEmployees,

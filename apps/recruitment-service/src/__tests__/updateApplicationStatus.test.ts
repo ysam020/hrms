@@ -31,6 +31,9 @@ jest.mock("@hrms/common", () => ({
   ),
   tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
   renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
+  // Real implementation — the hire-components test below needs an actual
+  // derived gross, not a stub.
+  deriveFromComponents: jest.requireActual("@hrms/common").deriveFromComponents,
 }));
 
 import { notify } from "@hrms/notifications";
@@ -226,6 +229,37 @@ describe("updateApplicationStatus", () => {
         hireSalary: 1200000,
         hireJoiningDate: new Date("2026-08-01"),
         hireReferredBy: "Jane Smith",
+      },
+    });
+  });
+
+  it("stores hireSalaryComponents and derives hireSalary as a correct monthly gross when components are provided", async () => {
+    mockFindUnique.mockResolvedValue(applicationWithClearedRound);
+    const cb = makeCallback();
+    const components = [
+      { code: "BASIC", name: "Basic Pay", type: "earning", amount: 30000 },
+      { code: "HRA", name: "HRA", type: "earning", amount: 15000 },
+      { code: "PF", name: "PF", type: "deduction", amount: 3600 },
+    ];
+    await updateApplicationStatus(
+      makeCall({
+        id: "app-1",
+        status: "Hired",
+        // A stale/unused annual figure — must be ignored in favor of the
+        // components-derived monthly gross when components are present.
+        salary: "1200000",
+        joiningDate: "2026-08-01",
+        components,
+      }),
+      cb,
+    );
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "app-1" },
+      data: {
+        status: "Hired",
+        hireSalary: 45000,
+        hireSalaryComponents: components,
+        hireJoiningDate: new Date("2026-08-01"),
       },
     });
   });

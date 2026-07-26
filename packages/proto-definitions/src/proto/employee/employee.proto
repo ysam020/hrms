@@ -28,17 +28,6 @@ message GetEmployeeResponse {
   Employee data = 3;
 }
 
-message CreateEmployeeRequest {
-  string firstName = 1;
-  string lastName = 2;
-  string email = 3;
-  string phone = 4;
-  string department = 5;
-  string designation = 6;
-  string dateOfJoining = 7;
-  string managerId = 9;
-}
-
 message UpdateEmployeeRequest {
   string employeeId = 1;
   string firstName = 2;
@@ -138,8 +127,6 @@ message AllowKycEditRequest {
 service EmployeeService {
   // Retrieves a single employee by ID.
   rpc GetEmployee (GetEmployeeRequest) returns (GetEmployeeResponse);
-  // Creates a new employee record.
-  rpc CreateEmployee (CreateEmployeeRequest) returns (GetEmployeeResponse);
   // Updates an existing employee record.
   rpc UpdateEmployee (UpdateEmployeeRequest) returns (GetEmployeeResponse);
   // Deletes an employee record by ID.

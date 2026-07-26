@@ -1,9 +1,11 @@
 import { prisma } from "@hrms/db";
+import { salary } from "@hrms/proto";
 import {
   updateSalary,
   getUserSalary,
   generateSalarySlip,
   derivePdfPassword,
+  seedSalaryFromHire,
 } from "../handlers/salary";
 
 jest.mock("../grpc/clients", () => ({
@@ -13,7 +15,7 @@ jest.mock("../grpc/clients", () => ({
 
 jest.mock("@hrms/db", () => {
   const _db = {
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), update: jest.fn() },
     attendanceRecord: { findMany: jest.fn().mockResolvedValue([]) },
     leaveBalance: { findFirst: jest.fn().mockResolvedValue(null) },
     payrollRun: {
@@ -56,7 +58,11 @@ jest.mock("@hrms/common", () => ({
     FORBIDDEN: 403,
     INTERNAL_SERVER_ERROR: 500,
   },
-  deriveFromComponents: jest.fn(),
+  // Real implementations — the seedSalaryFromHire tests below need actual
+  // derivations to build realistic gRPC payloads / User sync data, not stubs.
+  deriveFromComponents: jest.requireActual("@hrms/common").deriveFromComponents,
+  deriveOfferCompensationBreakup:
+    jest.requireActual("@hrms/common").deriveOfferCompensationBreakup,
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -78,6 +84,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
+const mockUserUpdate = prisma.user.update as jest.Mock;
 const mockPayrollRunFindFirst = (prisma as any).payrollRun
   .findFirst as jest.Mock;
 const mockPayrollLineItemFindFirst = (prisma as any).payrollLineItem
@@ -423,5 +430,188 @@ describe("derivePdfPassword", () => {
 
   it("returns null when DOB is not a parseable date", () => {
     expect(derivePdfPassword("AAAAA0000A", "not-a-date")).toBeNull();
+  });
+});
+
+describe("seedSalaryFromHire", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUserUpdate.mockResolvedValue({});
+  });
+
+  // Regression: seedSalaryFromHire used to pass a raw plain object straight
+  // to grpcCall for createSalaryStructure/updateSalaryStructure, omitting
+  // `components` (a `repeated ComponentAmount` proto field) entirely since
+  // this call only ever uses the flat legacy fields. The generated encoder
+  // tries to iterate `message.components` and throws "message.components is
+  // not iterable" on the resulting `undefined` — confirmed against a real
+  // gRPC call, not just a type error. fromPartial() zero-fills it to `[]`.
+  it("builds a createSalaryStructure request that encodes cleanly (regression: 'message.components is not iterable')", async () => {
+    mockGrpcCall.mockImplementation(async (_client, method) => {
+      if (method === "getSalaryStructure") return { data: null };
+      return { data: { id: "ss-1" } };
+    });
+
+    await seedSalaryFromHire("user-1", "t1", 1200000, new Date("2026-07-27"));
+
+    const createCall = mockGrpcCall.mock.calls.find(
+      (c) => c[1] === "createSalaryStructure",
+    );
+    expect(createCall).toBeDefined();
+    const sentRequest = createCall![2];
+    expect(() =>
+      salary.CreateSalaryRequest.encode(sentRequest).finish(),
+    ).not.toThrow();
+    expect(sentRequest.components).toEqual([]);
+  });
+
+  it("builds an updateSalaryStructure request that encodes cleanly when a structure already exists for the period", async () => {
+    mockGrpcCall.mockImplementation(async (_client, method) => {
+      if (method === "getSalaryStructure")
+        return { data: { id: "ss-existing" } };
+      return { data: { id: "ss-existing" } };
+    });
+
+    await seedSalaryFromHire("user-1", "t1", 1200000, new Date("2026-07-27"));
+
+    const updateCall = mockGrpcCall.mock.calls.find(
+      (c) => c[1] === "updateSalaryStructure",
+    );
+    expect(updateCall).toBeDefined();
+    const sentRequest = updateCall![2];
+    expect(() =>
+      salary.UpdateSalaryRequest.encode(sentRequest).finish(),
+    ).not.toThrow();
+    expect(sentRequest.components).toEqual([]);
+  });
+
+  it("returns true on success without touching User (SalaryStructure is the only source of truth)", async () => {
+    mockGrpcCall.mockImplementation(async (_client, method) => {
+      if (method === "getSalaryStructure") return { data: null };
+      return { data: { id: "ss-1" } };
+    });
+
+    const result = await seedSalaryFromHire(
+      "user-1",
+      "t1",
+      1200000,
+      new Date("2026-07-27"),
+    );
+
+    expect(result).toBe(true);
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+  });
+
+  it("returns false instead of throwing when the gRPC call fails", async () => {
+    mockGrpcCall.mockRejectedValue(new Error("gRPC unavailable"));
+    const result = await seedSalaryFromHire(
+      "user-1",
+      "t1",
+      1200000,
+      new Date("2026-07-27"),
+    );
+    expect(result).toBe(false);
+  });
+
+  const HIRE_COMPONENTS = [
+    { code: "BASIC", name: "Basic Pay", type: "earning", amount: 30000 },
+    { code: "HRA", name: "HRA", type: "earning", amount: 15000 },
+    { code: "PF", name: "PF", type: "deduction", amount: 3600 },
+  ];
+
+  it("passes real hire-time components straight through to createSalaryStructure and encodes cleanly", async () => {
+    mockGrpcCall.mockImplementation(async (_client, method) => {
+      if (method === "getSalaryStructure") return { data: null };
+      return { data: { id: "ss-1" } };
+    });
+
+    await seedSalaryFromHire(
+      "user-1",
+      "t1",
+      1200000,
+      new Date("2026-07-27"),
+      HIRE_COMPONENTS,
+    );
+
+    const createCall = mockGrpcCall.mock.calls.find(
+      (c) => c[1] === "createSalaryStructure",
+    );
+    expect(createCall).toBeDefined();
+    const sentRequest = createCall![2];
+    expect(() =>
+      salary.CreateSalaryRequest.encode(sentRequest).finish(),
+    ).not.toThrow();
+    expect(sentRequest.components).toEqual(HIRE_COMPONENTS);
+  });
+
+  it("passes real hire-time components through to updateSalaryStructure when a structure already exists", async () => {
+    mockGrpcCall.mockImplementation(async (_client, method) => {
+      if (method === "getSalaryStructure")
+        return { data: { id: "ss-existing" } };
+      return { data: { id: "ss-existing" } };
+    });
+
+    await seedSalaryFromHire(
+      "user-1",
+      "t1",
+      1200000,
+      new Date("2026-07-27"),
+      HIRE_COMPONENTS,
+    );
+
+    const updateCall = mockGrpcCall.mock.calls.find(
+      (c) => c[1] === "updateSalaryStructure",
+    );
+    expect(updateCall).toBeDefined();
+    const sentRequest = updateCall![2];
+    expect(() =>
+      salary.UpdateSalaryRequest.encode(sentRequest).finish(),
+    ).not.toThrow();
+    expect(sentRequest.components).toEqual(HIRE_COMPONENTS);
+  });
+
+  it("passes hire-time components straight through to createSalaryStructure without deriving from the annual hireSalary figure", async () => {
+    mockGrpcCall.mockImplementation(async (_client, method) => {
+      if (method === "getSalaryStructure") return { data: null };
+      return { data: { id: "ss-1" } };
+    });
+
+    const result = await seedSalaryFromHire(
+      "user-1",
+      "t1",
+      1200000, // an old-style annual figure that must NOT be used when components are present
+      new Date("2026-07-27"),
+      HIRE_COMPONENTS,
+    );
+
+    expect(result).toBe(true);
+    const createCall = mockGrpcCall.mock.calls.find(
+      (c) => c[1] === "createSalaryStructure",
+    );
+    expect(createCall![2].components).toEqual(HIRE_COMPONENTS);
+    // SalaryStructure is the only source of truth now — no User sync.
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the old gross-derived formula when hireSalaryComponents is empty or missing", async () => {
+    mockGrpcCall.mockImplementation(async (_client, method) => {
+      if (method === "getSalaryStructure") return { data: null };
+      return { data: { id: "ss-1" } };
+    });
+
+    await seedSalaryFromHire(
+      "user-1",
+      "t1",
+      1200000,
+      new Date("2026-07-27"),
+      [],
+    );
+
+    const createCall = mockGrpcCall.mock.calls.find(
+      (c) => c[1] === "createSalaryStructure",
+    );
+    const sentRequest = createCall![2];
+    expect(sentRequest.components).toEqual([]);
+    expect(mockUserUpdate).not.toHaveBeenCalled();
   });
 });

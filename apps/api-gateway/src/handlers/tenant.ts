@@ -1,6 +1,7 @@
 import { Response } from "express";
 import {
   prisma,
+  prismaWithTenant,
   Prisma,
   getClientForDb,
   canonicalizeEmail,
@@ -18,6 +19,7 @@ import {
   RESPONSE_STATUS,
   sendEmail,
   tenantFrom,
+  tenantReplyTo,
   PLATFORM_FROM,
   renderEmailHtml,
   hasPrivilegedRole,
@@ -27,6 +29,7 @@ import { handleError } from "../utils/handleError";
 import { aesEncrypt } from "@hrms/crypto";
 import { fetchPaymentMethod, getRazorpay } from "./payment";
 import { notify } from "@hrms/notifications";
+import { seedSalaryFromHire } from "./salary";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -361,7 +364,14 @@ async function buildTenant(
       Promise.all([
         prisma.user.update({
           where: { id: userId },
-          data: { tenantId: tenant.id, isSuperUser: true },
+          // The creator becomes the tenant's owner outright — there's no
+          // one to "approve" them via approveJoinRequest, so this is the
+          // other (only) place that must flip a "Pending" signup to Active.
+          data: {
+            tenantId: tenant.id,
+            isSuperUser: true,
+            employeeStatus: "Active",
+          },
         }),
         prisma.tenantMembership.create({
           data: { tenantId: tenant.id, userId, role: "owner" },
@@ -755,6 +765,10 @@ export async function getOrgProfile(req: AuthRequest, res: Response) {
         tan: true,
         website: true,
         workState: true,
+        cin: true,
+        logoUrl: true,
+        signatoryName: true,
+        signatoryDesignation: true,
       },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -786,15 +800,29 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
     });
   }
   try {
-    const { helpPhone, helpEmail, officeAddress, tan, website, workState } =
-      req.body as {
-        helpPhone?: string;
-        helpEmail?: string;
-        officeAddress?: string;
-        tan?: string;
-        website?: string;
-        workState?: string;
-      };
+    const {
+      helpPhone,
+      helpEmail,
+      officeAddress,
+      tan,
+      website,
+      workState,
+      cin,
+      logoUrl,
+      signatoryName,
+      signatoryDesignation,
+    } = req.body as {
+      helpPhone?: string;
+      helpEmail?: string;
+      officeAddress?: string;
+      tan?: string;
+      website?: string;
+      workState?: string;
+      cin?: string;
+      logoUrl?: string;
+      signatoryName?: string;
+      signatoryDesignation?: string;
+    };
     const tenant = await prisma.tenant.update({
       where: { id: tenantId },
       data: {
@@ -806,6 +834,14 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
         ...(tan !== undefined && { tan: tan || null }),
         ...(website !== undefined && { website: website || null }),
         ...(workState !== undefined && { workState: workState || null }),
+        ...(cin !== undefined && { cin: cin || null }),
+        ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
+        ...(signatoryName !== undefined && {
+          signatoryName: signatoryName || null,
+        }),
+        ...(signatoryDesignation !== undefined && {
+          signatoryDesignation: signatoryDesignation || null,
+        }),
       },
       select: {
         name: true,
@@ -815,6 +851,10 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
         tan: true,
         website: true,
         workState: true,
+        cin: true,
+        logoUrl: true,
+        signatoryName: true,
+        signatoryDesignation: true,
       },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -1162,6 +1202,7 @@ export async function approveJoinRequest(req: AuthRequest, res: Response) {
   }
   try {
     const id = String(req.params.id);
+    let { jobApplicationId } = req.body as { jobApplicationId?: string };
     const request = await prisma.tenantJoinRequest.findUnique({
       where: { id },
     });
@@ -1174,6 +1215,106 @@ export async function approveJoinRequest(req: AuthRequest, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
         message: "This request has already been resolved.",
       });
+    }
+
+    let jobApplication: {
+      email: string | null;
+      hireSalary: number | null;
+      hireJoiningDate: Date | null;
+      hireSalaryComponents: unknown;
+    } | null = null;
+
+    if (jobApplicationId) {
+      // An explicit pick (e.g. a future admin tool) — fail loudly on a bad
+      // one, since a wrong link here silently attaches someone's salary to
+      // the wrong account, unlike the best-effort salary seed below.
+      const candidate = await prismaWithTenant.jobApplication.findUnique({
+        where: { id: jobApplicationId },
+        select: {
+          tenantId: true,
+          status: true,
+          userId: true,
+          email: true,
+          hireSalary: true,
+          hireJoiningDate: true,
+          hireSalaryComponents: true,
+        },
+      });
+      if (
+        !candidate ||
+        candidate.tenantId !== tenantId ||
+        candidate.status !== "Hired" ||
+        candidate.userId
+      ) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message:
+            "That candidate can't be linked — it may already be linked to another account, or isn't a Hired application in this organisation.",
+        });
+      }
+      jobApplication = candidate;
+    } else if (request.email) {
+      // No explicit pick — silently link if (and only if) the join
+      // requester's own email exactly matches a Hired, unlinked candidate's
+      // assignedOfficialEmail (recorded by HR/IT before this login ever
+      // happened — see updateAssignedOfficialEmail). No match simply means
+      // no link, not an error — this is a convenience, not a requirement.
+      //
+      // Deliberately NOT filtering `userId: null` in the WHERE clause here —
+      // confirmed against the real Atlas cluster that Prisma's MongoDB
+      // connector does not match documents where an optional @db.ObjectId
+      // field (like userId) is entirely absent (as it is for every
+      // JobApplication — applyForJob never sets it) against a `{ userId:
+      // null }` filter, even though the equivalent raw Mongo query and
+      // Prisma's own `{ userId: null }` post-fetch JS check both work fine.
+      // Fetching without it and checking `!c.userId` in JS (matching the
+      // explicit-jobApplicationId branch above) sidesteps that connector gap.
+      const candidates = await prismaWithTenant.jobApplication.findMany({
+        where: {
+          tenantId,
+          status: "Hired",
+          assignedOfficialEmail: canonicalizeEmail(request.email),
+        },
+        select: {
+          id: true,
+          email: true,
+          userId: true,
+          hireSalary: true,
+          hireJoiningDate: true,
+          hireSalaryComponents: true,
+        },
+        take: 5,
+      });
+      const candidate = candidates.find((c) => !c.userId) ?? null;
+      if (candidate) {
+        jobApplicationId = candidate.id;
+        jobApplication = candidate;
+      }
+    }
+
+    if (jobApplicationId && jobApplication) {
+      await prismaWithTenant.jobApplication.update({
+        where: { id: jobApplicationId },
+        data: { userId: request.userId },
+      });
+      // Preserve the pre-hire personal email on the employee record itself —
+      // `User.email` is the login/company identity, so without this the only
+      // way to find what email someone originally applied with is to know to
+      // go look up the linked JobApplication separately. Also copy the hire
+      // joining date onto User.joining_date — the Headcount Growth analytics
+      // chart (getHeadcountGrowth in analyticsRoutes.ts) reads exclusively
+      // from that field, so without this every hire hired through this flow
+      // would be permanently invisible there.
+      const userUpdateData: Record<string, unknown> = {};
+      if (jobApplication.email)
+        userUpdateData.personalEmail = jobApplication.email;
+      if (jobApplication.hireJoiningDate)
+        userUpdateData.joining_date = jobApplication.hireJoiningDate;
+      if (Object.keys(userUpdateData).length > 0) {
+        await prisma.user.update({
+          where: { id: request.userId },
+          data: userUpdateData,
+        });
+      }
     }
 
     const existingMembership = await prisma.tenantMembership.findFirst({
@@ -1190,34 +1331,76 @@ export async function approveJoinRequest(req: AuthRequest, res: Response) {
       });
     }
 
+    // Was set to "Pending" at signup (see googleOAuthCallback.ts) so an
+    // unapproved user doesn't show up as an active employee anywhere
+    // (payroll, attendance, org chart, KYC review). Approval is what makes
+    // them active — unconditional, independent of the JobApplication-link
+    // block above, since not every approval has a linked candidate.
+    await prisma.user.update({
+      where: { id: request.userId },
+      data: { employeeStatus: "Active" },
+    });
+
     await prisma.tenantJoinRequest.update({
       where: { id },
       data: { status: "approved", reviewedBy: userId, reviewedAt: new Date() },
     });
 
+    let salarySeeded = false;
+    if (jobApplication?.hireSalary) {
+      salarySeeded = await seedSalaryFromHire(
+        request.userId,
+        tenantId,
+        jobApplication.hireSalary,
+        jobApplication.hireJoiningDate,
+        jobApplication.hireSalaryComponents,
+      );
+      if (!salarySeeded) {
+        // seedSalaryFromHire already logs its own root-cause error — this is
+        // a second, easily-greppable line correlating that failure back to
+        // the specific join request/candidate, since the HTTP response
+        // otherwise reports plain success and this was previously the only
+        // place the failure was visible at all.
+        logger.warn(
+          "approveJoinRequest: linked candidate but salary seeding failed — check the seedSalaryFromHire error logged just above",
+          { requestId: id, userId: request.userId, jobApplicationId },
+        );
+      }
+    }
+
     void (async () => {
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { name: true },
+        select: { name: true, helpEmail: true },
       });
       if (request.email) {
-        sendEmail({
-          to: request.email,
-          subject: `Your request to join ${tenant?.name ?? "the organisation"} was approved`,
-          html: renderEmailHtml({
-            title: "Request Approved",
-            tenantName: tenant?.name,
-            bodyHtml: `<h2>You're in!</h2><p>You've been added to <strong>${tenant?.name ?? "the organisation"}</strong>. Sign in to get started.</p>`,
-          }),
-          from: tenantFrom(tenant?.name ?? "Praesto"),
+        notify({
+          tenantId,
+          event: "joinRequestApproved",
+          email: {
+            to: request.email,
+            subject: `Your request to join ${tenant?.name ?? "the organisation"} was approved`,
+            html: renderEmailHtml({
+              title: "Request Approved",
+              tenantName: tenant?.name,
+              bodyHtml: `<h2>You're in!</h2><p>You've been added to <strong>${tenant?.name ?? "the organisation"}</strong>. Sign in to get started.</p>`,
+            }),
+            from: tenantFrom(tenant?.name ?? "Praesto"),
+            replyTo: tenantReplyTo(tenant?.helpEmail),
+          },
         }).catch((e) =>
-          logger.warn("join-request approval email failed", { error: e }),
+          logger.warn("join-request approval notify failed", { error: e }),
         );
       }
     })();
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { requestId: id, status: "approved" },
+      data: {
+        requestId: id,
+        status: "approved",
+        linkedJobApplicationId: jobApplicationId ?? null,
+        salarySeeded,
+      },
       message: "Request approved.",
     });
   } catch (error: unknown) {
@@ -1269,20 +1452,25 @@ export async function rejectJoinRequest(req: AuthRequest, res: Response) {
     void (async () => {
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { name: true },
+        select: { name: true, helpEmail: true },
       });
       if (request.email) {
-        sendEmail({
-          to: request.email,
-          subject: `Your request to join ${tenant?.name ?? "the organisation"} was declined`,
-          html: renderEmailHtml({
-            title: "Request Declined",
-            tenantName: tenant?.name,
-            bodyHtml: `<h2>Request declined</h2><p>Your request to join <strong>${tenant?.name ?? "the organisation"}</strong> was declined.</p>`,
-          }),
-          from: tenantFrom(tenant?.name ?? "Praesto"),
+        notify({
+          tenantId,
+          event: "joinRequestRejected",
+          email: {
+            to: request.email,
+            subject: `Your request to join ${tenant?.name ?? "the organisation"} was declined`,
+            html: renderEmailHtml({
+              title: "Request Declined",
+              tenantName: tenant?.name,
+              bodyHtml: `<h2>Request declined</h2><p>Your request to join <strong>${tenant?.name ?? "the organisation"}</strong> was declined.</p>`,
+            }),
+            from: tenantFrom(tenant?.name ?? "Praesto"),
+            replyTo: tenantReplyTo(tenant?.helpEmail),
+          },
         }).catch((e) =>
-          logger.warn("join-request rejection email failed", { error: e }),
+          logger.warn("join-request rejection notify failed", { error: e }),
         );
       }
     })();

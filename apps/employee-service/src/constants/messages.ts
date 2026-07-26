@@ -1,7 +1,4 @@
 export const MESSAGES = {
-  USERNAME_REQUIRED: "username is required",
-  EMPLOYEE_USERNAME_EXISTS: "Employee with this username already exists",
-  EMPLOYEE_CREATED: "Employee created successfully",
   EMPLOYEE_ID_REQUIRED: "Employee ID is required",
   EMPLOYEE_NOT_FOUND: "Employee not found",
   EMPLOYEE_PERMANENTLY_DELETED: "Employee permanently deleted",

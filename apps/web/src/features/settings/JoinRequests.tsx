@@ -59,12 +59,27 @@ export default function JoinRequests() {
         `${API_ENDPOINTS.JOIN_REQUESTS}/${id}/${decision}`,
       );
       if (res.data?.success) {
-        setAlert({
-          open: true,
-          message:
-            decision === "approve" ? "Request approved." : "Request rejected.",
-          severity: "success",
-        });
+        const { linkedJobApplicationId, salarySeeded } = res.data.data || {};
+        if (decision === "approve" && linkedJobApplicationId && !salarySeeded) {
+          // Linking succeeded but seeding their salary didn't — approval
+          // itself isn't wrong, but this needs a human to go fix the salary
+          // structure manually rather than silently looking fine.
+          setAlert({
+            open: true,
+            message:
+              "Request approved and linked to their hired candidate record, but syncing their salary failed — please set it manually in Salary Management.",
+            severity: "warning",
+          });
+        } else {
+          setAlert({
+            open: true,
+            message:
+              decision === "approve"
+                ? "Request approved."
+                : "Request rejected.",
+            severity: "success",
+          });
+        }
         setRequests((prev) => prev.filter((r) => r.id !== id));
       } else {
         setAlert({
@@ -178,7 +193,9 @@ export default function JoinRequests() {
           pendingDecision?.decision === "approve" ? (
             <>
               Approve <strong>{pendingDecision?.name}</strong>'s request to
-              join? This will add them as an employee in your organisation.
+              join? This will add them as an employee in your organisation. If
+              their email matches one recorded for a hired candidate, they'll be
+              linked automatically.
             </>
           ) : (
             <>

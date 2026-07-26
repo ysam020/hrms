@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { employeeClient, grpcCall } from "../grpc/clients";
+import { salary } from "@hrms/proto";
+import { employeeClient, salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -105,13 +106,6 @@ const RESTRICTED_EMPLOYEE_DETAIL_FIELDS = [
   "uan_no",
   "esic_no",
   "salary",
-  "salaryBasicPay",
-  "salaryHra",
-  "salaryConveyance",
-  "salaryPf",
-  "salaryEsi",
-  "salaryPt",
-  "salaryComponentBreakdown",
   "salaryStructure",
   "reasonForTermination",
   "dateOfTermination",
@@ -161,14 +155,6 @@ export async function getEmployeeDetails(req: Request, res: Response) {
         pf_no: true,
         uan_no: true,
         esic_no: true,
-        salary: true,
-        salaryBasicPay: true,
-        salaryHra: true,
-        salaryConveyance: true,
-        salaryPf: true,
-        salaryEsi: true,
-        salaryPt: true,
-        salaryComponentBreakdown: true,
         reasonForTermination: true,
         dateOfTermination: true,
         dateOfAbscond: true,
@@ -190,20 +176,34 @@ export async function getEmployeeDetails(req: Request, res: Response) {
       select: { role: true },
     });
 
+    // SalaryStructure (owned by salary-service), not a denormalized User
+    // column — this is the single employee this request is about, so one
+    // gRPC call here carries no N+1 risk (unlike payroll's bulk-run read).
+    const latestSalary: any = await grpcCall(
+      salaryClient,
+      "getSalaryStructure",
+      // fromPartial zero-fills the omitted int32 year/month fields — a raw
+      // object literal leaves them `undefined`, which the generated encoder
+      // rejects with "invalid int32: undefined".
+      salary.GetSalaryRequest.fromPartial({ userId: user.id }),
+    );
+    const salaryRow = latestSalary?.data;
+
     const data = {
       ...user,
       tenantRole: membership?.role ?? null,
       pf_no: safeDecrypt(user.pf_no),
       uan_no: safeDecrypt(user.uan_no),
       esic_no: safeDecrypt(user.esic_no),
+      salary: salaryRow?.grossEarnings ?? 0,
       salaryStructure: {
-        basicPay: user.salaryBasicPay,
-        hra: user.salaryHra,
-        conveyance: user.salaryConveyance,
-        pf: user.salaryPf,
-        esi: user.salaryEsi,
-        pt: user.salaryPt,
-        components: user.salaryComponentBreakdown ?? [],
+        basicPay: salaryRow?.basicPay ?? 0,
+        hra: salaryRow?.hra ?? 0,
+        conveyance: salaryRow?.conveyance ?? 0,
+        pf: salaryRow?.pf ?? 0,
+        esi: salaryRow?.esi ?? 0,
+        pt: salaryRow?.pt ?? 0,
+        components: salaryRow?.components ?? [],
       },
     };
 

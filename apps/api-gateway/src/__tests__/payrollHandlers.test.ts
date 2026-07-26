@@ -94,6 +94,8 @@ const mockHolidayFindMany = (prisma as any).holiday.findMany as jest.Mock;
 const mockPayCycleFindFirst = (prisma as any).payCycle.findFirst as jest.Mock;
 const mockResignationFindMany = (prisma as any).resignation
   .findMany as jest.Mock;
+const mockStructureFindMany = (prisma as any).salaryStructure
+  .findMany as jest.Mock;
 
 const makeReq = (overrides: any = {}) =>
   ({
@@ -135,16 +137,18 @@ describe("initiatePayrollRun", () => {
     mockLineItemFindMany.mockResolvedValue([]);
     mockRunFindManyForTds.mockResolvedValue([]);
     mockResignationFindMany.mockResolvedValue([]);
+    mockStructureFindMany.mockResolvedValue([]);
   });
 
   it("uses the employee's own configured Basic/HRA/Conveyance, prorated by attendance, instead of the fixed 50/25/25 split", async () => {
-    mockUserFindMany.mockResolvedValue([
+    mockUserFindMany.mockResolvedValue([{ id: "emp-1" }]);
+    mockStructureFindMany.mockResolvedValue([
       {
-        id: "emp-1",
-        salary: 30000,
-        salaryBasicPay: 20000,
-        salaryHra: 6000,
-        salaryConveyance: 4000,
+        userId: "emp-1",
+        grossEarnings: 30000,
+        basicPay: 20000,
+        hra: 6000,
+        conveyance: 4000,
       },
     ]);
     // Full attendance for the month — proration ratio effectively 1 once
@@ -176,13 +180,14 @@ describe("initiatePayrollRun", () => {
   });
 
   it("falls back to the fixed 50/25/25 split when the employee has no configured salary structure yet", async () => {
-    mockUserFindMany.mockResolvedValue([
+    mockUserFindMany.mockResolvedValue([{ id: "emp-2" }]);
+    mockStructureFindMany.mockResolvedValue([
       {
-        id: "emp-2",
-        salary: 30000,
-        salaryBasicPay: null,
-        salaryHra: null,
-        salaryConveyance: null,
+        userId: "emp-2",
+        grossEarnings: 30000,
+        basicPay: null,
+        hra: null,
+        conveyance: null,
       },
     ]);
     mockAttendanceFindMany.mockResolvedValue(
@@ -213,19 +218,18 @@ describe("initiatePayrollRun", () => {
 
   it("skips an employee with no salary structure instead of creating a ₹0 payslip", async () => {
     mockUserFindMany.mockResolvedValue([
+      { id: "emp-no-salary" },
+      { id: "emp-4" },
+    ]);
+    // emp-no-salary has no SalaryStructure row at all — not one with a null
+    // gross, genuinely absent.
+    mockStructureFindMany.mockResolvedValue([
       {
-        id: "emp-no-salary",
-        salary: null,
-        salaryBasicPay: null,
-        salaryHra: null,
-        salaryConveyance: null,
-      },
-      {
-        id: "emp-4",
-        salary: 20000,
-        salaryBasicPay: 10000,
-        salaryHra: 5000,
-        salaryConveyance: 5000,
+        userId: "emp-4",
+        grossEarnings: 20000,
+        basicPay: 10000,
+        hra: 5000,
+        conveyance: 5000,
       },
     ]);
     mockAttendanceFindMany.mockResolvedValue(
@@ -258,14 +262,16 @@ describe("initiatePayrollRun", () => {
   it("includes and prorates an employee who resigned mid-month instead of silently dropping them from the run", async () => {
     // No currently-active employees — this user's employeeStatus already
     // flipped away from "Active" the day after their lastWorkingDay.
-    mockUserFindMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+    mockUserFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "emp-exited", joining_date: null }]);
+    mockStructureFindMany.mockResolvedValue([
       {
-        id: "emp-exited",
-        salary: 30000,
-        salaryBasicPay: 20000,
-        salaryHra: 6000,
-        salaryConveyance: 4000,
-        joining_date: null,
+        userId: "emp-exited",
+        grossEarnings: 30000,
+        basicPay: 20000,
+        hra: 6000,
+        conveyance: 4000,
       },
     ]);
     mockResignationFindMany.mockResolvedValue([
@@ -298,13 +304,14 @@ describe("initiatePayrollRun", () => {
   });
 
   it("uses the tenant's configured PF/ESI rates instead of the 12%/1.75% defaults", async () => {
-    mockUserFindMany.mockResolvedValue([
+    mockUserFindMany.mockResolvedValue([{ id: "emp-3" }]);
+    mockStructureFindMany.mockResolvedValue([
       {
-        id: "emp-3",
-        salary: 20000,
-        salaryBasicPay: 10000,
-        salaryHra: 0,
-        salaryConveyance: 0,
+        userId: "emp-3",
+        grossEarnings: 20000,
+        basicPay: 10000,
+        hra: 0,
+        conveyance: 0,
       },
     ]);
     mockAttendanceFindMany.mockResolvedValue(
@@ -337,13 +344,14 @@ describe("initiatePayrollRun", () => {
   });
 
   it("treats an unrecorded weekend date as an implicit paid Week Off, not an unpaid gap", async () => {
-    mockUserFindMany.mockResolvedValue([
+    mockUserFindMany.mockResolvedValue([{ id: "emp-4" }]);
+    mockStructureFindMany.mockResolvedValue([
       {
-        id: "emp-4",
-        salary: 31000,
-        salaryBasicPay: null,
-        salaryHra: null,
-        salaryConveyance: null,
+        userId: "emp-4",
+        grossEarnings: 31000,
+        basicPay: null,
+        hra: null,
+        conveyance: null,
       },
     ]);
     // Only mark the weekdays of January 2020 as Present — the weekend days
@@ -374,13 +382,14 @@ describe("initiatePayrollRun", () => {
   });
 
   it("treats an unrecorded date in the tenant's Holiday calendar as an implicit paid Holiday", async () => {
-    mockUserFindMany.mockResolvedValue([
+    mockUserFindMany.mockResolvedValue([{ id: "emp-5" }]);
+    mockStructureFindMany.mockResolvedValue([
       {
-        id: "emp-5",
-        salary: 31000,
-        salaryBasicPay: null,
-        salaryHra: null,
-        salaryConveyance: null,
+        userId: "emp-5",
+        grossEarnings: 31000,
+        basicPay: null,
+        hra: null,
+        conveyance: null,
       },
     ]);
     // Jan 15, 2020 is a Wednesday (a working day) — mark every other day as
@@ -431,7 +440,10 @@ describe("initiatePayrollRun", () => {
 
   describe("pay cycle", () => {
     it("stamps the run with the tenant's default active pay cycle", async () => {
-      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1" }]);
+      mockStructureFindMany.mockResolvedValue([
+        { userId: "emp-1", grossEarnings: 30000 },
+      ]);
       mockPayCycleFindFirst.mockResolvedValue({
         id: "cycle-1",
         frequency: "monthly",
@@ -460,7 +472,10 @@ describe("initiatePayrollRun", () => {
     });
 
     it("uses the explicitly requested payCycleId instead of the default when provided", async () => {
-      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1" }]);
+      mockStructureFindMany.mockResolvedValue([
+        { userId: "emp-1", grossEarnings: 30000 },
+      ]);
       mockPayCycleFindFirst.mockResolvedValue({
         id: "cycle-biweekly",
         frequency: "biweekly",
@@ -489,7 +504,10 @@ describe("initiatePayrollRun", () => {
     });
 
     it("includes a warning in the response when the resolved cycle isn't monthly", async () => {
-      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1" }]);
+      mockStructureFindMany.mockResolvedValue([
+        { userId: "emp-1", grossEarnings: 30000 },
+      ]);
       mockPayCycleFindFirst.mockResolvedValue({
         id: "cycle-1",
         frequency: "biweekly",
@@ -512,7 +530,10 @@ describe("initiatePayrollRun", () => {
     });
 
     it("does not include a warning when no pay cycle is configured", async () => {
-      mockUserFindMany.mockResolvedValue([{ id: "emp-1", salary: 30000 }]);
+      mockUserFindMany.mockResolvedValue([{ id: "emp-1" }]);
+      mockStructureFindMany.mockResolvedValue([
+        { userId: "emp-1", grossEarnings: 30000 },
+      ]);
       const res = makeRes();
 
       await initiatePayrollRun(

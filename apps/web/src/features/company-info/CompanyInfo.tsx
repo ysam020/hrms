@@ -31,6 +31,8 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import LanguageIcon from "@mui/icons-material/Language";
 import MapIcon from "@mui/icons-material/Map";
 import EditIcon from "@mui/icons-material/Edit";
+import ImageIcon from "@mui/icons-material/Image";
+import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
@@ -47,6 +49,10 @@ interface OrgProfile {
   tan: string | null;
   website: string | null;
   workState: string | null;
+  cin: string | null;
+  logoUrl: string | null;
+  signatoryName: string | null;
+  signatoryDesignation: string | null;
 }
 
 function InfoRow({
@@ -120,6 +126,10 @@ export default function CompanyInfo() {
   const [editTan, setEditTan] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
   const [editWorkState, setEditWorkState] = useState("");
+  const [editCin, setEditCin] = useState("");
+  const [editLogoUrl, setEditLogoUrl] = useState("");
+  const [editSignatoryName, setEditSignatoryName] = useState("");
+  const [editSignatoryDesignation, setEditSignatoryDesignation] = useState("");
 
   const canEdit =
     isOwnerOrAdmin(user) ||
@@ -142,6 +152,10 @@ export default function CompanyInfo() {
     setEditTan(profile?.tan ?? "");
     setEditWebsite(profile?.website ?? "");
     setEditWorkState(profile?.workState ?? "");
+    setEditCin(profile?.cin ?? "");
+    setEditLogoUrl(profile?.logoUrl ?? "");
+    setEditSignatoryName(profile?.signatoryName ?? "");
+    setEditSignatoryDesignation(profile?.signatoryDesignation ?? "");
     setEditOpen(true);
   };
 
@@ -155,6 +169,10 @@ export default function CompanyInfo() {
         tan: editTan || null,
         website: editWebsite || null,
         workState: editWorkState || null,
+        cin: editCin || null,
+        logoUrl: editLogoUrl || null,
+        signatoryName: editSignatoryName || null,
+        signatoryDesignation: editSignatoryDesignation || null,
       });
       if (res.data?.success) {
         setProfile(res.data.data.orgProfile);
@@ -182,7 +200,9 @@ export default function CompanyInfo() {
     profile?.officeAddress ||
     profile?.tan ||
     profile?.website ||
-    profile?.workState;
+    profile?.workState ||
+    profile?.cin ||
+    profile?.signatoryName;
 
   return (
     <Container maxWidth="sm" sx={{ py: 4 }}>
@@ -266,6 +286,18 @@ export default function CompanyInfo() {
                 label="Website"
                 value={profile.website}
                 href={profile.website ?? undefined}
+              />
+              <InfoRow icon={<BadgeIcon />} label="CIN" value={profile.cin} />
+              <InfoRow
+                icon={<AssignmentIndIcon />}
+                label="Authorized signatory"
+                value={
+                  profile.signatoryName
+                    ? [profile.signatoryName, profile.signatoryDesignation]
+                        .filter(Boolean)
+                        .join(", ")
+                    : null
+                }
               />
             </>
           ) : (
@@ -351,6 +383,40 @@ export default function CompanyInfo() {
             value={editWebsite}
             onChange={(e) => setEditWebsite(e.target.value)}
             placeholder="https://yourcompany.com"
+            size="small"
+          />
+          <TextField
+            label="CIN"
+            fullWidth
+            value={editCin}
+            onChange={(e) => setEditCin(e.target.value.toUpperCase())}
+            placeholder="U72200DL2020PTC366655"
+            helperText="Corporate Identification Number — shown on generated documents like the offer letter"
+            size="small"
+          />
+          <TextField
+            label="Logo URL"
+            fullWidth
+            value={editLogoUrl}
+            onChange={(e) => setEditLogoUrl(e.target.value)}
+            placeholder="https://yourcompany.com/logo.png"
+            size="small"
+          />
+          <TextField
+            label="Authorized signatory name"
+            fullWidth
+            value={editSignatoryName}
+            onChange={(e) => setEditSignatoryName(e.target.value)}
+            placeholder="Jane Doe"
+            helperText="Printed on the offer letter signature block"
+            size="small"
+          />
+          <TextField
+            label="Authorized signatory designation"
+            fullWidth
+            value={editSignatoryDesignation}
+            onChange={(e) => setEditSignatoryDesignation(e.target.value)}
+            placeholder="Director"
             size="small"
           />
         </DialogContent>

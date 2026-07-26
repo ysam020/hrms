@@ -96,6 +96,7 @@ const JOB_OPENINGS = {
   GET_JOB_TITLES: "/get-job-titles",
   APPLY_FOR_JOB: (slug: string) => `/apply-for-job/${slug}`,
   HIRE_CANDIDATE: "/hire-candidate",
+  UPDATE_ASSIGNED_OFFICIAL_EMAIL: "/update-assigned-official-email",
   REJECT_CANDIDATE: "/reject-application",
   UPDATE_CANDIDATE_STATUS: "/update-candidate-status",
   SCHEDULE_INTERVIEW: "/schedule-interview",

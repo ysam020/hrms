@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 export const hiringSchema = z.object({
-  // The field is a text input (keyfilter: "int"), so formik always holds
-  // this as a string — coerce it rather than requiring an actual number,
-  // which rejected every valid value the user could ever type.
-  salary: z.coerce
+  // Drives redistribution across the salary component rows — the actual
+  // per-component amounts (not this single number) are what gets sent to
+  // the backend, but a positive gross is required before any components
+  // can be meaningfully split.
+  grossSalary: z.coerce
     .number({ invalid_type_error: "Salary must be a number" })
-    .int("Salary must be an integer"),
+    .positive("Monthly gross salary must be greater than 0"),
+  components: z.record(z.string(), z.number()).optional(),
   joining_date: z.coerce.date({ required_error: "Joining date is required" }),
   reference_by: z.string().optional(),
 });

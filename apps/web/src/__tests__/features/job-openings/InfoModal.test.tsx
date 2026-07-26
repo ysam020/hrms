@@ -281,4 +281,35 @@ describe("InfoModal", () => {
     expect(screen.queryByText("Reassign")).not.toBeInTheDocument();
     expect(screen.queryByText("Reschedule")).not.toBeInTheDocument();
   });
+
+  it("saves the assigned official email for a Hired candidate", async () => {
+    mockPut.mockResolvedValue({
+      data: {
+        success: true,
+        data: { assignedOfficialEmail: "jane@acme.example" },
+      },
+    });
+    const { setAlert } = renderModal({
+      status: "Hired",
+      applicantData: { status: "Hired", id: "app1" },
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. jane@yourcompany.com"), {
+      target: { value: "jane@acme.example" },
+    });
+    fireEvent.click(screen.getByLabelText("Save assigned official email"));
+
+    await waitFor(() =>
+      expect(mockPut).toHaveBeenCalledWith(expect.any(String), {
+        id: "app1",
+        assignedOfficialEmail: "jane@acme.example",
+      }),
+    );
+    expect(setAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: "success",
+        message: "Assigned official email updated.",
+      }),
+    );
+  });
 });

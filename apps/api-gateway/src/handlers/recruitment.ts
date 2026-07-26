@@ -3,7 +3,11 @@ import dayjs from "dayjs";
 import { recruitment } from "@hrms/proto";
 import { recruitmentClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  prisma as masterPrisma,
+  canonicalizeEmail,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
   apiResponse,
@@ -22,6 +26,7 @@ import { isSuperUser } from "../utils/user";
 import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
 import { getActiveSettings, SETTINGS_DEFAULTS } from "./tenantSettings";
 import { createInterviewMeetEvent } from "../services/googleCalendar";
+import { buildOfferLetterPdf } from "./offerLetter";
 
 export async function viewJobOpenings(req: Request, res: Response) {
   try {
@@ -266,28 +271,140 @@ export async function updateCandidateStatus(req: Request, res: Response) {
         interviewFeedback: feedback || "",
       }),
     );
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    return apiResponse(
+      res,
+      grpcToHttpStatus((response as any).status),
+      response,
+    );
   } catch (error: unknown) {
     return handleError(res, error);
   }
 }
 
 export async function hireCandidate(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
   try {
-    const { id, remarks, salary, joining_date, reference_by } = req.body;
+    const { id, remarks, salary, joining_date, reference_by, components } =
+      req.body as {
+        id?: string;
+        remarks?: string;
+        salary?: string | number;
+        joining_date?: string;
+        reference_by?: string;
+        components?: recruitment.ComponentAmount[];
+      };
     const response = await grpcCall(
       recruitmentClient,
       "updateApplicationStatus",
       recruitment.UpdateStatusRequest.fromPartial({
         id: id || "",
         status: "Hired",
-        remarks: remarks || "",
+        remarks: remarks ? String(remarks) : "",
         salary: salary ? String(salary) : "",
         joiningDate: joining_date || "",
         referenceBy: reference_by || "",
+        components: components || [],
       }),
     );
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+
+    // Best-effort: the offer letter email is a side effect of a successful
+    // hire, not the point of this endpoint — a PDF/email failure here must
+    // never turn an otherwise-successful hire into a failed API response.
+    // Only attempt it if the hire itself actually succeeded (grpc-js
+    // status.OK === 0) — updateApplicationStatus rejects plenty of hire
+    // attempts (no Cleared interview round, already Hired/Rejected, etc.),
+    // and this must not fire for those.
+    if (user?.tenantId && (response as any)?.status === 0) {
+      try {
+        const letter = await buildOfferLetterPdf(id || "", user.tenantId);
+        if ("buffer" in letter) {
+          await notify({
+            tenantId: user.tenantId,
+            event: "offerLetter",
+            email: {
+              to: letter.candidateEmail,
+              subject: `Offer of Employment — ${letter.tenantName}`,
+              html: renderEmailHtml({
+                title: "Offer Letter",
+                tenantName: letter.tenantName,
+                bodyHtml: `<h2>Dear ${letter.candidateName},</h2><p>Congratulations! Please find your offer letter attached.</p>`,
+              }),
+              from: tenantFrom(letter.tenantName),
+              replyTo: tenantReplyTo(letter.tenantHelpEmail ?? undefined),
+              attachments: [
+                {
+                  filename: `offer_letter_${letter.referenceNumber}.pdf`,
+                  content: letter.buffer.toString("base64"),
+                },
+              ],
+            },
+          });
+        } else {
+          logger.warn("Skipped offer letter email:", {
+            applicationId: id,
+            reason: letter.error,
+          });
+        }
+      } catch (error) {
+        logger.error("Failed to send offer letter email:", {
+          error,
+          applicationId: id,
+        });
+      }
+    }
+
+    return apiResponse(
+      res,
+      grpcToHttpStatus((response as any).status),
+      response,
+    );
+  } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
+// PUT /update-assigned-official-email — lets HR/IT record the company email
+// being provisioned for a hire, before that person's first login, so
+// join-request approval (approveJoinRequest in handlers/tenant.ts) can match
+// by exact email instead of guessing from name similarity.
+export async function updateAssignedOfficialEmail(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { id, assignedOfficialEmail } = req.body as {
+      id?: string;
+      assignedOfficialEmail?: string;
+    };
+    if (!id) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "id is required.",
+      });
+    }
+    const application = await prisma.jobApplication.findUnique({
+      where: { id },
+      select: { tenantId: true, status: true },
+    });
+    if (!application || application.tenantId !== user?.tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Application not found.",
+      });
+    }
+    if (application.status !== "Hired") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "An assigned official email can only be recorded for a Hired candidate.",
+      });
+    }
+    const trimmed = assignedOfficialEmail?.trim();
+    const updated = await prisma.jobApplication.update({
+      where: { id },
+      data: {
+        assignedOfficialEmail: trimmed ? canonicalizeEmail(trimmed) : null,
+      },
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { assignedOfficialEmail: updated.assignedOfficialEmail },
+      message: "Assigned official email updated.",
+    });
   } catch (error: unknown) {
     return handleError(res, error);
   }
@@ -307,7 +424,11 @@ export async function rejectApplication(req: Request, res: Response) {
         remarks: remarks || reason || "",
       }),
     );
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    return apiResponse(
+      res,
+      grpcToHttpStatus((response as any).status),
+      response,
+    );
   } catch (error: unknown) {
     return handleError(res, error);
   }
