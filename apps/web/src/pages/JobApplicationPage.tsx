@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import axios from "axios";
 import { useFormik } from "formik";
 import { z } from "zod";
 import { toFormikValidationSchema } from "zod-formik-adapter";
@@ -53,12 +54,12 @@ function JobApplicationPage() {
   const navigate = useNavigate();
   const { slug, id } = useParams();
   const [resumeFileName, setResumeFileName] = useState("");
-  // True while FileReader is still base64-encoding the selected file — the
-  // filename is set synchronously but formik's "resume" field only updates
-  // in reader.onloadend, asynchronously. A fast click on Submit right after
-  // choosing a file could race ahead of that callback: the filename looks
-  // set, but formik still sees an empty "resume" and rejects with "Resume is
-  // required" even though the applicant just picked one.
+  // True while the resume is still uploading to S3 — the filename is set
+  // synchronously but formik's "resume" field only updates once the upload
+  // resolves. A fast click on Submit right after choosing a file could race
+  // ahead of that: the filename looks set, but formik still sees an empty
+  // "resume" and rejects with "Resume is required" even though the
+  // applicant just picked one.
   const [resumeReading, setResumeReading] = useState(false);
   const [resumeFileError, setResumeFileError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -112,15 +113,21 @@ function JobApplicationPage() {
     },
   });
 
-  const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024; // 5MB — base64 (~+33%) still comfortably under the 10mb JSON body limit
+  const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!slug) {
+      setResumeFileError("This careers link is invalid.");
+      e.target.value = "";
+      return;
+    }
+
     // "accept=.pdf" on the input is a UI hint only — browsers don't enforce
-    // it, so an unauthenticated caller could otherwise base64-encode any
-    // file/size into this public endpoint's JSON body.
+    // it, so an unauthenticated caller could otherwise upload any file
+    // type/size to this public endpoint.
     if (file.type !== "application/pdf") {
       setResumeFileError("Only PDF files are accepted.");
       e.target.value = "";
@@ -135,17 +142,21 @@ function JobApplicationPage() {
     setResumeFileError("");
     setResumeFileName(file.name);
     setResumeReading(true);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      formik.setFieldValue("resume", reader.result);
-      setResumeReading(false);
-    };
-    reader.onerror = () => {
-      setResumeFileError("Couldn't read that file. Please try again.");
+    try {
+      const { data } = await apiClient.post(
+        API_ENDPOINTS.RESUME_UPLOAD_URL(slug),
+        { fileName: file.name, fileType: file.type },
+      );
+      const { url, fileUrl } = data.data;
+      // PUT directly to S3 — skip apiClient since the URL is pre-signed
+      await axios.put(url, file, { headers: { "Content-Type": file.type } });
+      formik.setFieldValue("resume", fileUrl);
+    } catch (err) {
+      setResumeFileError("Couldn't upload that file. Please try again.");
       setResumeFileName("");
+    } finally {
       setResumeReading(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const resumeHasError =

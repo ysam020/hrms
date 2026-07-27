@@ -12,16 +12,20 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import { useContext } from "react";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
+import { AlertContext } from "@web/app/providers/AlertContext";
 import DataList from "@web/shared/components/DataList";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { Dropdown } from "primereact/dropdown";
 import { interviewStatus } from "@web/assets/data/interviewStatus";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
+import apiClient from "@web/core/http/axiosConfig";
+import { API_ENDPOINTS } from "@web/shared/constants";
 
 const JobApplications = (props) => {
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
+  const { setAlert } = useContext(AlertContext);
   const canViewApplications = hasPermission(
     "JobOpenings",
     "view_applications",
@@ -145,9 +149,33 @@ const JobApplications = (props) => {
         icon: <FileDownload sx={{ fontSize: 16 }} />,
         label: `Download resume for ${row.name}`,
         color: "success" as const,
-        onClick: () => {
+        onClick: async () => {
+          // Applications submitted before the S3 migration still have their
+          // resume stored as a base64 data URL — downloadable directly.
+          // Newer ones store an S3 URL, which 403s unless swapped for a
+          // short-lived signed view URL first (the bucket has no public
+          // read access).
+          let href = row.resume;
+          if (!href.startsWith("data:")) {
+            try {
+              const { data } = await apiClient.post(
+                API_ENDPOINTS.RESUME_VIEW_URL,
+                { fileUrl: row.resume },
+              );
+              href = data.data.url;
+            } catch (err) {
+              setAlert({
+                open: true,
+                message:
+                  err.response?.data?.message ??
+                  "Couldn't download the resume. Please try again.",
+                severity: "error",
+              });
+              return;
+            }
+          }
           const link = document.createElement("a");
-          link.href = row.resume;
+          link.href = href;
           link.download = `${row.name}_Resume.pdf`;
           link.click();
         },

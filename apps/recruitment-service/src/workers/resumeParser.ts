@@ -1,17 +1,30 @@
 import { Worker, Job } from "bullmq";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import type { ResumeParsingJobData } from "@hrms/queue";
 import { prisma } from "@hrms/db";
 import { logger, requestIdStorage } from "@hrms/logger";
 import pdfParse from "pdf-parse";
+import { s3Client, S3_BUCKET, S3_URL_PREFIX } from "../config/s3";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5-coder:14b";
 const SCORE_THRESHOLD = 7;
 
-async function extractTextFromBase64Pdf(base64: string): Promise<string> {
-  const raw = base64.includes(",") ? base64.split(",")[1] : base64;
-  const buffer = Buffer.from(raw, "base64");
+async function fetchPdfFromS3(fileUrl: string): Promise<Buffer> {
+  const key = fileUrl.slice(S3_URL_PREFIX.length);
+  const { Body } = await s3Client.send(
+    new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }),
+  );
+  return Buffer.from(await Body!.transformToByteArray());
+}
+
+// Applications submitted before the S3 migration still have `resume` stored
+// as a base64 data URL — new ones store an S3 object URL instead.
+async function extractResumeText(resume: string): Promise<string> {
+  const buffer = resume.startsWith("data:")
+    ? Buffer.from(resume.split(",")[1], "base64")
+    : await fetchPdfFromS3(resume);
   const result = await pdfParse(buffer);
   return result.text.trim();
 }
@@ -105,7 +118,7 @@ async function processJob(job: Job<ResumeParsingJobData>) {
 
   logger.info(`[resumeParser] Scoring application ${applicationId}`);
 
-  const resumeText = await extractTextFromBase64Pdf(application.resume);
+  const resumeText = await extractResumeText(application.resume);
   if (!resumeText) {
     logger.warn(
       `[resumeParser] Empty PDF text for application ${applicationId}`,

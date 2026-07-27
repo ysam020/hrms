@@ -6,6 +6,7 @@ const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true };
 
 const mockPost = vi.fn();
 const mockGet = vi.fn();
+const mockPut = vi.fn();
 const mockNavigate = vi.fn();
 
 vi.mock("@web/core/http/axiosConfig", () => ({
@@ -15,12 +16,43 @@ vi.mock("@web/core/http/axiosConfig", () => ({
   },
 }));
 
+// The resume upload PUTs straight to S3 with plain axios (not apiClient),
+// bypassing the presigned URL's auth interceptors — see
+// JobApplicationPage.tsx's handleFileChange.
+vi.mock("axios", () => ({
+  default: {
+    put: (...args: any[]) => mockPut(...args),
+  },
+}));
+
 vi.mock("react-router-dom", async () => {
   const real = await vi.importActual<any>("react-router-dom");
   return { ...real, useNavigate: () => mockNavigate };
 });
 
 import JobApplicationPage from "@web/pages/JobApplicationPage";
+
+const RESUME_UPLOAD_RESPONSE = {
+  data: {
+    data: {
+      url: "https://s3.example.com/presigned-put-url",
+      fileUrl: "https://s3.example.com/job_applications/tenant/key.pdf",
+    },
+  },
+};
+
+// apiClient.post is shared between the resume-upload-url request (fired
+// from handleFileChange) and the apply-for-job submission — this keeps the
+// former on a fixed successful shape while letting each test control the
+// latter's outcome independently.
+const mockApplyForJob = (impl: (...args: any[]) => Promise<any>) => {
+  mockPost.mockImplementation((url: string, ...rest: any[]) => {
+    if (typeof url === "string" && url.includes("resume-upload-url")) {
+      return Promise.resolve(RESUME_UPLOAD_RESPONSE);
+    }
+    return impl(url, ...rest);
+  });
+};
 
 const renderPage = (slug = "acme-co", id = "job1") =>
   render(
@@ -54,12 +86,11 @@ const fillRequiredFields = async () => {
   );
   // The filename label updates synchronously in handleFileChange, but the
   // "resume" field itself (required by validation) is only populated once
-  // jsdom's FileReader.readAsDataURL finishes asynchronously via its own
-  // onloadend callback. Waiting on the Submit button's real disabled state
-  // (see the race-condition fix in JobApplicationPage.tsx) ties this to the
-  // actual condition instead of a blind fixed-duration timer, which would
-  // add real wall-clock time to the suite and risks being too short under
-  // CI load anyway.
+  // the presigned-upload request and the S3 PUT both resolve. Waiting on
+  // the Submit button's real disabled state (see the race-condition fix in
+  // JobApplicationPage.tsx) ties this to the actual condition instead of a
+  // blind fixed-duration timer, which would add real wall-clock time to the
+  // suite and risks being too short under CI load anyway.
   await waitFor(() =>
     expect(
       screen.getByRole("button", { name: /submit application/i }),
@@ -71,10 +102,13 @@ describe("JobApplicationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGet.mockResolvedValue({ data: { data: null } });
+    mockPut.mockResolvedValue({ status: 200 });
+    mockApplyForJob(() =>
+      Promise.resolve({ data: { message: "Application submitted" } }),
+    );
   });
 
   it("submits to the slug-scoped apply-for-job endpoint", async () => {
-    mockPost.mockResolvedValue({ data: { message: "Application submitted" } });
     renderPage("acme-co", "job1");
 
     await fillRequiredFields();
@@ -90,7 +124,6 @@ describe("JobApplicationPage", () => {
   });
 
   it("shows the success screen after a successful submission", async () => {
-    mockPost.mockResolvedValue({ data: { message: "Application submitted" } });
     renderPage();
 
     await fillRequiredFields();
@@ -104,7 +137,6 @@ describe("JobApplicationPage", () => {
   });
 
   it("navigates back to the same tenant's careers list from the success screen", async () => {
-    mockPost.mockResolvedValue({ data: { message: "Application submitted" } });
     renderPage("acme-co");
 
     await fillRequiredFields();
@@ -122,9 +154,11 @@ describe("JobApplicationPage", () => {
   });
 
   it("shows the server error message when submission fails", async () => {
-    mockPost.mockRejectedValue({
-      response: { data: { message: "This careers link doesn't exist." } },
-    });
+    mockApplyForJob(() =>
+      Promise.reject({
+        response: { data: { message: "This careers link doesn't exist." } },
+      }),
+    );
     renderPage();
 
     await fillRequiredFields();
@@ -179,51 +213,35 @@ describe("JobApplicationPage", () => {
   });
 
   describe("resume upload", () => {
-    it("disables Submit while the file is still being read, closing the race window", async () => {
-      // jsdom's real FileReader resolves too fast (within the same
-      // microtask flush userEvent.upload awaits) to ever observe the
-      // "still reading" window directly — replace it with a
-      // controllable one so the test can assert on that exact moment,
-      // the same way a slow device in the field would experience it.
-      const RealFileReader = global.FileReader;
-      let resolveRead: () => void;
-      class DelayedFileReader {
-        result: string | null = null;
-        onloadend: (() => void) | null = null;
-        onerror: (() => void) | null = null;
-        readAsDataURL() {
-          new Promise<void>((resolve) => {
-            resolveRead = resolve;
-          }).then(() => {
-            this.result = "data:application/pdf;base64,ZmFrZQ==";
-            this.onloadend?.();
-          });
-        }
-      }
-      // @ts-expect-error - test double, not a full FileReader
-      global.FileReader = DelayedFileReader;
+    it("disables Submit while the file is still uploading, closing the race window", async () => {
+      // Hold the presigned-upload request open so the test can assert on
+      // the "still uploading" window directly, the same way a slow
+      // connection in the field would experience it.
+      let resolveUpload: (value: unknown) => void;
+      mockPost.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveUpload = resolve;
+          }),
+      );
 
-      try {
-        renderPage();
-        const file = new File(["resume"], "resume.pdf", {
-          type: "application/pdf",
-        });
-        const input = document.getElementById(
-          "resume-upload",
-        ) as HTMLInputElement;
+      renderPage();
+      const file = new File(["resume"], "resume.pdf", {
+        type: "application/pdf",
+      });
+      const input = document.getElementById(
+        "resume-upload",
+      ) as HTMLInputElement;
 
-        await userEvent.upload(input, file);
+      await userEvent.upload(input, file);
 
-        const submitButton = screen.getByRole("button", {
-          name: /submit application/i,
-        });
-        expect(submitButton).toBeDisabled();
+      const submitButton = screen.getByRole("button", {
+        name: /submit application/i,
+      });
+      expect(submitButton).toBeDisabled();
 
-        resolveRead!();
-        await waitFor(() => expect(submitButton).not.toBeDisabled());
-      } finally {
-        global.FileReader = RealFileReader;
-      }
+      resolveUpload!(RESUME_UPLOAD_RESPONSE);
+      await waitFor(() => expect(submitButton).not.toBeDisabled());
     });
 
     it("rejects a non-PDF file with a client-side error, without touching formik's resume field", async () => {

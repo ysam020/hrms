@@ -1,5 +1,9 @@
 import { Request, Response } from "express";
 import dayjs from "dayjs";
+import path from "path";
+import { randomUUID } from "crypto";
+import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { recruitment } from "@hrms/proto";
 import { recruitmentClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
@@ -7,6 +11,7 @@ import {
   prismaWithTenant as prisma,
   prisma as masterPrisma,
   canonicalizeEmail,
+  getTenantId,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
@@ -27,6 +32,7 @@ import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
 import { getActiveSettings, SETTINGS_DEFAULTS } from "./tenantSettings";
 import { createInterviewMeetEvent } from "../services/googleCalendar";
 import { buildOfferLetterPdf } from "./offerLetter";
+import { s3Client, S3_BUCKET, S3_URL_PREFIX, s3FileUrl } from "../config/s3";
 
 export async function viewJobOpenings(req: Request, res: Response) {
   try {
@@ -191,6 +197,22 @@ export async function applyForJob(req: Request, res: Response) {
   try {
     const { name, mobile, email, aadharNo, jobTitleId, jobTitle, resume } =
       req.body;
+
+    // resume is populated client-side from the presigned-upload response
+    // (getResumeUploadUrl below), never uploaded inline — reject anything
+    // that isn't a URL to this tenant's own job_applications/ prefix so an
+    // anonymous caller can't stuff an arbitrary string into the field.
+    if (
+      resume &&
+      !String(resume).startsWith(
+        s3FileUrl(`job_applications/${getTenantId()}/`),
+      )
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Invalid resume upload.",
+      });
+    }
+
     const response = await grpcCall(recruitmentClient, "applyForJob", {
       jobTitleId: jobTitleId || jobTitle || "",
       name: name || "",
@@ -202,6 +224,99 @@ export async function applyForJob(req: Request, res: Response) {
     const resp = response as any;
     return apiResponse(res, grpcToHttpStatus(resp.status), resp);
   } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
+/**
+ * POST /public/careers/:slug/resume-upload-url
+ * Public presigned-upload endpoint for the careers-page application form —
+ * mirrors getPresignedUrl in handlers/general.ts, but scoped strictly to a
+ * single PDF resume and reachable without authentication (a candidate has no
+ * JWT). Keyed by the resolved tenant's id (set by resolvePublicTenant), not
+ * the public slug, so applyForJob's ownership check above and
+ * getResumeViewUrl below can compare stable ids.
+ */
+export async function getResumeUploadUrl(req: Request, res: Response) {
+  try {
+    const { fileName, fileType } = req.body;
+
+    if (!fileName || !fileType) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "fileName and fileType are required",
+      });
+    }
+
+    const ext = path.extname(fileName).toLowerCase();
+    if (ext !== ".pdf" || fileType !== "application/pdf") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Only PDF files are accepted",
+      });
+    }
+
+    const key = `job_applications/${getTenantId()}/${randomUUID()}.pdf`;
+
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      ContentType: fileType,
+    });
+    const url = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Pre-signed URL generated",
+      data: { url, fileUrl: s3FileUrl(key) },
+    });
+  } catch (error: unknown) {
+    logger.error("resume-upload-url error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
+ * POST /resume-view-url
+ * The bucket has no public read access, so a job application's raw resume
+ * URL 403s if loaded directly. Authorization is tenant-based rather than
+ * ownership-based (applicants aren't system users) — the key embeds the
+ * owning tenant's id, checked against the caller's own tenantId.
+ */
+export async function getResumeViewUrl(req: AuthRequest, res: Response) {
+  try {
+    const { fileUrl } = req.body as { fileUrl?: string };
+    if (
+      !fileUrl ||
+      typeof fileUrl !== "string" ||
+      !fileUrl.startsWith(S3_URL_PREFIX)
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "A valid fileUrl is required",
+      });
+    }
+
+    const key = decodeURIComponent(fileUrl.slice(S3_URL_PREFIX.length));
+    if (!key.startsWith("job_applications/") || key.includes("..")) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Not allowed",
+      });
+    }
+
+    // job_applications/{tenantId}/{file}
+    const ownerTenantId = key.split("/")[1];
+    if (ownerTenantId !== req.user!.tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "You don't have permission to view this file.",
+      });
+    }
+
+    const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+    const url = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Pre-signed view URL generated",
+      data: { url },
+    });
+  } catch (error: unknown) {
+    logger.error("resume-view-url error:", { error });
     return handleError(res, error);
   }
 }
