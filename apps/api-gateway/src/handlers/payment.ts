@@ -13,6 +13,25 @@ import { notify } from "@hrms/notifications";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { buildInvoicePdf } from "./invoice";
+import {
+  PLAN_PRICING,
+  TIER_EMPLOYEE_LIMITS,
+  amountPaise,
+  monthlyEquivalentPaise,
+  type PlanTier,
+  type Billing,
+} from "../config/billingPlans";
+import { getActiveEmployeeCount, getSeatStatus } from "../utils/planLimits";
+
+function isPlanTier(v: unknown): v is PlanTier {
+  return v === "starter" || v === "growth" || v === "enterprise";
+}
+
+const TIER_LABEL: Record<PlanTier, string> = {
+  starter: "Starter",
+  growth: "Growth",
+  enterprise: "Enterprise",
+};
 
 // Resolves the tenant owner's email — the billing relationship is with
 // whoever created the org (TenantMembership role "owner"), not necessarily
@@ -33,25 +52,18 @@ async function getTenantOwnerEmail(
   return { email: owner.email, username: owner.username };
 }
 
-// ₹999/month · ₹9,999/year (in paise)
-const BILLING_CONFIG = {
-  monthly: {
-    amount: 99900,
-    period: "monthly" as const,
-    interval: 1,
-    totalCount: 120,
-  },
-  annual: {
-    amount: 999900,
-    period: "yearly" as const,
-    interval: 1,
-    totalCount: 10,
-  },
-} as const;
+// Razorpay wants a subscription's total renewal count up front; 120 months
+// (10 years) for monthly, 10 years for annual — effectively "until cancelled".
+function totalCountFor(billing: Billing): number {
+  return billing === "annual" ? 10 : 120;
+}
 
 // Hot-path in-memory cache — avoids Redis round-trips within a single process
 // lifetime. Redis (see tenantTokenStore) is the durable layer that survives
-// restarts so we never create orphaned plans in Razorpay.
+// restarts so we never create orphaned plans in Razorpay. Keyed by
+// "<tier>:<billing>" since each (tier, billing) pair is its own flat-fee
+// Razorpay Plan — quantity is always 1 (there's no per-employee multiplier;
+// three fixed-price slabs by headcount, not per-seat billing).
 const planIdMemCache: Record<string, string> = {};
 
 // ─── Payment-method helpers ───────────────────────────────────────────────────
@@ -107,57 +119,78 @@ export function getRazorpay() {
 // ─── Plan ID — two-level cache (memory → Redis → Razorpay API) ───────────────
 
 async function getOrCreatePlanId(
-  billing: "monthly" | "annual",
+  tier: PlanTier,
+  billing: Billing,
 ): Promise<string> {
+  const cacheKey = `${tier}:${billing}`;
+
   // 1. In-memory (hot path, same process restart)
-  if (planIdMemCache[billing]) return planIdMemCache[billing];
+  if (planIdMemCache[cacheKey]) return planIdMemCache[cacheKey];
 
   // 2. Redis (survives restarts — plan IDs are permanent in Razorpay)
   const { getRazorpayPlanId, setRazorpayPlanId } =
     await import("../services/tenantTokenStore");
-  const cached = await getRazorpayPlanId(billing);
+  const cached = await getRazorpayPlanId(cacheKey);
   if (cached) {
-    planIdMemCache[billing] = cached;
+    planIdMemCache[cacheKey] = cached;
     return cached;
   }
 
-  // 3. Create a new plan in Razorpay (only runs once per billing period per env)
-  const cfg = BILLING_CONFIG[billing];
+  // 3. Create a new plan in Razorpay (only runs once per tier/billing per env)
+  // unit_amount is the tier's whole flat price — quantity is always 1.
+  const unitAmount = PLAN_PRICING[tier][billing];
   const rzp = getRazorpay();
 
   const plan = await (rzp.plans.create as any)({
-    period: cfg.period,
-    interval: cfg.interval,
+    period: billing === "annual" ? "yearly" : "monthly",
+    interval: 1,
     item: {
-      name: billing === "monthly" ? "HRMS Pro – Monthly" : "HRMS Pro – Annual",
-      amount: cfg.amount,
-      unit_amount: cfg.amount,
+      name: `HRMS ${TIER_LABEL[tier]} – ${
+        billing === "annual" ? "Annual" : "Monthly"
+      }`,
+      amount: unitAmount,
+      unit_amount: unitAmount,
       currency: "INR",
     },
   });
 
-  planIdMemCache[billing] = plan.id;
-  await setRazorpayPlanId(billing, plan.id);
-  logger.info(`Razorpay plan created (${billing}): ${plan.id}`);
+  planIdMemCache[cacheKey] = plan.id;
+  await setRazorpayPlanId(cacheKey, plan.id);
+  logger.info(`Razorpay plan created (${cacheKey}): ${plan.id}`);
   return plan.id;
 }
 
 // ─── POST /payment/create-subscription ───────────────────────────────────────
 
 export async function createSubscription(req: AuthRequest, res: Response) {
-  const { userId } = req.user!;
+  const { userId, tenantId } = req.user!;
   try {
-    const { billing } = req.body as { billing?: "monthly" | "annual" };
-    const period = billing === "annual" ? "annual" : "monthly";
-    const cfg = BILLING_CONFIG[period];
+    const { billing, planTier } = req.body as {
+      billing?: Billing;
+      planTier?: PlanTier;
+    };
+    const period: Billing = billing === "annual" ? "annual" : "monthly";
 
-    const planId = await getOrCreatePlanId(period);
+    // Pre-tenant (org-setup) signups pick a tier explicitly (derived from the
+    // company-size step); an existing tenant renewing (Subscription.tsx's
+    // "Renew" flow, post-expiry) keeps whatever tier it already had rather
+    // than silently resetting to starter if the field is omitted.
+    let tier: PlanTier = isPlanTier(planTier) ? planTier : "starter";
+    if (!isPlanTier(planTier) && tenantId) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { planTier: true },
+      });
+      if (isPlanTier(tenant?.planTier)) tier = tenant!.planTier as PlanTier;
+    }
+
+    const planId = await getOrCreatePlanId(tier, period);
     const rzp = getRazorpay();
 
     const subscription = await (rzp.subscriptions.create as any)({
       plan_id: planId,
       customer_notify: 1,
-      total_count: cfg.totalCount,
+      total_count: totalCountFor(period),
       quantity: 1,
     });
 
@@ -165,17 +198,44 @@ export async function createSubscription(req: AuthRequest, res: Response) {
     // client-side credentials if the tab closes mid-request.
     const { storePendingSubscription } =
       await import("../services/tenantTokenStore");
-    await storePendingSubscription(userId, subscription.id, period);
+    await storePendingSubscription(userId, subscription.id, period, tier);
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: {
         subscriptionId: subscription.id,
         keyId: process.env.RAZORPAY_KEY_ID,
         billing: period,
+        planTier: tier,
       },
     });
   } catch (error: unknown) {
     logger.error("createSubscription error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// ─── GET /payment/plan-pricing ────────────────────────────────────────────────
+// Authenticated-only (not requireTenant) — needed by the org-setup PlanStep
+// before a tenant exists, and by Subscription.tsx afterwards. The frontend
+// never hardcodes these numbers independent of what the backend will actually
+// charge.
+
+export async function getPlanPricing(req: AuthRequest, res: Response) {
+  const { tenantId } = req.user!;
+  try {
+    let activeEmployeeCount = 0;
+    if (tenantId) {
+      activeEmployeeCount = await getActiveEmployeeCount(tenantId);
+    }
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: {
+        pricing: PLAN_PRICING,
+        tierEmployeeLimits: TIER_EMPLOYEE_LIMITS,
+        activeEmployeeCount,
+      },
+    });
+  } catch (error: unknown) {
+    logger.error("getPlanPricing error:", { error });
     return handleError(res, error);
   }
 }
@@ -329,6 +389,275 @@ export async function reactivateSubscription(req: AuthRequest, res: Response) {
   }
 }
 
+// ─── POST /payment/change-plan ────────────────────────────────────────────────
+//
+// Tier changes within the same billing period are the only case that gets an
+// immediate, prorated charge (billing-period changes always land at the next
+// renewal — see the plan doc's "scope-reducing assumptions"). This endpoint
+// only computes what's needed and, for the immediate-upgrade path, returns an
+// order for the frontend to collect payment on — it never mutates the tenant
+// itself; confirmPlanUpgrade does that once payment is verified.
+
+export async function changePlan(req: AuthRequest, res: Response) {
+  const { tenantId } = req.user!;
+  try {
+    const { planTier, billing } = req.body as {
+      planTier?: PlanTier;
+      billing?: Billing;
+    };
+    if (!isPlanTier(planTier)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "A valid planTier ('starter', 'growth', or 'enterprise') is required.",
+      });
+    }
+    if (billing !== "monthly" && billing !== "annual") {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "A valid billing ('monthly' or 'annual') is required.",
+      });
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId! },
+      select: {
+        planTier: true,
+        billing: true,
+        pendingPlanTier: true,
+        razorpaySubscriptionId: true,
+        subscriptionStatus: true,
+        planExpiresAt: true,
+      },
+    });
+    if (!tenant?.razorpaySubscriptionId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "No subscription found.",
+      });
+    }
+    if (!["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Subscription is not active.",
+      });
+    }
+
+    const currentTier: PlanTier = isPlanTier(tenant.planTier)
+      ? tenant.planTier
+      : "starter";
+    const currentBilling: Billing =
+      tenant.billing === "annual" ? "annual" : "monthly";
+
+    // Requesting the currently-active tier/billing is only a genuine no-op
+    // if nothing is staged — if a downgrade/billing-change IS pending, this
+    // is how the frontend cancels it (re-points Razorpay's cycle_end
+    // schedule back at the plan that's actually still active).
+    if (
+      planTier === currentTier &&
+      billing === currentBilling &&
+      !tenant.pendingPlanTier
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "You're already on this plan.",
+      });
+    }
+
+    const limit = TIER_EMPLOYEE_LIMITS[planTier];
+    if (limit !== null) {
+      const activeEmployeeCount = await getActiveEmployeeCount(tenantId!);
+      if (activeEmployeeCount > limit) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `${TIER_LABEL[planTier]} supports up to ${limit} employees. You currently have ${activeEmployeeCount} — reduce headcount or choose a higher tier.`,
+        });
+      }
+    }
+
+    const newPlanId = await getOrCreatePlanId(planTier, billing);
+
+    // Billing-period changes (with or without a tier change) always defer to
+    // the next renewal — no proration. Only a same-billing tier change is
+    // eligible for the immediate/prorated path.
+    const billingUnchanged = billing === currentBilling;
+    const isUpgrade =
+      billingUnchanged &&
+      monthlyEquivalentPaise(planTier, billing) >
+        monthlyEquivalentPaise(currentTier, currentBilling);
+
+    const rzp = getRazorpay();
+
+    if (billingUnchanged && isUpgrade) {
+      const currentAmount = amountPaise(currentTier, currentBilling);
+      const newAmount = amountPaise(planTier, billing);
+      const now = new Date();
+      const cycleDays = currentBilling === "annual" ? 365 : 30;
+      const remainingMs = tenant.planExpiresAt
+        ? tenant.planExpiresAt.getTime() - now.getTime()
+        : 0;
+      const remainingDays = Math.max(
+        Math.ceil(remainingMs / (24 * 60 * 60 * 1000)),
+        0,
+      );
+      const proratedPaise = Math.max(
+        Math.round(((newAmount - currentAmount) * remainingDays) / cycleDays),
+        0,
+      );
+
+      if (proratedPaise <= 0) {
+        // Remaining cycle is worth ~nothing (e.g. renewal is today) — just
+        // swap immediately with no charge.
+        await (rzp.subscriptions.update as any)(tenant.razorpaySubscriptionId, {
+          plan_id: newPlanId,
+          quantity: 1,
+          schedule_change_at: "now",
+        });
+        await prisma.tenant.update({
+          where: { id: tenantId! },
+          data: { planTier, billing },
+        });
+        return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+          data: { requiresPayment: false },
+          message: "Plan changed.",
+        });
+      }
+
+      const order = await (rzp.orders as any).create({
+        amount: proratedPaise,
+        currency: "INR",
+        receipt: `upgrade_${tenantId}_${now.getTime()}`,
+        notes: {
+          tenantId: tenantId!,
+          planTier,
+          billing,
+          purpose: "plan_upgrade_proration",
+        },
+      });
+
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        data: {
+          requiresPayment: true,
+          orderId: order.id,
+          amount: proratedPaise,
+          keyId: process.env.RAZORPAY_KEY_ID,
+          planTier,
+          billing,
+        },
+      });
+    }
+
+    // Downgrade, or any billing-period change — scheduled for next cycle,
+    // Razorpay applies it automatically, no charge collected now.
+    await (rzp.subscriptions.update as any)(tenant.razorpaySubscriptionId, {
+      plan_id: newPlanId,
+      quantity: 1,
+      schedule_change_at: "cycle_end",
+    });
+    await prisma.tenant.update({
+      where: { id: tenantId! },
+      data: {
+        pendingPlanTier: planTier,
+        pendingBilling: billing,
+        pendingPlanChangeAt: tenant.planExpiresAt,
+      },
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { requiresPayment: false, effectiveAt: tenant.planExpiresAt },
+      message: `Your plan will change on ${tenant.planExpiresAt?.toLocaleDateString("en-IN") ?? "your next renewal"}.`,
+    });
+  } catch (error: unknown) {
+    logger.error("changePlan error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// ─── POST /payment/confirm-plan-upgrade ───────────────────────────────────────
+//
+// Completes the immediate-upgrade path from changePlan once the one-time
+// prorated Razorpay order has actually been paid. Verifies the standard
+// Razorpay Orders signature — HMAC(order_id|payment_id) — distinct from the
+// subscription signature (HMAC(payment_id|subscription_id)) used elsewhere in
+// this file.
+
+export async function confirmPlanUpgrade(req: AuthRequest, res: Response) {
+  const { tenantId } = req.user!;
+  try {
+    const {
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+      planTier,
+      billing,
+    } = req.body as {
+      razorpayOrderId?: string;
+      razorpayPaymentId?: string;
+      razorpaySignature?: string;
+      planTier?: PlanTier;
+      billing?: Billing;
+    };
+
+    if (
+      !razorpayOrderId ||
+      !razorpayPaymentId ||
+      !razorpaySignature ||
+      !isPlanTier(planTier) ||
+      (billing !== "monthly" && billing !== "annual")
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Payment details are required.",
+      });
+    }
+
+    const expected = createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .digest("hex");
+    if (expected !== razorpaySignature) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Payment verification failed.",
+      });
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId! },
+      select: { razorpaySubscriptionId: true },
+    });
+    if (!tenant?.razorpaySubscriptionId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "No subscription found.",
+      });
+    }
+
+    const newPlanId = await getOrCreatePlanId(planTier, billing);
+
+    const rzp = getRazorpay();
+    // schedule_change_at: "now" applies the new plan starting immediately,
+    // for all future cycles — planExpiresAt is untouched, so the renewal
+    // date doesn't move, only the price from here on does.
+    await (rzp.subscriptions.update as any)(tenant.razorpaySubscriptionId, {
+      plan_id: newPlanId,
+      quantity: 1,
+      schedule_change_at: "now",
+    });
+
+    await prisma.tenant.update({
+      where: { id: tenantId! },
+      data: {
+        planTier,
+        billing,
+        pendingPlanTier: null,
+        pendingBilling: null,
+        pendingPlanChangeAt: null,
+      },
+    });
+
+    logger.info(
+      `Plan upgrade confirmed for tenant ${tenantId}: ${planTier}/${billing}`,
+    );
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Plan upgraded.",
+    });
+  } catch (error: unknown) {
+    logger.error("confirmPlanUpgrade error:", { error });
+    return handleError(res, error);
+  }
+}
+
 // ─── POST /payment/webhook  — Razorpay sends events here ─────────────────────
 //
 // This handler is mounted in server.ts BEFORE express.json() and the CSRF
@@ -416,7 +745,21 @@ export async function handleWebhook(req: Request, res: Response) {
             tenant.planExpiresAt && tenant.planExpiresAt > now
               ? tenant.planExpiresAt
               : now;
-          const billing = tenant.billing === "annual" ? "annual" : "monthly";
+
+          // If a downgrade/billing-change was scheduled (changePlan, "cycle_end"),
+          // Razorpay has already started charging the new terms by the time this
+          // charge lands — this is the moment our own DB catches up and clears it.
+          const hasPendingChange = Boolean(tenant.pendingPlanTier);
+          const pendingOrCurrentTier =
+            tenant.pendingPlanTier ?? tenant.planTier;
+          const effectiveTier: PlanTier = isPlanTier(pendingOrCurrentTier)
+            ? pendingOrCurrentTier
+            : "starter";
+          const billing: Billing =
+            (tenant.pendingBilling ?? tenant.billing) === "annual"
+              ? "annual"
+              : "monthly";
+
           const next = new Date(base);
           billing === "annual"
             ? next.setFullYear(next.getFullYear() + 1)
@@ -428,11 +771,23 @@ export async function handleWebhook(req: Request, res: Response) {
             ? extractPaymentMethodFromEntity(pmEntity)
             : null;
 
+          // Informational only now (flat-fee slabs, not per-seat billing) —
+          // carried onto the invoice so it shows headcount at charge time.
+          const employeeCount = await getActiveEmployeeCount(tenant.id);
+
           await prisma.tenant.update({
             where: { id: tenant.id },
             data: {
               subscriptionStatus: "active",
               planExpiresAt: next,
+              planTier: effectiveTier,
+              billing,
+              lastBilledQuantity: employeeCount,
+              ...(hasPendingChange && {
+                pendingPlanTier: null,
+                pendingBilling: null,
+                pendingPlanChangeAt: null,
+              }),
               ...(pmInfo && {
                 paymentMethod: pmInfo.method,
                 paymentMethodSummary: pmInfo.summary,
@@ -449,6 +804,8 @@ export async function handleWebhook(req: Request, res: Response) {
               const invoicePdf = buildInvoicePdf({
                 tenantName: tenant.name,
                 plan: tenant.plan ?? "pro",
+                planTier: effectiveTier,
+                quantity: employeeCount,
                 billing,
                 amountPaise,
                 paymentMethodSummary:

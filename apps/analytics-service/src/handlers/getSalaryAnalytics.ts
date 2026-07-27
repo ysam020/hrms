@@ -16,22 +16,45 @@ export const getSalaryAnalytics = async (
     const cached = await cacheManager.get(cacheKey);
     if (cached) return callback(null, cached);
 
-    const where: any = {};
-    if (year) where.year = parseInt(String(year));
+    // Actual disbursed payroll cost by month — sourced from PayrollLineItem
+    // (the attendance-prorated amount actually paid), not SalaryStructure
+    // (which only holds the HR-configured salary and is never touched by
+    // disbursement; see payrollDisbursement.ts). Mongo's Prisma connector
+    // can't join PayrollRun.year/month into a PayrollLineItem aggregate, so
+    // this resolves in two queries and aggregates in JS, same pattern used
+    // elsewhere for "latest row per user" (see analyticsRoutes.ts).
+    const runWhere: any = { status: "disbursed" };
+    if (year) runWhere.year = parseInt(String(year));
 
-    const salaries = await prisma.salaryStructure.findMany({
-      where,
-      select: { netPayable: true, month: true, year: true },
-      orderBy: [{ year: "asc" }, { month: "asc" }],
+    const runs = await prisma.payrollRun.findMany({
+      where: runWhere,
+      select: { id: true, month: true, year: true },
+    });
+    const runById = new Map(runs.map((r) => [r.id, r]));
+
+    const lineItems = await prisma.payrollLineItem.findMany({
+      where: { payrollRunId: { in: runs.map((r) => r.id) } },
+      select: { payrollRunId: true, netPayable: true },
     });
 
-    const total = salaries.reduce((sum, s) => sum + (s.netPayable ?? 0), 0);
+    const totalByPeriod = new Map<string, number>();
+    for (const li of lineItems) {
+      const run = runById.get(li.payrollRunId);
+      if (!run) continue;
+      const key = `${run.year}-${String(run.month).padStart(2, "0")}`;
+      totalByPeriod.set(
+        key,
+        (totalByPeriod.get(key) ?? 0) + (li.netPayable ?? 0),
+      );
+    }
 
-    const data = salaries.map((s) => ({
-      label: `${s.year}-${String(s.month).padStart(2, "0")}`,
-      value: s.netPayable ?? 0,
-      date: `${s.year}-${String(s.month).padStart(2, "0")}`,
+    const sortedKeys = [...totalByPeriod.keys()].sort();
+    const data = sortedKeys.map((key) => ({
+      label: key,
+      value: totalByPeriod.get(key)!,
+      date: key,
     }));
+    const total = data.reduce((sum, d) => sum + d.value, 0);
 
     const response = {
       message: MESSAGES.SALARY_ANALYTICS_FETCHED,

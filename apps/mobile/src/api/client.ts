@@ -114,6 +114,13 @@ const forceLogout = () => {
   _onUnauthorized?.();
 };
 
+// A 401 response means the server actively rejected the refresh token —
+// there's really no session left. Anything else (network error, timeout)
+// says nothing about whether the session is still valid, so it must not be
+// treated as a logout signal (mirrors apps/web/src/core/http/axiosConfig.ts).
+const isDefiniteAuthFailure = (err: unknown) =>
+  (err as { response?: { status?: number } })?.response?.status === 401;
+
 const apiClient = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -167,8 +174,18 @@ apiClient.interceptors.response.use(
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
           return apiClient(originalRequest);
-        } catch {}
+        } catch (refreshErr) {
+          // Only a definitive rejection means the session is actually gone;
+          // a transient failure of the refresh call itself (network blip)
+          // must not nuke an otherwise-valid session.
+          if (isDefiniteAuthFailure(refreshErr)) {
+            forceLogout();
+          }
+          return Promise.reject(error);
+        }
       }
+      // The retried request (with a freshly refreshed token) still came
+      // back 401 — that's a genuine rejection, not a transient hiccup.
       forceLogout();
       return Promise.reject(error);
     }

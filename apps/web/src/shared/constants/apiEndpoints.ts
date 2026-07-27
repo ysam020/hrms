@@ -292,6 +292,9 @@ const PAYMENT = {
   CANCEL_SUBSCRIPTION: "/payment/cancel-subscription",
   REACTIVATE_SUBSCRIPTION: "/payment/reactivate-subscription",
   PENDING_SETUP: "/payment/pending-setup",
+  PLAN_PRICING: "/payment/plan-pricing",
+  CHANGE_PLAN: "/payment/change-plan",
+  CONFIRM_PLAN_UPGRADE: "/payment/confirm-plan-upgrade",
 };
 
 const TENANT = {

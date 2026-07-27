@@ -21,21 +21,25 @@ export async function storePendingSubscription(
   userId: string,
   subscriptionId: string,
   billing: string,
+  planTier: string = "flat",
 ): Promise<void> {
   await getClient().setex(
     `pending_sub:${userId}`,
     PENDING_SUB_TTL,
-    JSON.stringify({ subscriptionId, billing }),
+    JSON.stringify({ subscriptionId, billing, planTier }),
   );
 }
 
-export async function getPendingSubscription(
-  userId: string,
-): Promise<{ subscriptionId: string; billing: string } | null> {
+export async function getPendingSubscription(userId: string): Promise<{
+  subscriptionId: string;
+  billing: string;
+  planTier: string;
+} | null> {
   const raw = await getClient().get(`pending_sub:${userId}`);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return { planTier: "flat", ...parsed };
   } catch {
     return null;
   }

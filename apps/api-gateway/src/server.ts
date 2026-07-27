@@ -145,6 +145,9 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   // single designated worker (or the sole process outside cluster mode).
   if (!cluster.isWorker || cluster.worker?.id === 1) {
     void ensureMasterIndexes();
+    void import("./migrations/backfillPlanTier").then(({ backfillPlanTier }) =>
+      backfillPlanTier(),
+    );
     startSubscriptionReconciler();
     startPayrollDisbursementWorker();
   }

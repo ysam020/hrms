@@ -31,6 +31,12 @@ jest.mock("@hrms/db", () => {
     tenantMembership: {
       findFirst: jest.fn(),
     },
+    // Read by getSeatStatus (utils/planLimits.ts) via the plain `prisma`
+    // export — editEmployeeDetails's seat-limit guard on reactivation calls
+    // it whenever employeeStatus flips to "Active".
+    tenant: {
+      findUnique: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -91,6 +97,7 @@ const mockIsPrivileged = isPrivileged as jest.Mock;
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
 const mockUserCount = (prisma as any).user.count as jest.Mock;
+const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 const mockUserGroupBy = (prisma as any).user.groupBy as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserAggregateRaw = (prisma as any).user.aggregateRaw as jest.Mock;
@@ -115,6 +122,13 @@ describe("employeeHandlers", () => {
     (cacheManager.set as jest.Mock).mockResolvedValue(undefined);
     (cacheManager.invalidatePattern as jest.Mock).mockResolvedValue(undefined);
     (cacheManager.delete as jest.Mock).mockResolvedValue(undefined);
+    // Default: plenty of headroom under the starter tier's 25-employee cap,
+    // so editEmployeeDetails's seat-limit guard (getSeatStatus) doesn't block
+    // tests that aren't specifically exercising that guard. employeeInsights
+    // tests below queue their own mockResolvedValueOnce sequences, which take
+    // priority over this fallback.
+    mockUserCount.mockResolvedValue(5);
+    mockTenantFindUnique.mockResolvedValue({ planTier: "starter" });
   });
 
   describe("editEmployeeDetails", () => {

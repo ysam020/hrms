@@ -470,38 +470,15 @@ export async function runPayrollDisbursement(
       }
     }
 
-    // Generate payslip — upsert a SalaryStructure record per employee so
-    // that GET /payroll/my-payslips shows the disbursed salary immediately.
-    const payslipData = {
-      tenantId: tenantId ?? undefined,
-      userId: item.userId,
-      month: runMonth,
-      year: runYear,
-      grossSalary: item.grossSalary,
-      basicPay: item.basicPay ?? null,
-      hra: item.hra ?? null,
-      conveyance: item.conveyance ?? null,
-      pf: item.pf ?? null,
-      esi: item.esi ?? null,
-      pt: item.pt ?? null,
-      tds: item.tds ?? null,
-      deductions: item.totalDeductions,
-      advanceDeduction: item.advanceDeduction ?? 0,
-      grossEarnings: item.grossSalary,
-      netPayable: item.netPayable,
-    };
-    await prisma.salaryStructure.upsert({
-      where: {
-        tenantId_userId_year_month: {
-          tenantId: tenantId!,
-          userId: item.userId,
-          month: runMonth,
-          year: runYear,
-        },
-      },
-      create: payslipData,
-      update: payslipData,
-    });
+    // The payslip itself is served straight from this PayrollLineItem (see
+    // getMyPayslips in payroll.ts and the disbursed-period fallback in
+    // salary-service's getPayslip.ts) — SalaryStructure is deliberately left
+    // untouched here. It previously got upserted with this same attendance-
+    // prorated data, which meant a month with LOP silently became the new
+    // "configured" salary for every later lookup (next month's payroll
+    // input, the next performance-review raise's base, etc.), permanently
+    // compounding an attendance shortfall into the employee's ongoing pay.
+    // SalaryStructure now only ever reflects what HR/a raise configured.
 
     await prisma.payrollLineItem.update({
       where: { id: item.id },

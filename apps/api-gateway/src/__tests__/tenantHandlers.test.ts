@@ -1,6 +1,11 @@
 jest.mock("@hrms/db", () => {
   const _db = {
-    user: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+    user: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      count: jest.fn(),
+    },
     tenant: { findFirst: jest.fn(), findUnique: jest.fn() },
     tenantJoinRequest: {
       findFirst: jest.fn(),
@@ -86,6 +91,7 @@ const mockSendEmail = sendEmail as jest.Mock;
 const mockSeedSalaryFromHire = seedSalaryFromHire as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
 const mockUserUpdate = (prisma as any).user.update as jest.Mock;
+const mockUserCount = (prisma as any).user.count as jest.Mock;
 const mockJoinRequestFindUnique = (prisma as any).tenantJoinRequest
   .findUnique as jest.Mock;
 const mockJoinRequestUpdate = (prisma as any).tenantJoinRequest
@@ -124,6 +130,10 @@ describe("tenantHandlers — join requests / hired-candidate linking", () => {
     mockMembershipFindFirst.mockResolvedValue(null);
     mockMembershipCreate.mockResolvedValue({});
     mockJoinRequestUpdate.mockResolvedValue({});
+    // Well under the starter tier's 25-employee limit — getSeatStatus's
+    // guard passes by default so existing approval tests aren't affected;
+    // the seat-limit-specific test below overrides this to exercise the guard.
+    mockUserCount.mockResolvedValue(5);
   });
 
   describe("approveJoinRequest", () => {
@@ -182,6 +192,23 @@ describe("tenantHandlers — join requests / hired-candidate linking", () => {
           }),
         }),
       );
+    });
+
+    it("rejects approval when the starter tier's employee limit is already reached", async () => {
+      mockJoinRequestFindUnique.mockResolvedValue(pendingRequest);
+      // tenant.findUnique has no planTier in this mock's default shape,
+      // which getSeatStatus treats as the "starter" default (limit 25).
+      mockUserCount.mockResolvedValue(25);
+      const res = makeRes();
+      await approveJoinRequest(makeReq({ params: { id: "jr-1" } }), res);
+
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.BAD_REQUEST,
+        expect.objectContaining({ code: "SEAT_LIMIT_REACHED" }),
+      );
+      expect(mockMembershipCreate).not.toHaveBeenCalled();
+      expect(mockUserUpdate).not.toHaveBeenCalled();
     });
 
     it("silently links via an exact assignedOfficialEmail match when no jobApplicationId is provided (no dropdown, no HR pick)", async () => {

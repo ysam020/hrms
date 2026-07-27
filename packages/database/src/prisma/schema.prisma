@@ -47,6 +47,25 @@ model Tenant {
   subscriptionStatus     String    @default("active") // active | grace_period | expired
   planActivatedAt        DateTime?
   planExpiresAt          DateTime?
+  // "starter" (1-25 employees) | "growth" (26-100) | "enterprise" (101+) —
+  // three flat-fee slabs, not per-employee billing. See
+  // apps/api-gateway/src/config/billingPlans.ts for the actual prices.
+  planTier               String    @default("starter")
+  // Set when a downgrade or billing-period change is requested — Razorpay is
+  // told to apply it at the end of the current cycle (schedule_change_at:
+  // "cycle_end"), and the subscription.charged webhook (or, as a fallback,
+  // subscriptionReconciler.ts) copies these onto planTier/billing and clears
+  // them once that cycle actually renews. Never applied immediately/prorated —
+  // only tier upgrades on an unchanged billing period are.
+  pendingPlanTier        String?
+  pendingBilling         String?
+  // Mirrors planExpiresAt at the moment the change was scheduled — display-only,
+  // Razorpay's own schedule (not this field) drives when the change lands.
+  pendingPlanChangeAt    DateTime?
+  // Quantity Razorpay last charged on a per_seat subscription — carried onto
+  // the renewal invoice PDF (see invoice.ts) since the webhook only has the
+  // charged amount, not the headcount that produced it.
+  lastBilledQuantity     Int?
   paymentMethod          String?   // card | upi | netbanking | emandate | wallet
   paymentMethodSummary   String?   // e.g. "Visa •••• 1111" | "john@upi" | "HDFC Bank"
   helpPhone              String?

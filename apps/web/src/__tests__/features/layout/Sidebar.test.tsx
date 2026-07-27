@@ -118,8 +118,16 @@ describe("Sidebar", () => {
       totalUnread: 3,
       pendingApprovalsCount: 5,
     });
-    expect(await screen.findByText("3")).toBeInTheDocument();
-    expect(await screen.findByText("5")).toBeInTheDocument();
+    // Every nav icon (including Chat's) is React.lazy + Suspense-wrapped —
+    // under a full parallel test-suite run, the dynamic import can take
+    // longer than findByText's default 1s timeout to resolve even though it
+    // reliably resolves in well under that when this file runs alone.
+    expect(
+      await screen.findByText("3", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("5", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
   it("shows the item's label as text only in mobile mode", () => {

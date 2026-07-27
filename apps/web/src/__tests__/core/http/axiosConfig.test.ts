@@ -342,7 +342,12 @@ describe("response interceptor", () => {
 
   it("forces logout when refresh fails on a 401", async () => {
     mocks.axiosGet.mockResolvedValue({ data: { csrfToken: "csrf-1" } });
-    mocks.axiosPost.mockRejectedValue(new Error("refresh failed"));
+    // The refresh endpoint itself definitively rejecting (401) is what makes
+    // this a real logout — see isDefiniteAuthFailure.
+    mocks.axiosPost.mockRejectedValue({
+      response: { status: 401 },
+      message: "refresh failed",
+    });
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
     setAccessToken(makeJwt(3600));
@@ -355,6 +360,26 @@ describe("response interceptor", () => {
 
     expect(onUnauthorized).toHaveBeenCalled();
     expect(getAccessToken()).toBeNull();
+  });
+
+  it("does not force logout when the refresh call fails transiently (no definitive 401)", async () => {
+    mocks.axiosGet.mockResolvedValue({ data: { csrfToken: "csrf-1" } });
+    // A network blip/timeout on the refresh call itself says nothing about
+    // whether the session is still valid — must not be treated as a logout
+    // signal, only surfaced as this request's own failure.
+    mocks.axiosPost.mockRejectedValue(new Error("network error"));
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    setAccessToken(makeJwt(3600));
+    const error = {
+      response: { status: 401 },
+      config: { headers: {}, _authRetried: false },
+    };
+
+    await expect(responseErrorInterceptor(error)).rejects.toBe(error);
+
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(getAccessToken()).not.toBeNull();
   });
 
   it("forces logout immediately on a second 401 without retrying again", async () => {

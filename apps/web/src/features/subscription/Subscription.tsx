@@ -30,12 +30,27 @@ import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
+import {
+  PLAN_PRICING,
+  TIER_EMPLOYEE_LIMITS,
+  PLAN_TIER_LABELS,
+  amountPaise,
+  formatINR,
+  loadRazorpayScript,
+  type Billing,
+  type PlanTier,
+} from "@web/shared/constants/billing";
 
 interface Tenant {
   id: string;
   name: string;
   plan: string;
   billing: string | null;
+  planTier: string;
+  pendingPlanTier: string | null;
+  pendingBilling: string | null;
+  pendingPlanChangeAt: string | null;
+  activeEmployeeCount: number;
   subscriptionStatus: string;
   planActivatedAt: string | null;
   planExpiresAt: string | null;
@@ -44,41 +59,13 @@ interface Tenant {
   paymentMethodSummary: string | null;
 }
 
-type Billing = "monthly" | "annual";
-
-const PRICES = {
-  monthly: { display: "₹999", sub: "per month", amount: 99900 },
-  annual: {
-    display: "₹9,999",
-    sub: "per year",
-    savings: "Save ₹2,989 (25%)",
-    amount: 999900,
-  },
-};
-
 const PLAN_FEATURES = [
   "All modules (Attendance, Leave, Payroll, Recruitment)",
-  "Unlimited employees",
   "Analytics & Monitoring dashboards",
   "Role-based permissions",
   "Push notifications",
   "Priority support",
 ];
-
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (document.getElementById("razorpay-script")) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "razorpay-script";
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -134,13 +121,22 @@ function paymentMethodLabel(method: string | null): string {
 function statusLabel(s: string) {
   if (s === "active") return "Active";
   if (s === "grace_period") return "Grace Period";
+  if (s === "cancelling") return "Cancelling";
   return "Expired";
 }
 
 function statusColor(s: string): "success" | "warning" | "error" {
   if (s === "active") return "success";
-  if (s === "grace_period") return "warning";
+  if (s === "grace_period" || s === "cancelling") return "warning";
   return "error";
+}
+
+function safeTier(tier: string): PlanTier {
+  return tier === "growth" || tier === "enterprise" ? tier : "starter";
+}
+
+function tierLabel(tier: string): string {
+  return PLAN_TIER_LABELS[safeTier(tier)];
 }
 
 export default function Subscription() {
@@ -153,20 +149,30 @@ export default function Subscription() {
   const [cancelling, setCancelling] = useState(false);
   const [renewBilling, setRenewBilling] = useState<Billing>("monthly");
   const [renewing, setRenewing] = useState(false);
+  const [changeTier, setChangeTier] = useState<PlanTier>("starter");
+  const [changeBilling, setChangeBilling] = useState<Billing>("monthly");
+  const [changingPlan, setChangingPlan] = useState(false);
 
   const renewBillingRef = useRef(renewBilling);
   useEffect(() => {
     renewBillingRef.current = renewBilling;
   }, [renewBilling]);
 
-  useEffect(() => {
+  const fetchTenant = () =>
     apiClient
       .get(API_ENDPOINTS.MY_TENANT)
       .then((res) => {
-        if (res.data?.success) setTenant(res.data.data.tenant);
+        if (res.data?.success) {
+          const t: Tenant = res.data.data.tenant;
+          setTenant(t);
+          setChangeTier(safeTier(t.planTier));
+          setChangeBilling(t.billing === "annual" ? "annual" : "monthly");
+        }
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
+
+  useEffect(() => {
+    fetchTenant().finally(() => setLoading(false));
   }, []);
 
   const handleCancel = async () => {
@@ -236,7 +242,7 @@ export default function Subscription() {
         subscription_id: subscriptionId,
         name: "Praesto",
         image: `${window.location.origin}/favicon.ico`,
-        description: `HRMS Pro – ${renewBillingRef.current === "annual" ? "Annual" : "Monthly"} subscription`,
+        description: `HRMS ${renewBillingRef.current === "annual" ? "Annual" : "Monthly"} subscription`,
         prefill: {
           name: user
             ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
@@ -265,7 +271,7 @@ export default function Subscription() {
                   message: "Subscription renewed successfully!",
                   severity: "success",
                 });
-                return apiClient.get(API_ENDPOINTS.MY_TENANT);
+                return fetchTenant();
               }
               setAlert({
                 open: true,
@@ -273,9 +279,6 @@ export default function Subscription() {
                 severity: "error",
               });
               return null;
-            })
-            .then((meRes) => {
-              if (meRes?.data?.success) setTenant(meRes.data.data.tenant);
             })
             .catch((err: any) => {
               setAlert({
@@ -301,8 +304,164 @@ export default function Subscription() {
     }
   };
 
+  const handleChangePlan = async () => {
+    setChangingPlan(true);
+    try {
+      const res = await apiClient.post(API_ENDPOINTS.CHANGE_PLAN, {
+        planTier: changeTier,
+        billing: changeBilling,
+      });
+      if (!res.data?.success) {
+        setAlert({
+          open: true,
+          message: res.data?.message || "Failed to change plan.",
+          severity: "error",
+        });
+        setChangingPlan(false);
+        return;
+      }
+
+      const data = res.data.data;
+      if (!data?.requiresPayment) {
+        setAlert({
+          open: true,
+          message: res.data?.message || "Plan change scheduled.",
+          severity: "success",
+        });
+        await fetchTenant();
+        setChangingPlan(false);
+        return;
+      }
+
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        setAlert({
+          open: true,
+          message: "Failed to load payment gateway. Check your connection.",
+          severity: "error",
+        });
+        setChangingPlan(false);
+        return;
+      }
+
+      const options = {
+        key: data.keyId,
+        order_id: data.orderId,
+        amount: data.amount,
+        currency: "INR",
+        name: "Praesto",
+        image: `${window.location.origin}/favicon.ico`,
+        description: "Plan upgrade — prorated charge",
+        prefill: {
+          name: user
+            ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
+            : "",
+          email: user?.email ?? "",
+        },
+        theme: { color: "#1976d2" },
+        handler: (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          apiClient
+            .post(API_ENDPOINTS.CONFIRM_PLAN_UPGRADE, {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+              planTier: changeTier,
+              billing: changeBilling,
+            })
+            .then((confirmRes) => {
+              if (confirmRes.data?.success) {
+                setAlert({
+                  open: true,
+                  message: "Plan upgraded successfully!",
+                  severity: "success",
+                });
+                return fetchTenant();
+              }
+              setAlert({
+                open: true,
+                message: confirmRes.data?.message || "Upgrade failed.",
+                severity: "error",
+              });
+              return null;
+            })
+            .catch((err: any) => {
+              setAlert({
+                open: true,
+                message: err.response?.data?.message || "Upgrade failed.",
+                severity: "error",
+              });
+            })
+            .finally(() => setChangingPlan(false));
+        },
+        modal: { ondismiss: () => setChangingPlan(false) },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message: err.response?.data?.message || "Failed to change plan.",
+        severity: "error",
+      });
+      setChangingPlan(false);
+    }
+  };
+
+  const handleCancelPendingChange = async () => {
+    if (!tenant) return;
+    setChangingPlan(true);
+    try {
+      const res = await apiClient.post(API_ENDPOINTS.CHANGE_PLAN, {
+        planTier: safeTier(tenant.planTier),
+        billing: tenant.billing === "annual" ? "annual" : "monthly",
+      });
+      if (res.data?.success) {
+        setAlert({
+          open: true,
+          message: "Scheduled plan change cancelled.",
+          severity: "success",
+        });
+        await fetchTenant();
+      } else {
+        setAlert({
+          open: true,
+          message: res.data?.message || "Failed to cancel scheduled change.",
+          severity: "error",
+        });
+      }
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message:
+          err.response?.data?.message || "Failed to cancel scheduled change.",
+        severity: "error",
+      });
+    } finally {
+      setChangingPlan(false);
+    }
+  };
+
   const isExpired = ["expired"].includes(tenant?.subscriptionStatus ?? "");
-  const price = PRICES[renewBilling];
+  const canChangePlan = ["active", "grace_period"].includes(
+    tenant?.subscriptionStatus ?? "",
+  );
+  const renewPrice =
+    PLAN_PRICING[tenant ? safeTier(tenant.planTier) : "starter"][renewBilling];
+  const changeAmountPaise = amountPaise(changeTier, changeBilling);
+  const isSameAsCurrent =
+    tenant &&
+    changeTier === safeTier(tenant.planTier) &&
+    changeBilling === (tenant.billing === "annual" ? "annual" : "monthly") &&
+    !tenant.pendingPlanTier;
+  const changeTierLimit = TIER_EMPLOYEE_LIMITS[changeTier];
+  const tierBlockedByHeadcount =
+    changeTierLimit !== null &&
+    (tenant?.activeEmployeeCount ?? 0) > changeTierLimit;
 
   return (
     <Container maxWidth="sm" sx={{ py: 4 }}>
@@ -328,14 +487,18 @@ export default function Subscription() {
             >
               <Box>
                 <Typography variant="h6" fontWeight={700}>
-                  HRMS Pro
+                  HRMS {tierLabel(tenant.planTier)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {tenant.billing === "annual" ? "Annual" : "Monthly"} plan ·{" "}
-                  {tenant.billing === "annual"
-                    ? PRICES.annual.display
-                    : PRICES.monthly.display}
+                  {formatINR(
+                    amountPaise(
+                      safeTier(tenant.planTier),
+                      tenant.billing === "annual" ? "annual" : "monthly",
+                    ),
+                  )}
                   {tenant.billing === "annual" ? "/year" : "/month"}
+                  {` · ${tenant.activeEmployeeCount} employees`}
                 </Typography>
               </Box>
               <Chip
@@ -345,6 +508,28 @@ export default function Subscription() {
                 sx={{ fontWeight: 600 }}
               />
             </Box>
+
+            {tenant.pendingPlanTier && tenant.pendingPlanChangeAt && (
+              <Alert
+                severity="info"
+                sx={{ mb: 2 }}
+                action={
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={handleCancelPendingChange}
+                    disabled={changingPlan}
+                  >
+                    Cancel
+                  </Button>
+                }
+              >
+                Your plan will change to HRMS{" "}
+                {tierLabel(tenant.pendingPlanTier)} (
+                {tenant.pendingBilling === "annual" ? "Annual" : "Monthly"}) on{" "}
+                <strong>{formatDate(tenant.pendingPlanChangeAt)}</strong>.
+              </Alert>
+            )}
 
             {tenant.subscriptionStatus === "grace_period" &&
               tenant.planExpiresAt && (
@@ -475,6 +660,143 @@ export default function Subscription() {
             )}
           </Paper>
 
+          {/* Change Plan — upgrade/downgrade tier or billing period */}
+          {canChangePlan && (
+            <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                Change Plan
+              </Typography>
+
+              <Box sx={{ display: "flex", justifyContent: "center", mb: 1.5 }}>
+                <ToggleButtonGroup
+                  value={changeTier}
+                  exclusive
+                  size="small"
+                  onChange={(_, v) => v && setChangeTier(v)}
+                >
+                  <ToggleButton value="starter" sx={{ px: 2.5 }}>
+                    Starter (≤{TIER_EMPLOYEE_LIMITS.starter})
+                  </ToggleButton>
+                  <ToggleButton value="growth" sx={{ px: 2.5 }}>
+                    Growth (≤{TIER_EMPLOYEE_LIMITS.growth})
+                  </ToggleButton>
+                  <ToggleButton value="enterprise" sx={{ px: 2.5 }}>
+                    Enterprise
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+                <ToggleButtonGroup
+                  value={changeBilling}
+                  exclusive
+                  size="small"
+                  onChange={(_, v) => v && setChangeBilling(v)}
+                >
+                  <ToggleButton value="monthly" sx={{ px: 3 }}>
+                    Monthly
+                  </ToggleButton>
+                  <ToggleButton value="annual" sx={{ px: 3 }}>
+                    Annual
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              {tierBlockedByHeadcount && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  {PLAN_TIER_LABELS[changeTier]} supports up to{" "}
+                  {changeTierLimit} employees. You currently have{" "}
+                  {tenant.activeEmployeeCount}.
+                </Alert>
+              )}
+
+              <Box
+                sx={{
+                  border: 2,
+                  borderColor: "primary.main",
+                  borderRadius: 2,
+                  p: 2,
+                  mb: 2,
+                  bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    mb: 1,
+                  }}
+                >
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      HRMS {PLAN_TIER_LABELS[changeTier]}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Full-featured HR management
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: "right" }}>
+                    <Typography
+                      variant="h6"
+                      fontWeight={800}
+                      color="primary.main"
+                    >
+                      {formatINR(changeAmountPaise)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {changeBilling === "annual" ? "per year" : "per month"}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Divider sx={{ my: 1 }} />
+
+                <List dense disablePadding>
+                  {[
+                    changeTierLimit === null
+                      ? "Unlimited employees"
+                      : `Up to ${changeTierLimit} employees`,
+                    ...PLAN_FEATURES,
+                  ].map((f) => (
+                    <ListItem key={f} disableGutters sx={{ py: 0.25 }}>
+                      <ListItemIcon sx={{ minWidth: 26 }}>
+                        <CheckIcon fontSize="small" color="success" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={f}
+                        primaryTypographyProps={{ variant: "body2" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mb: 1.5 }}
+              >
+                Upgrading the tier (same billing period) charges the prorated
+                difference now. Downgrades and billing-period changes take
+                effect at your next renewal — no charge today.
+              </Typography>
+
+              <Button
+                variant="primary"
+                fullWidth
+                size="large"
+                disabled={
+                  changingPlan || isSameAsCurrent || tierBlockedByHeadcount
+                }
+                onClick={handleChangePlan}
+                loading={changingPlan}
+              >
+                Change Plan
+              </Button>
+            </Paper>
+          )}
+
           {/* Renew section — shown when expired */}
           {isExpired && (
             <Paper elevation={2} sx={{ p: 3 }}>
@@ -520,7 +842,7 @@ export default function Subscription() {
                 >
                   <Box>
                     <Typography variant="subtitle1" fontWeight={700}>
-                      HRMS Pro
+                      HRMS {tierLabel(tenant.planTier)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Full-featured HR management
@@ -532,19 +854,19 @@ export default function Subscription() {
                       fontWeight={800}
                       color="primary.main"
                     >
-                      {price.display}
+                      {formatINR(renewPrice)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {price.sub}
+                      {renewBilling === "annual" ? "per year" : "per month"}
                     </Typography>
-                    {renewBilling === "annual" && "savings" in price && (
+                    {renewBilling === "annual" && (
                       <Typography
                         variant="caption"
                         display="block"
                         color="success.main"
                         fontWeight={600}
                       >
-                        {price.savings}
+                        Save 10% vs. monthly
                       </Typography>
                     )}
                   </Box>
@@ -575,7 +897,7 @@ export default function Subscription() {
                 onClick={handleRenew}
                 loading={renewing}
               >
-                {`Pay ${price.display} & Renew`}
+                {`Pay ${formatINR(renewPrice)} & Renew`}
               </Button>
 
               <Typography

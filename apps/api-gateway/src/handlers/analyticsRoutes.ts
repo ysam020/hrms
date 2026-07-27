@@ -899,7 +899,7 @@ async function getLatestGrossByUser(
 ): Promise<Map<string, any>> {
   const rows = await (prisma as any).salaryStructure.findMany({
     where: { userId: { in: userIds } },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
   });
   const latest = new Map<string, any>();
   for (const row of rows as any[]) {
@@ -1086,7 +1086,7 @@ export async function getSalaryBands(_req: Request, res: Response) {
     }
     const bucketResult = await (prisma as any).salaryStructure.aggregateRaw({
       pipeline: [
-        { $sort: { userId: 1, createdAt: -1 } },
+        { $sort: { userId: 1, year: -1, month: -1 } },
         {
           $group: {
             _id: "$userId",

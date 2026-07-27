@@ -112,18 +112,32 @@ describe("EditSalaryStructure", () => {
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
   });
 
-  it("renders in view mode with the gross salary chip once loaded", async () => {
+  it("renders in view mode with the gross salary chip reflecting the selected period, not userData.salary", async () => {
     mockUseFetchData.mockReturnValue({
       data: USER_DATA,
       loading: false,
       error: null,
       refetch: vi.fn(),
     });
+    mockAllApiCalls({
+      existingSalaryData: {
+        basicPay: 30000,
+        hra: 15000,
+        conveyance: 5000,
+        pf: 3600,
+      },
+    });
     renderComponent();
     await waitFor(() =>
       expect(screen.getByText("Salary Structure")).toBeInTheDocument(),
     );
-    expect(screen.getByText("Gross: ₹60000")).toBeInTheDocument();
+    // Gross must come from this period's own structure (30000+15000+5000
+    // earnings = 50000), not userData.salary (60000, the employee's
+    // overall/latest salary) — those can legitimately differ, e.g. right
+    // after a raise that hasn't touched this specific past period.
+    await waitFor(() =>
+      expect(screen.getByText("Gross: ₹50000")).toBeInTheDocument(),
+    );
     expect(screen.getByText("Edit")).toBeInTheDocument();
   });
 

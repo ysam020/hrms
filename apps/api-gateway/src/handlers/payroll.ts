@@ -247,10 +247,13 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     // salary-service) is the only source of truth, not a denormalized User
     // column. Queried directly against the tenant DB rather than per-employee
     // gRPC calls (would be N+1 across potentially hundreds of employees):
-    // one findMany ordered newest-first, reduced to the latest row per user.
+    // one findMany ordered by latest *period* (not row-write order — disbursement
+    // no longer touches SalaryStructure, but this must still pick the highest
+    // year/month, not whichever row happened to be created last), reduced to
+    // the latest row per user.
     const allSalaryStructures = await (prisma as any).salaryStructure.findMany({
       where: { userId: { in: empIds } },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
     });
     const latestSalaryByUser = new Map<string, any>();
     for (const s of allSalaryStructures as any[]) {
@@ -1531,16 +1534,12 @@ export async function updateSalaryAdvanceStatus(req: Request, res: Response) {
 
 /**
  * GET /payroll/my-payslips
- * Returns the current employee's payslips (from SalaryStructure).
- *
- * SalaryStructure is written by two different flows that share the same
- * table: HR editing an employee's salary config (Salary Management, which
- * defaults to the *current* month and can also target future months), and
- * payroll disbursement upserting a payslip snapshot per employee (see the
- * "Generate payslips" step above). Only the latter represents money that
- * was actually paid out, so a row must not be shown here unless a
- * PayrollRun for its (year, month) has actually reached "disbursed" —
- * otherwise employees see a "payslip" for a month payroll hasn't run yet.
+ * Returns the current employee's payslips — one per disbursed PayrollRun,
+ * sourced from that run's PayrollLineItem (the actual, attendance-prorated
+ * amount paid), not from SalaryStructure. SalaryStructure only ever holds
+ * the HR-configured salary (never overwritten by disbursement — see
+ * payrollDisbursement.ts), so it can't be used as the payslip history: a
+ * month with no separate HR edit simply wouldn't have a row for that period.
  */
 export async function getMyPayslips(req: Request, res: Response) {
   const { user } = req as AuthRequest;
@@ -1550,19 +1549,40 @@ export async function getMyPayslips(req: Request, res: Response) {
 
     const disbursedRuns = await prisma.payrollRun.findMany({
       where: { status: "disbursed" },
-      select: { year: true, month: true },
+      select: { id: true, year: true, month: true },
     });
-    const disbursedPeriods = new Set(
-      disbursedRuns.map((r) => `${r.year}-${r.month}`),
-    );
+    const runById = new Map(disbursedRuns.map((r) => [r.id, r]));
 
-    const structures = await prisma.salaryStructure.findMany({
-      where: { userId: user!.userId },
-      orderBy: [{ year: "desc" }, { month: "desc" }],
+    const lineItems = await prisma.payrollLineItem.findMany({
+      where: {
+        userId: user!.userId,
+        payrollRunId: { in: disbursedRuns.map((r) => r.id) },
+      },
     });
-    const allPayslips = structures.filter((s) =>
-      disbursedPeriods.has(`${s.year}-${s.month}`),
-    );
+
+    const allPayslips = lineItems
+      .map((li) => {
+        const run = runById.get(li.payrollRunId)!;
+        return {
+          userId: li.userId,
+          month: run.month,
+          year: run.year,
+          grossSalary: li.grossSalary,
+          basicPay: li.basicPay,
+          hra: li.hra,
+          conveyance: li.conveyance,
+          incentive: li.incentive,
+          pf: li.pf,
+          esi: li.esi,
+          pt: li.pt,
+          deductions: li.otherDeductions,
+          advanceDeduction: li.advanceDeduction,
+          tds: li.tds,
+          netPayable: li.netPayable,
+          componentBreakdown: li.componentBreakdown,
+        };
+      })
+      .sort((a, b) => b.year - a.year || b.month - a.month);
     const payslips = allPayslips.slice(skip, skip + limit);
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

@@ -7,7 +7,6 @@ jest.mock("@hrms/db", () => {
     payrollLineItem: { findMany: jest.fn(), update: jest.fn() },
     user: { findMany: jest.fn() },
     salaryAdvance: { findFirst: jest.fn(), update: jest.fn() },
-    salaryStructure: { upsert: jest.fn() },
     notification: { create: jest.fn() },
     notificationRecipient: { createMany: jest.fn() },
     payoutTenantIndex: { upsert: jest.fn() },
@@ -71,7 +70,6 @@ describe("runPayrollDisbursement", () => {
       month: 6,
       year: 2024,
     });
-    db.salaryStructure.upsert.mockResolvedValue({});
     db.notification.create.mockResolvedValue({ id: "notif1" });
     db.notificationRecipient.createMany.mockResolvedValue({});
     db.payrollLineItem.update.mockResolvedValue({});
@@ -85,7 +83,7 @@ describe("runPayrollDisbursement", () => {
   });
 
   describe("flag-only mode (no RazorpayX configured)", () => {
-    it("generates a payslip snapshot per employee and broadcasts one batched notification", async () => {
+    it("post-processes each employee and broadcasts one batched notification", async () => {
       db.payrollLineItem.findMany.mockResolvedValue([
         baseLineItem({ id: "li1", userId: "u2" }),
         baseLineItem({ id: "li2", userId: "u3" }),
@@ -93,7 +91,6 @@ describe("runPayrollDisbursement", () => {
 
       const summary = await runPayrollDisbursement("r1");
 
-      expect(db.salaryStructure.upsert).toHaveBeenCalledTimes(2);
       expect(db.notification.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ eventType: "payroll" }),
@@ -106,25 +103,6 @@ describe("runPayrollDisbursement", () => {
         ],
       });
       expect(summary.postProcessed).toBe(2);
-    });
-
-    it("upserts the payslip on the tenant/user/year/month compound key", async () => {
-      db.payrollLineItem.findMany.mockResolvedValue([baseLineItem()]);
-
-      await runPayrollDisbursement("r1");
-
-      expect(db.salaryStructure.upsert).toHaveBeenCalledWith({
-        where: {
-          tenantId_userId_year_month: {
-            tenantId: "t1",
-            userId: "u2",
-            month: 6,
-            year: 2024,
-          },
-        },
-        create: expect.objectContaining({ userId: "u2" }),
-        update: expect.objectContaining({ userId: "u2" }),
-      });
     });
 
     it("marks the line item postProcessed after reconciliation+payslip generation", async () => {
@@ -168,12 +146,6 @@ describe("runPayrollDisbursement", () => {
 
       const summary = await runPayrollDisbursement("r1");
 
-      expect(db.salaryStructure.upsert).toHaveBeenCalledTimes(1);
-      expect(db.salaryStructure.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({ userId: "u3" }),
-        }),
-      );
       expect(summary.alreadyDone).toBe(0); // payoutStatus-based, not postProcessed-based
       expect(summary.postProcessed).toBe(1);
     });
@@ -313,11 +285,9 @@ describe("runPayrollDisbursement", () => {
         }),
       });
       expect(summary.payoutFail).toBe(1);
-      // Post-processing (payslip/advance/notification) must NOT run for a
-      // failed payout — an employee whose bank transfer failed must not
-      // have their advance balance reduced, receive a payslip claiming
-      // they were paid, or get a "Salary Disbursed" notification.
-      expect(db.salaryStructure.upsert).not.toHaveBeenCalled();
+      // Post-processing (advance/notification) must NOT run for a failed
+      // payout — an employee whose bank transfer failed must not have their
+      // advance balance reduced or get a "Salary Disbursed" notification.
       expect(db.notification.create).not.toHaveBeenCalled();
       expect(db.payrollLineItem.update).not.toHaveBeenCalledWith({
         where: { id: "li1" },
@@ -387,7 +357,6 @@ describe("runPayrollDisbursement", () => {
       await runPayrollDisbursement("r1");
 
       expect(db.salaryAdvance.findFirst).not.toHaveBeenCalled();
-      expect(db.salaryStructure.upsert).not.toHaveBeenCalled();
       expect(db.notification.create).not.toHaveBeenCalled();
       expect(db.payrollLineItem.update).not.toHaveBeenCalledWith({
         where: { id: "li1" },
@@ -467,7 +436,6 @@ describe("runPayrollDisbursement", () => {
       // in-memory line item fetched at the top of this call is stale
       // ("failed"), so this only passes if the fix tracks this pass's
       // actual outcome rather than trusting that stale snapshot.
-      expect(db.salaryStructure.upsert).toHaveBeenCalled();
       expect(db.payrollLineItem.update).toHaveBeenCalledWith({
         where: { id: "li1" },
         data: { postProcessed: true },
@@ -492,7 +460,6 @@ describe("runPayrollDisbursement", () => {
 
       await runPayrollDisbursement("r1");
 
-      expect(db.salaryStructure.upsert).not.toHaveBeenCalled();
       expect(db.notification.create).not.toHaveBeenCalled();
     });
   });

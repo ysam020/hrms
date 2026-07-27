@@ -90,6 +90,8 @@ async function reconcile(): Promise<void> {
         planExpiresAt: true,
         billing: true,
         subscriptionStatus: true,
+        pendingPlanTier: true,
+        pendingBilling: true,
       },
     });
 
@@ -125,12 +127,23 @@ async function reconcile(): Promise<void> {
           if (tenant.subscriptionStatus !== "active") {
             updates.subscriptionStatus = "active";
           }
-          // Push planExpiresAt forward if Razorpay's value is later than ours.
-          if (
+          // A new cycle has started if Razorpay's expiry moved past ours —
+          // that's also the signal that a scheduled ("cycle_end") plan change
+          // has now taken effect on Razorpay's side. Finalize it here as a
+          // fallback for a subscription.charged webhook we may have missed
+          // (the primary path is handleWebhook in payment.ts).
+          const newCycleStarted =
             rzpExpiry &&
-            (!tenant.planExpiresAt || rzpExpiry > tenant.planExpiresAt)
-          ) {
+            (!tenant.planExpiresAt || rzpExpiry > tenant.planExpiresAt);
+          if (newCycleStarted) {
             updates.planExpiresAt = rzpExpiry;
+            if (tenant.pendingPlanTier) {
+              updates.planTier = tenant.pendingPlanTier;
+              updates.billing = tenant.pendingBilling ?? tenant.billing;
+              updates.pendingPlanTier = null;
+              updates.pendingBilling = null;
+              updates.pendingPlanChangeAt = null;
+            }
           }
 
           if (Object.keys(updates).length > 0) {

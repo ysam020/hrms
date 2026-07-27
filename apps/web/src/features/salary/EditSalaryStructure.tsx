@@ -66,11 +66,15 @@ function ViewEditSalaryStructure() {
     null,
   );
 
+  // `userData.salary` is the employee's overall/latest salary, not scoped to
+  // the "Select Month/Year" period below — only used as a default/proration
+  // basis when entering edit mode for a period with no existing structure
+  // yet. Anything actually displayed for the selected period must come from
+  // `currentSalaryData` instead (see the grossEarnings/netPayable useMemo
+  // and the "Amount" column), or it'll silently disagree with whatever
+  // period the page is showing — e.g. showing a just-approved raise's gross
+  // even while viewing a past month that raise never touched.
   const grossSalary = parseFloat(userData?.salary) || 0;
-  const fixedStructure: Record<string, number> = userData?.salaryStructure
-    ?.components?.length
-    ? componentsArrayToValues(userData.salaryStructure.components)
-    : legacyFieldsToComponentValues(userData?.salaryStructure);
   const workState = userData?.workState ?? null;
 
   const [salaryComponents, setSalaryComponents] = useState<
@@ -340,8 +344,6 @@ function ViewEditSalaryStructure() {
       mergedComponents,
       formik.values.components,
       lockedKeys,
-      ptSlabs,
-      workState,
     );
     formik.setValues({
       ...formik.values,
@@ -452,7 +454,7 @@ function ViewEditSalaryStructure() {
             {!isEditing && (
               <Chip
                 icon={<AccountBalance />}
-                label={`Gross: ₹${grossSalary}`}
+                label={`Gross: ₹${grossEarnings}`}
                 size="small"
                 color="primary"
                 clickable
@@ -589,7 +591,7 @@ function ViewEditSalaryStructure() {
                         key: "fixedRate",
                         label: "Fixed Rate",
                         render: (component: SalaryComponentDef) =>
-                          fixedStructure?.[component.code] ?? "-",
+                          currentSalaryData?.[component.code] ?? "-",
                       },
                       {
                         key: "amount",

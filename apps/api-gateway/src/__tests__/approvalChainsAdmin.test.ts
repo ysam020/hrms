@@ -40,6 +40,9 @@ jest.mock("@hrms/db", () => {
     wfhRequest: { update: jest.fn() },
     attendanceRecord: { upsert: jest.fn() },
     user: { findUnique: jest.fn(), update: jest.fn() },
+    tenant: { findUnique: jest.fn() },
+    professionalTaxSlab: { findMany: jest.fn() },
+    salaryComponentDefinition: { findMany: jest.fn() },
   };
   return { prismaWithTenant: _db, prisma: _db };
 });
@@ -379,6 +382,12 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     db.user.findUnique.mockResolvedValue({ isSuperUser: false });
+    // Statutory PF/ESI/PT recompute on a performance-review raise (see
+    // approvalChains.ts) needs these — no tenant-configured PT slabs/rates,
+    // so it falls back to the default 12%/1.75% and the flat PT slab.
+    db.tenant.findUnique.mockResolvedValue({ workState: null });
+    db.professionalTaxSlab.findMany.mockResolvedValue([]);
+    db.salaryComponentDefinition.findMany.mockResolvedValue([]);
   });
 
   it("returns NOT_FOUND when the instance doesn't belong to the tenant", async () => {
@@ -641,7 +650,15 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
       "createSalaryStructure",
       expect.objectContaining({
         userId: "u2",
-        components: [{ code: "BASIC", type: "earning", amount: 110000 }],
+        // PF/ESI/PT are recomputed from the new gross/basic (12%/ceiling/
+        // slab), not scaled by the raise ratio — 110000 is above the ESI
+        // wage ceiling, so ESI is 0; PT falls back to the flat 200 slab.
+        components: [
+          { code: "BASIC", type: "earning", amount: 110000 },
+          { code: "PF", type: "deduction", amount: 13200 },
+          { code: "ESI", type: "deduction", amount: 0 },
+          { code: "PT", type: "deduction", amount: 200 },
+        ],
       }),
     );
     // SalaryStructure is the only source of truth now — no denormalized
@@ -751,9 +768,13 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
 
     await actOnApproval(req, res);
 
-    // A 10% increment must scale every component, not just overwrite
-    // basicPay with the whole new gross while leaving HRA/conveyance/PF
-    // stale — that was the bug this test now guards against.
+    // A 10% increment must scale every *earning* component, not just
+    // overwrite basicPay with the whole new gross while leaving HRA/
+    // conveyance stale. PF/ESI/PT are NOT scaled by the ratio — they're
+    // recomputed from the new gross/basic: PF stays 12% of the new basic
+    // (coincidentally the same 6600 either way here), ESI drops to 0 once
+    // gross crosses the wage ceiling, and PT is a flat slab amount that
+    // doesn't move with salary at all.
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "updateSalaryStructure",
@@ -764,8 +785,8 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
           { code: "HRA", type: "earning", amount: 27500 },
           { code: "CONVEYANCE", type: "earning", amount: 11000 },
           { code: "PF", type: "deduction", amount: 6600 },
-          { code: "ESI", type: "deduction", amount: 825 },
-          { code: "PT", type: "deduction", amount: 220 },
+          { code: "ESI", type: "deduction", amount: 0 },
+          { code: "PT", type: "deduction", amount: 200 },
         ],
       }),
     );

@@ -196,22 +196,41 @@ export const requestKycEditAccessSchema = z.object({
 
 // ── Salary ────────────────────────────────────────────────────────────────────
 
+// The Employee/Salary module (EditSalaryStructure.tsx, the only current
+// caller) always sends `{ components: [...] }` — createSalaryStructure/
+// updateSalaryStructure (salary-service) have supported this shape for a
+// while, but this schema was never updated to match, so it rejected every
+// real request with a bare "Required" error. The flat-field shape is kept
+// as an accepted alternative since the handler itself still supports it
+// (legacy/API callers that predate the components model).
+const salaryComponentAmountSchema = z.object({
+  code: z.string().min(1).max(64),
+  name: z.string().max(128).optional(),
+  type: z.enum(["earning", "deduction"]),
+  amount: z.number(),
+});
+
+const legacySalaryFieldsSchema = z.object({
+  basicPay: z.number().nonnegative(),
+  hra: z.number().nonnegative(),
+  conveyance: z.number().nonnegative(),
+  incentive: z.number().nonnegative(),
+  pf: z.number().nonnegative(),
+  esi: z.number().nonnegative(),
+  pt: z.number().nonnegative(),
+  deductions: z.number().nonnegative(),
+  grossEarnings: z.number().optional(),
+  netPayable: z.number().optional(),
+});
+
 export const updateSalarySchema = z.object({
   userId: z.string().min(1).max(64),
   year: z.string().regex(/^\d{4}$/),
   month: z.string().regex(/^(0?[1-9]|1[0-2])$/),
-  salaryStructure: z.object({
-    basicPay: z.number().nonnegative(),
-    hra: z.number().nonnegative(),
-    conveyance: z.number().nonnegative(),
-    incentive: z.number().nonnegative(),
-    pf: z.number().nonnegative(),
-    esi: z.number().nonnegative(),
-    pt: z.number().nonnegative(),
-    deductions: z.number().nonnegative(),
-    grossEarnings: z.number().optional(),
-    netPayable: z.number().optional(),
-  }),
+  salaryStructure: z.union([
+    z.object({ components: z.array(salaryComponentAmountSchema).min(1) }),
+    legacySalaryFieldsSchema,
+  ]),
 });
 
 // ── User ──────────────────────────────────────────────────────────────────────
