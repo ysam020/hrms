@@ -4,7 +4,7 @@ import { authClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
 import { recordLoginEvent } from "../services/loginEventService";
@@ -209,7 +209,17 @@ export async function refreshToken(req: Request, res: Response) {
       refreshToken: token,
     });
     if (!response.accessToken) {
-      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+      // response.status is auth-service's own grpc.status enum value carried
+      // in the response payload — the RPC itself succeeded at the transport
+      // level even though the requested operation failed, so grpcCall's own
+      // error-code handling never sees this. UNAUTHENTICATED (a genuinely
+      // invalid/revoked token) must map to 401 so the frontend knows to log
+      // out; anything else (e.g. INTERNAL from a transient Redis hiccup) has
+      // to surface as something other than 401 — the frontend specifically
+      // treats a 401 here as "session is really gone," and collapsing every
+      // failure reason into that code is what turned momentary backend
+      // blips into full logouts.
+      return apiResponse(res, grpcToHttpStatus(response.status), {
         message: response.message,
       });
     }
@@ -491,19 +501,28 @@ export async function webAuthnLogin(req: Request, res: Response) {
       });
     }
     const jwt = await import("jsonwebtoken");
-    const payload = jwt.default.verify(
-      tempToken,
-      process.env.ACCESS_JWT_TOKEN!,
-      { algorithms: ["HS256"] },
-    ) as any;
+    let payload: any;
+    try {
+      payload = jwt.default.verify(tempToken, process.env.ACCESS_JWT_TOKEN!, {
+        algorithms: ["HS256"],
+      });
+    } catch {
+      // The token itself is genuinely invalid/expired — a real rejection.
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: "Authentication failed",
+      });
+    }
+    // A verified, valid tempToken reaching here means only the profile fetch
+    // (a DB call) can still fail — that's a transient infra issue, not a
+    // rejection, so it must not collapse into the same 401 as an invalid
+    // token above (a DB hiccup right after a legitimate WebAuthn login
+    // shouldn't look like "authentication failed" to the client).
     const profile = await fetchFullProfile(payload.userId);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { accessToken: tempToken, user: profile },
     });
   } catch (error: unknown) {
-    return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
-      message: "Authentication failed",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -582,7 +601,17 @@ export async function googleAuthCallback(req: Request, res: Response) {
     );
 
     if (!response.accessToken) {
-      const message = encodeURIComponent("Authentication failed");
+      // Same distinction as the refreshToken handler above: response.status
+      // is auth-service's own status for *why* this failed, separate from
+      // grpcCall's transport-level error handling. A transient backend blip
+      // (DB/Redis hiccup — grpcToHttpStatus(response.status) would be 5xx)
+      // shouldn't tell the user their Google sign-in itself was rejected.
+      const isTransient = grpcToHttpStatus(response.status) >= 500;
+      const message = encodeURIComponent(
+        isTransient
+          ? "Something went wrong — please try signing in again."
+          : "Authentication failed",
+      );
       return jsRedirect(
         res,
         isMobile

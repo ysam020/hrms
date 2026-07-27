@@ -1,9 +1,19 @@
 import { jsPDF } from "jspdf";
 import { formatINR } from "./salary";
 
+const TIER_LABEL: Record<string, string> = {
+  starter: "Starter",
+  growth: "Growth",
+  enterprise: "Enterprise",
+};
+
 export interface InvoiceDetails {
   tenantName: string;
   plan: string;
+  planTier?: "starter" | "growth" | "enterprise" | string;
+  // Informational only (flat-fee slabs, not per-seat billing) — headcount at
+  // charge time, shown for context rather than as a rate multiplier.
+  quantity?: number;
   billing: "monthly" | "annual" | string;
   amountPaise: number;
   paymentMethodSummary?: string | null;
@@ -63,7 +73,12 @@ export function buildInvoicePdf(details: InvoiceDetails): Buffer {
     "Billing period",
     `${details.billingPeriodStart.toLocaleDateString("en-IN")} – ${details.billingPeriodEnd.toLocaleDateString("en-IN")}`,
   );
-  row("Plan", `${details.plan} (${details.billing})`);
+  const tierLabel = TIER_LABEL[details.planTier ?? ""] ?? "Starter";
+  const planLine =
+    details.quantity !== undefined
+      ? `${details.plan} · ${tierLabel} · ${details.quantity} employees (${details.billing})`
+      : `${details.plan} · ${tierLabel} (${details.billing})`;
+  row("Plan", planLine);
   row("Payment method", details.paymentMethodSummary || "-");
 
   curY += 4;

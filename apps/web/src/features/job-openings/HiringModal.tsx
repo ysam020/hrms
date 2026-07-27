@@ -151,8 +151,6 @@ function HiringModal(props) {
       mergedComponents,
       formik.values.components,
       lockedKeys,
-      ptSlabs,
-      null,
     );
     formik.setValues({
       ...formik.values,

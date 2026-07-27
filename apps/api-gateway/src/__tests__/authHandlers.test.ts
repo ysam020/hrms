@@ -50,6 +50,9 @@ jest.mock("@hrms/common", () => ({
     INTERNAL_SERVER_ERROR: 500,
     UN_AUTHORIZED: 401,
   },
+  // Real mapping logic (not hand-mocked) — refreshToken/googleAuthCallback
+  // depend on its actual UNAUTHENTICATED-vs-everything-else distinction.
+  grpcToHttpStatus: jest.requireActual("@hrms/common").grpcToHttpStatus,
 }));
 
 jest.mock("@hrms/crypto", () => ({
@@ -90,6 +93,7 @@ import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { aesDecrypt } from "@hrms/crypto";
 import jwt from "jsonwebtoken";
+import { status as GrpcStatus } from "@grpc/grpc-js";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
@@ -199,8 +203,11 @@ describe("authHandlers", () => {
       );
     });
 
-    it("returns UN_AUTHORIZED when grpc returns no accessToken", async () => {
-      mockGrpcCall.mockResolvedValue({ message: "Token expired" });
+    it("returns UN_AUTHORIZED when grpc reports the refresh token itself is invalid/revoked", async () => {
+      mockGrpcCall.mockResolvedValue({
+        message: "Token expired",
+        status: GrpcStatus.UNAUTHENTICATED,
+      });
       const res = makeRes();
       await refreshToken(
         makeReq({ cookies: { refresh_token: "valid-token" } }),
@@ -209,6 +216,26 @@ describe("authHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.UN_AUTHORIZED,
+        expect.any(Object),
+      );
+    });
+
+    it("does not collapse a transient backend failure into UN_AUTHORIZED", async () => {
+      // A momentary Redis/DB hiccup on the auth-service side must not look
+      // like "session is really gone" to the frontend — only a genuinely
+      // invalid/revoked token (UNAUTHENTICATED, tested above) should.
+      mockGrpcCall.mockResolvedValue({
+        message: "Redis unavailable",
+        status: GrpcStatus.INTERNAL,
+      });
+      const res = makeRes();
+      await refreshToken(
+        makeReq({ cookies: { refresh_token: "valid-token" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
     });

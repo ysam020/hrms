@@ -130,6 +130,12 @@ function findPtSlab(
   );
 }
 
+// Employee-side ESI contribution stops applying once gross crosses this
+// statutory wage ceiling — must match calcStatutoryDeductions in
+// apps/api-gateway/src/utils/payrollCalc.ts, the backend's own source of
+// truth for this same rule.
+const ESI_WAGE_CEILING = 21000;
+
 /**
  * Derives auto-computed salary component values from the tenant's configured
  * SalaryComponentDefinition rows (+ ProfessionalTaxSlab for PT), replacing
@@ -168,7 +174,10 @@ export function computeSalaryComponents({
 
     if (c.calcType === "percent_of_basic") {
       const base = c.percentOf === "gross" ? grossSalary : basicPay;
-      values[c.code] = Math.round(base * ((c.percentValue ?? 0) / 100));
+      values[c.code] =
+        c.code === "ESI" && grossSalary > ESI_WAGE_CEILING
+          ? 0
+          : Math.round(base * ((c.percentValue ?? 0) / 100));
       locked.add(c.code);
     }
     // calcType "fixed" (non-PT) or "formula" (not yet supported): manual entry.
@@ -191,18 +200,19 @@ const DEFAULT_GROSS_SHARE: Record<string, number> = {
 };
 
 /**
- * Solves for the earnings total (Basic+HRA+Conveyance+...) that, once the
- * locked/derived deductions computeSalaryComponents would compute from it
- * are added back on, sums to exactly `targetTotal` — so "Monthly Gross
- * Salary" means the same thing everywhere in the app: the full sum of every
- * component (earnings AND PF/ESI/PT), not just the earnings alone.
+ * Solves for the earnings total (Basic+HRA+Conveyance+...) that satisfies
+ * `targetTotal`, once any *locked earning* component (e.g. a tenant-
+ * configured percent-of-basic allowance) that isn't part of the freely
+ * redistributed set is accounted for — "Monthly Gross Salary" means the sum
+ * of earning components only (matching the payslip's "Gross Earnings" line
+ * and the backend's netPayable formula), never earnings-plus-deductions.
+ * PF/ESI/PT are deductions taken *out of* that gross afterward to reach Net
+ * Payable — they must never shrink the earnings split itself, which is why
+ * only `type === "earning"` components are considered here at all.
  *
- * Each locked component (earning or deduction — the same rule
- * computeSalaryComponents uses, which doesn't distinguish by type either) is
- * linear in either `targetTotal` directly (percentOf "gross", and PT's
- * slab/fixed lookup — both independent of how earnings get split) or in
- * Basic (percentOf "basic", e.g. PF) — and Basic is always a fixed
- * `basicShare` fraction of the earnings total by construction (see
+ * A locked earning component is linear in either `targetTotal` directly
+ * (percentOf "gross") or in Basic (percentOf "basic") — and Basic is always
+ * a fixed `basicShare` fraction of the earnings total by construction (see
  * redistributeGross), so this reduces to one linear equation:
  * E + independent + basicDependentRate * basicShare * E = target,
  * i.e. E = (target - independent) / (1 + basicDependentRate * basicShare).
@@ -211,18 +221,12 @@ function computeGrossUpEarnings(
   targetTotal: number,
   components: SalaryComponentDef[],
   basicShare: number,
-  ptSlabs: PtSlab[],
-  workState: string | null | undefined,
 ): number {
   let independent = 0;
   let basicDependentRate = 0;
 
   for (const c of components) {
-    if (c.code === "PT" && c.calcType === "fixed") {
-      const slab = findPtSlab(ptSlabs, workState, targetTotal);
-      independent += slab ? slab.monthlyPT : (c.percentValue ?? 0);
-      continue;
-    }
+    if (c.type !== "earning") continue;
     if (c.calcType === "percent_of_basic") {
       const rate = (c.percentValue ?? 0) / 100;
       if (c.percentOf === "gross") {
@@ -243,11 +247,13 @@ function computeGrossUpEarnings(
 
 /**
  * Redistributes a newly-typed target gross salary across the currently
- * unlocked earning components, preserving their existing relative ratios,
- * after first grossing up for the locked deductions (PF/ESI/PT) that will be
- * derived from the result — so Basic+HRA+Conveyance+...+PF+ESI+PT always
- * sums back to `newGross`, not just the earning components alone. Backs the
- * editable Gross Salary field in the Employee/Salary modules.
+ * unlocked earning components, preserving their existing relative ratios —
+ * so Basic+HRA+Conveyance+... (every *earning* component, locked or not)
+ * sums back to exactly `newGross`. PF/ESI/PT are deductions, computed
+ * separately by computeSalaryComponents off the resulting Basic/gross, and
+ * are subtracted from this total (once) to reach Net Payable — they never
+ * shrink what gets redistributed here. Backs the editable Gross Salary
+ * field in the Employee/Salary modules.
  *
  * If nothing is set yet (fresh structure, sum = 0), seeds the standard
  * Basic/HRA/Conveyance 50/25/25 split (see DEFAULT_GROSS_SHARE above) when
@@ -265,8 +271,6 @@ export function redistributeGross(
   components: SalaryComponentDef[],
   currentValues: Record<string, number>,
   lockedKeys: Set<string>,
-  ptSlabs: PtSlab[] = [],
-  workState?: string | null,
 ): Record<string, number> {
   const earningCodes = components
     .filter((c) => c.type === "earning" && !lockedKeys.has(c.code))
@@ -292,8 +296,6 @@ export function redistributeGross(
     newGross,
     components,
     basicShare,
-    ptSlabs,
-    workState,
   );
 
   if (currentSum > 0) {

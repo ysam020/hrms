@@ -22,9 +22,15 @@ export const getSalaryStructure = async (
     if (month) where.month = parseInt(String(month));
     if (year) where.year = parseInt(String(year));
 
+    // "Latest" means latest *period* (highest year/month), not latest row
+    // last written — createdAt ordering used to let a row touched out of
+    // period order (e.g. by disbursement re-upserting an old month) shadow
+    // the true current structure. When month/year are given, the (userId,
+    // year, month) unique constraint means at most one row matches anyway,
+    // so this ordering only matters for the no-month/year "latest" lookup.
     const salaryStructure = await prisma.salaryStructure.findFirst({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
     });
 
     if (!salaryStructure) {

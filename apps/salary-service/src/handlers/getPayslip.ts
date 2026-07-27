@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 import { toWireSalaryStructure } from "@hrms/common";
@@ -26,10 +26,56 @@ export const getPayslip = async (
     if (month) where.month = parseInt(String(month));
     if (year) where.year = parseInt(String(year));
 
-    const salaryStructure = await prisma.salaryStructure.findFirst({
+    let salaryStructure: any = await prisma.salaryStructure.findFirst({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
     });
+
+    // SalaryStructure is the HR-configured salary and is never overwritten by
+    // disbursement (see payrollDisbursement.ts) — so a past disbursed month
+    // HR never separately re-edited won't have its own exact-period row here.
+    // The actual paid amount for that period lives in PayrollLineItem
+    // instead; synthesize an equivalent shape from it rather than reporting
+    // "no salary data" for a month that was, in fact, paid.
+    if (!salaryStructure && month && year) {
+      const monthNum = parseInt(String(month));
+      const yearNum = parseInt(String(year));
+      const tenantId = getTenantId();
+      const run = await prisma.payrollRun.findFirst({
+        where: {
+          tenantId,
+          month: monthNum,
+          year: yearNum,
+          status: "disbursed",
+        },
+      });
+      const lineItem = run
+        ? await prisma.payrollLineItem.findFirst({
+            where: { payrollRunId: run.id, userId },
+          })
+        : null;
+      if (lineItem) {
+        salaryStructure = {
+          userId,
+          month: monthNum,
+          year: yearNum,
+          grossSalary: lineItem.grossSalary,
+          basicPay: lineItem.basicPay,
+          hra: lineItem.hra,
+          conveyance: lineItem.conveyance,
+          incentive: lineItem.incentive,
+          pf: lineItem.pf,
+          esi: lineItem.esi,
+          pt: lineItem.pt,
+          deductions: lineItem.otherDeductions,
+          grossEarnings: lineItem.grossSalary,
+          netPayable: lineItem.netPayable,
+          componentBreakdown: lineItem.componentBreakdown,
+          advanceDeduction: lineItem.advanceDeduction,
+          tds: lineItem.tds,
+        };
+      }
+    }
 
     if (!salaryStructure) {
       return callback(null, {

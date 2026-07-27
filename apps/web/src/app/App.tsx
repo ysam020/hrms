@@ -146,8 +146,17 @@ function App() {
           setUser(res.data?.success ? res.data.data.user : null);
           setBooting(false);
         })
-        .catch(() => {
-          setUser(null);
+        .catch((err) => {
+          // A 401 here means the axios interceptor already tried refreshing
+          // and the server still rejected it (or forceLogout already fired
+          // via _onUnauthorized) — there's really no session. Anything else
+          // (network error, timeout — this bypassed the interceptor's own
+          // retry entirely since there's no response to react to) says
+          // nothing about session validity, so don't clear a possibly-still-
+          // valid user just because this one revalidation call had a blip.
+          if ((err as any)?.response?.status === 401) {
+            setUser(null);
+          }
           setBooting(false);
         });
     };
@@ -178,7 +187,7 @@ function App() {
     // payload. If pendingSetup === true the user has no tenant yet — send them
     // to /org-setup (which fetches their available tenants itself). Otherwise
     // fetch the profile and drop them into the app.
-    const boot = async () => {
+    const boot = async (isRetry = false) => {
       try {
         let token = getAccessToken();
         if (!token) {
@@ -215,8 +224,24 @@ function App() {
         if (cancelled) return;
         if (res.data?.success) setUser(res.data.data.user);
         setBooting(false);
-      } catch {
-        if (!cancelled) setBooting(false);
+      } catch (err) {
+        if (cancelled) return;
+        // A 401 here means the server actively rejected the refresh token or
+        // the profile request — there really is no session to recover.
+        // Anything else (aborted request, network blip, transient 5xx) says
+        // nothing about whether the session is valid, so treating the first
+        // hiccup as "logged out" is what forces a hard refresh after Google
+        // sign-in (a service-worker-triggered reload can abort this exact
+        // sequence, see watchForServiceWorkerUpdates) or after an ordinary
+        // page refresh. Give it one bounded retry before actually giving up.
+        const isDefiniteAuthFailure = (err as any)?.response?.status === 401;
+        if (!isRetry && !isDefiniteAuthFailure) {
+          setTimeout(() => {
+            if (!cancelled) boot(true);
+          }, 800);
+          return;
+        }
+        setBooting(false);
       }
     };
 

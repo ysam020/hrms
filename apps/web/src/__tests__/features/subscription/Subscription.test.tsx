@@ -22,6 +22,11 @@ function tenant(overrides: Partial<any> = {}) {
     name: "Acme Corp",
     plan: "pro",
     billing: "monthly",
+    planTier: "starter",
+    activeEmployeeCount: 5,
+    pendingPlanTier: null,
+    pendingBilling: null,
+    pendingPlanChangeAt: null,
     subscriptionStatus: "active",
     planActivatedAt: "2026-01-01T00:00:00Z",
     planExpiresAt: "2026-02-01T00:00:00Z",
@@ -70,8 +75,21 @@ describe("Subscription", () => {
     });
     renderSubscription();
     expect(
-      await screen.findByText(/Annual plan · ₹9,999\/year/),
+      await screen.findByText(/Annual plan · ₹86,389\.2\/year/),
     ).toBeInTheDocument();
+  });
+
+  it("shows the employee count alongside the price for any tier", async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          tenant: tenant({ planTier: "growth", activeEmployeeCount: 60 }),
+        },
+      },
+    });
+    renderSubscription();
+    expect(await screen.findByText(/60 employees/)).toBeInTheDocument();
   });
 
   it("shows the Active status chip for an active subscription", async () => {
@@ -104,6 +122,28 @@ describe("Subscription", () => {
     expect(screen.getByText("8 February 2026")).toBeInTheDocument();
   });
 
+  it("shows a banner with the cancel option when a plan change is pending", async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          tenant: tenant({
+            pendingPlanTier: "growth",
+            pendingBilling: "monthly",
+            // Deliberately distinct from planExpiresAt (2026-02-01) so the
+            // banner's date and the "Renews on" field aren't the same text.
+            pendingPlanChangeAt: "2026-03-01T00:00:00Z",
+          }),
+        },
+      },
+    });
+    renderSubscription();
+    expect(
+      await screen.findByText(/Your plan will change to HRMS Growth/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1 March 2026")).toBeInTheDocument();
+  });
+
   it("shows an expired banner and the renew section for an expired subscription", async () => {
     mockGet.mockResolvedValue({
       data: {
@@ -118,6 +158,10 @@ describe("Subscription", () => {
     expect(screen.getByText("Renew Subscription")).toBeInTheDocument();
     expect(
       screen.queryByText("Cancel Subscription", { selector: "span" }),
+    ).not.toBeInTheDocument();
+    // Change Plan only applies to an active/grace_period subscription.
+    expect(
+      screen.queryByText("Change Plan", { selector: "h6" }),
     ).not.toBeInTheDocument();
   });
 
@@ -214,14 +258,14 @@ describe("Subscription", () => {
     renderSubscription();
     await screen.findByText("Renew Subscription");
     expect(
-      screen.getByText("Pay ₹999 & Renew", { selector: "span" }),
+      screen.getByText("Pay ₹7,999 & Renew", { selector: "span" }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Annual" }));
     expect(
-      screen.getByText("Pay ₹9,999 & Renew", { selector: "span" }),
+      screen.getByText("Pay ₹86,389.2 & Renew", { selector: "span" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Save ₹2,989 (25%)")).toBeInTheDocument();
+    expect(screen.getByText("Save 10% vs. monthly")).toBeInTheDocument();
   });
 
   it("initiates the Razorpay checkout with the selected billing and pre-filled user details", async () => {
@@ -258,7 +302,7 @@ describe("Subscription", () => {
 
     await act(async () => {
       fireEvent.click(
-        screen.getByText("Pay ₹999 & Renew", { selector: "span" }),
+        screen.getByText("Pay ₹7,999 & Renew", { selector: "span" }),
       );
     });
 
@@ -293,7 +337,9 @@ describe("Subscription", () => {
     // loadRazorpayScript only resolves true via a real script id already
     // present, which we deliberately don't add here, then manually fire
     // the script's onerror handler once React has appended it to the DOM.
-    fireEvent.click(screen.getByText("Pay ₹999 & Renew", { selector: "span" }));
+    fireEvent.click(
+      screen.getByText("Pay ₹7,999 & Renew", { selector: "span" }),
+    );
     await waitFor(() => {
       const script = document.getElementById("razorpay-script");
       expect(script).not.toBeNull();
@@ -309,5 +355,133 @@ describe("Subscription", () => {
         }),
       ),
     );
+  });
+
+  describe("Change Plan", () => {
+    it("disables the Change Plan button when the selected tier/billing matches the current plan", async () => {
+      mockGet.mockResolvedValue({
+        data: { success: true, data: { tenant: tenant() } },
+      });
+      renderSubscription();
+      await screen.findByText("Change Plan", { selector: "h6" });
+      expect(
+        screen.getByRole("button", { name: "Change Plan" }),
+      ).toBeDisabled();
+    });
+
+    it("blocks switching to a lower tier when headcount is over its limit", async () => {
+      mockGet.mockResolvedValue({
+        data: {
+          success: true,
+          data: {
+            tenant: tenant({ planTier: "enterprise", activeEmployeeCount: 30 }),
+          },
+        },
+      });
+      renderSubscription();
+      await screen.findByText("Change Plan", { selector: "h6" });
+
+      fireEvent.click(screen.getByRole("button", { name: /Starter/ }));
+      expect(
+        await screen.findByText(/Starter supports up to 25 employees/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Change Plan" }),
+      ).toBeDisabled();
+    });
+
+    it("submits a scheduled (no-payment) plan change and refreshes the tenant", async () => {
+      mockGet.mockResolvedValueOnce({
+        data: { success: true, data: { tenant: tenant() } },
+      });
+      mockPost.mockResolvedValueOnce({
+        data: {
+          success: true,
+          message: "Your plan will change on 1 February 2026.",
+          data: { requiresPayment: false },
+        },
+      });
+      mockGet.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            tenant: tenant({
+              pendingPlanTier: "growth",
+              pendingBilling: "monthly",
+              pendingPlanChangeAt: "2026-02-01T00:00:00Z",
+            }),
+          },
+        },
+      });
+
+      const { setAlert } = renderSubscription();
+      await screen.findByText("Change Plan", { selector: "h6" });
+
+      fireEvent.click(screen.getByRole("button", { name: /Growth/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Change Plan" }));
+      });
+
+      await waitFor(() =>
+        expect(mockPost).toHaveBeenCalledWith("/payment/change-plan", {
+          planTier: "growth",
+          billing: "monthly",
+        }),
+      );
+      await waitFor(() =>
+        expect(setAlert).toHaveBeenCalledWith(
+          expect.objectContaining({ severity: "success" }),
+        ),
+      );
+      expect(
+        await screen.findByText(/Your plan will change to HRMS Growth/),
+      ).toBeInTheDocument();
+    });
+
+    it("collects a prorated payment via Razorpay order checkout for an immediate upgrade", async () => {
+      mockGet.mockResolvedValueOnce({
+        data: { success: true, data: { tenant: tenant() } },
+      });
+      mockPost.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            requiresPayment: true,
+            orderId: "order_123",
+            amount: 50000,
+            keyId: "rzp_test_key",
+          },
+        },
+      });
+
+      const fakeScript = document.createElement("script");
+      fakeScript.id = "razorpay-script";
+      document.body.appendChild(fakeScript);
+
+      const openSpy = vi.fn();
+      const RazorpayMock = vi.fn(function MockRazorpay(this: any) {
+        this.open = openSpy;
+      });
+      (window as any).Razorpay = RazorpayMock;
+
+      renderSubscription();
+      await screen.findByText("Change Plan", { selector: "h6" });
+
+      fireEvent.click(screen.getByRole("button", { name: /Growth/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Change Plan" }));
+      });
+
+      await waitFor(() =>
+        expect(RazorpayMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            order_id: "order_123",
+            amount: 50000,
+            key: "rzp_test_key",
+          }),
+        ),
+      );
+      expect(openSpy).toHaveBeenCalled();
+    });
   });
 });

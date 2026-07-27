@@ -38,6 +38,10 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { getWorkingDays, isHoliday, eachDate } from "../utils/workingDays";
 import { getActiveSettings } from "./tenantSettings";
+import {
+  calcStatutoryDeductions,
+  groupSlabsByState,
+} from "../utils/payrollCalc";
 
 dayjs.extend(utc);
 
@@ -785,14 +789,14 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
           },
         );
 
-        // The increment is a percentage on the *whole* gross, but every
-        // individual earning/deduction component needs to scale with it —
-        // dumping the new gross straight into basicPay (the old behavior)
-        // left HRA/conveyance/etc stale and made basicPay == grossSalary.
-        // Prefer the target period's own row as the base to scale from; if
-        // this is the first revision landing in that period, fall back to
-        // the latest structure already fetched above (same one used to
-        // compute currentSalary).
+        // The increment is a percentage on the *whole* gross, but only the
+        // earning components (Basic/HRA/Conveyance/...) should scale with
+        // it — dumping the new gross straight into basicPay (the old
+        // behavior) left HRA/conveyance/etc stale and made basicPay ==
+        // grossSalary. Prefer the target period's own row as the base to
+        // scale from; if this is the first revision landing in that period,
+        // fall back to the latest structure already fetched above (same one
+        // used to compute currentSalary).
         const baseStructure: any = existing?.data?.id
           ? existing.data
           : latestStructure;
@@ -807,10 +811,66 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
             // `ratio` below still lands on newCtc, not newCtc-scaled-again.
             [{ code: "BASIC", type: "earning", amount: currentSalary }];
 
-        const components = baseComponents.map((c) => ({
+        // PF/ESI/PT are statutory — recomputed from the new gross/basic
+        // below via calcStatutoryDeductions, the same formula payroll runs
+        // use, rather than scaled by `ratio` (PT is a flat slab amount that
+        // doesn't move with salary at all; ESI stops applying entirely once
+        // gross crosses the wage ceiling; PF is 12% of the *new* basic, not
+        // 12% of the *old* PF amount). Any other deduction (e.g. a fixed
+        // loan-EMI "other deductions" bucket) is carried forward unscaled —
+        // a raise doesn't change what's owed on an existing loan.
+        const earningComponents = baseComponents.filter(
+          (c) => c.type === "earning",
+        );
+        const nonStatutoryDeductions = baseComponents.filter(
+          (c) =>
+            c.type === "deduction" && !["PF", "ESI", "PT"].includes(c.code),
+        );
+
+        const scaledEarnings = earningComponents.map((c) => ({
           ...c,
           amount: Math.round((parseFloat(String(c.amount)) || 0) * ratio),
         }));
+        const newGrossEarnings = scaledEarnings.reduce(
+          (sum, c) => sum + (parseFloat(String(c.amount)) || 0),
+          0,
+        );
+        const newBasicPay =
+          parseFloat(
+            String(scaledEarnings.find((c) => c.code === "BASIC")?.amount ?? 0),
+          ) || 0;
+
+        const [ptSlabs, tenantRow, componentRateRows] = await Promise.all([
+          (prisma as any).professionalTaxSlab.findMany({
+            where: { tenantId },
+          }),
+          prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { workState: true },
+          }),
+          (prisma as any).salaryComponentDefinition.findMany({
+            where: { tenantId, code: { in: ["PF", "ESI"] }, isActive: true },
+            select: { code: true, percentValue: true },
+          }),
+        ]);
+        const statutory = calcStatutoryDeductions(
+          newGrossEarnings,
+          newBasicPay,
+          tenantRow?.workState ?? null,
+          groupSlabsByState(ptSlabs),
+          componentRateRows,
+        );
+
+        const components = [
+          ...scaledEarnings,
+          { code: "PF", type: "deduction", amount: statutory.pf },
+          { code: "ESI", type: "deduction", amount: statutory.esi },
+          { code: "PT", type: "deduction", amount: statutory.pt },
+          ...nonStatutoryDeductions.map((c) => ({
+            ...c,
+            amount: parseFloat(String(c.amount)) || 0,
+          })),
+        ];
 
         let result: any;
         if (existing?.data?.id) {

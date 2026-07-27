@@ -225,7 +225,7 @@ describe("HiringModal", () => {
     expect(handleClose).toHaveBeenCalled();
   });
 
-  it("regression: the sum of every component (earnings + PF/ESI/PT) equals the entered gross, not just the earnings alone", async () => {
+  it("keeps earnings summing to the entered gross — PF/ESI/PT are deductions taken out of it, not squeezed inside it", async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === API_ENDPOINTS.LIST_SALARY_COMPONENTS) {
         return Promise.resolve({
@@ -257,13 +257,18 @@ describe("HiringModal", () => {
     const byCode = Object.fromEntries(
       payload.components.map((c: any) => [c.code, c.amount]),
     );
-    // Basic Pay must no longer equal the whole gross (the reported bug).
+    // Basic Pay must no longer equal the whole gross (the original bug).
     expect(byCode.BASIC).not.toBe(200000);
-    const total = payload.components.reduce(
-      (sum: number, c: any) => sum + c.amount,
-      0,
-    );
-    expect(Math.abs(total - 200000)).toBeLessThanOrEqual(2);
+    const earningsTotal = payload.components
+      .filter((c: any) => c.type === "earning")
+      .reduce((sum: number, c: any) => sum + c.amount, 0);
+    // Earnings alone must sum to the entered gross — PF/ESI/PT don't shrink
+    // the split, they're deducted from it afterward.
+    expect(earningsTotal).toBe(200000);
+    // Gross (200000) is above the ESI wage ceiling, so ESI must be zero —
+    // not a flat 1.75% of gross with no cap.
+    expect(byCode.ESI).toBe(0);
+    expect(byCode.PF).toBe(12000); // 12% of the resulting 100000 Basic
   });
 
   // Failure error-alert behavior isn't re-verified here: a rejecting

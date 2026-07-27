@@ -10,23 +10,40 @@ import ListItemText from "@mui/material/ListItemText";
 import CheckIcon from "@mui/icons-material/Check";
 import Button from "@web/shared/components/Button";
 import { alpha } from "@mui/material/styles";
-import { PLAN_FEATURES, PRICES } from "./constants";
+import { PLAN_FEATURES } from "./constants";
 import type { Billing } from "./types";
+import {
+  PLAN_PRICING,
+  TIER_EMPLOYEE_LIMITS,
+  PLAN_TIER_LABELS,
+  formatINR,
+  type PlanTier,
+} from "@web/shared/constants/billing";
 
 export function PlanStep({
   billing,
   setBilling,
+  planTier,
   loading,
   onBack,
   onPayAndCreate,
 }: {
   billing: Billing;
   setBilling: (v: Billing) => void;
+  // Decided by the company-size selection on the previous step — this step
+  // only lets the user pick monthly vs. annual for whichever tier that is.
+  planTier: PlanTier;
   loading: boolean;
   onBack: () => void;
   onPayAndCreate: () => void;
 }) {
-  const price = PRICES[billing];
+  const amountPaise = PLAN_PRICING[planTier][billing];
+  const priceDisplay = formatINR(amountPaise);
+  const sub = billing === "annual" ? "per year" : "per month";
+  const limit = TIER_EMPLOYEE_LIMITS[planTier];
+  const employeeFeature =
+    limit === null ? "Unlimited employees" : `Up to ${limit} employees`;
+  const features = [employeeFeature, ...PLAN_FEATURES];
 
   return (
     <>
@@ -72,7 +89,7 @@ export function PlanStep({
         >
           <Box>
             <Typography variant="h6" fontWeight={700}>
-              HRMS Pro
+              HRMS {PLAN_TIER_LABELS[planTier]}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Full-featured HR management
@@ -80,19 +97,19 @@ export function PlanStep({
           </Box>
           <Box sx={{ textAlign: "right" }}>
             <Typography variant="h5" fontWeight={800} color="primary.main">
-              {price.display}
+              {priceDisplay}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {price.sub}
+              {sub}
             </Typography>
-            {billing === "annual" && "savings" in price && (
+            {billing === "annual" && (
               <Typography
                 variant="caption"
                 display="block"
                 color="success.main"
                 fontWeight={600}
               >
-                {price.savings}
+                Save 10% vs. monthly
               </Typography>
             )}
           </Box>
@@ -101,7 +118,7 @@ export function PlanStep({
         <Divider sx={{ my: 1.5, borderColor: "var(--text-input-border)" }} />
 
         <List dense disablePadding>
-          {PLAN_FEATURES.map((f) => (
+          {features.map((f) => (
             <ListItem key={f} disableGutters sx={{ py: 0.3 }}>
               <ListItemIcon sx={{ minWidth: 28 }}>
                 <CheckIcon fontSize="small" color="success" />
@@ -147,7 +164,7 @@ export function PlanStep({
             fontSize: 14,
           }}
         >
-          {`Pay ${price.display} & Continue`}
+          {`Pay ${priceDisplay} & Continue`}
         </Button>
       </Box>
 

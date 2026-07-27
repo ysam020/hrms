@@ -16,6 +16,7 @@ import { handleError } from "../utils/handleError";
 import { safeDecrypt } from "@hrms/crypto";
 import { isPrivileged } from "./approvalChains";
 import { isHrOrAboveCaller } from "../utils/user";
+import { getSeatStatus } from "../utils/planLimits";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
   const authReq = req as AuthRequest;
@@ -49,13 +50,30 @@ export async function editEmployeeDetails(req: Request, res: Response) {
 
     const targetUser = await prisma.user.findUnique({
       where: { username },
-      select: { id: true },
+      select: { id: true, employeeStatus: true },
     });
 
     if (!targetUser) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Employee not found",
       });
+    }
+
+    // Reactivating a Resigned/Terminated/etc. employee also grows headcount,
+    // same as approveJoinRequest adding one — same seat-limit guard applies.
+    const tenantId = getTenantId();
+    if (
+      tenantId &&
+      employeeStatus === "Active" &&
+      targetUser.employeeStatus !== "Active"
+    ) {
+      const seatStatus = await getSeatStatus(tenantId);
+      if (!seatStatus.available) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `Your plan supports up to ${seatStatus.limit} employees. Upgrade to a higher tier to add more.`,
+          code: "SEAT_LIMIT_REACHED",
+        });
+      }
     }
 
     const updateData: Record<string, any> = {};
@@ -79,12 +97,12 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       data: updateData,
     });
 
-    const tenantId = getTenantId() ?? "global";
+    const cacheTenantId = tenantId ?? "global";
     await Promise.all([
-      cacheManager.invalidatePattern(`t:${tenantId}:employees:*`),
-      cacheManager.delete(`t:${tenantId}:employee:${targetUser.id}`),
-      cacheManager.delete(`t:${tenantId}:employee-details:${username}`),
-      cacheManager.delete(`t:${tenantId}:dashboard:employee-insights`),
+      cacheManager.invalidatePattern(`t:${cacheTenantId}:employees:*`),
+      cacheManager.delete(`t:${cacheTenantId}:employee:${targetUser.id}`),
+      cacheManager.delete(`t:${cacheTenantId}:employee-details:${username}`),
+      cacheManager.delete(`t:${cacheTenantId}:dashboard:employee-insights`),
     ]);
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

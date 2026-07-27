@@ -550,34 +550,60 @@ describe("initiatePayrollRun", () => {
 
 describe("getMyPayslips", () => {
   const mockRunFindMany = (prisma as any).payrollRun.findMany as jest.Mock;
-  const mockStructureFindMany = (prisma as any).salaryStructure
+  const mockLineItemFindMany = (prisma as any).payrollLineItem
     .findMany as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it("only returns SalaryStructure rows for months that actually disbursed", async () => {
-    mockRunFindMany.mockResolvedValue([{ year: 2026, month: 5 }]);
-    mockStructureFindMany.mockResolvedValue([
-      { userId: "hr-1", year: 2026, month: 7, netPayable: 93800 }, // salary config edited for the current month, never run
-      { userId: "hr-1", year: 2026, month: 5, netPayable: 93050 }, // actually disbursed
+  // SalaryStructure only ever holds the HR-configured salary (never touched
+  // by disbursement — see payrollDisbursement.ts), so a payslip's actual
+  // paid figures come from the disbursed run's PayrollLineItem instead.
+  it("returns a payslip per disbursed PayrollRun's line item", async () => {
+    mockRunFindMany.mockResolvedValue([
+      { id: "run-may", year: 2026, month: 5 },
+    ]);
+    mockLineItemFindMany.mockResolvedValue([
+      {
+        userId: "hr-1",
+        payrollRunId: "run-may",
+        netPayable: 93050,
+        grossSalary: 100000,
+        basicPay: 50000,
+        hra: 25000,
+        conveyance: 25000,
+        incentive: 0,
+        pf: 6000,
+        esi: 0,
+        pt: 200,
+        otherDeductions: 0,
+        advanceDeduction: 0,
+        tds: 0,
+        componentBreakdown: null,
+      },
     ]);
     const res = makeRes();
 
     await getMyPayslips(makeReq(), res);
 
+    expect(mockLineItemFindMany.mock.calls[0][0].where.payrollRunId).toEqual({
+      in: ["run-may"],
+    });
     const data = (res.json as jest.Mock).mock.calls[0][0].data;
     expect(data).toEqual([
-      { userId: "hr-1", year: 2026, month: 5, netPayable: 93050 },
+      expect.objectContaining({
+        userId: "hr-1",
+        year: 2026,
+        month: 5,
+        netPayable: 93050,
+      }),
     ]);
   });
 
   it("returns an empty list when no payroll run has ever disbursed", async () => {
     mockRunFindMany.mockResolvedValue([]);
-    mockStructureFindMany.mockResolvedValue([
-      { userId: "hr-1", year: 2026, month: 7, netPayable: 93800 },
-    ]);
+    mockLineItemFindMany.mockResolvedValue([]);
     const res = makeRes();
 
     await getMyPayslips(makeReq(), res);

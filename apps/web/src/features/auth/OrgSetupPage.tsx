@@ -41,6 +41,16 @@ import {
   type PendingOrgForm,
   type Tenant,
 } from "./org-setup/types";
+import type { PlanTier } from "@web/shared/constants/billing";
+
+// The company-size dropdown (OrgDetailsStep) is what decides the plan tier —
+// PlanStep no longer lets the user pick a tier directly, it only picks
+// monthly vs. annual for whichever tier this resolves to.
+function planTierForCompanySize(companySize: string): PlanTier {
+  if (companySize === "26–100") return "growth";
+  if (companySize === "More than 100") return "enterprise";
+  return "starter";
+}
 
 export default function OrgSetupPage() {
   const navigate = useNavigate();
@@ -80,6 +90,8 @@ export default function OrgSetupPage() {
   } | null>(null);
   const [checkingDomain, setCheckingDomain] = useState(false);
   const [submittingJoinRequest, setSubmittingJoinRequest] = useState(false);
+
+  const planTier = planTierForCompanySize(companySize);
 
   const orgNameRef = useRef(orgName);
   const industryRef = useRef(industry);
@@ -224,6 +236,7 @@ export default function OrgSetupPage() {
 
       const subRes = await apiClient.post(API_ENDPOINTS.CREATE_SUBSCRIPTION, {
         billing,
+        planTier,
       });
       if (!subRes.data?.success) {
         setAlert({
@@ -261,6 +274,7 @@ export default function OrgSetupPage() {
           const size = companySizeRef.current;
           const week = workWeekRef.current;
           const bill = billingRef.current;
+          const tier = planTierForCompanySize(companySizeRef.current);
 
           // Store non-sensitive form data so we can recover if the tab closes
           // before the API call completes. No payment credentials are stored.
@@ -281,6 +295,7 @@ export default function OrgSetupPage() {
               ...(size && { companySize: size }),
               workWeekPattern: week,
               billing: bill,
+              planTier: tier,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySubscriptionId: response.razorpay_subscription_id,
               razorpaySignature: response.razorpay_signature,
@@ -582,6 +597,7 @@ export default function OrgSetupPage() {
             <PlanStep
               billing={billing}
               setBilling={setBilling}
+              planTier={planTier}
               loading={loading}
               onBack={() => setStep(0)}
               onPayAndCreate={handlePayAndCreate}

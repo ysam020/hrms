@@ -4,7 +4,8 @@ import { getSalaryAnalytics } from "../handlers/getSalaryAnalytics";
 
 jest.mock("@hrms/db", () => {
   const _db = {
-    salaryStructure: { findMany: jest.fn() },
+    payrollRun: { findMany: jest.fn() },
+    payrollLineItem: { findMany: jest.fn() },
   };
   return {
     prisma: _db,
@@ -21,7 +22,9 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-const mockFindMany = (prisma as any).salaryStructure.findMany as jest.Mock;
+const mockRunFindMany = (prisma as any).payrollRun.findMany as jest.Mock;
+const mockLineItemFindMany = (prisma as any).payrollLineItem
+  .findMany as jest.Mock;
 const mockCacheGet = cacheManager.get as jest.Mock;
 const mockCacheSet = cacheManager.set as jest.Mock;
 
@@ -33,6 +36,8 @@ describe("getSalaryAnalytics", () => {
     jest.clearAllMocks();
     mockCacheGet.mockResolvedValue(null);
     mockCacheSet.mockResolvedValue(undefined);
+    mockRunFindMany.mockResolvedValue([]);
+    mockLineItemFindMany.mockResolvedValue([]);
   });
 
   it("returns cached result on cache hit", async () => {
@@ -40,14 +45,18 @@ describe("getSalaryAnalytics", () => {
     mockCacheGet.mockResolvedValue(cached);
     const cb = makeCallback();
     await getSalaryAnalytics(makeCall({}), cb);
-    expect(mockFindMany).not.toHaveBeenCalled();
+    expect(mockRunFindMany).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, cached);
   });
 
-  it("sums netPayable as total", async () => {
-    mockFindMany.mockResolvedValue([
-      { netPayable: 50000, month: 1, year: 2024 },
-      { netPayable: 60000, month: 2, year: 2024 },
+  it("sums netPayable (from disbursed PayrollLineItems) as total", async () => {
+    mockRunFindMany.mockResolvedValue([
+      { id: "r1", month: 1, year: 2024 },
+      { id: "r2", month: 2, year: 2024 },
+    ]);
+    mockLineItemFindMany.mockResolvedValue([
+      { payrollRunId: "r1", netPayable: 50000 },
+      { payrollRunId: "r2", netPayable: 60000 },
     ]);
     const cb = makeCallback();
     await getSalaryAnalytics(makeCall({}), cb);
@@ -55,8 +64,9 @@ describe("getSalaryAnalytics", () => {
   });
 
   it("formats label as YYYY-MM", async () => {
-    mockFindMany.mockResolvedValue([
-      { netPayable: 50000, month: 3, year: 2024 },
+    mockRunFindMany.mockResolvedValue([{ id: "r1", month: 3, year: 2024 }]);
+    mockLineItemFindMany.mockResolvedValue([
+      { payrollRunId: "r1", netPayable: 50000 },
     ]);
     const cb = makeCallback();
     await getSalaryAnalytics(makeCall({}), cb);
@@ -64,16 +74,15 @@ describe("getSalaryAnalytics", () => {
     expect(item.label).toBe("2024-03");
   });
 
-  it("filters by year when provided", async () => {
-    mockFindMany.mockResolvedValue([]);
+  it("only considers disbursed runs, filtered by year when provided", async () => {
     const cb = makeCallback();
     await getSalaryAnalytics(makeCall({ year: "2024" }), cb);
-    const where = mockFindMany.mock.calls[0][0].where;
+    const where = mockRunFindMany.mock.calls[0][0].where;
+    expect(where.status).toBe("disbursed");
     expect(where.year).toBe(2024);
   });
 
   it("caches the response", async () => {
-    mockFindMany.mockResolvedValue([]);
     const cb = makeCallback();
     await getSalaryAnalytics(makeCall({}), cb);
     expect(mockCacheSet).toHaveBeenCalledWith(
@@ -84,7 +93,7 @@ describe("getSalaryAnalytics", () => {
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockFindMany.mockRejectedValue(new Error("DB error"));
+    mockRunFindMany.mockRejectedValue(new Error("DB error"));
     const cb = makeCallback();
     await getSalaryAnalytics(makeCall({}), cb);
     expect(cb).toHaveBeenCalledWith(

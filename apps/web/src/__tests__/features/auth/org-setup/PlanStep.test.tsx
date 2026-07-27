@@ -11,6 +11,7 @@ function renderStep(
     <PlanStep
       billing="monthly"
       setBilling={setBilling}
+      planTier="starter"
       loading={false}
       onBack={onBack}
       onPayAndCreate={onPayAndCreate}
@@ -21,24 +22,50 @@ function renderStep(
 }
 
 describe("PlanStep", () => {
-  it("shows the monthly price and no savings note by default", () => {
-    renderStep({ billing: "monthly" });
-    expect(screen.getByText("₹999")).toBeInTheDocument();
+  it("shows the starter monthly price and no savings note by default", () => {
+    renderStep({ planTier: "starter", billing: "monthly" });
+    expect(screen.getByText("₹7,999")).toBeInTheDocument();
     expect(screen.getByText("per month")).toBeInTheDocument();
     expect(screen.queryByText(/Save/)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Pay ₹999 & Continue" }),
+      screen.getByRole("button", { name: "Pay ₹7,999 & Continue" }),
     ).toBeInTheDocument();
   });
 
-  it("shows the annual price with a savings note", () => {
-    renderStep({ billing: "annual" });
-    expect(screen.getByText("₹9,999")).toBeInTheDocument();
+  it("shows the starter annual price with a savings note", () => {
+    renderStep({ planTier: "starter", billing: "annual" });
+    expect(screen.getByText("₹86,389.2")).toBeInTheDocument();
     expect(screen.getByText("per year")).toBeInTheDocument();
-    expect(screen.getByText("Save ₹2,989 (25%)")).toBeInTheDocument();
+    expect(screen.getByText("Save 10% vs. monthly")).toBeInTheDocument();
+  });
+
+  it("shows the growth tier's price and employee cap", () => {
+    renderStep({ planTier: "growth", billing: "monthly" });
+    expect(screen.getByText("₹14,999")).toBeInTheDocument();
+    expect(screen.getByText("Up to 100 employees")).toBeInTheDocument();
+    expect(screen.getByText("HRMS Growth")).toBeInTheDocument();
+  });
+
+  it("shows the enterprise tier as unlimited", () => {
+    renderStep({ planTier: "enterprise", billing: "monthly" });
+    expect(screen.getByText("₹29,999")).toBeInTheDocument();
+    expect(screen.getByText("Unlimited employees")).toBeInTheDocument();
+    expect(screen.getByText("HRMS Enterprise")).toBeInTheDocument();
+  });
+
+  it("shows the starter tier's employee cap in its feature list", () => {
+    renderStep({ planTier: "starter" });
+    expect(screen.getByText("Up to 25 employees")).toBeInTheDocument();
+  });
+
+  it("does not expose a tier toggle — planTier is decided by the previous step", () => {
+    renderStep({ planTier: "starter" });
     expect(
-      screen.getByRole("button", { name: "Pay ₹9,999 & Continue" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Growth/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Enterprise/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("switches billing when the toggle is clicked", () => {
@@ -58,7 +85,7 @@ describe("PlanStep", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(onBack).toHaveBeenCalled();
     fireEvent.click(
-      screen.getByRole("button", { name: "Pay ₹999 & Continue" }),
+      screen.getByRole("button", { name: "Pay ₹7,999 & Continue" }),
     );
     expect(onPayAndCreate).toHaveBeenCalled();
   });

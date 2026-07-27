@@ -70,18 +70,55 @@ describe("tenantTokenStore", () => {
 
   describe("pending subscription", () => {
     it("stores and retrieves a pending subscription", async () => {
+      await storePendingSubscription("u1", "sub_1", "monthly", "per_seat");
+      expect(mockRedisInstance.setex).toHaveBeenCalledWith(
+        "pending_sub:u1",
+        7 * 24 * 60 * 60,
+        JSON.stringify({
+          subscriptionId: "sub_1",
+          billing: "monthly",
+          planTier: "per_seat",
+        }),
+      );
+
+      mockRedisInstance.get.mockResolvedValue(
+        JSON.stringify({
+          subscriptionId: "sub_1",
+          billing: "monthly",
+          planTier: "per_seat",
+        }),
+      );
+      const result = await getPendingSubscription("u1");
+      expect(result).toEqual({
+        subscriptionId: "sub_1",
+        billing: "monthly",
+        planTier: "per_seat",
+      });
+    });
+
+    it("defaults planTier to 'flat' when not provided", async () => {
       await storePendingSubscription("u1", "sub_1", "monthly");
       expect(mockRedisInstance.setex).toHaveBeenCalledWith(
         "pending_sub:u1",
         7 * 24 * 60 * 60,
-        JSON.stringify({ subscriptionId: "sub_1", billing: "monthly" }),
+        JSON.stringify({
+          subscriptionId: "sub_1",
+          billing: "monthly",
+          planTier: "flat",
+        }),
       );
 
+      // Older records written before planTier existed still resolve — the
+      // reader backfills the default rather than treating them as malformed.
       mockRedisInstance.get.mockResolvedValue(
         JSON.stringify({ subscriptionId: "sub_1", billing: "monthly" }),
       );
       const result = await getPendingSubscription("u1");
-      expect(result).toEqual({ subscriptionId: "sub_1", billing: "monthly" });
+      expect(result).toEqual({
+        subscriptionId: "sub_1",
+        billing: "monthly",
+        planTier: "flat",
+      });
     });
 
     it("returns null when there is no pending subscription", async () => {

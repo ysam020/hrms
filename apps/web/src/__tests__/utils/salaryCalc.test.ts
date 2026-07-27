@@ -67,8 +67,8 @@ describe("computeSalaryComponents", () => {
 
   it("derives percent_of_basic components from gross when percentOf is 'gross'", () => {
     const { values } = computeSalaryComponents({
-      basicPay: 20000,
-      grossSalary: 40000,
+      basicPay: 10000,
+      grossSalary: 20000,
       components: [
         makeComponent({
           code: "ESI",
@@ -78,12 +78,12 @@ describe("computeSalaryComponents", () => {
         }),
       ],
     });
-    expect(values.ESI).toBe(700); // 1.75% of 40000
+    expect(values.ESI).toBe(350); // 1.75% of 20000
   });
 
-  it("skips ESI-style components above the configured gross when caller passes a gross beyond any threshold (no built-in cap — matches percentValue literally)", () => {
+  it("zeroes out ESI once gross crosses the statutory wage ceiling (₹21,000), matching the backend's calcStatutoryDeductions", () => {
     const { values } = computeSalaryComponents({
-      basicPay: 5000,
+      basicPay: 50000,
       grossSalary: 100000,
       components: [
         makeComponent({
@@ -94,7 +94,7 @@ describe("computeSalaryComponents", () => {
         }),
       ],
     });
-    expect(values.ESI).toBe(1750);
+    expect(values.ESI).toBe(0);
   });
 
   it("locks PT to the fixed component's own value when no matching PT slab exists", () => {
@@ -276,29 +276,23 @@ describe("redistributeGross", () => {
     expect(result.CONVEYANCE).toBe(26667);
   });
 
-  // Regression: entering a gross of 200,000 used to set Basic Pay to
-  // 200,000 (the whole gross), with PF/ESI/PT then added ON TOP — so the
-  // sum of every displayed component exceeded the entered gross. Basic/HRA/
-  // Conveyance must instead be grossed-up so that once PF is derived from
-  // the result, everything (earnings + PF) sums back to the entered gross.
-  it("grosses up earnings so Basic+HRA+Conveyance+PF sums to the entered gross, not just the earnings alone", () => {
+  // Regression (superseded): entering a gross used to either (a) dump the
+  // whole figure into Basic with PF added ON TOP (sum exceeded gross), or a
+  // later, still-wrong "fix" (b) treated gross as CTC-inclusive-of-PF and
+  // grossed earnings DOWN to leave room for it — which then got deducted a
+  // SECOND time when Net Payable subtracted PF from that already-reduced
+  // total. "Gross Salary" must mean earnings only (Basic+HRA+Conveyance),
+  // matching the payslip's "Gross Earnings" line; PF/ESI/PT are deductions
+  // taken out of it once, afterward, never squeezed inside it.
+  it("does not let a deduction (PF) shrink the earnings split — Basic+HRA+Conveyance sums to the entered gross exactly", () => {
     const result = redistributeGross(200000, componentsWithPF, {}, new Set());
-    // earningsTotal = 200000 / 1.06 = 188679.245..., split 50/25/25.
-    expect(result.BASIC).toBe(94340);
-    expect(result.HRA).toBe(47170);
-    expect(result.CONVEYANCE).toBe(47170);
-    const { values: derived } = computeSalaryComponents({
-      basicPay: result.BASIC,
-      grossSalary: 200000,
-      components: componentsWithPF,
-    });
-    const total = result.BASIC + result.HRA + result.CONVEYANCE + derived.PF;
-    // Within a rupee of 200000 — Math.round is applied independently to
-    // each component, so exact equality isn't guaranteed, just very close.
-    expect(Math.abs(total - 200000)).toBeLessThanOrEqual(2);
+    expect(result.BASIC).toBe(100000);
+    expect(result.HRA).toBe(50000);
+    expect(result.CONVEYANCE).toBe(50000);
+    expect(result.BASIC + result.HRA + result.CONVEYANCE).toBe(200000);
   });
 
-  it("proportional rescale also grosses up for PF so the total still sums to the new gross", () => {
+  it("proportional rescale also ignores PF — earnings alone sum to the new gross", () => {
     const current = { BASIC: 20000, HRA: 10000, CONVEYANCE: 10000, PF: 2400 };
     const result = redistributeGross(
       80000,
@@ -306,9 +300,9 @@ describe("redistributeGross", () => {
       current,
       new Set(),
     );
-    expect(result.BASIC).toBe(37736);
-    expect(result.HRA).toBe(18868);
-    expect(result.CONVEYANCE).toBe(18868);
+    expect(result.BASIC).toBe(40000);
+    expect(result.HRA).toBe(20000);
+    expect(result.CONVEYANCE).toBe(20000);
     // Deduction (PF)'s stale value is left untouched by redistributeGross
     // itself — the caller re-derives it from the new BASIC separately.
     expect(result.PF).toBe(2400);

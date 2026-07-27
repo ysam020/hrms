@@ -5,6 +5,9 @@ import {
   cancelSubscription,
   reactivateSubscription,
   getPendingSetup,
+  getPlanPricing,
+  changePlan,
+  confirmPlanUpgrade,
 } from "../handlers/payment";
 
 export const paymentRouter: Router = Router();
@@ -15,6 +18,9 @@ paymentRouter.post(
   createSubscription,
 );
 paymentRouter.get("/payment/pending-setup", authenticate, getPendingSetup);
+// authenticate-only (no requireTenant) — needed by org-setup's PlanStep
+// before a tenant exists, as well as by Subscription.tsx afterwards.
+paymentRouter.get("/payment/plan-pricing", authenticate, getPlanPricing);
 paymentRouter.post(
   "/payment/cancel-subscription",
   authenticate,
@@ -26,6 +32,18 @@ paymentRouter.post(
   authenticate,
   requireTenant,
   reactivateSubscription,
+);
+paymentRouter.post(
+  "/payment/change-plan",
+  authenticate,
+  requireTenant,
+  changePlan,
+);
+paymentRouter.post(
+  "/payment/confirm-plan-upgrade",
+  authenticate,
+  requireTenant,
+  confirmPlanUpgrade,
 );
 
 // NOTE: /payment/webhook is mounted directly in server.ts before the CSRF

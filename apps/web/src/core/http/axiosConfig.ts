@@ -202,13 +202,27 @@ const forceLogout = () => {
   _onUnauthorized?.();
 };
 
+// A 401 response means the server actively rejected the refresh token —
+// there's really no session left. Anything else (network error, timeout,
+// aborted request) says nothing about whether the session is still valid,
+// so it must not be treated as a logout signal.
+const isDefiniteAuthFailure = (err: unknown) =>
+  (err as { response?: { status?: number } })?.response?.status === 401;
+
 // Proactively refresh when the tab becomes visible and the token is close
 // to expiry, so the user never hits a 401 mid-session.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   const token = getAccessToken();
   if (token && isExpiringSoon(token, 5 * 60)) {
-    performRefresh().catch(forceLogout);
+    // The token isn't expired yet — a transient failure here (e.g. the
+    // network hasn't reconnected after the laptop woke up right as this
+    // tab regained focus) shouldn't log the user out. Only act on a
+    // definitive rejection; otherwise leave the session alone and let the
+    // next real request retry the refresh.
+    performRefresh().catch((err) => {
+      if (isDefiniteAuthFailure(err)) forceLogout();
+    });
   }
 });
 
@@ -365,9 +379,21 @@ apiClient.interceptors.response.use(
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers["Authorization"] = `Bearer ${newToken}`;
           return apiClient(originalRequest);
-        } catch {}
+        } catch (refreshErr) {
+          // Only a definitive rejection from the server means the session
+          // is actually gone. A transient failure of the refresh call
+          // itself (network blip, timeout) must not nuke an otherwise-valid
+          // session — surface this request's failure and let the next one
+          // try the refresh again instead of forcing a logout.
+          if (isDefiniteAuthFailure(refreshErr)) {
+            forceLogout();
+          }
+          return Promise.reject(error);
+        }
       }
 
+      // The retried request (with a freshly refreshed token) still came
+      // back 401 — that's a genuine rejection, not a transient hiccup.
       forceLogout();
       return Promise.reject(error);
     }

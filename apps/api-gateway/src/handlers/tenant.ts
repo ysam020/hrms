@@ -30,6 +30,7 @@ import { aesEncrypt } from "@hrms/crypto";
 import { fetchPaymentMethod, getRazorpay } from "./payment";
 import { notify } from "@hrms/notifications";
 import { seedSalaryFromHire } from "./salary";
+import { getSeatStatus, getActiveEmployeeCount } from "../utils/planLimits";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -150,6 +151,7 @@ async function buildTenant(
     industry?: string;
     companySize?: string;
     billing?: string;
+    planTier?: string;
     razorpaySubscriptionId: string;
     razorpayPaymentId?: string;
     workWeekPattern?: {
@@ -165,6 +167,7 @@ async function buildTenant(
     industry,
     companySize,
     billing,
+    planTier,
     razorpaySubscriptionId,
     razorpayPaymentId,
     workWeekPattern,
@@ -245,6 +248,10 @@ async function buildTenant(
         slug,
         dbName,
         plan: "pro",
+        planTier:
+          planTier === "growth" || planTier === "enterprise"
+            ? planTier
+            : "starter",
         ...(billing && { billing }),
         ...(industry && { industry }),
         ...(companySize && { companySize }),
@@ -442,6 +449,7 @@ export async function createTenant(req: AuthRequest, res: Response) {
       industry,
       companySize,
       billing,
+      planTier,
       razorpayPaymentId,
       razorpaySubscriptionId,
       razorpaySignature,
@@ -451,6 +459,7 @@ export async function createTenant(req: AuthRequest, res: Response) {
       industry?: string;
       companySize?: string;
       billing?: string;
+      planTier?: string;
       razorpayPaymentId?: string;
       razorpaySubscriptionId?: string;
       razorpaySignature?: string;
@@ -489,6 +498,7 @@ export async function createTenant(req: AuthRequest, res: Response) {
         industry,
         companySize,
         billing,
+        planTier,
         razorpaySubscriptionId,
         razorpayPaymentId,
         workWeekPattern,
@@ -558,6 +568,7 @@ export async function completePendingSetup(req: AuthRequest, res: Response) {
         industry,
         companySize,
         billing: pending.billing,
+        planTier: pending.planTier,
         razorpaySubscriptionId: pending.subscriptionId,
         razorpayPaymentId: verifiedPayment?.id,
         workWeekPattern,
@@ -697,7 +708,12 @@ export async function getMyTenant(req: AuthRequest, res: Response) {
         message: "Tenant not found.",
       });
     }
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, { data: { tenant } });
+    // Not a Tenant column — computed so the Subscription page can price a
+    // plan change without a second round trip.
+    const activeEmployeeCount = await getActiveEmployeeCount(tenantId);
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: { tenant: { ...tenant, activeEmployeeCount } },
+    });
   } catch (error: unknown) {
     return handleError(res, error);
   }
@@ -1214,6 +1230,14 @@ export async function approveJoinRequest(req: AuthRequest, res: Response) {
     if (request.status !== "pending") {
       return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
         message: "This request has already been resolved.",
+      });
+    }
+
+    const seatStatus = await getSeatStatus(tenantId);
+    if (!seatStatus.available) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: `Your plan supports up to ${seatStatus.limit} employees. Upgrade to a higher tier to add more.`,
+        code: "SEAT_LIMIT_REACHED",
       });
     }
 

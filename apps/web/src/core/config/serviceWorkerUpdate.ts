@@ -8,9 +8,18 @@
 export function watchForServiceWorkerUpdates(): void {
   if (!("serviceWorker" in navigator)) return;
 
+  // If no service worker currently controls this page, the controllerchange
+  // that's about to fire is the *first* activation for this client (a new
+  // visitor, or one returning after a cache/storage clear) — there's no
+  // stale bundle to replace, so reloading would just interrupt whatever
+  // this load is already doing (e.g. consuming the Google OAuth callback's
+  // access_token query param). Only reload when a controller already
+  // existed, i.e. this is a genuine version change under an open tab.
+  const hadController = !!navigator.serviceWorker.controller;
+
   let reloaded = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloaded) return;
+    if (reloaded || !hadController) return;
     reloaded = true;
     window.location.reload();
   });

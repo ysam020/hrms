@@ -75,13 +75,18 @@ describe("getSalaryStructure", () => {
     expect(callArgs.where).toEqual({ userId: "john" });
   });
 
-  it("orders by createdAt descending to get latest record", async () => {
+  it("orders by year/month descending to get the latest period, not the latest row written", async () => {
+    // Deliberately not createdAt: a row touched out of period order (e.g. by
+    // disbursement re-upserting an old month) must not shadow the true
+    // current structure — see the handler's own comment.
     mockFindFirst.mockResolvedValue({ id: "sal-1" });
 
     await getSalaryStructure(makeCall({ userId: "john" }), makeCallback());
 
     expect(mockFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { createdAt: "desc" } }),
+      expect.objectContaining({
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+      }),
     );
   });
 

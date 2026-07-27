@@ -8,6 +8,8 @@ import {
   cancelSubscription,
   reactivateSubscription,
   handleWebhook,
+  changePlan,
+  confirmPlanUpgrade,
 } from "../handlers/payment";
 import * as tenantTokenStore from "../services/tenantTokenStore";
 
@@ -20,7 +22,7 @@ jest.mock("@hrms/db", () => ({
       updateMany: jest.fn(),
     },
     tenantMembership: { findFirst: jest.fn().mockResolvedValue(null) },
-    user: { findUnique: jest.fn().mockResolvedValue(null) },
+    user: { findUnique: jest.fn().mockResolvedValue(null), count: jest.fn() },
   },
 }));
 
@@ -56,6 +58,8 @@ const mockRzpPlansCreate = jest.fn();
 const mockRzpSubscriptionsCreate = jest.fn();
 const mockRzpSubscriptionsFetch = jest.fn();
 const mockRzpSubscriptionsCancel = jest.fn();
+const mockRzpSubscriptionsUpdate = jest.fn();
+const mockRzpOrdersCreate = jest.fn();
 
 jest.mock("razorpay", () => {
   return jest.fn().mockImplementation(() => ({
@@ -65,7 +69,9 @@ jest.mock("razorpay", () => {
       create: (...a: any[]) => mockRzpSubscriptionsCreate(...a),
       fetch: (...a: any[]) => mockRzpSubscriptionsFetch(...a),
       cancel: (...a: any[]) => mockRzpSubscriptionsCancel(...a),
+      update: (...a: any[]) => mockRzpSubscriptionsUpdate(...a),
     },
+    orders: { create: (...a: any[]) => mockRzpOrdersCreate(...a) },
   }));
 });
 
@@ -76,6 +82,7 @@ const mockTenantUpdateMany = (prisma as any).tenant.updateMany as jest.Mock;
 const mockMembershipFindFirst = (prisma as any).tenantMembership
   .findFirst as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;
+const mockUserCount = (prisma as any).user.count as jest.Mock;
 const mockNotify = notify as jest.Mock;
 const mockTokenStore = tenantTokenStore as jest.Mocked<typeof tenantTokenStore>;
 
@@ -174,6 +181,7 @@ describe("payment handlers", () => {
         "u1",
         "sub_1",
         "monthly",
+        "starter",
       );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -438,6 +446,240 @@ describe("payment handlers", () => {
         dataArg.planExpiresAt.getFullYear() -
           dataArg.planActivatedAt.getFullYear(),
       ).toBe(1);
+    });
+  });
+
+  describe("changePlan", () => {
+    beforeEach(() => {
+      mockRzpPlansCreate.mockResolvedValue({ id: "plan_new" });
+      mockTokenStore.getRazorpayPlanId.mockResolvedValue(null);
+      mockTokenStore.setRazorpayPlanId.mockResolvedValue(undefined);
+      mockRzpSubscriptionsUpdate.mockResolvedValue({});
+      mockTenantUpdate.mockResolvedValue({});
+      mockUserCount.mockResolvedValue(10);
+    });
+
+    it("rejects an invalid planTier", async () => {
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: { planTier: "bogus", billing: "monthly" },
+      };
+      const res = makeRes();
+      await changePlan(req, res);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 400 }),
+      );
+    });
+
+    it("upgrades immediately with no charge when the renewal date is today (prorated amount rounds to zero)", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        planTier: "starter",
+        billing: "monthly",
+        pendingPlanTier: null,
+        razorpaySubscriptionId: "sub_1",
+        subscriptionStatus: "active",
+        planExpiresAt: new Date(),
+      });
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: { planTier: "growth", billing: "monthly" },
+      };
+      const res = makeRes();
+
+      await changePlan(req, res);
+
+      expect(mockRzpSubscriptionsUpdate).toHaveBeenCalledWith("sub_1", {
+        plan_id: "plan_new",
+        quantity: 1,
+        schedule_change_at: "now",
+      });
+      expect(mockTenantUpdate).toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: { planTier: "growth", billing: "monthly" },
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ requiresPayment: false }),
+        }),
+      );
+    });
+
+    it("collects a prorated one-time order for a same-billing upgrade mid-cycle", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        planTier: "starter",
+        billing: "monthly",
+        pendingPlanTier: null,
+        razorpaySubscriptionId: "sub_1",
+        subscriptionStatus: "active",
+        planExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      mockRzpOrdersCreate.mockResolvedValue({ id: "order_1" });
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: { planTier: "growth", billing: "monthly" },
+      };
+      const res = makeRes();
+
+      await changePlan(req, res);
+
+      expect(mockRzpOrdersCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: "INR" }),
+      );
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            requiresPayment: true,
+            orderId: "order_1",
+            planTier: "growth",
+            billing: "monthly",
+          }),
+        }),
+      );
+      // Tenant isn't mutated yet — only confirmPlanUpgrade does that.
+      expect(mockTenantUpdate).not.toHaveBeenCalled();
+    });
+
+    it("schedules a downgrade for the next cycle with no charge", async () => {
+      const expiry = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+      mockTenantFindUnique.mockResolvedValue({
+        planTier: "growth",
+        billing: "monthly",
+        pendingPlanTier: null,
+        razorpaySubscriptionId: "sub_1",
+        subscriptionStatus: "active",
+        planExpiresAt: expiry,
+      });
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: { planTier: "starter", billing: "monthly" },
+      };
+      const res = makeRes();
+
+      await changePlan(req, res);
+
+      expect(mockRzpSubscriptionsUpdate).toHaveBeenCalledWith("sub_1", {
+        plan_id: "plan_new",
+        quantity: 1,
+        schedule_change_at: "cycle_end",
+      });
+      expect(mockTenantUpdate).toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: {
+          pendingPlanTier: "starter",
+          pendingBilling: "monthly",
+          pendingPlanChangeAt: expiry,
+        },
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ requiresPayment: false }),
+        }),
+      );
+    });
+
+    it("blocks downgrading to a tier whose employee limit the tenant already exceeds", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        planTier: "growth",
+        billing: "monthly",
+        pendingPlanTier: null,
+        razorpaySubscriptionId: "sub_1",
+        subscriptionStatus: "active",
+        planExpiresAt: new Date(),
+      });
+      mockUserCount.mockResolvedValue(30);
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: { planTier: "starter", billing: "monthly" },
+      };
+      const res = makeRes();
+
+      await changePlan(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: expect.stringContaining("Starter supports up to 25"),
+        }),
+      );
+      expect(mockRzpSubscriptionsUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("confirmPlanUpgrade", () => {
+    it("verifies the order signature, swaps the plan immediately, and clears any pending change", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_1",
+      });
+      // "enterprise:monthly" — deliberately untouched by the changePlan tests
+      // above (which only ever use starter/growth), so this doesn't collide
+      // with getOrCreatePlanId's module-level in-memory cache (see the
+      // "responds with an error status" test's comment for the same caveat).
+      mockTokenStore.getRazorpayPlanId.mockResolvedValue("plan_enterprise");
+      mockRzpSubscriptionsUpdate.mockResolvedValue({});
+      mockTenantUpdate.mockResolvedValue({});
+      mockUserCount.mockResolvedValue(10);
+
+      const orderId = "order_1";
+      const paymentId = "pay_1";
+      const signature = createHmac("sha256", "key_secret")
+        .update(`${orderId}|${paymentId}`)
+        .digest("hex");
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: {
+          razorpayOrderId: orderId,
+          razorpayPaymentId: paymentId,
+          razorpaySignature: signature,
+          planTier: "enterprise",
+          billing: "monthly",
+        },
+      };
+      const res = makeRes();
+
+      await confirmPlanUpgrade(req, res);
+
+      expect(mockRzpSubscriptionsUpdate).toHaveBeenCalledWith("sub_1", {
+        plan_id: "plan_enterprise",
+        quantity: 1,
+        schedule_change_at: "now",
+      });
+      expect(mockTenantUpdate).toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: {
+          planTier: "enterprise",
+          billing: "monthly",
+          pendingPlanTier: null,
+          pendingBilling: null,
+          pendingPlanChangeAt: null,
+        },
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 200 }),
+      );
+    });
+
+    it("rejects a bad signature", async () => {
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: {
+          razorpayOrderId: "order_1",
+          razorpayPaymentId: "pay_1",
+          razorpaySignature: "bogus",
+          planTier: "growth",
+          billing: "monthly",
+        },
+      };
+      const res = makeRes();
+
+      await confirmPlanUpgrade(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "Payment verification failed.",
+        }),
+      );
+      expect(mockRzpSubscriptionsUpdate).not.toHaveBeenCalled();
     });
   });
 

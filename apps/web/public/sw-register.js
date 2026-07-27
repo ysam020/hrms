@@ -22,13 +22,9 @@ if ("serviceWorker" in navigator) {
       })
       .catch(console.error);
 
-    // When the new SW takes control, reload once to serve fresh assets
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
-    });
+    // Reload-on-update is handled once, centrally, by
+    // watchForServiceWorkerUpdates() (see src/core/config/serviceWorkerUpdate.ts)
+    // — it also guards against reloading on this client's first-ever SW
+    // activation, which a second independent listener here can't do.
   });
 }

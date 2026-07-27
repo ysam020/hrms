@@ -341,6 +341,7 @@ describe("OrgSetupPage", () => {
     await waitFor(() =>
       expect(mockPost).toHaveBeenCalledWith("/payment/create-subscription", {
         billing: "monthly",
+        planTier: "starter",
       }),
     );
     expect(openSpy).toHaveBeenCalled();
