@@ -14,7 +14,7 @@ import { randomBytes } from "crypto";
 import path from "path";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3Client, S3_BUCKET, S3_REGION, s3FileUrl } from "../config/s3";
+import { s3Client, S3_BUCKET, S3_URL_PREFIX, s3FileUrl } from "../config/s3";
 import { NOTIFICATION_PRUNE_LIMIT } from "../constants";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -631,8 +631,6 @@ export async function getPresignedUrl(req: Request, res: Response) {
     return handleError(res, error);
   }
 }
-
-const S3_URL_PREFIX = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/`;
 
 /**
  * POST /upload/view-url

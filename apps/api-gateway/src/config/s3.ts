@@ -9,6 +9,8 @@ export const s3Client = new S3Client({
   responseChecksumValidation: "WHEN_REQUIRED",
 });
 
+export const S3_URL_PREFIX = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/`;
+
 export function s3FileUrl(key: string): string {
-  return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`;
+  return `${S3_URL_PREFIX}${key}`;
 }

@@ -95,6 +95,8 @@ const JOB_OPENINGS = {
     `/public/careers/${slug}/job/${id}`,
   GET_JOB_TITLES: "/get-job-titles",
   APPLY_FOR_JOB: (slug: string) => `/apply-for-job/${slug}`,
+  RESUME_UPLOAD_URL: (slug: string) =>
+    `/public/careers/${slug}/resume-upload-url`,
   HIRE_CANDIDATE: "/hire-candidate",
   UPDATE_ASSIGNED_OFFICIAL_EMAIL: "/update-assigned-official-email",
   REJECT_CANDIDATE: "/reject-application",
@@ -237,6 +239,7 @@ const UPLOAD = {
   UPLOAD_FILES: (query: string) => `/upload-file${query}`,
   UPLOAD_PRESIGNED_URL: "/upload/presigned-url",
   UPLOAD_VIEW_URL: "/upload/view-url",
+  RESUME_VIEW_URL: "/resume-view-url",
 };
 
 const CHAT = {

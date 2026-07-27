@@ -74,6 +74,7 @@ jest.mock("../config/s3", () => ({
   s3Client: {},
   S3_BUCKET: "test-bucket",
   S3_REGION: "test-region",
+  S3_URL_PREFIX: "https://test-bucket.s3.test-region.amazonaws.com/",
   s3FileUrl: jest.fn((key: string) => `https://s3.example.com/${key}`),
 }));
 

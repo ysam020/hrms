@@ -31,6 +31,11 @@ publicRecruitmentRouter.post(
   resolvePublicTenant,
   h.applyForJob,
 );
+publicRecruitmentRouter.post(
+  "/public/careers/:slug/resume-upload-url",
+  resolvePublicTenant,
+  h.getResumeUploadUrl,
+);
 
 recruitmentRouter.get("/view-job-openings", authenticate, h.viewJobOpenings);
 recruitmentRouter.get("/view-job-opening/:id", authenticate, h.viewJobOpening);
@@ -58,6 +63,12 @@ recruitmentRouter.get(
   authenticate,
   requirePrivileged,
   h.viewApplications,
+);
+recruitmentRouter.post(
+  "/resume-view-url",
+  authenticate,
+  requirePrivileged,
+  h.getResumeViewUrl,
 );
 recruitmentRouter.put(
   "/update-candidate-status",
