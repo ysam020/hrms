@@ -34,6 +34,15 @@ WORKDIR /app
 # Must be set before secrets load (loadSecrets skips already-set env vars).
 ENV VITE_API_STRING=/api/v1
 ENV VITE_SERVER_URL=
+# Not a secret — plain config (MB). handleFileUpload.tsx's fallback is `|| 0`,
+# so leaving this unset silently caps uploads at 0 bytes rather than erroring.
+ENV VITE_MAX_FILE_SIZE=15
+# Local-dev bypass for AWS Secrets Manager — loadSecrets() (called by
+# load-build-secrets.mjs) reads this file instead of calling AWS whenever
+# it's set, so this only matters locally; a real deploy leaves it unset and
+# falls through to Secrets Manager as before. The path itself only exists
+# for the duration of the RUN below, via --mount=type=secret.
+ENV LOCAL_SECRETS_FILE=/run/secrets/local_secrets_file
 
 # Install against the FULL workspace's package.json files (from the pruner
 # stage's unpruned checkout), not turbo prune's out/json subset: turbo@2.10.5's
@@ -65,6 +74,7 @@ RUN pnpm db:generate
 
 RUN --mount=type=secret,id=aws_credentials,target=/root/.aws/credentials \
     --mount=type=secret,id=aws_config,target=/root/.aws/config \
+    --mount=type=secret,id=local_secrets_file,target=/run/secrets/local_secrets_file \
     turbo build --filter=web --force
 
 # Pinned (not the floating `alpine` tag) for reproducible builds — an
