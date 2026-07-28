@@ -836,7 +836,19 @@ Resources:
                 -out /opt/hrms/packages/certificates/cert.pem \
                 -subj "/CN=localhost" \
                 -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
-              cp /opt/hrms/packages/certificates/cert.pem /opt/hrms/packages/certificates/rootCA.pem
+              # mTLS: gRPC clients (api-gateway) must present a distinct
+              # identity from the servers' own cert.pem/key.pem - grpc-js
+              # resets the connection if client and server present identical
+              # certs (see the comment in apps/api-gateway/src/grpc/clients.ts).
+              # Mirrors scripts/generate-certs.mjs's self-signed fallback:
+              # two independent self-signed leaf certs, neither a real CA,
+              # bundled together into rootCA.pem as mutually-trusted roots.
+              openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+                -keyout /opt/hrms/packages/certificates/client-key.pem \
+                -out /opt/hrms/packages/certificates/client-cert.pem \
+                -subj "/CN=grpc-internal-client"
+              cat /opt/hrms/packages/certificates/cert.pem /opt/hrms/packages/certificates/client-cert.pem \
+                > /opt/hrms/packages/certificates/rootCA.pem
               chmod 644 /opt/hrms/packages/certificates/*.pem
             fi
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
