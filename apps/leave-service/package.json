@@ -16,11 +16,11 @@
     "@hrms/notifications": "workspace:*",
     "@hrms/proto": "workspace:^",
     "@hrms/queue": "workspace:*",
-    "dayjs": "^1.11.13",
+    "dayjs": "^1.11.21",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@hrms/typescript-config": "workspace:*",
-    "tsx": "^4.19.2"
+    "tsx": "^4.23.1"
   }
 }
