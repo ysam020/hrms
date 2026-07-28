@@ -193,6 +193,47 @@ export async function deleteHrActivity(req: Request, res: Response) {
   }
 }
 
+export async function bulkDeleteHrActivities(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { ids } = req.body as { ids: string[] };
+
+    const existing = await prisma.hrActivity.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, createdBy: true },
+    });
+    const ownedIds = existing
+      .filter((a) => a.createdBy === user?.userId)
+      .map((a) => a.id);
+    const foundIds = new Set(existing.map((a) => a.id));
+    const notFound = ids.filter(
+      (id) => !foundIds.has(id) || !ownedIds.includes(id),
+    );
+
+    if (ownedIds.length > 0) {
+      await prisma.hrActivity.updateMany({
+        where: { id: { in: ownedIds } },
+        data: {
+          status: "deleted",
+          deletedBy: user?.userId || "",
+          deletedOn: new Date(),
+        },
+      });
+      await cacheManager.invalidatePattern(
+        `t:${getTenantId() ?? "global"}:hrm:activities:*`,
+      );
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `${ownedIds.length} HR activity(ies) deleted`,
+      data: { deleted: ownedIds.length, notFound },
+    });
+  } catch (error: unknown) {
+    logger.error("bulk-delete-hr-activities error:", { error });
+    return handleError(res, error);
+  }
+}
+
 export async function getPolicies(req: Request, res: Response) {
   try {
     const { page, limit } = parsePagination(req.query, 10);

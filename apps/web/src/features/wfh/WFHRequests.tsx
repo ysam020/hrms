@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -99,6 +100,11 @@ function WFHRequests() {
     label?: string;
   } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<"approve" | "reject" | null>(
+    null,
+  );
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const isApprover =
     isHrOrAbove(user) ||
@@ -332,12 +338,59 @@ function WFHRequests() {
 
   const memoizedData = useMemo(() => data || [], [data]);
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [data]);
+
+  const isRowBulkSelectable = useCallback(
+    (row: any) => {
+      if (row.status !== "Pending") return false;
+      const isOwn = row.userId === user?.id;
+      return isApprover && (!isOwn || user?.isSuperUser);
+    },
+    [isApprover, user?.id, user?.isSuperUser],
+  );
+
+  const handleBulkConfirm = useCallback(async () => {
+    if (!bulkAction) return;
+    setBulkLoading(true);
+    try {
+      const res = await apiClient.patch(API_ENDPOINTS.BULK_UPDATE_WFH_STATUS, {
+        requestIds: selectedIds,
+        action: bulkAction,
+      });
+      const failed = res.data?.data?.failed ?? [];
+      const succeeded = res.data?.data?.succeeded ?? [];
+      refresh();
+      setAlert({
+        open: true,
+        message:
+          failed.length > 0
+            ? `${succeeded.length} ${bulkAction}d, ${failed.length} failed`
+            : res.data.message ||
+              `${succeeded.length} request(s) ${bulkAction}d`,
+        severity: failed.length > 0 ? "warning" : "success",
+      });
+      setSelectedIds([]);
+      setBulkAction(null);
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message: err?.response?.data?.message || "Action failed",
+        severity: "error",
+      });
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [bulkAction, selectedIds, refresh, setAlert]);
+
   return (
     <ErrorBoundary fallback={<ErrorFallback />}>
       <DataList
         ariaLabel="WFH requests"
         data={memoizedData}
         columns={columns}
+        getRowId={(row: any) => row.id}
         actions={rowActions}
         loading={loading}
         emptyMessage="No WFH requests found"
@@ -346,39 +399,85 @@ function WFHRequests() {
           onChange: handleGlobalFilterChange,
           placeholder: "Search…",
         }}
+        selection={
+          isApprover
+            ? {
+                selectedIds,
+                onChange: setSelectedIds,
+                isRowSelectable: isRowBulkSelectable,
+              }
+            : undefined
+        }
         toolbarActions={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          selectedIds.length > 0 ? (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <FilterList
-                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-              />
-              <Box sx={{ minWidth: 130 }}>
-                <Dropdown
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.value)}
-                  options={STATUS_OPTIONS}
-                  placeholder="Select Status"
-                  className="w-full"
-                  style={{ minWidth: "130px" }}
-                  appendTo={() =>
-                    document.querySelector("#root .App") as HTMLElement
-                  }
-                />
-              </Box>
-            </Box>
-            <Tooltip title="Request WFH">
-              <span>
+              <Typography variant="body2" color="text.secondary">
+                {selectedIds.length} selected
+              </Typography>
+              <Tooltip title="Approve selected">
                 <IconButton
-                  color="primary"
+                  onClick={() => setBulkAction("approve")}
+                  color="success"
                   size="small"
-                  onClick={() => setOpenRequest(true)}
-                  aria-label="Request WFH"
+                  aria-label="Approve selected WFH requests"
                 >
-                  <AddIcon sx={{ fontSize: 20 }} />
+                  <CheckIcon sx={{ fontSize: 18 }} />
                 </IconButton>
-              </span>
-            </Tooltip>
-          </Box>
+              </Tooltip>
+              <Tooltip title="Reject selected">
+                <IconButton
+                  onClick={() => setBulkAction("reject")}
+                  color="error"
+                  size="small"
+                  aria-label="Reject selected WFH requests"
+                >
+                  <CloseIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Clear selection">
+                <IconButton
+                  onClick={() => setSelectedIds([])}
+                  size="small"
+                  aria-label="Clear selection"
+                >
+                  <RemoveCircleIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <FilterList
+                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+                />
+                <Box sx={{ minWidth: 130 }}>
+                  <Dropdown
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.value)}
+                    options={STATUS_OPTIONS}
+                    placeholder="Select Status"
+                    className="w-full"
+                    style={{ minWidth: "130px" }}
+                    appendTo={() =>
+                      document.querySelector("#root .App") as HTMLElement
+                    }
+                  />
+                </Box>
+              </Box>
+              <Tooltip title="Request WFH">
+                <span>
+                  <IconButton
+                    color="primary"
+                    size="small"
+                    onClick={() => setOpenRequest(true)}
+                    aria-label="Request WFH"
+                  >
+                    <AddIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+          )
         }
         pagination={{
           page: pagination.pageIndex,
@@ -487,6 +586,21 @@ function WFHRequests() {
         }
         loading={confirmLoading}
         variant={confirmTarget?.action === "approve" ? "default" : "danger"}
+      />
+
+      <ConfirmationDialog
+        open={!!bulkAction}
+        onClose={() => !bulkLoading && setBulkAction(null)}
+        onConfirm={handleBulkConfirm}
+        title={
+          bulkAction === "approve"
+            ? "Approve WFH Requests"
+            : "Reject WFH Requests"
+        }
+        message={`Are you sure you want to ${bulkAction} ${selectedIds.length} selected WFH request(s)?`}
+        confirmText={bulkAction === "approve" ? "Approve" : "Reject"}
+        loading={bulkLoading}
+        variant={bulkAction === "approve" ? "default" : "danger"}
       />
     </ErrorBoundary>
   );

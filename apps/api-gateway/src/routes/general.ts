@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/authenticate";
+import { validate } from "../middleware/validate";
+import { bulkDeleteHolidaysSchema } from "../schemas";
 import * as h from "../handlers/general";
 
 export const generalRouter: Router = Router();
@@ -14,6 +16,12 @@ generalRouter.get(
 generalRouter.get("/audit-logs", authenticate, h.getAuditLogs);
 generalRouter.post("/add-holiday", authenticate, h.addHoliday);
 generalRouter.put("/delete-holiday", authenticate, h.deleteHoliday);
+generalRouter.put(
+  "/bulk-delete-holidays",
+  authenticate,
+  validate(bulkDeleteHolidaysSchema),
+  h.bulkDeleteHolidays,
+);
 generalRouter.post("/add-event", authenticate, h.addEvent);
 generalRouter.put(
   "/edit-calendar-event/:_id",

@@ -71,6 +71,7 @@ const EMPLOYEE = {
 const HOLIDAYS = {
   ADD_HOLIDAY: "/add-holiday",
   DELETE_HOLIDAY: "/delete-holiday",
+  BULK_DELETE_HOLIDAYS: "/bulk-delete-holidays",
   GET_HOLIDAYS: (year: number) => `/get-holidays/${year}`,
   GET_BIRTHDAYS_ANNIVERSARIES: (month: number, year: number) =>
     `/birthdays-anniversaries?month=${month}&year=${year}`,
@@ -82,6 +83,7 @@ const HR_ACTIVITIES = {
   GET_HR_ACTIVITIES: (page = 1, limit = 10, statusFilter = "Active") =>
     `/get-hr-activities?page=${page}&limit=${limit}&status=${statusFilter}`,
   DELETE_HR_ACTIVITY: (id: string | number) => `/delete-hr-activity/${id}`,
+  BULK_DELETE_HR_ACTIVITIES: "/bulk-delete-hr-activities",
 };
 
 const JOB_OPENINGS = {
@@ -90,6 +92,7 @@ const JOB_OPENINGS = {
   VIEW_JOB_OPENINGS: (page: number, limit: number, params = "") =>
     `/view-job-openings?page=${page}&limit=${limit}${params}`,
   DELETE_JOB_OPENING: (id: string | number) => `/delete-job-opening/${id}`,
+  BULK_DELETE_JOB_OPENINGS: "/bulk-delete-job-openings",
   GET_ALL_JOB_OPENINGS: (slug: string) => `/public/careers/${slug}`,
   GET_PUBLIC_JOB_OPENING: (slug: string, id: string) =>
     `/public/careers/${slug}/job/${id}`,
@@ -122,6 +125,8 @@ const RESIGNATION = {
   UPDATE_RESIGNATION: (id: string | number) => `/update-resignation/${id}`,
   APPROVE_RESIGNATION: (id: string) => `/approve-resignation/${id}`,
   REJECT_RESIGNATION: (id: string) => `/reject-resignation/${id}`,
+  BULK_APPROVE_RESIGNATIONS: "/bulk-approve-resignations",
+  BULK_REJECT_RESIGNATIONS: "/bulk-reject-resignations",
   WITHDRAW_RESIGNATION: (id: string) => `/withdraw-resignation/${id}`,
   GET_RESIGNATION_CHECKLIST: (id: string) => `/resignations/${id}/checklist`,
   UPDATE_RESIGNATION_CHECKLIST_ITEM: (id: string, itemDefId: string) =>
@@ -382,6 +387,7 @@ const WFH = {
     `/wfh/requests?page=${page}&limit=${limit}${params}`,
   REQUEST_WFH: "/wfh/requests",
   UPDATE_WFH_STATUS: "/wfh/requests/status",
+  BULK_UPDATE_WFH_STATUS: "/wfh/requests/bulk-status",
   WFH_CALENDAR: (year: number, month: number) =>
     `/wfh/calendar?year=${year}&month=${month}`,
 };

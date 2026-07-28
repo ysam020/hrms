@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -38,6 +39,7 @@ import AddIcon from "@mui/icons-material/Add";
 import InfoIcon from "@mui/icons-material/Info";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import CloseIcon from "@mui/icons-material/Close";
 import PersonIcon from "@mui/icons-material/Person";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -91,6 +93,9 @@ function ViewJobOpenings() {
     id: string | null;
   }>({ open: false, id: null });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
   const [detailsAnchorEl, setDetailsAnchorEl] = useState<HTMLElement | null>(
     null,
@@ -196,6 +201,10 @@ function ViewJobOpenings() {
 
   const memoizedData = useMemo(() => data, [data]);
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [data]);
+
   const handleDeleteClick = (e, _id) => {
     e.stopPropagation();
     setDeleteDialog({ open: true, id: _id });
@@ -230,6 +239,35 @@ function ViewJobOpenings() {
 
   const handleDeleteCancel = () => {
     setDeleteDialog({ open: false, id: null });
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      const res = await apiClient.put(API_ENDPOINTS.BULK_DELETE_JOB_OPENINGS, {
+        ids: selectedIds,
+      });
+      const failed = res.data?.data?.failed ?? [];
+      refresh();
+      setAlert({
+        open: true,
+        message:
+          failed.length > 0
+            ? `${res.data.data.succeeded.length} deleted, ${failed.length} failed`
+            : res.data.message || "Job openings deleted successfully",
+        severity: failed.length > 0 ? "warning" : "success",
+      });
+      setSelectedIds([]);
+      setBulkDeleteOpen(false);
+    } catch (err) {
+      setAlert({
+        open: true,
+        message: err.response?.data?.message || "Something went wrong",
+        severity: "error",
+      });
+    } finally {
+      setBulkDeleteLoading(false);
+    }
   };
 
   const updateJobOptimistically = useCallback((jobId, updatedJobData) => {
@@ -418,6 +456,7 @@ function ViewJobOpenings() {
           ariaLabel="Job openings"
           data={memoizedData}
           columns={columns}
+          getRowId={(row: any) => row.id}
           actions={rowActions}
           loading={loading}
           emptyMessage="No job openings found"
@@ -427,42 +466,77 @@ function ViewJobOpenings() {
             onChange: handleGlobalFilterChange,
             placeholder: "Search job openings…",
           }}
+          selection={
+            canDelete
+              ? {
+                  selectedIds,
+                  onChange: setSelectedIds,
+                  isRowSelectable: (row: any) =>
+                    row.status !== "Deleted" && row.status !== "deleted",
+                }
+              : undefined
+          }
           toolbarActions={
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <FilterList
-                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-              />
-              <Box sx={{ minWidth: 120 }}>
-                <Dropdown
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.value)}
-                  options={[
-                    { label: "All", value: "All" },
-                    { label: "Active", value: "Active" },
-                    { label: "Expired", value: "Expired" },
-                    { label: "Deleted", value: "Deleted" },
-                  ]}
-                  placeholder="Select Status"
-                  className="w-full"
-                  style={{ minWidth: "120px" }}
-                  appendTo={() =>
-                    document.querySelector("#root .App") as HTMLElement
-                  }
-                />
-              </Box>
-              {canCreate && (
-                <Tooltip title="New Job Opening">
+            selectedIds.length > 0 ? (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedIds.length} selected
+                </Typography>
+                <IconButton
+                  onClick={() => setBulkDeleteOpen(true)}
+                  color="error"
+                  size="small"
+                  aria-label="Delete selected job openings"
+                >
+                  <DeleteIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+                <Tooltip title="Clear selection">
                   <IconButton
-                    onClick={() => setOpenAdd(true)}
-                    color="primary"
+                    onClick={() => setSelectedIds([])}
                     size="small"
-                    aria-label="New job opening"
+                    aria-label="Clear selection"
                   >
-                    <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                    <CloseIcon sx={{ fontSize: 18 }} />
                   </IconButton>
                 </Tooltip>
-              )}
-            </Box>
+              </Box>
+            ) : (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <FilterList
+                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+                />
+                <Box sx={{ minWidth: 120 }}>
+                  <Dropdown
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.value)}
+                    options={[
+                      { label: "All", value: "All" },
+                      { label: "Active", value: "Active" },
+                      { label: "Expired", value: "Expired" },
+                      { label: "Deleted", value: "Deleted" },
+                    ]}
+                    placeholder="Select Status"
+                    className="w-full"
+                    style={{ minWidth: "120px" }}
+                    appendTo={() =>
+                      document.querySelector("#root .App") as HTMLElement
+                    }
+                  />
+                </Box>
+                {canCreate && (
+                  <Tooltip title="New Job Opening">
+                    <IconButton
+                      onClick={() => setOpenAdd(true)}
+                      color="primary"
+                      size="small"
+                      aria-label="New job opening"
+                    >
+                      <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+            )
           }
           pagination={{
             page: pagination.pageIndex,
@@ -493,6 +567,18 @@ function ViewJobOpenings() {
           confirmText="Delete"
           cancelText="Cancel"
           loading={deleteLoading}
+          variant="danger"
+          theme={theme}
+        />
+        <ConfirmationDialog
+          open={bulkDeleteOpen}
+          onClose={() => !bulkDeleteLoading && setBulkDeleteOpen(false)}
+          onConfirm={handleBulkDeleteConfirm}
+          title="Delete Job Openings"
+          message={`Are you sure you want to delete ${selectedIds.length} selected job opening(s)? This action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          loading={bulkDeleteLoading}
           variant="danger"
           theme={theme}
         />

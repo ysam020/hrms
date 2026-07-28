@@ -532,6 +532,92 @@ export async function updateWfhStatus(req: Request, res: Response) {
 }
 
 /**
+ * PATCH /wfh/requests/bulk-status
+ * Bulk approve or reject several WFH requests in one pass. Cancel is
+ * intentionally excluded — cancellation is self-service and single-item
+ * only. Mirrors the approve/reject core of updateWfhStatus above, but each
+ * id is resolved and acted on independently so one already-decided or
+ * overlapping request doesn't fail the whole batch.
+ */
+export async function bulkUpdateWfhStatus(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { requestIds, action, rejectionReason } = req.body as {
+      requestIds: string[];
+      action: "approve" | "reject";
+      rejectionReason?: string;
+    };
+
+    const tenantId = user?.tenantId;
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "No active tenant.",
+      });
+    }
+
+    const privileged = await isWfhPrivileged(user);
+    const succeeded: string[] = [];
+    const failed: { id: string; message: string }[] = [];
+
+    for (const requestId of requestIds) {
+      try {
+        const wfhReq = await prisma.wfhRequest.findUnique({
+          where: { id: requestId },
+        });
+        if (!wfhReq) throw new Error("WFH request not found");
+        if ((wfhReq as any).status !== "Pending") {
+          throw new Error(
+            `Cannot ${action} a request with status '${(wfhReq as any).status}'`,
+          );
+        }
+
+        if (action === "approve") {
+          const overlappingApprovedLeave = await (
+            prisma as any
+          ).leaveApplication.findFirst({
+            where: {
+              userId: (wfhReq as any).userId,
+              status: "Approved",
+              from: { lte: (wfhReq as any).toDate },
+              to: { gte: (wfhReq as any).date },
+            },
+          });
+          if (overlappingApprovedLeave) {
+            throw new Error(
+              "This WFH request overlaps an already-approved leave application for the same date(s)",
+            );
+          }
+        }
+
+        await actOnApprovalForEntity(
+          tenantId,
+          "wfh",
+          requestId,
+          user!.userId,
+          action === "approve" ? "approved" : "rejected",
+          rejectionReason,
+          privileged,
+        );
+        succeeded.push(requestId);
+      } catch (err) {
+        failed.push({
+          id: requestId,
+          message: err instanceof Error ? err.message : `Failed to ${action}`,
+        });
+      }
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `${succeeded.length} WFH request(s) ${action === "approve" ? "approved" : "rejected"}`,
+      data: { succeeded, failed },
+    });
+  } catch (error) {
+    logger.error("PATCH /wfh/requests/bulk-status error:", { error });
+    return handleError(res, error);
+  }
+}
+
+/**
  * GET /wfh/calendar
  * Monthly calendar view of WFH requests for the team (for manager dashboards).
  */

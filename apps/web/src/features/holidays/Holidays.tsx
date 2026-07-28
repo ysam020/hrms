@@ -81,6 +81,9 @@ function ViewAddHolidays() {
     name: "",
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
   const formik = useFormik({
     initialValues: { name: "", date: "" },
@@ -116,6 +119,7 @@ function ViewAddHolidays() {
 
   useEffect(() => {
     getHolidays();
+    setSelectedDates([]);
   }, [date]);
 
   const isDetailsPopoverOpen = Boolean(detailsAnchorEl);
@@ -164,6 +168,31 @@ function ViewAddHolidays() {
       });
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      const res = await apiClient.put(API_ENDPOINTS.BULK_DELETE_HOLIDAYS, {
+        dates: selectedDates,
+      });
+      getHolidays();
+      setAlert({
+        open: true,
+        message: res.data.message || "Holidays deleted successfully",
+        severity: "success",
+      });
+      setSelectedDates([]);
+      setBulkDeleteOpen(false);
+    } catch (err) {
+      setAlert({
+        open: true,
+        message: err.response?.data?.message || "Failed to delete holidays",
+        severity: "error",
+      });
+    } finally {
+      setBulkDeleteLoading(false);
     }
   };
 
@@ -327,36 +356,71 @@ function ViewAddHolidays() {
           ariaLabel="Holidays"
           data={tableData}
           columns={columns}
+          getRowId={(row: any) => row.date}
           actions={rowActions}
           loading={formik.isSubmitting}
           emptyMessage="No holidays configured"
+          selection={
+            canDelete
+              ? {
+                  selectedIds: selectedDates,
+                  onChange: setSelectedDates,
+                  isRowSelectable: (row: any) => !row.isAddRow,
+                }
+              : undefined
+          }
           toolbarActions={
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Calendar
-                value={date}
-                onChange={(e) => e.value && setDate(e.value)}
-                view="year"
-                dateFormat="yy"
-                showIcon
-                placeholder="Select Year"
-                style={{ maxWidth: 180 }}
-              />
-              {canAdd && (
-                <Tooltip title="Add Holiday">
-                  <span>
-                    <IconButton
-                      onClick={handleAddClick}
-                      disabled={isAdding}
-                      color="primary"
-                      size="small"
-                      aria-label="Add holiday"
-                    >
-                      <Add aria-hidden="true" sx={{ fontSize: 20 }} />
-                    </IconButton>
-                  </span>
+            selectedDates.length > 0 ? (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedDates.length} selected
+                </Typography>
+                <IconButton
+                  onClick={() => setBulkDeleteOpen(true)}
+                  color="error"
+                  size="small"
+                  aria-label="Delete selected holidays"
+                >
+                  <DeleteIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+                <Tooltip title="Clear selection">
+                  <IconButton
+                    onClick={() => setSelectedDates([])}
+                    size="small"
+                    aria-label="Clear selection"
+                  >
+                    <Cancel sx={{ fontSize: 18 }} />
+                  </IconButton>
                 </Tooltip>
-              )}
-            </Box>
+              </Box>
+            ) : (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Calendar
+                  value={date}
+                  onChange={(e) => e.value && setDate(e.value)}
+                  view="year"
+                  dateFormat="yy"
+                  showIcon
+                  placeholder="Select Year"
+                  style={{ maxWidth: 180 }}
+                />
+                {canAdd && (
+                  <Tooltip title="Add Holiday">
+                    <span>
+                      <IconButton
+                        onClick={handleAddClick}
+                        disabled={isAdding}
+                        color="primary"
+                        size="small"
+                        aria-label="Add holiday"
+                      >
+                        <Add aria-hidden="true" sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+              </Box>
+            )
           }
         />
 
@@ -463,6 +527,19 @@ function ViewAddHolidays() {
           confirmText="Delete"
           cancelText="Cancel"
           loading={deleteLoading}
+          variant="danger"
+          theme={theme}
+        />
+        <ConfirmationDialog
+          open={bulkDeleteOpen}
+          onClose={() => !bulkDeleteLoading && setBulkDeleteOpen(false)}
+          onConfirm={handleBulkDeleteConfirm}
+          title="Delete Holidays"
+          message={`Are you sure you want to delete ${selectedDates.length} selected holiday(s)?`}
+          description="This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          loading={bulkDeleteLoading}
           variant="danger"
           theme={theme}
         />

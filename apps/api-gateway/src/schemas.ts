@@ -678,6 +678,39 @@ export const bulkAdvanceStageSchema = z.object({
   outcome: z.enum(["pass", "fail", "hold", "pending"]).optional(),
 });
 
+export const bulkDeleteHolidaysSchema = z.object({
+  dates: z.array(z.string().min(1)).min(1).max(200),
+});
+
+export const bulkDeleteHrActivitiesSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(200),
+});
+
+export const bulkDeleteJobOpeningsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(200),
+});
+
+export const bulkApproveResignationsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(200),
+  comments: z.string().max(2000).optional(),
+  lastWorkingDay: z.string().optional(),
+  noticePeriodWaived: z.boolean().optional(),
+  buyoutAmount: z.number().optional(),
+  relievedFromDutyOn: z.string().optional(),
+});
+
+export const bulkRejectResignationsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(200),
+  comments: z.string().max(2000).optional(),
+  rejectionReason: z.string().max(2000).optional(),
+});
+
+export const bulkUpdateWfhStatusSchema = z.object({
+  requestIds: z.array(z.string().min(1)).min(1).max(200),
+  action: z.enum(["approve", "reject"]),
+  rejectionReason: z.string().max(2000).optional(),
+});
+
 export const createOfferSchema = z.object({
   designation: z.string().max(160).optional(),
   department: z.string().max(160).optional(),
