@@ -16,8 +16,12 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import Tooltip from "@mui/material/Tooltip";
+import IconButton from "@mui/material/IconButton";
 import Person from "@mui/icons-material/Person";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import BulkImportDialog from "./bulk-import/BulkImportDialog";
 
 function EmployeeList() {
   const { setAlert } = useContext(AlertContext);
@@ -26,6 +30,7 @@ function EmployeeList() {
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   const fetchEmployeeData = useCallback(
     async ({ page, limit }) => {
@@ -128,6 +133,18 @@ function EmployeeList() {
             onChange: handleGlobalFilterChange,
             placeholder: "Search employees…",
           }}
+          toolbarActions={
+            <Tooltip title="Bulk Import Employees">
+              <IconButton
+                onClick={() => setBulkImportOpen(true)}
+                color="primary"
+                size="small"
+                aria-label="Bulk import employees"
+              >
+                <UploadFileIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+              </IconButton>
+            </Tooltip>
+          }
           pagination={{
             page: pagination.pageIndex,
             pageSize: pagination.pageSize,
@@ -139,6 +156,11 @@ function EmployeeList() {
           }}
         />
       </ErrorBoundary>
+      <BulkImportDialog
+        open={bulkImportOpen}
+        onClose={() => setBulkImportOpen(false)}
+        onImported={resetPagination}
+      />
     </div>
   );
 }

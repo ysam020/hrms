@@ -28,6 +28,7 @@ import { payrollComponentsRouter } from "./payrollComponents";
 import { taxDeclarationRouter } from "./taxDeclaration";
 import { orgStructureRouter } from "./orgStructure";
 import { onboardingRouter } from "./onboarding";
+import { bulkOnboardingRouter } from "./bulkOnboarding";
 // ── New features ──────────────────────────────────────────────────────────────
 import { payrollRouter } from "./payroll";
 import { performanceReviewRouter } from "./performanceReview";
@@ -101,6 +102,7 @@ rootRouter.use(...subscriptionGuard, interviewPipelinesRouter);
 rootRouter.use(...subscriptionGuard, payrollComponentsRouter);
 rootRouter.use(...subscriptionGuard, orgStructureRouter);
 rootRouter.use(...subscriptionGuard, onboardingRouter);
+rootRouter.use(...subscriptionGuard, bulkOnboardingRouter);
 // ── New feature routers ───────────────────────────────────────────────────────
 rootRouter.use("/payroll", ...subscriptionGuard, payrollRouter);
 rootRouter.use(

@@ -902,3 +902,14 @@ export const submitManagerReviewSchema = z.object({
   recommendedIncrementPct: z.number().min(0).max(100).optional(),
   effectiveFrom: z.string().min(1).optional(),
 });
+
+// ─── Bulk onboarding import ─────────────────────────────────────────────────
+
+export const bulkOnboardingUploadUrlSchema = z.object({
+  fileName: z.string().min(1).max(256),
+  fileType: z.string().min(1).max(128),
+});
+
+export const bulkOnboardingKeySchema = z.object({
+  key: z.string().min(1).max(1024),
+});
