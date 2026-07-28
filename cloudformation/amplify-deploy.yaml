@@ -37,6 +37,23 @@ Parameters:
       — required for apps/web/src/core/config/firebase.tsx's getToken() call
       to register a push subscription at all. Without it, FCM token
       generation fails silently for every user.
+  AttachCustomDomain:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: >
+      Set to "false" to skip AWS::Amplify::Domain — use when DomainName is
+      still claimed by an Amplify app in a different (e.g. abandoned/locked)
+      AWS account, which fails domain association with "already associated
+      with another Amplify app" regardless of DNS/nameserver ownership (this
+      is a separate Amplify-internal claim, not a DNS check). The app is
+      still fully live on its default *.amplifyapp.com domain either way;
+      re-run this stack with "true" once the domain claim is released
+      (AWS Support case against the old account, or after enough time post
+      account closure).
+
+Conditions:
+  ShouldAttachCustomDomain: !Equals [!Ref AttachCustomDomain, "true"]
 
 Resources:
   AmplifyApp:
@@ -122,6 +139,7 @@ Resources:
 
   AmplifyDomain:
     Type: AWS::Amplify::Domain
+    Condition: ShouldAttachCustomDomain
     Properties:
       AppId: !GetAtt AmplifyApp.AppId
       DomainName: !Ref DomainName
@@ -138,7 +156,9 @@ Outputs:
     Description: The *.amplifyapp.com domain, usable immediately while the custom domain validates
     Value: !Sub "https://${BranchName}.${AmplifyApp.DefaultDomain}"
   CustomDomainUrl:
+    Condition: ShouldAttachCustomDomain
     Value: !Sub "https://${DomainName}"
   DomainAssociationStatus:
+    Condition: ShouldAttachCustomDomain
     Description: Check `aws amplify get-domain-association` if this stays PENDING_VERIFICATION for long
     Value: !GetAtt AmplifyDomain.DomainStatus
