@@ -21,6 +21,30 @@ jest.mock("@hrms/db", () => {
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
     canonicalizeEmail: jest.requireActual("@hrms/db").canonicalizeEmail,
+    // Reimplemented against the mocked `_db` rather than requireActual'd —
+    // the real generateUniqueUsername (packages/database/src/username.ts)
+    // imports its own `prisma` singleton straight from prismaClient.ts, not
+    // from this mocked module, so requireActual would hit a real DB
+    // connection here. Tests below expect this to consume a second
+    // `user.findFirst` call (see the mockResolvedValueOnce(null) chains),
+    // so the loop is kept identical to the real implementation.
+    generateUniqueUsername: async (email: string) => {
+      const base = email
+        .split("@")[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/, "");
+      let username = base;
+      let counter = 1;
+      while (
+        await _db.user.findFirst({ where: { username }, select: { id: true } })
+      ) {
+        username = `${base}${counter}`;
+        counter++;
+      }
+      return username;
+    },
   };
 });
 

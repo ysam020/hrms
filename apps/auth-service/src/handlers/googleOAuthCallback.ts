@@ -1,30 +1,11 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prisma, canonicalizeEmail } from "@hrms/db";
+import { prisma, canonicalizeEmail, generateUniqueUsername } from "@hrms/db";
 import { signAccessToken, signRefreshToken } from "../services/jwt";
 import { storeRefreshToken } from "../services/redis";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
 const BLOCKED_STATUSES = ["Terminated", "Absconded", "Resigned"];
-
-async function generateUniqueUsername(email: string): Promise<string> {
-  const base = email
-    .split("@")[0]
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/, "");
-
-  let username = base;
-  let counter = 1;
-  while (
-    await prisma.user.findFirst({ where: { username }, select: { id: true } })
-  ) {
-    username = `${base}${counter}`;
-    counter++;
-  }
-  return username;
-}
 
 export const googleOAuthCallback = async (
   call: ServerUnaryCall<any, any>,

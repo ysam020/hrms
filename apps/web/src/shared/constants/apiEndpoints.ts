@@ -144,6 +144,13 @@ const ONBOARDING = {
     `/onboarding-checklist/${stepKey}`,
 };
 
+const BULK_ONBOARDING = {
+  BULK_ONBOARDING_TEMPLATE: "/bulk-onboarding/template",
+  BULK_ONBOARDING_UPLOAD_URL: "/bulk-onboarding/upload-url",
+  BULK_ONBOARDING_VALIDATE: "/bulk-onboarding/validate",
+  BULK_ONBOARDING_COMMIT: "/bulk-onboarding/commit",
+};
+
 const PAYROLL_COMPONENTS = {
   LIST_SALARY_COMPONENTS: "/salary-component-definitions",
   CREATE_SALARY_COMPONENT: "/salary-component-definitions",
@@ -445,6 +452,7 @@ export const API_ENDPOINTS = {
   ...RECRUITMENT_PIPELINE,
   ...PAYROLL_COMPONENTS,
   ...ONBOARDING,
+  ...BULK_ONBOARDING,
   ...PAYMENT,
   ...TENANT,
   ...PAYROLL,
