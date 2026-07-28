@@ -26,6 +26,7 @@ packages/database/src/generated/
 .env.*
 !.env.example
 !.env.*.example
+local-secrets.json
 
 # ── Local secrets (never commit real values) ─────────────────────────────────
 secrets.json

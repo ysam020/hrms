@@ -147,7 +147,7 @@ Resources:
   PraestoBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: praesto
+      BucketName: praesto-423437244709
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1073,7 +1073,7 @@ Resources:
   MonitoringBackupPolicy:
     Type: AWS::DLM::LifecyclePolicy
     Properties:
-      Description: Daily EBS snapshots of the monitoring host (Prometheus TSDB + Grafana state) — see the comment above MonitoringInstanceRecoveryAlarm.
+      Description: Daily EBS snapshots of the monitoring host Prometheus TSDB and Grafana state - see comment above MonitoringInstanceRecoveryAlarm
       State: ENABLED
       ExecutionRoleArn: !GetAtt MonitoringBackupRole.Arn
       PolicyDetails:

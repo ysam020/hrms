@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -86,6 +87,10 @@ function ViewResignations() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [globalFilter, setGlobalFilter] = useState("");
   const [openResign, setOpenResign] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDecision, setBulkDecision] = useState<"approve" | "reject" | null>(
+    null,
+  );
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -143,6 +148,52 @@ function ViewResignations() {
       }, 400);
     },
     [resetPagination],
+  );
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [data]);
+
+  const canManageResignation = useMemo(
+    () =>
+      isOwnerOrAdmin(user) ||
+      hasPermission(
+        "ResignationProcess",
+        "approve_resignation",
+        "team",
+        user?.isSuperUser,
+        user?.permissions || [],
+      ) ||
+      hasPermission(
+        "ResignationProcess",
+        "approve_resignation",
+        "all",
+        user?.isSuperUser,
+        user?.permissions || [],
+      ) ||
+      hasPermission(
+        "ResignationProcess",
+        "reject_resignation",
+        "team",
+        user?.isSuperUser,
+        user?.permissions || [],
+      ) ||
+      hasPermission(
+        "ResignationProcess",
+        "reject_resignation",
+        "all",
+        user?.isSuperUser,
+        user?.permissions || [],
+      ),
+    [user],
+  );
+
+  const canApproveRejectRow = useCallback(
+    (rowData: any) =>
+      canManageResignation &&
+      !["Withdrawn", "Rejected", "Approved"].includes(rowData.status) &&
+      (user?.isSuperUser || rowData.userId !== user.id),
+    [canManageResignation, user],
   );
 
   const handleResignationAction = useCallback(
@@ -299,40 +350,7 @@ function ViewResignations() {
 
   const actions = useCallback(
     (rowData: any) => {
-      const canManageResignation =
-        isOwnerOrAdmin(user) ||
-        hasPermission(
-          "ResignationProcess",
-          "approve_resignation",
-          "team",
-          user?.isSuperUser,
-          user?.permissions || [],
-        ) ||
-        hasPermission(
-          "ResignationProcess",
-          "approve_resignation",
-          "all",
-          user?.isSuperUser,
-          user?.permissions || [],
-        ) ||
-        hasPermission(
-          "ResignationProcess",
-          "reject_resignation",
-          "team",
-          user?.isSuperUser,
-          user?.permissions || [],
-        ) ||
-        hasPermission(
-          "ResignationProcess",
-          "reject_resignation",
-          "all",
-          user?.isSuperUser,
-          user?.permissions || [],
-        );
-      const canApproveReject =
-        canManageResignation &&
-        !["Withdrawn", "Rejected", "Approved"].includes(rowData.status) &&
-        (user?.isSuperUser || rowData.userId !== user.id);
+      const canApproveReject = canApproveRejectRow(rowData);
       const canWithdraw =
         rowData.status === "Submitted" &&
         (rowData.userId === user.id || user?.isSuperUser);
@@ -428,7 +446,7 @@ function ViewResignations() {
           : []),
       ];
     },
-    [user],
+    [user, canApproveRejectRow],
   );
 
   return (
@@ -437,6 +455,7 @@ function ViewResignations() {
         ariaLabel="Resignations"
         data={data || []}
         columns={columns}
+        getRowId={(row: any) => row.id}
         actions={actions}
         loading={loading}
         emptyMessage="No resignations found"
@@ -445,35 +464,81 @@ function ViewResignations() {
           onChange: handleGlobalFilterChange,
           placeholder: "Search resignations…",
         }}
+        selection={
+          canManageResignation
+            ? {
+                selectedIds,
+                onChange: setSelectedIds,
+                isRowSelectable: canApproveRejectRow,
+              }
+            : undefined
+        }
         toolbarActions={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <FilterList
-              sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-            />
-            <Box sx={{ minWidth: 130 }}>
-              <Dropdown
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.value)}
-                options={STATUS_OPTIONS}
-                placeholder="Select Status"
-                className="w-full"
-                style={{ minWidth: "130px" }}
-                appendTo={() =>
-                  document.querySelector("#root .App") as HTMLElement
-                }
-              />
+          selectedIds.length > 0 ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {selectedIds.length} selected
+              </Typography>
+              <Tooltip title="Approve selected">
+                <IconButton
+                  onClick={() => setBulkDecision("approve")}
+                  color="success"
+                  size="small"
+                  aria-label="Approve selected resignations"
+                >
+                  <CheckIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Reject selected">
+                <IconButton
+                  onClick={() => setBulkDecision("reject")}
+                  color="error"
+                  size="small"
+                  aria-label="Reject selected resignations"
+                >
+                  <CloseIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Clear selection">
+                <IconButton
+                  onClick={() => setSelectedIds([])}
+                  size="small"
+                  aria-label="Clear selection"
+                >
+                  <RemoveCircleOutlineIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
             </Box>
-            <Tooltip title="Submit Resignation">
-              <IconButton
-                onClick={() => setOpenResign(true)}
-                color="primary"
-                size="small"
-                aria-label="Submit resignation"
-              >
-                <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
-              </IconButton>
-            </Tooltip>
-          </Box>
+          ) : (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 130 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  options={STATUS_OPTIONS}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "130px" }}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                />
+              </Box>
+              <Tooltip title="Submit Resignation">
+                <IconButton
+                  onClick={() => setOpenResign(true)}
+                  color="primary"
+                  size="small"
+                  aria-label="Submit resignation"
+                >
+                  <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )
         }
         pagination={{
           page: pagination.pageIndex,
@@ -494,6 +559,19 @@ function ViewResignations() {
         onClose={() => setDecisionDialog(null)}
         onDone={() => {
           setDecisionDialog(null);
+          refresh();
+        }}
+      />
+
+      <ResignationDecisionDialog
+        open={!!bulkDecision}
+        mode={bulkDecision ?? "approve"}
+        resignationId={null}
+        resignationIds={selectedIds}
+        onClose={() => setBulkDecision(null)}
+        onDone={() => {
+          setBulkDecision(null);
+          setSelectedIds([]);
           refresh();
         }}
       />

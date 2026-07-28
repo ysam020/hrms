@@ -7,6 +7,7 @@ import {
   editHrActivitySchema,
   createOrUpdatePolicySchema,
   updatePolicySchema,
+  bulkDeleteHrActivitiesSchema,
 } from "../schemas";
 
 export const hrmRouter: Router = Router();
@@ -32,6 +33,13 @@ hrmRouter.delete(
   authenticate,
   requireSuperUser,
   h.deleteHrActivity,
+);
+hrmRouter.put(
+  "/bulk-delete-hr-activities",
+  authenticate,
+  requireSuperUser,
+  validate(bulkDeleteHrActivitiesSchema),
+  h.bulkDeleteHrActivities,
 );
 
 hrmRouter.get("/policies", authenticate, h.getPolicies);

@@ -12,8 +12,16 @@ import Skeleton from "@mui/material/Skeleton";
 import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import Checkbox from "@mui/material/Checkbox";
 import SearchIcon from "@mui/icons-material/Search";
 import EmptyState from "./EmptyState";
+
+export interface DataListSelection<T> {
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  /** Rows failing this predicate render without a checkbox and are excluded from "select all". */
+  isRowSelectable?: (row: T) => boolean;
+}
 
 export interface DataListColumn<T> {
   key: string;
@@ -58,6 +66,8 @@ interface DataListProps<T> {
   /** Alternate row background shading. Rows variant only. */
   striped?: boolean;
   actions?: (row: T) => DataListAction<T>[];
+  /** Row-select checkboxes for bulk actions. Requires `getRowId`. */
+  selection?: DataListSelection<T>;
   /** Makes the whole card clickable (e.g. navigate to a detail page). Cards variant only. */
   onRowClick?: (row: T) => void;
   pagination?: DataListPagination;
@@ -141,11 +151,13 @@ function CardRow<T>({
   columns,
   actions,
   onRowClick,
+  checkbox,
 }: {
   row: T;
   columns: DataListColumn<T>[];
   actions?: DataListAction<T>[];
   onRowClick?: (row: T) => void;
+  checkbox?: ReactNode;
 }) {
   const primaryCol = columns.find((c) => c.primary) ?? columns[0];
   const restCols = columns.filter((c) => c !== primaryCol);
@@ -204,6 +216,7 @@ function CardRow<T>({
           gap: 1,
         }}
       >
+        {checkbox}
         <Box
           sx={{ minWidth: 0, flex: 1, color: "text.primary", fontWeight: 600 }}
         >
@@ -236,11 +249,13 @@ function TableRowLike<T>({
   columns,
   actions,
   alt,
+  checkbox,
 }: {
   row: T;
   columns: DataListColumn<T>[];
   actions?: DataListAction<T>[];
   alt?: boolean;
+  checkbox?: ReactNode;
 }) {
   return (
     <Box
@@ -257,24 +272,27 @@ function TableRowLike<T>({
         "&:hover": { backgroundColor: "action.hover" },
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          columnGap: 2.5,
-          rowGap: 0.5,
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        {columns.map((col) => (
-          <MetaItem
-            key={col.key}
-            label={col.label}
-            hideLabel={col.hideLabel}
-            value={col.render ? col.render(row) : (row as any)[col.key]}
-          />
-        ))}
+      <Box sx={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+        {checkbox}
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            columnGap: 2.5,
+            rowGap: 0.5,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {columns.map((col) => (
+            <MetaItem
+              key={col.key}
+              label={col.label}
+              hideLabel={col.hideLabel}
+              value={col.render ? col.render(row) : (row as any)[col.key]}
+            />
+          ))}
+        </Box>
       </Box>
       {actions && <ActionsRow row={row} actions={actions} />}
     </Box>
@@ -334,19 +352,72 @@ function DataList<T>({
   pagination,
   search,
   toolbarActions,
+  selection,
   emptyMessage = "No records found",
   emptyIcon,
   ariaLabel,
 }: DataListProps<T>) {
   const headingId = useId();
-  const hasToolbar = !!search || !!toolbarActions;
+  const hasToolbar = !!search || !!toolbarActions || !!selection;
   const totalPages = pagination
     ? Math.max(1, Math.ceil(pagination.totalCount / pagination.pageSize))
     : 1;
 
+  const selectedSet = selection ? new Set(selection.selectedIds) : null;
+  const selectableRows = selection
+    ? data.filter(
+        (row) => !selection.isRowSelectable || selection.isRowSelectable(row),
+      )
+    : [];
+  const selectableIds = selection
+    ? selectableRows.map((row) => (getRowId ? getRowId(row) : ""))
+    : [];
+  const allSelected =
+    selectableIds.length > 0 &&
+    selectableIds.every((id) => selectedSet!.has(id));
+  const someSelected =
+    !allSelected && selectableIds.some((id) => selectedSet!.has(id));
+
+  const toggleRow = (id: string) => {
+    if (!selection) return;
+    const next = selectedSet!.has(id)
+      ? selection.selectedIds.filter((sid) => sid !== id)
+      : [...selection.selectedIds, id];
+    selection.onChange(next);
+  };
+
+  const toggleAll = () => {
+    if (!selection) return;
+    if (allSelected) {
+      const selectableSet = new Set(selectableIds);
+      selection.onChange(
+        selection.selectedIds.filter((id) => !selectableSet.has(id)),
+      );
+    } else {
+      selection.onChange(
+        Array.from(new Set([...selection.selectedIds, ...selectableIds])),
+      );
+    }
+  };
+
   const rows = data.map((row, i) => {
     const rowKey = getRowId ? getRowId(row) : i;
     const rowActions = actions?.(row);
+    const rowSelectable =
+      !selection ||
+      !selection.isRowSelectable ||
+      selection.isRowSelectable(row);
+    const checkbox =
+      selection && rowSelectable ? (
+        <Checkbox
+          size="small"
+          checked={selectedSet!.has(String(rowKey))}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => toggleRow(String(rowKey))}
+          inputProps={{ "aria-label": "Select row" }}
+          sx={{ p: 0.5, mr: 0.5, flexShrink: 0 }}
+        />
+      ) : undefined;
     return (
       <Fragment key={rowKey}>
         {variant === "cards" ? (
@@ -355,6 +426,7 @@ function DataList<T>({
             columns={columns}
             actions={rowActions}
             onRowClick={onRowClick}
+            checkbox={checkbox}
           />
         ) : (
           <>
@@ -364,6 +436,7 @@ function DataList<T>({
               columns={columns}
               actions={rowActions}
               alt={striped && i % 2 === 1}
+              checkbox={checkbox}
             />
           </>
         )}
@@ -409,6 +482,31 @@ function DataList<T>({
             gap: 1.5,
           }}
         >
+          {selection && data.length > 0 && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+                flexShrink: 0,
+              }}
+            >
+              <Checkbox
+                size="small"
+                checked={allSelected}
+                indeterminate={someSelected}
+                disabled={selectableIds.length === 0}
+                onChange={toggleAll}
+                inputProps={{ "aria-label": "Select all on this page" }}
+                sx={{ p: 0.5 }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {selection.selectedIds.length > 0
+                  ? `${selection.selectedIds.length} selected`
+                  : "Select all"}
+              </Typography>
+            </Box>
+          )}
           {search && (
             <Box sx={{ width: { xs: "100%", sm: 260 }, flexShrink: 0 }}>
               <TextField

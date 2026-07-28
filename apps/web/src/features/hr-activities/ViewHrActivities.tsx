@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -84,6 +85,9 @@ function ViewHrActivities() {
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [openAdd, setOpenAdd] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
   const [detailsAnchorEl, setDetailsAnchorEl] = useState<HTMLElement | null>(
     null,
@@ -168,6 +172,10 @@ function ViewHrActivities() {
 
   const memoizedData = useMemo(() => data || [], [data]);
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [data]);
+
   const handleDeleteClick = (id, title) => {
     setDeleteDialog({ open: true, id, title });
   };
@@ -200,6 +208,31 @@ function ViewHrActivities() {
       });
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      const res = await apiClient.put(API_ENDPOINTS.BULK_DELETE_HR_ACTIVITIES, {
+        ids: selectedIds,
+      });
+      refresh();
+      setAlert({
+        open: true,
+        message: res.data.message || "HR activities deleted successfully",
+        severity: "success",
+      });
+      setSelectedIds([]);
+      setBulkDeleteOpen(false);
+    } catch (err) {
+      setAlert({
+        open: true,
+        message: err.response?.data?.message || "Something went wrong",
+        severity: "error",
+      });
+    } finally {
+      setBulkDeleteLoading(false);
     }
   };
 
@@ -335,6 +368,7 @@ function ViewHrActivities() {
         ariaLabel="HR activities"
         data={memoizedData}
         columns={columns}
+        getRowId={(row: any) => row.id}
         actions={rowActions}
         loading={loading}
         emptyMessage="No HR activities found"
@@ -343,42 +377,76 @@ function ViewHrActivities() {
           onChange: handleGlobalFilterChange,
           placeholder: "Search activities…",
         }}
+        selection={
+          canDelete
+            ? {
+                selectedIds,
+                onChange: setSelectedIds,
+                isRowSelectable: (row: any) => row.status !== "Deleted",
+              }
+            : undefined
+        }
         toolbarActions={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <FilterList
-              sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-            />
-            <Box sx={{ minWidth: 120 }}>
-              <Dropdown
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.value)}
-                appendTo={() =>
-                  document.querySelector("#root .App") as HTMLElement
-                }
-                options={[
-                  { label: "All", value: "All" },
-                  { label: "Active", value: "Active" },
-                  { label: "Expired", value: "Expired" },
-                  { label: "Deleted", value: "Deleted" },
-                ]}
-                placeholder="Select Status"
-                className="w-full"
-                style={{ minWidth: "120px" }}
-              />
-            </Box>
-            {canCreate && (
-              <Tooltip title="Add New Activity">
+          selectedIds.length > 0 ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {selectedIds.length} selected
+              </Typography>
+              <IconButton
+                onClick={() => setBulkDeleteOpen(true)}
+                color="error"
+                size="small"
+                aria-label="Delete selected HR activities"
+              >
+                <DeleteIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+              <Tooltip title="Clear selection">
                 <IconButton
-                  onClick={() => setOpenAdd(true)}
-                  color="primary"
+                  onClick={() => setSelectedIds([])}
                   size="small"
-                  aria-label="Add new HR activity"
+                  aria-label="Clear selection"
                 >
-                  <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                  <CloseIcon sx={{ fontSize: 18 }} />
                 </IconButton>
               </Tooltip>
-            )}
-          </Box>
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <FilterList
+                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+              />
+              <Box sx={{ minWidth: 120 }}>
+                <Dropdown
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.value)}
+                  appendTo={() =>
+                    document.querySelector("#root .App") as HTMLElement
+                  }
+                  options={[
+                    { label: "All", value: "All" },
+                    { label: "Active", value: "Active" },
+                    { label: "Expired", value: "Expired" },
+                    { label: "Deleted", value: "Deleted" },
+                  ]}
+                  placeholder="Select Status"
+                  className="w-full"
+                  style={{ minWidth: "120px" }}
+                />
+              </Box>
+              {canCreate && (
+                <Tooltip title="Add New Activity">
+                  <IconButton
+                    onClick={() => setOpenAdd(true)}
+                    color="primary"
+                    size="small"
+                    aria-label="Add new HR activity"
+                  >
+                    <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          )
         }
         pagination={{
           page: pagination.pageIndex,
@@ -649,6 +717,19 @@ function ViewHrActivities() {
         confirmText="Delete"
         cancelText="Cancel"
         loading={deleteLoading}
+        variant="danger"
+        theme={theme}
+      />
+      <ConfirmationDialog
+        open={bulkDeleteOpen}
+        onClose={() => !bulkDeleteLoading && setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDeleteConfirm}
+        title="Delete HR Activities"
+        message={`Are you sure you want to delete ${selectedIds.length} selected HR activity(ies)?`}
+        description="This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        loading={bulkDeleteLoading}
         variant="danger"
         theme={theme}
       />

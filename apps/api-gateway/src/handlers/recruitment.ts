@@ -134,6 +134,38 @@ export async function editJobOpening(req: Request, res: Response) {
   }
 }
 
+export async function bulkDeleteJobOpenings(req: Request, res: Response) {
+  try {
+    const { ids } = req.body as { ids: string[] };
+
+    const results = await Promise.allSettled(
+      ids.map((id) => grpcCall(recruitmentClient, "deleteJobOpening", { id })),
+    );
+    const succeeded: string[] = [];
+    const failed: { id: string; message: string }[] = [];
+    results.forEach((result, i) => {
+      if (result.status === "fulfilled") {
+        succeeded.push(ids[i]);
+      } else {
+        failed.push({
+          id: ids[i],
+          message:
+            result.reason instanceof Error
+              ? result.reason.message
+              : "Failed to delete",
+        });
+      }
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `${succeeded.length} job opening(s) deleted`,
+      data: { succeeded, failed },
+    });
+  } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
 export async function deleteJobOpening(req: Request, res: Response) {
   try {
     const response = await grpcCall(recruitmentClient, "deleteJobOpening", {
@@ -670,6 +702,117 @@ export async function approveResignation(req: Request, res: Response) {
         ? "Resignation approved."
         : "Approved — forwarded to the next approver.",
       data: result,
+    });
+  } catch (error) {
+    return handleActionError(res, error);
+  }
+}
+
+export async function bulkApproveResignations(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const {
+      ids,
+      comments,
+      lastWorkingDay,
+      noticePeriodWaived,
+      buyoutAmount,
+      relievedFromDutyOn,
+    } = req.body as {
+      ids: string[];
+      comments?: string;
+      lastWorkingDay?: string;
+      noticePeriodWaived?: boolean;
+      buyoutAmount?: number;
+      relievedFromDutyOn?: string;
+    };
+    const tenantId = user!.tenantId;
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "No active tenant.",
+      });
+    }
+    const privileged = await isPrivileged(req as AuthRequest);
+
+    const succeeded: string[] = [];
+    const failed: { id: string; message: string }[] = [];
+    for (const id of ids) {
+      try {
+        await actOnApprovalForEntity(
+          tenantId,
+          "resignation",
+          id,
+          user!.userId,
+          "approved",
+          comments || undefined,
+          privileged,
+          {
+            lastWorkingDay,
+            noticePeriodWaived,
+            buyoutAmount,
+            relievedFromDutyOn,
+          },
+        );
+        succeeded.push(id);
+      } catch (err) {
+        failed.push({
+          id,
+          message: err instanceof Error ? err.message : "Failed to approve",
+        });
+      }
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `${succeeded.length} resignation(s) approved`,
+      data: { succeeded, failed },
+    });
+  } catch (error) {
+    return handleActionError(res, error);
+  }
+}
+
+export async function bulkRejectResignations(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const { ids, comments, rejectionReason } = req.body as {
+      ids: string[];
+      comments?: string;
+      rejectionReason?: string;
+    };
+    const tenantId = user!.tenantId;
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "No active tenant.",
+      });
+    }
+    const privileged = await isPrivileged(req as AuthRequest);
+
+    const succeeded: string[] = [];
+    const failed: { id: string; message: string }[] = [];
+    for (const id of ids) {
+      try {
+        await actOnApprovalForEntity(
+          tenantId,
+          "resignation",
+          id,
+          user!.userId,
+          "rejected",
+          comments || undefined,
+          privileged,
+          { rejectionReason },
+        );
+        succeeded.push(id);
+      } catch (err) {
+        failed.push({
+          id,
+          message: err instanceof Error ? err.message : "Failed to reject",
+        });
+      }
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `${succeeded.length} resignation(s) rejected`,
+      data: { succeeded, failed },
     });
   } catch (error) {
     return handleActionError(res, error);

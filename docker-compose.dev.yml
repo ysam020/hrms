@@ -15,6 +15,7 @@ x-backend-service: &backend-service
   volumes:
     - ${USERPROFILE:-${HOME}}/.aws:/app/.aws:ro
     - ./packages/certificates:/app/packages/certificates:ro
+    - ./local-secrets.json:/app/local-secrets.json:ro
   restart: on-failure
 
 services:
@@ -30,6 +31,7 @@ services:
         - PORT=9002
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - AUTH_SERVICE_HOST=auth-service
       - USER_SERVICE_HOST=user-service
       - EMPLOYEE_SERVICE_HOST=employee-service
@@ -77,6 +79,7 @@ services:
         - PORT=50051
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=auth-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9101
@@ -103,6 +106,7 @@ services:
         - PORT=50052
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=user-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9102
@@ -129,6 +133,7 @@ services:
         - PORT=50053
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=employee-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9103
@@ -155,6 +160,7 @@ services:
         - PORT=50054
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=attendance-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9104
@@ -181,6 +187,7 @@ services:
         - PORT=50055
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=leave-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9105
@@ -207,6 +214,7 @@ services:
         - PORT=50056
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=recruitment-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9106
@@ -234,6 +242,7 @@ services:
         - PORT=50057
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=hrm-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9107
@@ -260,6 +269,7 @@ services:
         - PORT=50058
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=salary-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9108
@@ -286,6 +296,7 @@ services:
         - PORT=50059
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=analytics-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9109
@@ -312,6 +323,7 @@ services:
         - PORT=50060
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=notification-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9110
@@ -338,6 +350,7 @@ services:
         - PORT=50061
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=performance-review-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9112
@@ -363,6 +376,7 @@ services:
         - PROJECT=scheduler-service
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=scheduler-service
       - METRICS_PORT=9111
       - LOKI_URL=http://loki:3100
@@ -384,6 +398,7 @@ services:
       secrets:
         - aws_credentials
         - aws_config
+        - local_secrets_file
     ports:
       - "80:80"
       - "443:443"
@@ -394,6 +409,12 @@ services:
   mongodb:
     container_name: hrms-dev-mongodb
     image: mongo:7
+    # Prisma's MongoDB provider requires transactions for some writes (e.g.
+    # user creation on first Google login), and transactions require a
+    # replica set — a plain standalone mongod isn't enough. --replSet turns
+    # this single node into a (single-member) replica set; mongodb-init below
+    # runs the one-time rs.initiate() once it's reachable.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
     environment:
@@ -407,6 +428,29 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
+
+  mongodb-init:
+    container_name: hrms-dev-mongodb-init
+    image: mongo:7
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    # Idempotent: if the replica set already exists, rs.status() succeeds and
+    # this is a no-op; only a brand-new/never-initiated node hits rs.initiate().
+    entrypoint:
+      - bash
+      - -c
+      - |
+        mongosh --host mongodb --eval '
+          try {
+            rs.status();
+            print("replica set already initiated");
+          } catch (e) {
+            rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongodb:27017" }] });
+            print("replica set initiated");
+          }
+        '
+    restart: "no"
 
   redis:
     container_name: hrms-dev-redis
@@ -486,3 +530,5 @@ secrets:
     file: ${USERPROFILE:-${HOME}}/.aws/credentials
   aws_config:
     file: ${USERPROFILE:-${HOME}}/.aws/config
+  local_secrets_file:
+    file: ./local-secrets.json

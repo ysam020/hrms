@@ -442,6 +442,63 @@ export async function deleteHoliday(req: Request, res: Response) {
   }
 }
 
+export async function bulkDeleteHolidays(req: Request, res: Response) {
+  try {
+    const { dates } = req.body as { dates: string[] };
+
+    const buckets = new Map<
+      string,
+      { year: number; month: number; formatted: Set<string> }
+    >();
+    const notFound = new Set(dates);
+    for (const date of dates) {
+      const d = dayjs(date);
+      if (!d.isValid()) continue;
+      const year = d.year();
+      const month = d.month() + 1;
+      const key = `${year}-${month}`;
+      const formatted = d.format("YYYY-MM-DD");
+      if (!buckets.has(key))
+        buckets.set(key, { year, month, formatted: new Set() });
+      buckets.get(key)!.formatted.add(formatted);
+    }
+
+    let deleted = 0;
+    const touchedYears = new Set<number>();
+    for (const { year, month, formatted } of buckets.values()) {
+      const record = await prisma.holiday.findFirst({ where: { year, month } });
+      if (!record) continue;
+      const list = Array.isArray(record.holidays)
+        ? (record.holidays as any[])
+        : [];
+      const newList = list.filter((h: any) => !formatted.has(h.date));
+      if (newList.length === list.length) continue;
+      deleted += list.length - newList.length;
+      list
+        .filter((h: any) => formatted.has(h.date))
+        .forEach((h: any) => notFound.delete(h.date));
+      await prisma.holiday.update({
+        where: { id: record.id },
+        data: { holidays: newList },
+      });
+      touchedYears.add(year);
+    }
+    await Promise.all(
+      Array.from(touchedYears).map((year) =>
+        cacheManager.delete(`t:${getTenantId() ?? "global"}:holiday:${year}`),
+      ),
+    );
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `${deleted} holiday(s) deleted`,
+      data: { deleted, notFound: Array.from(notFound) },
+    });
+  } catch (error: unknown) {
+    logger.error("bulk-delete-holidays error:", { error });
+    return handleError(res, error);
+  }
+}
+
 export async function addEvent(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {

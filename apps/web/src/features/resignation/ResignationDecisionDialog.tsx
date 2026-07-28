@@ -18,6 +18,8 @@ interface Props {
   open: boolean;
   mode: "approve" | "reject";
   resignationId: string | null;
+  /** Bulk mode: acts on every id in this list instead of `resignationId`. */
+  resignationIds?: string[];
   employeeName?: string;
   onClose: () => void;
   onDone: () => void;
@@ -27,6 +29,7 @@ export default function ResignationDecisionDialog({
   open,
   mode,
   resignationId,
+  resignationIds,
   employeeName,
   onClose,
   onDone,
@@ -41,13 +44,15 @@ export default function ResignationDecisionDialog({
   const [relievedFromDutyOn, setRelievedFromDutyOn] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const isBulk = !!resignationIds && resignationIds.length > 0;
+
   // Clear the form whenever a new resignation is opened — the dialog stays
   // mounted between opens, so without this a cancelled edit for one employee
   // would leak into the form for the next.
   useEffect(() => {
     if (open) reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, resignationId]);
+  }, [open, resignationId, resignationIds]);
 
   function reset() {
     setComments("");
@@ -60,11 +65,47 @@ export default function ResignationDecisionDialog({
   }
 
   async function submit() {
-    if (!resignationId) return;
+    if (!isBulk && !resignationId) return;
     setSaving(true);
     try {
-      if (mode === "approve") {
-        await apiClient.put(API_ENDPOINTS.APPROVE_RESIGNATION(resignationId), {
+      if (isBulk) {
+        const res = await apiClient.put(
+          mode === "approve"
+            ? API_ENDPOINTS.BULK_APPROVE_RESIGNATIONS
+            : API_ENDPOINTS.BULK_REJECT_RESIGNATIONS,
+          mode === "approve"
+            ? {
+                ids: resignationIds,
+                comments: comments || undefined,
+                lastWorkingDay: lastWorkingDay || undefined,
+                noticePeriodWaived,
+                buyoutAmount:
+                  noticePeriodWaived && buyoutAmount
+                    ? Number(buyoutAmount)
+                    : undefined,
+                relievedFromDutyOn:
+                  gardenLeave && relievedFromDutyOn
+                    ? relievedFromDutyOn
+                    : undefined,
+              }
+            : {
+                ids: resignationIds,
+                rejectionReason: rejectionReason || undefined,
+                comments: comments || undefined,
+              },
+        );
+        const failed = res.data?.data?.failed ?? [];
+        const succeeded = res.data?.data?.succeeded ?? [];
+        setAlert({
+          open: true,
+          message:
+            failed.length > 0
+              ? `${succeeded.length} ${mode === "approve" ? "approved" : "rejected"}, ${failed.length} failed`
+              : `${succeeded.length} resignation(s) ${mode === "approve" ? "approved" : "rejected"}.`,
+          severity: failed.length > 0 ? "warning" : "success",
+        });
+      } else if (mode === "approve") {
+        await apiClient.put(API_ENDPOINTS.APPROVE_RESIGNATION(resignationId!), {
           comments: comments || undefined,
           lastWorkingDay: lastWorkingDay || undefined,
           noticePeriodWaived,
@@ -81,7 +122,7 @@ export default function ResignationDecisionDialog({
           severity: "success",
         });
       } else {
-        await apiClient.put(API_ENDPOINTS.REJECT_RESIGNATION(resignationId), {
+        await apiClient.put(API_ENDPOINTS.REJECT_RESIGNATION(resignationId!), {
           rejectionReason: rejectionReason || undefined,
           comments: comments || undefined,
         });
@@ -114,7 +155,11 @@ export default function ResignationDecisionDialog({
     >
       <DialogTitle>
         {mode === "approve" ? "Approve resignation" : "Reject resignation"}
-        {employeeName ? ` — ${employeeName}` : ""}
+        {isBulk
+          ? ` — ${resignationIds!.length} selected`
+          : employeeName
+            ? ` — ${employeeName}`
+            : ""}
       </DialogTitle>
       <DialogContent
         sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}

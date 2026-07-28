@@ -8,7 +8,12 @@ import {
 import { validate } from "../middleware/validate";
 import { resolvePublicTenant } from "../middleware/resolvePublicTenant";
 import * as h from "../handlers/recruitment";
-import { submitResignationSchema } from "../schemas";
+import {
+  submitResignationSchema,
+  bulkDeleteJobOpeningsSchema,
+  bulkApproveResignationsSchema,
+  bulkRejectResignationsSchema,
+} from "../schemas";
 
 export const recruitmentRouter: Router = Router();
 
@@ -56,6 +61,13 @@ recruitmentRouter.delete(
   authenticate,
   requirePrivileged,
   h.deleteJobOpening,
+);
+recruitmentRouter.put(
+  "/bulk-delete-job-openings",
+  authenticate,
+  requirePrivileged,
+  validate(bulkDeleteJobOpeningsSchema),
+  h.bulkDeleteJobOpenings,
 );
 recruitmentRouter.get("/get-job-titles", h.getJobTitles);
 recruitmentRouter.get(
@@ -114,6 +126,18 @@ recruitmentRouter.put(
   "/reject-resignation/:_id",
   authenticate,
   h.rejectResignation,
+);
+recruitmentRouter.put(
+  "/bulk-approve-resignations",
+  authenticate,
+  validate(bulkApproveResignationsSchema),
+  h.bulkApproveResignations,
+);
+recruitmentRouter.put(
+  "/bulk-reject-resignations",
+  authenticate,
+  validate(bulkRejectResignationsSchema),
+  h.bulkRejectResignations,
 );
 recruitmentRouter.put(
   "/withdraw-resignation/:_id",
