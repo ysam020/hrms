@@ -1,6 +1,6 @@
 import { S3Client } from "@aws-sdk/client-s3";
 
-export const S3_BUCKET = "praesto";
+export const S3_BUCKET = "praesto-423437244709";
 export const S3_REGION = "ap-south-1";
 
 export const s3Client = new S3Client({
