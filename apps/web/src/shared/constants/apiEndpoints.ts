@@ -49,6 +49,7 @@ const LEAVE = {
   GET_LEAVE_APPLICATIONS: (params: string) =>
     `/get-leave-applications?${params}`,
   UPDATE_LEAVE_STATUS: "/update-leave-status",
+  BULK_UPDATE_LEAVE_STATUS: "/bulk-update-leave-status",
 };
 
 const KYC = {

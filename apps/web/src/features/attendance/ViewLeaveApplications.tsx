@@ -11,7 +11,6 @@ import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import Download from "@mui/icons-material/Download";
 import FilterList from "@mui/icons-material/FilterList";
 import AddIcon from "@mui/icons-material/Add";
 import Dialog from "@mui/material/Dialog";
@@ -32,10 +31,6 @@ import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { ErrorBoundary } from "react-error-boundary";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
-import {
-  downloadExcel,
-  generateFilename,
-} from "@web/shared/utils/downloadReport";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Person from "@mui/icons-material/Person";
@@ -99,6 +94,11 @@ function ViewLeaveApplications() {
   const [actionLoading, setActionLoading] = useState(false);
   const [openApply, setOpenApply] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<"approve" | "reject" | null>(
+    null,
+  );
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Deep link support (e.g. the dashboard's "Apply Leave" quick action) —
   // land here with the modal already open instead of just the bare list.
@@ -210,6 +210,10 @@ function ViewLeaveApplications() {
     deps: [statusFilter, showFutureOnly],
   });
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [data]);
+
   const handleGlobalFilterChange = useCallback(
     (value) => {
       searchRef.current = value ?? "";
@@ -271,63 +275,41 @@ function ViewLeaveApplications() {
     setActionDialog({ open: false, id: null, username: null, status: null });
   }, []);
 
-  const handleDownloadExcel = useCallback(async () => {
+  const handleBulkConfirm = useCallback(async () => {
+    if (!bulkAction) return;
+    setBulkLoading(true);
     try {
-      const params = `status=${statusFilter}&futureOnly=${showFutureOnly}`;
-      const response = await apiClient(
-        API_ENDPOINTS.GET_LEAVE_APPLICATIONS(params),
+      const response = await apiClient.put(
+        API_ENDPOINTS.BULK_UPDATE_LEAVE_STATUS,
+        { leaveIds: selectedIds, action: bulkAction },
       );
-      const allData = response.data.leaves || response.data.data?.records || [];
-
-      if (!allData || allData.length === 0) {
-        setAlert({
-          open: true,
-          message: "No data available to download.",
-          severity: "warning",
-        });
-        return;
-      }
-
-      const exportData = allData.map((item) => ({
-        userId: item.userId,
-        from: item.from,
-        to: item.to,
-        reason: item.reason,
-        sickLeave: item.sick_leave,
-        status: item.status,
-      }));
-
-      const filename = generateFilename("Leave_Applications");
-
-      const columnWidths = {
-        Username: 20,
-        From: 15,
-        To: 15,
-        Reason: 30,
-        "Sick Leave": 15,
-        "Medical Certificate": 20,
-        Status: 15,
-      };
-
-      await downloadExcel(exportData, filename, "Leave Applications", {
-        formatFieldNames: true,
-        columnWidths,
-      });
-
+      const failed = response.data?.data?.failed ?? [];
+      const succeeded = response.data?.data?.succeeded ?? [];
+      refresh();
       setAlert({
         open: true,
-        message: "Download completed successfully",
-        severity: "success",
+        message:
+          failed.length > 0
+            ? `${succeeded.length} ${bulkAction}d, ${failed.length} failed`
+            : response.data.message ||
+              `${succeeded.length} leave application(s) ${bulkAction}d`,
+        severity: failed.length > 0 ? "warning" : "success",
       });
+      setSelectedIds([]);
+      setBulkAction(null);
     } catch (error) {
-      console.error("Error downloading Excel file:", error);
       setAlert({
         open: true,
-        message: "Failed to download Excel file. Please try again.",
+        message:
+          error.message === "Network Error"
+            ? "Network Error. Please check your connection and try again."
+            : error.response?.data?.message || "An error occurred",
         severity: "error",
       });
+    } finally {
+      setBulkLoading(false);
     }
-  }, [statusFilter, showFutureOnly, setAlert]);
+  }, [bulkAction, selectedIds, setAlert, refresh]);
 
   const handleStatusFilterChange = useCallback((e) => {
     setStatusFilter(e.value);
@@ -495,6 +477,14 @@ function ViewLeaveApplications() {
     [user, handleLeaveActionClick, canManageLeave, isPrivilegedUser],
   );
 
+  const canBulkActOnRow = useCallback(
+    (row: any) =>
+      canManageLeave &&
+      row.status === "Pending" &&
+      (user?.isSuperUser || row.userId !== user?.id),
+    [canManageLeave, user],
+  );
+
   return (
     <div>
       <ErrorBoundary fallback={<ErrorFallback />}>
@@ -502,6 +492,7 @@ function ViewLeaveApplications() {
           ariaLabel="Leave applications"
           data={data || []}
           columns={columns}
+          getRowId={(row: any) => row.id || row._id}
           actions={rowActions}
           loading={loading}
           emptyMessage="No leave applications found"
@@ -510,75 +501,108 @@ function ViewLeaveApplications() {
             onChange: handleGlobalFilterChange,
             placeholder: "Search employees…",
           }}
+          selection={
+            canManageLeave
+              ? {
+                  selectedIds,
+                  onChange: setSelectedIds,
+                  isRowSelectable: canBulkActOnRow,
+                }
+              : undefined
+          }
           toolbarActions={
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-                flexWrap: "wrap",
-              }}
-            >
-              <FilterList
-                sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
-              />
-              <Box sx={{ minWidth: 120 }}>
-                <Dropdown
-                  value={statusFilter}
-                  onChange={handleStatusFilterChange}
-                  options={statusOptions}
-                  placeholder="Select Status"
-                  className="w-full"
-                  style={{ minWidth: "120px" }}
-                  appendTo={() =>
-                    document.querySelector("#root .App") as HTMLElement
-                  }
-                />
-              </Box>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={showFutureOnly}
-                    onChange={handleFutureOnlyToggle}
-                    color="primary"
-                    size="small"
-                  />
-                }
-                label={
-                  <Typography
-                    variant="body2"
-                    fontSize="0.8rem"
-                    color="text.secondary"
-                  >
-                    Future leaves only
-                  </Typography>
-                }
-                sx={{ margin: 0 }}
-              />
-              <Tooltip title="Download Excel">
-                <span>
+            selectedIds.length > 0 ? (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedIds.length} selected
+                </Typography>
+                <Tooltip title="Approve selected">
                   <IconButton
-                    onClick={handleDownloadExcel}
-                    disabled={!data || data.length === 0 || loading}
+                    onClick={() => setBulkAction("approve")}
+                    color="success"
+                    size="small"
+                    aria-label="Approve selected leave applications"
+                  >
+                    <CheckIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Reject selected">
+                  <IconButton
+                    onClick={() => setBulkAction("reject")}
+                    color="error"
+                    size="small"
+                    aria-label="Reject selected leave applications"
+                  >
+                    <CloseIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Clear selection">
+                  <IconButton
+                    onClick={() => setSelectedIds([])}
+                    size="small"
+                    aria-label="Clear selection"
+                  >
+                    <RemoveCircleOutlineIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  flexWrap: "wrap",
+                }}
+              >
+                <FilterList
+                  sx={{ fontSize: 18, color: "text.secondary", opacity: 0.7 }}
+                />
+                <Box sx={{ minWidth: 120 }}>
+                  <Dropdown
+                    value={statusFilter}
+                    onChange={handleStatusFilterChange}
+                    options={statusOptions}
+                    placeholder="Select Status"
+                    className="w-full"
+                    style={{ minWidth: "120px" }}
+                    appendTo={() =>
+                      document.querySelector("#root .App") as HTMLElement
+                    }
+                  />
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showFutureOnly}
+                      onChange={handleFutureOnlyToggle}
+                      color="primary"
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography
+                      variant="body2"
+                      fontSize="0.8rem"
+                      color="text.secondary"
+                    >
+                      Future leaves only
+                    </Typography>
+                  }
+                  sx={{ margin: 0 }}
+                />
+                <Tooltip title="Apply for Leave">
+                  <IconButton
+                    onClick={() => setOpenApply(true)}
                     color="primary"
                     size="small"
-                    aria-label="Download leave applications as Excel"
+                    aria-label="Apply for leave"
                   >
-                    <Download sx={{ fontSize: 20 }} aria-hidden="true" />
+                    <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
                   </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="Apply for Leave">
-                <IconButton
-                  onClick={() => setOpenApply(true)}
-                  color="primary"
-                  size="small"
-                  aria-label="Apply for leave"
-                >
-                  <AddIcon sx={{ fontSize: 20 }} aria-hidden="true" />
-                </IconButton>
-              </Tooltip>
-            </Box>
+                </Tooltip>
+              </Box>
+            )
           }
           pagination={{
             page: pagination.pageIndex,
@@ -620,6 +644,23 @@ function ViewLeaveApplications() {
         cancelText="Cancel"
         loading={actionLoading}
         variant={actionDialog.status === "Reject" ? "danger" : "default"}
+        theme={theme}
+      />
+
+      <ConfirmationDialog
+        open={!!bulkAction}
+        onClose={() => !bulkLoading && setBulkAction(null)}
+        onConfirm={handleBulkConfirm}
+        title={
+          bulkAction === "approve"
+            ? "Approve Leave Applications"
+            : "Reject Leave Applications"
+        }
+        message={`Are you sure you want to ${bulkAction} ${selectedIds.length} selected leave application(s)?`}
+        confirmText={bulkAction === "approve" ? "Approve" : "Reject"}
+        cancelText="Cancel"
+        loading={bulkLoading}
+        variant={bulkAction === "approve" ? "default" : "danger"}
         theme={theme}
       />
 

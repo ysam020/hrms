@@ -1,7 +1,6 @@
-import { memo, useCallback, useContext, useState } from "react";
+import { memo, useCallback, useContext, useRef, useState } from "react";
 import axios from "axios";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Stepper from "@mui/material/Stepper";
 import Step from "@mui/material/Step";
 import StepLabel from "@mui/material/StepLabel";
@@ -14,9 +13,11 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import DownloadIcon from "@mui/icons-material/Download";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { FileUpload } from "primereact/fileupload";
 import ThemedDialog from "@web/shared/components/ThemedDialog";
+import Button from "@web/shared/components/Button";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -67,6 +68,7 @@ function BulkImportDialog({
   const [validationResult, setValidationResult] =
     useState<ValidationResult | null>(null);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
+  const fileUploadRef = useRef<FileUpload>(null);
 
   const isBusy = phase !== "idle";
 
@@ -218,31 +220,23 @@ function BulkImportDialog({
       actions={
         <>
           {step === 1 && !validationResult?.valid && (
-            <Button onClick={reset} disabled={isBusy}>
+            <Button onClick={reset} disabled={isBusy} variant="secondary">
               Upload a different file
             </Button>
           )}
           {step === 1 && validationResult?.valid && (
             <Button
-              variant="contained"
               onClick={handleCommit}
               disabled={isBusy}
-              startIcon={
-                phase === "committing" ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : undefined
-              }
+              loading={phase === "committing"}
+              loadingText="Importing..."
             >
               Import Employees
             </Button>
           )}
-          {step === 2 && (
-            <Button variant="contained" onClick={handleClose}>
-              Close
-            </Button>
-          )}
+          {step === 2 && <Button onClick={handleClose}>Close</Button>}
           {step !== 2 && (
-            <Button onClick={handleClose} disabled={isBusy}>
+            <Button onClick={handleClose} disabled={isBusy} variant="secondary">
               Cancel
             </Button>
           )}
@@ -263,32 +257,46 @@ function BulkImportDialog({
             Download the template, fill in employee details, then upload the
             completed CSV file below.
           </Typography>
-          <Button
-            variant="outlined"
-            startIcon={
-              phase === "downloading" ? (
-                <CircularProgress size={16} />
-              ) : (
-                <DownloadIcon aria-hidden="true" />
-              )
-            }
-            onClick={downloadTemplate}
-            disabled={isBusy}
-            sx={{ alignSelf: "flex-start" }}
-          >
-            Download Template
-          </Button>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <Button
+              icon={<DownloadIcon aria-hidden="true" />}
+              onClick={downloadTemplate}
+              disabled={isBusy}
+              loading={phase === "downloading"}
+              loadingText="Downloading..."
+            >
+              Download Template
+            </Button>
+            <Button
+              icon={<UploadFileIcon aria-hidden="true" />}
+              onClick={() => fileUploadRef.current?.getInput()?.click()}
+              disabled={isBusy}
+            >
+              Choose File
+            </Button>
+          </Box>
+          {/* Header (Choose/Upload/Cancel) replaced with just the hidden
+              choose button — it still needs to render (unstyled, off-screen)
+              so its native file input mounts and getInput() below has
+              something to click; the visible trigger is the "Choose File"
+              button above, styled with our own Button instead of PrimeReact's. */}
           <FileUpload
+            ref={fileUploadRef}
             customUpload
+            auto
             uploadHandler={uploadHandler}
             accept=".csv"
             multiple={false}
             maxFileSize={
               (Number(import.meta.env.VITE_MAX_FILE_SIZE) || 15) * 1024 * 1024
             }
+            headerTemplate={(options) => (
+              <div style={{ display: "none" }}>{options.chooseButton}</div>
+            )}
             emptyTemplate={
               <p>
-                Drag and drop the completed template here, or click to upload.
+                Drag and drop the completed template here, or use "Choose File"
+                above.
               </p>
             }
             disabled={isBusy}

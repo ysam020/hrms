@@ -4,10 +4,6 @@ import ViewLeaveApplications from "@web/features/attendance/ViewLeaveApplication
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import apiClient from "@web/core/http/axiosConfig";
-import {
-  downloadExcel,
-  generateFilename,
-} from "@web/shared/utils/downloadReport";
 
 const mocks = vi.hoisted(() => {
   const instance: any = vi.fn();
@@ -18,12 +14,6 @@ vi.mock("@web/core/http/axiosConfig", () => ({ default: mocks.instance }));
 const mockApiClient = apiClient as unknown as ReturnType<typeof vi.fn> & {
   put: ReturnType<typeof vi.fn>;
 };
-
-vi.mock("@web/shared/utils/downloadReport", () => ({
-  downloadExcel: vi.fn(),
-  generateFilename: vi.fn(() => "Leave_Applications_06_2024"),
-}));
-const mockDownloadExcel = downloadExcel as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock("@web/features/attendance/LeaveApplication", () => ({
   default: ({ onSuccess }: any) => (
@@ -93,7 +83,6 @@ describe("ViewLeaveApplications", () => {
   beforeEach(() => {
     mocks.instance.mockReset();
     mocks.instance.put.mockReset();
-    mockDownloadExcel.mockReset();
   });
 
   it("shows an empty state when there are no leave applications", async () => {
@@ -246,52 +235,6 @@ describe("ViewLeaveApplications", () => {
     expect(setAlert).toHaveBeenCalledWith(
       expect.objectContaining({
         message: "Leave application withdrawn successfully",
-      }),
-    );
-  });
-
-  it("warns instead of downloading when there is no data to export", async () => {
-    const setAlert = vi.fn();
-    renderWith([], { setAlert });
-    await screen.findByText("No leave applications found");
-
-    // apiClient resolves the same records (empty) for the download call too
-    fireEvent.click(
-      screen.getByLabelText("Download leave applications as Excel"),
-    );
-    // Download button is disabled with no data — assert via disabled attr instead
-    expect(
-      screen.getByLabelText("Download leave applications as Excel"),
-    ).toBeDisabled();
-    expect(mockDownloadExcel).not.toHaveBeenCalled();
-  });
-
-  it("downloads an Excel export of the current results", async () => {
-    mockDownloadExcel.mockResolvedValue(true);
-    const setAlert = vi.fn();
-    mockApiClient.mockResolvedValue({
-      data: { data: { records: [makeLeave()], pagination: { totalCount: 1 } } },
-    });
-    render(
-      <MemoryRouter future={future}>
-        <AlertContext.Provider value={{ setAlert } as any}>
-          <UserContext.Provider value={{ user: { id: "u1" } } as any}>
-            <ViewLeaveApplications />
-          </UserContext.Provider>
-        </AlertContext.Provider>
-      </MemoryRouter>,
-    );
-    await screen.findByText("Jane Doe (jdoe)");
-
-    fireEvent.click(
-      screen.getByLabelText("Download leave applications as Excel"),
-    );
-
-    await waitFor(() => expect(mockDownloadExcel).toHaveBeenCalled());
-    expect(setAlert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        severity: "success",
-        message: "Download completed successfully",
       }),
     );
   });

@@ -2,20 +2,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ViewAttendances from "@web/features/attendance/ViewAttendances";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import apiClient from "@web/core/http/axiosConfig";
-import {
-  downloadExcel,
-  generateFilename,
-} from "@web/shared/utils/downloadReport";
 
 const mocks = vi.hoisted(() => ({ instance: vi.fn() }));
 vi.mock("@web/core/http/axiosConfig", () => ({ default: mocks.instance }));
 const mockApiClient = apiClient as unknown as ReturnType<typeof vi.fn>;
-
-vi.mock("@web/shared/utils/downloadReport", () => ({
-  downloadExcel: vi.fn(),
-  generateFilename: vi.fn(() => "Attendances_2024-06"),
-}));
-const mockDownloadExcel = downloadExcel as unknown as ReturnType<typeof vi.fn>;
 
 function makeRow(overrides: Partial<any> = {}) {
   return {
@@ -107,61 +97,6 @@ describe("ViewAttendances", () => {
 
     await waitFor(() =>
       expect(mockApiClient.mock.calls.length).toBeGreaterThan(callsBefore),
-    );
-  });
-
-  it("disables the download button when there is no data", async () => {
-    mockApiClient.mockResolvedValue({
-      data: { data: { records: [], pagination: { totalCount: 0 } } },
-    });
-    renderWith();
-    await screen.findByText("No attendance records found");
-    expect(
-      screen.getByLabelText("Download attendance as Excel"),
-    ).toBeDisabled();
-  });
-
-  it("downloads an Excel export and shows a success alert", async () => {
-    mockApiClient.mockResolvedValue({
-      data: { data: { records: [makeRow()], pagination: { totalCount: 1 } } },
-    });
-    mockDownloadExcel.mockResolvedValue(true);
-    const setAlert = vi.fn();
-    renderWith(setAlert);
-    await screen.findByText("Jane Doe (jdoe)");
-
-    fireEvent.click(screen.getByLabelText("Download attendance as Excel"));
-
-    await waitFor(() => expect(mockDownloadExcel).toHaveBeenCalled());
-    expect(setAlert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        severity: "success",
-        message: "Download completed successfully",
-      }),
-    );
-  });
-
-  it("shows a download-specific error message when the export fetch fails", async () => {
-    mockApiClient
-      .mockResolvedValueOnce({
-        data: { data: { records: [makeRow()], pagination: { totalCount: 1 } } },
-      })
-      .mockRejectedValueOnce({
-        response: { data: { message: "Export failed" } },
-      });
-    const setAlert = vi.fn();
-    renderWith(setAlert);
-    await screen.findByText("Jane Doe (jdoe)");
-
-    fireEvent.click(screen.getByLabelText("Download attendance as Excel"));
-
-    await waitFor(() =>
-      expect(setAlert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          severity: "error",
-          message: "Download failed: Export failed",
-        }),
-      ),
     );
   });
 });
