@@ -8,7 +8,6 @@ import {
 } from "react";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import Download from "@mui/icons-material/Download";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DataList from "@web/shared/components/DataList";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
@@ -17,10 +16,6 @@ import { tableToolbarDate } from "@web/shared/utils/table/tableToolbarDate";
 import { ErrorBoundary } from "react-error-boundary";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import {
-  downloadExcel,
-  generateFilename,
-} from "@web/shared/utils/downloadReport";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Person from "@mui/icons-material/Person";
@@ -35,7 +30,6 @@ function ViewAttendances() {
       "0",
     )}`,
   );
-  const [isDownloading, setIsDownloading] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const searchRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -107,39 +101,6 @@ function ViewAttendances() {
     [resetPagination],
   );
 
-  // Download function
-  const handleDownloadExcel = useCallback(async () => {
-    if (isDownloading) return;
-
-    try {
-      setIsDownloading(true);
-      // Parse year and month from date
-      const [year, month] = date.split("-");
-
-      // Fetch all data without pagination for download
-      const response = await apiClient(`/get-all-attendances/${year}/${month}`);
-      const allData = response.data.summaries || response.data.data || [];
-
-      const filename = generateFilename("Attendances", `${year}-${month}`);
-      await downloadExcel(allData, filename);
-
-      setAlert({
-        open: true,
-        message: "Download completed successfully",
-        severity: "success",
-      });
-    } catch (err) {
-      setAlert({
-        open: true,
-        message:
-          "Download failed: " + (err.response?.data?.message || err.message),
-        severity: "error",
-      });
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [date, setAlert, isDownloading]);
-
   const columns = useMemo(
     () => [
       {
@@ -199,19 +160,6 @@ function ViewAttendances() {
                 aria-label="Refresh attendance data"
               >
                 <RefreshIcon aria-hidden="true" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Download Excel">
-              <IconButton
-                onClick={handleDownloadExcel}
-                disabled={
-                  !data || data.length === 0 || loading || isDownloading
-                }
-                color="primary"
-                size="small"
-                aria-label="Download attendance as Excel"
-              >
-                <Download aria-hidden="true" />
               </IconButton>
             </Tooltip>
           </Box>

@@ -121,6 +121,12 @@ export const updateLeaveStatusSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+export const bulkUpdateLeaveStatusSchema = z.object({
+  leaveIds: z.array(z.string().min(1)).min(1).max(200),
+  action: z.enum(["approve", "reject"]),
+  reason: z.string().max(500).optional(),
+});
+
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 export const startConversationSchema = z.object({

@@ -2,7 +2,11 @@ import { Router } from "express";
 import { authenticate } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import * as h from "../handlers/leave";
-import { addLeaveSchema, updateLeaveStatusSchema } from "../schemas";
+import {
+  addLeaveSchema,
+  updateLeaveStatusSchema,
+  bulkUpdateLeaveStatusSchema,
+} from "../schemas";
 
 export const leaveRouter: Router = Router();
 
@@ -22,6 +26,12 @@ leaveRouter.put(
   authenticate,
   validate(updateLeaveStatusSchema),
   h.updateLeaveStatus,
+);
+leaveRouter.put(
+  "/bulk-update-leave-status",
+  authenticate,
+  validate(bulkUpdateLeaveStatusSchema),
+  h.bulkUpdateLeaveStatus,
 );
 leaveRouter.get(
   "/get-available-paid-leaves/:userId?",

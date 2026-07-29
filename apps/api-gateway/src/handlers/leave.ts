@@ -179,6 +179,65 @@ export async function updateLeaveStatus(req: Request, res: Response) {
   }
 }
 
+/**
+ * PUT /bulk-update-leave-status
+ * Bulk approve or reject several leave applications in one pass. Cancel is
+ * intentionally excluded — cancellation is self-service and single-item
+ * only. Mirrors the approve/reject branch of updateLeaveStatus above, but
+ * each id is resolved and acted on independently via actOnApprovalForEntity
+ * so one already-decided request doesn't fail the whole batch.
+ */
+export async function bulkUpdateLeaveStatus(req: Request, res: Response) {
+  const authReq = req as AuthRequest;
+  const { user } = authReq;
+  try {
+    const { leaveIds, action, reason } = req.body as {
+      leaveIds: string[];
+      action: "approve" | "reject";
+      reason?: string;
+    };
+
+    const tenantId = user!.tenantId;
+    if (!tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "No active tenant.",
+      });
+    }
+
+    const privileged = await isPrivileged(authReq);
+    const succeeded: string[] = [];
+    const failed: { id: string; message: string }[] = [];
+
+    for (const leaveId of leaveIds) {
+      try {
+        await actOnApprovalForEntity(
+          tenantId,
+          "leave",
+          leaveId,
+          user!.userId,
+          action === "approve" ? "approved" : "rejected",
+          reason || undefined,
+          privileged,
+        );
+        succeeded.push(leaveId);
+      } catch (err) {
+        failed.push({
+          id: leaveId,
+          message: err instanceof Error ? err.message : `Failed to ${action}`,
+        });
+      }
+    }
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: `${succeeded.length} leave application(s) ${action === "approve" ? "approved" : "rejected"}`,
+      data: { succeeded, failed },
+    });
+  } catch (error) {
+    logger.error("PUT /bulk-update-leave-status error:", { error });
+    return handleActionError(res, error);
+  }
+}
+
 export async function getAvailablePaidLeaves(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {

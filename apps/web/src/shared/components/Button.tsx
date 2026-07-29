@@ -131,12 +131,17 @@ function Button({
   };
 
   const combinedStyle = {
+    // Falls back to "none" for the solid variants (they don't set their own
+    // border); outline's border from getVariantStyles() below must win over
+    // this, so it's spread in after — putting it later here previously
+    // clobbered outline's border unconditionally since a later duplicate
+    // key always wins in an object literal.
+    border: "none",
     ...getVariantStyles(),
     ...getSizeStyles(),
     width: fullWidth ? "100%" : "auto",
     cursor: disabled || loading ? "not-allowed" : "pointer",
     opacity: disabled || loading ? 0.6 : 1,
-    border: variant === "outline" || variant === "ghost" ? undefined : "none",
     // Don't suppress focus outlines — we restore them for keyboard users via
     // :focus-visible in the CSS. Setting outline:none here would fail WCAG 2.4.7.
     borderRadius: "8px",
