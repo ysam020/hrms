@@ -1,6 +1,7 @@
 import { prisma } from "@hrms/db";
 import { getRedisClient } from "@hrms/cache";
-import { getRazorpay } from "../handlers/payment";
+import { getRazorpay, getOrCreatePlanId } from "../handlers/payment";
+import { getActiveEmployeeCount } from "../utils/planLimits";
 import { startSubscriptionReconciler } from "../services/subscriptionReconciler";
 
 jest.mock("@hrms/db", () => ({
@@ -17,16 +18,32 @@ jest.mock("@hrms/cache", () => ({
 }));
 
 const mockFetch = jest.fn();
+const mockSubUpdate = jest.fn();
+const mockSubCancel = jest.fn();
 jest.mock("../handlers/payment", () => ({
-  getRazorpay: jest.fn(() => ({ subscriptions: { fetch: mockFetch } })),
+  getRazorpay: jest.fn(() => ({
+    subscriptions: {
+      fetch: mockFetch,
+      update: mockSubUpdate,
+      cancel: mockSubCancel,
+    },
+  })),
+  getOrCreatePlanId: jest.fn(),
+}));
+
+jest.mock("../utils/planLimits", () => ({
+  getActiveEmployeeCount: jest.fn(),
 }));
 
 const db: any = prisma;
+const mockGetActiveEmployeeCount = getActiveEmployeeCount as jest.Mock;
+const mockGetOrCreatePlanId = getOrCreatePlanId as jest.Mock;
 
 const BASE_TENANT = {
   id: "t1",
   razorpaySubscriptionId: "sub_1",
   planExpiresAt: new Date("2026-07-01T00:00:00Z"),
+  planTier: "growth",
   billing: "monthly",
   subscriptionStatus: "active",
 };
@@ -43,6 +60,7 @@ describe("startSubscriptionReconciler", () => {
     jest.clearAllMocks();
     db.tenant.update.mockResolvedValue({});
     mockRedisSet.mockResolvedValue("OK"); // lock acquired by default
+    mockSubCancel.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -93,6 +111,59 @@ describe("startSubscriptionReconciler", () => {
     });
   });
 
+  it("finalizes a pending downgrade when headcount is within the new tier's limit", async () => {
+    db.tenant.findMany.mockResolvedValue([
+      { ...BASE_TENANT, pendingPlanTier: "starter", pendingBilling: "monthly" },
+    ]);
+    const laterTs = Math.floor(
+      new Date("2026-08-01T00:00:00Z").getTime() / 1000,
+    );
+    mockFetch.mockResolvedValue({ status: "active", current_end: laterTs });
+    mockGetActiveEmployeeCount.mockResolvedValue(10); // within starter's limit of 25
+    await runReconcilerOnce();
+    expect(db.tenant.update).toHaveBeenCalledWith({
+      where: { id: "t1" },
+      data: {
+        planExpiresAt: new Date(laterTs * 1000),
+        planTier: "starter",
+        billing: "monthly",
+        pendingPlanTier: null,
+        pendingBilling: null,
+        pendingPlanChangeAt: null,
+      },
+    });
+    expect(mockSubUpdate).not.toHaveBeenCalled();
+  });
+
+  it("blocks a pending downgrade and reverts Razorpay's plan when headcount exceeds the new tier's limit", async () => {
+    db.tenant.findMany.mockResolvedValue([
+      { ...BASE_TENANT, pendingPlanTier: "starter", pendingBilling: "monthly" },
+    ]);
+    const laterTs = Math.floor(
+      new Date("2026-08-01T00:00:00Z").getTime() / 1000,
+    );
+    mockFetch.mockResolvedValue({ status: "active", current_end: laterTs });
+    mockGetActiveEmployeeCount.mockResolvedValue(30); // exceeds starter's limit of 25
+    mockGetOrCreatePlanId.mockResolvedValue("plan_growth_monthly");
+    await runReconcilerOnce();
+
+    expect(mockGetOrCreatePlanId).toHaveBeenCalledWith("growth", "monthly");
+    expect(mockSubUpdate).toHaveBeenCalledWith("sub_1", {
+      plan_id: "plan_growth_monthly",
+      quantity: 1,
+      schedule_change_at: "now",
+    });
+    expect(db.tenant.update).toHaveBeenCalledWith({
+      where: { id: "t1" },
+      data: {
+        planExpiresAt: new Date(laterTs * 1000),
+        pendingPlanTier: null,
+        pendingBilling: null,
+        pendingPlanChangeAt: null,
+      },
+    });
+  });
+
   it("does not rewrite planExpiresAt when Razorpay's value is earlier than ours", async () => {
     db.tenant.findMany.mockResolvedValue([BASE_TENANT]);
     const earlierTs = Math.floor(
@@ -113,30 +184,48 @@ describe("startSubscriptionReconciler", () => {
     });
   });
 
-  it.each(["cancelled", "completed", "expired"])(
-    "marks the tenant expired when Razorpay reports %s and local status isn't already expired",
+  it.each(["cancelled", "completed"])(
+    "marks the tenant cancelled when Razorpay reports %s and local status isn't already cancelled",
     async (rzpStatus) => {
       db.tenant.findMany.mockResolvedValue([BASE_TENANT]);
       mockFetch.mockResolvedValue({ status: rzpStatus, current_end: null });
       await runReconcilerOnce();
       expect(db.tenant.update).toHaveBeenCalledWith({
         where: { id: "t1" },
-        data: { subscriptionStatus: "expired" },
+        data: { subscriptionStatus: "cancelled" },
       });
     },
   );
 
-  it("does not double-write when local status is already expired", async () => {
+  it("marks the tenant expired when Razorpay reports expired and local status isn't already expired", async () => {
+    db.tenant.findMany.mockResolvedValue([BASE_TENANT]);
+    mockFetch.mockResolvedValue({ status: "expired", current_end: null });
+    await runReconcilerOnce();
+    expect(db.tenant.update).toHaveBeenCalledWith({
+      where: { id: "t1" },
+      data: { subscriptionStatus: "expired" },
+    });
+  });
+
+  it("heals a legacy 'cancelling' tenant to 'cancelled' when Razorpay confirms cancellation", async () => {
     db.tenant.findMany.mockResolvedValue([
       { ...BASE_TENANT, subscriptionStatus: "cancelling" },
     ]);
     mockFetch.mockResolvedValue({ status: "cancelled", current_end: null });
     await runReconcilerOnce();
-    // cancelling -> expired transition still applies (status isn't "expired" yet)
     expect(db.tenant.update).toHaveBeenCalledWith({
       where: { id: "t1" },
-      data: { subscriptionStatus: "expired" },
+      data: { subscriptionStatus: "cancelled" },
     });
+  });
+
+  it("does not double-write when local status is already cancelled", async () => {
+    db.tenant.findMany.mockResolvedValue([
+      { ...BASE_TENANT, subscriptionStatus: "cancelled" },
+    ]);
+    mockFetch.mockResolvedValue({ status: "cancelled", current_end: null });
+    await runReconcilerOnce();
+    expect(db.tenant.update).not.toHaveBeenCalled();
   });
 
   // Regression test for a bug where the general "active" heal branch (`if
@@ -195,6 +284,48 @@ describe("startSubscriptionReconciler", () => {
     await jest.advanceTimersByTimeAsync(6 * 60 * 60 * 1000);
     expect(db.tenant.findMany).toHaveBeenCalledTimes(2);
     jest.useRealTimers();
+  });
+
+  // Coverage for confirmPaymentMethodChange's best-effort cancel of the old
+  // subscription: if that call failed, previousRazorpaySubscriptionId is
+  // left set as a retry queue of one, and the reconciler is the fallback
+  // that keeps trying so the old mandate doesn't bill forever.
+  describe("orphaned old subscription retry-cancel", () => {
+    beforeEach(() => {
+      mockFetch.mockResolvedValue({ status: "active", current_end: null });
+    });
+
+    it("does not attempt a cancel when previousRazorpaySubscriptionId is not set", async () => {
+      db.tenant.findMany.mockResolvedValue([BASE_TENANT]);
+      await runReconcilerOnce();
+      expect(mockSubCancel).not.toHaveBeenCalled();
+    });
+
+    it("retries cancelling an orphaned previous subscription and clears the field on success", async () => {
+      db.tenant.findMany.mockResolvedValue([
+        { ...BASE_TENANT, previousRazorpaySubscriptionId: "sub_old" },
+      ]);
+      await runReconcilerOnce();
+      expect(mockSubCancel).toHaveBeenCalledWith("sub_old", {
+        cancel_at_cycle_end: 0,
+      });
+      expect(db.tenant.update).toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: { previousRazorpaySubscriptionId: null },
+      });
+    });
+
+    it("leaves previousRazorpaySubscriptionId set when the retry-cancel fails", async () => {
+      db.tenant.findMany.mockResolvedValue([
+        { ...BASE_TENANT, previousRazorpaySubscriptionId: "sub_old" },
+      ]);
+      mockSubCancel.mockRejectedValue(new Error("Razorpay down"));
+      await runReconcilerOnce();
+      expect(db.tenant.update).not.toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: { previousRazorpaySubscriptionId: null },
+      });
+    });
   });
 
   // Regression coverage for a real bug: with N gateway replicas, each ran

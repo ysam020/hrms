@@ -25,7 +25,7 @@ import Avatar from "@mui/material/Avatar";
 import AvatarGroup from "@mui/material/AvatarGroup";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -37,6 +37,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   draft: { color: "#64748b", bg: "rgba(100,116,139,0.15)" },
@@ -496,16 +497,16 @@ function PerformanceReviewCycles() {
 
       <Dialog
         open={open}
-        onClose={closeDialog}
+        onClose={ignoreBackdropClick(closeDialog)}
         maxWidth="sm"
         fullWidth
         disablePortal
       >
-        <DialogTitle>
+        <DialogTitleWithClose onClose={closeDialog}>
           {editingCycleId
             ? "Edit Performance Review Cycle"
             : "New Performance Review Cycle"}
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent
           sx={{
             display: "flex",

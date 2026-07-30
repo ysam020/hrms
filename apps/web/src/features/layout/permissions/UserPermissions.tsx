@@ -250,6 +250,7 @@ function UserPermissions() {
           optionLabel="name"
           placeholder="Select a Role"
           showClear
+          appendTo="self"
           style={{ marginLeft: "10px", maxWidth: "300px" }}
           disabled={fetchingPermissions || isSuperUser || loadingRoles}
         />

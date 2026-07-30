@@ -20,7 +20,7 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Checkbox from "@mui/material/Checkbox";
@@ -33,6 +33,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 const ENTITIES = [
   "employee",
@@ -570,11 +571,13 @@ function ReportBuilder() {
       {/* Save Dialog */}
       <Dialog
         open={openSave}
-        onClose={() => setOpenSave(false)}
+        onClose={ignoreBackdropClick(() => setOpenSave(false))}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Save Report</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenSave(false)}>
+          Save Report
+        </DialogTitleWithClose>
         <DialogContent
           sx={{
             display: "flex",

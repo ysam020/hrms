@@ -24,7 +24,7 @@ import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
@@ -36,6 +36,7 @@ import ReplayIcon from "@mui/icons-material/Replay";
 import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import StatusTimeline, {
   type TimelineStage,
 } from "@web/shared/components/StatusTimeline";
@@ -552,11 +553,13 @@ function PayrollRuns() {
 
       <Dialog
         open={openInitiate}
-        onClose={() => setOpenInitiate(false)}
+        onClose={ignoreBackdropClick(() => setOpenInitiate(false))}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Initiate Payroll Run</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenInitiate(false)}>
+          Initiate Payroll Run
+        </DialogTitleWithClose>
         <DialogContent sx={{ pt: "16px !important" }}>
           <Box>
             <Typography
@@ -604,17 +607,17 @@ function PayrollRuns() {
 
       <Dialog
         open={!!viewRun}
-        onClose={() => setViewRun(null)}
+        onClose={ignoreBackdropClick(() => setViewRun(null))}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitleWithClose onClose={() => setViewRun(null)}>
           {viewRun &&
             dayjs(new Date(viewRun.year, (viewRun.month ?? 1) - 1)).format(
               "MMMM YYYY",
             )}{" "}
           Payroll Run
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent
           sx={{
             display: "flex",

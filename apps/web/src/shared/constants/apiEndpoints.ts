@@ -259,9 +259,10 @@ const CHAT = {
   GET_CONVERSATIONS: "/chat/conversations",
   START_CONVERSATION: "/chat/conversations/start",
   GET_MESSAGES: (roomId: string) => `/chat/conversations/${roomId}/messages`,
+  GET_FILE_VIEW_URL: (messageId: string) =>
+    `/chat/messages/${messageId}/view-url`,
   MARK_AS_READ: (roomId: string) => `/chat/conversations/${roomId}/read`,
   GET_UNREAD_COUNTS: "/chat/unread-counts",
-  UPLOAD_FILE: "/chat/upload",
   DELETE_MESSAGE: (messageId: string) => `/chat/messages/${messageId}`,
   DELETE_CONVERSATION: (roomId: string) => `/chat/conversations/${roomId}`,
   PIN_MESSAGE: (messageId: string) => `/chat/messages/${messageId}/pin`,
@@ -311,6 +312,8 @@ const PAYMENT = {
   PLAN_PRICING: "/payment/plan-pricing",
   CHANGE_PLAN: "/payment/change-plan",
   CONFIRM_PLAN_UPGRADE: "/payment/confirm-plan-upgrade",
+  START_PAYMENT_METHOD_CHANGE: "/payment/start-payment-method-change",
+  CONFIRM_PAYMENT_METHOD_CHANGE: "/payment/confirm-payment-method-change",
 };
 
 const TENANT = {

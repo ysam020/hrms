@@ -5,7 +5,7 @@ import Alert from "@mui/material/Alert";
 import Button from "@web/shared/components/Button";
 import DataList from "@web/shared/components/DataList";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -20,6 +20,7 @@ import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import { numField } from "@web/shared/components/numField";
 import { useCrudDialog } from "@web/shared/hooks/useCrudDialog";
 import {
@@ -184,14 +185,14 @@ export function NoticePeriodTab({
 
       <Dialog
         open={policyDialogOpen}
-        onClose={() => setPolicyDialogOpen(false)}
+        onClose={ignoreBackdropClick(() => setPolicyDialogOpen(false))}
         fullWidth
         maxWidth="sm"
         TransitionComponent={SlideUpTransition}
       >
-        <DialogTitle>
+        <DialogTitleWithClose onClose={() => setPolicyDialogOpen(false)}>
           {editingPolicy ? "Edit notice period band" : "Add notice period band"}
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent
           sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
         >

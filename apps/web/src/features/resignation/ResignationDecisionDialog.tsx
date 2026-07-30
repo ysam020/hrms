@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -13,6 +13,7 @@ import SlideUpTransition from "@web/shared/components/SlideUpTransition";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 interface Props {
   open: boolean;
@@ -148,19 +149,19 @@ export default function ResignationDecisionDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={ignoreBackdropClick(onClose)}
       fullWidth
       maxWidth="sm"
       TransitionComponent={SlideUpTransition}
     >
-      <DialogTitle>
+      <DialogTitleWithClose onClose={onClose}>
         {mode === "approve" ? "Approve resignation" : "Reject resignation"}
         {isBulk
           ? ` — ${resignationIds!.length} selected`
           : employeeName
             ? ` — ${employeeName}`
             : ""}
-      </DialogTitle>
+      </DialogTitleWithClose>
       <DialogContent
         sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
       >

@@ -119,6 +119,65 @@ describe("requireActiveSubscription", () => {
     );
   });
 
+  it("blocks with 402 when cancelled and planExpiresAt has passed", async () => {
+    (prisma.tenant.findUnique as jest.Mock).mockResolvedValue({
+      subscriptionStatus: "cancelled",
+      planExpiresAt: new Date("2020-01-01T00:00:00Z"),
+    });
+    const req: any = { user: { tenantId: "t1" } };
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireActiveSubscription(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(402);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message:
+          "Your subscription was cancelled and your access has ended. Please resubscribe to continue.",
+      }),
+    );
+  });
+
+  it("blocks with 402 when cancelled and planExpiresAt is null", async () => {
+    (prisma.tenant.findUnique as jest.Mock).mockResolvedValue({
+      subscriptionStatus: "cancelled",
+      planExpiresAt: null,
+    });
+    const req: any = { user: { tenantId: "t1" } };
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireActiveSubscription(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(402);
+  });
+
+  it("allows access and sets cancelled + expiry headers when cancelled but still within the paid period", async () => {
+    const expiresAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    (prisma.tenant.findUnique as jest.Mock).mockResolvedValue({
+      subscriptionStatus: "cancelled",
+      planExpiresAt: expiresAt,
+    });
+    const req: any = { user: { tenantId: "t1" } };
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireActiveSubscription(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "X-Subscription-Cancelled",
+      "true",
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "X-Plan-Expires-At",
+      expiresAt.toISOString(),
+    );
+  });
+
   it("allows access for an active subscription without setting any warning headers", async () => {
     (prisma.tenant.findUnique as jest.Mock).mockResolvedValue({
       subscriptionStatus: "active",

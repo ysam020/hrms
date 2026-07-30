@@ -25,7 +25,9 @@ export async function addLeave(req: Request, res: Response) {
     } = req.body;
     const response = await grpcCall(leaveClient, "applyLeave", {
       userId: user!.userId,
-      leaveType,
+      // Empty/omitted leaveType is resolved by leave-service (Paid Leave,
+      // falling back to Leave Without Pay if the paid-leave balance is 0).
+      leaveType: leaveType || "",
       from,
       to,
       reason: reason || "",

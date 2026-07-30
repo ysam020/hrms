@@ -5,7 +5,7 @@ import TextField from "@mui/material/TextField";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import RadioGroup from "@mui/material/RadioGroup";
@@ -13,6 +13,7 @@ import Radio from "@mui/material/Radio";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import SaveIcon from "@mui/icons-material/Save";
 import { resolveEffectiveDate, type EffectiveDatePreset } from "./helpers";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 export function SaveDialog({
   open,
@@ -60,16 +61,20 @@ export function SaveDialog({
   return (
     <Dialog
       open={open}
-      onClose={onCancel}
+      onClose={ignoreBackdropClick(onCancel)}
       maxWidth="xs"
       fullWidth
       slots={{ transition: SlideUpTransition }}
       transitionDuration={{ enter: 280, exit: 200 }}
       aria-labelledby="effective-date-dialog-title"
     >
-      <DialogTitle id="effective-date-dialog-title" sx={{ fontWeight: 600 }}>
+      <DialogTitleWithClose
+        onClose={onCancel}
+        id="effective-date-dialog-title"
+        sx={{ fontWeight: 600 }}
+      >
         When should changes take effect?
-      </DialogTitle>
+      </DialogTitleWithClose>
       <DialogContent>
         <RadioGroup
           value={preset}

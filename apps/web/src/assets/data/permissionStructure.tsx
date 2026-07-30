@@ -91,11 +91,6 @@ export const permissionStructure = {
       revoke_superuser: ["-"],
     },
   },
-  AuditLogs: {
-    actions: {
-      view: ["self", "team", "all"],
-    },
-  },
   Holidays: {
     actions: {
       add: ["-"],

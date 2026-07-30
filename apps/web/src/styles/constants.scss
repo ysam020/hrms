@@ -34,7 +34,13 @@ $pending-text: #504811;
   --btn-color: #fff;
 }
 
-#light {
+// Scoped to both the #light/#dark id (set on the .App div) and the
+// body.p-light/body.p-dark class (set on <body> by usePrimeReactTheme).
+// The id alone doesn't reach content MUI portals straight to <body> (Dialogs,
+// Popovers, etc. render outside .App), so components inside a portaled
+// Dialog would otherwise fall back to unthemed variable-less defaults.
+#light,
+body.p-light {
   --card-background: #fff;
   --card-background-primary: #f9fafb;
   --card-background-secondary: #efefef;
@@ -63,7 +69,8 @@ $pending-text: #504811;
   --dropdown-item-selected: #dbeafe;
 }
 
-#dark {
+#dark,
+body.p-dark {
   --card-background: #212e35;
   --card-background-primary: #1c262a;
   --card-background-secondary: #141d23;

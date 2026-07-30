@@ -20,7 +20,7 @@ import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import DownloadIcon from "@mui/icons-material/Download";
@@ -31,6 +31,7 @@ import AddIcon from "@mui/icons-material/Add";
 import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
 import { Editor } from "primereact/editor";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import CreatePolicy from "./CreatePolicy";
 
@@ -77,6 +78,7 @@ function PolicyViewer({ policy, onClose, theme }) {
     <CustomModal
       open={!!policy}
       handleClose={onClose}
+      hideCloseButton
       modalStyle={{
         width: { xs: "95%", sm: 620, md: 720 },
         overflow: "hidden",
@@ -247,6 +249,7 @@ function EditPolicyModal({ policy, onClose, onSaved, theme }) {
     <CustomModal
       open={!!policy}
       handleClose={onClose}
+      hideCloseButton
       modalStyle={{
         width: { xs: "95%", sm: 680, md: 760 },
         overflow: "hidden",
@@ -653,12 +656,14 @@ function ViewPolicies() {
 
       <Dialog
         open={openAdd}
-        onClose={() => setOpenAdd(false)}
+        onClose={ignoreBackdropClick(() => setOpenAdd(false))}
         disablePortal
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Create Policy</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenAdd(false)}>
+          Create Policy
+        </DialogTitleWithClose>
         <DialogContent>
           <CreatePolicy
             onSaved={() => {

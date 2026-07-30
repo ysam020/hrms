@@ -9,7 +9,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -29,6 +29,7 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -357,12 +358,14 @@ export default function RecruitmentPipelineSettings() {
       {/* ── Template editor dialog ── */}
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={ignoreBackdropClick(() => setDialogOpen(false))}
         fullWidth
         maxWidth="md"
         TransitionComponent={SlideUpTransition}
       >
-        <DialogTitle>{editing ? "Edit pipeline" : "Add pipeline"}</DialogTitle>
+        <DialogTitleWithClose onClose={() => setDialogOpen(false)}>
+          {editing ? "Edit pipeline" : "Add pipeline"}
+        </DialogTitleWithClose>
         <DialogContent
           sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
         >

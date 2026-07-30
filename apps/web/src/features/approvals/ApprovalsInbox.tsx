@@ -9,7 +9,7 @@ import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Skeleton from "@mui/material/Skeleton";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -30,6 +30,7 @@ import {
   type JoinRequestApprovalItem,
 } from "@web/app/providers/ApprovalsBadgeContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 dayjs.extend(relativeTime);
 
@@ -319,10 +320,15 @@ function ApprovalsInbox() {
         </Box>
       )}
 
-      <Dialog open={!!decision} onClose={closeDialog} fullWidth maxWidth="sm">
-        <DialogTitle>
+      <Dialog
+        open={!!decision}
+        onClose={ignoreBackdropClick(closeDialog)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitleWithClose onClose={closeDialog}>
           {decision?.mode === "approved" ? "Approve request" : "Reject request"}
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {decision?.summary}

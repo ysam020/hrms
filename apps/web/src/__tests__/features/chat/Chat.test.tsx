@@ -13,6 +13,7 @@ import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
 import useChat from "@web/shared/hooks/useChat";
 import { useApiClient } from "@web/shared/hooks/useApiClient";
 import apiClient from "@web/core/http/axiosConfig";
+import axios from "axios";
 
 vi.mock("@web/shared/hooks/useChat");
 const mockUseChat = useChat as unknown as ReturnType<typeof vi.fn>;
@@ -22,6 +23,9 @@ const mockUseApiClient = useApiClient as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock("@web/core/http/axiosConfig", () => ({ default: { post: vi.fn() } }));
 const mockPost = apiClient.post as unknown as ReturnType<typeof vi.fn>;
+
+vi.mock("axios", () => ({ default: { put: vi.fn().mockResolvedValue({}) } }));
+const mockAxiosPut = axios.put as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock("@web/features/chat/ConversationsPanel", () => ({
   ConversationsPanel: (props: any) => (
@@ -316,10 +320,8 @@ describe("Chat", () => {
     mockPost.mockResolvedValue({
       data: {
         data: {
+          url: "https://s3.example.com/presigned-put-url",
           fileUrl: "https://x/img.png",
-          fileName: "img.png",
-          fileMimeType: "image/png",
-          fileSize: 100,
         },
       },
     });
@@ -338,8 +340,16 @@ describe("Chat", () => {
           roomId: "room1",
           type: "image",
           fileName: "img.png",
+          fileUrl: "https://x/img.png",
         }),
       ),
+    );
+    expect(mockAxiosPut).toHaveBeenCalledWith(
+      "https://s3.example.com/presigned-put-url",
+      file,
+      expect.objectContaining({
+        headers: { "Content-Type": "image/png" },
+      }),
     );
   });
 

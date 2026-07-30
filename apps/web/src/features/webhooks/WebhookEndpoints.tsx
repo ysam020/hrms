@@ -7,7 +7,7 @@ import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -28,6 +28,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 const WEBHOOK_EVENTS = [
@@ -380,13 +381,19 @@ function WebhookEndpoints() {
       {/* Create Endpoint Dialog */}
       <Dialog
         open={openCreate}
-        onClose={() => {
+        onClose={ignoreBackdropClick(() => {
           if (!newSecret) setOpenCreate(false);
-        }}
+        })}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Register Webhook Endpoint</DialogTitle>
+        <DialogTitleWithClose
+          onClose={() => {
+            if (!newSecret) setOpenCreate(false);
+          }}
+        >
+          Register Webhook Endpoint
+        </DialogTitleWithClose>
         <DialogContent sx={{ pt: "16px !important" }}>
           {newSecret ? (
             <Box>

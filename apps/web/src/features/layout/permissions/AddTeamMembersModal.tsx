@@ -1,4 +1,11 @@
-import { memo, useContext } from "react";
+import {
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
@@ -7,9 +14,9 @@ import { useFormik } from "formik";
 import apiClient from "@web/core/http/axiosConfig";
 import GroupAddIcon from "@mui/icons-material/GroupAdd";
 import PeopleIcon from "@mui/icons-material/People";
-import InfoIcon from "@mui/icons-material/Info";
 import useUserList from "@web/shared/hooks/useUserList";
-import { MultiSelect } from "primereact/multiselect";
+import { AutoComplete } from "primereact/autocomplete";
+import debounce from "lodash/debounce";
 import Button from "@web/shared/components/Button";
 import CustomModal from "@web/shared/components/Modal";
 import { API_ENDPOINTS } from "@web/shared/constants";
@@ -17,10 +24,46 @@ import { API_ENDPOINTS } from "@web/shared/constants";
 function AddTeamMembersModal(props) {
   const { setAlert } = useContext(AlertContext);
   const userList = useUserList();
+  const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
+
+  // Team membership is exclusive — don't offer users who are already on
+  // some team (the caller computes this across all teams).
+  const availableUserList = useMemo(() => {
+    if (!props.assignedUserIds || !userList) return userList;
+    return userList.filter((user) => !props.assignedUserIds.has(user.value));
+  }, [userList, props.assignedUserIds]);
+
+  const handleSearch = useCallback(
+    (query: string) => {
+      if (!availableUserList || !Array.isArray(availableUserList)) {
+        setFilteredUsers([]);
+        return;
+      }
+
+      const lowerQuery = query.toLowerCase();
+      setFilteredUsers(
+        availableUserList.filter((user) =>
+          user.label.toLowerCase().includes(lowerQuery),
+        ),
+      );
+    },
+    [availableUserList],
+  );
+
+  const debouncedSearchUsers = useMemo(
+    () => debounce(handleSearch, 300),
+    [handleSearch],
+  );
+
+  useEffect(() => {
+    return () => {
+      debouncedSearchUsers.cancel();
+    };
+  }, [debouncedSearchUsers]);
 
   const formik = useFormik({
     initialValues: {
-      members: [],
+      members: [] as { value: string; label: string }[],
     },
     onSubmit: async (values, { resetForm }) => {
       if (!values.members || values.members.length === 0) {
@@ -34,7 +77,7 @@ function AddTeamMembersModal(props) {
 
       try {
         const res = await apiClient.put(API_ENDPOINTS.ADD_TEAM_MEMBERS, {
-          members: values.members,
+          members: values.members.map((member) => member.value),
           teamId: props._id,
         });
 
@@ -114,73 +157,51 @@ function AddTeamMembersModal(props) {
       {/* Form */}
       <Box sx={{ p: 2.5, pt: 0 }}>
         <form onSubmit={formik.handleSubmit}>
-          <Stack spacing={1}>
+          <Stack spacing={2}>
             {/* Team Members Selection */}
             <Box>
               <Typography
-                variant="h6"
+                variant="subtitle2"
                 color="text.secondary"
-                gutterBottom
-                sx={{ mb: 1 }}
+                sx={{
+                  mb: 0.75,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
               >
-                <PeopleIcon
-                  sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                />
+                <PeopleIcon sx={{ fontSize: 16 }} />
                 Select Team Members
               </Typography>
 
-              <MultiSelect
+              <AutoComplete
                 value={formik.values.members}
                 onChange={(e) => formik.setFieldValue("members", e.value)}
-                options={userList}
-                optionLabel="label"
-                optionValue="value"
-                placeholder="Choose team members..."
-                maxSelectedLabels={3}
-                appendTo="self"
-                display="chip"
-                filter
-                filterBy="label"
+                suggestions={filteredUsers}
+                completeMethod={(e) => debouncedSearchUsers(e.query)}
+                field="label"
+                placeholder="Search team members..."
+                multiple
+                dropdown
+                // appendTo="self" renders inside this modal's animated
+                // (transformed) wrapper, which breaks the panel's viewport
+                // position calc — see ScheduleInterviewModal.tsx/HiringModal.tsx
+                // for the same established fix — portal to the app root instead.
+                appendTo={() =>
+                  document.querySelector("#root .App") as HTMLElement
+                }
                 style={{ width: "100%" }}
                 panelStyle={{ maxHeight: "200px" }}
-                scrollHeight="200px"
               />
 
-              {/* Selection Summary */}
-              {formik.values.members && formik.values.members.length > 0 && (
-                <Box
-                  sx={{
-                    mt: 1,
-                    p: 1.5,
-                    bgcolor: "action.hover",
-                    borderRadius: 1,
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    {formik.values.members.length} member(s) selected
-                    {formik.values.members.length > 3 &&
-                      ` (${formik.values.members.length - 3} more...)`}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-
-            {/* Available Users Info */}
-            <Box
-              sx={{
-                p: 1.5,
-                bgcolor: "info.dark",
-                borderRadius: 1,
-                border: "1px solid",
-                borderColor: "info.main",
-              }}
-            >
               <Typography
                 variant="caption"
-                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                color="text.secondary"
+                sx={{ mt: 0.75, display: "block" }}
               >
-                <InfoIcon sx={{ fontSize: 14 }} />
-                {userList?.length || 0} users available for selection
+                {formik.values.members.length > 0 &&
+                  `${formik.values.members.length} selected · `}
+                {availableUserList?.length || 0} users available
               </Typography>
             </Box>
 

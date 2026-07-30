@@ -11,7 +11,7 @@ import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Accordion from "@mui/material/Accordion";
@@ -28,6 +28,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import TuneIcon from "@mui/icons-material/Tune";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import SaveIcon from "@mui/icons-material/Save";
 import { numField } from "@web/shared/components/numField";
 import {
@@ -415,14 +416,14 @@ function LeavePolicyEditor({
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={ignoreBackdropClick(() => setDialogOpen(false))}
         fullWidth
         maxWidth="sm"
         TransitionComponent={SlideUpTransition}
       >
-        <DialogTitle>
+        <DialogTitleWithClose onClose={() => setDialogOpen(false)}>
           {editingIndex === null ? "Add leave policy" : "Edit leave policy"}
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent
           sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
         >

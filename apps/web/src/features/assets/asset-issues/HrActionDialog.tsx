@@ -1,10 +1,11 @@
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Button from "@web/shared/components/Button";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 export interface ActionDialogState {
   issueId: string;
@@ -29,8 +30,15 @@ export function HrActionDialog({
   onConfirm: () => void;
 }) {
   return (
-    <Dialog open={!!actionDialog} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{actionDialog?.label} Issue</DialogTitle>
+    <Dialog
+      open={!!actionDialog}
+      onClose={ignoreBackdropClick(onClose)}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitleWithClose onClose={onClose}>
+        {actionDialog?.label} Issue
+      </DialogTitleWithClose>
       <DialogContent
         sx={{
           display: "flex",

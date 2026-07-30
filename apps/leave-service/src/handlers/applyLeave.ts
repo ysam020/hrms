@@ -68,15 +68,16 @@ export const applyLeave = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { userId, leaveType, from, to, reason, sickLeave } = call.request;
+    const { userId, from, to, reason, sickLeave } = call.request;
+    let leaveType: string = call.request.leaveType || "";
     const unit: string = call.request.unit || "full_day";
     const session: string | undefined = call.request.session || undefined;
     const shortLeaveHours: number | undefined =
       call.request.shortLeaveHours || undefined;
 
-    if (!userId || !leaveType || !from || !to) {
+    if (!userId || !from || !to) {
       return callback(null, {
-        message: MESSAGES.USERNAME_LEAVE_TYPE_FROM_TO_REQUIRED,
+        message: MESSAGES.USERNAME_FROM_TO_REQUIRED,
         status: status.INVALID_ARGUMENT,
       });
     }
@@ -128,8 +129,34 @@ export const applyLeave = async (
     let leaveSettings: Awaited<ReturnType<typeof getLeaveSettings>> = null;
     if (tenantId) {
       leaveSettings = await getLeaveSettings(tenantId);
+    }
 
-      if (leaveSettings) {
+    // Default an omitted/blank leaveType to Paid Leave — falling back to
+    // Leave Without Pay when the applicant's paid-leave balance is tracked
+    // and already exhausted, so a defaulted application doesn't get rejected
+    // below by the exhaustion check for a type the caller never chose.
+    if (!leaveType) {
+      leaveType = "PL";
+      if (tenantId && leaveSettings) {
+        const applicant = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { joining_date: true },
+        });
+        const plRemaining = await ensureTrackedBalance(
+          tenantId,
+          userId,
+          "PL",
+          leaveSettings,
+          applicant?.joining_date,
+        );
+        if (plRemaining !== null && plRemaining <= 0) {
+          leaveType = "LWP";
+        }
+      }
+    }
+
+    if (tenantId && leaveSettings) {
+      {
         // 1. If custom leave types are configured, validate the requested type.
         if (leaveSettings.customLeaveTypes.length > 0) {
           const validKeys = leaveSettings.customLeaveTypes.flatMap((lt: any) =>

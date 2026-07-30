@@ -32,7 +32,7 @@ import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 import Divider from "@mui/material/Divider";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import FilterList from "@mui/icons-material/FilterList";
 import AddIcon from "@mui/icons-material/Add";
@@ -45,6 +45,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import dayjs from "dayjs";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 function ViewJobOpenings() {
   const navigate = useNavigate();
@@ -751,12 +752,14 @@ function ViewJobOpenings() {
 
         <Dialog
           open={openAdd}
-          onClose={() => setOpenAdd(false)}
+          onClose={ignoreBackdropClick(() => setOpenAdd(false))}
           disablePortal
           fullWidth
           maxWidth="md"
         >
-          <DialogTitle>New Job Opening</DialogTitle>
+          <DialogTitleWithClose onClose={() => setOpenAdd(false)}>
+            New Job Opening
+          </DialogTitleWithClose>
           <DialogContent>
             <NewJobOpening
               onSaved={() => {

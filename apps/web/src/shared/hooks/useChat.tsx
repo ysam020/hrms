@@ -26,17 +26,22 @@ function useChat() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [messages, setMessages] = useState({}); // roomId -> Message[]
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
-  const [typingUsers, setTypingUsers] = useState({}); // roomId -> username[]
+  const [typingUsers, setTypingUsers] = useState({}); // roomId -> userId[]
   const [unreadCounts, setUnreadCounts] = useState({}); // roomId -> number
   const [pinnedMessages, setPinnedMessages] = useState({}); // roomId -> Message[]
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
-  const typingTimeoutsRef = useRef({}); // roomId:username -> timeout
+  const typingTimeoutsRef = useRef({}); // roomId:userId -> timeout
   const dbLoadedRoomsRef = useRef(new Set());
   const prevConnectedRef = useRef(false);
   const hasEverConnectedRef = useRef(false);
+  const conversationsRef = useRef<any[]>([]);
   const api = useApiClient();
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   // IndexedDB helpers
 
@@ -403,18 +408,31 @@ function useChat() {
       // Persist to IndexedDB
       saveMessage(msg).catch(console.error);
 
-      setConversations((prev) => {
-        const updated = prev.map((c) =>
-          c._id === roomId
-            ? { ...c, lastMessage: msg, lastActivity: new Date().toISOString() }
-            : c,
-        );
-        return updated.sort(
-          (a, b) =>
-            new Date(b.lastActivity).getTime() -
-            new Date(a.lastActivity).getTime(),
-        );
-      });
+      const roomExists = conversationsRef.current.some((c) => c._id === roomId);
+      if (!roomExists) {
+        // Brand-new conversation this client hasn't loaded yet (e.g. we're
+        // the recipient of a chat someone just started with us) — refetch
+        // the list so it picks up the new room with full participantDetails,
+        // rather than splicing together a partial room from just the message.
+        fetchConversations();
+      } else {
+        setConversations((prev) => {
+          const updated = prev.map((c) =>
+            c._id === roomId
+              ? {
+                  ...c,
+                  lastMessage: msg,
+                  lastActivity: new Date().toISOString(),
+                }
+              : c,
+          );
+          return updated.sort(
+            (a, b) =>
+              new Date(b.lastActivity).getTime() -
+              new Date(a.lastActivity).getTime(),
+          );
+        });
+      }
 
       if (msg.senderId !== user?.id && roomId !== activeRoomId) {
         setUnreadCounts((prev) => ({
@@ -427,32 +445,32 @@ function useChat() {
         emitRead(roomId);
       }
     },
-    [user?.id, activeRoomId, emitRead],
+    [user?.id, activeRoomId, emitRead, fetchConversations],
   );
 
-  const handleTyping = useCallback(({ roomId, username }) => {
+  const handleTyping = useCallback(({ roomId, userId }) => {
     setTypingUsers((prev) => {
       const current = prev[roomId] || [];
-      if (current.includes(username)) return prev;
-      return { ...prev, [roomId]: [...current, username] };
+      if (current.includes(userId)) return prev;
+      return { ...prev, [roomId]: [...current, userId] };
     });
 
-    const key = `${roomId}:${username}`;
+    const key = `${roomId}:${userId}`;
     clearTimeout(typingTimeoutsRef.current[key]);
     typingTimeoutsRef.current[key] = setTimeout(() => {
       setTypingUsers((prev) => ({
         ...prev,
-        [roomId]: (prev[roomId] || []).filter((u) => u !== username),
+        [roomId]: (prev[roomId] || []).filter((u) => u !== userId),
       }));
     }, 3000);
   }, []);
 
-  const handleStopTyping = useCallback(({ roomId, username }) => {
+  const handleStopTyping = useCallback(({ roomId, userId }) => {
     setTypingUsers((prev) => ({
       ...prev,
-      [roomId]: (prev[roomId] || []).filter((u) => u !== username),
+      [roomId]: (prev[roomId] || []).filter((u) => u !== userId),
     }));
-    const key = `${roomId}:${username}`;
+    const key = `${roomId}:${userId}`;
     clearTimeout(typingTimeoutsRef.current[key]);
   }, []);
 

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "../middleware/authenticate";
+import { authenticate, requirePrivileged } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import { bulkDeleteHolidaysSchema } from "../schemas";
 import * as h from "../handlers/general";
@@ -13,7 +13,12 @@ generalRouter.get(
   authenticate,
   h.getBirthdaysAnniversaries,
 );
-generalRouter.get("/audit-logs", authenticate, h.getAuditLogs);
+generalRouter.get(
+  "/audit-logs",
+  authenticate,
+  requirePrivileged,
+  h.getAuditLogs,
+);
 generalRouter.post("/add-holiday", authenticate, h.addHoliday);
 generalRouter.put("/delete-holiday", authenticate, h.deleteHoliday);
 generalRouter.put(

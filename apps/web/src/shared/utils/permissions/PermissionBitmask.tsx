@@ -99,9 +99,6 @@ const PERM_DEFS = [
   ["Permissions", "revoke_superuser"],
   ["Permissions", "grant_superuser", "all"],
 
-  // AuditLogs
-  ["AuditLogs", "view", "self", "team", "all"],
-
   // Holidays (scopeless)
   ["Holidays", "add"],
   ["Holidays", "delete"],

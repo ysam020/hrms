@@ -97,7 +97,7 @@ function LeaveApplication({ onSuccess }: { onSuccess?: () => void }) {
       from: "",
       to: "",
       reason: "",
-      leaveType: "",
+      leaveType: "PL",
       sick_leave: false,
       medicalCertificate: "",
       unit: "full_day",

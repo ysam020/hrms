@@ -1,11 +1,12 @@
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
 import Box from "@mui/material/Box";
 import Button from "@web/shared/components/Button";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import { ISSUE_TYPES, PRIORITIES } from "./constants";
 
 export interface ReportForm {
@@ -34,8 +35,15 @@ export function ReportIssueDialog({
   onSubmit: () => void;
 }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Report Asset Issue</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={ignoreBackdropClick(onClose)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitleWithClose onClose={onClose}>
+        Report Asset Issue
+      </DialogTitleWithClose>
       <DialogContent
         sx={{
           display: "flex",

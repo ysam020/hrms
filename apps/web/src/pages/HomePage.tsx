@@ -14,7 +14,6 @@ import Toolbar from "@mui/material/Toolbar";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { TabValueContext } from "@web/app/providers/TabValueContext";
 import AppbarComponent from "@web/features/layout/AppbarComponent";
-import { DashboardEditProvider } from "@web/app/providers/DashboardEditContext";
 import DrawerComponent from "@web/features/layout/DrawerComponent";
 import routesConfig from "@web/app/router/routesConfig";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -128,153 +127,149 @@ function HomePage(props) {
 
   return (
     <BottomDrawerProvider>
-      <DashboardEditProvider>
-        <NotificationContext.Provider value={notificationContextValue}>
-          <TabValueContext.Provider value={tabValueContextValue}>
-            <Box
-              sx={{
-                display: "flex",
-                bgcolor: theme === "light" ? "#F9FAFB" : "#111B21",
-              }}
-            >
-              <CssBaseline />
+      <NotificationContext.Provider value={notificationContextValue}>
+        <TabValueContext.Provider value={tabValueContextValue}>
+          <Box
+            sx={{
+              display: "flex",
+              bgcolor: theme === "light" ? "#F9FAFB" : "#111B21",
+            }}
+          >
+            <CssBaseline />
+            <ErrorBoundary fallback={<ErrorFallback />}>
+              <AppbarComponent
+                mobileOpen={mobileOpen}
+                setMobileOpen={setMobileOpen}
+                showSidebar={props.showSidebar}
+                setOpenNotificationDrawer={setOpenNotificationDrawer}
+                setOpenActivityDrawer={setOpenActivityDrawer}
+                handleOpen={handleOpen}
+              />
+            </ErrorBoundary>
+
+            {props.showSidebar && (
               <ErrorBoundary fallback={<ErrorFallback />}>
-                <AppbarComponent
+                <DrawerComponent
                   mobileOpen={mobileOpen}
                   setMobileOpen={setMobileOpen}
-                  showSidebar={props.showSidebar}
-                  setOpenNotificationDrawer={setOpenNotificationDrawer}
-                  setOpenActivityDrawer={setOpenActivityDrawer}
-                  handleOpen={handleOpen}
                 />
               </ErrorBoundary>
+            )}
 
-              {props.showSidebar && (
+            {/* Content */}
+            <Box component="main" sx={mainBoxStyles}>
+              <Toolbar />
+
+              {/* Floating viewport: fills whatever space remains below the
+                  AppBar/Toolbar spacer (flex:1 + minHeight:0, rather than
+                  a hardcoded calc(100vh - Npx), avoids depending on
+                  Toolbar's height, which varies by breakpoint) and frames
+                  every route the same way the chat page already did —
+                  fixed height, margin for breathing room, content that
+                  scrolls inside rather than the whole page. Transparent
+                  background — individual routes/components (Paper, cards,
+                  etc.) paint their own surfaces; a fill color here just
+                  added an unwanted second layer. Route content that
+                  manages its own internal pinned header/footer (TabsPanel,
+                  DataList, Chat, the calendar) fills this via height:100%
+                  and never triggers this box's own scroll; overflowY:auto
+                  here is a safety net for anything else. */}
+              <Box
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  margin: "10px",
+                  borderRadius: "12px",
+                  backgroundColor: "transparent",
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                }}
+              >
+                <Routes location={location}>
+                  {filteredRoutes
+                    .filter((r) => !r.spotlightOnly)
+                    .map(({ path, element, moduleTags }, index) => (
+                      <Route
+                        key={index}
+                        path={path}
+                        // moduleTags only decides Suspense/ErrorBoundary
+                        // wrapping here — it is NOT an access-control
+                        // check. Actual route gating is checkAccess/
+                        // <RequireAccess> in routesConfig.tsx (see the
+                        // comment there) and/or each page's own internal
+                        // role check.
+                        element={
+                          moduleTags.length === 0 ? (
+                            element
+                          ) : (
+                            <Suspense fallback={<LoadingState size="small" />}>
+                              <ErrorBoundary fallback={<ErrorFallback />}>
+                                {element}
+                              </ErrorBoundary>
+                            </Suspense>
+                          )
+                        }
+                      />
+                    ))}
+                  <Route
+                    path="*"
+                    element={
+                      <Suspense fallback={<LoadingState size="small" />}>
+                        <ErrorBoundary fallback={<ErrorFallback />}>
+                          <UnAuthorisedRoute />
+                        </ErrorBoundary>
+                      </Suspense>
+                    }
+                  />
+                </Routes>
+              </Box>
+
+              <Suspense fallback={null}>
                 <ErrorBoundary fallback={<ErrorFallback />}>
-                  <DrawerComponent
-                    mobileOpen={mobileOpen}
-                    setMobileOpen={setMobileOpen}
+                  <ActivityDrawer
+                    open={openActivityDrawer}
+                    setOpen={setOpenActivityDrawer}
+                    toggleDrawer={toggleActivityDrawer}
                   />
                 </ErrorBoundary>
-              )}
+              </Suspense>
 
-              {/* Content */}
-              <Box component="main" sx={mainBoxStyles}>
-                <Toolbar />
-
-                {/* Floating viewport: fills whatever space remains below the
-                    AppBar/Toolbar spacer (flex:1 + minHeight:0, rather than
-                    a hardcoded calc(100vh - Npx), avoids depending on
-                    Toolbar's height, which varies by breakpoint) and frames
-                    every route the same way the chat page already did —
-                    fixed height, margin for breathing room, content that
-                    scrolls inside rather than the whole page. Transparent
-                    background — individual routes/components (Paper, cards,
-                    etc.) paint their own surfaces; a fill color here just
-                    added an unwanted second layer. Route content that
-                    manages its own internal pinned header/footer (TabsPanel,
-                    DataList, Chat, the calendar) fills this via height:100%
-                    and never triggers this box's own scroll; overflowY:auto
-                    here is a safety net for anything else. */}
-                <Box
-                  sx={{
-                    flex: 1,
-                    minHeight: 0,
-                    margin: "10px",
-                    borderRadius: "12px",
-                    backgroundColor: "transparent",
-                    overflowY: "auto",
-                    overflowX: "hidden",
-                  }}
-                >
-                  <Routes location={location}>
-                    {filteredRoutes
-                      .filter((r) => !r.spotlightOnly)
-                      .map(({ path, element, moduleTags }, index) => (
-                        <Route
-                          key={index}
-                          path={path}
-                          // moduleTags only decides Suspense/ErrorBoundary
-                          // wrapping here — it is NOT an access-control
-                          // check. Actual route gating is checkAccess/
-                          // <RequireAccess> in routesConfig.tsx (see the
-                          // comment there) and/or each page's own internal
-                          // role check.
-                          element={
-                            moduleTags.length === 0 ? (
-                              element
-                            ) : (
-                              <Suspense
-                                fallback={<LoadingState size="small" />}
-                              >
-                                <ErrorBoundary fallback={<ErrorFallback />}>
-                                  {element}
-                                </ErrorBoundary>
-                              </Suspense>
-                            )
-                          }
-                        />
-                      ))}
-                    <Route
-                      path="*"
-                      element={
-                        <Suspense fallback={<LoadingState size="small" />}>
-                          <ErrorBoundary fallback={<ErrorFallback />}>
-                            <UnAuthorisedRoute />
-                          </ErrorBoundary>
-                        </Suspense>
-                      }
-                    />
-                  </Routes>
-                </Box>
-
-                <Suspense fallback={null}>
-                  <ErrorBoundary fallback={<ErrorFallback />}>
-                    <ActivityDrawer
-                      open={openActivityDrawer}
-                      setOpen={setOpenActivityDrawer}
-                      toggleDrawer={toggleActivityDrawer}
-                    />
-                  </ErrorBoundary>
-                </Suspense>
-
-                <Suspense fallback={null}>
-                  <ErrorBoundary fallback={<ErrorFallback />}>
-                    <NotificationDrawer
-                      open={openNotificationDrawer}
-                      setOpen={setOpenNotificationDrawer}
-                      toggleDrawer={toggleNotificationDrawer}
-                    />
-                  </ErrorBoundary>
-                </Suspense>
-              </Box>
+              <Suspense fallback={null}>
+                <ErrorBoundary fallback={<ErrorFallback />}>
+                  <NotificationDrawer
+                    open={openNotificationDrawer}
+                    setOpen={setOpenNotificationDrawer}
+                    toggleDrawer={toggleNotificationDrawer}
+                  />
+                </ErrorBoundary>
+              </Suspense>
             </Box>
+          </Box>
 
-            <NotificationConsentDrawer
-              showConsentDrawer={showConsentDrawer}
-              setShowConsentDrawer={setShowConsentDrawer}
-              setAlert={setAlert}
-            />
-            <Suspense fallback={null}>
-              <ErrorBoundary fallback={null}>
-                <ChatbotFab />
-              </ErrorBoundary>
-            </Suspense>
-
-            <Suspense fallback={null}>
-              <ErrorBoundary fallback={null}>
-                <OnboardingModals />
-              </ErrorBoundary>
-            </Suspense>
-          </TabValueContext.Provider>
-
-          <Suspense fallback={<LoadingState />}>
-            <ErrorBoundary fallback={<ErrorFallback />}>
-              <SpotlightModal open={open} handleClose={handleClose} />
+          <NotificationConsentDrawer
+            showConsentDrawer={showConsentDrawer}
+            setShowConsentDrawer={setShowConsentDrawer}
+            setAlert={setAlert}
+          />
+          <Suspense fallback={null}>
+            <ErrorBoundary fallback={null}>
+              <ChatbotFab />
             </ErrorBoundary>
           </Suspense>
-        </NotificationContext.Provider>
-      </DashboardEditProvider>
+
+          <Suspense fallback={null}>
+            <ErrorBoundary fallback={null}>
+              <OnboardingModals />
+            </ErrorBoundary>
+          </Suspense>
+        </TabValueContext.Provider>
+
+        <Suspense fallback={<LoadingState />}>
+          <ErrorBoundary fallback={<ErrorFallback />}>
+            <SpotlightModal open={open} handleClose={handleClose} />
+          </ErrorBoundary>
+        </Suspense>
+      </NotificationContext.Provider>
     </BottomDrawerProvider>
   );
 }

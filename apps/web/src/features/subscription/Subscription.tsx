@@ -122,12 +122,14 @@ function statusLabel(s: string) {
   if (s === "active") return "Active";
   if (s === "grace_period") return "Grace Period";
   if (s === "cancelling") return "Cancelling";
+  if (s === "cancelled") return "Cancelled";
   return "Expired";
 }
 
 function statusColor(s: string): "success" | "warning" | "error" {
   if (s === "active") return "success";
-  if (s === "grace_period" || s === "cancelling") return "warning";
+  if (s === "grace_period" || s === "cancelling" || s === "cancelled")
+    return "warning";
   return "error";
 }
 
@@ -152,6 +154,7 @@ export default function Subscription() {
   const [changeTier, setChangeTier] = useState<PlanTier>("starter");
   const [changeBilling, setChangeBilling] = useState<Billing>("monthly");
   const [changingPlan, setChangingPlan] = useState(false);
+  const [changingPaymentMethod, setChangingPaymentMethod] = useState(false);
 
   const renewBillingRef = useRef(renewBilling);
   useEffect(() => {
@@ -181,7 +184,7 @@ export default function Subscription() {
       const res = await apiClient.post(API_ENDPOINTS.CANCEL_SUBSCRIPTION);
       if (res.data?.success) {
         setTenant((prev) =>
-          prev ? { ...prev, subscriptionStatus: "expired" } : prev,
+          prev ? { ...prev, subscriptionStatus: "cancelled" } : prev,
         );
         setAlert({
           open: true,
@@ -412,6 +415,116 @@ export default function Subscription() {
     }
   };
 
+  const handleChangePaymentMethod = async () => {
+    setChangingPaymentMethod(true);
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        setAlert({
+          open: true,
+          message: "Failed to load payment gateway. Check your connection.",
+          severity: "error",
+        });
+        setChangingPaymentMethod(false);
+        return;
+      }
+
+      const subRes = await apiClient.post(
+        API_ENDPOINTS.START_PAYMENT_METHOD_CHANGE,
+      );
+      if (!subRes.data?.success) {
+        setAlert({
+          open: true,
+          message:
+            subRes.data?.message || "Failed to start payment method change.",
+          severity: "error",
+        });
+        setChangingPaymentMethod(false);
+        return;
+      }
+
+      const { subscriptionId, keyId } = subRes.data.data;
+
+      const options = {
+        key: keyId,
+        subscription_id: subscriptionId,
+        name: "Praesto",
+        image: `${window.location.origin}/favicon.ico`,
+        description: "HRMS subscription — payment method update",
+        prefill: {
+          name: user
+            ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
+            : "",
+          email: user?.email ?? "",
+        },
+        // Forced card-only — the whole point of this flow is to move the
+        // tenant onto a payment instrument Razorpay allows plan changes on
+        // (UPI/Emandate subscriptions can never have plan_id updated).
+        method: {
+          card: true,
+          netbanking: false,
+          wallet: false,
+          upi: false,
+          paylater: false,
+          emi: false,
+        },
+        theme: { color: "#1976d2" },
+        handler: (response: {
+          razorpay_payment_id: string;
+          razorpay_subscription_id: string;
+          razorpay_signature: string;
+        }) => {
+          apiClient
+            .post(API_ENDPOINTS.CONFIRM_PAYMENT_METHOD_CHANGE, {
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySubscriptionId: response.razorpay_subscription_id,
+              razorpaySignature: response.razorpay_signature,
+            })
+            .then((confirmRes) => {
+              if (confirmRes.data?.success) {
+                setAlert({
+                  open: true,
+                  message: "Payment method updated successfully!",
+                  severity: "success",
+                });
+                return fetchTenant();
+              }
+              setAlert({
+                open: true,
+                message:
+                  confirmRes.data?.message ||
+                  "Failed to update payment method.",
+                severity: "error",
+              });
+              return null;
+            })
+            .catch((err: any) => {
+              setAlert({
+                open: true,
+                message:
+                  err.response?.data?.message ||
+                  "Failed to update payment method.",
+                severity: "error",
+              });
+            })
+            .finally(() => setChangingPaymentMethod(false));
+        },
+        modal: { ondismiss: () => setChangingPaymentMethod(false) },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err: any) {
+      setAlert({
+        open: true,
+        message:
+          err.response?.data?.message || "Failed to update payment method.",
+        severity: "error",
+      });
+      setChangingPaymentMethod(false);
+    }
+  };
+
   const handleCancelPendingChange = async () => {
     if (!tenant) return;
     setChangingPlan(true);
@@ -446,7 +559,13 @@ export default function Subscription() {
     }
   };
 
-  const isExpired = ["expired"].includes(tenant?.subscriptionStatus ?? "");
+  const cancelledAccessEnded = Boolean(
+    tenant &&
+    tenant.subscriptionStatus === "cancelled" &&
+    (!tenant.planExpiresAt || new Date(tenant.planExpiresAt) <= new Date()),
+  );
+  const isExpired =
+    tenant?.subscriptionStatus === "expired" || cancelledAccessEnded;
   const canChangePlan = ["active", "grace_period"].includes(
     tenant?.subscriptionStatus ?? "",
   );
@@ -503,7 +622,12 @@ export default function Subscription() {
               </Box>
               <Chip
                 label={statusLabel(tenant.subscriptionStatus)}
-                color={statusColor(tenant.subscriptionStatus)}
+                color={
+                  tenant.subscriptionStatus === "cancelled" &&
+                  cancelledAccessEnded
+                    ? "error"
+                    : statusColor(tenant.subscriptionStatus)
+                }
                 size="small"
                 sx={{ fontWeight: 600 }}
               />
@@ -543,6 +667,23 @@ export default function Subscription() {
             {tenant.subscriptionStatus === "expired" && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 Your subscription has expired. Renew below to restore access.
+              </Alert>
+            )}
+
+            {tenant.subscriptionStatus === "cancelled" &&
+              !cancelledAccessEnded &&
+              tenant.planExpiresAt && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  Your subscription is cancelled and won&apos;t renew.
+                  You&apos;ll keep access until{" "}
+                  <strong>{formatDate(tenant.planExpiresAt)}</strong>.
+                </Alert>
+              )}
+
+            {cancelledAccessEnded && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                Your subscription was cancelled and your access has ended.
+                Resubscribe below to continue.
               </Alert>
             )}
 
@@ -644,10 +785,32 @@ export default function Subscription() {
                     sx={{ fontSize: "0.7rem" }}
                   />
                 </Box>
+                {["upi", "emandate", "nach"].includes(tenant.paymentMethod) && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 1 }}
+                  >
+                    Switch to a card to unlock plan changes.
+                  </Typography>
+                )}
+                {canChangePlan && (
+                  <Box sx={{ mt: 1.5 }}>
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={handleChangePaymentMethod}
+                      disabled={changingPaymentMethod}
+                      loading={changingPaymentMethod}
+                    >
+                      Change Payment Method
+                    </Button>
+                  </Box>
+                )}
               </>
             )}
 
-            {!isExpired && tenant.subscriptionStatus !== "expired" && (
+            {!isExpired && tenant.subscriptionStatus !== "cancelled" && (
               <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
                 <Button
                   variant="danger"
@@ -933,8 +1096,9 @@ export default function Subscription() {
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Your subscription will be cancelled immediately and your team will
-            lose access to all HRMS features. This action cannot be undone.
+            {tenant?.planExpiresAt
+              ? `Your subscription will stop renewing. Your team will keep full access until ${formatDate(tenant.planExpiresAt)}, after which you'll need to resubscribe to continue.`
+              : "Your subscription will stop renewing. This action cannot be undone."}
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

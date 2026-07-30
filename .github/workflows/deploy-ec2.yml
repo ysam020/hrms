@@ -54,8 +54,6 @@ jobs:
         run: |
           set -euo pipefail
           aws s3 cp docker-compose.prod.yml "s3://${{ vars.DEPLOY_ARTIFACTS_BUCKET }}/docker-compose.prod.yml"
-          aws s3 cp docker-compose.monitoring-prod.yml "s3://${{ vars.DEPLOY_ARTIFACTS_BUCKET }}/docker-compose.monitoring-prod.yml"
-          aws s3 sync monitoring/ "s3://${{ vars.DEPLOY_ARTIFACTS_BUCKET }}/monitoring/" --delete
 
       - name: Roll out to ASG instances via SSM (batched, health-checked, auto-rollback)
         run: |
@@ -200,53 +198,3 @@ jobs:
           done
 
           echo "Rollout complete: $IMAGE_TAG is healthy on all instances ($UPDATED_IDS)"
-
-      - name: Redeploy monitoring host via SSM
-        run: |
-          set -euo pipefail
-
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=hrms-monitoring" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].InstanceId' --output text)
-
-          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
-            echo "No running hrms-monitoring instance found - skipping (has the stack been deployed?)"
-            exit 0
-          fi
-
-          COMMAND_ID=$(aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --instance-ids "$INSTANCE_ID" \
-            --parameters 'commands=["sudo /opt/hrms-monitoring/deploy.sh"]' \
-            --comment "hrms monitoring redeploy" \
-            --query 'Command.CommandId' --output text)
-
-          TIMEOUT=300
-          INTERVAL=10
-          ELAPSED=0
-          while true; do
-            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
-              --query 'Status' --output text 2>/dev/null || echo "Pending")
-
-            if [ "$STATUS" = "Success" ]; then
-              echo "Monitoring redeploy succeeded on instance $INSTANCE_ID"
-              break
-            fi
-
-            case "$STATUS" in
-              Pending|InProgress|Delayed)
-                if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-                  echo "::error::Monitoring redeploy did not finish within ${TIMEOUT}s (last status: $STATUS)"
-                  exit 1
-                fi
-                sleep "$INTERVAL"
-                ELAPSED=$((ELAPSED + INTERVAL))
-                ;;
-              *)
-                echo "::error::Monitoring redeploy failed (status: $STATUS)"
-                aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
-                  --query '{Status:Status,StdOut:StandardOutputContent,StdErr:StandardErrorContent}' --output json || true
-                exit 1
-                ;;
-            esac
-          done

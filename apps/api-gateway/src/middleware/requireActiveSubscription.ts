@@ -3,8 +3,10 @@ import { prisma } from "@hrms/db";
 import { AuthRequest } from "./authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 
-// Applied after requireTenant — blocks expired orgs, passes grace-period and
-// cancelling orgs through with warning headers so the UI can show banners.
+// Applied after requireTenant — blocks expired orgs (and cancelled orgs past
+// their paid period), passes grace-period, cancelling (legacy), and
+// still-within-period cancelled orgs through with warning headers so the UI
+// can show banners.
 export async function requireActiveSubscription(
   req: AuthRequest,
   res: Response,
@@ -36,10 +38,30 @@ export async function requireActiveSubscription(
     }
 
     if (tenant.subscriptionStatus === "cancelling") {
-      // Cancellation requested but not yet confirmed by Razorpay webhook.
-      // The tenant retains full access until the webhook sets status to
-      // "expired". Signal the UI to show a "cancellation pending" banner.
+      // Legacy transitional state — no longer set by current code
+      // (cancelSubscription now sets "cancelled" synchronously), but a
+      // pre-existing row could still carry this value. Fail open: full
+      // access, no special banner.
       res.setHeader("X-Subscription-Cancelling", "true");
+    }
+
+    if (tenant.subscriptionStatus === "cancelled") {
+      // The tenant explicitly cancelled — cancel_at_cycle_end means they
+      // keep access through the period they already paid for. Checked live
+      // on every request rather than via a scheduled job, so access ends
+      // exactly when planExpiresAt passes, not whenever a batch job next runs.
+      const stillWithinPaidPeriod =
+        tenant.planExpiresAt && tenant.planExpiresAt > new Date();
+      if (!stillWithinPaidPeriod) {
+        return apiResponse(res, RESPONSE_STATUS.PAYMENT_REQUIRES, {
+          message:
+            "Your subscription was cancelled and your access has ended. Please resubscribe to continue.",
+        });
+      }
+      res.setHeader("X-Subscription-Cancelled", "true");
+      if (tenant.planExpiresAt) {
+        res.setHeader("X-Plan-Expires-At", tenant.planExpiresAt.toISOString());
+      }
     }
 
     next();

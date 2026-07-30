@@ -8,6 +8,8 @@ import {
   getPlanPricing,
   changePlan,
   confirmPlanUpgrade,
+  startPaymentMethodChange,
+  confirmPaymentMethodChange,
 } from "../handlers/payment";
 
 export const paymentRouter: Router = Router();
@@ -44,6 +46,18 @@ paymentRouter.post(
   authenticate,
   requireTenant,
   confirmPlanUpgrade,
+);
+paymentRouter.post(
+  "/payment/start-payment-method-change",
+  authenticate,
+  requireTenant,
+  startPaymentMethodChange,
+);
+paymentRouter.post(
+  "/payment/confirm-payment-method-change",
+  authenticate,
+  requireTenant,
+  confirmPaymentMethodChange,
 );
 
 // NOTE: /payment/webhook is mounted directly in server.ts before the CSRF

@@ -25,11 +25,12 @@ import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 const STATUS_CFG: Record<string, { color: string; bg: string }> = {
   draft: { color: "#d97706", bg: "rgba(217,119,6,0.15)" },
@@ -428,19 +429,19 @@ function Reviews() {
 
       <Dialog
         open={!!detail}
-        onClose={closeDetail}
+        onClose={ignoreBackdropClick(closeDetail)}
         maxWidth="sm"
         fullWidth
         disablePortal
       >
-        <DialogTitle>
+        <DialogTitleWithClose onClose={closeDetail}>
           {detail &&
             `${cycleNames[detail.cycleId] || ""} — ${
               detail.userId === user?.id
                 ? "You"
                 : employeeNames[detail.userId] || detail.userId
             }`}
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent
           sx={{
             display: "flex",

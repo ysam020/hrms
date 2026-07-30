@@ -10,6 +10,8 @@ import {
   handleWebhook,
   changePlan,
   confirmPlanUpgrade,
+  startPaymentMethodChange,
+  confirmPaymentMethodChange,
 } from "../handlers/payment";
 import * as tenantTokenStore from "../services/tenantTokenStore";
 
@@ -325,7 +327,7 @@ describe("payment handlers", () => {
       expect(mockRzpSubscriptionsCancel).not.toHaveBeenCalled();
     });
 
-    it("cancels an active subscription and sets status to cancelling", async () => {
+    it("schedules cancellation at cycle end and sets status to cancelled", async () => {
       mockTenantFindUnique.mockResolvedValue({
         razorpaySubscriptionId: "sub_1",
         subscriptionStatus: "active",
@@ -338,11 +340,11 @@ describe("payment handlers", () => {
       await cancelSubscription(req, res);
 
       expect(mockRzpSubscriptionsCancel).toHaveBeenCalledWith("sub_1", {
-        cancel_at_cycle_end: 0,
+        cancel_at_cycle_end: 1,
       });
       expect(mockTenantUpdate).toHaveBeenCalledWith({
         where: { id: "t1" },
-        data: { subscriptionStatus: "cancelling" },
+        data: { subscriptionStatus: "cancelled" },
       });
     });
   });
@@ -470,6 +472,65 @@ describe("payment handlers", () => {
         expect.objectContaining({ status: 400 }),
       );
     });
+
+    it("rejects a plan change for a UPI Autopay subscription before calling Razorpay", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        planTier: "starter",
+        billing: "monthly",
+        pendingPlanTier: null,
+        razorpaySubscriptionId: "sub_1",
+        subscriptionStatus: "active",
+        planExpiresAt: new Date(),
+        paymentMethod: "upi",
+      });
+      const req: any = {
+        user: { tenantId: "t1" },
+        body: { planTier: "growth", billing: "monthly" },
+      };
+      const res = makeRes();
+
+      await changePlan(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: expect.stringContaining("UPI Autopay"),
+        }),
+      );
+      expect(mockRzpSubscriptionsUpdate).not.toHaveBeenCalled();
+      expect(mockRzpOrdersCreate).not.toHaveBeenCalled();
+    });
+
+    it.each(["emandate", "nach"])(
+      "rejects a plan change for a %s subscription before calling Razorpay",
+      async (method) => {
+        mockTenantFindUnique.mockResolvedValue({
+          planTier: "starter",
+          billing: "monthly",
+          pendingPlanTier: null,
+          razorpaySubscriptionId: "sub_1",
+          subscriptionStatus: "active",
+          planExpiresAt: new Date(),
+          paymentMethod: method,
+        });
+        const req: any = {
+          user: { tenantId: "t1" },
+          body: { planTier: "growth", billing: "monthly" },
+        };
+        const res = makeRes();
+
+        await changePlan(req, res);
+
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status: 400,
+            message: expect.stringContaining("e-Mandate"),
+          }),
+        );
+        expect(mockRzpSubscriptionsUpdate).not.toHaveBeenCalled();
+        expect(mockRzpOrdersCreate).not.toHaveBeenCalled();
+      },
+    );
 
     it("upgrades immediately with no charge when the renewal date is today (prorated amount rounds to zero)", async () => {
       mockTenantFindUnique.mockResolvedValue({
@@ -683,6 +744,351 @@ describe("payment handlers", () => {
     });
   });
 
+  describe("startPaymentMethodChange", () => {
+    beforeEach(() => {
+      // "enterprise:annual" is deliberately unused by any other describe
+      // block in this file, so it can't collide with getOrCreatePlanId's
+      // module-level in-memory cache the way starter/growth:monthly would.
+      mockTokenStore.getRazorpayPlanId.mockResolvedValue(null);
+      mockRzpPlansCreate.mockResolvedValue({ id: "plan_pm_change" });
+      mockRzpSubscriptionsCreate.mockResolvedValue({ id: "sub_new" });
+      mockTokenStore.storePendingPaymentMethodChange.mockResolvedValue(
+        undefined,
+      );
+    });
+
+    it("rejects when no subscription exists", async () => {
+      mockTenantFindUnique.mockResolvedValue({ razorpaySubscriptionId: null });
+      const req: any = { user: { tenantId: "t1" }, body: {} };
+      const res = makeRes();
+
+      await startPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "No subscription found.",
+        }),
+      );
+      expect(mockRzpSubscriptionsCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects when the subscription isn't active or in grace period", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "expired",
+        planTier: "enterprise",
+        billing: "annual",
+        planExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      });
+      const req: any = { user: { tenantId: "t1" }, body: {} };
+      const res = makeRes();
+
+      await startPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "Subscription is not active.",
+        }),
+      );
+      expect(mockRzpSubscriptionsCreate).not.toHaveBeenCalled();
+    });
+
+    it("defers start_at to planExpiresAt when active with a far-out renewal", async () => {
+      const planExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "active",
+        planTier: "enterprise",
+        billing: "annual",
+        planExpiresAt,
+      });
+      const req: any = { user: { tenantId: "t1" }, body: {} };
+      const res = makeRes();
+
+      await startPaymentMethodChange(req, res);
+
+      expect(mockRzpSubscriptionsCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          plan_id: "plan_pm_change",
+          total_count: 10,
+          quantity: 1,
+          notes: { tenantId: "t1", purpose: "payment_method_change" },
+          start_at: Math.floor(planExpiresAt.getTime() / 1000),
+        }),
+      );
+      expect(
+        mockTokenStore.storePendingPaymentMethodChange,
+      ).toHaveBeenCalledWith("t1", "sub_new");
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            subscriptionId: "sub_new",
+            keyId: process.env.RAZORPAY_KEY_ID,
+          },
+        }),
+      );
+    });
+
+    it("charges immediately (no start_at) when in grace_period, regardless of planExpiresAt", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "grace_period",
+        planTier: "enterprise",
+        billing: "annual",
+        planExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      });
+      const req: any = { user: { tenantId: "t1" }, body: {} };
+      const res = makeRes();
+
+      await startPaymentMethodChange(req, res);
+
+      const callArgs = mockRzpSubscriptionsCreate.mock.calls[0][0];
+      expect(callArgs.start_at).toBeUndefined();
+    });
+
+    it("charges immediately when active but planExpiresAt is within the 24h safety buffer", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "active",
+        planTier: "enterprise",
+        billing: "annual",
+        planExpiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1h out
+      });
+      const req: any = { user: { tenantId: "t1" }, body: {} };
+      const res = makeRes();
+
+      await startPaymentMethodChange(req, res);
+
+      const callArgs = mockRzpSubscriptionsCreate.mock.calls[0][0];
+      expect(callArgs.start_at).toBeUndefined();
+    });
+  });
+
+  describe("confirmPaymentMethodChange", () => {
+    beforeEach(() => {
+      mockRzpPaymentsFetch.mockResolvedValue({
+        method: "card",
+        card: { network: "Visa", last4: "4242" },
+      });
+      mockRzpSubscriptionsCancel.mockResolvedValue({});
+      mockTenantUpdate.mockResolvedValue({});
+      mockTokenStore.getPendingPaymentMethodChange.mockResolvedValue({
+        subscriptionId: "sub_new",
+      });
+      mockTokenStore.clearPendingPaymentMethodChange.mockResolvedValue(
+        undefined,
+      );
+    });
+
+    function validReq(overrides: Record<string, any> = {}) {
+      const paymentId = "pay_1";
+      const subscriptionId = "sub_new";
+      const signature = createHmac("sha256", "key_secret")
+        .update(`${paymentId}|${subscriptionId}`)
+        .digest("hex");
+      return {
+        user: { tenantId: "t1" },
+        body: {
+          razorpayPaymentId: paymentId,
+          razorpaySubscriptionId: subscriptionId,
+          razorpaySignature: signature,
+          ...overrides,
+        },
+      } as any;
+    }
+
+    it("rejects when payment details are missing", async () => {
+      const req: any = { user: { tenantId: "t1" }, body: {} };
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "Payment details are required.",
+        }),
+      );
+    });
+
+    it("rejects a bad signature", async () => {
+      const req = validReq({ razorpaySignature: "bogus" });
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "Payment verification failed.",
+        }),
+      );
+    });
+
+    it("rejects when no subscription exists on the tenant", async () => {
+      mockTenantFindUnique.mockResolvedValue({ razorpaySubscriptionId: null });
+      const req = validReq();
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "No subscription found.",
+        }),
+      );
+    });
+
+    it("rejects when the new subscription id equals the tenant's current subscription id", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_new", // same as request — confused/replayed
+        subscriptionStatus: "active",
+        billing: "annual",
+        planExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      });
+      const req = validReq();
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "Invalid payment method change request.",
+        }),
+      );
+    });
+
+    it("rejects when there's no matching pending change in Redis", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "active",
+        billing: "annual",
+        planExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      });
+      mockTokenStore.getPendingPaymentMethodChange.mockResolvedValue(null);
+      const req = validReq();
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: expect.stringContaining("expired or is invalid"),
+        }),
+      );
+    });
+
+    it("rejects when the pending change's subscription id doesn't match the request", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "active",
+        billing: "annual",
+        planExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      });
+      mockTokenStore.getPendingPaymentMethodChange.mockResolvedValue({
+        subscriptionId: "sub_different",
+      });
+      const req = validReq();
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: expect.stringContaining("expired or is invalid"),
+        }),
+      );
+    });
+
+    it("swaps the subscription and preserves billing dates when deferred (far-out renewal)", async () => {
+      const planExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "active",
+        billing: "annual",
+        planExpiresAt,
+      });
+      const req = validReq();
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      expect(mockTenantUpdate).toHaveBeenNthCalledWith(1, {
+        where: { id: "t1" },
+        data: {
+          razorpaySubscriptionId: "sub_new",
+          previousRazorpaySubscriptionId: "sub_old",
+          subscriptionStatus: "active",
+          paymentMethod: "card",
+          paymentMethodSummary: "Visa •••• 4242",
+        },
+      });
+      expect(mockRzpSubscriptionsCancel).toHaveBeenCalledWith("sub_old", {
+        cancel_at_cycle_end: 0,
+      });
+      expect(mockTenantUpdate).toHaveBeenNthCalledWith(2, {
+        where: { id: "t1" },
+        data: { previousRazorpaySubscriptionId: null },
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 200 }),
+      );
+    });
+
+    it("computes a fresh planActivatedAt/planExpiresAt when immediate (grace_period)", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "grace_period",
+        billing: "monthly",
+        planExpiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // already lapsed
+      });
+      const req = validReq();
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      const firstUpdateData = mockTenantUpdate.mock.calls[0][0].data;
+      expect(firstUpdateData.planActivatedAt).toBeInstanceOf(Date);
+      expect(firstUpdateData.planExpiresAt).toBeInstanceOf(Date);
+    });
+
+    it("leaves previousRazorpaySubscriptionId set when the old-subscription cancel fails", async () => {
+      mockTenantFindUnique.mockResolvedValue({
+        razorpaySubscriptionId: "sub_old",
+        subscriptionStatus: "active",
+        billing: "annual",
+        planExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      });
+      mockRzpSubscriptionsCancel.mockRejectedValue(new Error("Razorpay down"));
+      const req = validReq();
+      const res = makeRes();
+
+      await confirmPaymentMethodChange(req, res);
+
+      // Only the initial swap update happened — no second call clearing
+      // previousRazorpaySubscriptionId, since the cancel failed.
+      expect(mockTenantUpdate).toHaveBeenCalledTimes(1);
+      expect(mockTenantUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            previousRazorpaySubscriptionId: "sub_old",
+          }),
+        }),
+      );
+      // Still reports success to the client — the swap itself succeeded,
+      // and the reconciler will retry the stray cancel.
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 200 }),
+      );
+    });
+  });
+
   describe("handleWebhook", () => {
     function makeWebhookReq(payload: object, secret = "webhook_secret") {
       const rawBody = Buffer.from(JSON.stringify(payload), "utf8");
@@ -836,6 +1242,86 @@ describe("payment handlers", () => {
       );
     });
 
+    it("subscription.charged finalizes a pending downgrade when headcount is within the new tier's limit", async () => {
+      mockTenantFindFirst.mockResolvedValue({
+        id: "t1",
+        name: "Acme Corp",
+        slug: "acme-corp",
+        plan: "pro",
+        planTier: "growth",
+        billing: "monthly",
+        pendingPlanTier: "starter",
+        pendingBilling: "monthly",
+        planExpiresAt: null,
+      });
+      mockTenantUpdate.mockResolvedValue({});
+      mockUserCount.mockResolvedValue(10); // within starter's limit of 25
+      const req = makeWebhookReq({
+        event: "subscription.charged",
+        payload: { subscription: { entity: { id: "sub_1" } } },
+      });
+      const res = makeRes();
+
+      await handleWebhook(req, res);
+
+      expect(mockTenantUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "t1" },
+          data: expect.objectContaining({
+            planTier: "starter",
+            billing: "monthly",
+            pendingPlanTier: null,
+            pendingBilling: null,
+            pendingPlanChangeAt: null,
+          }),
+        }),
+      );
+      expect(mockRzpSubscriptionsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("subscription.charged blocks a pending downgrade and reverts Razorpay's plan when headcount exceeds the new tier's limit", async () => {
+      mockTenantFindFirst.mockResolvedValue({
+        id: "t1",
+        name: "Acme Corp",
+        slug: "acme-corp",
+        plan: "pro",
+        // "growth:annual" is deliberately unused by any other test in this
+        // file — getOrCreatePlanId's module-level in-memory cache persists
+        // across tests within this file's run, so a combo already cached
+        // elsewhere (e.g. growth:monthly) would return that cached plan id
+        // instead of ever calling rzp.plans.create with this test's mock.
+        planTier: "growth",
+        billing: "annual",
+        pendingPlanTier: "starter",
+        pendingBilling: "monthly",
+        planExpiresAt: null,
+      });
+      mockTenantUpdate.mockResolvedValue({});
+      mockUserCount.mockResolvedValue(30); // exceeds starter's limit of 25
+      mockRzpPlansCreate.mockResolvedValue({ id: "plan_growth_annual" });
+      const req = makeWebhookReq({
+        event: "subscription.charged",
+        payload: { subscription: { entity: { id: "sub_1" } } },
+      });
+      const res = makeRes();
+
+      await handleWebhook(req, res);
+
+      expect(mockRzpSubscriptionsUpdate).toHaveBeenCalledWith("sub_1", {
+        plan_id: "plan_growth_annual",
+        quantity: 1,
+        schedule_change_at: "now",
+      });
+      const updateCall = mockTenantUpdate.mock.calls[0][0];
+      expect(updateCall.where).toEqual({ id: "t1" });
+      expect(updateCall.data).toMatchObject({
+        pendingPlanTier: null,
+        pendingBilling: null,
+        pendingPlanChangeAt: null,
+      });
+      expect(updateCall.data.planTier).toBe("growth");
+    });
+
     it("subscription.halted moves non-expired tenants to grace_period", async () => {
       mockTenantUpdateMany.mockResolvedValue({ count: 1 });
       const req = makeWebhookReq({
@@ -894,7 +1380,7 @@ describe("payment handlers", () => {
     });
 
     it.each(["subscription.cancelled", "subscription.completed"])(
-      "%s marks the tenant expired",
+      "%s marks the tenant cancelled",
       async (event) => {
         mockTenantUpdateMany.mockResolvedValue({ count: 1 });
         const req = makeWebhookReq({
@@ -907,7 +1393,7 @@ describe("payment handlers", () => {
 
         expect(mockTenantUpdateMany).toHaveBeenCalledWith({
           where: { razorpaySubscriptionId: "sub_1" },
-          data: { subscriptionStatus: "expired" },
+          data: { subscriptionStatus: "cancelled" },
         });
       },
     );

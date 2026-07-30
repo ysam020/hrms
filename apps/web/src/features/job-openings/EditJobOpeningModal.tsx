@@ -35,7 +35,10 @@ const FormikDropdownWrapper = ({
         options={options}
         onBlur={() => formik.setFieldTouched(name, true)}
         placeholder={placeholder}
-        appendTo="self"
+        // appendTo="self" renders inside this modal's animated (transformed)
+        // CustomModal wrapper, which breaks the panel's viewport position
+        // calc — see ScheduleInterviewModal.tsx for the same established fix.
+        appendTo={() => document.querySelector("#root .App") as HTMLElement}
         className={hasError ? "p-invalid" : ""}
         style={{ width: "100%" }}
         {...inputProps}

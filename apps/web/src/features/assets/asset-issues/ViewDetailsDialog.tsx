@@ -1,5 +1,5 @@
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Divider from "@mui/material/Divider";
@@ -8,6 +8,7 @@ import StatusTimeline from "@web/shared/components/StatusTimeline";
 import { DetailRow, PriorityLabel, StatusChip } from "./components";
 import { ISSUE_TYPES } from "./constants";
 import { buildAssetIssueStages } from "./helpers";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 export function ViewDetailsDialog({
   issue,
@@ -17,8 +18,15 @@ export function ViewDetailsDialog({
   onClose: () => void;
 }) {
   return (
-    <Dialog open={!!issue} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Issue Details</DialogTitle>
+    <Dialog
+      open={!!issue}
+      onClose={ignoreBackdropClick(onClose)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitleWithClose onClose={onClose}>
+        Issue Details
+      </DialogTitleWithClose>
       <DialogContent
         sx={{
           display: "flex",

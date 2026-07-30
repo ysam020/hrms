@@ -1,5 +1,4 @@
 import { memo, useContext, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
 import AppBar from "@mui/material/AppBar";
 import IconButton from "@mui/material/IconButton";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -21,8 +20,8 @@ import { UserContext } from "@web/app/providers/UserContext";
 import Tooltip from "@mui/material/Tooltip";
 import LogoDark from "@web/assets/data/LogoDark";
 import LogoLight from "@web/assets/data/LogoLight";
-import { useDashboardEdit } from "@web/app/providers/DashboardEditContext";
 import AppsPopover from "@web/features/layout/AppsPopover";
+import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 
 const drawerWidth = 60;
 
@@ -39,9 +38,6 @@ function AppbarComponent({
   const { handleLogout, user } = useContext(UserContext);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { editMode, toggleEditMode, resetFn } = useDashboardEdit();
-  const { pathname } = useLocation();
-  const isDashboard = pathname === "/";
   const notificationCount = useMemo(
     () => notifications?.length || 0,
     [notifications],
@@ -54,12 +50,16 @@ function AppbarComponent({
       onClick: handleOpen,
       badge: false,
     },
-    {
-      title: "Audit Logs",
-      iconClass: "pi-book",
-      onClick: () => setOpenActivityDrawer(true),
-      badge: false,
-    },
+    ...(isOwnerOrAdmin(user)
+      ? [
+          {
+            title: "Audit Logs",
+            iconClass: "pi-book",
+            onClick: () => setOpenActivityDrawer(true),
+            badge: false,
+          },
+        ]
+      : []),
     {
       title: theme === "light" ? "Dark mode" : "Light mode",
       iconClass: theme === "light" ? "pi-moon" : "pi-sun",
@@ -309,90 +309,6 @@ function AppbarComponent({
               role="toolbar"
               aria-label="Main actions"
             >
-              {/* Customize button — dashboard only */}
-              {isDashboard && (
-                <>
-                  {editMode && resetFn && (
-                    <Tooltip
-                      title="Reset to default layout"
-                      placement="bottom"
-                      arrow
-                    >
-                      <Box
-                        component="button"
-                        aria-label="Reset to default layout"
-                        onClick={resetFn}
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "40px",
-                          height: "44px",
-                          borderRadius: "10px",
-                          cursor: "pointer",
-                          border: "none",
-                          background: "transparent",
-                          "&:hover": {
-                            background:
-                              theme === "light"
-                                ? "rgba(0,0,0,0.06)"
-                                : "rgba(255,255,255,0.08)",
-                          },
-                        }}
-                      >
-                        <i
-                          className="pi pi-refresh"
-                          style={{
-                            fontSize: 14,
-                            color: theme === "light" ? "#1f2937" : "#f3f4f6",
-                          }}
-                        />
-                      </Box>
-                    </Tooltip>
-                  )}
-                  <Tooltip
-                    title={editMode ? "Done customizing" : "Customize layout"}
-                    placement="bottom"
-                    arrow
-                  >
-                    <Box
-                      component="button"
-                      aria-label={
-                        editMode ? "Done customizing" : "Customize layout"
-                      }
-                      aria-pressed={editMode}
-                      onClick={toggleEditMode}
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "40px",
-                        height: "44px",
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        border: "none",
-                        background: "transparent",
-                        "&:hover": {
-                          background:
-                            theme === "light"
-                              ? "rgba(0,0,0,0.06)"
-                              : "rgba(255,255,255,0.08)",
-                        },
-                      }}
-                    >
-                      <i
-                        className={editMode ? "pi pi-check" : "pi pi-sliders-h"}
-                        style={{
-                          fontSize: "16px",
-                          color: theme === "light" ? "#1f2937" : "#f3f4f6",
-                          transition: "all 0.2s ease",
-                        }}
-                      />
-                    </Box>
-                  </Tooltip>
-                </>
-              )}
-
               {renderActionItem(actionItems[0], 0)}
 
               {/* Apps launcher, right of Search */}

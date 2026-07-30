@@ -271,7 +271,7 @@ describe("useChat", () => {
     );
 
     act(() => {
-      socket.__handlers["chat:typing"]({ roomId: "roomX", username: "jane" });
+      socket.__handlers["chat:typing"]({ roomId: "roomX", userId: "jane" });
     });
     expect(result.current.typingUsers["roomX"]).toEqual(["jane"]);
 

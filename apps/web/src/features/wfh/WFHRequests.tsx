@@ -23,7 +23,7 @@ import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -36,6 +36,7 @@ import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
 import Person from "@mui/icons-material/Person";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
@@ -492,11 +493,13 @@ function WFHRequests() {
 
       <Dialog
         open={openRequest}
-        onClose={() => setOpenRequest(false)}
+        onClose={ignoreBackdropClick(() => setOpenRequest(false))}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Request WFH</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenRequest(false)}>
+          Request WFH
+        </DialogTitleWithClose>
         <DialogContent
           sx={{
             display: "flex",

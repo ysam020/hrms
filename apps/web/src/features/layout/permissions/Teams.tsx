@@ -64,6 +64,16 @@ function Teams() {
     "Error loading teams",
   );
 
+  // Users already on any team shouldn't be offered again when adding
+  // members to a team — membership is exclusive to one team.
+  const assignedUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    (teams || []).forEach((team: any) => {
+      (team.membersInfo || []).forEach((member: any) => ids.add(member.id));
+    });
+    return ids;
+  }, [teams]);
+
   const handleAvatarGroupClick = (
     event,
     users,
@@ -258,6 +268,7 @@ function Teams() {
         open={openCreateTeam}
         handleClose={handleCloseCreateTeam}
         getData={refetch}
+        assignedUserIds={assignedUserIds}
       />
 
       <AddTeamMembersModal
@@ -265,6 +276,7 @@ function Teams() {
         handleClose={handleCloseAddTeamMembers}
         getData={refetch}
         _id={selectedTeamId}
+        assignedUserIds={assignedUserIds}
       />
 
       <Popover

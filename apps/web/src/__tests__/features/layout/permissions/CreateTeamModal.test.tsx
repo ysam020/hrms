@@ -55,7 +55,12 @@ const USERS = [
 
 function renderWith(
   open: boolean,
-  { setAlert = vi.fn(), handleClose = vi.fn(), getData = vi.fn() } = {},
+  {
+    setAlert = vi.fn(),
+    handleClose = vi.fn(),
+    getData = vi.fn(),
+    assignedUserIds = undefined as Set<string> | undefined,
+  } = {},
 ) {
   mockUseUserList.mockReturnValue(USERS);
   render(
@@ -64,6 +69,7 @@ function renderWith(
         open={open}
         handleClose={handleClose}
         getData={getData}
+        assignedUserIds={assignedUserIds}
       />
     </AlertContext.Provider>,
   );
@@ -94,6 +100,12 @@ describe("CreateTeamModal", () => {
     expect(screen.getByText(/1 member\(s\) selected/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("add-u2"));
     expect(screen.getByText(/2 member\(s\) selected/)).toBeInTheDocument();
+  });
+
+  it("excludes users already assigned to a team from the member options", () => {
+    renderWith(true, { assignedUserIds: new Set(["u2"]) });
+    expect(screen.getByText("add-u1")).toBeInTheDocument();
+    expect(screen.queryByText("add-u2")).not.toBeInTheDocument();
   });
 
   it("only offers selected members as team-leader options", () => {
