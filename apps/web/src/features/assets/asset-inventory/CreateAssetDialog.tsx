@@ -4,12 +4,13 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import Grid from "@mui/material/Grid";
 import Autocomplete from "@mui/material/Autocomplete";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 export interface CreateAssetForm {
   name: string;
@@ -38,8 +39,15 @@ export function CreateAssetDialog({
   onSubmit: () => void;
 }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Add New Asset</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={ignoreBackdropClick(onClose)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitleWithClose onClose={onClose}>
+        Add New Asset
+      </DialogTitleWithClose>
       <DialogContent sx={{ pt: "16px !important" }}>
         <Grid container spacing={2}>
           <Grid item xs={6}>

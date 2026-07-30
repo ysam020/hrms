@@ -95,7 +95,12 @@ export const addLeaveSchema = z
   .object({
     from: isoDate,
     to: isoDate,
-    leaveType: z.string().min(1).max(64),
+    // Empty/omitted leaveType is allowed — leave-service defaults it to
+    // Paid Leave (or Leave Without Pay if the paid-leave balance is 0).
+    leaveType: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.string().min(1).max(64).optional(),
+    ),
     reason: z.string().max(1000).optional(),
     sick_leave: z.boolean().optional(),
     medicalCertificate: z.string().max(2048).optional(),

@@ -10,6 +10,9 @@ import {
 } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { s3Client, S3_BUCKET, S3_URL_PREFIX } from "../config/s3";
 
 function withId<
   T extends { id: string; chatRoomId?: string; replyToId?: string | null },
@@ -21,6 +24,30 @@ function withId<
 }
 
 const MAX_PINNED_MESSAGES = 5;
+
+// The bucket blocks all public/anonymous access (see cloudformation/hrms-deploy.yaml)
+// — msg.fileUrl is a permanent-looking S3 URL but isn't actually reachable
+// without a signature. 15 minutes comfortably covers a scrollback session
+// without needing a page reload, while keeping exposure bounded.
+const CHAT_FILE_VIEW_URL_TTL = 900;
+
+// Use base masterPrisma (no tenantId filter) so participants from any
+// tenant context can be resolved to their display name.
+async function resolveParticipantDetails(participantIds: string[]) {
+  const users = await masterPrisma.user.findMany({
+    where: { id: { in: participantIds } },
+    select: {
+      id: true,
+      username: true,
+      first_name: true,
+      last_name: true,
+      employee_photo: true,
+      designation: true,
+    },
+  });
+  const userMap = new Map(users.map((u: any) => [u.id, u]));
+  return participantIds.map((p) => userMap.get(p) ?? { id: p });
+}
 
 // Populates each message's `replyTo` (currently just a raw replyToId on the
 // stored doc) with a lightweight preview of the message it replies to —
@@ -90,7 +117,7 @@ export async function getConversations(req: Request, res: Response) {
       ...new Set(rooms.flatMap((r: any) => r.participants)),
     ];
 
-    const [lastMessages, participantUsers] = await Promise.all([
+    const [lastMessages, participantDetailsById] = await Promise.all([
       lastMessageIds.length
         ? prisma.message.findMany({
             where: { id: { in: lastMessageIds } },
@@ -104,23 +131,11 @@ export async function getConversations(req: Request, res: Response) {
             },
           })
         : Promise.resolve([]),
-      // Use base masterPrisma (no tenantId filter) so participants from any
-      // tenant context can be resolved to their display name.
-      masterPrisma.user.findMany({
-        where: { id: { in: allParticipantIds } },
-        select: {
-          id: true,
-          username: true,
-          first_name: true,
-          last_name: true,
-          employee_photo: true,
-          designation: true,
-        },
-      }),
+      resolveParticipantDetails(allParticipantIds),
     ]);
 
     const msgMap = new Map(lastMessages.map((m: any) => [m.id, m]));
-    const userMap = new Map(participantUsers.map((u: any) => [u.id, u]));
+    const userMap = new Map(participantDetailsById.map((u: any) => [u.id, u]));
 
     const rawCounts = await prisma.message.groupBy({
       by: ["chatRoomId"],
@@ -193,9 +208,12 @@ export async function startConversation(req: Request, res: Response) {
             },
           })
         : existing;
+      const participantDetails = await resolveParticipantDetails(
+        room.participants,
+      );
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         message: "Conversation started",
-        data: withId(room),
+        data: withId({ ...room, participantDetails }),
       });
     }
 
@@ -209,9 +227,12 @@ export async function startConversation(req: Request, res: Response) {
       },
     });
 
+    const participantDetails = await resolveParticipantDetails(
+      room.participants,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Conversation started",
-      data: withId(room),
+      data: withId({ ...room, participantDetails }),
     });
   } catch (error: unknown) {
     logger.error("POST /chat/conversations/start error:", { error });
@@ -259,6 +280,48 @@ export async function getMessages(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("GET /chat/conversations/:roomId/messages error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function getMessageFileViewUrl(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const userId = user!.userId;
+    const messageId = String(req.params.messageId);
+
+    const msg = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!msg || msg.isDeleted || !msg.fileUrl)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "File not found",
+      });
+
+    const room = await prisma.chatRoom.findUnique({
+      where: { id: msg.chatRoomId },
+      select: { participants: true },
+    });
+    if (!room || !room.participants.includes(userId))
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+
+    if (!msg.fileUrl.startsWith(S3_URL_PREFIX))
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Invalid file reference",
+      });
+    const key = decodeURIComponent(msg.fileUrl.slice(S3_URL_PREFIX.length));
+
+    const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+    const url = await getSignedUrl(s3Client, command, {
+      expiresIn: CHAT_FILE_VIEW_URL_TTL,
+    });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Pre-signed view URL generated",
+      data: { url },
+    });
+  } catch (error: unknown) {
+    logger.error("GET /chat/messages/:messageId/view-url error:", { error });
     return handleError(res, error);
   }
 }

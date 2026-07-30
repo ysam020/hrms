@@ -28,7 +28,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import Popover from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
@@ -41,6 +41,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import FilterList from "@mui/icons-material/FilterList";
 import dayjs from "dayjs";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 function ViewHrActivities() {
@@ -736,12 +737,14 @@ function ViewHrActivities() {
 
       <Dialog
         open={openAdd}
-        onClose={() => setOpenAdd(false)}
+        onClose={ignoreBackdropClick(() => setOpenAdd(false))}
         disablePortal
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Add New Activity</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenAdd(false)}>
+          Add New Activity
+        </DialogTitleWithClose>
         <DialogContent>
           <AddHrActivity
             onSaved={() => {

@@ -15,6 +15,7 @@ import type { Theme } from "@mui/material/styles";
 import Close from "@mui/icons-material/Close";
 import { getRoleConfig } from "./helpers";
 import type { Employee } from "./types";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 export function EmployeeDetailDialog({
   employee,
@@ -30,7 +31,7 @@ export function EmployeeDetailDialog({
   return (
     <Dialog
       open={!!employee}
-      onClose={onClose}
+      onClose={ignoreBackdropClick(onClose)}
       maxWidth="sm"
       fullWidth
       fullScreen={isMobile}

@@ -1,9 +1,16 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MessageBubble } from "@web/features/chat/MessageBubble";
 import apiClient from "@web/core/http/axiosConfig";
 
+// Chat file/image messages resolve their fileUrl to a short-lived signed
+// view URL via a GET call — mock it to resolve immediately with a
+// recognisable signed URL distinct from the stored msg.fileUrl.
 vi.mock("@web/core/http/axiosConfig", () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: { data: {} } }) },
+  default: {
+    get: vi
+      .fn()
+      .mockResolvedValue({ data: { data: { url: "https://signed/img.png" } } }),
+  },
 }));
 
 function baseMsg(overrides: Partial<any> = {}) {
@@ -70,17 +77,19 @@ describe("MessageBubble", () => {
     expect(screen.getByLabelText("More message options")).toBeInTheDocument();
   });
 
-  it("renders an image message and forwards clicks to onImageClick", () => {
+  it("renders an image message and forwards clicks to onImageClick", async () => {
     const { onImageClick } = renderBubble({
       msg: baseMsg({
+        _id: "m-img",
         type: "image",
         fileUrl: "https://x/img.png",
         fileName: "img.png",
       }),
     });
-    const img = screen.getByAltText("img.png");
+    const img = await screen.findByAltText("img.png");
+    expect(img).toHaveAttribute("src", "https://signed/img.png");
     fireEvent.click(img);
-    expect(onImageClick).toHaveBeenCalledWith("https://x/img.png");
+    expect(onImageClick).toHaveBeenCalledWith("https://signed/img.png");
   });
 
   it("renders a video message with a filename caption", () => {

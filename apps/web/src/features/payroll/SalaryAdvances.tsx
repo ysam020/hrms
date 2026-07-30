@@ -22,7 +22,7 @@ import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -33,6 +33,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
 import FilterList from "@mui/icons-material/FilterList";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "All" },
@@ -358,11 +359,13 @@ function SalaryAdvances() {
 
       <Dialog
         open={openRequest}
-        onClose={() => setOpenRequest(false)}
+        onClose={ignoreBackdropClick(() => setOpenRequest(false))}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Request Salary Advance</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenRequest(false)}>
+          Request Salary Advance
+        </DialogTitleWithClose>
         <DialogContent
           sx={{
             display: "flex",

@@ -49,6 +49,41 @@ export async function clearPendingSubscription(userId: string): Promise<void> {
   await getClient().del(`pending_sub:${userId}`);
 }
 
+// ─── Change-payment-method correlation ────────────────────────────────────────
+// Same-browser-session flow (start → Razorpay Checkout → confirm), not an
+// abandon/resume-days-later story like the signup flow above — a short TTL
+// is enough.
+const PENDING_PM_CHANGE_TTL = 60 * 60; // 1h
+
+export async function storePendingPaymentMethodChange(
+  tenantId: string,
+  subscriptionId: string,
+): Promise<void> {
+  await getClient().setex(
+    `pending_pm_change:${tenantId}`,
+    PENDING_PM_CHANGE_TTL,
+    JSON.stringify({ subscriptionId }),
+  );
+}
+
+export async function getPendingPaymentMethodChange(
+  tenantId: string,
+): Promise<{ subscriptionId: string } | null> {
+  const raw = await getClient().get(`pending_pm_change:${tenantId}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export async function clearPendingPaymentMethodChange(
+  tenantId: string,
+): Promise<void> {
+  await getClient().del(`pending_pm_change:${tenantId}`);
+}
+
 // ─── Webhook idempotency ──────────────────────────────────────────────────────
 
 // Atomically reserves the event ID: returns true only for the caller that

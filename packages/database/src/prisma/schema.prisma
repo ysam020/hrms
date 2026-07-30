@@ -44,7 +44,17 @@ model Tenant {
   // Prisma still maps the resulting duplicate-key error to P2002 on
   // tenant.create() even though the index isn't declared here.
   razorpaySubscriptionId String?
-  subscriptionStatus     String    @default("active") // active | grace_period | expired
+  // Set transiently during a payment-method swap (see confirmPaymentMethodChange
+  // in payment.ts) to the subscription being retired; cleared once its
+  // cancellation is confirmed. subscriptionReconciler.ts retries the cancel
+  // on every run while this is still set, so a failed cancel never silently
+  // leaves the old subscription (and its old mandate) billing forever.
+  previousRazorpaySubscriptionId String?
+  // active | grace_period | cancelled | expired | cancelling (legacy, no
+  // longer set — see cancelSubscription in payment.ts). "cancelled" means the
+  // user opted out; access continues until planExpiresAt (checked live by
+  // requireActiveSubscription), distinct from "expired" (involuntary lapse).
+  subscriptionStatus     String    @default("active")
   planActivatedAt        DateTime?
   planExpiresAt          DateTime?
   // "starter" (1-25 employees) | "growth" (26-100) | "enterprise" (101+) —

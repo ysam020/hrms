@@ -165,6 +165,52 @@ describe("Subscription", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows a cancelled banner with the access-until date while still within the paid period", async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          tenant: tenant({
+            subscriptionStatus: "cancelled",
+            planExpiresAt: "2026-12-01T00:00:00Z",
+          }),
+        },
+      },
+    });
+    renderSubscription();
+    expect(await screen.findByText("Cancelled")).toBeInTheDocument();
+    expect(screen.getByText(/won't renew/)).toBeInTheDocument();
+    // "1 December 2026" appears twice: once in the banner's "until" date,
+    // once in the existing "Renews on" field — both read planExpiresAt.
+    expect(screen.getAllByText("1 December 2026")).toHaveLength(2);
+    expect(screen.queryByText("Renew Subscription")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Cancel Subscription", { selector: "span" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows an access-ended banner and the renew section once a cancelled subscription's period has passed", async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          tenant: tenant({
+            subscriptionStatus: "cancelled",
+            planExpiresAt: "2026-01-01T00:00:00Z",
+          }),
+        },
+      },
+    });
+    renderSubscription();
+    expect(
+      await screen.findByText(/your access has ended/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Renew Subscription")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Cancel Subscription", { selector: "span" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the Cancel Subscription button for a non-expired subscription", async () => {
     mockGet.mockResolvedValue({
       data: {
@@ -222,7 +268,7 @@ describe("Subscription", () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.getByText("Expired")).toBeInTheDocument(),
+      expect(screen.getByText("Cancelled")).toBeInTheDocument(),
     );
   });
 

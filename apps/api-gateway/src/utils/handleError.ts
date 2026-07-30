@@ -50,6 +50,16 @@ export function handleError(res: Response, err: unknown): Response {
     });
   }
 
+  // Razorpay SDK errors: { statusCode, error: { code, description } }. Without
+  // this, any Razorpay rejection (invalid state transition, unsupported
+  // payment mode, etc.) silently flattens into a generic 500 with no
+  // indication of what actually went wrong.
+  if (typeof anyErr?.statusCode === "number" && anyErr?.error?.description) {
+    return apiResponse(res, anyErr.statusCode, {
+      message: anyErr.error.description,
+    });
+  }
+
   return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
     message: "Internal Server Error",
   });

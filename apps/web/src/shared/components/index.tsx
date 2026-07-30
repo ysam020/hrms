@@ -4,6 +4,7 @@ export { default as CameraConsentDrawer } from "./CameraConsentDrawer";
 export { default as CheckboxWrapper } from "./CheckboxWrapper";
 export { default as ConfirmationDialog } from "./ConfirmationDialog";
 export { default as DeviceListItem } from "./DeviceListItem";
+export { default as DialogTitleWithClose } from "./DialogTitleWithClose";
 export { default as DomMagnifier } from "./DomMagnifier";
 export { default as DropdownWrapper } from "./DropdownWrapper";
 export { default as EmptyState } from "./EmptyState";

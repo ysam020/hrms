@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Button from "@web/shared/components/Button";
@@ -20,6 +20,7 @@ import { SettlementTab } from "./exit-management/SettlementTab";
 import { NoticeHistoryTab } from "./exit-management/NoticeHistoryTab";
 import { RehireTab } from "./exit-management/RehireTab";
 import { buildResignationStages } from "./exit-management/helpers";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import type {
   ChecklistItem,
   ExitManagementDialogProps,
@@ -228,14 +229,14 @@ export default function ExitManagementDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={ignoreBackdropClick(onClose)}
       fullWidth
       maxWidth="md"
       TransitionComponent={SlideUpTransition}
     >
-      <DialogTitle>
+      <DialogTitleWithClose onClose={onClose}>
         Manage exit{employeeName ? ` — ${employeeName}` : ""}
-      </DialogTitle>
+      </DialogTitleWithClose>
       <DialogContent sx={{ pt: 1 }}>
         <Box sx={{ mb: 2, overflowX: "auto" }}>
           <StatusTimeline

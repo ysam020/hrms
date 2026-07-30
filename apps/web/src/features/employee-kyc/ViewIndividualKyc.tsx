@@ -12,8 +12,9 @@ import { ApprovalsBadgeContext } from "@web/app/providers/ApprovalsBadgeContext"
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import Button from "@web/shared/components/Button";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Box from "@mui/material/Box";
@@ -110,12 +111,14 @@ function RequestRevisionDialog({
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={ignoreBackdropClick(handleClose)}
       fullWidth
       maxWidth="sm"
       TransitionComponent={SlideUpTransition}
     >
-      <DialogTitle>Request KYC revision</DialogTitle>
+      <DialogTitleWithClose onClose={handleClose}>
+        Request KYC revision
+      </DialogTitleWithClose>
       <DialogContent sx={{ pt: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Select the fields that need correction and describe the issue with
@@ -189,12 +192,14 @@ function RequestEditAccessDialog({
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={ignoreBackdropClick(handleClose)}
       fullWidth
       maxWidth="sm"
       TransitionComponent={SlideUpTransition}
     >
-      <DialogTitle>Request to update your KYC</DialogTitle>
+      <DialogTitleWithClose onClose={handleClose}>
+        Request to update your KYC
+      </DialogTitleWithClose>
       <DialogContent sx={{ pt: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Your KYC is already approved. Tell HR what changed (e.g. new bank

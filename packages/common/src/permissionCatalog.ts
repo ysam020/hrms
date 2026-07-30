@@ -80,9 +80,6 @@ const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
     assign_superuser: ["-"],
     revoke_superuser: ["-"],
   },
-  AuditLogs: {
-    view: ["self", "team", "all"],
-  },
   Holidays: {
     add: ["-"],
     delete: ["-"],

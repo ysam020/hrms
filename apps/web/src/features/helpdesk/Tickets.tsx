@@ -21,7 +21,7 @@ import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -33,6 +33,7 @@ import FilterList from "@mui/icons-material/FilterList";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "All" },
@@ -327,11 +328,13 @@ function Tickets() {
 
       <Dialog
         open={openCreate}
-        onClose={() => setOpenCreate(false)}
+        onClose={ignoreBackdropClick(() => setOpenCreate(false))}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Raise Support Ticket</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenCreate(false)}>
+          Raise Support Ticket
+        </DialogTitleWithClose>
         <DialogContent sx={{ pt: "16px !important" }}>
           <Grid container spacing={2}>
             <Grid item xs={12}>

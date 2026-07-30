@@ -27,7 +27,7 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import Person from "@mui/icons-material/Person";
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -38,6 +38,7 @@ import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import FilterList from "@mui/icons-material/FilterList";
 import AddIcon from "@mui/icons-material/Add";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
@@ -601,12 +602,14 @@ function ViewResignations() {
 
       <Dialog
         open={openResign}
-        onClose={() => setOpenResign(false)}
+        onClose={ignoreBackdropClick(() => setOpenResign(false))}
         disablePortal
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Submit Resignation</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenResign(false)}>
+          Submit Resignation
+        </DialogTitleWithClose>
         <DialogContent>
           <ResignationForm
             onSuccess={() => {

@@ -4,18 +4,10 @@ import AppbarComponent from "@web/features/layout/AppbarComponent";
 import { NotificationContext } from "@web/app/providers/NotificationContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { UserContext } from "@web/app/providers/UserContext";
-import { useDashboardEdit } from "@web/app/providers/DashboardEditContext";
 
 vi.mock("@web/features/layout/AppsPopover", () => ({
   default: () => <div>Stub AppsPopover</div>,
 }));
-
-vi.mock("@web/app/providers/DashboardEditContext", () => ({
-  useDashboardEdit: vi.fn(),
-}));
-const mockUseDashboardEdit = useDashboardEdit as unknown as ReturnType<
-  typeof vi.fn
->;
 
 function renderWith(
   path = "/",
@@ -24,10 +16,7 @@ function renderWith(
     theme = "light",
     toggleTheme = vi.fn(),
     handleLogout = vi.fn(),
-    user = { tenantName: "Acme Corp" },
-    editMode = false,
-    toggleEditMode = vi.fn(),
-    resetFn = null as (() => void) | null,
+    user = { tenantName: "Acme Corp" } as Record<string, any>,
     handleOpen = vi.fn(),
     setOpenNotificationDrawer = vi.fn(),
     setOpenActivityDrawer = vi.fn(),
@@ -35,12 +24,6 @@ function renderWith(
     mobileOpen = false,
   } = {},
 ) {
-  mockUseDashboardEdit.mockReturnValue({
-    editMode,
-    toggleEditMode,
-    resetFn,
-    registerReset: vi.fn(),
-  });
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
@@ -112,61 +95,37 @@ describe("AppbarComponent", () => {
     expect(screen.queryByLabelText(/notifications$/)).not.toBeInTheDocument();
   });
 
-  it("calls handleOpen (search), setOpenActivityDrawer, and handleLogout from their action buttons", () => {
+  it("calls handleOpen (search) and handleLogout from their action buttons", () => {
     const handleOpen = vi.fn();
-    const setOpenActivityDrawer = vi.fn();
     const handleLogout = vi.fn();
-    renderWith("/", { handleOpen, setOpenActivityDrawer, handleLogout });
+    renderWith("/", { handleOpen, handleLogout });
 
     fireEvent.click(screen.getByLabelText("Search"));
     expect(handleOpen).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByLabelText("Audit Logs"));
-    expect(setOpenActivityDrawer).toHaveBeenCalledWith(true);
 
     fireEvent.click(screen.getByLabelText("Logout"));
     expect(handleLogout).toHaveBeenCalled();
   });
 
-  it("shows the dashboard-only Customize layout toggle on the dashboard route", () => {
-    renderWith("/");
-    expect(screen.getByLabelText("Customize layout")).toBeInTheDocument();
+  it("hides the Audit Logs action for a non-owner/admin, non-superuser", () => {
+    renderWith("/", { user: { tenantRole: "employee" } });
+    expect(screen.queryByLabelText("Audit Logs")).not.toBeInTheDocument();
   });
 
-  it("hides the Customize layout toggle off the dashboard route", () => {
-    renderWith("/helpdesk");
-    expect(screen.queryByLabelText("Customize layout")).not.toBeInTheDocument();
+  it("shows the Audit Logs action and opens the drawer for an owner", () => {
+    const setOpenActivityDrawer = vi.fn();
+    renderWith("/", {
+      user: { tenantRole: "owner" },
+      setOpenActivityDrawer,
+    });
+
+    fireEvent.click(screen.getByLabelText("Audit Logs"));
+    expect(setOpenActivityDrawer).toHaveBeenCalledWith(true);
   });
 
-  it("toggles edit mode, flipping to 'Done customizing' and aria-pressed", () => {
-    const toggleEditMode = vi.fn();
-    renderWith("/", { editMode: false, toggleEditMode });
-    const button = screen.getByLabelText("Customize layout");
-    expect(button).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(button);
-    expect(toggleEditMode).toHaveBeenCalled();
-  });
-
-  it("shows 'Done customizing' with aria-pressed=true while in edit mode", () => {
-    renderWith("/", { editMode: true });
-    expect(screen.getByLabelText("Done customizing")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  });
-
-  it("hides the reset-layout button unless in edit mode with a resetFn registered", () => {
-    renderWith("/", { editMode: false, resetFn: null });
-    expect(
-      screen.queryByLabelText("Reset to default layout"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("shows the reset-layout button in edit mode once a resetFn is registered", () => {
-    const resetFn = vi.fn();
-    renderWith("/", { editMode: true, resetFn });
-    fireEvent.click(screen.getByLabelText("Reset to default layout"));
-    expect(resetFn).toHaveBeenCalled();
+  it("shows the Audit Logs action for a superuser regardless of tenantRole", () => {
+    renderWith("/", { user: { tenantRole: "employee", isSuperUser: true } });
+    expect(screen.getByLabelText("Audit Logs")).toBeInTheDocument();
   });
 
   it("opens the mobile actions menu and closes it after an item is clicked", () => {

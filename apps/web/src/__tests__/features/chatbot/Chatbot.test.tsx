@@ -110,6 +110,28 @@ describe("Chatbot", () => {
     );
   });
 
+  it("closes when clicking outside the panel", async () => {
+    renderChatbot();
+    fireEvent.click(screen.getByLabelText("Open HRMS AI Assistant"));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.pointerDown(document.body);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("stays open when clicking inside the panel", async () => {
+    renderChatbot();
+    fireEvent.click(screen.getByLabelText("Open HRMS AI Assistant"));
+    const dialog = screen.getByRole("dialog");
+
+    fireEvent.pointerDown(dialog);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("toggles open/closed on Cmd/Ctrl+Shift+A", async () => {
     renderChatbot();
     fireEvent.keyDown(window, { key: "a", ctrlKey: true, shiftKey: true });

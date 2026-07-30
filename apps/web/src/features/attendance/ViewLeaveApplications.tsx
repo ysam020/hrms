@@ -14,7 +14,7 @@ import Tooltip from "@mui/material/Tooltip";
 import FilterList from "@mui/icons-material/FilterList";
 import AddIcon from "@mui/icons-material/Add";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import Switch from "@mui/material/Switch";
 import FormControlLabel from "@mui/material/FormControlLabel";
@@ -36,6 +36,7 @@ import Typography from "@mui/material/Typography";
 import Person from "@mui/icons-material/Person";
 import { Dropdown } from "primereact/dropdown";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import formatEmployeeLabel from "@web/shared/utils/formatEmployeeLabel";
@@ -666,12 +667,14 @@ function ViewLeaveApplications() {
 
       <Dialog
         open={openApply}
-        onClose={() => setOpenApply(false)}
+        onClose={ignoreBackdropClick(() => setOpenApply(false))}
         disablePortal
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Apply for Leave</DialogTitle>
+        <DialogTitleWithClose onClose={() => setOpenApply(false)}>
+          Apply for Leave
+        </DialogTitleWithClose>
         <DialogContent>
           <LeaveApplication
             onSuccess={() => {

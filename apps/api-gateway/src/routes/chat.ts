@@ -18,6 +18,11 @@ chatRouter.get(
   authenticate,
   h.getMessages,
 );
+chatRouter.get(
+  "/chat/messages/:messageId/view-url",
+  authenticate,
+  h.getMessageFileViewUrl,
+);
 chatRouter.post(
   "/chat/conversations/:roomId/read",
   authenticate,

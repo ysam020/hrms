@@ -7,6 +7,7 @@ import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import SlideUpTransition from "./SlideUpTransition";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 function ThemedDialog({
   open,
@@ -41,7 +42,7 @@ function ThemedDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={ignoreBackdropClick(onClose)}
       maxWidth={maxWidth}
       fullWidth={fullWidth}
       slots={{ transition: SlideUpTransition }}

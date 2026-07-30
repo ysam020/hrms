@@ -35,11 +35,13 @@ x-backend-service: &backend-service
   #
   # Memory budget (this host is m7i-flex.large: 8 GiB total, per
   # cloudformation/hrms-deploy.yaml): api-gateway (768M) + 12 backend
-  # services x 384M = 5,376M, leaving ~2,816M (~34%) of headroom for the OS,
-  # dockerd, and the CloudWatch/SSM agents. Redis no longer runs on this host
-  # at all — every instance connects to the shared RedisCluster ElastiCache
-  # endpoint (see cloudformation/hrms-deploy.yaml) instead of its own local
-  # container, so it isn't part of this host's budget anymore either.
+  # services x 384M = 5,376M + redis (256M) + caddy (128M) = 5,760M, leaving
+  # ~2,432M (~30%) of headroom for the OS, dockerd, and the CloudWatch/SSM
+  # agents. Redis runs on this same host again (see the `redis` service
+  # below) — this single-instance deployment has no other instance to share
+  # a cache with, so the ElastiCache cluster that used to serve that role
+  # was pure cost with no benefit here. Caddy (see the `caddy` service
+  # below) replaces the ALB for public TLS termination.
   # `web` runs under a separate compose profile and isn't part of this
   # host's default `up -d`, so it's excluded from this budget. Unlike
   # memory, cpus limits are deliberately left oversubscribed (0.5 x 12 + 1.0
@@ -212,6 +214,54 @@ services:
       - "9111:9111"
     <<: *backend-service
 
+  # Back to a per-instance container (was ElastiCache — see the CloudFormation
+  # template's comment history). This account runs a single ASG instance with
+  # no failover need, so the shared/replicated cache this replaced isn't
+  # buying anything here, and it was the largest recurring cost line after
+  # EC2. Not published to the host port: nothing outside this compose
+  # network needs to reach it, only api-gateway/backend containers via the
+  # `redis` service name (REDIS_URL in the hrms/config secret points here).
+  redis:
+    container_name: hrms-prod-redis
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # Public TLS termination (was the ALB's job — see the CloudFormation
+  # template's comment history). Caddyfile is written once at boot by
+  # LaunchTemplate UserData, not synced per-deploy like docker-compose.prod.yml,
+  # since its content (the domain name) doesn't change between deploys.
+  # caddy-data persists the Let's Encrypt account/certificate across
+  # container restarts so it isn't re-issued every time.
+  caddy:
+    container_name: hrms-prod-caddy
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
   web:
     container_name: hrms-prod-web
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/web:${TAG_NAME:-latest}
@@ -227,3 +277,8 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:

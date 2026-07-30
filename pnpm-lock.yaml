@@ -943,18 +943,12 @@ importers:
       react-error-boundary:
         specifier: ^5.0.0
         version: 5.0.0(react@18.3.1)
-      react-grid-layout:
-        specifier: ^1.4.4
-        version: 1.5.3(react-dom@18.3.1)(react@18.3.1)
       react-leaflet:
         specifier: ^4.2.1
         version: 4.2.1(leaflet@1.9.4)(react-dom@18.3.1)(react@18.3.1)
       react-linkify:
         specifier: ^1.0.0-alpha
         version: 1.0.0-alpha
-      react-resizable:
-        specifier: ^3.0.4
-        version: 3.1.3(react-dom@18.3.1)(react@18.3.1)
       react-router-dom:
         specifier: ^6.28.1
         version: 6.30.3(react-dom@18.3.1)(react@18.3.1)
@@ -17798,13 +17792,6 @@ packages:
       }
     dev: false
 
-  /fast-equals@4.0.3:
-    resolution:
-      {
-        integrity: sha512-G3BSX9cfKttjr+2o1O22tYMLq0DPluZnYtq1rXumE1SpL/F/SLIfHx08WYQoWSIpeMYf8sRbJ8++71+v6Pnxfg==,
-      }
-    dev: false
-
   /fast-json-stable-stringify@2.1.0:
     resolution:
       {
@@ -23650,21 +23637,6 @@ packages:
       scheduler: 0.23.2
     dev: false
 
-  /react-draggable@4.5.0(react-dom@18.3.1)(react@18.3.1):
-    resolution:
-      {
-        integrity: sha512-VC+HBLEZ0XJxnOxVAZsdRi8rD04Iz3SiiKOoYzamjylUcju/hP9np/aZdLHf/7WOD268WMoNJMvYfB5yAK45cw==,
-      }
-    peerDependencies:
-      react: ">= 16.3.0"
-      react-dom: ">= 16.3.0"
-    dependencies:
-      clsx: 2.1.1
-      prop-types: 15.8.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-    dev: false
-
   /react-error-boundary@5.0.0(react@18.3.1):
     resolution:
       {
@@ -23701,25 +23673,6 @@ packages:
       react: ">=17.0.0"
     dependencies:
       react: 19.2.3
-    dev: false
-
-  /react-grid-layout@1.5.3(react-dom@18.3.1)(react@18.3.1):
-    resolution:
-      {
-        integrity: sha512-KaG6IbjD6fYhagUtIvOzhftXG+ViKZjCjADe86X1KHl7C/dsBN2z0mi14nbvZKTkp0RKiil9RPcJBgq3LnoA8g==,
-      }
-    peerDependencies:
-      react: ">= 16.3.0"
-      react-dom: ">= 16.3.0"
-    dependencies:
-      clsx: 2.1.1
-      fast-equals: 4.0.3
-      prop-types: 15.8.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      react-draggable: 4.5.0(react-dom@18.3.1)(react@18.3.1)
-      react-resizable: 3.1.3(react-dom@18.3.1)(react@18.3.1)
-      resize-observer-polyfill: 1.5.1
     dev: false
 
   /react-is@16.13.1:
@@ -24050,21 +24003,6 @@ packages:
       tslib: 2.8.1
       use-callback-ref: 1.3.3(@types/react@19.2.17)(react@19.2.3)
       use-sidecar: 1.1.3(@types/react@19.2.17)(react@19.2.3)
-    dev: false
-
-  /react-resizable@3.1.3(react-dom@18.3.1)(react@18.3.1):
-    resolution:
-      {
-        integrity: sha512-liJBNayhX7qA4tBJiBD321FDhJxgGTJ07uzH5zSORXoE8h7PyEZ8mLqmosST7ppf6C4zUsbd2gzDMmBCfFp9Lw==,
-      }
-    peerDependencies:
-      react: ">= 16.3"
-      react-dom: ">= 16.3"
-    dependencies:
-      prop-types: 15.8.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      react-draggable: 4.5.0(react-dom@18.3.1)(react@18.3.1)
     dev: false
 
   /react-router-dom@6.30.3(react-dom@18.3.1)(react@18.3.1):
@@ -24429,13 +24367,6 @@ packages:
     dependencies:
       postal-mime: 2.7.5
       standardwebhooks: 1.0.0
-    dev: false
-
-  /resize-observer-polyfill@1.5.1:
-    resolution:
-      {
-        integrity: sha512-LwZrotdHOo12nQuZlHEmtuXdqGoOD0OhaxopaNFxWzInpEgaLWoVuAMbTzixuosCx2nEG58ngzW3vxdWoxIgdg==,
-      }
     dev: false
 
   /resolve-cwd@3.0.0:

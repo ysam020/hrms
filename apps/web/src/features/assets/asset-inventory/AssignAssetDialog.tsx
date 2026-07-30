@@ -1,12 +1,13 @@
 import Button from "@web/shared/components/Button";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
 import Autocomplete from "@mui/material/Autocomplete";
 import CircularProgress from "@mui/material/CircularProgress";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import { CONDITION_OPTIONS } from "./constants";
 
 export interface AssignForm {
@@ -43,8 +44,15 @@ export function AssignAssetDialog({
   onSubmit: () => void;
 }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Assign Asset {assetCode}</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={ignoreBackdropClick(onClose)}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitleWithClose onClose={onClose}>
+        Assign Asset {assetCode}
+      </DialogTitleWithClose>
       <DialogContent
         sx={{
           display: "flex",

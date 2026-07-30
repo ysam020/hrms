@@ -1,7 +1,6 @@
 export const MESSAGES = {
   USERNAME_REQUIRED: "username is required",
-  USERNAME_LEAVE_TYPE_FROM_TO_REQUIRED:
-    "username, leaveType, from and to are required",
+  USERNAME_FROM_TO_REQUIRED: "username, from and to are required",
   INVALID_DATE_FORMAT: "Invalid date format. Use YYYY-MM-DD",
   END_DATE_BEFORE_START: "End date cannot be before start date",
   LEAVE_ALREADY_APPLIED: "Leave already applied for this date range",

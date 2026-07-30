@@ -20,9 +20,7 @@ import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 const mockApiResponse = apiResponse as jest.Mock;
 const makeRes = () => ({ json: jest.fn() }) as any;
 
-function makePrismaError(
-  code: string,
-): Prisma.PrismaClientKnownRequestError {
+function makePrismaError(code: string): Prisma.PrismaClientKnownRequestError {
   return new Prisma.PrismaClientKnownRequestError("Prisma error", {
     code,
     clientVersion: "5.0.0",
@@ -42,7 +40,9 @@ describe("handleError — Prisma known errors", () => {
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
       RESPONSE_STATUS.CONFLICT,
-      expect.objectContaining({ message: "A record with this data already exists" }),
+      expect.objectContaining({
+        message: "A record with this data already exists",
+      }),
     );
   });
 
@@ -121,6 +121,39 @@ describe("handleError — gRPC annotated errors", () => {
       res,
       502,
       expect.objectContaining({ message: "Service error" }),
+    );
+  });
+});
+
+// ─── Razorpay SDK errors ──────────────────────────────────────────────────────
+
+describe("handleError — Razorpay SDK errors", () => {
+  it("surfaces the Razorpay statusCode and description instead of a generic 500", () => {
+    const res = makeRes();
+    const rzpErr = {
+      statusCode: 400,
+      error: {
+        code: "BAD_REQUEST_ERROR",
+        description: "subscriptions cannot be updated when payment mode is upi",
+      },
+    };
+    handleError(res, rzpErr);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      400,
+      expect.objectContaining({
+        message: "subscriptions cannot be updated when payment mode is upi",
+      }),
+    );
+  });
+
+  it("falls back to 500 when statusCode is present but error.description is missing", () => {
+    const res = makeRes();
+    handleError(res, { statusCode: 400, error: {} });
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
+      expect.any(Object),
     );
   });
 });

@@ -15,7 +15,7 @@ import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import SlideUpTransition from "@web/shared/components/SlideUpTransition";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Alert from "@mui/material/Alert";
@@ -36,6 +36,7 @@ import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import apiClient from "@web/core/http/axiosConfig";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import { UserContext } from "@web/app/providers/UserContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { states } from "@web/assets/data/statesData";
@@ -314,16 +315,19 @@ export default function CompanyInfo() {
 
       <Dialog
         open={editOpen}
-        onClose={() => !saving && setEditOpen(false)}
+        onClose={ignoreBackdropClick(() => !saving && setEditOpen(false))}
         maxWidth="xs"
         fullWidth
         slots={{ transition: SlideUpTransition }}
         transitionDuration={{ enter: 280, exit: 200 }}
         aria-labelledby="edit-org-dialog-title"
       >
-        <DialogTitle id="edit-org-dialog-title">
+        <DialogTitleWithClose
+          id="edit-org-dialog-title"
+          onClose={() => !saving && setEditOpen(false)}
+        >
           Edit Organisation Profile
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent
           sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}
         >

@@ -6,6 +6,7 @@ import MenuItem from "@mui/material/MenuItem";
 import _Linkify from "react-linkify";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { LinkPreview } from "./LinkPreview";
+import { useFileViewUrl } from "./useFileViewUrl";
 import { FIRST_URL_RE, formatFileSize, formatTime } from "./chatHelpers";
 import {
   DeleteIcon,
@@ -52,6 +53,9 @@ export function MessageBubble({
   const isRead =
     isMine &&
     roomParticipants.some((p) => p !== msg.senderId && msg.readBy?.includes(p));
+
+  const hasFile = !msg.isDeleted && msg.type !== "text" && Boolean(msg.fileUrl);
+  const fileViewUrl = useFileViewUrl(msg._id, hasFile);
 
   if (msg.isDeleted) {
     return (
@@ -189,23 +193,30 @@ export function MessageBubble({
             </>
           )}
 
-          {msg.type === "image" && (
-            <img
-              src={msg.fileUrl}
-              alt={msg.fileName || "Image"}
-              className="chat-image-preview"
-              onClick={() => onImageClick(msg.fileUrl)}
-            />
-          )}
+          {msg.type === "image" &&
+            (fileViewUrl ? (
+              <img
+                src={fileViewUrl}
+                alt={msg.fileName || "Image"}
+                className="chat-image-preview"
+                onClick={() => onImageClick(fileViewUrl)}
+              />
+            ) : (
+              <div className="chat-media-loading chat-image-preview" />
+            ))}
 
           {msg.type === "video" && (
             <div className="chat-video-wrap">
-              <video
-                src={msg.fileUrl}
-                controls
-                className="chat-video-preview"
-                preload="metadata"
-              />
+              {fileViewUrl ? (
+                <video
+                  src={fileViewUrl}
+                  controls
+                  className="chat-video-preview"
+                  preload="metadata"
+                />
+              ) : (
+                <div className="chat-media-loading chat-video-preview" />
+              )}
               {msg.fileName && (
                 <Typography variant="caption" className="chat-media-filename">
                   {msg.fileName}
@@ -216,10 +227,13 @@ export function MessageBubble({
 
           {msg.type === "file" && (
             <a
-              href={msg.fileUrl}
+              href={fileViewUrl || undefined}
               target="_blank"
               rel="noreferrer"
               className="chat-file-card"
+              onClick={(e) => {
+                if (!fileViewUrl) e.preventDefault();
+              }}
             >
               <div className="chat-file-card-icon">
                 <FileTypeIcon mime={msg.fileMimeType} size="medium" />

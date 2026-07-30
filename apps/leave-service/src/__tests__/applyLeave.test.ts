@@ -112,7 +112,7 @@ describe("applyLeave", () => {
     const cb = makeCallback();
     await applyLeave(makeCall({ userId: "john" }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
-      message: MESSAGES.USERNAME_LEAVE_TYPE_FROM_TO_REQUIRED,
+      message: MESSAGES.USERNAME_FROM_TO_REQUIRED,
       status: status.INVALID_ARGUMENT,
     });
   });

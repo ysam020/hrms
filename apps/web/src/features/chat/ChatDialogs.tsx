@@ -8,6 +8,7 @@ import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import Button from "@web/shared/components/Button";
 import { CloseIcon } from "./chatIcons";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 
 export function ImageLightboxDialog({
   lightboxUrl,
@@ -19,7 +20,7 @@ export function ImageLightboxDialog({
   return (
     <Dialog
       open={Boolean(lightboxUrl)}
-      onClose={onClose}
+      onClose={ignoreBackdropClick(onClose)}
       maxWidth="lg"
       slots={{ transition: SlideUpTransition }}
       transitionDuration={{ enter: 280, exit: 200 }}

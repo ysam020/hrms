@@ -1,13 +1,8 @@
-import { memo, useContext, useEffect } from "react";
-import Modal from "@mui/material/Modal";
-import Paper from "@mui/material/Paper";
+import { memo, useContext, useEffect, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
-import Backdrop from "@mui/material/Backdrop";
-import Fade from "@mui/material/Fade";
 import { AlertContext } from "@web/app/providers/AlertContext";
-import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { useFormik } from "formik";
 import { z } from "zod";
 import { toFormikValidationSchema } from "zod-formik-adapter";
@@ -22,6 +17,7 @@ import useUserList from "@web/shared/hooks/useUserList";
 import { MultiSelect } from "primereact/multiselect";
 import { Dropdown } from "primereact/dropdown";
 import Button from "@web/shared/components/Button";
+import CustomModal from "@web/shared/components/Modal";
 import { API_ENDPOINTS } from "@web/shared/constants";
 
 const validationSchema = toFormikValidationSchema(
@@ -40,8 +36,14 @@ const validationSchema = toFormikValidationSchema(
 
 function CreateTeamModal(props) {
   const { setAlert } = useContext(AlertContext);
-  const { theme } = useContext(ThemeContext);
   const userList = useUserList();
+
+  // Team membership is exclusive — don't offer users who are already on
+  // some team (the caller computes this across all teams).
+  const availableUserList = useMemo(() => {
+    if (!props.assignedUserIds || !userList) return userList;
+    return userList.filter((user) => !props.assignedUserIds.has(user.value));
+  }, [userList, props.assignedUserIds]);
 
   const formik = useFormik({
     initialValues: {
@@ -93,304 +95,276 @@ function CreateTeamModal(props) {
 
   const modalStyle = {
     width: { xs: "90%", sm: 600 },
-    maxHeight: "90vh",
-    overflow: "auto",
-    outline: 0,
   };
 
   return (
-    <Modal
+    <CustomModal
       open={props.open}
-      onClose={props.handleClose}
-      closeAfterTransition
+      handleClose={props.handleClose}
+      modalStyle={modalStyle}
       disablePortal
-      BackdropComponent={Backdrop}
-      BackdropProps={{
-        timeout: 200,
-        sx: {
-          backgroundColor: "rgba(0, 0, 0, 0.4)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-        },
-      }}
     >
-      <Fade in={props.open} timeout={200}>
-        <Paper
-          elevation={8}
-          sx={{
-            ...modalStyle,
-            borderRadius: 3,
-            backgroundColor: "background.paper",
-            border:
-              theme === "light" ? "1px solid #e5e7eb" : "1px solid #374151",
-          }}
-        >
-          {/* Header */}
+      {/* Header */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          p: 2.5,
+          pb: 2,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Box
             sx={{
+              p: 0.75,
+              bgcolor: "secondary.main",
+              color: "secondary.contrastText",
+              borderRadius: 1.5,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              p: 2.5,
-              pb: 2,
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Box
-                sx={{
-                  p: 0.75,
-                  bgcolor: "secondary.main",
-                  color: "secondary.contrastText",
-                  borderRadius: 1.5,
-                  display: "flex",
-                }}
-              >
-                <GroupsIcon fontSize="small" />
-              </Box>
-              <Box>
-                <Typography
-                  variant="h6"
-                  fontWeight={600}
-                  sx={{ fontSize: "1.1rem" }}
-                >
-                  Create New Team
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <TeamIcon sx={{ fontSize: 14, color: "text.secondary" }} />
-                  <Typography variant="caption" color="text.secondary">
-                    Team Management
-                  </Typography>
-                </Box>
-              </Box>
+            <GroupsIcon fontSize="small" />
+          </Box>
+          <Box>
+            <Typography
+              variant="h6"
+              fontWeight={600}
+              sx={{ fontSize: "1.1rem" }}
+            >
+              Create New Team
+            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <TeamIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+              <Typography variant="caption" color="text.secondary">
+                Team Management
+              </Typography>
             </Box>
           </Box>
+        </Box>
+      </Box>
 
-          {/* Form */}
-          <Box sx={{ p: 2.5, pt: 0 }}>
-            <form onSubmit={formik.handleSubmit}>
-              <Stack spacing={2}>
-                {/* Team Name Section */}
-                <Box>
-                  <Typography
-                    variant="h6"
-                    color="text.secondary"
-                    gutterBottom
-                    sx={{ mb: 1 }}
-                  >
-                    <TeamIcon
-                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                    />
-                    Team Name
-                  </Typography>
+      {/* Form */}
+      <Box sx={{ p: 2.5, pt: 0 }}>
+        <form onSubmit={formik.handleSubmit}>
+          <Stack spacing={2}>
+            {/* Team Name Section */}
+            <Box>
+              <Typography
+                variant="h6"
+                color="text.secondary"
+                gutterBottom
+                sx={{ mb: 1 }}
+              >
+                <TeamIcon
+                  sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                />
+                Team Name
+              </Typography>
 
-                  <FormikInputWrapper
-                    type="text"
-                    name="team_name"
-                    placeholder="Enter team name (e.g., Development Team, Marketing Squad)"
-                    formik={formik}
-                    inputProps={{
-                      autoFocus: true,
-                      maxLength: 50,
-                    }}
-                  />
-                </Box>
+              <FormikInputWrapper
+                type="text"
+                name="team_name"
+                placeholder="Enter team name (e.g., Development Team, Marketing Squad)"
+                formik={formik}
+                inputProps={{
+                  autoFocus: true,
+                  maxLength: 50,
+                }}
+              />
+            </Box>
 
-                {/* Team Members Section */}
-                <Box>
-                  <Typography
-                    variant="h6"
-                    color="text.secondary"
-                    gutterBottom
-                    sx={{ mb: 1 }}
-                  >
-                    <PeopleIcon
-                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                    />
-                    Team Members
-                  </Typography>
+            {/* Team Members Section */}
+            <Box>
+              <Typography
+                variant="h6"
+                color="text.secondary"
+                gutterBottom
+                sx={{ mb: 1 }}
+              >
+                <PeopleIcon
+                  sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                />
+                Team Members
+              </Typography>
 
-                  <MultiSelect
-                    value={formik.values.members}
-                    onChange={(e) => formik.setFieldValue("members", e.value)}
-                    options={userList}
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Select team members..."
-                    maxSelectedLabels={3}
-                    appendTo="self"
-                    display="chip"
-                    filter
-                    filterBy="label"
-                    style={{ width: "100%" }}
-                    panelStyle={{ maxHeight: "200px" }}
-                    scrollHeight="200px"
-                  />
+              <MultiSelect
+                value={formik.values.members}
+                onChange={(e) => formik.setFieldValue("members", e.value)}
+                options={availableUserList}
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select team members..."
+                maxSelectedLabels={3}
+                appendTo="self"
+                display="chip"
+                filter
+                filterBy="label"
+                style={{ width: "100%" }}
+                panelStyle={{ maxHeight: "200px" }}
+                scrollHeight="200px"
+              />
 
-                  {/* Validation Error */}
-                  {formik.touched.members && formik.errors.members && (
-                    <Typography
-                      variant="caption"
-                      color="error"
-                      sx={{
-                        mt: 0.5,
-                        display: "block",
-                        color: "#f15c6d",
-                        fontSize: 14,
-                      }}
-                    >
-                      {formik.errors.members}
-                    </Typography>
-                  )}
+              {/* Validation Error */}
+              {formik.touched.members && formik.errors.members && (
+                <Typography
+                  variant="caption"
+                  color="error"
+                  sx={{
+                    mt: 0.5,
+                    display: "block",
+                    color: "#f15c6d",
+                    fontSize: 14,
+                  }}
+                >
+                  {formik.errors.members}
+                </Typography>
+              )}
 
-                  {/* Selection Summary */}
-                  {formik.values.members &&
-                    formik.values.members.length > 0 && (
-                      <Box
-                        sx={{
-                          mt: 1.5,
-                          p: 1.5,
-                          bgcolor: "success.light",
-                          borderRadius: 1,
-                          border: "1px solid",
-                          borderColor: "success.main",
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          color="success.dark"
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 0.5,
-                          }}
-                        >
-                          <CheckCircleIcon sx={{ fontSize: 14 }} />
-                          {formik.values.members.length} member(s) selected
-                          {formik.values.members.length > 3 &&
-                            ` (${formik.values.members.length - 3} more...)`}
-                        </Typography>
-                      </Box>
-                    )}
-                </Box>
-
-                {/* Team Leader Section */}
-                <Box>
-                  <Typography
-                    variant="h6"
-                    color="text.secondary"
-                    gutterBottom
-                    sx={{ mb: 1 }}
-                  >
-                    <PersonIcon
-                      sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
-                    />
-                    Team Leader
-                  </Typography>
-
-                  <Dropdown
-                    value={formik.values.team_leader}
-                    onChange={(e) =>
-                      formik.setFieldValue("team_leader", e.value)
-                    }
-                    options={userList.filter((u) =>
-                      formik.values.members.includes(u.value),
-                    )}
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Select team leader..."
-                    style={{ width: "100%" }}
-                    disabled={formik.values.members.length === 0}
-                    emptyMessage="Please select team members first"
-                    appendTo={"self"}
-                  />
-
-                  {/* Validation Error */}
-                  {formik.touched.team_leader && formik.errors.team_leader && (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        mt: 0.5,
-                        display: "block",
-                        color: "#f15c6d",
-                        fontSize: 14,
-                      }}
-                    >
-                      {formik.errors.team_leader}
-                    </Typography>
-                  )}
-
-                  {/* Helper Text */}
-                  {formik.values.members.length === 0 && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ mt: 0.5, display: "block" }}
-                    >
-                      Select team members first to choose a team leader
-                    </Typography>
-                  )}
-
-                  {/* Leader Selection Summary */}
-                  {formik.values.team_leader && (
-                    <Box
-                      sx={{
-                        mt: 1.5,
-                        p: 1.5,
-                        bgcolor: "primary.light",
-                        borderRadius: 1,
-                        border: "1px solid",
-                        borderColor: "primary.main",
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        color="primary.dark"
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 0.5,
-                        }}
-                      >
-                        <PersonIcon sx={{ fontSize: 14 }} />
-                        {`${userList.find((u) => u.value === formik.values.team_leader)?.label || formik.values.team_leader} selected as team leader`}
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-
-                {/* Guidelines */}
-                <Box sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 1 }}>
+              {/* Selection Summary */}
+              {formik.values.members && formik.values.members.length > 0 && (
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1.5,
+                    bgcolor: "success.light",
+                    borderRadius: 1,
+                    border: "1px solid",
+                    borderColor: "success.main",
+                  }}
+                >
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ display: "block", mb: 1 }}
+                    color="success.dark"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                    }}
                   >
-                    <strong>What's Next:</strong>
-                  </Typography>
-                  <Typography variant="caption">
-                    After creating the team, you can add or remove team members
-                    and change the team leader as needed.
+                    <CheckCircleIcon sx={{ fontSize: 14 }} />
+                    {formik.values.members.length} member(s) selected
+                    {formik.values.members.length > 3 &&
+                      ` (${formik.values.members.length - 3} more...)`}
                   </Typography>
                 </Box>
+              )}
+            </Box>
 
-                {/* Submit Button */}
-                <Button
-                  type="submit"
-                  disabled={
-                    !formik.values.team_name.trim() ||
-                    !formik.values.members.length ||
-                    !formik.values.team_leader ||
-                    formik.isSubmitting
-                  }
+            {/* Team Leader Section */}
+            <Box>
+              <Typography
+                variant="h6"
+                color="text.secondary"
+                gutterBottom
+                sx={{ mb: 1 }}
+              >
+                <PersonIcon
+                  sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }}
+                />
+                Team Leader
+              </Typography>
+
+              <Dropdown
+                value={formik.values.team_leader}
+                onChange={(e) => formik.setFieldValue("team_leader", e.value)}
+                options={availableUserList.filter((u) =>
+                  formik.values.members.includes(u.value),
+                )}
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select team leader..."
+                style={{ width: "100%" }}
+                disabled={formik.values.members.length === 0}
+                emptyMessage="Please select team members first"
+                appendTo={"self"}
+              />
+
+              {/* Validation Error */}
+              {formik.touched.team_leader && formik.errors.team_leader && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    mt: 0.5,
+                    display: "block",
+                    color: "#f15c6d",
+                    fontSize: 14,
+                  }}
                 >
-                  Create Team
-                </Button>
-              </Stack>
-            </form>
-          </Box>
-        </Paper>
-      </Fade>
-    </Modal>
+                  {formik.errors.team_leader}
+                </Typography>
+              )}
+
+              {/* Helper Text */}
+              {formik.values.members.length === 0 && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, display: "block" }}
+                >
+                  Select team members first to choose a team leader
+                </Typography>
+              )}
+
+              {/* Leader Selection Summary */}
+              {formik.values.team_leader && (
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1.5,
+                    bgcolor: "primary.light",
+                    borderRadius: 1,
+                    border: "1px solid",
+                    borderColor: "primary.main",
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    color="primary.dark"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                    }}
+                  >
+                    <PersonIcon sx={{ fontSize: 14 }} />
+                    {`${availableUserList.find((u) => u.value === formik.values.team_leader)?.label || formik.values.team_leader} selected as team leader`}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+
+            {/* Guidelines */}
+            <Box sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 1 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mb: 1 }}
+              >
+                <strong>What's Next:</strong>
+              </Typography>
+              <Typography variant="caption">
+                After creating the team, you can add or remove team members and
+                change the team leader as needed.
+              </Typography>
+            </Box>
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              disabled={
+                !formik.values.team_name.trim() ||
+                !formik.values.members.length ||
+                !formik.values.team_leader ||
+                formik.isSubmitting
+              }
+            >
+              Create Team
+            </Button>
+          </Stack>
+        </form>
+      </Box>
+    </CustomModal>
   );
 }
 

@@ -20,6 +20,7 @@ function BroadcastModal(props) {
       handleClose={props.handleClose}
       modalStyle={modalStyle}
       disableEscapeKeyDown
+      hideCloseButton
     >
       {/* Header */}
       <Box

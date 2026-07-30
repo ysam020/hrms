@@ -1,38 +1,13 @@
-import {
-  Suspense,
-  lazy,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { Suspense, lazy, memo, useContext, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import Chip from "@mui/material/Chip";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import Skeleton from "@mui/material/Skeleton";
-import Typography from "@mui/material/Typography";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import CloseIcon from "@mui/icons-material/Close";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import { Responsive, WidthProvider } from "react-grid-layout";
-import "react-grid-layout/css/styles.css";
-import "react-resizable/css/styles.css";
 import { ErrorBoundary } from "react-error-boundary";
 import ErrorFallback from "@web/shared/components/ErrorFallback";
 import { UserContext } from "@web/app/providers/UserContext";
 import { DashboardProvider } from "@web/app/providers/DashboardContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
-import { useDashboardEdit } from "@web/app/providers/DashboardEditContext";
 import "../../styles/dashboard.scss";
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 // Lazy-loaded widgets
 const HrActivities = lazy(() => import("./HrActivities"));
@@ -46,94 +21,21 @@ const BirthdayAnniversary = lazy(() => import("./BirthdayAnniversary"));
 const DepartmentBreakdown = lazy(() => import("./DepartmentBreakdown"));
 const WorkforceStatus = lazy(() => import("./WorkforceStatus"));
 
-// Constants
-const STORAGE_KEY_LAYOUT = "db_layout_v14";
-const STORAGE_KEY_VISIBILITY = "db_visibility_v12";
 const RIGHT_PANEL_WIDTH = 270;
 
-const WIDGET_LABELS = {
-  quickStats: "Quick Stats",
-  workforceStatus: "Workforce Status",
-  attendanceCalendar: "Calendar",
-  hrActivities: "HR Activities",
-  pendingApprovals: "Pending Approvals",
-  kycStatus: "KYC Status",
-  jobOpeningsList: "Open Positions",
-  birthdayAnniversary: "Birthdays & Anniversaries",
-  departmentBreakdown: "Departments",
-};
-
-const DEFAULT_LAYOUTS = {
-  lg: [
-    { i: "quickStats", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
-    { i: "workforceStatus", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
-    { i: "attendanceCalendar", x: 0, y: 2, w: 12, h: 2, minW: 6, minH: 2 },
-    { i: "hrActivities", x: 0, y: 4, w: 6, h: 4, minW: 4, minH: 2 },
-    { i: "pendingApprovals", x: 6, y: 4, w: 3, h: 4, minW: 3, minH: 2 },
-    { i: "kycStatus", x: 9, y: 4, w: 3, h: 4, minW: 2, minH: 2 },
-    { i: "jobOpeningsList", x: 0, y: 7, w: 4, h: 5, minW: 3, minH: 2 },
-    { i: "birthdayAnniversary", x: 4, y: 7, w: 5, h: 5, minW: 3, minH: 2 },
-    { i: "departmentBreakdown", x: 9, y: 7, w: 3, h: 5, minW: 2, minH: 2 },
-  ],
-  md: [
-    { i: "quickStats", x: 0, y: 0, w: 5, h: 2, minW: 4, minH: 2 },
-    { i: "workforceStatus", x: 5, y: 0, w: 5, h: 2, minW: 4, minH: 2 },
-    { i: "attendanceCalendar", x: 0, y: 2, w: 10, h: 2, minW: 6, minH: 2 },
-    { i: "hrActivities", x: 0, y: 4, w: 5, h: 4, minW: 4, minH: 2 },
-    { i: "pendingApprovals", x: 5, y: 4, w: 3, h: 4, minW: 2, minH: 2 },
-    { i: "kycStatus", x: 8, y: 4, w: 2, h: 4, minW: 2, minH: 2 },
-    { i: "jobOpeningsList", x: 0, y: 7, w: 3, h: 5, minW: 3, minH: 2 },
-    { i: "birthdayAnniversary", x: 3, y: 7, w: 4, h: 5, minW: 3, minH: 2 },
-    { i: "departmentBreakdown", x: 7, y: 7, w: 3, h: 5, minW: 2, minH: 2 },
-  ],
-  sm: [
-    { i: "quickStats", x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 2 },
-    { i: "workforceStatus", x: 0, y: 2, w: 6, h: 2, minW: 2, minH: 2 },
-    { i: "attendanceCalendar", x: 0, y: 4, w: 6, h: 2, minW: 2, minH: 2 },
-    { i: "hrActivities", x: 0, y: 6, w: 6, h: 4, minW: 2, minH: 2 },
-    { i: "pendingApprovals", x: 0, y: 9, w: 3, h: 4, minW: 2, minH: 2 },
-    { i: "kycStatus", x: 3, y: 9, w: 3, h: 4, minW: 2, minH: 2 },
-    { i: "jobOpeningsList", x: 0, y: 12, w: 6, h: 5, minW: 2, minH: 2 },
-    { i: "birthdayAnniversary", x: 0, y: 17, w: 6, h: 5, minW: 2, minH: 2 },
-    { i: "departmentBreakdown", x: 0, y: 22, w: 6, h: 5, minW: 2, minH: 2 },
-  ],
-  xs: [
-    { i: "quickStats", x: 0, y: 0, w: 4, h: 2, minW: 1, minH: 2 },
-    { i: "workforceStatus", x: 0, y: 2, w: 4, h: 2, minW: 1, minH: 2 },
-    { i: "attendanceCalendar", x: 0, y: 4, w: 4, h: 2, minW: 1, minH: 2 },
-    { i: "hrActivities", x: 0, y: 6, w: 4, h: 4, minW: 1, minH: 2 },
-    { i: "pendingApprovals", x: 0, y: 9, w: 4, h: 4, minW: 1, minH: 2 },
-    { i: "kycStatus", x: 0, y: 12, w: 4, h: 4, minW: 1, minH: 2 },
-    { i: "jobOpeningsList", x: 0, y: 15, w: 4, h: 5, minW: 1, minH: 2 },
-    { i: "birthdayAnniversary", x: 0, y: 20, w: 4, h: 5, minW: 1, minH: 2 },
-    { i: "departmentBreakdown", x: 0, y: 25, w: 4, h: 5, minW: 1, minH: 2 },
-  ],
-  xxs: [
-    { i: "quickStats", x: 0, y: 0, w: 2, h: 2, minW: 1, minH: 2 },
-    { i: "workforceStatus", x: 0, y: 2, w: 2, h: 2, minW: 1, minH: 2 },
-    { i: "attendanceCalendar", x: 0, y: 4, w: 2, h: 2, minW: 1, minH: 2 },
-    { i: "hrActivities", x: 0, y: 6, w: 2, h: 4, minW: 1, minH: 2 },
-    { i: "pendingApprovals", x: 0, y: 9, w: 2, h: 4, minW: 1, minH: 2 },
-    { i: "kycStatus", x: 0, y: 12, w: 2, h: 4, minW: 1, minH: 2 },
-    { i: "jobOpeningsList", x: 0, y: 15, w: 2, h: 5, minW: 1, minH: 2 },
-    { i: "birthdayAnniversary", x: 0, y: 20, w: 2, h: 5, minW: 1, minH: 2 },
-    { i: "departmentBreakdown", x: 0, y: 25, w: 2, h: 5, minW: 1, minH: 2 },
-  ],
-};
-
-const DEFAULT_VISIBILITY = Object.keys(WIDGET_LABELS).reduce((acc, k) => {
-  acc[k] = true;
-  return acc;
-}, {});
-
-function loadFromStorage(key, fallback) {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? JSON.parse(v) : fallback;
-  } catch {
-    return fallback;
-  }
-}
+// Fixed dashboard arrangement — span is out of a 12-column grid, height in px.
+// Each row's spans sum to 12, so items simply flow in this order.
+const WIDGETS = [
+  { id: "quickStats", span: 6, height: 108 },
+  { id: "workforceStatus", span: 6, height: 108 },
+  { id: "attendanceCalendar", span: 12, height: 108 },
+  { id: "hrActivities", span: 6, height: 224 },
+  { id: "pendingApprovals", span: 3, height: 224 },
+  { id: "kycStatus", span: 3, height: 224 },
+  { id: "jobOpeningsList", span: 4, height: 282 },
+  { id: "birthdayAnniversary", span: 5, height: 282 },
+  { id: "departmentBreakdown", span: 3, height: 282 },
+];
 
 const WidgetSkeleton = () => (
   <Box sx={{ p: 1, height: "100%", width: "100%" }}>
@@ -167,19 +69,7 @@ function renderWidget(id) {
 }
 
 const WidgetCard = memo(
-  ({
-    label,
-    editMode,
-    onHide,
-    isDark,
-    children,
-  }: {
-    label: string;
-    editMode: boolean;
-    onHide: () => void;
-    isDark: boolean;
-    children: ReactNode;
-  }) => (
+  ({ isDark, children }: { isDark: boolean; children: ReactNode }) => (
     <Box
       sx={{
         height: "100%",
@@ -187,63 +77,12 @@ const WidgetCard = memo(
         flexDirection: "column",
         borderRadius: 2,
         overflow: "hidden",
-        border: editMode
-          ? `2px dashed ${isDark ? "rgba(99,102,241,0.55)" : "rgba(99,102,241,0.45)"}`
-          : "none",
-        boxShadow: editMode
-          ? "none"
-          : isDark
-            ? "0 1px 3px rgba(0,0,0,0.35)"
-            : "0 1px 4px rgba(0,0,0,0.08)",
+        boxShadow: isDark
+          ? "0 1px 3px rgba(0,0,0,0.35)"
+          : "0 1px 4px rgba(0,0,0,0.08)",
         bgcolor: isDark ? "#212e35" : "#fff",
-        transition: "border 0.2s, box-shadow 0.2s",
       }}
     >
-      {editMode && (
-        <Box
-          className="drag-handle"
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            px: 1.5,
-            py: 0.5,
-            background: isDark
-              ? "linear-gradient(135deg,#1a237e,#283593)"
-              : "linear-gradient(135deg,#3949ab,#5c6bc0)",
-            cursor: "grab",
-            userSelect: "none",
-            flexShrink: 0,
-            "&:active": { cursor: "grabbing" },
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-            <DragIndicatorIcon
-              sx={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}
-              aria-hidden="true"
-            />
-            <Typography
-              variant="caption"
-              sx={{ color: "#fff", fontWeight: 600, fontSize: "0.7rem" }}
-            >
-              {label}
-            </Typography>
-          </Box>
-          <IconButton
-            size="small"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={onHide}
-            aria-label={`Hide ${label} widget`}
-            sx={{
-              color: "rgba(255,255,255,0.7)",
-              p: 0.2,
-              "&:hover": { color: "#fff", bgcolor: "rgba(255,255,255,0.18)" },
-            }}
-          >
-            <CloseIcon sx={{ fontSize: 13 }} aria-hidden="true" />
-          </IconButton>
-        </Box>
-      )}
       <Box sx={{ flex: 1, overflow: "hidden" }}>{children}</Box>
     </Box>
   ),
@@ -284,74 +123,9 @@ function DashboardInner() {
   const isDark = theme === "dark";
   const isMobile = useMediaQuery("(max-width:767px)");
 
-  const { editMode, registerReset } = useDashboardEdit();
-
-  const [visibility, setVisibility] = useState(() =>
-    loadFromStorage(STORAGE_KEY_VISIBILITY, DEFAULT_VISIBILITY),
-  );
-
-  const [layouts, setLayouts] = useState(() =>
-    loadFromStorage(STORAGE_KEY_LAYOUT, DEFAULT_LAYOUTS),
-  );
-
-  const saveVisibility = useCallback((newVis) => {
-    setVisibility(newVis);
-    localStorage.setItem(STORAGE_KEY_VISIBILITY, JSON.stringify(newVis));
-  }, []);
-
-  const handleHideWidget = useCallback(
-    (id) => saveVisibility({ ...visibility, [id]: false }),
-    [visibility, saveVisibility],
-  );
-
-  const handleToggleWidget = useCallback(
-    (id) => saveVisibility({ ...visibility, [id]: !visibility[id] }),
-    [visibility, saveVisibility],
-  );
-
-  const handleResetLayout = useCallback(() => {
-    setLayouts(DEFAULT_LAYOUTS);
-    setVisibility(DEFAULT_VISIBILITY);
-    localStorage.removeItem(STORAGE_KEY_LAYOUT);
-    localStorage.removeItem(STORAGE_KEY_VISIBILITY);
-  }, []);
-
-  // Register reset fn with the appbar context
-  useEffect(() => {
-    registerReset(handleResetLayout);
-  }, [registerReset, handleResetLayout]);
-
-  const isMounted = useRef(false);
-  const handleLayoutChange = useCallback((_cur, allLayouts) => {
-    if (!isMounted.current) {
-      isMounted.current = true;
-      return;
-    }
-    setLayouts((prev) => {
-      // Merge per-item within each breakpoint so hidden widgets keep their
-      // stored dimensions and aren't lost when they're re-shown.
-      const merged = { ...prev };
-      Object.entries(allLayouts).forEach(([bp, items]) => {
-        const layoutItems = items as any[];
-        const incomingIds = new Set(layoutItems.map((item) => item.i));
-        merged[bp] = [
-          ...(prev[bp] || []).filter((item) => !incomingIds.has(item.i)),
-          ...layoutItems,
-        ];
-      });
-      localStorage.setItem(STORAGE_KEY_LAYOUT, JSON.stringify(merged));
-      return merged;
-    });
-  }, []);
-
-  const visibleIds = useMemo(
-    () => Object.keys(WIDGET_LABELS).filter((k) => visibility[k]),
-    [visibility],
-  );
-
   return (
     <Box
-      className={`dashboard dashboard-height-transition`}
+      className="dashboard dashboard-height-transition"
       data-dark={isDark ? "true" : undefined}
       sx={{
         display: "flex",
@@ -379,72 +153,6 @@ function DashboardInner() {
           minWidth: 0,
         }}
       >
-        {/* Widget toggles strip — only in edit mode */}
-        {editMode && (
-          <Box
-            sx={{
-              mx: 1,
-              px: 1.5,
-              py: 0.75,
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 0.5,
-              borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
-              bgcolor: isDark ? "#1c262a" : "#fff",
-              flexShrink: 0,
-              borderRadius: 1,
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{
-                color: "text.secondary",
-                fontSize: "0.68rem",
-                mr: 0.25,
-                flexShrink: 0,
-              }}
-            >
-              Show / hide:
-            </Typography>
-            {Object.entries(WIDGET_LABELS).map(([id, label]) => (
-              <Chip
-                key={id}
-                size="small"
-                label={label}
-                onClick={() => handleToggleWidget(id)}
-                variant={visibility[id] ? "filled" : "outlined"}
-                color={visibility[id] ? "primary" : "default"}
-                icon={
-                  visibility[id] ? undefined : (
-                    <VisibilityOffIcon
-                      sx={{ fontSize: 11, "&&": { ml: 0.75 } }}
-                      aria-hidden="true"
-                    />
-                  )
-                }
-                sx={{
-                  fontSize: "0.67rem",
-                  height: 22,
-                  cursor: "pointer",
-                  opacity: visibility[id] ? 1 : 0.5,
-                  transition: "opacity 0.15s",
-                }}
-              />
-            ))}
-            <Tooltip title="Reset to default layout">
-              <IconButton
-                size="small"
-                onClick={handleResetLayout}
-                aria-label="Reset dashboard to default layout"
-                sx={{ color: "text.secondary", ml: "auto" }}
-              >
-                <RestartAltIcon sx={{ fontSize: 16 }} aria-hidden="true" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
-
         {/* Scrollable grid */}
         <Box
           sx={{
@@ -453,37 +161,31 @@ function DashboardInner() {
             p: 1,
           }}
         >
-          <ResponsiveGridLayout
-            className="dashboard-grid"
-            layouts={layouts}
-            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-            rowHeight={50}
-            margin={[8, 8]}
-            containerPadding={[0, 0]}
-            isDraggable={editMode}
-            isResizable={editMode}
-            draggableHandle=".drag-handle"
-            onLayoutChange={handleLayoutChange}
-            resizeHandles={["se"]}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(12, 1fr)",
+              gap: 1,
+            }}
           >
-            {visibleIds.map((id) => (
-              <div key={id} style={{ height: "100%" }}>
-                <WidgetCard
-                  label={WIDGET_LABELS[id]}
-                  editMode={editMode}
-                  onHide={() => handleHideWidget(id)}
-                  isDark={isDark}
-                >
+            {WIDGETS.map(({ id, span, height }) => (
+              <Box
+                key={id}
+                sx={{
+                  gridColumn: isMobile ? "1 / -1" : `span ${span}`,
+                  height,
+                }}
+              >
+                <WidgetCard isDark={isDark}>
                   <ErrorBoundary fallback={<ErrorFallback />}>
                     <Suspense fallback={<WidgetSkeleton />}>
                       {renderWidget(id)}
                     </Suspense>
                   </ErrorBoundary>
                 </WidgetCard>
-              </div>
+              </Box>
             ))}
-          </ResponsiveGridLayout>
+          </Box>
         </Box>
       </Box>
 

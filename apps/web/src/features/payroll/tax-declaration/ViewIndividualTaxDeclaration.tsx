@@ -9,7 +9,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Grid from "@mui/material/Grid2";
 import Divider from "@mui/material/Divider";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
+import DialogTitleWithClose from "@web/shared/components/DialogTitleWithClose";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
@@ -18,6 +18,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import apiClient from "@web/core/http/axiosConfig";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
+import { ignoreBackdropClick } from "@web/shared/utils/dialogClose";
 import ConfirmationDialog from "@web/shared/components/ConfirmationDialog";
 
 const LINE_ITEM_LABELS: Record<string, string> = {
@@ -278,15 +279,15 @@ function ViewIndividualTaxDeclaration() {
 
       <Dialog
         open={revisionDialogOpen}
-        onClose={() => setRevisionDialogOpen(false)}
+        onClose={ignoreBackdropClick(() => setRevisionDialogOpen(false))}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>
+        <DialogTitleWithClose onClose={() => setRevisionDialogOpen(false)}>
           {revisionStage === "declaration"
             ? "Request revision"
             : "Request proof revision"}
-        </DialogTitle>
+        </DialogTitleWithClose>
         <DialogContent>
           <TextField
             label="What needs to change?"

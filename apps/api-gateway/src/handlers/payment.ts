@@ -33,6 +33,10 @@ const TIER_LABEL: Record<PlanTier, string> = {
   enterprise: "Enterprise",
 };
 
+// Razorpay only supports subscriptions.update (plan_id changes) for
+// card-authorized subscriptions — not UPI Autopay or Emandate/NACH.
+const BLOCKED_PLAN_UPDATE_METHODS = ["upi", "emandate", "nach"];
+
 // Resolves the tenant owner's email — the billing relationship is with
 // whoever created the org (TenantMembership role "owner"), not necessarily
 // whoever is logged in when a webhook fires.
@@ -118,7 +122,7 @@ export function getRazorpay() {
 
 // ─── Plan ID — two-level cache (memory → Redis → Razorpay API) ───────────────
 
-async function getOrCreatePlanId(
+export async function getOrCreatePlanId(
   tier: PlanTier,
   billing: Billing,
 ): Promise<string> {
@@ -297,19 +301,25 @@ export async function cancelSubscription(req: AuthRequest, res: Response) {
     }
 
     const rzp = getRazorpay();
+    // cancel_at_cycle_end: 1 — schedule the cancellation for the end of the
+    // current paid period rather than cutting it off immediately: the
+    // tenant already paid for this cycle, so access (and Razorpay billing)
+    // should continue until it actually ends.
     await (rzp.subscriptions.cancel as any)(tenant.razorpaySubscriptionId, {
-      cancel_at_cycle_end: 0,
+      cancel_at_cycle_end: 1,
     });
 
-    // Set "cancelling" rather than immediately "expired".
-    // The subscription.cancelled webhook (fired by Razorpay within seconds)
-    // is the authoritative signal that confirms the cancellation and moves
-    // the tenant to "expired". This avoids the race where the Razorpay call
-    // succeeds but our DB write was already wrong, or where the next renewal
-    // charge fires before the cancel lands.
+    // Set "cancelled" synchronously — cancel_at_cycle_end returning success
+    // *is* Razorpay's confirmation that the cancellation was scheduled, so
+    // there's no need to wait for a webhook to know this took effect (unlike
+    // an immediate cancel, which used to leave the tenant in an interim
+    // "cancelling" state until subscription.cancelled arrived — a webhook
+    // that isn't guaranteed to ever arrive). requireActiveSubscription reads
+    // planExpiresAt to decide, on every request, whether the paid period is
+    // still running.
     await prisma.tenant.update({
       where: { id: tenantId! },
-      data: { subscriptionStatus: "cancelling" },
+      data: { subscriptionStatus: "cancelled" },
     });
 
     logger.info(`Subscription cancellation requested for tenant ${tenantId}`);
@@ -426,6 +436,7 @@ export async function changePlan(req: AuthRequest, res: Response) {
         razorpaySubscriptionId: true,
         subscriptionStatus: true,
         planExpiresAt: true,
+        paymentMethod: true,
       },
     });
     if (!tenant?.razorpaySubscriptionId) {
@@ -436,6 +447,19 @@ export async function changePlan(req: AuthRequest, res: Response) {
     if (!["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Subscription is not active.",
+      });
+    }
+    // Razorpay rejects subscriptions.update outright for UPI Autopay and
+    // Emandate/NACH mandates ("You can only update a Subscription authorised
+    // using cards and not via UPI and Emandate") — plan changes only work
+    // for card subscriptions. Every branch below eventually calls
+    // subscriptions.update, and for the prorated-upgrade path that call
+    // happens in confirmPlanUpgrade *after* the customer is charged — so
+    // this must be caught here, before any order is created.
+    if (BLOCKED_PLAN_UPDATE_METHODS.includes(tenant.paymentMethod ?? "")) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Plan changes aren't supported for subscriptions paid via UPI Autopay or e-Mandate. Change your payment method to a card, then try again.",
       });
     }
 
@@ -658,6 +682,228 @@ export async function confirmPlanUpgrade(req: AuthRequest, res: Response) {
   }
 }
 
+// ─── POST /payment/start-payment-method-change ────────────────────────────────
+//
+// Razorpay has no in-place way to swap a subscription's payment instrument —
+// only a brand-new subscription, authorized via Checkout, can attach a
+// different payment method. This creates that new subscription (same
+// tier/billing as today — a payment-method-only swap) and, when the tenant's
+// current cycle still has significant time left, defers its first real
+// charge to their existing planExpiresAt via start_at so the Checkout
+// authorization only runs a small, auto-refunded token transaction instead
+// of a real double-charge. confirmPaymentMethodChange finishes the swap once
+// the new subscription is actually authorized.
+
+export async function startPaymentMethodChange(
+  req: AuthRequest,
+  res: Response,
+) {
+  const { tenantId } = req.user!;
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId! },
+      select: {
+        planTier: true,
+        billing: true,
+        razorpaySubscriptionId: true,
+        subscriptionStatus: true,
+        planExpiresAt: true,
+      },
+    });
+    if (!tenant?.razorpaySubscriptionId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "No subscription found.",
+      });
+    }
+    if (!["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Subscription is not active.",
+      });
+    }
+
+    const tier: PlanTier = isPlanTier(tenant.planTier)
+      ? tenant.planTier
+      : "starter";
+    const billing: Billing = tenant.billing === "annual" ? "annual" : "monthly";
+
+    // Deferring requires a generous lead time — Razorpay's docs give no
+    // minimum for start_at, and this also bounds how far confirm's
+    // independent recompute of `deferred` could possibly drift from this one.
+    const deferred =
+      tenant.subscriptionStatus === "active" &&
+      !!tenant.planExpiresAt &&
+      tenant.planExpiresAt.getTime() > Date.now() + 24 * 60 * 60 * 1000;
+
+    const planId = await getOrCreatePlanId(tier, billing);
+    const rzp = getRazorpay();
+
+    const subscription = await (rzp.subscriptions.create as any)({
+      plan_id: planId,
+      customer_notify: 1,
+      total_count: totalCountFor(billing),
+      quantity: 1,
+      notes: { tenantId: tenantId!, purpose: "payment_method_change" },
+      ...(deferred && {
+        start_at: Math.floor(tenant.planExpiresAt!.getTime() / 1000),
+      }),
+    });
+
+    const { storePendingPaymentMethodChange } =
+      await import("../services/tenantTokenStore");
+    await storePendingPaymentMethodChange(tenantId!, subscription.id);
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: {
+        subscriptionId: subscription.id,
+        keyId: process.env.RAZORPAY_KEY_ID,
+      },
+    });
+  } catch (error: unknown) {
+    logger.error("startPaymentMethodChange error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// ─── POST /payment/confirm-payment-method-change ──────────────────────────────
+//
+// Completes the swap started by startPaymentMethodChange once the new
+// subscription has actually been authorized. Writes the new subscription
+// onto the tenant BEFORE cancelling the old one — that ordering means any
+// stray webhook that later arrives for the old subscription id finds no
+// matching tenant row (handleWebhook matches purely by whatever
+// razorpaySubscriptionId currently sits on the tenant) and safely no-ops.
+// The old subscription's cancellation is best-effort: if it fails,
+// previousRazorpaySubscriptionId is left set so subscriptionReconciler.ts
+// retries it on its next run instead of silently leaving a second mandate
+// billing forever.
+
+export async function confirmPaymentMethodChange(
+  req: AuthRequest,
+  res: Response,
+) {
+  const { tenantId } = req.user!;
+  try {
+    const { razorpayPaymentId, razorpaySubscriptionId, razorpaySignature } =
+      req.body as {
+        razorpayPaymentId?: string;
+        razorpaySubscriptionId?: string;
+        razorpaySignature?: string;
+      };
+
+    if (!razorpayPaymentId || !razorpaySubscriptionId || !razorpaySignature) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Payment details are required.",
+      });
+    }
+
+    const expected = createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+      .update(`${razorpayPaymentId}|${razorpaySubscriptionId}`)
+      .digest("hex");
+    if (expected !== razorpaySignature) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Payment verification failed.",
+      });
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId! },
+      select: {
+        razorpaySubscriptionId: true,
+        subscriptionStatus: true,
+        billing: true,
+        planExpiresAt: true,
+      },
+    });
+    if (!tenant?.razorpaySubscriptionId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "No subscription found.",
+      });
+    }
+    if (razorpaySubscriptionId === tenant.razorpaySubscriptionId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Invalid payment method change request.",
+      });
+    }
+
+    const { getPendingPaymentMethodChange, clearPendingPaymentMethodChange } =
+      await import("../services/tenantTokenStore");
+    const pending = await getPendingPaymentMethodChange(tenantId!);
+    if (!pending || pending.subscriptionId !== razorpaySubscriptionId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "This payment method change request has expired or is invalid.",
+      });
+    }
+    await clearPendingPaymentMethodChange(tenantId!);
+
+    const pmInfo = await fetchPaymentMethod(razorpayPaymentId);
+
+    const now = new Date();
+    // Recomputed fresh (not trusted from start) — if something legitimately
+    // changed planExpiresAt in between (e.g. a renewal webhook), this
+    // reflects the tenant's true current state rather than a stale snapshot.
+    const deferred =
+      tenant.subscriptionStatus === "active" &&
+      !!tenant.planExpiresAt &&
+      tenant.planExpiresAt.getTime() > now.getTime() + 24 * 60 * 60 * 1000;
+
+    let planActivatedAt: Date | undefined;
+    let newPlanExpiresAt: Date | undefined;
+    if (!deferred) {
+      planActivatedAt = now;
+      newPlanExpiresAt = new Date(now);
+      if (tenant.billing === "annual") {
+        newPlanExpiresAt.setFullYear(newPlanExpiresAt.getFullYear() + 1);
+      } else {
+        newPlanExpiresAt.setMonth(newPlanExpiresAt.getMonth() + 1);
+      }
+    }
+
+    const oldSubscriptionId = tenant.razorpaySubscriptionId;
+
+    await prisma.tenant.update({
+      where: { id: tenantId! },
+      data: {
+        razorpaySubscriptionId,
+        previousRazorpaySubscriptionId: oldSubscriptionId,
+        subscriptionStatus: "active",
+        ...(planActivatedAt && {
+          planActivatedAt,
+          planExpiresAt: newPlanExpiresAt,
+        }),
+        ...(pmInfo && {
+          paymentMethod: pmInfo.method,
+          paymentMethodSummary: pmInfo.summary,
+        }),
+      },
+    });
+
+    try {
+      const rzp = getRazorpay();
+      await (rzp.subscriptions.cancel as any)(oldSubscriptionId, {
+        cancel_at_cycle_end: 0,
+      });
+      await prisma.tenant.update({
+        where: { id: tenantId! },
+        data: { previousRazorpaySubscriptionId: null },
+      });
+    } catch (err) {
+      logger.error(
+        `confirmPaymentMethodChange: failed to cancel old subscription ${oldSubscriptionId} for tenant ${tenantId} — left for reconciler`,
+        { err },
+      );
+    }
+
+    logger.info(`Payment method changed for tenant ${tenantId}`);
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Payment method updated.",
+    });
+  } catch (error: unknown) {
+    logger.error("confirmPaymentMethodChange error:", { error });
+    return handleError(res, error);
+  }
+}
+
 // ─── POST /payment/webhook  — Razorpay sends events here ─────────────────────
 //
 // This handler is mounted in server.ts BEFORE express.json() and the CSRF
@@ -752,18 +998,13 @@ export async function handleWebhook(req: Request, res: Response) {
           const hasPendingChange = Boolean(tenant.pendingPlanTier);
           const pendingOrCurrentTier =
             tenant.pendingPlanTier ?? tenant.planTier;
-          const effectiveTier: PlanTier = isPlanTier(pendingOrCurrentTier)
+          let effectiveTier: PlanTier = isPlanTier(pendingOrCurrentTier)
             ? pendingOrCurrentTier
             : "starter";
-          const billing: Billing =
+          let billing: Billing =
             (tenant.pendingBilling ?? tenant.billing) === "annual"
               ? "annual"
               : "monthly";
-
-          const next = new Date(base);
-          billing === "annual"
-            ? next.setFullYear(next.getFullYear() + 1)
-            : next.setMonth(next.getMonth() + 1);
 
           // Extract payment method from webhook payload (free — no extra API call)
           const pmEntity = payload.payment?.entity;
@@ -771,9 +1012,55 @@ export async function handleWebhook(req: Request, res: Response) {
             ? extractPaymentMethodFromEntity(pmEntity)
             : null;
 
-          // Informational only now (flat-fee slabs, not per-seat billing) —
-          // carried onto the invoice so it shows headcount at charge time.
+          // Informational now for the invoice (flat-fee slabs, not per-seat
+          // billing) — but also the last checkpoint against a pending
+          // downgrade: changePlan only checks headcount against the new
+          // tier's limit at request time, and a downgrade can sit pending
+          // for up to a full annual cycle before landing here. If headcount
+          // has since grown past the pending tier's limit, block the
+          // downgrade instead of silently under-provisioning the tenant, and
+          // revert Razorpay's plan_id back to the current tier so future
+          // cycles don't keep charging the blocked (lower) price.
           const employeeCount = await getActiveEmployeeCount(tenant.id);
+          const pendingLimit = hasPendingChange
+            ? TIER_EMPLOYEE_LIMITS[effectiveTier]
+            : null;
+          const downgradeBlocked =
+            hasPendingChange &&
+            pendingLimit !== null &&
+            employeeCount > pendingLimit;
+
+          if (downgradeBlocked) {
+            logger.warn(
+              `Downgrade to ${effectiveTier} blocked for tenant ${tenant.id}: ${employeeCount} active employees exceed the ${pendingLimit} limit`,
+            );
+            effectiveTier = isPlanTier(tenant.planTier)
+              ? tenant.planTier
+              : "starter";
+            billing = tenant.billing === "annual" ? "annual" : "monthly";
+            try {
+              const currentPlanId = await getOrCreatePlanId(
+                effectiveTier,
+                billing,
+              );
+              const rzp = getRazorpay();
+              await (rzp.subscriptions.update as any)(subscriptionId, {
+                plan_id: currentPlanId,
+                quantity: 1,
+                schedule_change_at: "now",
+              });
+            } catch (err) {
+              logger.error(
+                `Failed to revert Razorpay plan after blocking downgrade for tenant ${tenant.id}`,
+                { err },
+              );
+            }
+          }
+
+          const next = new Date(base);
+          billing === "annual"
+            ? next.setFullYear(next.getFullYear() + 1)
+            : next.setMonth(next.getMonth() + 1);
 
           await prisma.tenant.update({
             where: { id: tenant.id },
@@ -904,10 +1191,13 @@ export async function handleWebhook(req: Request, res: Response) {
 
       case "subscription.cancelled":
       case "subscription.completed":
-        // Also covers the "cancelling" state set by cancelSubscription().
+        // cancelSubscription() already sets "cancelled" synchronously when
+        // the user requests it (cancel_at_cycle_end: 1) — this webhook is
+        // Razorpay's own confirmation once that scheduled cancellation (or
+        // one made directly in the Razorpay dashboard) actually lands.
         await prisma.tenant.updateMany({
           where: { razorpaySubscriptionId: subscriptionId },
-          data: { subscriptionStatus: "expired" },
+          data: { subscriptionStatus: "cancelled" },
         });
         break;
     }

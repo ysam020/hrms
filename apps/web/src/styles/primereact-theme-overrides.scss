@@ -36,7 +36,13 @@ body.p-light .p-calendar .p-button {
   }
 }
 
-#dark {
+// Scoped to both the #dark id (the .App div) and body.p-dark (set on <body>
+// by usePrimeReactTheme) — the id alone misses components rendered inside an
+// MUI Dialog/Popover, since MUI portals those straight to <body>, outside
+// .App. See the body.p-dark/.p-light .p-calendar .p-button rules above for
+// the first instance of this same portal-escaping problem.
+#dark,
+body.p-dark {
   // Password Input Component
   .p-password {
     .p-inputtext {
@@ -125,6 +131,13 @@ body.p-light .p-calendar .p-button {
         &.p-datepicker-today > span {
           background: rgba(57, 162, 207, 0.2) !important;
           color: #39a2cf !important;
+        }
+
+        // Match the custom Button component's primary variant (dark theme)
+        // so the selected date reads as the same brand color as Submit/etc.
+        > span.p-highlight {
+          background: #006658 !important;
+          color: #ffffff !important;
         }
 
         span {
@@ -439,7 +452,8 @@ body.p-light .p-calendar .p-button {
 // LIGHT THEME OVERRIDES
 // ============================================================================
 
-#light {
+#light,
+body.p-light {
   // Input components
   .p-password,
   .p-calendar,
@@ -514,6 +528,17 @@ body.p-light .p-calendar .p-button {
     .p-datepicker-calendar {
       td {
         color: #000000 !important;
+
+        // Without this, selected days fall through to the dark theme's
+        // rgba(34, 211, 238, 0.16) highlight (both theme.css files are
+        // loaded at once — see usePrimeReactTheme.tsx) which reads fine on
+        // a dark surface but is nearly invisible on light theme's white.
+        // Uses the custom Button component's primary variant (light theme)
+        // so the selected date reads as the same brand color as Submit/etc.
+        > span.p-highlight {
+          background: #41837a !important;
+          color: #ffffff !important;
+        }
 
         span:hover {
           background: #f3f4f6 !important;

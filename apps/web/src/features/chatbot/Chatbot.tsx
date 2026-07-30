@@ -45,6 +45,37 @@ const SUGGESTED = [
   "What is my date of birth on record?",
 ];
 
+const FAB_SIZE = 56;
+const FAB_EDGE_MARGIN = 16;
+const FAB_DRAG_THRESHOLD = 4;
+const FAB_POSITION_STORAGE_KEY = "chatbotFabPosition";
+
+interface FabPosition {
+  x: number;
+  y: number;
+}
+
+const clampFabPosition = (x: number, y: number): FabPosition => {
+  const maxX = Math.max(
+    FAB_EDGE_MARGIN,
+    window.innerWidth - FAB_SIZE - FAB_EDGE_MARGIN,
+  );
+  const maxY = Math.max(
+    FAB_EDGE_MARGIN,
+    window.innerHeight - FAB_SIZE - FAB_EDGE_MARGIN,
+  );
+  return {
+    x: Math.min(Math.max(x, FAB_EDGE_MARGIN), maxX),
+    y: Math.min(Math.max(y, FAB_EDGE_MARGIN), maxY),
+  };
+};
+
+const defaultFabPosition = (): FabPosition =>
+  clampFabPosition(
+    window.innerWidth - FAB_SIZE - FAB_EDGE_MARGIN,
+    window.innerHeight - FAB_SIZE - FAB_EDGE_MARGIN,
+  );
+
 export default function Chatbot() {
   const { user } = useContext(UserContext);
   const muiTheme = useTheme();
@@ -52,9 +83,21 @@ export default function Chatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [fabPos, setFabPos] = useState<FabPosition | null>(null);
+  const [isDraggingFab, setIsDraggingFab] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const fabDragStateRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    pointerId: number;
+    dragging: boolean;
+  } | null>(null);
+  const suppressFabClickRef = useRef(false);
 
   const isDark = muiTheme.palette.mode === "dark";
 
@@ -102,6 +145,107 @@ export default function Chatbot() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    let initial = defaultFabPosition();
+    try {
+      const saved = localStorage.getItem(FAB_POSITION_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+          initial = clampFabPosition(parsed.x, parsed.y);
+        }
+      }
+    } catch {}
+    setFabPos(initial);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      setFabPos((prev) => (prev ? clampFabPosition(prev.x, prev.y) : prev));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const handleFabPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!fabPos || e.button !== 0) return;
+      fabDragStateRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        originX: fabPos.x,
+        originY: fabPos.y,
+        pointerId: e.pointerId,
+        dragging: false,
+      };
+    },
+    [fabPos],
+  );
+
+  const handleFabPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const state = fabDragStateRef.current;
+      if (!state) return;
+      const dx = e.clientX - state.startX;
+      const dy = e.clientY - state.startY;
+      if (!state.dragging && Math.hypot(dx, dy) > FAB_DRAG_THRESHOLD) {
+        state.dragging = true;
+        setIsDraggingFab(true);
+        e.currentTarget.setPointerCapture(state.pointerId);
+      }
+      if (state.dragging) {
+        setFabPos(clampFabPosition(state.originX + dx, state.originY + dy));
+      }
+    },
+    [],
+  );
+
+  const handleFabPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const state = fabDragStateRef.current;
+      if (!state) return;
+      if (state.dragging) {
+        suppressFabClickRef.current = true;
+        setIsDraggingFab(false);
+        setFabPos((prev) => {
+          if (prev) {
+            try {
+              localStorage.setItem(
+                FAB_POSITION_STORAGE_KEY,
+                JSON.stringify(prev),
+              );
+            } catch {}
+          }
+          return prev;
+        });
+        if (e.currentTarget.hasPointerCapture(state.pointerId)) {
+          e.currentTarget.releasePointerCapture(state.pointerId);
+        }
+      }
+      fabDragStateRef.current = null;
+    },
+    [],
+  );
+
+  const handleFabClick = useCallback(() => {
+    if (suppressFabClickRef.current) {
+      suppressFabClickRef.current = false;
+      return;
+    }
+    setOpen(true);
   }, []);
 
   const streamSse = useCallback(
@@ -295,6 +439,7 @@ export default function Chatbot() {
       <AnimatePresence>
         {open && (
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label="HRMS AI Assistant"
@@ -638,13 +783,22 @@ export default function Chatbot() {
             transition={{ type: "spring", stiffness: 380, damping: 22 }}
             style={{
               position: "fixed",
-              bottom: 24,
-              right: 24,
+              top: fabPos ? fabPos.y : undefined,
+              left: fabPos ? fabPos.x : undefined,
+              bottom: fabPos ? undefined : 24,
+              right: fabPos ? undefined : 24,
               zIndex: 1300,
+              touchAction: "none",
+              userSelect: "none",
+              cursor: isDraggingFab ? "grabbing" : "grab",
             }}
+            onPointerDown={handleFabPointerDown}
+            onPointerMove={handleFabPointerMove}
+            onPointerUp={handleFabPointerUp}
+            onPointerCancel={handleFabPointerUp}
           >
             <Fab
-              onClick={() => setOpen(true)}
+              onClick={handleFabClick}
               aria-label="Open HRMS AI Assistant"
               sx={{
                 bgcolor: c.brand,

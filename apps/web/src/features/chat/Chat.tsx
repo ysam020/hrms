@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import axios from "axios";
 import Typography from "@mui/material/Typography";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ThemeContext } from "@web/app/providers/ThemeContext";
@@ -146,8 +147,11 @@ function Chat() {
     [activeRoom],
   );
   const activeTypingUsers = useMemo(
-    () => (activeRoomId ? typingUsers[activeRoomId] : []) || [],
-    [typingUsers, activeRoomId],
+    () =>
+      ((activeRoomId ? typingUsers[activeRoomId] : []) || []).map(
+        (userId: string) => resolveParticipantName(userId) || "Someone",
+      ),
+    [typingUsers, activeRoomId, resolveParticipantName],
   );
   const otherUser = useMemo(
     () => (activeRoom ? getOtherParticipant(activeRoom, user?.id) : null),
@@ -289,19 +293,32 @@ function Chat() {
       if (!file || !activeRoomId) return;
       setUploading(true);
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await apiClient.post(API_ENDPOINTS.UPLOAD_FILE, formData);
-        const { fileUrl, fileName, fileMimeType, fileSize } = res.data.data;
-        const type = getMessageType(fileMimeType);
+        // Same presigned-URL flow as every other upload in the app: get a
+        // signed PUT URL, upload straight to S3, then send the resulting
+        // fileUrl in the message. There's no dedicated /chat/upload route.
+        const { data: presignedRes } = await apiClient.post(
+          API_ENDPOINTS.UPLOAD_PRESIGNED_URL,
+          {
+            fileName: file.name,
+            fileType: file.type,
+            folder: "chat",
+            username: user?.username,
+          },
+        );
+        const { url, fileUrl } = presignedRes.data;
+        await axios.put(url, file, {
+          headers: { "Content-Type": file.type },
+        });
+
+        const type = getMessageType(file.type);
         sendMessage({
           roomId: activeRoomId,
-          content: fileName,
+          content: file.name,
           type,
           fileUrl,
-          fileName,
-          fileMimeType,
-          fileSize,
+          fileName: file.name,
+          fileMimeType: file.type,
+          fileSize: file.size,
         });
       } catch (err) {
         console.error("Chat file upload failed:", err);
@@ -310,7 +327,7 @@ function Chat() {
         e.target.value = "";
       }
     },
-    [activeRoomId, sendMessage],
+    [activeRoomId, sendMessage, user?.username],
   );
 
   // Infinite scroll (load older messages)
