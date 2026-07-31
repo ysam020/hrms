@@ -1,0 +1,226 @@
+paths:
+  /api/v1/leave-policy:
+    get:
+      summary: Get the tenant's leave policy
+      description: >-
+        Returns just the per-leave-type policy list (leavePolicies) from the
+        tenant's active TenantSettings — not the full organisation settings
+        form. Empty array when the tenant has never configured per-type
+        policies (falls back to the legacy flat quota fields elsewhere).
+      tags: [Leave Policy]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Leave policy retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      leavePolicies:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/LeavePolicy"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+    put:
+      summary: Update the tenant's leave policy
+      description: >-
+        Owners/admins/superusers only. Writes a new versioned TenantSettings
+        row patching just leavePolicies, so this doesn't require resubmitting
+        Attendance/HR fields it never touched. effectiveFrom defaults to now;
+        when set in the future, the new policy list only takes effect from
+        that date, keeping the previous version active until then.
+      tags: [Leave Policy]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [leavePolicies]
+              properties:
+                leavePolicies:
+                  type: array
+                  maxItems: 30
+                  items:
+                    $ref: "#/components/schemas/LeavePolicy"
+                effectiveFrom:
+                  type: string
+                  format: date-time
+                  description: Defaults to now if omitted.
+                note:
+                  type: string
+                  example: "Added compassionate leave policy for FY26"
+      responses:
+        "200":
+          description: Leave policy updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      leavePolicies:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/LeavePolicy"
+        "400":
+          description: Invalid effectiveFrom date, or other validation error from settings versioning
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — only owners and admins can update leave policy, or no active tenant
+
+  /api/v1/comp-off-credits:
+    get:
+      summary: List comp-off credits
+      description: >-
+        Returns a user's comp-off credit ledger (earned via manual HR credit
+        for worked holidays/weekends), most recent sourceDate first. Any
+        credit past its expiresOn is lazily flipped from "available" to
+        "expired" on read, keeping balances accurate without a separate cron.
+        Owners/admins/HR/superusers may pass userId to view any employee's
+        credits; everyone else always sees only their own.
+      tags: [Leave Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          schema: { type: string }
+          description: Privileged callers only (owner/admin/HR/superuser).
+      responses:
+        "200":
+          description: Comp-off credits retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CompOffCredit"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+    post:
+      summary: Manually credit comp-off
+      description: >-
+        Owners/admins/HR/superusers only. Credits an employee for a worked
+        holiday/weekend. If expiresOn is omitted, it's resolved from the
+        tenant's comp-off leave policy (the leavePolicies entry flagged
+        isCompOff) as sourceDate + compOffExpiryDays; if no such policy is
+        configured, the credit never expires.
+      tags: [Leave Policy]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, sourceDate]
+              properties:
+                userId:
+                  type: string
+                  example: "665f1c2e8a1b2c0012a3b456"
+                sourceDate:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  example: "2026-03-29"
+                  description: The worked holiday/weekend date this credit is earned for.
+                earnedDays:
+                  type: number
+                  minimum: 0.5
+                  maximum: 3
+                  default: 1
+                expiresOn:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  description: Optional; falls back to the tenant's comp-off policy expiry when omitted.
+      responses:
+        "200":
+          description: Comp-off credited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Comp-off credited." }
+                  data:
+                    $ref: "#/components/schemas/CompOffCredit"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — only owners, admins, and HR can credit comp-off, or no active tenant
+
+components:
+  schemas:
+    LeavePolicy:
+      type: object
+      description: >-
+        A per-leave-type policy entry. TenantSettings.leavePolicies is an
+        array of these; when set, it supersedes the legacy flat
+        paidLeavesPerYear/sickLeavesPerYear/casualLeavesPerYear quotas and
+        customLeaveTypes for that key.
+      properties:
+        key: { type: string, example: "PL" }
+        name: { type: string, example: "Paid Leave" }
+        daysPerYear: { type: number, example: 12 }
+        isStatutory: { type: boolean, default: false }
+        requiresProof: { type: boolean, default: false }
+        accrualMethod:
+          type: string
+          enum: [lump_sum, monthly]
+          default: lump_sum
+        prorateByJoinDate: { type: boolean, default: true }
+        carryForward:
+          type: object
+          properties:
+            enabled: { type: boolean, default: false }
+            maxDays: { type: number, nullable: true }
+            expiryMonths: { type: number, nullable: true }
+        encashment:
+          type: object
+          properties:
+            enabled: { type: boolean, default: false }
+            ratePerDay: { type: number, nullable: true }
+            maxDaysPerYear: { type: number, nullable: true }
+        isCompOff: { type: boolean, default: false }
+        compOffExpiryDays: { type: number, nullable: true, example: 90 }
+        onExhaustion:
+          type: string
+          enum: [reject, auto_lop, manager_override]
+          default: manager_override
+    CompOffCredit:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        userId: { type: string }
+        sourceDate: { type: string, format: date-time }
+        earnedDays: { type: number, example: 1 }
+        expiresOn: { type: string, format: date-time, nullable: true }
+        status:
+          type: string
+          enum: [available, expired, used]
+        createdBy: { type: string }

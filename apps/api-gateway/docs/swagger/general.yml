@@ -2,7 +2,10 @@ paths:
   /api/v1/get-holidays/{year}:
     get:
       summary: Get holidays for a year
-      description: Returns the list of public/company holidays for the given year
+      description: >-
+        Returns the flattened list of company holidays for the given year,
+        read out of the per year/month Holiday records. Cached per
+        tenant/year.
       tags: [General]
       security:
         - bearerAuth: []
@@ -21,23 +24,36 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Holidays retrieved successfully" }
                   data:
                     type: array
                     items:
                       type: object
                       properties:
-                        _id: { type: string }
                         name: { type: string, example: "Republic Day" }
                         date:
                           { type: string, format: date, example: "2026-01-26" }
-                        type: { type: string, enum: [public, company] }
+                        createdBy: { type: string }
+                        createdOn: { type: string, format: date-time }
+                        month:
+                          {
+                            type: integer,
+                            description: "1-12, from the parent Holiday record",
+                          }
+        "400":
+          description: Invalid year
         "401":
           description: Unauthorized
 
   /api/v1/add-holiday:
     post:
       summary: Add a holiday
-      description: Add a new holiday to the company calendar (admin only)
+      description: >-
+        Adds a holiday to the company calendar for the year/month derived
+        from `date`. Any authenticated user may call this — there is no role
+        restriction. Rejects duplicate dates within the same year/month.
+        Invalidates the cached holiday list for that year.
       tags: [General]
       security:
         - bearerAuth: []
@@ -51,10 +67,6 @@ paths:
               properties:
                 name: { type: string, example: "Founders Day" }
                 date: { type: string, format: date, example: "2026-03-15" }
-                type:
-                  type: string
-                  enum: [public, company]
-                  default: "company"
       responses:
         "200":
           description: Holiday added
@@ -64,13 +76,21 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Holiday added successfully" }
+        "400":
+          description: Missing/invalid name or date, or a holiday already exists on that date
         "401":
           description: Unauthorized
 
   /api/v1/delete-holiday:
     put:
       summary: Delete a holiday
-      description: Remove a holiday from the company calendar
+      description: >-
+        Removes a single holiday identified by its exact `date` (not an id —
+        the year/month bucket is derived from the date to locate the
+        record). Any authenticated user may call this. Invalidates the
+        cached holiday list for that year.
       tags: [General]
       security:
         - bearerAuth: []
@@ -80,9 +100,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [holidayId]
+              required: [date]
               properties:
-                holidayId: { type: string, example: "6672a2501aa931b68b091faf" }
+                date: { type: string, format: date, example: "2026-03-15" }
       responses:
         "200":
           description: Holiday deleted
@@ -92,52 +112,24 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Holiday deleted successfully" }
+        "400":
+          description: Missing or invalid date
         "401":
           description: Unauthorized
+        "404":
+          description: No holiday record for that month, or no holiday on that date
 
-  /api/v1/get-calendar-events:
-    get:
-      summary: Get calendar events
-      description: Returns all calendar events visible to the authenticated user
-      tags: [General]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: startDate
-          in: query
-          schema: { type: string, format: date }
-        - name: endDate
-          in: query
-          schema: { type: string, format: date }
-        - name: eventType
-          in: query
-          schema: { type: string }
-      responses:
-        "200":
-          description: Calendar events retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        _id: { type: string }
-                        title: { type: string }
-                        date: { type: string, format: date }
-                        eventType: { type: string }
-                        description: { type: string }
-        "401":
-          description: Unauthorized
-
-  /api/v1/add-event:
-    post:
-      summary: Add a calendar event
-      description: Create a new calendar event
+  /api/v1/bulk-delete-holidays:
+    put:
+      summary: Bulk delete holidays
+      description: >-
+        Deletes multiple holidays at once, identified by exact dates. Dates
+        are bucketed by their year/month record internally. Dates that don't
+        match an existing holiday are reported back in `notFound`. Any
+        authenticated user may call this. Invalidates the cached holiday
+        list for every year touched.
       tags: [General]
       security:
         - bearerAuth: []
@@ -147,15 +139,105 @@ paths:
           application/json:
             schema:
               type: object
-              required: [title, date]
+              required: [dates]
               properties:
-                title: { type: string, example: "Team Building Activity" }
-                date: { type: string, format: date, example: "2026-04-15" }
-                eventType: { type: string, example: "company" }
-                description: { type: string }
-                allDay: { type: boolean, default: true }
+                dates:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { type: string, format: date }
       responses:
         "200":
+          description: Bulk delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "3 holiday(s) deleted" }
+                  data:
+                    type: object
+                    properties:
+                      deleted: { type: integer, example: 3 }
+                      notFound:
+                        type: array
+                        items: { type: string, format: date }
+        "401":
+          description: Unauthorized
+
+  /api/v1/get-calendar-events:
+    get:
+      summary: Get calendar events
+      description: >-
+        Returns all personal calendar events for the authenticated user only
+        (events are stored on the user's own record, not shared/global),
+        sorted by date ascending. No filter query params are supported.
+        Cached per tenant/user.
+      tags: [General]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Calendar events retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Calendar events retrieved successfully",
+                    }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        title: { type: string }
+                        date: { type: string, format: date }
+                        startTime: { type: string, example: "10:00" }
+                        endTime: { type: string, example: "11:00" }
+                        description: { type: string }
+        "401":
+          description: Unauthorized
+        "404":
+          description: User not found
+
+  /api/v1/add-event:
+    post:
+      summary: Add a calendar event
+      description: >-
+        Creates a new personal calendar event on the authenticated user's own
+        record. `_id` is server-generated. title is truncated to 200 chars,
+        description to 1000. Not validated by a Zod schema — missing fields
+        are silently stored as empty strings. Invalidates the cached events
+        list for the user.
+      tags: [General]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  {
+                    type: string,
+                    maxLength: 200,
+                    example: "Team Building Activity",
+                  }
+                date: { type: string, format: date, example: "2026-04-15" }
+                startTime: { type: string, example: "09:00" }
+                endTime: { type: string, example: "17:00" }
+                description: { type: string, maxLength: 1000 }
+      responses:
+        "201":
           description: Event added
           content:
             application/json:
@@ -163,13 +245,28 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Event added successfully" }
+                  data:
+                    type: object
+                    properties:
+                      _id: { type: string }
+                      title: { type: string }
+                      date: { type: string, format: date }
+                      startTime: { type: string }
+                      endTime: { type: string }
+                      description: { type: string }
         "401":
           description: Unauthorized
+        "404":
+          description: User not found
 
   /api/v1/edit-calendar-event/{_id}:
     put:
       summary: Edit a calendar event
-      description: Update details of an existing calendar event
+      description: >-
+        Updates fields of an existing event on the authenticated user's own
+        record (only fields explicitly present in the body are changed).
+        Invalidates the cached events list for the user.
       tags: [General]
       security:
         - bearerAuth: []
@@ -185,20 +282,33 @@ paths:
             schema:
               type: object
               properties:
-                title: { type: string }
+                title: { type: string, maxLength: 200 }
                 date: { type: string, format: date }
-                eventType: { type: string }
-                description: { type: string }
+                startTime: { type: string }
+                endTime: { type: string }
+                description: { type: string, maxLength: 1000 }
       responses:
         "200":
           description: Event updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Event updated successfully" }
         "401":
           description: Unauthorized
+        "404":
+          description: User or event not found
 
   /api/v1/delete-calendar-event/{_id}:
     delete:
       summary: Delete a calendar event
-      description: Remove a calendar event permanently
+      description: >-
+        Removes an event from the authenticated user's own record.
+        Invalidates the cached events list for the user.
       tags: [General]
       security:
         - bearerAuth: []
@@ -210,16 +320,41 @@ paths:
       responses:
         "200":
           description: Event deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Event deleted successfully" }
         "401":
           description: Unauthorized
+        "404":
+          description: User or event not found
 
   /api/v1/birthdays-anniversaries:
     get:
       summary: Get birthdays and work anniversaries
-      description: Returns upcoming employee birthdays and work anniversaries
+      description: >-
+        Returns a flat, day-sorted list mixing both birthdays and work
+        anniversaries falling in the given month/year, across all
+        non-terminated employees. `month` and `year` query params are
+        required. Cached per tenant/month/year.
       tags: [General]
       security:
         - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 3
+        - name: year
+          in: query
+          required: true
+          schema: { type: integer }
+          example: 2026
       responses:
         "200":
           description: Birthdays and anniversaries retrieved
@@ -229,56 +364,55 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Birthdays and anniversaries retrieved successfully",
+                    }
                   data:
-                    type: object
-                    properties:
-                      birthdays:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            username: { type: string }
-                            fullName: { type: string }
-                            date: { type: string, format: date }
-                      anniversaries:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            username: { type: string }
-                            fullName: { type: string }
-                            yearsCompleted: { type: integer }
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string, enum: [birthday, anniversary] }
+                        name: { type: string }
+                        username: { type: string }
+                        department: { type: string }
+                        day:
+                          { type: integer, description: "Day of month (1-31)" }
+                        years:
+                          {
+                            type: integer,
+                            description: "Years of service completed — anniversary entries only",
+                          }
+        "400":
+          description: month or year query params missing/invalid
         "401":
           description: Unauthorized
 
   /api/v1/audit-logs:
     get:
       summary: Get audit logs
-      description: Returns system audit logs (admin only)
+      description: >-
+        Returns recent audit log entries. Requires privileged access (tenant
+        owner or admin, or superuser). Defaults to the last 30 days if `days`
+        is omitted, capped at NOTIFICATION_PRUNE_LIMIT rows.
       tags: [General]
       security:
         - bearerAuth: []
       parameters:
-        - name: startDate
+        - name: days
           in: query
-          schema: { type: string, format: date }
-        - name: endDate
+          description: How many days back to search.
+          schema: { type: integer, default: 30 }
+        - name: entityType
           in: query
-          schema: { type: string, format: date }
-        - name: action
-          in: query
+          description: Filter by entity type (e.g. "Leave", "User").
           schema: { type: string }
-          description: Filter by action type
-        - name: username
+        - name: userName
           in: query
+          description: Filter by the username recorded on the log entry.
           schema: { type: string }
-          description: Filter by user
-        - name: page
-          in: query
-          schema: { type: integer, default: 1 }
-        - name: limit
-          in: query
-          schema: { type: integer, default: 50 }
       responses:
         "200":
           description: Audit logs retrieved
@@ -288,24 +422,40 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Audit logs retrieved successfully",
+                    }
                   data:
                     type: array
                     items:
                       type: object
                       properties:
                         _id: { type: string }
+                        action: { type: string, example: "UPDATE" }
+                        entityType: { type: string, example: "Leave" }
                         username: { type: string }
-                        action: { type: string }
-                        resource: { type: string }
+                        description: { type: string }
                         ipAddress: { type: string }
+                        userAgent: { type: string }
                         timestamp: { type: string, format: date-time }
+                        oldValue: { type: object }
+                        newValue: { type: object }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — requires privileged (owner/admin/superuser) access
 
   /api/v1/upload/presigned-url:
     post:
       summary: Get S3 presigned upload URL
-      description: Generates a pre-signed S3 URL for direct file upload from the client
+      description: >-
+        Generates a pre-signed S3 PUT URL (5 minute expiry) for direct
+        client-side upload. Validates the file extension/mimetype against an
+        allow-list and rejects known-dangerous extensions (.exe, .sh, .ps1,
+        etc). All path components are sanitized before being used as the S3
+        key.
       tags: [General]
       security:
         - bearerAuth: []
@@ -315,11 +465,17 @@ paths:
           application/json:
             schema:
               type: object
-              required: [fileName, fileType]
+              required: [fileName, fileType, folder, username]
               properties:
                 fileName: { type: string, example: "resume.pdf" }
                 fileType: { type: string, example: "application/pdf" }
-                folder: { type: string, example: "documents/kyc" }
+                folder: { type: string, example: "employee_kyc" }
+                username: { type: string, example: "sameer_yadav" }
+                formikField:
+                  {
+                    type: string,
+                    description: "Optional extra path segment (e.g. form field name)",
+                  }
       responses:
         "200":
           description: Presigned URL generated
@@ -329,26 +485,77 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Pre-signed URL generated" }
                   data:
                     type: object
                     properties:
-                      uploadUrl:
+                      url:
                         {
                           type: string,
                           format: uri,
-                          description: "S3 presigned URL for PUT upload",
+                          description: "S3 presigned URL for the PUT upload",
+                        }
+                      key:
+                        {
+                          type: string,
+                          description: "S3 object key the file will be stored under",
                         }
                       fileUrl:
                         {
                           type: string,
                           format: uri,
-                          description: "Public URL of the uploaded file",
+                          description: "Stored/public URL to persist on the record",
                         }
-                      expiresIn:
-                        {
-                          type: integer,
-                          example: 300,
-                          description: "URL expiry in seconds",
-                        }
+        "400":
+          description: Missing required fields, dangerous extension, or disallowed file type
         "401":
           description: Unauthorized
+
+  /api/v1/upload/view-url:
+    post:
+      summary: Get a short-lived S3 view URL
+      description: >-
+        Returns a pre-signed GET URL (5 minute expiry) for viewing a
+        previously uploaded file. Restricted to `employee_kyc/` paths only
+        (the bucket has no public read access, and KYC documents are
+        sensitive). The caller must either own the file (username in the key
+        matches their own) or hold a privileged role for the same tenant as
+        the file's owner; path traversal (`..`) is rejected outright.
+      tags: [General]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileUrl]
+              properties:
+                fileUrl:
+                  {
+                    type: string,
+                    format: uri,
+                    description: "The stored fileUrl from a prior presigned-url upload",
+                  }
+      responses:
+        "200":
+          description: Presigned view URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Pre-signed view URL generated" }
+                  data:
+                    type: object
+                    properties:
+                      url: { type: string, format: uri }
+        "400":
+          description: fileUrl missing or not a valid S3 URL
+        "401":
+          description: Unauthorized
+        "403":
+          description: Not the file's owner and not privileged for its tenant, or path outside employee_kyc/

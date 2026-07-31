@@ -1,0 +1,103 @@
+paths:
+  /api/v1/overtime-requests:
+    post:
+      summary: Log or request overtime
+      description: >-
+        Records an overtime entry for the given date (one per user per date —
+        a second request for the same date is rejected). If the tenant has
+        overtimePreApprovalRequired enabled, the request is created "Pending"
+        and instantiated against the tenant's Approval Chain for the
+        "overtime" module. Otherwise it's auto-approved immediately (matching
+        legacy behavior where overtime wasn't tracked/gated at all), useful
+        for reporting purposes.
+      tags: [Overtime]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, plannedHours]
+              properties:
+                date:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  example: "2026-04-15"
+                plannedHours:
+                  type: number
+                  minimum: 0.5
+                  maximum: 12
+                  example: 2.5
+                reason:
+                  type: string
+                  example: "Month-end payroll processing"
+      responses:
+        "200":
+          description: Overtime request created (submitted for approval, or auto-approved)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    type: string
+                    example: "Overtime logged."
+                  data:
+                    $ref: "#/components/schemas/OvertimeRequest"
+        "400":
+          description: An overtime request for this date already exists
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
+    get:
+      summary: List overtime requests
+      description: >-
+        Owners/admins/HR/superusers may pass userId to view a specific
+        employee's requests, or omit it to see every request for the tenant.
+        Non-privileged callers always see only their own, newest date first.
+      tags: [Overtime]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          schema: { type: string }
+          description: Privileged callers only; ignored (forced to own userId) otherwise.
+      responses:
+        "200":
+          description: Overtime requests retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OvertimeRequest"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
+components:
+  schemas:
+    OvertimeRequest:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        userId: { type: string }
+        date: { type: string, format: date-time }
+        plannedHours: { type: number, example: 2.5 }
+        reason: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [Pending, Approved, Rejected]
+        approvedAt: { type: string, format: date-time, nullable: true }

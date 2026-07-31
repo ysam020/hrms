@@ -2,7 +2,7 @@ paths:
   /api/v1/get-roles:
     get:
       summary: Get all roles
-      description: Returns all defined roles in the system
+      description: Returns all roles defined for the current tenant.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -22,15 +22,22 @@ paths:
                       properties:
                         _id: { type: string }
                         name: { type: string, example: "hr" }
-                        description: { type: string }
                         permissions: { type: array, items: { type: string } }
+                        assignedTo:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              username: { type: string }
+                              fullName: { type: string }
+                              imgURL: { type: string }
         "401":
           description: Unauthorized
 
   /api/v1/create-role:
     post:
       summary: Create a role
-      description: Define a new role with a set of permissions
+      description: Creates a new role (starts with no permissions and no assigned users). Requires superuser.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -43,12 +50,6 @@ paths:
               required: [name]
               properties:
                 name: { type: string, example: "team_lead" }
-                description:
-                  { type: string, example: "Team lead with elevated access" }
-                permissions:
-                  type: array
-                  items: { type: string }
-                  example: ["view_attendance", "approve_leave"]
       responses:
         "200":
           description: Role created
@@ -58,13 +59,25 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Role created successfully" }
+                  data:
+                    type: object
+                    properties:
+                      roleId: { type: string }
+        "400":
+          description: Role name missing, or a role with this name already exists
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
 
   /api/v1/delete-role/{_id}:
     delete:
       summary: Delete a role
-      description: Remove a role from the system
+      description: >
+        Removes a role. Fails if any user still has this role assigned.
+        Requires superuser.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -76,13 +89,29 @@ paths:
       responses:
         "200":
           description: Role deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Role deleted successfully" }
+        "400":
+          description: Cannot delete role that has assigned users
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: Role not found
 
   /api/v1/update-role-permissions/{_id}:
     put:
       summary: Update role permissions
-      description: Replace the permissions set for an existing role
+      description: >
+        Replaces the permission set for an existing role. Unknown permission
+        keys are rejected. Requires superuser.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -97,7 +126,6 @@ paths:
           application/json:
             schema:
               type: object
-              required: [permissions]
               properties:
                 permissions:
                   type: array
@@ -107,13 +135,30 @@ paths:
       responses:
         "200":
           description: Role permissions updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Role permissions updated successfully",
+                    }
+        "400":
+          description: "Unknown permission(s): <list>"
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: Role not found
 
   /api/v1/get-role-permissions/{_id}:
     get:
       summary: Get permissions for a role
-      description: Returns the list of permissions assigned to a specific role
+      description: Returns the name and permission set of a specific role.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -134,29 +179,49 @@ paths:
                   data:
                     type: object
                     properties:
-                      roleId: { type: string }
+                      _id: { type: string }
                       name: { type: string }
                       permissions: { type: array, items: { type: string } }
         "401":
           description: Unauthorized
+        "404":
+          description: Role not found
 
   /api/v1/get-role-and-permissions:
     get:
       summary: Get all roles with their permissions
-      description: Returns all roles along with their complete permission sets
+      description: Returns every role for the tenant along with its permission set (no assignedTo).
       tags: [Permissions]
       security:
         - bearerAuth: []
       responses:
         "200":
           description: Roles and permissions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        name: { type: string }
+                        permissions: { type: array, items: { type: string } }
         "401":
           description: Unauthorized
 
   /api/v1/save-user-permissions:
     put:
       summary: Save user-level permissions
-      description: Set custom (overriding) permissions for a specific user
+      description: >
+        Sets a user's custom permissions (overwrites, not merges) and
+        optionally assigns them a role (adding it to their role list and to
+        that role's assignedTo). Fires an in-app + email notification to the
+        user when permissions are newly granted. Requires superuser.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -166,23 +231,55 @@ paths:
           application/json:
             schema:
               type: object
-              required: [username, permissions]
+              required: [selectedUser]
               properties:
-                username: { type: string, example: "sameer_yadav" }
+                selectedUser:
+                  type: string
+                  description: Username of the target user.
+                  example: "sameer_yadav"
                 permissions:
                   type: array
                   items: { type: string }
                   example: ["view_salary", "edit_attendance"]
+                selectedRole:
+                  description: Role name string, or an object with a `name` field.
+                  oneOf:
+                    - type: string
+                    - type: object
+                      properties:
+                        name: { type: string }
       responses:
         "200":
-          description: User permissions saved
+          description: User permissions updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "User permissions updated successfully",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      addedCount: { type: integer }
+                      removedCount: { type: integer }
+        "400":
+          description: "Unknown permission(s): <list>"
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: User not found
 
   /api/v1/get-user-permissions/{username}:
     get:
       summary: Get user-level permissions
-      description: Returns the effective permissions for a specific user (role + custom)
+      description: Returns the custom permissions and role list stored directly on the user record.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -204,16 +301,15 @@ paths:
                   data:
                     type: object
                     properties:
-                      username: { type: string }
-                      role: { type: string }
                       permissions: { type: array, items: { type: string } }
+                      role: { type: array, items: { type: string } }
         "401":
           description: Unauthorized
 
   /api/v1/update-superuser/{username}:
     put:
       summary: Toggle superuser status
-      description: Grant or revoke superuser privileges for a user
+      description: Grants or revokes superuser privileges for a user. Requires superuser.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -228,19 +324,36 @@ paths:
           application/json:
             schema:
               type: object
-              required: [isSuperUser]
               properties:
                 isSuperUser: { type: boolean, example: true }
       responses:
         "200":
           description: Superuser status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Superuser status granted successfully",
+                    }
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: User not found
 
   /api/v1/delete-user-role:
     post:
       summary: Remove a role from a user
-      description: Unassign a role from a specific user
+      description: >
+        Unassigns a role from a user, also stripping any permissions that came
+        from that role and removing the user from the role's assignedTo list.
+        Requires superuser.
       tags: [Permissions]
       security:
         - bearerAuth: []
@@ -257,13 +370,42 @@ paths:
       responses:
         "200":
           description: Role removed from user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Removed sameer_yadav from role hr",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      removedRole: { type: string }
+                      removedPermissions:
+                        { type: array, items: { type: string } }
+                      updatedUser:
+                        type: object
+                        properties:
+                          username: { type: string }
+                          role: { type: array, items: { type: string } }
+                          permissions: { type: array, items: { type: string } }
+        "400":
+          description: User does not have this role
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: Role or user not found
 
   /api/v1/get-teams:
     get:
       summary: Get all teams
-      description: Returns all defined teams with their members
+      description: Returns all teams for the tenant, with team leader and member names resolved.
       tags: [Teams]
       security:
         - bearerAuth: []
@@ -282,21 +424,90 @@ paths:
                       type: object
                       properties:
                         _id: { type: string }
-                        name: { type: string, example: "Backend Team" }
-                        members:
+                        teamName: { type: string, example: "Backend Team" }
+                        teamLeaderId: { type: string }
+                        teamLeaderName: { type: string }
+                        members: { type: array, items: { type: string } }
+                        membersInfo:
                           type: array
                           items:
                             type: object
                             properties:
+                              id: { type: string }
                               username: { type: string }
-                              fullName: { type: string }
+                              name: { type: string }
+                              designation: { type: string, nullable: true }
+                              employeePhoto: { type: string, nullable: true }
+        "401":
+          description: Unauthorized
+
+  /api/v1/get-org-chart:
+    get:
+      summary: Get organization chart
+      description: >
+        Returns the CEO, all teams (with resolved leader/member names), active
+        employees not yet assigned to any team, and headcount stats
+        (totalEmployeeCount, employeeStatusBreakdown) for the Organization Tree
+        page.
+      tags: [Teams]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Org chart retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      ceo:
+                        type: object
+                        nullable: true
+                        properties:
+                          id: { type: string }
+                          username: { type: string }
+                          name: { type: string }
+                          designation: { type: string }
+                          department: { type: string }
+                          employeePhoto: { type: string, nullable: true }
+                      teams:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id: { type: string }
+                            teamName: { type: string }
+                            leader: { type: object }
+                            members: { type: array, items: { type: object } }
+                      unassigned:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            username: { type: string }
+                            name: { type: string }
+                            designation: { type: string, nullable: true }
+                            employeePhoto: { type: string, nullable: true }
+                      totalEmployeeCount: { type: integer }
+                      employeeStatusBreakdown:
+                        type: object
+                        properties:
+                          active: { type: integer }
+                          resigned: { type: integer }
+                          terminated: { type: integer }
+                          absconded: { type: integer }
         "401":
           description: Unauthorized
 
   /api/v1/create-team:
     post:
       summary: Create a team
-      description: Create a new team
+      description: Creates a new team with a leader and initial members. Requires superuser.
       tags: [Teams]
       security:
         - bearerAuth: []
@@ -306,24 +517,44 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name]
+              description: >
+                Accepts either snake_case or camelCase field names
+                (team_name/teamName, team_leader_id/teamLeaderId).
               properties:
-                name: { type: string, example: "Frontend Team" }
-                description: { type: string }
+                team_name: { type: string, example: "Frontend Team" }
+                teamName: { type: string, example: "Frontend Team" }
+                team_leader_id: { type: string }
+                teamLeaderId: { type: string }
                 members:
                   type: array
                   items: { type: string }
-                  description: List of usernames
+                  description: List of user IDs.
       responses:
         "200":
           description: Team created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Team created successfully" }
+                  data:
+                    type: object
+                    properties:
+                      teamId: { type: string }
+        "400":
+          description: Team name and team leader are required, or team name already exists
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
 
   /api/v1/delete-team/{_id}:
     delete:
       summary: Delete a team
-      description: Remove a team permanently
+      description: Removes a team permanently. Requires superuser.
       tags: [Teams]
       security:
         - bearerAuth: []
@@ -335,13 +566,25 @@ paths:
       responses:
         "200":
           description: Team deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Team deleted successfully" }
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: Team not found
 
   /api/v1/add-team-members:
     put:
       summary: Add members to a team
-      description: Add one or more users to an existing team
+      description: Adds one or more user IDs to an existing team's member list. Requires superuser.
       tags: [Teams]
       security:
         - bearerAuth: []
@@ -351,23 +594,37 @@ paths:
           application/json:
             schema:
               type: object
-              required: [teamId, members]
+              required: [teamId]
               properties:
                 teamId: { type: string }
                 members:
                   type: array
                   items: { type: string }
-                  description: List of usernames to add
+                  description: List of user IDs to add.
       responses:
         "200":
           description: Members added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Team members added successfully" }
+        "400":
+          description: "Users already in team: <list>"
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: Team not found
 
   /api/v1/delete-user-from-team:
     post:
       summary: Remove a user from a team
-      description: Remove a specific user from a team
+      description: Removes a specific user (by ID) from a team's member list. Requires superuser.
       tags: [Teams]
       security:
         - bearerAuth: []
@@ -377,12 +634,29 @@ paths:
           application/json:
             schema:
               type: object
-              required: [teamId, username]
+              required: [teamId, userId]
               properties:
                 teamId: { type: string }
-                username: { type: string, example: "sameer_yadav" }
+                userId: { type: string }
       responses:
         "200":
           description: User removed from team
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "User removed from team successfully",
+                    }
+        "400":
+          description: User is not a member of this team
         "401":
           description: Unauthorized
+        "403":
+          description: Requires superuser
+        "404":
+          description: Team not found

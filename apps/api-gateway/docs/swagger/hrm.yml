@@ -2,10 +2,31 @@ paths:
   /api/v1/get-hr-activities:
     get:
       summary: List HR activities
-      description: Returns all HR activities (warnings, commendations, PIPs, etc.)
+      description: >-
+        Paginated, searchable list of HR activity records (title/description
+        entries logged against employees or the organisation, e.g. warnings,
+        commendations, notices). Results are cached per tenant/page/filter.
+        Soft-deleted activities (status "deleted") are always excluded.
       tags: [HR Activities]
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+        - name: status
+          in: query
+          description: >-
+            Filter by status. Defaults to "Active"; pass "all" (case
+            insensitive) to include every non-deleted status.
+          schema: { type: string, default: "Active" }
+        - name: search
+          in: query
+          description: Case-insensitive match against title or description.
+          schema: { type: string }
       responses:
         "200":
           description: HR activities retrieved
@@ -15,23 +36,52 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "HR activities listed successfully",
+                    }
+                  status: { type: integer, example: 0 }
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        _id: { type: string }
-                        type: { type: string, example: "warning" }
-                        username: { type: string }
-                        description: { type: string }
-                        createdAt: { type: string, format: date-time }
+                    type: object
+                    properties:
+                      activities:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            title:
+                              { type: string, example: "Q1 Performance Review" }
+                            description: { type: string }
+                            scheduledAt: { type: string, format: date-time }
+                            date: { type: string, example: "2026-03-15" }
+                            time: { type: string, example: "14:30" }
+                            status: { type: string, example: "Active" }
+                            createdBy:
+                              {
+                                type: string,
+                                description: "Username, resolved from the creating user id",
+                              }
+                            createdOn: { type: string, format: date-time }
+                            lastUpdatedBy: { type: string }
+                            lastUpdatedOn: { type: string, format: date-time }
+                      pagination:
+                        type: object
+                        properties:
+                          totalCount: { type: integer }
+                          page: { type: integer }
+                          limit: { type: integer }
+                          totalPages: { type: integer }
         "401":
           description: Unauthorized
 
   /api/v1/hr-activity/{_id}:
     get:
       summary: Get a specific HR activity
-      description: Returns details of a single HR activity record
+      description: >-
+        Returns a single HR activity record via the hrm-service gRPC backend
+        (getHrActivity). Response shape is passed through as-is.
       tags: [HR Activities]
       security:
         - bearerAuth: []
@@ -51,7 +101,11 @@ paths:
   /api/v1/add-hr-activity:
     post:
       summary: Create HR activity
-      description: Record a new HR activity for an employee
+      description: >-
+        Records a new HR activity entry. Requires super user privileges
+        (tenant owner, or a user explicitly flagged isSuperUser). createdBy is
+        set from the authenticated user, not the request body. Invalidates the
+        cached activities list for the tenant.
       tags: [HR Activities]
       security:
         - bearerAuth: []
@@ -61,16 +115,19 @@ paths:
           application/json:
             schema:
               type: object
-              required: [username, type, description]
+              required: [title]
               properties:
-                username: { type: string, example: "sameer_yadav" }
-                type:
-                  type: string
-                  enum: [warning, commendation, pip, promotion, transfer, other]
-                  example: "commendation"
+                title:
+                  { type: string, maxLength: 256, example: "Verbal warning" }
                 description:
-                  { type: string, example: "Outstanding performance in Q1" }
-                date: { type: string, format: date }
+                  {
+                    type: string,
+                    maxLength: 2000,
+                    example: "Repeated late arrivals in February",
+                  }
+                date: { type: string, maxLength: 32, example: "2026-03-01" }
+                time: { type: string, maxLength: 32, example: "10:00" }
+                status: { type: string, maxLength: 64, example: "Active" }
       responses:
         "200":
           description: HR activity created
@@ -82,11 +139,17 @@ paths:
                   success: { type: boolean, example: true }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — requires super user privileges
 
   /api/v1/edit-hr-activity/{_id}:
     put:
       summary: Edit HR activity
-      description: Update an existing HR activity record
+      description: >-
+        Updates an existing HR activity record. Requires super user
+        privileges, and additionally only the user who originally created the
+        activity may edit it (403 if the caller isn't the creator, 404 if the
+        record doesn't exist). All body fields are optional (partial update).
       tags: [HR Activities]
       security:
         - bearerAuth: []
@@ -102,19 +165,28 @@ paths:
             schema:
               type: object
               properties:
-                type: { type: string }
-                description: { type: string }
-                date: { type: string, format: date }
+                title: { type: string, maxLength: 256 }
+                description: { type: string, maxLength: 2000 }
+                date: { type: string, maxLength: 32 }
+                time: { type: string, maxLength: 32 }
+                status: { type: string, maxLength: 64 }
       responses:
         "200":
           description: HR activity updated
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — only the activity's creator may edit it
+        "404":
+          description: HR activity not found
 
   /api/v1/delete-hr-activity/{_id}:
     delete:
       summary: Delete HR activity
-      description: Remove an HR activity record
+      description: >-
+        Soft-deletes an HR activity record (status set to "deleted",
+        deletedBy/deletedOn recorded). Requires super user privileges, and
+        only the activity's original creator may delete it.
       tags: [HR Activities]
       security:
         - bearerAuth: []
@@ -126,16 +198,91 @@ paths:
       responses:
         "200":
           description: HR activity deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "HR activity deleted successfully",
+                    }
+                  status: { type: integer, example: 0 }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — only the activity's creator may delete it
+        "404":
+          description: HR activity not found
+
+  /api/v1/bulk-delete-hr-activities:
+    put:
+      summary: Bulk delete HR activities
+      description: >-
+        Soft-deletes multiple HR activity records at once. Requires super user
+        privileges. Only activities owned (created) by the caller are
+        actually deleted — ids that don't exist, or belong to someone else,
+        are reported back in `notFound` rather than causing a failure.
+      tags: [HR Activities]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { type: string }
+      responses:
+        "200":
+          description: Bulk delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "2 HR activity(ies) deleted" }
+                  data:
+                    type: object
+                    properties:
+                      deleted: { type: integer, example: 2 }
+                      notFound:
+                        type: array
+                        items: { type: string }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — requires super user privileges
 
   /api/v1/policies:
     get:
       summary: List all policies
-      description: Returns all HR policies
+      description: >-
+        Paginated list of HR policy documents (excludes soft-deleted, i.e.
+        status "deleted"/"Deleted"). Each entry is enriched with `category`
+        (alias of policyType), `title` (alias of policyName), `createdAt` and
+        `updatedAt` aliases alongside the raw Policy fields. Result is cached
+        per tenant/page/limit.
       tags: [Policies]
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
       responses:
         "200":
           description: Policies retrieved
@@ -145,20 +292,53 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Policies listed" }
+                  status: { type: integer, example: 0 }
                   data:
                     type: array
                     items:
                       type: object
                       properties:
                         id: { type: string }
-                        title: { type: string }
-                        category: { type: string }
-                        updatedAt: { type: string, format: date-time }
+                        policyType: { type: string, example: "Leave Policy" }
+                        policyName: { type: string }
+                        category:
+                          {
+                            type: string,
+                            description: "Alias of policyType",
+                            example: "Leave Policy",
+                          }
+                        title:
+                          { type: string, description: "Alias of policyName" }
+                        content: { type: string }
+                        status: { type: string, example: "active" }
+                        createdBy: { type: string }
+                        createdOn: { type: string, format: date-time }
+                        createdAt:
+                          {
+                            type: string,
+                            format: date-time,
+                            description: "Alias of createdOn",
+                          }
+                        lastUpdatedOn: { type: string, format: date-time }
+                        updatedAt:
+                          {
+                            type: string,
+                            format: date-time,
+                            description: "Alias of lastUpdatedOn",
+                          }
+                  total: { type: integer }
+                  page: { type: integer }
+                  totalPages: { type: integer }
         "401":
           description: Unauthorized
     post:
       summary: Create or update a policy
-      description: Create a new policy or update if one exists with the same title
+      description: >-
+        Requires super user privileges. Looks for an existing non-deleted
+        policy matching `policyType` (and, when `policyType` is "Other", also
+        matching `policyName`) — if found, updates its content in place;
+        otherwise creates a new policy. Invalidates the cached policies list.
       tags: [Policies]
       security:
         - bearerAuth: []
@@ -168,24 +348,42 @@ paths:
           application/json:
             schema:
               type: object
-              required: [title, content]
+              required: [policyType, content]
               properties:
-                title: { type: string, example: "Remote Work Policy" }
-                category: { type: string, example: "Work Arrangement" }
-                content:
+                policyType:
+                  { type: string, maxLength: 128, example: "Leave Policy" }
+                policyName:
                   {
                     type: string,
-                    description: "Policy body (HTML or Markdown)",
+                    maxLength: 256,
+                    description: 'Required to disambiguate when policyType is "Other"',
                   }
+                content: { type: string, description: "Policy body (HTML)" }
       responses:
         "200":
           description: Policy created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Policy created successfully" }
+                  status: { type: integer, example: 0 }
+        "400":
+          description: policyType or content missing
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — requires super user privileges
 
   /api/v1/policies/{id}:
     get:
       summary: Get a specific policy
+      description: >-
+        Returns a single policy via the hrm-service gRPC backend (getPolicy).
+        Response shape is passed through as-is.
       tags: [Policies]
       security:
         - bearerAuth: []
@@ -203,6 +401,9 @@ paths:
           description: Policy not found
     put:
       summary: Update a policy
+      description: >-
+        Requires super user privileges. All fields optional (partial update).
+        Invalidates the cached policies list.
       tags: [Policies]
       security:
         - bearerAuth: []
@@ -218,16 +419,29 @@ paths:
             schema:
               type: object
               properties:
-                title: { type: string }
-                category: { type: string }
+                policyType: { type: string, maxLength: 128 }
+                policyName: { type: string, maxLength: 256 }
                 content: { type: string }
       responses:
         "200":
           description: Policy updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Policy updated successfully" }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — requires super user privileges
     delete:
       summary: Delete a policy
+      description: >-
+        Requires super user privileges. Soft-deletes the policy (status set
+        to "Deleted") and invalidates the cached policies list.
       tags: [Policies]
       security:
         - bearerAuth: []
@@ -239,13 +453,26 @@ paths:
       responses:
         "200":
           description: Policy deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Policy deleted successfully" }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — requires super user privileges
 
   /api/v1/policies/{id}/pdf:
     get:
       summary: Download policy as PDF
-      description: Generates and returns a PDF version of the policy
+      description: >-
+        Generates a branded PDF of the policy document on the fly (cover
+        page + rendered HTML content, paginated) and streams it back as an
+        attachment. Not cached.
       tags: [Policies]
       security:
         - bearerAuth: []
@@ -264,11 +491,16 @@ paths:
                 format: binary
         "401":
           description: Unauthorized
+        "404":
+          description: Policy not found
 
   /api/v1/is-superuser/{username}:
     get:
-      summary: Check if user is a superuser
-      description: Returns whether the specified user has superuser privileges
+      summary: Check if a user is a superuser
+      description: >-
+        Requires super user privileges to call. Looks up the target user by
+        username (not id) and returns their isSuperUser flag directly — this
+        is a raw field lookup, not a resource:action permission check.
       tags: [HR Activities]
       security:
         - bearerAuth: []
@@ -287,9 +519,10 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  data:
-                    type: object
-                    properties:
-                      isSuperuser: { type: boolean, example: false }
+                  isSuperUser: { type: boolean, example: false }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — requires super user privileges
+        "404":
+          description: User not found

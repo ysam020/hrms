@@ -1,0 +1,669 @@
+paths:
+  /api/v1/assets/issues:
+    get:
+      summary: List asset issues
+      description: >
+        Lists reported asset issues (malfunction, damage, lost, stolen,
+        return request, other). HR/admin/owner/superusers (or `Assets:manage`
+        grantees) see every issue across the tenant; other employees see only
+        issues they personally reported.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [open, in_review, approved, rejected, resolved],
+            }
+        - name: type
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [malfunction, damage, lost, stolen, return_request, other],
+            }
+        - name: priority
+          in: query
+          schema: { type: string, enum: [low, medium, high, critical] }
+        - name: assetId
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Asset issues retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: array, items: { type: object } }
+                  total: { type: integer, example: 12 }
+        "401":
+          description: Unauthorized
+    post:
+      summary: Report an asset issue
+      description: >
+        An employee reports a problem with an asset currently assigned to
+        them (malfunction, damage, lost, stolen, a return request, or other).
+        HR/admin/owner may report on any asset; other employees must
+        currently hold the asset. Duplicate open issues of the same type on
+        the same asset are rejected with 409.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, type, title, description]
+              properties:
+                assetId: { type: string, example: "66f1a2b3c4d5e6f7a8b9c0d1" }
+                type:
+                  {
+                    type: string,
+                    enum:
+                      [
+                        malfunction,
+                        damage,
+                        lost,
+                        stolen,
+                        return_request,
+                        other,
+                      ],
+                    example: "malfunction",
+                  }
+                priority:
+                  {
+                    type: string,
+                    enum: [low, medium, high, critical],
+                    default: medium,
+                  }
+                title: { type: string, example: "Laptop won't power on" }
+                description:
+                  {
+                    type: string,
+                    example: "Screen stays black even when plugged in.",
+                  }
+      responses:
+        "201":
+          description: Issue reported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      issueId: { type: string }
+        "403":
+          description: You can only report issues on assets currently assigned to you
+        "409":
+          description: An open issue of this type already exists for this asset
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/issues/{issueId}:
+    get:
+      summary: Get an asset issue
+      description: >
+        Returns full issue detail enriched with asset and reporter/reviewer
+        info. HR sees any issue; other employees only their own.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Issue retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Forbidden
+        "404":
+          description: Issue not found
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/issues/{issueId}/status:
+    patch:
+      summary: Update an asset issue's status
+      description: >
+        HR/admin/owner-only lifecycle transition: open → in_review/rejected,
+        in_review → approved/rejected, approved → resolved. Resolving an
+        issue triggers automatic side effects depending on issue type — lost
+        or stolen retires the asset and closes its assignment; damage sends
+        the asset to maintenance; return_request closes the assignment and
+        frees the asset, same as a normal return. Auto-effects are skipped
+        (with a note in the response) if the asset has since been reassigned.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  {
+                    type: string,
+                    enum: [in_review, approved, rejected, resolved],
+                    example: "approved",
+                  }
+                notes:
+                  {
+                    type: string,
+                    example: "Confirmed damage, approving repair.",
+                  }
+      responses:
+        "200":
+          description: Issue status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+        "400":
+          description: Invalid status transition for the issue's current state
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/summary:
+    get:
+      summary: Get asset inventory summary
+      description: >
+        HR/admin/owner-only dashboard aggregate — asset counts by status and
+        category, count of open issues needing HR action, and count of
+        assignments pending employee acknowledgement.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Asset summary retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      total: { type: integer, example: 120 }
+                      byStatus: { type: object }
+                      byCategory: { type: object }
+                      openIssues: { type: integer, example: 3 }
+                      pendingAcks: { type: integer, example: 5 }
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/categories:
+    get:
+      summary: List asset categories
+      description: >
+        Tenant-scoped lookup of active asset categories, used to populate the
+        Category autocomplete in the Create Asset dialog.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Asset categories retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: array, items: { type: object } }
+        "401":
+          description: Unauthorized
+    post:
+      summary: Create an asset category
+      description: >
+        HR/admin/owner-only. Persists a newly-typed category so it appears in
+        the dropdown next time. If the category already exists for the
+        tenant, returns 200 as a no-op success rather than an error.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Laptops" }
+      responses:
+        "201":
+          description: Asset category added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "200":
+          description: Asset category already exists (no-op)
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/assign:
+    post:
+      summary: Assign an asset to an employee
+      description: >
+        HR/admin/owner-only. Assigns an "available" asset to an active
+        employee, atomically flipping the asset to "assigned" and creating
+        the backing assignment record. Fails with 409 if the asset is not
+        currently available (including a race with a concurrent assign
+        call), and with 400 if the target employee is not active.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, userId]
+              properties:
+                assetId: { type: string, example: "66f1a2b3c4d5e6f7a8b9c0d1" }
+                userId: { type: string, example: "66f1a2b3c4d5e6f7a8b9c0d2" }
+                expectedReturn: { type: string, example: "2026-12-31" }
+                conditionOut:
+                  { type: string, enum: [good, fair, damaged], example: "good" }
+                notes: { type: string, example: "Includes charger and sleeve." }
+      responses:
+        "200":
+          description: Asset assigned to the employee
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Asset assigned to jdoe" }
+        "400":
+          description: Cannot assign assets to inactive employees
+        "404":
+          description: Employee or asset not found
+        "409":
+          description: Asset is not currently available
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/return:
+    post:
+      summary: Return an assigned asset
+      description: >
+        HR/admin/owner-only. Records the return of a currently-assigned
+        asset, closing the active assignment and setting the asset back to
+        "available" (or "maintenance" if returned in damaged condition).
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, conditionIn]
+              properties:
+                assetId: { type: string, example: "66f1a2b3c4d5e6f7a8b9c0d1" }
+                conditionIn:
+                  { type: string, enum: [good, fair, damaged], example: "good" }
+                notes: { type: string, example: "Minor scratches on the lid." }
+      responses:
+        "200":
+          description: Asset returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+        "400":
+          description: This asset is not currently assigned
+        "404":
+          description: Asset or active assignment not found
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/assignments/{assignmentId}/acknowledge:
+    post:
+      summary: Acknowledge asset receipt
+      description: >
+        The employee holding an assignment confirms they received the asset
+        in the stated condition. Only the assignment's own holder may call
+        this; fails with 409 if already acknowledged, or 400 if the
+        assignment has since been returned.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, example: "Received in good condition." }
+      responses:
+        "200":
+          description: Asset receipt acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+        "400":
+          description: Cannot acknowledge a returned assignment
+        "403":
+          description: You can only acknowledge your own assignment
+        "404":
+          description: Assignment not found
+        "409":
+          description: Assignment already acknowledged
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets:
+    get:
+      summary: List assets
+      description: >
+        Lists inventory assets with optional status/category/search filters.
+        HR/admin/owner/superusers see all assets (optionally filtered to a
+        specific employee's currently-assigned assets via `userId`); other
+        employees only ever see their own currently-assigned assets.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            { type: string, enum: [available, assigned, maintenance, retired] }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: userId
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Assets retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: array, items: { type: object } }
+                  total: { type: integer, example: 40 }
+        "401":
+          description: Unauthorized
+    post:
+      summary: Create an asset
+      description: >
+        HR/admin/owner-only. Adds a new asset to inventory with status
+        "available". `assetCode` is unique per tenant and normalized to
+        uppercase.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetCode, name, category]
+              properties:
+                assetCode: { type: string, example: "LAP-0042" }
+                name: { type: string, example: "MacBook Pro 14-inch" }
+                category: { type: string, example: "Laptops" }
+                brand: { type: string, example: "Apple" }
+                model: { type: string, example: "M3 Pro" }
+                serialNumber: { type: string, example: "C02XXXXXJGH5" }
+                purchaseDate: { type: string, example: "2026-01-15" }
+                purchaseValue: { type: number, example: 189999 }
+                condition:
+                  { type: string, enum: [good, fair, damaged], default: good }
+                notes: { type: string, example: "AppleCare+ until 2028." }
+      responses:
+        "201":
+          description: Asset created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      assetId: { type: string }
+                      assetCode: { type: string }
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/{assetId}:
+    get:
+      summary: Get an asset
+      description: >
+        Returns full asset detail including assignment history enriched with
+        holder names. HR/admin/owner see any asset; other employees only if
+        they currently hold it.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Asset retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Forbidden
+        "404":
+          description: Asset not found
+        "401":
+          description: Unauthorized
+    patch:
+      summary: Update an asset
+      description: >
+        HR/admin/owner-only. Updates asset metadata (name, category, brand,
+        condition, notes, etc.) and/or its status among available,
+        maintenance, or retired — status cannot be set to "assigned" here
+        (use the assign endpoint), cannot be set to "available" while
+        currently assigned (use return), and a retired asset's status can
+        never be changed again.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                category: { type: string }
+                brand: { type: string }
+                model: { type: string }
+                serialNumber: { type: string }
+                purchaseDate: { type: string }
+                purchaseValue: { type: number }
+                condition: { type: string, enum: [good, fair, damaged] }
+                status:
+                  { type: string, enum: [available, maintenance, retired] }
+                notes: { type: string }
+      responses:
+        "200":
+          description: Asset updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      assetId: { type: string }
+        "400":
+          description: Invalid status transition
+        "403":
+          description: Forbidden
+        "404":
+          description: Asset not found
+        "401":
+          description: Unauthorized
+    delete:
+      summary: Retire an asset (deprecated alias)
+      description: >
+        HR/admin/owner-only. Deprecated backward-compatibility alias for
+        `POST /assets/{assetId}/retire` — kept so older clients continue to
+        work. Prefer the POST retire endpoint for new integrations. Fails
+        with 409 if the asset is currently assigned.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Asset retired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+        "409":
+          description: Cannot retire an asset that is currently assigned
+        "403":
+          description: Forbidden
+        "404":
+          description: Asset not found
+        "401":
+          description: Unauthorized
+
+  /api/v1/assets/{assetId}/retire:
+    post:
+      summary: Retire an asset
+      description: >
+        HR/admin/owner-only. Primary retirement endpoint — marks an asset's
+        status as "retired" (terminal state). Fails with 409 if the asset is
+        currently assigned; it must be returned first.
+      tags: [Assets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Asset retired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+        "409":
+          description: Cannot retire an asset that is currently assigned
+        "403":
+          description: Forbidden
+        "404":
+          description: Asset not found
+        "401":
+          description: Unauthorized

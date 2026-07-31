@@ -2,64 +2,56 @@ paths:
   /api/v1/get-all-users:
     get:
       summary: List all users
-      description: Returns a paginated list of users with optional filters
-      tags: [Users]
+      description: >
+        Returns a paginated list of users with optional search/role/department
+        filters. Requires an authenticated user with an active tenant and
+        subscription (userRouter is mounted behind the subscription guard).
+      tags: [User Management]
       security:
         - bearerAuth: []
       parameters:
         - name: page
           in: query
           schema: { type: integer, default: 1 }
-          description: Page number
         - name: limit
           in: query
           schema: { type: integer, default: 50 }
-          description: Items per page
+          description: Capped by the gateway's MAX_LIMIT_LARGE.
         - name: search
           in: query
           schema: { type: string }
-          description: Search term for name or email
         - name: role
           in: query
           schema: { type: string }
-          description: Filter by role
         - name: department
           in: query
           schema: { type: string }
-          description: Filter by department
       responses:
         "200":
-          description: Users retrieved successfully
+          description: Users retrieved
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string }
                   data:
                     type: object
-                    properties:
-                      users:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id: { type: string }
-                            email: { type: string }
-                            username: { type: string }
-                            role: { type: string }
-                            department: { type: string }
-                      total: { type: integer }
-                      page: { type: integer }
-                      limit: { type: integer }
+                    description: Raw user-service listUsers response (paginated list + total/page/limit).
         "401":
           description: Unauthorized
 
   /api/v1/get-user-data/{username}:
     get:
       summary: Get user data by username
-      description: Returns detailed information for a specific user
-      tags: [Users]
+      description: >
+        Returns detailed information for a specific user, merged with the
+        current salary structure (from salary-service) and tenant work state.
+        Sensitive fields (aadhar_no, bank_account_no, pan_no, salary,
+        salaryStructure) are stripped unless the caller is the user themself
+        or HR-or-above.
+      tags: [User Management]
       security:
         - bearerAuth: []
       parameters:
@@ -67,6 +59,10 @@ paths:
           in: path
           required: true
           schema: { type: string }
+          description: >
+            Despite the name, this is actually resolved as the target user's
+            database ID by the handler (passed through to user-service getUser
+            as userId).
           example: "sameer_yadav"
       responses:
         "200":
@@ -77,26 +73,28 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string }
+                  status: { type: integer }
                   data:
                     type: object
-                    properties:
-                      id: { type: string }
-                      email: { type: string }
-                      username: { type: string }
-                      fullName: { type: string }
-                      role: { type: string }
-                      department: { type: string }
-                      designation: { type: string }
+                    description: >
+                      snake_case user record (converted from user-service's
+                      camelCase) plus role (array), isSuperUser, employeeStatus,
+                      dateOfTermination, reasonForTermination, dateOfAbscond,
+                      kyc_revision_notes ({ [field]: issue }), workState, and
+                      (owner/HR-and-above only) salary + salaryStructure
+                      ({ basicPay, hra, conveyance, pf, esi, pt, components }).
         "401":
           description: Unauthorized
-        "404":
-          description: User not found
 
   /api/v1/save-fcm-token:
     put:
       summary: Save FCM push notification token
-      description: Registers a Firebase Cloud Messaging token for the current user's device
-      tags: [Users]
+      description: >
+        Registers/updates a Firebase Cloud Messaging token for the current
+        user's device. Existing entries are deduped by deviceFingerprint, so
+        both fcmToken and deviceFingerprint are required.
+      tags: [User Management]
       security:
         - bearerAuth: []
       requestBody:
@@ -105,17 +103,21 @@ paths:
           application/json:
             schema:
               type: object
-              required: [fcmToken]
+              required: [fcmToken, deviceFingerprint]
               properties:
                 fcmToken:
                   type: string
-                  description: Firebase Cloud Messaging token
+                  maxLength: 512
                   example: "fxyz123:APA91b..."
+                deviceFingerprint:
+                  type: string
+                  maxLength: 256
                 deviceInfo:
                   type: object
                   properties:
-                    platform: { type: string, example: "web" }
-                    userAgent: { type: string, example: "Mozilla/5.0..." }
+                    browser: { type: string, maxLength: 128 }
+                    os: { type: string, maxLength: 128 }
+                    deviceType: { type: string, maxLength: 64 }
       responses:
         "200":
           description: FCM token saved
@@ -125,16 +127,30 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string }
+        "400":
+          description: fcmToken and deviceFingerprint are required
         "401":
           description: Unauthorized
 
   /api/v1/disable-push-notifications:
     delete:
       summary: Disable push notifications
-      description: Removes the FCM token for the current user, disabling push notifications
-      tags: [Users]
+      description: >
+        Removes the FCM token for a specific device (deviceFingerprint) or all
+        devices (disableAll: true) for the current user.
+      tags: [User Management]
       security:
         - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deviceFingerprint: { type: string }
+                disableAll: { type: boolean }
       responses:
         "200":
           description: Push notifications disabled
@@ -144,6 +160,7 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string }
         "401":
           description: Unauthorized
 
@@ -155,7 +172,7 @@ paths:
         for biometric attendance check-in. The face recognition model runs in a
         Web Worker (face-api.js) on the client; only the descriptor vector is
         stored server-side.
-      tags: [Users]
+      tags: [User Management]
       security:
         - bearerAuth: []
       responses:
@@ -167,10 +184,17 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Face descriptor status fetched" }
                   data:
                     type: object
                     properties:
                       hasDescriptor: { type: boolean, example: true }
+                      descriptor:
+                        type: array
+                        nullable: true
+                        items: { type: number }
+                        description: 128-dimensional vector, or null if not enrolled.
         "401":
           description: Unauthorized
 
@@ -182,7 +206,7 @@ paths:
         biometric attendance check-in via face recognition. The descriptor is
         a 128-dimensional float array produced by face-api.js running in a
         Web Worker on the client.
-      tags: [Users]
+      tags: [User Management]
       security:
         - bearerAuth: []
       requestBody:
@@ -199,7 +223,6 @@ paths:
                   minItems: 128
                   maxItems: 128
                   description: 128-dimensional face descriptor vector from face-api.js
-                  example: [0.12, -0.34, 0.56, "..."]
       responses:
         "200":
           description: Face descriptor saved
@@ -209,8 +232,12 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  message: { type: string, example: "Face descriptor enrolled" }
+                  message:
+                    {
+                      type: string,
+                      example: "Face descriptor saved successfully",
+                    }
         "400":
-          description: Invalid descriptor (not 128 dimensions)
+          description: Invalid descriptor (not exactly 128 numbers)
         "401":
           description: Unauthorized

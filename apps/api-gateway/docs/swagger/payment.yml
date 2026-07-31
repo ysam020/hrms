@@ -3,28 +3,36 @@ paths:
     post:
       summary: Create a Razorpay subscription
       description: >
-        Creates a new Razorpay subscription for the authenticated user's organisation.
-        Called during the onboarding wizard after the org is created (pendingSetup users
-        can access this endpoint). On success, returns a Razorpay subscription ID and
-        payment link for the user to complete payment.
-      tags: [Billing]
+        Creates a Razorpay subscription for the given tier/billing (creating
+        the Razorpay Plan on first use, cached in Redis) and records it as a
+        pending subscription for the caller so the backend can recover
+        (`GET /payment/pending-setup`, `POST /tenants/complete-pending-setup`)
+        if the client tab closes before checkout finishes. Used both by the
+        org-setup wizard (no tenant yet — `planTier` must be supplied
+        explicitly) and by an existing tenant's "Renew" flow (tier defaults to
+        the tenant's current `planTier` if omitted). Requires only
+        `authenticate`.
+      tags: [Payment]
       security:
         - bearerAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required: [planId]
               properties:
-                planId:
+                billing:
                   type: string
-                  description: Razorpay plan ID to subscribe to
-                  example: "plan_OABcDEfGhIjKlM"
+                  enum: [monthly, annual]
+                  default: monthly
+                planTier:
+                  type: string
+                  enum: [starter, growth, enterprise]
+                  description: Defaults to "starter", or the existing tenant's planTier.
       responses:
         "200":
-          description: Subscription created — user must complete payment
+          description: Subscription created — client completes payment via Razorpay Checkout
           content:
             application/json:
               schema:
@@ -36,26 +44,30 @@ paths:
                     properties:
                       subscriptionId:
                         { type: string, example: "sub_OABcDEfGhIjKlM" }
-                      shortUrl:
-                        { type: string, example: "https://rzp.io/l/xyz" }
-        "400":
-          description: Invalid plan ID
+                      keyId:
+                        {
+                          type: string,
+                          description: "Razorpay public key ID (RAZORPAY_KEY_ID)",
+                        }
+                      billing: { type: string, example: "monthly" }
+                      planTier: { type: string, example: "starter" }
         "401":
           description: Unauthorized
 
   /api/v1/payment/pending-setup:
     get:
-      summary: Check subscription activation status
+      summary: Check for a recoverable pending subscription
       description: >
-        Polls whether the Razorpay subscription has been activated (payment confirmed).
-        Called by the onboarding wizard to detect when the webhook has fired.
-        Returns `{ activated: true }` once `subscriptionStatus = "active"`.
-      tags: [Billing]
+        Polls whether the caller has a pending Razorpay subscription recorded
+        server-side and whether it's actually been paid
+        (`subscriptions.fetch` status `authenticated` or `active`). Clears
+        the pending record if it's stale/unpaid. Requires only `authenticate`.
+      tags: [Payment]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Activation status
+          description: Pending-setup status
           content:
             application/json:
               schema:
@@ -65,10 +77,53 @@ paths:
                   data:
                     type: object
                     properties:
-                      activated: { type: boolean, example: false }
-                      subscriptionStatus:
-                        type: string
-                        enum: [active, grace_period, cancelling, expired]
+                      hasPending: { type: boolean, example: false }
+                      billing:
+                        {
+                          type: string,
+                          enum: [monthly, annual],
+                          description: "Only present when hasPending is true",
+                        }
+        "401":
+          description: Unauthorized
+
+  /api/v1/payment/plan-pricing:
+    get:
+      summary: Get plan pricing and tier limits
+      description: >
+        Returns the backend's flat-fee pricing table (`PLAN_PRICING`, in
+        paise), employee-count limits per tier (`TIER_EMPLOYEE_LIMITS`), and
+        the caller's current active employee count (0 if no tenant yet).
+        Authenticated-only — deliberately **not** gated by `requireTenant` —
+        needed by the org-setup wizard's plan step before a tenant exists, as
+        well as by the Subscription page afterwards.
+      tags: [Payment]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pricing table
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      pricing:
+                        type: object
+                        description: "Record<PlanTier, Record<Billing, amountInPaise>>"
+                        example:
+                          starter: { monthly: 799900, annual: 8638920 }
+                          growth: { monthly: 1499900, annual: 16198920 }
+                          enterprise: { monthly: 2999900, annual: 32398920 }
+                      tierEmployeeLimits:
+                        type: object
+                        description: "null = uncapped"
+                        example: { starter: 25, growth: 100, enterprise: null }
+                      activeEmployeeCount: { type: integer, example: 12 }
         "401":
           description: Unauthorized
 
@@ -76,10 +131,14 @@ paths:
     post:
       summary: Cancel subscription
       description: >
-        Schedules the active Razorpay subscription for cancellation.
-        The subscription transitions to `cancelling` status; access continues until
-        the current billing period ends, at which point it moves to `expired`.
-      tags: [Billing]
+        Schedules the Razorpay subscription for cancellation at the end of
+        the current billing cycle (`cancel_at_cycle_end: 1` — the tenant
+        keeps access through what they already paid for). Sets
+        `Tenant.subscriptionStatus` to `cancelled` synchronously (does not
+        wait for the `subscription.cancelled` webhook).
+        `requireActiveSubscription` continues to allow access until
+        `planExpiresAt` passes. Requires `requireTenant`.
+      tags: [Payment]
       security:
         - bearerAuth: []
       responses:
@@ -94,24 +153,44 @@ paths:
                   message:
                     {
                       type: string,
-                      example: "Subscription will be cancelled at period end",
+                      example: "Subscription cancellation initiated.",
                     }
         "400":
-          description: Subscription is not active
+          description: No subscription found, or subscription is not active/grace_period
         "401":
           description: Unauthorized
-        "402":
-          description: Subscription already expired
 
   /api/v1/payment/reactivate-subscription:
     post:
-      summary: Reactivate subscription
+      summary: Reactivate a cancelled subscription via a new payment
       description: >
-        Reactivates a subscription that is in `cancelling` status before the billing
-        period ends. Moves it back to `active` status.
-      tags: [Billing]
+        Re-authorizes billing on the tenant using a fresh Razorpay checkout
+        result. Verifies `razorpaySignature` as
+        `HMAC-SHA256(paymentId|subscriptionId)` with `RAZORPAY_KEY_SECRET`,
+        then updates the tenant's `razorpaySubscriptionId`,
+        `subscriptionStatus` (`active`), `planActivatedAt`, and
+        `planExpiresAt`. Requires `requireTenant`.
+      tags: [Payment]
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                [razorpayPaymentId, razorpaySubscriptionId, razorpaySignature]
+              properties:
+                billing:
+                  type: string
+                  enum: [monthly, annual]
+                  default: monthly
+                razorpayPaymentId:
+                  { type: string, example: "pay_OABcDEfGhIjKlM" }
+                razorpaySubscriptionId:
+                  { type: string, example: "sub_OABcDEfGhIjKlM" }
+                razorpaySignature: { type: string }
       responses:
         "200":
           description: Subscription reactivated
@@ -121,57 +200,313 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  message: { type: string, example: "Subscription reactivated" }
+                  message:
+                    { type: string, example: "Subscription reactivated." }
         "400":
-          description: Subscription is not in cancelling state
+          description: Missing payment details, or signature verification failed
         "401":
           description: Unauthorized
-        "402":
-          description: Subscription already expired
 
-  /api/v1/payment/webhook:
+  /api/v1/payment/change-plan:
     post:
-      summary: Razorpay payment webhook
+      summary: Change plan tier and/or billing period
       description: >
-        Receives payment lifecycle events from Razorpay. Protected by HMAC signature
-        verification using `RAZORPAY_WEBHOOK_SECRET`. This endpoint is mounted
-        **before** the CSRF middleware and `express.json()` so that the raw request
-        body is preserved for signature validation — do not add CSRF or JSON parsing
-        middleware to this route.
-
-        Handled events and their effects on `Tenant.subscriptionStatus`:
-
-        - `subscription.activated` → `active`; sets `planActivatedAt`
-
-        - `subscription.charged` → extends `planExpiresAt`; clears grace period
-
-        - `subscription.payment_failed` → `grace_period` (first failure)
-
-        - `subscription.deactivated` → `expired`
-
-        - `subscription.cancelled` → `cancelling` or `expired` based on timing
-      tags: [Billing]
+        Computes and (for a same-billing tier upgrade) charges the prorated
+        difference for the remainder of the current cycle. A downgrade, or
+        any billing-period change, is always scheduled for the next renewal
+        with no proration and no immediate charge — Razorpay applies it via
+        `schedule_change_at: "cycle_end"`. Blocked if the tenant is paid via
+        UPI Autopay or e-Mandate/NACH (Razorpay only supports
+        `subscriptions.update` for card-authorized subscriptions), if there's
+        no active subscription, or if the target tier's employee limit is
+        already exceeded. This endpoint never mutates the tenant for the
+        immediate-upgrade path — it only returns a Razorpay order; payment
+        must be completed and confirmed via `POST
+        /payment/confirm-plan-upgrade`. Requires `requireTenant`.
+      tags: [Payment]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              description: Razorpay webhook payload (raw JSON body)
+              required: [planTier, billing]
+              properties:
+                planTier:
+                  type: string
+                  enum: [starter, growth, enterprise]
+                billing:
+                  type: string
+                  enum: [monthly, annual]
+      responses:
+        "200":
+          description: >
+            Either a prorated order to pay (`requiresPayment: true`), an
+            immediate no-charge swap, or a scheduled next-cycle change
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Plan changed." }
+                  data:
+                    type: object
+                    properties:
+                      requiresPayment: { type: boolean }
+                      orderId:
+                        {
+                          type: string,
+                          description: "Only when requiresPayment is true",
+                        }
+                      amount:
+                        {
+                          type: integer,
+                          description: "Prorated amount in paise, only when requiresPayment is true",
+                        }
+                      keyId:
+                        { type: string, description: "Razorpay public key ID" }
+                      planTier: { type: string }
+                      billing: { type: string }
+                      effectiveAt:
+                        {
+                          type: string,
+                          format: date-time,
+                          description: "Only for a scheduled (deferred) change",
+                        }
+        "400":
+          description: >
+            Invalid planTier/billing, no active subscription, payment method
+            unsupported for plan changes, already on this plan, or employee
+            count exceeds the target tier's limit
+        "401":
+          description: Unauthorized
+
+  /api/v1/payment/confirm-plan-upgrade:
+    post:
+      summary: Confirm a paid, prorated plan upgrade
+      description: >
+        Completes the immediate-upgrade path started by `POST
+        /payment/change-plan` once the one-time prorated Razorpay order has
+        been paid. Verifies the standard Razorpay Orders signature —
+        `HMAC-SHA256(orderId|paymentId)` — then applies the new plan to the
+        subscription immediately (`schedule_change_at: "now"`;
+        `planExpiresAt`/renewal date is unchanged, only the price from here on
+        changes) and clears any pending downgrade fields. Requires
+        `requireTenant`.
+      tags: [Payment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                [
+                  razorpayOrderId,
+                  razorpayPaymentId,
+                  razorpaySignature,
+                  planTier,
+                  billing,
+                ]
+              properties:
+                razorpayOrderId:
+                  { type: string, example: "order_OABcDEfGhIjKlM" }
+                razorpayPaymentId:
+                  { type: string, example: "pay_OABcDEfGhIjKlM" }
+                razorpaySignature: { type: string }
+                planTier:
+                  type: string
+                  enum: [starter, growth, enterprise]
+                billing:
+                  type: string
+                  enum: [monthly, annual]
+      responses:
+        "200":
+          description: Plan upgraded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Plan upgraded." }
+        "400":
+          description: >
+            Missing/invalid fields, signature verification failed, or no
+            subscription found
+        "401":
+          description: Unauthorized
+
+  /api/v1/payment/start-payment-method-change:
+    post:
+      summary: Start a payment method change
+      description: >
+        Razorpay has no in-place way to swap a subscription's payment
+        instrument — only a brand-new subscription authorized via Checkout
+        can attach a different one. Creates that new subscription (same
+        tier/billing as today) and, if the tenant's current cycle still has
+        more than 24h left, defers its first real charge to the existing
+        `planExpiresAt` via `start_at` so Checkout only runs a small,
+        auto-refunded authorization charge. Requires `requireTenant`.
+      tags: [Payment]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: New subscription created for authorization via Checkout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      subscriptionId:
+                        { type: string, example: "sub_OABcDEfGhIjKlM" }
+                      keyId:
+                        { type: string, description: "Razorpay public key ID" }
+        "400":
+          description: No subscription found, or subscription is not active/grace_period
+        "401":
+          description: Unauthorized
+
+  /api/v1/payment/confirm-payment-method-change:
+    post:
+      summary: Confirm a payment method change
+      description: >
+        Completes the swap started by `POST
+        /payment/start-payment-method-change` once the new subscription has
+        actually been authorized. Verifies
+        `HMAC-SHA256(paymentId|subscriptionId)`, writes the new subscription
+        onto the tenant, then best-effort cancels the old one (if that
+        cancel fails, `previousRazorpaySubscriptionId` is left set for
+        `subscriptionReconciler.ts` to retry). Requires `requireTenant`.
+      tags: [Payment]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                [razorpayPaymentId, razorpaySubscriptionId, razorpaySignature]
+              properties:
+                razorpayPaymentId:
+                  { type: string, example: "pay_OABcDEfGhIjKlM" }
+                razorpaySubscriptionId:
+                  {
+                    type: string,
+                    description: "The NEW subscription ID from start-payment-method-change",
+                    example: "sub_NEWoNEwOnEwoneW",
+                  }
+                razorpaySignature: { type: string }
+      responses:
+        "200":
+          description: Payment method updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Payment method updated." }
+        "400":
+          description: >
+            Missing/invalid fields, signature verification failed, no
+            subscription found, the new subscription ID matches the
+            existing one, or the pending change request has expired/is
+            invalid
+        "401":
+          description: Unauthorized
+
+  /api/v1/payment/webhook:
+    post:
+      summary: Razorpay payment gateway webhook (server-to-server)
+      description: >
+        Receives subscription lifecycle events from Razorpay's payment
+        gateway. **Not bearer-authenticated** — this is a server-to-server
+        callback from Razorpay, not a browser client. Authenticity is
+        instead verified via `HMAC-SHA256` signature over the raw request
+        body using `RAZORPAY_WEBHOOK_SECRET`, checked with a constant-time
+        comparison (`timingSafeEqual`) against the `x-razorpay-signature`
+        header. The route is mounted directly in `server.ts`
+        (`app.post("/api/v1/payment/webhook", express.raw(...), handleWebhook)`)
+        **before** the CSRF middleware and `express.json()`, so the raw
+        bytes Razorpay signed are preserved and Razorpay's request isn't
+        rejected by CSRF protection. Duplicate deliveries are de-duplicated
+        via an atomic reservation on the `x-razorpay-event-id` header.
+
+        Handled events and their effect on the matching tenant (looked up by
+        `razorpaySubscriptionId`):
+
+        - `subscription.charged` — advances `planExpiresAt` by one billing
+        cycle; applies any pending plan/billing change unless headcount now
+        exceeds the pending tier's limit (in which case the downgrade is
+        blocked and Razorpay's plan is reverted); sends a renewal email with
+        an invoice PDF.
+
+        - `subscription.halted` — sets `subscriptionStatus` to
+        `grace_period` (all Razorpay retries exhausted).
+
+        - `subscription.payment.failed` — logs a warning and emails the
+        tenant owner; Razorpay will retry automatically. No status change.
+
+        - `subscription.cancelled` / `subscription.completed` — sets
+        `subscriptionStatus` to `cancelled` (confirms a cancellation already
+        set synchronously by `POST /payment/cancel-subscription`, or one
+        made directly in the Razorpay dashboard).
+      tags: [Payment]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: >
+                Razorpay webhook payload (raw bytes — parsed manually inside
+                the handler, not by express.json())
+              example:
+                event: "subscription.charged"
+                payload:
+                  subscription:
+                    entity: { id: "sub_OABcDEfGhIjKlM" }
+                  payment:
+                    entity:
+                      {
+                        id: "pay_OABcDEfGhIjKlM",
+                        amount: 799900,
+                        method: "card",
+                      }
       parameters:
         - in: header
           name: x-razorpay-signature
           required: true
           schema: { type: string }
           description: HMAC-SHA256 signature of the raw request body
+        - in: header
+          name: x-razorpay-event-id
+          required: false
+          schema: { type: string }
+          description: Used for idempotency — duplicate event IDs are skipped
       responses:
         "200":
-          description: Webhook acknowledged (processing is async)
+          description: Webhook processed (or skipped as a duplicate/no-op)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  received: { type: boolean, example: true }
+                  ok: { type: boolean, example: true }
         "400":
-          description: Invalid signature or malformed payload
+          description: Invalid/missing signature
+        "500":
+          description: RAZORPAY_WEBHOOK_SECRET not configured, or internal error

@@ -1,8 +1,17 @@
 paths:
   /api/v1/add-attendance:
     post:
-      summary: Add attendance record
-      description: Log a check-in/check-out attendance entry for the authenticated user
+      summary: Check in or check out
+      description: >-
+        Marks a check-in or check-out for the authenticated user. Geofencing
+        (if enabled for the tenant) validates latitude/longitude against the
+        office location, or against an Approved WFH request's leniency for
+        that day. Check-in flags the record "Late" once past the tenant's
+        configured grace period; check-out computes workingHours and, if the
+        tenant has overtimePreApprovalRequired disabled, resolveOvertimeHours
+        for any time worked beyond the standard day. A half-day is derived
+        automatically when workingHours falls under the tenant's
+        halfDayMinHours threshold.
       tags: [Attendance]
       security:
         - bearerAuth: []
@@ -12,58 +21,64 @@ paths:
           application/json:
             schema:
               type: object
-              required: [date, checkIn]
+              required: [type]
               properties:
-                date:
+                type:
                   type: string
-                  format: date
-                  example: "2026-04-01"
-                checkIn:
+                  enum: [CHECK_IN, CHECK_OUT]
+                  example: "CHECK_IN"
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                  example: 28.6139
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                  example: 77.209
+                deviceInfo:
                   type: string
-                  format: time
-                  example: "09:00"
-                checkOut:
+                  example: "Chrome 124 / Windows 10"
+                imageUrl:
                   type: string
-                  format: time
-                  example: "18:00"
-                status:
-                  type: string
-                  enum: [present, absent, half-day, late]
-                  example: "present"
-                notes: { type: string, example: "Working from home" }
+                  example: "https://cdn.example.com/checkins/abc123.jpg"
       responses:
         "200":
-          description: Attendance recorded
+          description: Attendance marked
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  message: { type: string, example: "Attendance added" }
+                  message: { type: string, example: "Checked in successfully" }
+                  data:
+                    type: object
+                    description: The created/updated AttendanceRecord
         "400":
-          description: Invalid attendance data
+          description: Invalid attendance type, or geofence/leave-conflict rejection
         "401":
           description: Unauthorized
 
-  /api/v1/get-attendances/{month}/{year}:
+  /api/v1/get-attendances/{year}/{month}:
     get:
       summary: Get own attendance for a month
-      description: Returns the authenticated user's attendance records for the given month/year
+      description: Returns the authenticated user's attendance records for the given calendar month (UTC month bounds), including per-day check-in/check-out, status, and computed work hours.
       tags: [Attendance]
       security:
         - bearerAuth: []
       parameters:
-        - name: month
-          in: path
-          required: true
-          schema: { type: integer, minimum: 1, maximum: 12 }
-          example: 4
         - name: year
           in: path
           required: true
           schema: { type: integer }
           example: 2026
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
       responses:
         "200":
           description: Attendance records retrieved
@@ -79,17 +94,24 @@ paths:
                       type: object
                       properties:
                         date: { type: string, format: date }
-                        checkIn: { type: string }
-                        checkOut: { type: string }
-                        status: { type: string }
-                        hoursWorked: { type: number }
+                        checkIn: { type: string, nullable: true }
+                        checkOut: { type: string, nullable: true }
+                        status:
+                          type: string
+                          example: "Present"
+                        workHours: { type: number, example: 8.5 }
         "401":
           description: Unauthorized
 
   /api/v1/get-all-attendances/{year}/{month}:
     get:
       summary: Get all employees' attendance for a month
-      description: Returns attendance records for all employees (admin/HR only)
+      description: >-
+        Owners/admins/HR/superusers get every active employee's monthly
+        attendance summary (presents, half days, corrections used, paid/unpaid
+        leaves), searchable by username/first/last name. Non-privileged
+        callers get back only their own row, ignoring the search param.
+        Paginated.
       tags: [Attendance]
       security:
         - bearerAuth: []
@@ -104,6 +126,17 @@ paths:
           required: true
           schema: { type: integer, minimum: 1, maximum: 12 }
           example: 4
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer }
+          description: Defaults to PAGINATION.DEFAULT_LIMIT_LARGE; capped at PAGINATION.MAX_LIMIT_LARGE.
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Matches username/first_name/last_name (privileged callers only).
       responses:
         "200":
           description: All attendance records retrieved
@@ -113,20 +146,44 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Attendance records fetched" }
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        username: { type: string }
-                        records: { type: array, items: { type: object } }
+                    type: object
+                    properties:
+                      records:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            username: { type: string }
+                            firstName: { type: string }
+                            lastName: { type: string }
+                            presents: { type: integer, example: 20 }
+                            halfDays: { type: integer, example: 1 }
+                            totalLeaves: { type: integer, example: 2 }
+                            paidLeaves: { type: integer, example: 1 }
+                            unpaidLeaves: { type: integer, example: 1 }
+                            correctionsUsed: { type: integer, example: 0 }
+                      pagination:
+                        type: object
+                        properties:
+                          totalCount: { type: integer, example: 42 }
+                          page: { type: integer, example: 1 }
+                          limit: { type: integer, example: 100 }
+                          totalPages: { type: integer, example: 1 }
         "401":
           description: Unauthorized
 
   /api/v1/attendance-correction:
     put:
-      summary: Request attendance correction
-      description: Submit a correction request for an incorrect attendance record
+      summary: Correct an attendance record
+      description: >-
+        Regularizes a check-in/check-out for a given date. Employees may only
+        correct their own attendance and are bounded by the tenant's
+        regularizationBackdateWindowDays (default 3 days); owners/admins/HR/
+        superusers are exempt from both restrictions and may correct any
+        user's record for any date.
       tags: [Attendance]
       security:
         - bearerAuth: []
@@ -136,39 +193,55 @@ paths:
           application/json:
             schema:
               type: object
-              required: [date, correctedCheckIn]
+              required: [userId]
               properties:
-                date: { type: string, format: date, example: "2026-04-01" }
-                correctedCheckIn:
-                  { type: string, format: time, example: "09:00" }
-                correctedCheckOut:
-                  { type: string, format: time, example: "18:00" }
-                reason: { type: string, example: "Forgot to mark check-in" }
+                userId:
+                  type: string
+                  example: "665f1c2e8a1b2c0012a3b456"
+                date:
+                  type: string
+                  format: date
+                  example: "2026-04-01"
+                timeIn: { type: string, example: "09:05" }
+                timeOut: { type: string, example: "18:10" }
       responses:
         "200":
-          description: Correction request submitted
+          description: Attendance corrected
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    description: The updated AttendanceRecord
+        "400":
+          description: Missing userId, or date is outside the allowed regularization window
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — correcting another user's record without privileged role
 
-  /api/v1/get-attendance-summary/{username}/{year}/{month}:
+  /api/v1/get-attendance-summary/{userId}/{year}/{month}:
     get:
       summary: Get attendance summary for a user
-      description: Returns aggregated attendance summary (present/absent/leave days) for a user
+      description: >-
+        Returns a per-status day count (presents/late/half days/leaves/week
+        offs/holidays/WFH) for the given month, plus used paid/unpaid leaves
+        and remaining regularization corrections
+        (ATTENDANCE_CORRECTIONS_PER_MONTH, default 3). For the current month,
+        only counts through today. Callers may only view their own summary
+        unless privileged (owner/admin/HR/superuser).
       tags: [Attendance]
       security:
         - bearerAuth: []
       parameters:
-        - name: username
+        - name: userId
           in: path
           required: true
           schema: { type: string }
-          example: "sameer_yadav"
+          example: "665f1c2e8a1b2c0012a3b456"
         - name: year
           in: path
           required: true
@@ -188,25 +261,49 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Attendance summary fetched" }
                   data:
                     type: object
                     properties:
-                      username: { type: string }
-                      totalDays: { type: integer, example: 22 }
-                      present: { type: integer, example: 20 }
-                      absent: { type: integer, example: 1 }
+                      presents: { type: integer, example: 18 }
+                      late: { type: integer, example: 2 }
+                      halfDays: { type: integer, example: 1 }
                       leaves: { type: integer, example: 1 }
-                      totalHours: { type: number, example: 176 }
+                      weekOffs: { type: integer, example: 8 }
+                      holidays: { type: integer, example: 1 }
+                      wfh: { type: integer, example: 2 }
+                      paidLeaves: { type: integer, example: 1 }
+                      unpaidLeaves: { type: integer, example: 0 }
+                      totalLeaves: { type: integer, example: 1 }
+                      correctionsUsed: { type: integer, example: 1 }
+                      remainingCorrections: { type: integer, example: 2 }
+                      maxCorrectionsPerMonth: { type: integer, example: 3 }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — viewing another user's summary without privileged role
 
   /api/v1/attendance-insights:
     get:
-      summary: Attendance insights
-      description: Returns aggregate attendance statistics across the organization
+      summary: Organization-wide attendance insights
+      description: >-
+        Owners/admins/HR/superusers only (requireHrPrivileged). Returns
+        aggregate attendance rate, average working hours, correction/
+        automation rates, a per-employee risk assessment (scored from
+        attendance rate, correction frequency, and low average hours),
+        per-department performance, weekly trend direction, and peak
+        check-in hours, for a selectable period.
       tags: [Attendance]
       security:
         - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [current_month, last_month, quarter, year]
+            default: current_month
       responses:
         "200":
           description: Insights retrieved
@@ -219,8 +316,162 @@ paths:
                   data:
                     type: object
                     properties:
-                      averageAttendance: { type: number, example: 92.5 }
-                      lateArrivals: { type: integer, example: 8 }
-                      absentToday: { type: integer, example: 3 }
+                      primaryMetrics:
+                        type: object
+                        properties:
+                          overallAttendanceRate: { type: number, example: 92.5 }
+                          averageWorkingHours: { type: number, example: 7.8 }
+                          correctionRate: { type: number, example: 4 }
+                          automationRate: { type: number, example: 96 }
+                          statusDistribution:
+                            type: object
+                            properties:
+                              present: { type: integer }
+                              halfDay: { type: integer }
+                              leave: { type: integer }
+                              weekOff: { type: integer }
+                              holiday: { type: integer }
+                      employeeRiskAssessment:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId: { type: string }
+                            username: { type: string }
+                            employeeName: { type: string }
+                            department: { type: string }
+                            attendanceRate: { type: number }
+                            avgWorkingHours: { type: number }
+                            correctionFrequency: { type: number }
+                            riskScore: { type: number }
+                            riskLevel:
+                              type: string
+                              enum: [Low, Medium, High]
+                      teamPerformance:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            department: { type: string }
+                            employeeCount: { type: integer }
+                            attendanceRate: { type: number }
+                            avgWorkingHours: { type: number }
+                            correctionRate: { type: number }
+                      trendAnalysis:
+                        type: object
+                        properties:
+                          weeklyTrends:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                week: { type: integer }
+                                attendanceRate: { type: number }
+                          trendDirection:
+                            type: string
+                            enum: [improving, declining, stable]
+                      attendancePatterns:
+                        type: object
+                        properties:
+                          peakHours:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                hour: { type: integer }
+                                count: { type: integer }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — requires owner/admin/HR role or superuser
+
+  /api/v1/attendance/{recordId}/breaks:
+    post:
+      summary: Start a break
+      description: >-
+        Starts a timed break (lunch/short_break/other) against today's
+        attendance record. Only one open break is allowed per record at a
+        time. Employees may only log breaks on their own record; owners/
+        admins/HR/superusers may start a break on any user's record.
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema: { type: string }
+          example: "665f1c2e8a1b2c0012a3b789"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                breakType:
+                  type: string
+                  enum: [lunch, short_break, other]
+                  default: lunch
+                isPaid:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Break started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Break started." }
+                  data:
+                    type: object
+                    description: The created AttendanceBreak (startTime set, endTime null)
+        "400":
+          description: A break is already in progress for this record
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — logging a break on another user's record without privileged role
+        "404":
+          description: Attendance record not found
+
+  /api/v1/attendance/breaks/{id}/end:
+    put:
+      summary: End a break
+      description: >-
+        Ends an in-progress break and records its durationMinutes. Employees
+        may only end their own break; owners/admins/HR/superusers may end any
+        user's break.
+      tags: [Attendance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: "665f1c2e8a1b2c0012a3bc12"
+      responses:
+        "200":
+          description: Break ended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Break ended." }
+                  data:
+                    type: object
+                    description: The updated AttendanceBreak (endTime and durationMinutes set)
+        "400":
+          description: Break already ended
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — ending another user's break without privileged role
+        "404":
+          description: Break not found

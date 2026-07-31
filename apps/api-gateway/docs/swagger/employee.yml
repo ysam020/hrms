@@ -1,9 +1,17 @@
 paths:
   /api/v1/edit-employee-details:
     put:
-      summary: Edit employee details
-      description: Update employee profile fields for the authenticated user
-      tags: [Employee Management]
+      summary: Edit employee lifecycle/statutory details
+      description: >-
+        Updates an employee's employment status (Active/Terminated/Absconded),
+        PF/UAN/ESIC numbers, and termination/absconding metadata. Allowed for
+        owners, admins, superusers, or any user holding the
+        `EmployeeManagement:edit` permission (checked inside the handler, no
+        route-level role guard). Reactivating a non-Active employee back to
+        "Active" grows headcount and is blocked with `SEAT_LIMIT_REACHED` if
+        the tenant's plan seat limit has been reached. Invalidates the
+        employee list/detail/insights caches for the affected user.
+      tags: [Employee]
       security:
         - bearerAuth: []
       requestBody:
@@ -12,19 +20,25 @@ paths:
           application/json:
             schema:
               type: object
+              required: [username]
               properties:
-                department: { type: string, example: "SOFTWARE DEVELOPMENT" }
-                designation: { type: string, example: "FULL STACK DEVELOPER" }
-                phone: { type: string, example: "+91 9876543210" }
-                dateOfBirth:
-                  { type: string, format: date, example: "1995-06-15" }
-                address: { type: string, example: "Mumbai, India" }
-                emergencyContact:
-                  type: object
-                  properties:
-                    name: { type: string }
-                    phone: { type: string }
-                    relation: { type: string }
+                username:
+                  { type: string, maxLength: 64, example: "sameer_yadav" }
+                employeeStatus:
+                  type: string
+                  enum: [Active, Terminated, Absconded]
+                  example: "Terminated"
+                pf_no: { type: string, maxLength: 64, example: "PF1234567" }
+                uan_no: { type: string, maxLength: 64, example: "UAN123456789" }
+                esic_no: { type: string, maxLength: 64, example: "ESIC1234567" }
+                reasonForTermination:
+                  type: string
+                  maxLength: 512
+                  example: "Performance"
+                dateOfTermination:
+                  { type: string, format: date, example: "2026-07-31" }
+                dateOfAbscond:
+                  { type: string, format: date, example: "2026-07-31" }
       responses:
         "200":
           description: Employee details updated
@@ -34,15 +48,40 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  message: { type: string, example: "Employee details updated" }
+                  message:
+                    {
+                      type: string,
+                      example: "Employee details updated successfully",
+                    }
+        "400":
+          description: Seat limit reached while reactivating an employee to Active
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: false }
+                  message: { type: string }
+                  code: { type: string, example: "SEAT_LIMIT_REACHED" }
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — caller lacks EmployeeManagement:edit and is not owner/admin/superuser
+        "404":
+          description: Employee not found
 
   /api/v1/get-employee-details/{username}:
     get:
       summary: Get employee details
-      description: Returns detailed employee profile for the given username
-      tags: [Employee Management]
+      description: >-
+        Returns profile fields plus the employee's current salary structure
+        (fetched from salary-service via gRPC). Statutory/financial fields
+        (pf_no, uan_no, esic_no, salary, salaryStructure,
+        reasonForTermination, dateOfTermination, dateOfAbscond) are only
+        included when the caller is viewing their own record or is HR-or-above
+        — otherwise those fields are stripped from the response. Results are
+        cached per tenant/username.
+      tags: [Employee]
       security:
         - bearerAuth: []
       parameters:
@@ -53,22 +92,48 @@ paths:
           example: "sameer_yadav"
       responses:
         "200":
-          description: Employee details retrieved
+          description: Employee details fetched
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Employee details fetched" }
                   data:
                     type: object
                     properties:
+                      id: { type: string }
                       username: { type: string }
-                      department: { type: string }
-                      designation: { type: string }
-                      dateOfJoining: { type: string, format: date }
-                      phone: { type: string }
-                      dateOfBirth: { type: string, format: date }
+                      first_name: { type: string }
+                      middle_name: { type: string, nullable: true }
+                      last_name: { type: string }
+                      employeeStatus:
+                        type: string
+                        enum: [Active, Terminated, Absconded, Resigned]
+                      isSuperUser: { type: boolean }
+                      tenantRole: { type: string, nullable: true }
+                      pf_no: { type: string, nullable: true }
+                      uan_no: { type: string, nullable: true }
+                      esic_no: { type: string, nullable: true }
+                      reasonForTermination: { type: string, nullable: true }
+                      dateOfTermination:
+                        { type: string, format: date-time, nullable: true }
+                      dateOfAbscond:
+                        { type: string, format: date-time, nullable: true }
+                      salary: { type: number, example: 55000 }
+                      salaryStructure:
+                        type: object
+                        properties:
+                          basicPay: { type: number }
+                          hra: { type: number }
+                          conveyance: { type: number }
+                          pf: { type: number }
+                          esi: { type: number }
+                          pt: { type: number }
+                          components:
+                            type: array
+                            items: { type: object }
         "401":
           description: Unauthorized
         "404":
@@ -76,34 +141,59 @@ paths:
 
   /api/v1/employee-insights:
     get:
-      summary: Employee insights
-      description: Returns aggregate statistics about employees (counts by department, role, status, etc.)
-      tags: [Employee Management]
+      summary: Employee headcount insights
+      description: >-
+        Aggregate employee counts only (no per-employee PII) — powers the
+        Dashboard widgets (visible to every authenticated user) and the
+        Employee Management "Insights" tab. Deliberately left open to any
+        authenticated caller; tab-level gating to HR+ is enforced by the
+        frontend, not here. Cached per tenant.
+      tags: [Employee]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Insights data retrieved
+          description: Employee insights fetched
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Employee insights fetched" }
                   data:
                     type: object
                     properties:
-                      totalEmployees: { type: integer, example: 45 }
-                      byDepartment: { type: array, items: { type: object } }
-                      byRole: { type: array, items: { type: object } }
+                      overview:
+                        type: object
+                        properties:
+                          activeEmployees: { type: integer, example: 42 }
+                          resignedEmployees: { type: integer, example: 3 }
+                          terminatedEmployees: { type: integer, example: 1 }
+                          abscondedEmployees: { type: integer, example: 0 }
+                          totalEmployees: { type: integer, example: 46 }
+                      departmentBreakdown:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            department: { type: string, example: "Engineering" }
+                            count: { type: integer, example: 12 }
+                            activeCount: { type: integer, example: 12 }
         "401":
           description: Unauthorized
 
   /api/v1/complete-kyc:
     post:
-      summary: Submit KYC
-      description: Submit KYC (Know Your Customer) documents for the authenticated employee
-      tags: [KYC]
+      summary: Submit KYC details
+      description: >-
+        Submits/creates the authenticated employee's own KYC record
+        (personal, address, identity document, and bank details) via
+        employee-service's submitKyc RPC. All fields are optional at the
+        gateway validation layer; submitKyc enforces its own completeness
+        rules downstream.
+      tags: [Employee]
       security:
         - bearerAuth: []
       requestBody:
@@ -113,28 +203,47 @@ paths:
             schema:
               type: object
               properties:
-                panNumber: { type: string, example: "ABCDE1234F" }
-                aadharNumber: { type: string, example: "1234-5678-9012" }
-                bankAccountNumber: { type: string, example: "1234567890" }
-                ifscCode: { type: string, example: "HDFC0001234" }
-                bankName: { type: string, example: "HDFC Bank" }
-                documents:
+                employee_photo: { type: string, maxLength: 4096 }
+                dob: { type: string, maxLength: 32, example: "1995-06-15" }
+                blood_group: { type: string, maxLength: 16, example: "O+" }
+                qualification: { type: string, maxLength: 256 }
+                mobile: { type: string, maxLength: 16, example: "9876543210" }
+                email: { type: string, format: email, maxLength: 256 }
+                official_email: { type: string, format: email, maxLength: 256 }
+                permanent_address_line_1: { type: string, maxLength: 256 }
+                permanent_address_line_2: { type: string, maxLength: 256 }
+                permanent_address_city: { type: string, maxLength: 128 }
+                permanent_address_state: { type: string, maxLength: 128 }
+                permanent_address_pincode: { type: string, maxLength: 16 }
+                communication_address_line_1: { type: string, maxLength: 256 }
+                communication_address_line_2: { type: string, maxLength: 256 }
+                communication_address_city: { type: string, maxLength: 128 }
+                communication_address_state: { type: string, maxLength: 128 }
+                communication_address_pincode: { type: string, maxLength: 16 }
+                aadhar_no:
+                  { type: string, maxLength: 20, example: "123456789012" }
+                aadhar_photo_front: { type: string, maxLength: 4096 }
+                aadhar_photo_back: { type: string, maxLength: 4096 }
+                pan_no: { type: string, maxLength: 20, example: "ABCDE1234F" }
+                pan_photo: { type: string, maxLength: 4096 }
+                education_certificates:
                   type: array
-                  items:
-                    type: object
-                    properties:
-                      type: { type: string, example: "pan_card" }
-                      url: { type: string, format: uri }
+                  items: { type: string }
+                experience_certificate: { type: string, maxLength: 4096 }
+                electricity_bill: { type: string, maxLength: 4096 }
+                bank_account_no: { type: string, maxLength: 32 }
+                bank_name: { type: string, maxLength: 128 }
+                ifsc_code:
+                  { type: string, maxLength: 16, example: "HDFC0001234" }
       responses:
         "200":
-          description: KYC submitted successfully
+          description: KYC submitted (passthrough of submitKyc RPC response)
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  message: { type: string, example: "KYC submitted for review" }
         "400":
           description: Invalid KYC data
         "401":
@@ -142,9 +251,16 @@ paths:
 
   /api/v1/edit-kyc:
     put:
-      summary: Edit KYC details
-      description: Update a pending or rejected KYC submission
-      tags: [KYC]
+      summary: Edit an existing KYC submission
+      description: >-
+        Edits a KYC record identified by `username` (required by the handler,
+        though the shared schema marks it optional). Self-edits are always
+        allowed; editing someone else's KYC requires HR/owner/admin/superuser
+        or the `BasicKYCDetails:edit_kyc:all` permission. Blocked once the KYC
+        is "Approved", "Rejected", "Edit Requested", or the caller has already
+        used their one allowed edit within a granted edit window. Accepts the
+        same field set as complete-kyc.
+      tags: [Employee]
       security:
         - bearerAuth: []
       requestBody:
@@ -153,68 +269,290 @@ paths:
           application/json:
             schema:
               type: object
+              required: [username]
               properties:
-                panNumber: { type: string }
-                aadharNumber: { type: string }
-                bankAccountNumber: { type: string }
-                ifscCode: { type: string }
+                username:
+                  { type: string, maxLength: 64, example: "sameer_yadav" }
+                employee_photo: { type: string, maxLength: 4096 }
+                dob: { type: string, maxLength: 32 }
+                blood_group: { type: string, maxLength: 16 }
+                qualification: { type: string, maxLength: 256 }
+                mobile: { type: string, maxLength: 16 }
+                email: { type: string, format: email, maxLength: 256 }
+                official_email: { type: string, format: email, maxLength: 256 }
+                aadhar_no: { type: string, maxLength: 20 }
+                pan_no: { type: string, maxLength: 20 }
+                bank_account_no: { type: string, maxLength: 32 }
+                bank_name: { type: string, maxLength: 128 }
+                ifsc_code: { type: string, maxLength: 16 }
       responses:
         "200":
-          description: KYC updated
+          description: KYC updated (passthrough of submitKyc RPC response)
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-        "401":
-          description: Unauthorized
-
-  /api/v1/kyc-approval:
-    post:
-      summary: Approve or reject KYC
-      description: Admin/HR action to approve or reject an employee KYC submission
-      tags: [KYC]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [kycId, action]
-              properties:
-                kycId: { type: string, example: "6672a2501aa931b68b091faf" }
-                action:
-                  type: string
-                  enum: [approve, reject]
-                  example: "approve"
-                rejectionReason: { type: string, example: "Document unclear" }
-      responses:
-        "200":
-          description: KYC status updated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
+        "400":
+          description: >-
+            username missing, or KYC not currently editable (already
+            finalized, awaiting approver, or edit window already used)
         "401":
           description: Unauthorized
         "403":
-          description: Forbidden
+          description: Editing someone else's KYC without permission
+        "404":
+          description: Employee not found
+
+  /api/v1/kyc-approval:
+    post:
+      summary: Approve or request revision on a KYC submission
+      description: >-
+        Decides a submitted KYC. `kyc_approval` must be "Approved" or
+        "Revision Requested" — there is no reject action ("Rejected" is a
+        legacy terminal status no longer reachable from this endpoint).
+        `field_issues` (a map of field name to issue description) is required
+        when requesting a revision. Requires HR/owner/admin/superuser or the
+        matching granular `BasicKYCDetails:approve_kyc:all` /
+        `BasicKYCDetails:request_kyc_revision:all` permission.
+      tags: [Employee]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, kyc_approval]
+              properties:
+                username:
+                  { type: string, maxLength: 64, example: "sameer_yadav" }
+                kyc_approval:
+                  type: string
+                  enum: [Approved, "Revision Requested"]
+                  example: "Approved"
+                field_issues:
+                  type: object
+                  additionalProperties: { type: string, maxLength: 500 }
+                  example: { "pan_no": "Photo is blurry" }
+      responses:
+        "200":
+          description: KYC decision recorded (passthrough of RPC response)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "400":
+          description: Missing/invalid fields, e.g. field_issues absent for a revision request
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller lacks the approve/revision-request permission
+        "404":
+          description: User not found
 
   /api/v1/view-all-kycs:
     get:
-      summary: View all KYC submissions
-      description: Returns all KYC submissions (admin/HR only)
-      tags: [KYC]
+      summary: List KYC submissions
+      description: >-
+        Paginated list of active employees' KYC status. Non-privileged
+        callers only ever see their own record; privileged callers (HR+,
+        superuser) additionally get free-text `search` (username/name/
+        department/designation) and `status` filtering.
+      tags: [Employee]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+        - name: search
+          in: query
+          description: Privileged callers only
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by kyc_approval status; "All" or omitted returns every status
+          schema: { type: string, example: "Pending" }
+      responses:
+        "200":
+          description: KYC list fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "KYC list fetched" }
+                  data:
+                    type: object
+                    properties:
+                      kycs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            username: { type: string }
+                            first_name: { type: string }
+                            middle_name: { type: string, nullable: true }
+                            last_name: { type: string }
+                            department: { type: string, nullable: true }
+                            designation: { type: string, nullable: true }
+                            employeeStatus: { type: string }
+                            joiningDate: { type: string, format: date-time }
+                            kyc_approval: { type: string }
+                            kyc_date:
+                              {
+                                type: string,
+                                format: date-time,
+                                nullable: true,
+                              }
+                      pagination:
+                        type: object
+                        properties:
+                          totalCount: { type: integer }
+                          page: { type: integer }
+                          limit: { type: integer }
+                          totalPages: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/v1/get-kyc-insights:
+    get:
+      summary: KYC completion insights
+      description: >-
+        Aggregate tenant-wide KYC statistics (approved/pending/rejected
+        counts and completion rate) for the Dashboard KYC widget and the KYC
+        "Insights" tab. Open to any authenticated user; tab-level gating to
+        HR+ is enforced by the frontend.
+      tags: [Employee]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: KYC list retrieved
+          description: KYC insights fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "KYC insights fetched" }
+                  data:
+                    type: object
+                    properties:
+                      overview:
+                        type: object
+                        properties:
+                          approvedKyc: { type: integer, example: 30 }
+                          pendingKyc: { type: integer, example: 10 }
+                          rejectedKyc: { type: integer, example: 1 }
+                          completionRate: { type: number, example: 73.17 }
+                          totalEmployees: { type: integer, example: 41 }
+        "401":
+          description: Unauthorized
+        "500":
+          description: No tenant context on the request
+
+  /api/v1/request-kyc-edit-access:
+    post:
+      summary: Request access to re-edit an approved KYC
+      description: >-
+        Self-service only — lets an employee whose KYC is already "Approved"
+        ask HR to reopen it for one more edit. Records a reason; HR grants the
+        request via PUT /allow-kyc-edit.
+      tags: [Employee]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  example: "Bank account number changed"
+      responses:
+        "200":
+          description: Edit access requested (passthrough of RPC response)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/v1/allow-kyc-edit:
+    put:
+      summary: Grant a pending KYC edit-access request
+      description: >-
+        HR action that reopens an "Edit Requested" KYC back to editable
+        state for the named employee. Requires HR/owner/admin/superuser or
+        the `BasicKYCDetails:request_kyc_revision:all` permission. No request
+        body schema is enforced by middleware; `username` is required by the
+        handler.
+      tags: [Employee]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string, example: "sameer_yadav" }
+      responses:
+        "200":
+          description: Edit access granted (passthrough of RPC response)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        "400":
+          description: username missing
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller lacks permission to grant KYC edits
+        "404":
+          description: User not found
+
+  /api/v1/kyc-approvals/pending:
+    get:
+      summary: List pending KYC approvals/edit-access requests
+      description: >-
+        Feeds the dashboard's Pending Approvals widget, sidebar badge, and
+        the approvals inbox. Returns two independently-permissioned
+        categories merged and sorted by date: fresh/resubmitted KYCs
+        awaiting approval, and Approved KYCs with a pending edit-access
+        request awaiting grant. A caller with neither permission gets an
+        empty list rather than a 403, since this is called unconditionally
+        by every logged-in user's dashboard.
+      tags: [Employee]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pending KYC actions fetched
           content:
             application/json:
               schema:
@@ -226,37 +564,15 @@ paths:
                     items:
                       type: object
                       properties:
-                        kycId: { type: string }
-                        username: { type: string }
-                        status:
+                        instanceId: { type: string, example: "kyc:64f1..." }
+                        module: { type: string, example: "kyc" }
+                        kycAction:
                           type: string
-                          enum: [pending, approved, rejected]
-                        submittedAt: { type: string, format: date-time }
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-kyc-insights:
-    get:
-      summary: KYC insights
-      description: Returns aggregate KYC statistics (counts by status, department, etc.)
-      tags: [KYC]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: KYC insights retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: object
-                    properties:
-                      total: { type: integer }
-                      pending: { type: integer }
-                      approved: { type: integer }
-                      rejected: { type: integer }
+                          enum: [approve, allow_edit]
+                        username: { type: string }
+                        requestedByName: { type: string }
+                        createdAt:
+                          { type: string, format: date-time, nullable: true }
+                        summary: { type: string }
         "401":
           description: Unauthorized

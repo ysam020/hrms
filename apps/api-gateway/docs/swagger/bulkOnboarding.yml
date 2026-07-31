@@ -1,0 +1,223 @@
+paths:
+  /api/v1/bulk-onboarding/template:
+    get:
+      summary: Download the bulk onboarding CSV template
+      description: >-
+        Streams a freshly-generated CSV (Content-Type text/csv, as an
+        attachment) with the current header row for bulk employee import.
+        Generated on demand from the import spec rather than a static file,
+        so the template never drifts out of sync with what /validate and
+        /commit expect. Requires HR/owner/admin/superuser (requireHrPrivileged).
+      tags: [Bulk Onboarding]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: CSV template file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser
+
+  /api/v1/bulk-onboarding/upload-url:
+    post:
+      summary: Get a pre-signed S3 upload URL for the filled-in CSV
+      description: >-
+        Same presigned-PUT pattern used for resume uploads — the browser
+        uploads the filled-in workbook directly to S3, bypassing the API
+        server. Only `.csv` is accepted; the file extension is the primary
+        gate since `.csv` MIME types vary widely across browsers/OSes.
+        Requires HR/owner/admin/superuser. The returned `key` is passed to
+        /validate and /commit.
+      tags: [Bulk Onboarding]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, fileType]
+              properties:
+                fileName:
+                  type: string
+                  maxLength: 256
+                  example: "employee-onboarding-template.csv"
+                fileType:
+                  type: string
+                  maxLength: 128
+                  example: "text/csv"
+      responses:
+        "200":
+          description: Pre-signed URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Pre-signed URL generated" }
+                  data:
+                    type: object
+                    properties:
+                      url: { type: string, format: uri }
+                      key:
+                        {
+                          type: string,
+                          example: "bulk-onboarding/<tenantId>/import_171.../csv",
+                        }
+        "400":
+          description: File is not a .csv, or no active tenant
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser
+
+  /api/v1/bulk-onboarding/validate:
+    post:
+      summary: Validate an uploaded onboarding workbook
+      description: >-
+        Report-only — fetches the CSV from S3 by `key`, parses it, and
+        validates every row (per-row parse errors, duplicate "Official
+        Email" values within the sheet, and emails that already belong to an
+        existing account) without writing anything to the database. Requires
+        HR/owner/admin/superuser.
+      tags: [Bulk Onboarding]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+                  maxLength: 1024
+                  example: "bulk-onboarding/<tenantId>/import_171.../csv"
+      responses:
+        "200":
+          description: Validation report (valid may be true or false)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Workbook is valid" }
+                  data:
+                    type: object
+                    properties:
+                      valid: { type: boolean }
+                      summary:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            sheetName: { type: string, example: "Employees" }
+                            rows: { type: integer }
+                            errors: { type: integer }
+                      errors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            sheetName: { type: string }
+                            row: { type: integer }
+                            message: { type: string }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser
+
+  /api/v1/bulk-onboarding/commit:
+    post:
+      summary: Commit a validated onboarding workbook
+      description: >-
+        Re-runs the same full validation as /validate against a fresh S3
+        fetch (never trusts an earlier /validate call, since DB state can
+        change in between) and only writes if the workbook is still
+        completely clean — nothing is imported for a batch with any
+        remaining error. On a clean batch, creates a User +
+        TenantMembership(role="employee") + SalaryStructure per row (manual
+        Basic Pay breakdown if provided, otherwise derived from the row's
+        gross salary). There is no cross-service transaction, so a failure on
+        an individual row after validation passed is reported per-row rather
+        than rolling back the whole batch. Requires HR/owner/admin/superuser.
+      tags: [Bulk Onboarding]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+                  maxLength: 1024
+                  example: "bulk-onboarding/<tenantId>/import_171.../csv"
+      responses:
+        "200":
+          description: Import completed (possibly with some per-row failures)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "12 employees imported" }
+                  data:
+                    type: object
+                    properties:
+                      created:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            row: { type: integer }
+                            email: { type: string }
+                            userId: { type: string }
+                      failed:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            row: { type: integer }
+                            email: { type: string }
+                            message: { type: string }
+        "400":
+          description: >-
+            Workbook still has validation errors (nothing imported), or no
+            active tenant
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: false }
+                  message:
+                    {
+                      type: string,
+                      example: "Workbook still has validation errors — nothing was imported",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      valid: { type: boolean, example: false }
+                      summary: { type: array, items: { type: object } }
+                      errors: { type: array, items: { type: object } }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser

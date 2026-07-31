@@ -1,0 +1,507 @@
+paths:
+  /api/v1/payroll/runs:
+    post:
+      summary: Initiate a payroll run
+      description: >-
+        Initiates a new payroll run for a past month/year (never the current
+        or future month) and computes attendance-prorated line-items for
+        every active employee, plus anyone who exited during that month.
+        Line-items are computed once at initiation time from each employee's
+        current salary structure, attendance, pending salary advance EMIs, and
+        income-tax (TDS) position, and are immutable afterward. Runs start in
+        "draft" status; @@unique([tenantId, month, year]) prevents a
+        duplicate run for the same period. Restricted to owner/admin/hr.
+        Employees with no salary structure configured are skipped (returned
+        in `skippedEmployees`) rather than given a ₹0 payslip.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [month, year]
+              properties:
+                month: { type: integer, minimum: 1, maximum: 12, example: 3 }
+                year:
+                  { type: integer, minimum: 2000, maximum: 2100, example: 2026 }
+                notes:
+                  { type: string, maxLength: 1000, example: "March payroll" }
+      responses:
+        "201":
+          description: Payroll run created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Payroll run created for 2026-03" }
+                  data:
+                    type: object
+                    properties:
+                      runId: { type: string }
+                      status: { type: string, example: "draft" }
+                      employeeCount: { type: integer, example: 42 }
+                      totalGross: { type: number }
+                      totalNet: { type: number }
+                      totalDeductions: { type: number }
+                      payCycleId: { type: string, nullable: true }
+                      skippedEmployees:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId: { type: string }
+                            reason:
+                              { type: string, example: "No salary structure" }
+                      warning:
+                        type: string
+                        description: >-
+                          Present only when the tenant's resolved pay cycle is
+                          non-monthly (this run still covers the full calendar
+                          month, not a single pay-cycle period)
+        "400":
+          description: >-
+            month/year is the current or future month (only past months are
+            allowed), or no active employees found to process
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — only owner/admin/hr can initiate payroll runs
+        "409":
+          description: A payroll run for this month/year already exists
+
+    get:
+      summary: List payroll runs
+      description: >-
+        Lists payroll runs for the tenant, newest period first. `search`
+        resolves to a year (4-digit), a month name (with optional year,
+        e.g. "March 2026"), or falls back to a contains-match on `notes`.
+        Restricted to owner/admin/hr.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              [
+                draft,
+                processing,
+                approved,
+                disbursing,
+                disbursed,
+                disbursement_failed,
+                cancelled,
+              ]
+        - name: search
+          in: query
+          schema: { type: string }
+          example: "March 2026"
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payroll runs retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Payroll runs retrieved" }
+                  data:
+                    type: array
+                    items: { type: object }
+                  total: { type: integer }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — only owner/admin/hr can list payroll runs
+
+  /api/v1/payroll/runs/{runId}:
+    get:
+      summary: Get a payroll run's detail
+      description: >-
+        Returns a single payroll run with its full line-items, each enriched
+        with the employee's username/name/designation/department. Restricted
+        to owner/admin/hr.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Payroll run retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Payroll run retrieved" }
+                  data:
+                    type: object
+                    description: PayrollRun with lineItems[].employee enrichment
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — only owner/admin/hr can view payroll runs
+        "404":
+          description: Payroll run not found
+
+  /api/v1/payroll/runs/status:
+    patch:
+      summary: Transition a payroll run's lifecycle status
+      description: >-
+        Moves a run through draft → processing → approved → disbursed |
+        cancelled. `status` is the target status; the endpoint maps it to an
+        internal action (processing→submit, approved→approve,
+        disbursed→disburse, cancelled→cancel) and validates the current
+        status permits that transition. submit/approve require
+        owner/admin/hr; disburse/cancel require owner/admin. Approval enforces
+        a four-eyes rule — the run's initiator cannot approve their own run
+        unless they are a superuser. Disbursing a run (when RazorpayX is
+        configured) pre-validates every line-item employee has bank account +
+        IFSC on file before changing status. Disbursement itself runs as a
+        background job — a successful disburse call moves the run to
+        "disbursing" (202 Accepted), and the job later flips it to
+        "disbursed" once RazorpayX payouts and payslip generation complete.
+        Concurrent status updates on the same run are rejected with 409.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runId, status]
+              properties:
+                runId: { type: string }
+                status:
+                  type: string
+                  enum: [processing, approved, disbursed, cancelled]
+                notes: { type: string, maxLength: 1000 }
+      responses:
+        "200":
+          description: Payroll run status updated (submit/approve/cancel)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Payroll run approved successfully",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      runId: { type: string }
+                      status: { type: string }
+        "202":
+          description: >-
+            Disbursement started as a background job — poll GET
+            /payroll/runs/{runId} for progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Payroll disbursement started. Poll GET /payroll/runs/:runId for progress.",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      runId: { type: string }
+                      status: { type: string, example: "disbursing" }
+        "400":
+          description: >-
+            Invalid target status, run's current status doesn't permit this
+            transition, or (disburse) employees are missing bank details
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — caller's role doesn't permit this transition, or the
+            initiator is attempting to approve their own run
+        "404":
+          description: Payroll run not found
+        "409":
+          description: Run was already updated by another concurrent request
+        "500":
+          description: Failed to enqueue the disbursement job — run status was rolled back
+
+  /api/v1/payroll/runs/{runId}/retry-payouts:
+    post:
+      summary: Retry failed payouts for a disbursed/failed run
+      description: >-
+        Re-enqueues the disbursement job for a run whose bank payouts didn't
+        fully complete — either individual line items are still
+        failed/pending, or the whole background job exhausted its retries
+        (run status "disbursement_failed"). Only re-processes line items not
+        already in a terminal payout state, so it's safe to call repeatedly
+        without double-paying. Restricted to owner/admin.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Retry job enqueued — poll GET /payroll/runs/{runId} for progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Retrying 3 outstanding payout(s). Poll GET /payroll/runs/:runId for progress.",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      runId: { type: string }
+                      outstanding: { type: integer }
+        "400":
+          description: >-
+            Run's status isn't retryable (must be disbursed or
+            disbursement_failed), or nothing is outstanding to retry
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — only owner/admin can retry payroll payouts
+        "404":
+          description: Payroll run not found
+        "409":
+          description: Run is already being retried by another concurrent request
+        "500":
+          description: Failed to enqueue the retry job — run status was rolled back
+
+  /api/v1/payroll/advances:
+    post:
+      summary: Request a salary advance
+      description: >-
+        Any authenticated employee requests a salary advance against their
+        salary, to be recovered via monthly EMI deductions from future
+        payslips. Only one active advance (Pending/Approved/Repaying) is
+        allowed per employee at a time.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason, emiMonths]
+              properties:
+                amount: { type: number, maximum: 10000000, example: 50000 }
+                reason:
+                  {
+                    type: string,
+                    maxLength: 1000,
+                    example: "Medical emergency",
+                  }
+                emiMonths:
+                  { type: integer, minimum: 1, maximum: 24, example: 5 }
+      responses:
+        "201":
+          description: Salary advance requested (status Pending)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Salary advance requested" }
+                  data:
+                    type: object
+                    properties:
+                      advanceId: { type: string }
+                      amount: { type: number }
+                      emiAmount: { type: number }
+                      emiMonths: { type: integer }
+        "401":
+          description: Unauthorized
+        "409":
+          description: Caller already has an active salary advance
+
+    get:
+      summary: List salary advances
+      description: >-
+        HR/owner/admin (or a holder of the
+        SalaryManagement:approve_advance permission) see every employee's
+        advances, with an optional name/username search; any other
+        authenticated employee only ever sees their own.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Approved, Rejected, Repaying, Closed]
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Name/username search — privileged callers only
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Salary advances retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Salary advances retrieved" }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: SalaryAdvance row + employee summary
+                  total: { type: integer }
+        "401":
+          description: Unauthorized
+
+  /api/v1/payroll/advances/status:
+    patch:
+      summary: Approve or reject a salary advance
+      description: >-
+        Transitions a Pending advance to Approved or Rejected. HR may
+        override the EMI amount on approval, which recomputes emiMonths as
+        ceil(amount / emiAmount). Restricted to owner/admin/hr or a holder of
+        the SalaryManagement:approve_advance permission. Concurrent updates
+        on the same advance are rejected with 409.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [advanceId, action]
+              properties:
+                advanceId: { type: string }
+                action: { type: string, enum: [approve, reject] }
+                emiAmount:
+                  type: number
+                  description: Optional override, only used when action=approve
+                  example: 10000
+      responses:
+        "200":
+          description: Advance status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Salary advance approved" }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — caller lacks owner/admin/hr role or the
+            SalaryManagement:approve_advance permission
+        "400":
+          description: Advance is not in Pending status
+        "404":
+          description: Advance not found
+        "409":
+          description: Advance was already updated by another concurrent request
+
+  /api/v1/payroll/my-payslips:
+    get:
+      summary: Get the current employee's payslip history
+      description: >-
+        Returns one payslip per disbursed PayrollRun the caller has a
+        PayrollLineItem in — sourced from the actual, attendance-prorated
+        amount that was disbursed, not from the live SalaryStructure. Sorted
+        newest period first.
+      tags: [Payroll]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payslips retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Payslips retrieved" }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId: { type: string }
+                        month: { type: integer }
+                        year: { type: integer }
+                        grossSalary: { type: number }
+                        basicPay: { type: number }
+                        hra: { type: number }
+                        conveyance: { type: number }
+                        incentive: { type: number }
+                        pf: { type: number }
+                        esi: { type: number }
+                        pt: { type: number }
+                        deductions: { type: number }
+                        advanceDeduction: { type: number }
+                        tds: { type: number }
+                        netPayable: { type: number }
+                        componentBreakdown:
+                          type: array
+                          items: { type: object }
+                  total: { type: integer }
+        "401":
+          description: Unauthorized

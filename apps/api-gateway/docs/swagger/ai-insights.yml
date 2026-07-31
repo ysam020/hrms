@@ -1,52 +1,75 @@
 paths:
   /api/v1/ai-insights:
-    get:
+    post:
       summary: Generate an AI analytics report
       description: >
-        Streams an AI-generated analytical report for a given HRMS module and time period.
-        The response is delivered as Server-Sent Events (SSE). Unlike the chatbot, this
-        is a one-shot generation with no tool calls — the model receives aggregated module
-        data and produces a structured narrative analysis.
+        Fetches aggregated data for one HRMS module, then streams an AI-generated
+        analytical report as Server-Sent Events (SSE). This is a one-shot generation with
+        no tool calls — the model (Ollama, model configured via `OLLAMA_MODEL`, default
+        `qwen2.5-coder:14b`) receives the aggregated module data plus a module-specific
+        system prompt and streams back a narrative report as JSON text, one token per SSE
+        event.
 
         Available modules and what they analyse:
 
-        - `attendance` — on-time rates, late arrivals, absenteeism patterns, WFH trends
+        - `attendance` — attendance rate, working hours, correction/late-arrival rates,
+        per-employee risk scoring, department comparison, weekly trend, peak check-in
+        hours. Data window is controlled by `period`.
 
-        - `leave` — leave utilisation, approval rates, leave type breakdown, seasonal trends
+        - `employee-management` — headcount by status (active/resigned/terminated/
+        absconded), attrition rate, department/designation breakdown, joinees in the last
+        90 days.
 
-        - `recruitment` — pipeline conversion, time-to-hire, hiring manager performance
+        - `employee-kyc` — KYC approval completion rate, pending/rejected counts, and a
+        department-wise compliance breakdown.
 
-        - `salary` — salary distribution by department, median vs budget, pay equity signals
+        - `recruitment` — job opening and application pipeline metrics, hiring success
+        rate, top performing job postings, experience/budget analysis, deadline urgency,
+        hiring manager leaderboard, monthly posting trend.
 
-        - `workforce` — headcount growth, department distribution, turnover rates
+        - `resignation` — resignation status counts, approval rate, upcoming departures in
+        the next 30 days, and a 6-month monthly trend.
 
-        The `period` parameter accepts ISO 8601 date ranges or keywords like `last_30_days`,
-        `last_quarter`, `this_year`.
+        Requires role owner, admin, or hr. Rate-limited to 20 requests/minute per client
+        (Redis-backed) since each call invokes the LLM.
       tags: [AI Insights]
       security:
         - bearerAuth: []
-      parameters:
-        - name: module
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [attendance, leave, recruitment, salary, workforce]
-          example: "attendance"
-          description: The HRMS module to generate insights for
-        - name: period
-          in: query
-          required: false
-          schema: { type: string }
-          example: "last_30_days"
-          description: >
-            Time period for the report. Accepts keywords: `last_7_days`, `last_30_days`,
-            `last_quarter`, `this_year`, `last_year`. Defaults to `last_30_days`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [module]
+              properties:
+                module:
+                  type: string
+                  enum:
+                    [
+                      attendance,
+                      employee-management,
+                      employee-kyc,
+                      recruitment,
+                      resignation,
+                    ]
+                  example: "attendance"
+                  description: The HRMS module to generate insights for.
+                period:
+                  type: string
+                  enum: [current_month, last_month, quarter, year]
+                  default: "current_month"
+                  example: "current_month"
+                  description: >
+                    Only used by the `attendance` module to pick the reporting window;
+                    ignored by all other modules.
       responses:
         "200":
           description: >
             SSE stream of the AI-generated report. Content-Type is `text/event-stream`.
-            Each line is a `data: <json>` event.
+            Each line is a `data: <json>` event. The accumulated `token` values, once
+            concatenated, form a JSON string with shape
+            `{ summary, patterns[], risks[], recommendations[] }`.
           content:
             text/event-stream:
               schema:
@@ -58,40 +81,33 @@ paths:
 
                   - `data: {"done": true}` — stream complete
 
-                  - `data: {"error": "..."}` — error during generation
+                  - `data: {"error": "..."}` — generation failed after the stream had
+                  already started (e.g. Ollama unreachable or timed out after 120s); this
+                  arrives as an SSE event within the 200 response, not as an HTTP error
+                  status, because headers are only switched to `text/event-stream` after
+                  data fetching succeeds.
               example: |
-                data: {"token":"## Attendance Analysis — Last 30 Days\n\n"}
-                data: {"token":"Overall on-time rate is **87%**, which is "}
-                data: {"token":"3 percentage points below the previous period.\n\n"}
-                data: {"token":"**Key findings:**\n"}
-                data: {"token":"- Late arrivals peaked on Mondays (avg 12 per day)\n"}
-                data: {"token":"- Engineering department has the highest WFH usage (42%)\n"}
+                data: {"token":"{\n  \"summary\": \"Overall attendance rate is 91%"}
+                data: {"token":" across 128 active employees this month...\"}"}
                 data: {"done":true}
         "400":
-          description: Invalid module or period
+          description: Missing or unrecognised `module` in the request body
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  message:
-                    {
-                      type: string,
-                      example: "Invalid module: 'payroll'. Valid modules are: attendance, leave, recruitment, salary, workforce",
-                    }
+                  success: { type: boolean, example: false }
+                  message: { type: string, example: "Unknown module: payroll" }
         "401":
           description: Unauthorized
         "402":
           description: Subscription expired
-        "503":
-          description: AI service (Ollama) is unavailable
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    {
-                      type: string,
-                      example: "AI service is currently unavailable",
-                    }
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
+        "500":
+          description: >
+            Data-fetch failure before the stream started (e.g. Prisma error, or missing
+            tenant context for the employee-kyc module)

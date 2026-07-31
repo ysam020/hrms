@@ -1,0 +1,673 @@
+paths:
+  /api/v1/salary-component-definitions:
+    get:
+      summary: List salary component definitions
+      description: >-
+        Returns the tenant's active salary component definitions
+        (earnings/deductions used to build salary structures and payslips),
+        ordered by displayOrder. On first call for a tenant, seeds the six
+        default components (Basic Pay, HRA, Conveyance Allowance, Provident
+        Fund, ESI, Professional Tax) idempotently so payroll calculations have
+        something to reference even before HR configures anything.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Salary component definitions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        code: { type: string, example: "BASIC" }
+                        name: { type: string, example: "Basic Pay" }
+                        type: { type: string, enum: [earning, deduction] }
+                        isTaxable: { type: boolean }
+                        calcType:
+                          type: string
+                          enum: [fixed, percent_of_basic, formula]
+                        percentOf: { type: string, nullable: true }
+                        percentValue: { type: number, nullable: true }
+                        isRecurring: { type: boolean }
+                        isStatutory: { type: boolean }
+                        isActive: { type: boolean }
+                        displayOrder: { type: integer }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+
+    post:
+      summary: Create a salary component definition
+      description: >-
+        Adds a new tenant-configurable earning/deduction component (beyond
+        the default six) that can be referenced by code when building a
+        salary structure. `code` is upper-cased on save. Restricted to
+        owner/admin/superuser or a holder of the
+        Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code, type]
+              properties:
+                name:
+                  { type: string, maxLength: 120, example: "Special Allowance" }
+                code: { type: string, maxLength: 60, example: "SPECIAL" }
+                type: { type: string, enum: [earning, deduction] }
+                isTaxable: { type: boolean, default: true }
+                calcType:
+                  type: string
+                  enum: [fixed, percent_of_basic, formula]
+                  default: fixed
+                percentOf: { type: string, maxLength: 60 }
+                percentValue: { type: number, minimum: 0, example: 10 }
+                isRecurring: { type: boolean, default: true }
+                displayOrder: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Component added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Component added." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            salary components
+
+  /api/v1/salary-component-definitions/{id}:
+    put:
+      summary: Update a salary component definition
+      description: >-
+        Partially updates a component's fields, or its isActive flag.
+        Statutory components (PF/ESI/PT) cannot be deactivated via this
+        endpoint. Restricted to owner/admin/superuser or a holder of the
+        Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+                code: { type: string, maxLength: 60 }
+                type: { type: string, enum: [earning, deduction] }
+                isTaxable: { type: boolean }
+                calcType:
+                  type: string
+                  enum: [fixed, percent_of_basic, formula]
+                percentOf: { type: string, maxLength: 60 }
+                percentValue: { type: number, minimum: 0 }
+                isRecurring: { type: boolean }
+                displayOrder: { type: integer, minimum: 0 }
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: Component updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Component updated." }
+                  data: { type: object }
+        "400":
+          description: Attempted to deactivate a statutory component (PF/ESI/PT)
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            salary components
+        "404":
+          description: Component not found
+
+    delete:
+      summary: Remove a salary component definition
+      description: >-
+        Soft-deletes a component (sets isActive to false) — never hard
+        deletes, so historical payslips referencing this code remain
+        readable. Statutory components (PF/ESI/PT) cannot be removed.
+        Restricted to owner/admin/superuser or a holder of the
+        Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Component removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Component removed." }
+        "400":
+          description: Attempted to remove a statutory component (PF/ESI/PT)
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            salary components
+        "404":
+          description: Component not found
+
+  /api/v1/pt-slabs:
+    get:
+      summary: List Professional Tax slabs
+      description: >-
+        Returns the tenant's state-wise Professional Tax slabs, ordered by
+        state then minGross. Used by payroll runs to compute PT instead of
+        the flat approximate default when the tenant has configured them.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: PT slabs retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        state: { type: string, example: "Maharashtra" }
+                        minGross: { type: number }
+                        maxGross: { type: number, nullable: true }
+                        monthlyPT: { type: number }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+
+    post:
+      summary: Create a Professional Tax slab
+      description: >-
+        Adds a state-wise PT slab. Restricted to owner/admin/superuser or a
+        holder of the Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state, minGross, monthlyPT]
+              properties:
+                state: { type: string, maxLength: 60, example: "Maharashtra" }
+                minGross: { type: number, minimum: 0, example: 0 }
+                maxGross: { type: number, minimum: 0, example: 10000 }
+                monthlyPT: { type: number, minimum: 0, example: 175 }
+      responses:
+        "200":
+          description: Slab added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Slab added." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            Professional Tax slabs
+
+  /api/v1/pt-slabs/{id}:
+    put:
+      summary: Update a Professional Tax slab
+      description: >-
+        Partially updates a PT slab's fields. Restricted to owner/admin/
+        superuser or a holder of the Organisation:edit_organisation_settings
+        permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                state: { type: string, maxLength: 60 }
+                minGross: { type: number, minimum: 0 }
+                maxGross: { type: number, minimum: 0 }
+                monthlyPT: { type: number, minimum: 0 }
+      responses:
+        "200":
+          description: Slab updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Slab updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            Professional Tax slabs
+        "404":
+          description: Slab not found
+
+    delete:
+      summary: Remove a Professional Tax slab
+      description: >-
+        Hard-deletes a PT slab. Restricted to owner/admin/superuser or a
+        holder of the Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Slab removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Slab removed." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            Professional Tax slabs
+        "404":
+          description: Slab not found
+
+  /api/v1/tds-slabs:
+    get:
+      summary: List Income Tax (TDS) slabs
+      description: >-
+        Returns the tenant's income-tax slabs across financial years and
+        regimes (old/new), ordered by financial year desc, regime, then
+        minIncome. Used by payroll runs, the TDS worksheet, and Form 16 to
+        compute monthly/annual tax.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Income Tax slabs retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        financialYear: { type: string, example: "2026-27" }
+                        regime: { type: string, enum: [old, new] }
+                        minIncome: { type: number }
+                        maxIncome: { type: number, nullable: true }
+                        ratePercent: { type: number }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+
+    post:
+      summary: Create an Income Tax (TDS) slab
+      description: >-
+        Adds a slab row for a given financial year/regime/income band.
+        Restricted to owner/admin/superuser or a holder of the
+        Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [financialYear, regime, minIncome, ratePercent]
+              properties:
+                financialYear:
+                  { type: string, maxLength: 20, example: "2026-27" }
+                regime: { type: string, enum: [old, new] }
+                minIncome: { type: number, minimum: 0, example: 0 }
+                maxIncome: { type: number, minimum: 0, example: 300000 }
+                ratePercent:
+                  { type: number, minimum: 0, maximum: 100, example: 5 }
+      responses:
+        "200":
+          description: Slab added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Slab added." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            Income Tax slabs
+
+  /api/v1/tds-slabs/{id}:
+    put:
+      summary: Update an Income Tax (TDS) slab
+      description: >-
+        Partially updates a TDS slab's fields. Restricted to owner/admin/
+        superuser or a holder of the Organisation:edit_organisation_settings
+        permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                financialYear: { type: string, maxLength: 20 }
+                regime: { type: string, enum: [old, new] }
+                minIncome: { type: number, minimum: 0 }
+                maxIncome: { type: number, minimum: 0 }
+                ratePercent: { type: number, minimum: 0, maximum: 100 }
+      responses:
+        "200":
+          description: Slab updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Slab updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            Income Tax slabs
+        "404":
+          description: Slab not found
+
+    delete:
+      summary: Remove an Income Tax (TDS) slab
+      description: >-
+        Hard-deletes a TDS slab. Restricted to owner/admin/superuser or a
+        holder of the Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Slab removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Slab removed." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            Income Tax slabs
+        "404":
+          description: Slab not found
+
+  /api/v1/pay-cycles:
+    get:
+      summary: List pay cycles
+      description: >-
+        Returns the tenant's active pay cycles, default cycle first. Payroll
+        runs are stamped with the resolved pay cycle at initiation time.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pay cycles retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string, example: "Monthly" }
+                        frequency:
+                          type: string
+                          enum: [monthly, biweekly, weekly]
+                        payDay: { type: integer }
+                        isDefault: { type: boolean }
+                        isActive: { type: boolean }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+
+    post:
+      summary: Create a pay cycle
+      description: >-
+        Adds a new pay cycle. Setting isDefault clears the flag on every
+        other cycle for the tenant first, so only one cycle is ever default.
+        Note: payroll runs are still processed one per calendar month
+        regardless of a non-monthly cycle's frequency (see the payroll run
+        initiation endpoint). Restricted to owner/admin/superuser or a holder
+        of the Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, payDay]
+              properties:
+                name: { type: string, maxLength: 120, example: "Monthly" }
+                frequency:
+                  type: string
+                  enum: [monthly, biweekly, weekly]
+                  default: monthly
+                payDay: { type: integer, minimum: 1, maximum: 31, example: 1 }
+                isDefault: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Pay cycle added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Pay cycle added." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            pay cycles
+
+  /api/v1/pay-cycles/{id}:
+    put:
+      summary: Update a pay cycle
+      description: >-
+        Partially updates a pay cycle's fields, or its isActive flag. Setting
+        isDefault to true clears the flag on every other cycle for the
+        tenant. Restricted to owner/admin/superuser or a holder of the
+        Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+                frequency:
+                  type: string
+                  enum: [monthly, biweekly, weekly]
+                payDay: { type: integer, minimum: 1, maximum: 31 }
+                isDefault: { type: boolean }
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: Pay cycle updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Pay cycle updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            pay cycles
+        "404":
+          description: Pay cycle not found
+
+    delete:
+      summary: Remove a pay cycle
+      description: >-
+        Soft-deletes a pay cycle (sets isActive and isDefault to false).
+        Restricted to owner/admin/superuser or a holder of the
+        Organisation:edit_organisation_settings permission.
+      tags: [Payroll Components]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pay cycle removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Pay cycle removed." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — only owners/admins (or
+            Organisation:edit_organisation_settings holders) can configure
+            pay cycles
+        "404":
+          description: Pay cycle not found

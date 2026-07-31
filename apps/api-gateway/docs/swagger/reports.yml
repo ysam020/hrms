@@ -1,0 +1,375 @@
+paths:
+  /api/v1/reports/schema/{entity}:
+    get:
+      summary: Get an entity's reportable schema
+      description: >
+        HR/admin/owner-only. Returns the selectable columns, filterable
+        fields, and supported filter operators for one of the 6 reportable
+        entities (employee, attendance, leave, salary, recruitment, payroll).
+        Powers the report builder UI's field selector — field names are
+        drawn from a per-entity allowlist so sensitive/encrypted columns can
+        never be selected or filtered on.
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entity
+          in: path
+          required: true
+          schema:
+            {
+              type: string,
+              enum: [employee, attendance, leave, salary, recruitment, payroll],
+            }
+      responses:
+        "200":
+          description: Entity schema retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      entity: { type: string, example: "employee" }
+                      selectableFields: { type: array, items: { type: string } }
+                      filterableFields: { type: array, items: { type: string } }
+                      operators:
+                        type: array
+                        items: { type: string }
+                        example: [eq, ne, gt, gte, lt, lte, in, contains]
+        "404":
+          description: Unknown entity
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/reports/run:
+    post:
+      summary: Run an ad-hoc report
+      description: >
+        HR/admin/owner-only. Executes a one-off report query against one of
+        the 6 supported entities (employee, attendance, leave, salary,
+        recruitment, payroll) with server-side filters, column projection,
+        and sort — all validated against a per-entity field allowlist to
+        prevent access to fields not intended for reporting. Row count is
+        hard-capped at 10,000 regardless of the requested limit. Returns
+        JSON by default, or a downloadable CSV when `format: "csv"`.
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity, columns]
+              properties:
+                entity:
+                  {
+                    type: string,
+                    enum:
+                      [
+                        employee,
+                        attendance,
+                        leave,
+                        salary,
+                        recruitment,
+                        payroll,
+                      ],
+                    example: "leave",
+                  }
+                columns:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items: { type: string }
+                  example: ["userId", "leaveType", "days", "status"]
+                filters:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    properties:
+                      field: { type: string, example: "status" }
+                      operator:
+                        {
+                          type: string,
+                          enum: [eq, ne, gt, gte, lt, lte, in, contains],
+                          example: "eq",
+                        }
+                      value:
+                        oneOf:
+                          - { type: string }
+                          - { type: number }
+                          - { type: boolean }
+                          - { type: array, items: { type: string } }
+                        example: "approved"
+                groupBy: { type: string }
+                sort:
+                  type: object
+                  properties:
+                    field: { type: string, example: "appliedOn" }
+                    direction: { type: string, enum: [asc, desc] }
+                limit:
+                  { type: integer, minimum: 1, maximum: 10000, default: 1000 }
+                format: { type: string, enum: [json, csv], default: json }
+      responses:
+        "200":
+          description: Report generated (JSON body, or a CSV file when format=csv)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Report generated: 42 row(s)" }
+                  data:
+                    type: object
+                    properties:
+                      rows: { type: array, items: { type: object } }
+                      rowCount: { type: integer, example: 42 }
+            text/csv:
+              schema: { type: string }
+        "400":
+          description: Unknown entity
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/reports/saved:
+    post:
+      summary: Save a report configuration
+      description: >
+        HR/admin/owner-only. Persists a named report configuration (entity,
+        columns, filters, sort, limit) for later re-use, with an optional
+        cron `schedule` and email `recipients` list for future scheduled
+        delivery.
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, entity, config]
+              properties:
+                name: { type: string, example: "Monthly Leave Summary" }
+                description:
+                  { type: string, example: "Approved leave grouped by type." }
+                entity:
+                  {
+                    type: string,
+                    enum:
+                      [
+                        employee,
+                        attendance,
+                        leave,
+                        salary,
+                        recruitment,
+                        payroll,
+                      ],
+                    example: "leave",
+                  }
+                config:
+                  type: object
+                  required: [columns]
+                  properties:
+                    filters:
+                      type: array
+                      maxItems: 10
+                      items:
+                        type: object
+                        properties:
+                          field: { type: string }
+                          operator:
+                            {
+                              type: string,
+                              enum: [eq, ne, gt, gte, lt, lte, in, contains],
+                            }
+                          value: {}
+                    columns:
+                      type: array
+                      minItems: 1
+                      maxItems: 20
+                      items: { type: string }
+                    groupBy: { type: string }
+                    sort:
+                      type: object
+                      properties:
+                        field: { type: string }
+                        direction: { type: string, enum: [asc, desc] }
+                    limit: { type: integer, minimum: 1, maximum: 10000 }
+                schedule:
+                  {
+                    type: string,
+                    example: "0 9 1 * *",
+                    description: "Cron expression",
+                  }
+                recipients:
+                  type: array
+                  maxItems: 10
+                  items: { type: string, format: email }
+                  example: ["hr@example.com"]
+      responses:
+        "201":
+          description: Report saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      reportId: { type: string }
+        "400":
+          description: Unknown entity
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+    get:
+      summary: List saved reports
+      description: >
+        HR/admin/owner-only. Lists saved report configurations for the
+        tenant, optionally filtered by entity. The stored `config` object is
+        omitted from the list view — fetch a single report to see it.
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entity
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [employee, attendance, leave, salary, recruitment, payroll],
+            }
+      responses:
+        "200":
+          description: Saved reports retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: array, items: { type: object } }
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/reports/saved/{reportId}:
+    get:
+      summary: Get a saved report
+      description: >
+        HR/admin/owner-only. Returns a single saved report including its
+        full stored `config`.
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Report retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Forbidden
+        "404":
+          description: Report not found
+        "401":
+          description: Unauthorized
+    delete:
+      summary: Delete a saved report
+      description: HR/admin/owner-only. Permanently deletes a saved report configuration.
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Report deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+        "403":
+          description: Forbidden
+        "404":
+          description: Report not found
+        "401":
+          description: Unauthorized
+
+  /api/v1/reports/saved/{reportId}/run:
+    post:
+      summary: Run a saved report
+      description: >
+        HR/admin/owner-only. Re-executes a saved report's stored
+        configuration and updates its `lastRunAt` timestamp. Returns JSON by
+        default, or a downloadable CSV via the `?format=csv` query param.
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, csv], default: json }
+      responses:
+        "200":
+          description: Saved report executed (JSON body, or a CSV file when format=csv)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Report 'Monthly Leave Summary' executed: 42 row(s)",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      rows: { type: array, items: { type: object } }
+                      rowCount: { type: integer, example: 42 }
+            text/csv:
+              schema: { type: string }
+        "403":
+          description: Forbidden
+        "404":
+          description: Report not found
+        "401":
+          description: Unauthorized

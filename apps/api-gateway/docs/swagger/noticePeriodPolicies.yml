@@ -1,0 +1,170 @@
+paths:
+  /api/v1/notice-period-policies:
+    get:
+      summary: List notice period policies
+      description: >-
+        Returns the tenant's configured notice period policy rows (rules
+        matching tenure/designation/department to a required notice period
+        in days), ordered by `priority` descending then `minTenureMonths`
+        ascending — the order in which they'd be evaluated for a match.
+        Actual resolution of which policy applies to a given resignation
+        happens in recruitment-service, not here; this endpoint only
+        manages the configuration rows. Requires an active tenant.
+      tags: [Notice Period Policies]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notice period policies retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        minTenureMonths: { type: integer, example: 0 }
+                        maxTenureMonths: { type: integer, nullable: true }
+                        designation: { type: string, nullable: true }
+                        department: { type: string, nullable: true }
+                        noticePeriodDays: { type: integer, example: 30 }
+                        isProbationPolicy: { type: boolean }
+                        priority: { type: integer }
+                        createdBy: { type: string }
+                        createdAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the session
+    post:
+      summary: Create a notice period policy
+      description: >-
+        Adds a new notice period policy rule for the tenant. Restricted to
+        owners, admins, HR, or a user with
+        `Organisation:edit_organisation_settings`. `createdBy` is set from
+        the authenticated user.
+      tags: [Notice Period Policies]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [noticePeriodDays]
+              properties:
+                minTenureMonths: { type: integer, minimum: 0, default: 0 }
+                maxTenureMonths: { type: integer, minimum: 0 }
+                designation: { type: string, maxLength: 120 }
+                department: { type: string, maxLength: 120 }
+                noticePeriodDays:
+                  { type: integer, minimum: 0, maximum: 180, example: 30 }
+                isProbationPolicy: { type: boolean, default: false }
+                priority:
+                  { type: integer, minimum: 0, maximum: 100, default: 0 }
+      responses:
+        "200":
+          description: Notice period policy created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Notice period policy created." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+
+  /api/v1/notice-period-policies/{id}:
+    put:
+      summary: Update a notice period policy
+      description: >-
+        Partial update of an existing policy rule (all fields optional).
+        Restricted to owners, admins, HR, or a user with
+        `Organisation:edit_organisation_settings`.
+      tags: [Notice Period Policies]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                minTenureMonths: { type: integer, minimum: 0 }
+                maxTenureMonths: { type: integer, minimum: 0 }
+                designation: { type: string, maxLength: 120 }
+                department: { type: string, maxLength: 120 }
+                noticePeriodDays: { type: integer, minimum: 0, maximum: 180 }
+                isProbationPolicy: { type: boolean }
+                priority: { type: integer, minimum: 0, maximum: 100 }
+      responses:
+        "200":
+          description: Notice period policy updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Notice period policy updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+        "404":
+          description: Policy not found in this tenant
+    delete:
+      summary: Delete a notice period policy
+      description: >-
+        Hard-deletes the policy row (unlike the exit checklist item defs,
+        there is no soft-delete/deactivate here). Restricted to owners,
+        admins, HR, or a user with `Organisation:edit_organisation_settings`.
+      tags: [Notice Period Policies]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Notice period policy deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Policy deleted." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+        "404":
+          description: Policy not found in this tenant

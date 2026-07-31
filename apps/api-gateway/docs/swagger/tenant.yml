@@ -1,20 +1,18 @@
 paths:
-  /api/v1/tenants/invite/{token}:
+  /api/v1/tenants/available:
     get:
-      summary: Resolve invite token
+      summary: List available tenants
       description: >
-        Validates a tenant invite token and returns the invitation details.
-        Used by the invite landing page before the invitee logs in — no auth required.
-      tags: [Tenant Management]
-      parameters:
-        - name: token
-          in: path
-          required: true
-          schema: { type: string }
-          example: "abc123xyz"
+        Returns every organisation the authenticated user holds a
+        `TenantMembership` in (active tenants only). Requires only `authenticate`
+        — no resolved tenant context needed, so `pendingSetup` users (no tenant
+        yet) can call this too, e.g. to render the tenant picker.
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
       responses:
         "200":
-          description: Invite is valid
+          description: Tenants the user belongs to
           content:
             application/json:
               schema:
@@ -24,23 +22,368 @@ paths:
                   data:
                     type: object
                     properties:
-                      tenantName: { type: string, example: "Acme Corp" }
-                      role: { type: string, example: "employee" }
-                      invitedBy: { type: string, example: "john@acme.com" }
-                      expiresAt: { type: string, format: date-time }
-        "404":
-          description: Token not found or expired
+                      tenants:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              {
+                                type: string,
+                                example: "6672a2501aa931b68b091faf",
+                              }
+                            name: { type: string, example: "Acme Corp" }
+                            slug: { type: string, example: "acme-corp" }
+                            role: { type: string, example: "owner" }
+        "401":
+          description: Unauthorized
 
-  /api/v1/tenants/available:
+  /api/v1/tenants:
+    post:
+      summary: Create a new organisation
+      description: >
+        Creates a `Tenant`, provisions its dedicated database, seeds default
+        `TenantSettings`, and makes the caller its `owner`. Requires only
+        `authenticate` (a `pendingSetup` JWT with no tenant yet). Payment must
+        already have been captured client-side via Razorpay Checkout —
+        `razorpaySignature` is verified here as
+        `HMAC-SHA256(paymentId|subscriptionId)` using `RAZORPAY_KEY_SECRET`
+        before the tenant is created. If the caller's email domain is already
+        claimed by another active tenant, the request is rejected with
+        `DOMAIN_ALREADY_CLAIMED` and the just-created Razorpay subscription is
+        best-effort cancelled. Idempotent: retrying with the same
+        `razorpaySubscriptionId` after a tenant was already created for it
+        re-issues tokens instead of erroring.
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                [
+                  name,
+                  razorpayPaymentId,
+                  razorpaySubscriptionId,
+                  razorpaySignature,
+                ]
+              properties:
+                name: { type: string, example: "Acme Corp" }
+                industry: { type: string, example: "Technology" }
+                companySize: { type: string, example: "50-200" }
+                billing:
+                  type: string
+                  enum: [monthly, annual]
+                  example: "monthly"
+                planTier:
+                  type: string
+                  enum: [starter, growth, enterprise]
+                  example: "starter"
+                razorpayPaymentId:
+                  { type: string, example: "pay_OABcDEfGhIjKlM" }
+                razorpaySubscriptionId:
+                  { type: string, example: "sub_OABcDEfGhIjKlM" }
+                razorpaySignature:
+                  {
+                    type: string,
+                    description: "HMAC-SHA256(paymentId|subscriptionId)",
+                  }
+                workWeekPattern:
+                  type: object
+                  description: Defaults to Mon-Fri if omitted.
+                  properties:
+                    type:
+                      type: string
+                      enum: [mon_fri, mon_sat, custom]
+                    workingDays:
+                      type: array
+                      items: { type: integer, minimum: 0, maximum: 6 }
+      responses:
+        "200":
+          description: Organisation created — sets `refresh_token` cookie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Organisation created successfully.",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      accessToken: { type: string }
+                      tenant:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          name: { type: string, example: "Acme Corp" }
+                          slug: { type: string, example: "acme-corp" }
+        "400":
+          description: Missing name/payment details, or signature verification failed
+        "409":
+          description: >
+            Email domain already claimed by another active tenant
+            (`code: "DOMAIN_ALREADY_CLAIMED"`)
+        "401":
+          description: Unauthorized
+
+  /api/v1/tenants/complete-pending-setup:
+    post:
+      summary: Complete pending setup (server-side recovery)
+      description: >
+        Server-side recovery path for org creation — used when the client tab
+        closed before `POST /tenants` could run. Looks up the caller's pending
+        subscription (stored server-side by `create-subscription`) and verifies
+        payment directly against the Razorpay API (`subscriptions.fetch`,
+        status must be `authenticated` or `active`) rather than trusting a
+        client-supplied signature. Otherwise identical to `POST /tenants`.
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Acme Corp" }
+                industry: { type: string, example: "Technology" }
+                companySize: { type: string, example: "50-200" }
+                workWeekPattern:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum: [mon_fri, mon_sat, custom]
+                    workingDays:
+                      type: array
+                      items: { type: integer, minimum: 0, maximum: 6 }
+      responses:
+        "200":
+          description: Organisation created — same response shape as `POST /tenants`
+        "400":
+          description: Missing name, no pending payment found, or payment not completed
+        "401":
+          description: Unauthorized
+
+  /api/v1/tenants/select:
+    post:
+      summary: Select/switch active tenant
+      description: >
+        Switches the authenticated user's active organisation context. Caller
+        must hold a `TenantMembership` on the target tenant, which must be
+        active. Issues a new JWT carrying the selected tenant's `tenantId`,
+        `dbName`, and `tenantRole`, and sets the `refresh_token` cookie.
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId]
+              properties:
+                tenantId: { type: string, example: "6672a2501aa931b68b091faf" }
+      responses:
+        "200":
+          description: Tenant selected, new JWT issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Tenant selected." }
+                  data:
+                    type: object
+                    properties:
+                      accessToken: { type: string }
+                      tenant:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          name: { type: string }
+                          slug: { type: string }
+                      tenantRole: { type: string, example: "admin" }
+        "400":
+          description: tenantId is required
+        "403":
+          description: Not a member of the target tenant, or tenant is inactive
+        "401":
+          description: Unauthorized
+
+  /api/v1/tenants/domain-suggestion:
     get:
-      summary: List available tenants
-      description: Returns all organisations the authenticated user belongs to.
-      tags: [Tenant Management]
+      summary: Check for a domain-matched organisation
+      description: >
+        Checked by `pendingSetup` users on the org-setup page: is there an
+        existing tenant whose claimed domain matches the caller's email
+        domain, or does the caller already have a join request in flight?
+        Public/free-mail domains never match. Requires only `authenticate`.
+      tags: [Tenant]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: List of tenants the user belongs to
+          description: Domain suggestion / existing request status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      requestStatus:
+                        type: string
+                        nullable: true
+                        enum: [pending, approved, null]
+                      request:
+                        type: object
+                        nullable: true
+                        properties:
+                          id: { type: string }
+                          tenantId: { type: string }
+                          tenantName: { type: string }
+                          createdAt: { type: string, format: date-time }
+                      suggestion:
+                        type: object
+                        nullable: true
+                        properties:
+                          tenantId: { type: string }
+                          tenantName: { type: string }
+                          domain: { type: string, example: "acme.com" }
+                      previousRequestStatus:
+                        type: string
+                        nullable: true
+                        enum: [rejected, null]
+        "401":
+          description: Unauthorized
+
+  /api/v1/tenants/join-requests:
+    post:
+      summary: Request to join a domain-matched organisation
+      description: >
+        Creates (or resets, if previously rejected) a `TenantJoinRequest` for
+        the caller against a tenant whose claimed `domain` matches the
+        caller's email domain. Rejected outright for public/free-mail domains,
+        non-matching domains, inactive tenants, or if already a member.
+        Notifies the target tenant's owners/admins and anyone holding
+        `Organisation:approve_join_requests`. Requires only `authenticate`.
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId]
+              properties:
+                tenantId: { type: string, example: "6672a2501aa931b68b091faf" }
+      responses:
+        "200":
+          description: Join request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Your request to join has been sent to the organisation's admins.",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: "pending" }
+        "400":
+          description: tenantId missing, or domain-based join not available for this email
+        "403":
+          description: Email domain doesn't match the target tenant, or tenant inactive
+        "404":
+          description: Organisation not found
+        "409":
+          description: Already a member of this organisation
+        "401":
+          description: Unauthorized
+
+    get:
+      summary: List join requests for the current tenant
+      description: >
+        Lists `TenantJoinRequest` rows for the caller's tenant, filtered by
+        `status` (defaults to `pending`). Requires `requireTenant` +
+        `requireActiveSubscription`, and the caller must be `owner`/`admin`,
+        a superuser, or hold `Organisation:approve_join_requests`
+        (`canApproveJoinRequests`, checked in-handler).
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, default: "pending" }
+      responses:
+        "200":
+          description: Join requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      requests:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            userId: { type: string }
+                            name: { type: string, example: "Jane Doe" }
+                            email: { type: string, format: email }
+                            status: { type: string, example: "pending" }
+                            createdAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: No active tenant, or lacks permission to view join requests
+
+  /api/v1/tenants/join-requests/pending:
+    get:
+      summary: List pending join requests for approval widgets
+      description: >
+        Feeds the sidebar badge / dashboard "Pending Approvals" widget —
+        same pattern as `GET /kyc-approvals/pending`. Requires only
+        `authenticate` (no `requireTenant`); returns an empty array rather
+        than 403 for callers without `canApproveJoinRequests`, since this is
+        merged into a shared widget. Also aggregated into
+        `GET /approvals/pending-all`.
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pending join-request action items
           content:
             application/json:
               schema:
@@ -52,144 +395,148 @@ paths:
                     items:
                       type: object
                       properties:
-                        tenantId: { type: string }
-                        name: { type: string, example: "Acme Corp" }
-                        slug: { type: string, example: "acme-corp" }
-                        role: { type: string, example: "admin" }
+                        instanceId:
+                          { type: string, example: "join_request:6672..." }
+                        module: { type: string, example: "join_request" }
+                        requestedByName: { type: string, format: email }
+                        createdAt: { type: string, format: date-time }
+                        summary:
+                          {
+                            type: string,
+                            example: "jane@acme.com requested to join your organisation",
+                          }
         "401":
           description: Unauthorized
 
-  /api/v1/tenants:
+  /api/v1/tenants/join-requests/{id}/approve:
     post:
-      summary: Create a new organisation
+      summary: Approve a join request
       description: >
-        Creates a new tenant (organisation). The authenticated user must have a
-        `pendingSetup` JWT (issued after first Google OAuth without an existing org).
-        This creates the `Tenant` record and the `TenantMembership` for the owner.
-      tags: [Tenant Management]
+        Approves a pending `TenantJoinRequest`, creates the
+        `TenantMembership` (role `employee`) if none exists, and flips the
+        user's `employeeStatus` to `Active`. If a matching Hired
+        `JobApplication` is linked (explicitly via `jobApplicationId`, or
+        auto-matched on `assignedOfficialEmail`), it's linked to the user and
+        salary is seeded from the hire terms. Blocked if the tenant is at its
+        plan's seat limit (`code: "SEAT_LIMIT_REACHED"`). Requires
+        `requireTenant` + `requireActiveSubscription` +
+        `canApproveJoinRequests`.
+      tags: [Tenant]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required: [name, slug]
               properties:
-                name:
+                jobApplicationId:
                   type: string
-                  description: Display name of the organisation
-                  example: "Acme Corp"
-                slug:
-                  type: string
-                  description: URL-safe unique identifier (used to derive the database name)
-                  example: "acme-corp"
-                industry:
-                  type: string
-                  example: "Technology"
-                companySize:
-                  type: string
-                  example: "50-200"
-                helpEmail:
-                  type: string
-                  format: email
-                  example: "hr@acme.com"
-                helpPhone:
-                  type: string
-                  example: "+91 9876543210"
-                website:
-                  type: string
-                  example: "https://acme.com"
-      responses:
-        "201":
-          description: Organisation created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: object
-                    properties:
-                      tenantId: { type: string }
-                      slug: { type: string, example: "acme-corp" }
-                      dbName: { type: string, example: "hrms-acme-corp" }
-        "409":
-          description: Slug already taken
-        "401":
-          description: Unauthorized
-
-  /api/v1/tenants/complete-pending-setup:
-    post:
-      summary: Complete pending setup
-      description: >
-        Marks the pending-setup stage as complete after org creation and payment confirmation.
-        Issues a full JWT replacing the pending-setup token.
-      tags: [Tenant Management]
-      security:
-        - bearerAuth: []
+                  description: >
+                    Explicit Hired-candidate link. Must belong to this tenant,
+                    have status "Hired", and not already be linked to a user.
       responses:
         "200":
-          description: Setup complete, full JWT issued
+          description: Join request approved
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Request approved." }
                   data:
                     type: object
                     properties:
-                      accessToken: { type: string }
+                      requestId: { type: string }
+                      status: { type: string, example: "approved" }
+                      linkedJobApplicationId: { type: string, nullable: true }
+                      salarySeeded: { type: boolean }
+        "400":
+          description: >
+            Invalid jobApplicationId link, or seat limit reached
+            (`code: "SEAT_LIMIT_REACHED"`)
         "401":
           description: Unauthorized
-
-  /api/v1/tenants/select:
-    post:
-      summary: Switch active tenant
-      description: >
-        Switches the authenticated user's active organisation context.
-        Issues a new JWT containing the selected tenant's `tenantId`, `dbName`, and `tenantRole`.
-      tags: [Tenant Management]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [tenantId]
-              properties:
-                tenantId:
-                  type: string
-                  description: ID of the tenant to switch to
-                  example: "6672a2501aa931b68b091faf"
-      responses:
-        "200":
-          description: Tenant switched, new JWT issued
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: object
-                    properties:
-                      accessToken: { type: string }
+        "402":
+          description: Subscription expired
         "403":
-          description: User is not a member of the target tenant
+          description: No active tenant, or lacks permission to approve join requests
+        "404":
+          description: Join request not found
+        "409":
+          description: Request already resolved
+
+  /api/v1/tenants/join-requests/{id}/reject:
+    post:
+      summary: Reject a join request
+      description: >
+        Rejects a pending `TenantJoinRequest` and records an optional reason.
+        Requires `requireTenant` + `requireActiveSubscription` +
+        `canApproveJoinRequests`.
+      tags: [Tenant]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  {
+                    type: string,
+                    example: "Domain matched but role not needed.",
+                  }
+      responses:
+        "200":
+          description: Join request rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Request rejected." }
+                  data:
+                    type: object
+                    properties:
+                      requestId: { type: string }
+                      status: { type: string, example: "rejected" }
         "401":
           description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: No active tenant, or lacks permission to reject join requests
+        "404":
+          description: Join request not found
+        "409":
+          description: Request already resolved
 
   /api/v1/tenants/me:
     get:
       summary: Get current tenant
-      description: Returns the details of the currently active tenant.
-      tags: [Tenant Management]
+      description: >
+        Returns the full `Tenant` record for the caller's active tenant, plus
+        a computed `activeEmployeeCount` (not a stored column — lets the
+        Subscription page price a plan change without a second round trip).
+        Requires `requireTenant` but deliberately **not**
+        `requireActiveSubscription` — the subscription page must be able to
+        load even when the subscription has expired.
+      tags: [Tenant]
       security:
         - bearerAuth: []
       responses:
@@ -204,46 +551,68 @@ paths:
                   data:
                     type: object
                     properties:
-                      id: { type: string }
-                      name: { type: string, example: "Acme Corp" }
-                      slug: { type: string, example: "acme-corp" }
-                      plan: { type: string, example: "pro" }
-                      subscriptionStatus:
-                        type: string
-                        enum: [active, grace_period, cancelling, expired]
-                        example: "active"
-                      planExpiresAt:
-                        { type: string, format: date-time, nullable: true }
-                      isActive: { type: boolean, example: true }
+                      tenant:
+                        type: object
+                        description: Full Tenant record plus activeEmployeeCount
+                        properties:
+                          id: { type: string }
+                          name: { type: string, example: "Acme Corp" }
+                          slug: { type: string, example: "acme-corp" }
+                          plan: { type: string, example: "pro" }
+                          planTier:
+                            type: string
+                            enum: [starter, growth, enterprise]
+                          subscriptionStatus:
+                            type: string
+                            enum: [active, grace_period, cancelled, expired]
+                          planExpiresAt:
+                            { type: string, format: date-time, nullable: true }
+                          isActive: { type: boolean, example: true }
+                          activeEmployeeCount: { type: integer, example: 42 }
         "401":
           description: Unauthorized
         "403":
           description: No active tenant context (pendingSetup token)
+        "404":
+          description: Tenant not found
 
   /api/v1/tenants/complete-org-setup:
     post:
-      summary: Complete org profile setup
-      description: Marks the org profile setup step as complete in the onboarding wizard.
-      tags: [Tenant Management]
+      summary: Complete org profile setup step
+      description: >
+        Marks the org-profile step of the onboarding wizard complete
+        (`orgSetupComplete` on the refresh-token record) and issues a new JWT
+        with `orgSetupComplete: true`. Requires `requireTenant` only — no
+        subscription guard, since the caller is still mid-setup.
+      tags: [Tenant]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Org setup marked complete
+          description: Org setup marked complete, new JWT issued
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      accessToken: { type: string }
         "401":
           description: Unauthorized
+        "403":
+          description: No active tenant
 
   /api/v1/tenants/members:
     get:
       summary: List tenant members
-      description: Returns all members of the current organisation with their roles.
-      tags: [Tenant Management]
+      description: >
+        Returns every `TenantMembership` for the current tenant joined with
+        basic `User` fields. Requires `requireTenant` +
+        `requireActiveSubscription`.
+      tags: [Tenant]
       security:
         - bearerAuth: []
       responses:
@@ -256,92 +625,35 @@ paths:
                 properties:
                   success: { type: boolean, example: true }
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        userId: { type: string }
-                        username: { type: string }
-                        email: { type: string, format: email }
-                        role: { type: string, example: "admin" }
-                        joinedAt: { type: string, format: date-time }
+                    type: object
+                    properties:
+                      members:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId: { type: string }
+                            role: { type: string, example: "admin" }
+                            joinedAt: { type: string, format: date-time }
+                            email: { type: string, format: email }
+                            firstName: { type: string }
+                            lastName: { type: string }
+                            photo: { type: string }
         "401":
           description: Unauthorized
         "402":
           description: Subscription expired
-
-  /api/v1/tenants/invite:
-    post:
-      summary: Invite a user
-      description: Sends an invitation email to a user to join the organisation.
-      tags: [Tenant Management]
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email, role]
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: "newuser@acme.com"
-                role:
-                  type: string
-                  enum: [admin, hr, manager, employee]
-                  example: "employee"
-      responses:
-        "200":
-          description: Invitation sent
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  message: { type: string, example: "Invitation sent" }
-        "409":
-          description: User is already a member
-        "401":
-          description: Unauthorized
-        "402":
-          description: Subscription expired
-
-  /api/v1/tenants/invite/{id}:
-    delete:
-      summary: Revoke an invite
-      description: Cancels a pending (unused) invitation.
-      tags: [Tenant Management]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-          description: Invite ID to revoke
-      responses:
-        "200":
-          description: Invite revoked
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-        "404":
-          description: Invite not found
-        "401":
-          description: Unauthorized
+        "403":
+          description: No active tenant
 
   /api/v1/tenants/org-profile:
     get:
       summary: Get org profile
-      description: Returns the organisation's public profile (name, logo, address, contact).
-      tags: [Tenant Management]
+      description: >
+        Returns the organisation's letterhead/compliance profile fields. Any
+        authenticated tenant member may read. Requires `requireTenant` +
+        `requireActiveSubscription`.
+      tags: [Tenant]
       security:
         - bearerAuth: []
       responses:
@@ -356,22 +668,36 @@ paths:
                   data:
                     type: object
                     properties:
-                      name: { type: string, example: "Acme Corp" }
-                      slug: { type: string, example: "acme-corp" }
-                      industry: { type: string, example: "Technology" }
-                      companySize: { type: string, example: "50-200" }
-                      helpEmail: { type: string, format: email }
-                      helpPhone: { type: string }
-                      officeAddress: { type: string }
-                      website: { type: string }
+                      orgProfile:
+                        type: object
+                        properties:
+                          name: { type: string, example: "Acme Corp" }
+                          helpPhone: { type: string, nullable: true }
+                          helpEmail:
+                            { type: string, format: email, nullable: true }
+                          officeAddress: { type: string, nullable: true }
+                          tan: { type: string, nullable: true }
+                          website: { type: string, nullable: true }
+                          workState: { type: string, nullable: true }
+                          cin: { type: string, nullable: true }
+                          logoUrl: { type: string, nullable: true }
+                          signatoryName: { type: string, nullable: true }
+                          signatoryDesignation: { type: string, nullable: true }
         "401":
           description: Unauthorized
         "402":
           description: Subscription expired
+        "403":
+          description: No active tenant
+
     put:
       summary: Update org profile
-      description: Updates the organisation's public profile fields.
-      tags: [Tenant Management]
+      description: >
+        Updates the organisation's letterhead/compliance profile fields
+        (used on invoices/payslips). Restricted to superusers or callers
+        holding the `Organisation:edit_company_info` permission — checked
+        in-handler, on top of `requireTenant` + `requireActiveSubscription`.
+      tags: [Tenant]
       security:
         - bearerAuth: []
       requestBody:
@@ -381,23 +707,38 @@ paths:
             schema:
               type: object
               properties:
-                name: { type: string, example: "Acme Corporation" }
-                industry: { type: string, example: "Technology" }
-                companySize: { type: string, example: "200-500" }
-                helpEmail: { type: string, format: email }
-                helpPhone: { type: string }
+                helpPhone: { type: string, example: "+91 9876543210" }
+                helpEmail:
+                  { type: string, format: email, example: "hr@acme.com" }
                 officeAddress: { type: string }
-                website: { type: string }
+                tan:
+                  { type: string, description: "Tax deduction account number" }
+                website: { type: string, example: "https://acme.com" }
+                workState: { type: string, example: "Maharashtra" }
+                cin: { type: string, description: "Corporate identity number" }
+                logoUrl: { type: string }
+                signatoryName: { type: string, example: "Jane Doe" }
+                signatoryDesignation: { type: string, example: "HR Director" }
       responses:
         "200":
-          description: Org profile updated
+          description: Org profile updated — same shape as GET
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Organisation profile updated." }
+                  data:
+                    type: object
+                    properties:
+                      orgProfile: { type: object }
         "401":
           description: Unauthorized
         "402":
           description: Subscription expired
+        "403":
+          description: >
+            No active tenant, or lacks Organisation:edit_company_info
+            permission
