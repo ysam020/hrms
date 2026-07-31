@@ -1,0 +1,533 @@
+paths:
+  # ── Interview pipeline templates ─────────────────────────────────────────────
+
+  /api/v1/interview-pipeline-templates:
+    get:
+      summary: List interview pipeline templates
+      description: >-
+        Returns all pipeline templates configured for the tenant, ordered
+        with the default template first, then by creation date.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Templates retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InterviewPipelineTemplate"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
+    post:
+      summary: Create an interview pipeline template
+      description: >-
+        Owners, admins, and HR only (or superusers, or a user holding the
+        Organisation:edit_organisation_settings permission). Defines the
+        ordered stages a job opening's candidates move through; setting
+        isDefault clears the flag on any other existing default template
+        for the tenant. Templates are referenced by job openings via
+        pipelineTemplateId and snapshotted onto each application at apply
+        time.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, stages]
+              properties:
+                name:
+                  {
+                    type: string,
+                    maxLength: 160,
+                    example: "Standard Engineering Pipeline",
+                  }
+                stages:
+                  type: array
+                  minItems: 1
+                  maxItems: 15
+                  items:
+                    $ref: "#/components/schemas/InterviewPipelineStage"
+                isDefault: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Pipeline template created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Pipeline template created." }
+                  data:
+                    $ref: "#/components/schemas/InterviewPipelineTemplate"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — owner/admin/HR only, or no active tenant
+
+  /api/v1/interview-pipeline-templates/{id}:
+    put:
+      summary: Update an interview pipeline template
+      description: >-
+        Owners, admins, and HR only. All fields are optional (partial
+        update); setting isDefault true clears the flag on any other
+        template for the tenant. isActive can be toggled independently.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 160 }
+                stages:
+                  type: array
+                  maxItems: 15
+                  items:
+                    $ref: "#/components/schemas/InterviewPipelineStage"
+                isDefault: { type: boolean }
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: Pipeline template updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Pipeline template updated." }
+                  data:
+                    $ref: "#/components/schemas/InterviewPipelineTemplate"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — owner/admin/HR only, or no active tenant
+        "404":
+          description: Template not found
+
+    delete:
+      summary: Remove an interview pipeline template
+      description: >-
+        Owners, admins, and HR only. Soft-delete: sets isActive and
+        isDefault to false rather than deleting the row, so historical
+        applications that reference this template via pipelineTemplateId
+        remain valid.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pipeline template removed
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — owner/admin/HR only, or no active tenant
+        "404":
+          description: Template not found
+
+  # ── Application stage events ─────────────────────────────────────────────────
+
+  /api/v1/applications/{id}/advance-stage:
+    put:
+      summary: Advance a candidate to a new pipeline stage
+      description: >-
+        Owners, admins, and HR only. Logs a new ApplicationStageEvent and
+        updates JobApplication.currentStageOrder — this is the newer
+        event-trail pipeline flow and does not touch the legacy `interviews`
+        JSON field used by /update-candidate-status. If the application has
+        a pipelineTemplateId, stageName/stageOrder are validated against the
+        template's configured stage: a background-verification stage
+        requires bgvVendor (and bgvResult once a non-pending outcome is
+        recorded); an interview stage (one with an interviewerRole) requires
+        scorecards or notes once a non-pending outcome is recorded. Blocked
+        once the application is already Hired or Rejected.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Application id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stageName, stageOrder]
+              properties:
+                stageName: { type: string, maxLength: 120 }
+                stageOrder: { type: integer, minimum: 0 }
+                outcome:
+                  type: string
+                  enum: [pass, fail, hold, pending]
+                interviewerId: { type: string }
+                scorecards:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    required: [interviewerId]
+                    properties:
+                      interviewerId: { type: string }
+                      score: { type: number }
+                      notes: { type: string, maxLength: 2000 }
+                bgvVendor: { type: string, maxLength: 120 }
+                bgvResult:
+                  type: string
+                  enum: [clear, flagged, pending]
+                scheduledAt: { type: string, format: date-time }
+                notes: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Stage updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Stage updated." }
+                  data:
+                    $ref: "#/components/schemas/ApplicationStageEvent"
+        "400":
+          description: >-
+            Candidate already Hired/Rejected, stage mismatch against the
+            configured template, or missing bgvVendor/bgvResult/scorecards
+            required by the configured stage
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — owner/admin/HR only, or no active tenant
+        "404":
+          description: Application not found
+
+  /api/v1/applications/{id}/stage-events:
+    get:
+      summary: List an application's stage-event history
+      description: Returns all ApplicationStageEvent records for the application, ordered by stageOrder ascending.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Application id
+      responses:
+        "200":
+          description: Stage events retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApplicationStageEvent"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
+  /api/v1/applications/bulk-advance-stage:
+    post:
+      summary: Bulk advance multiple candidates to a new stage
+      description: >-
+        Owners, admins, and HR only. For manufacturing/BPO-style bulk hiring
+        drives — loops the same single-application write per id rather than
+        a distinct schema shape, and does not run the per-template BGV/
+        scorecard validation that advance-stage does. Applications already
+        Hired/Rejected, or belonging to another tenant, are silently dropped
+        from the batch rather than failing the whole request.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [applicationIds, stageName, stageOrder]
+              properties:
+                applicationIds:
+                  type: array
+                  items: { type: string }
+                  minItems: 1
+                  maxItems: 200
+                stageName: { type: string, maxLength: 120 }
+                stageOrder: { type: integer, minimum: 0 }
+                outcome:
+                  type: string
+                  enum: [pass, fail, hold, pending]
+      responses:
+        "200":
+          description: Bulk advance result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "5 application(s) advanced." }
+                  data:
+                    type: object
+                    properties:
+                      updated: { type: integer }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — owner/admin/HR only, or no active tenant
+
+  # ── Offers ───────────────────────────────────────────────────────────────────
+
+  /api/v1/applications/{id}/offers:
+    get:
+      summary: List an application's offer versions
+      description: Returns all Offer records for the application, newest version first.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Application id
+      responses:
+        "200":
+          description: Offers retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Offer"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
+    post:
+      summary: Create (or revise) an offer for a candidate
+      description: >-
+        Owners, admins, and HR only. Creates the next version for this
+        application — version 1 for a fresh offer, or version N+1 to record
+        a revised/counter offer against the latest existing version.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Application id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                designation: { type: string, maxLength: 160 }
+                department: { type: string, maxLength: 160 }
+                offeredCTC: { type: number, minimum: 0 }
+                joiningDate: { type: string, format: date }
+                candidateNote: { type: string, maxLength: 2000 }
+                internalNote: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Offer created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Offer v1 created." }
+                  data:
+                    $ref: "#/components/schemas/Offer"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — owner/admin/HR only, or no active tenant
+        "404":
+          description: Application not found
+
+  /api/v1/offers/{id}/status:
+    put:
+      summary: Update an offer's status
+      description: >-
+        Any authenticated tenant member (no privileged-role check beyond
+        tenant membership). Setting status to "Sent" stamps sentAt; setting
+        it to "Accepted" or "Declined" stamps respondedAt.
+      tags: [Interview Pipelines]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Offer id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum:
+                    [
+                      Draft,
+                      Sent,
+                      Negotiating,
+                      Accepted,
+                      Declined,
+                      Withdrawn,
+                      Expired,
+                    ]
+      responses:
+        "200":
+          description: Offer status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Offer marked Sent." }
+                  data:
+                    $ref: "#/components/schemas/Offer"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+        "404":
+          description: Offer not found
+
+components:
+  schemas:
+    InterviewPipelineStage:
+      type: object
+      required: [order, name]
+      properties:
+        order: { type: integer, minimum: 1 }
+        name: { type: string, maxLength: 120, example: "Technical Round 1" }
+        interviewerRole: { type: string, maxLength: 60 }
+        outcomeOptions:
+          type: array
+          items: { type: string }
+          maxItems: 10
+          default: [pass, fail, hold]
+        isBgvStage: { type: boolean, default: false }
+        bgvVendor: { type: string, maxLength: 120 }
+
+    InterviewPipelineTemplate:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        name: { type: string }
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/InterviewPipelineStage"
+        isDefault: { type: boolean }
+        isActive: { type: boolean }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    ApplicationStageEvent:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        applicationId: { type: string }
+        stageName: { type: string }
+        stageOrder: { type: integer }
+        outcome: { type: string, enum: [pass, fail, hold, pending] }
+        interviewerId: { type: string, nullable: true }
+        scorecards:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              interviewerId: { type: string }
+              score: { type: number }
+              notes: { type: string }
+        bgvVendor: { type: string, nullable: true }
+        bgvResult: { type: string, nullable: true }
+        scheduledAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        notes: { type: string, nullable: true }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Offer:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        applicationId: { type: string }
+        version: { type: integer }
+        designation: { type: string, nullable: true }
+        department: { type: string, nullable: true }
+        offeredCTC: { type: number, nullable: true }
+        joiningDate: { type: string, format: date, nullable: true }
+        candidateNote: { type: string, nullable: true }
+        internalNote: { type: string, nullable: true }
+        status:
+          type: string
+          enum:
+            [Draft, Sent, Negotiating, Accepted, Declined, Withdrawn, Expired]
+        sentAt: { type: string, format: date-time, nullable: true }
+        respondedAt: { type: string, format: date-time, nullable: true }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }

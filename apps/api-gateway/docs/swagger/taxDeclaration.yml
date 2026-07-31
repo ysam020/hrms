@@ -1,0 +1,459 @@
+paths:
+  /api/v1/tax-declarations/mine:
+    get:
+      summary: Get the caller's own Old Regime tax declaration
+      description: >-
+        Returns the authenticated employee's tax declaration for the given
+        financial year (defaults to the current financial year, Apr–Mar).
+        Returns `{ status: null, financialYear }` if none exists yet.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: financialYear
+          in: query
+          schema: { type: string, example: "2026-27" }
+          description: Defaults to the current financial year
+      responses:
+        "200":
+          description: Declaration retrieved (or a null-status placeholder)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        nullable: true
+                        enum:
+                          [
+                            Draft,
+                            Submitted,
+                            RevisionRequested,
+                            Declared,
+                            ProofsSubmitted,
+                            ProofRevisionRequested,
+                            Verified,
+                          ]
+                      financialYear: { type: string }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+
+  /api/v1/tax-declarations/draft:
+    post:
+      summary: Save (create or edit) a draft tax declaration
+      description: >-
+        Self-service only. Creates the caller's declaration for the given
+        financial year (opting into Old Regime) if none exists, or freely
+        edits it while still in an editable status (Draft or
+        RevisionRequested) — does not advance the status. Editing after
+        Submitted/Declared/etc. is rejected.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                financialYear:
+                  type: string
+                  maxLength: 20
+                  example: "2026-27"
+                  description: Defaults to the current financial year
+                monthlyRent: { type: number, minimum: 0, example: 20000 }
+                isMetroCity: { type: boolean, example: true }
+                lineItems:
+                  type: array
+                  items:
+                    type: object
+                    required: [code, declaredAmount]
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          [
+                            SEC80C,
+                            SEC80D_SELF,
+                            SEC80D_PARENTS,
+                            HOME_LOAN_INTEREST,
+                            NPS_80CCD1B,
+                            OTHER,
+                          ]
+                      label: { type: string, maxLength: 120 }
+                      declaredAmount:
+                        { type: number, minimum: 0, example: 150000 }
+                      proofAmount: { type: number, minimum: 0 }
+      responses:
+        "200":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Draft saved." }
+                  data: { type: object }
+        "400":
+          description: Declaration is no longer in an editable status
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+
+  /api/v1/tax-declarations/submit:
+    post:
+      summary: Submit the caller's tax declaration for HR review
+      description: >-
+        Self-service only. Advances a Draft or RevisionRequested declaration
+        to Submitted, clearing any prior revision notes. A draft must exist
+        first.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                financialYear:
+                  type: string
+                  maxLength: 20
+                  example: "2026-27"
+                  description: Defaults to the current financial year
+      responses:
+        "200":
+          description: Declaration submitted for review
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Declaration submitted for review.",
+                    }
+                  data: { type: object }
+        "400":
+          description: Declaration is already past the editable stage
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+        "404":
+          description: No draft exists yet — save one before submitting
+
+  /api/v1/tax-declarations/proofs:
+    post:
+      summary: Submit proof documents for a Declared tax declaration
+      description: >-
+        Self-service only. Advances a Declared or ProofRevisionRequested
+        declaration to ProofsSubmitted. `proofs` is a `{ code: proofAmount }`
+        map merged into the existing lineItems by code; proof document files
+        themselves are uploaded via the generic file-upload endpoint and
+        their URLs included as part of lineItems separately.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proofs]
+              properties:
+                financialYear:
+                  type: string
+                  maxLength: 20
+                  example: "2026-27"
+                  description: Defaults to the current financial year
+                proofs:
+                  type: object
+                  additionalProperties: { type: number, minimum: 0 }
+                  example: { SEC80C: 150000, SEC80D_SELF: 12000 }
+      responses:
+        "200":
+          description: Proofs submitted for verification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Proofs submitted for verification.",
+                    }
+                  data: { type: object }
+        "400":
+          description: Declaration hasn't been approved (Declared) yet
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+        "404":
+          description: No declaration found for that financial year
+
+  /api/v1/tax-declarations:
+    get:
+      summary: List tax declarations for HR review
+      description: >-
+        Returns all employees' declarations for a financial year (defaults to
+        current), optionally filtered by status, paginated and enriched with
+        employee username/name. Restricted to HR/owner/admin/superuser or a
+        holder of the TaxDeclaration:review_declaration:all permission.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: financialYear
+          in: query
+          schema: { type: string, example: "2026-27" }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              [
+                All,
+                Draft,
+                Submitted,
+                RevisionRequested,
+                Declared,
+                ProofsSubmitted,
+                ProofRevisionRequested,
+                Verified,
+              ]
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Declarations retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: TaxDeclaration row + employee summary
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — requires HR/owner/admin/superuser or the
+            TaxDeclaration:review_declaration:all permission
+
+  /api/v1/tax-declarations/pending:
+    get:
+      summary: Get pending declaration/proof review items
+      description: >-
+        Feeds HR's review queue — declarations awaiting the declare-stage
+        decision (status Submitted) plus ones awaiting the proof-stage
+        decision (status ProofsSubmitted) for the current financial year,
+        each gated independently by whether the caller holds
+        review_declaration or review_proofs. Returns an empty list for
+        whichever stage the caller can't act on rather than 403ing the whole
+        request.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pending review items retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        instanceId: { type: string }
+                        userId: { type: string }
+                        financialYear: { type: string }
+                        stage: { type: string, enum: [declaration, proofs] }
+                        username: { type: string }
+                        requestedByName: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        summary: { type: string }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the caller's session
+
+  /api/v1/tax-declarations/review:
+    post:
+      summary: Approve or request revision of a submitted declaration
+      description: >-
+        HR action. Moves a Submitted declaration to Declared, or to
+        RevisionRequested with per-field notes. Restricted to HR/owner/admin/
+        superuser or a holder of the TaxDeclaration:review_declaration:all
+        permission.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, financialYear, decision]
+              properties:
+                userId: { type: string }
+                financialYear:
+                  { type: string, maxLength: 20, example: "2026-27" }
+                decision: { type: string, enum: [Declared, RevisionRequested] }
+                revisionNotes:
+                  type: object
+                  additionalProperties: { type: string }
+                  example: { SEC80C: "Please re-check the declared amount" }
+      responses:
+        "200":
+          description: Declaration approved or revision requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Declaration approved." }
+                  data: { type: object }
+        "400":
+          description: >-
+            decision is not Declared/RevisionRequested, or declaration isn't
+            currently in Submitted status
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — requires HR/owner/admin/superuser or the
+            TaxDeclaration:review_declaration:all permission
+        "404":
+          description: Declaration not found
+
+  /api/v1/tax-declarations/review-proofs:
+    post:
+      summary: Verify or request revision of submitted proofs
+      description: >-
+        HR action. Moves a ProofsSubmitted declaration to Verified, or to
+        ProofRevisionRequested with per-field notes. Restricted to HR/owner/
+        admin/superuser or a holder of the TaxDeclaration:review_proofs:all
+        permission.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, financialYear, decision]
+              properties:
+                userId: { type: string }
+                financialYear:
+                  { type: string, maxLength: 20, example: "2026-27" }
+                decision:
+                  type: string
+                  enum: [Verified, ProofRevisionRequested]
+                revisionNotes:
+                  type: object
+                  additionalProperties: { type: string }
+                  example:
+                    { SEC80C: "Proof document doesn't match declared amount" }
+      responses:
+        "200":
+          description: Proofs verified or revision requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Proofs verified." }
+                  data: { type: object }
+        "400":
+          description: >-
+            decision is not Verified/ProofRevisionRequested, or declaration
+            isn't currently in ProofsSubmitted status
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — requires HR/owner/admin/superuser or the
+            TaxDeclaration:review_proofs:all permission
+        "404":
+          description: Declaration not found
+
+  /api/v1/tax-declarations/{userId}:
+    get:
+      summary: Get one employee's declaration for HR review
+      description: >-
+        HR detail/review view for a single employee's declaration in the
+        given financial year (defaults to current). Accessible to callers
+        holding either review_declaration or review_proofs permission (or
+        HR/owner/admin/superuser). Registered last among GET routes so it
+        doesn't shadow the literal /mine and /pending paths above it.
+      tags: [Tax Declaration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: financialYear
+          in: query
+          schema: { type: string, example: "2026-27" }
+      responses:
+        "200":
+          description: Declaration retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    description: TaxDeclaration row + employee summary
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            Forbidden — requires HR/owner/admin/superuser or the
+            review_declaration/review_proofs permission
+        "404":
+          description: No declaration found for that financial year

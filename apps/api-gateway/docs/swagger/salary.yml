@@ -1,8 +1,20 @@
 paths:
   /api/v1/update-salary:
     post:
-      summary: Update employee salary
-      description: Set or update the salary details for an employee (admin/HR only)
+      summary: Create or update an employee's salary structure
+      description: >-
+        Creates the SalaryStructure row for a given userId/year/month if none
+        exists, otherwise updates the existing one. Accepts either the
+        tenant-configured `components` array (earning/deduction rows by code
+        — the current Employee/Salary module shape) or the legacy flat-field
+        shape (basicPay, hra, conveyance, incentive, pf, esi, pt, deductions).
+        When `components` is sent, any tenant-configured percent-of-basic
+        component (e.g. a percentage-based allowance defined in Settings →
+        Payroll Components) that the caller didn't already supply an amount
+        for is auto-derived from Basic Pay and appended. Restricted to
+        owner/admin/hr (tenantRole), superusers, or a user holding the
+        `SalaryManagement:update_salary` permission. Busts the cached
+        employee-details payload for the tenant on success.
       tags: [Salary]
       security:
         - bearerAuth: []
@@ -12,18 +24,58 @@ paths:
           application/json:
             schema:
               type: object
-              required: [username, basicSalary]
+              required: [userId, year, month, salaryStructure]
               properties:
-                username: { type: string, example: "sameer_yadav" }
-                basicSalary: { type: number, example: 50000 }
-                hra: { type: number, example: 20000 }
-                conveyanceAllowance: { type: number, example: 5000 }
-                medicalAllowance: { type: number, example: 3000 }
-                specialAllowance: { type: number, example: 10000 }
-                pfContribution: { type: number, example: 6000 }
-                professionalTax: { type: number, example: 200 }
-                effectiveFrom:
-                  { type: string, format: date, example: "2026-04-01" }
+                userId: { type: string, example: "6720abf1e4b0c9a1d2e3f456" }
+                year:
+                  type: string
+                  pattern: "^\\d{4}$"
+                  example: "2026"
+                month:
+                  type: string
+                  pattern: "^(0?[1-9]|1[0-2])$"
+                  example: "4"
+                salaryStructure:
+                  oneOf:
+                    - type: object
+                      required: [components]
+                      properties:
+                        components:
+                          type: array
+                          minItems: 1
+                          items:
+                            type: object
+                            required: [code, type, amount]
+                            properties:
+                              code: { type: string, example: "BASIC" }
+                              name: { type: string, example: "Basic Pay" }
+                              type:
+                                type: string
+                                enum: [earning, deduction]
+                              amount: { type: number, example: 25000 }
+                    - type: object
+                      required:
+                        [
+                          basicPay,
+                          hra,
+                          conveyance,
+                          incentive,
+                          pf,
+                          esi,
+                          pt,
+                          deductions,
+                        ]
+                      properties:
+                        basicPay: { type: number, example: 25000 }
+                        hra: { type: number, example: 10000 }
+                        conveyance: { type: number, example: 1600 }
+                        incentive: { type: number, example: 2000 }
+                        pf: { type: number, example: 3000 }
+                        esi: { type: number, example: 0 }
+                        pt: { type: number, example: 200 }
+                        deductions: { type: number, example: 0 }
+                        grossEarnings: { type: number, example: 38600 }
+                        netPayable: { type: number, example: 35400 }
       responses:
         "200":
           description: Salary updated successfully
@@ -33,25 +85,30 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  message: { type: string, example: "Salary updated" }
+                  message:
+                    { type: string, example: "Salary updated successfully" }
         "401":
           description: Unauthorized
         "403":
-          description: Forbidden
+          description: >-
+            Forbidden — caller is not owner/admin/hr/superuser and lacks the
+            SalaryManagement:update_salary permission
 
-  /api/v1/get-user-salary/{username}/{year}/{month}:
+  /api/v1/get-user-salary/{userId}/{year}/{month}:
     get:
-      summary: Get user salary for a month
-      description: Returns the salary breakdown for a specific employee, year, and month
+      summary: Get an employee's salary structure for a month
+      description: >-
+        Returns the raw SalaryStructure for the given userId/year/month. A
+        non-superuser may only fetch their own salary — requesting another
+        user's returns 403.
       tags: [Salary]
       security:
         - bearerAuth: []
       parameters:
-        - name: username
+        - name: userId
           in: path
           required: true
           schema: { type: string }
-          example: "sameer_yadav"
         - name: year
           in: path
           required: true
@@ -64,7 +121,7 @@ paths:
           example: 4
       responses:
         "200":
-          description: Salary data retrieved
+          description: Salary structure retrieved (empty/null data if none exists for this period)
           content:
             application/json:
               schema:
@@ -73,42 +130,33 @@ paths:
                   success: { type: boolean, example: true }
                   data:
                     type: object
-                    properties:
-                      username: { type: string }
-                      year: { type: integer }
-                      month: { type: integer }
-                      basicSalary: { type: number }
-                      grossSalary: { type: number }
-                      netSalary: { type: number }
-                      deductions:
-                        type: object
-                        properties:
-                          pf: { type: number }
-                          professionalTax: { type: number }
-                      allowances:
-                        type: object
-                        properties:
-                          hra: { type: number }
-                          conveyance: { type: number }
-                          medical: { type: number }
+                    description: Raw gRPC getSalaryStructure response envelope
         "401":
           description: Unauthorized
-        "404":
-          description: Salary data not found
+        "403":
+          description: Forbidden — may only view your own salary unless superuser
 
-  /api/v1/generate-salary-slip/{username}/{year}/{month}:
+  /api/v1/generate-salary-slip/{userId}/{year}/{month}:
     get:
-      summary: Generate salary slip PDF
-      description: Generates and returns a salary slip PDF for the given employee and period
+      summary: Generate a payslip PDF
+      description: >-
+        Builds and downloads a password-protected payslip PDF for the given
+        employee/period. The PDF password is the employee's PAN followed by
+        their date of birth (DDMMYYYY). Earnings/deductions reflect
+        attendance-based proration (present/late/half-day/holiday/week-off/WFH
+        days + paid leaves) against the configured salary structure; if a
+        payroll run has already been disbursed for this exact month, the
+        actual disbursed PayrollLineItem amounts are used instead of a
+        recomputed preview. A non-superuser may only generate their own
+        payslip.
       tags: [Salary]
       security:
         - bearerAuth: []
       parameters:
-        - name: username
+        - name: userId
           in: path
           required: true
           schema: { type: string }
-          example: "sameer_yadav"
         - name: year
           in: path
           required: true
@@ -121,13 +169,196 @@ paths:
           example: 4
       responses:
         "200":
-          description: Salary slip PDF
+          description: Salary slip PDF (password-protected with PAN + DOB)
           content:
             application/pdf:
               schema:
                 type: string
                 format: binary
+        "400":
+          description: >-
+            Cannot generate — employee's PAN and/or date of birth is missing
+            (required to password-protect the PDF)
         "401":
           description: Unauthorized
+        "403":
+          description: Forbidden — may only generate your own payslip unless superuser
         "404":
-          description: Salary data not found
+          description: No salary data found for the selected period
+
+  /api/v1/generate-tds-worksheet/{userId}/{year}/{month}:
+    get:
+      summary: Generate a TDS worksheet PDF
+      description: >-
+        Builds and downloads a password-protected, month-wise income-tax (TDS)
+        worksheet PDF for the given employee/period, covering gross earnings,
+        Section 10/16 exemptions, chapter VI-A deductions, slab-wise tax
+        calculation, rebate under Section 87A, cess, and financial-year-to-date
+        TDS already withheld. Regime (old/new) is inferred from whether the
+        employee has an approved Old Regime tax declaration for the financial
+        year. Same PAN+DOB PDF password scheme as the payslip. A non-superuser
+        may only generate their own worksheet.
+      tags: [Salary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: year
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 2026
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
+      responses:
+        "200":
+          description: TDS worksheet PDF (password-protected with PAN + DOB)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: >-
+            Cannot generate — employee's PAN and/or date of birth is missing
+            (required to password-protect the PDF)
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — may only generate your own worksheet unless superuser
+        "404":
+          description: No salary data found for the selected period
+
+  /api/v1/email-salary-slip:
+    post:
+      summary: Email a payslip on demand
+      description: >-
+        Builds the same payslip PDF as the download endpoint and emails it as
+        an attachment to the employee's address on file. A non-superuser may
+        only email their own payslip.
+      tags: [Salary]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, year, month]
+              properties:
+                userId: { type: string, example: "6720abf1e4b0c9a1d2e3f456" }
+                year: { type: integer, example: 2026 }
+                month: { type: integer, minimum: 1, maximum: 12, example: 4 }
+      responses:
+        "200":
+          description: Salary slip emailed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Salary slip emailed" }
+        "400":
+          description: >-
+            userId/year/month missing, employee has no email on file, or
+            PAN/DOB missing for PDF password protection
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — may only email your own payslip unless superuser
+        "404":
+          description: No salary data found for the selected period
+
+  /api/v1/email-tds-worksheet:
+    post:
+      summary: Email a TDS worksheet on demand
+      description: >-
+        Builds the same TDS worksheet PDF as the download endpoint and emails
+        it as an attachment to the employee's address on file. A non-superuser
+        may only email their own worksheet.
+      tags: [Salary]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, year, month]
+              properties:
+                userId: { type: string, example: "6720abf1e4b0c9a1d2e3f456" }
+                year: { type: integer, example: 2026 }
+                month: { type: integer, minimum: 1, maximum: 12, example: 4 }
+      responses:
+        "200":
+          description: TDS worksheet emailed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "TDS worksheet emailed" }
+        "400":
+          description: >-
+            userId/year/month missing, employee has no email on file, or
+            PAN/DOB missing for PDF password protection
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — may only email your own worksheet unless superuser
+        "404":
+          description: No salary data found for the selected period
+
+  /api/v1/generate-form16/{userId}/{financialYear}:
+    get:
+      summary: Generate a Form 16 (Part B) PDF
+      description: >-
+        Builds and downloads a password-protected Form 16 Part B PDF covering
+        the full financial year, aggregated from every finalized
+        (approved/disbursed) PayrollRun's PayrollLineItem rows for that
+        employee. Marked PROVISIONAL if fewer than 12 months have been
+        finalized so far. `financialYear` must look like "2026-27". Same
+        PAN+DOB PDF password scheme as the payslip/worksheet. A non-superuser
+        may only generate their own Form 16.
+      tags: [Salary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: financialYear
+          in: path
+          required: true
+          schema: { type: string, example: "2026-27" }
+      responses:
+        "200":
+          description: Form 16 (Part B) PDF (password-protected with PAN + DOB)
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: >-
+            financialYear is not in "YYYY-YY" format, or employee's PAN/date
+            of birth is missing (required to password-protect the PDF)
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden — may only generate your own Form 16 unless superuser
+        "404":
+          description: >-
+            Employee not found, or no finalized payroll runs/payslips exist
+            for this employee in the given financial year

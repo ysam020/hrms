@@ -2,7 +2,14 @@ paths:
   /api/v1/chat/conversations:
     get:
       summary: Get all conversations
-      description: Returns all chat conversations for the authenticated user
+      description: >
+        Returns every chat conversation (direct rooms) the authenticated user
+        is a participant of and hasn't deleted, ordered by most recent
+        activity. Each room includes the last message preview, resolved
+        participant profile details, and the caller's unread message count
+        for that room. Real-time delivery of new messages happens over
+        WebSocket; this endpoint is for loading conversation list state
+        (e.g. on page load or reconnect).
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -15,32 +22,54 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Conversations retrieved" }
                   data:
                     type: array
                     items:
                       type: object
                       properties:
-                        roomId: { type: string }
+                        _id: { type: string }
+                        tenantId: { type: string, nullable: true }
                         participants:
+                          type: array
+                          items: { type: string }
+                          description: User IDs of the room's participants
+                        type: { type: string, example: "direct" }
+                        lastActivity: { type: string, format: date-time }
+                        lastMessage:
+                          type: object
+                          nullable: true
+                          properties:
+                            _id: { type: string }
+                            content: { type: string, nullable: true }
+                            senderId: { type: string }
+                            type: { type: string, example: "text" }
+                            isDeleted: { type: boolean }
+                            createdAt: { type: string, format: date-time }
+                        participantDetails:
                           type: array
                           items:
                             type: object
                             properties:
+                              id: { type: string }
                               username: { type: string }
-                              fullName: { type: string }
-                        lastMessage:
-                          type: object
-                          properties:
-                            content: { type: string }
-                            sentAt: { type: string, format: date-time }
+                              first_name: { type: string }
+                              last_name: { type: string }
+                              employee_photo: { type: string, nullable: true }
+                              designation: { type: string, nullable: true }
                         unreadCount: { type: integer, example: 3 }
         "401":
           description: Unauthorized
 
   /api/v1/chat/conversations/start:
     post:
-      summary: Start a new conversation
-      description: Creates a new 1:1 or group chat conversation
+      summary: Start (or resume) a direct conversation
+      description: >
+        Creates a new 1:1 direct chat room with `recipientUserId`, or returns
+        the existing room if one already exists between the two users. If
+        the caller had previously deleted that room (soft "delete for me"),
+        it is un-deleted for them. Group conversations are not supported —
+        this always creates/returns a two-participant "direct" room.
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -50,37 +79,62 @@ paths:
           application/json:
             schema:
               type: object
-              required: [participants]
+              required: [recipientUserId]
               properties:
-                participants:
-                  type: array
-                  items: { type: string }
-                  description: List of usernames to include in the conversation
-                  example: ["john_doe", "jane_smith"]
-                name:
+                recipientUserId:
                   type: string
-                  description: Group name (for group conversations)
-                  example: "Project Phoenix"
+                  description: User ID of the other participant (1-64 chars). Cannot equal the caller's own user ID.
+                  example: "6672a2501aa931b68b091faf"
+                  minLength: 1
+                  maxLength: 64
       responses:
         "200":
-          description: Conversation started
+          description: Conversation started or resumed
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Conversation started" }
                   data:
                     type: object
                     properties:
-                      roomId: { type: string }
+                      _id: { type: string }
+                      participants:
+                        type: array
+                        items: { type: string }
+                      type: { type: string, example: "direct" }
+                      lastActivity: { type: string, format: date-time }
+                      participantDetails:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            username: { type: string }
+                            first_name: { type: string }
+                            last_name: { type: string }
+                            employee_photo: { type: string, nullable: true }
+                            designation: { type: string, nullable: true }
+        "400":
+          description: recipientUserId missing, invalid, or equal to the caller's own user ID
         "401":
           description: Unauthorized
 
   /api/v1/chat/conversations/{roomId}/messages:
     get:
-      summary: Get messages in a conversation
-      description: Returns paginated messages for a specific chat room
+      summary: Get message history for a conversation
+      description: >
+        Returns a page of message history for a chat room, oldest-to-newest
+        within the page, for cursor-based backward scrollback. Pass `before`
+        (a message ID) to fetch messages older than that message. Each
+        message's `replyTo` (if it replies to another message) is resolved
+        to a lightweight preview (content/fileName/sender/isDeleted) so
+        clients loading history — not just the original sender's optimistic
+        render — can show reply context. Caller must be a participant of the
+        room. New messages arriving after the initial load are delivered over
+        WebSocket, not this endpoint.
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -90,16 +144,13 @@ paths:
           required: true
           schema: { type: string }
           description: Chat room ID
-        - name: page
-          in: query
-          schema: { type: integer, default: 1 }
         - name: limit
           in: query
           schema: { type: integer, default: 50 }
         - name: before
           in: query
-          schema: { type: string, format: date-time }
-          description: Fetch messages before this timestamp (for pagination)
+          schema: { type: string }
+          description: Message ID cursor — fetches messages older than this message
       responses:
         "200":
           description: Messages retrieved
@@ -109,23 +160,96 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Messages retrieved" }
                   data:
                     type: array
                     items:
                       type: object
                       properties:
-                        messageId: { type: string }
-                        sender: { type: string }
-                        content: { type: string }
-                        sentAt: { type: string, format: date-time }
-                        readBy: { type: array, items: { type: string } }
+                        _id: { type: string }
+                        chatRoom: { type: string }
+                        senderId: { type: string }
+                        content: { type: string, nullable: true }
+                        type: { type: string, example: "text" }
+                        fileUrl: { type: string, nullable: true }
+                        fileName: { type: string, nullable: true }
+                        fileMimeType: { type: string, nullable: true }
+                        fileSize: { type: number, nullable: true }
+                        replyTo:
+                          type: object
+                          nullable: true
+                          properties:
+                            _id: { type: string }
+                            content: { type: string, nullable: true }
+                            type: { type: string }
+                            fileName: { type: string, nullable: true }
+                            senderId: { type: string }
+                            isDeleted: { type: boolean }
+                        readBy:
+                          type: array
+                          items: { type: string }
+                        isDeleted: { type: boolean }
+                        isPinned: { type: boolean }
+                        pinnedAt:
+                          { type: string, format: date-time, nullable: true }
+                        pinnedBy: { type: string, nullable: true }
+                        createdAt: { type: string, format: date-time }
         "401":
           description: Unauthorized
+        "403":
+          description: Caller is not a participant of this room
+        "404":
+          description: Conversation not found
+
+  /api/v1/chat/messages/{messageId}/view-url:
+    get:
+      summary: Get a pre-signed view URL for a message attachment
+      description: >
+        Generates a short-lived (15 minute) pre-signed S3 URL for viewing a
+        message's file attachment. The stored `fileUrl` looks like a
+        permanent S3 URL but the bucket blocks all public/anonymous access,
+        so a signed URL must be minted per view. Fails if the message has no
+        file, is deleted, or the caller isn't a participant of its room.
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pre-signed view URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Pre-signed view URL generated" }
+                  data:
+                    type: object
+                    properties:
+                      url: { type: string, format: uri }
+        "400":
+          description: Message's stored file reference is invalid
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not a participant of this message's room
+        "404":
+          description: Message not found, deleted, or has no file attachment
 
   /api/v1/chat/conversations/{roomId}/read:
     post:
       summary: Mark messages as read
-      description: Marks all unread messages in a conversation as read for the authenticated user
+      description: >
+        Marks all not-yet-read messages sent by other participants in this
+        room as read by the caller (bulk update; adds the caller's user ID
+        to each message's `readBy` array). Used to drive read-receipt state
+        and unread badges.
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -143,13 +267,21 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Messages marked as read" }
         "401":
           description: Unauthorized
+        "403":
+          description: Caller is not a participant of this room
+        "404":
+          description: Conversation not found
 
   /api/v1/chat/unread-counts:
     get:
-      summary: Get unread message counts
-      description: Returns the number of unread messages per conversation for the authenticated user
+      summary: Get unread message counts for all conversations
+      description: >
+        Returns unread message counts, keyed by room ID, for every
+        conversation the caller participates in (and hasn't deleted). Used
+        to populate unread badges without fetching full conversation list.
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -162,20 +294,26 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Unread counts retrieved" }
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        roomId: { type: string }
-                        unreadCount: { type: integer, example: 5 }
+                    type: object
+                    additionalProperties: { type: integer }
+                    example:
+                      {
+                        "6672a2501aa931b68b091faf": 3,
+                        "6672a2501aa931b68b091fb0": 0,
+                      }
         "401":
           description: Unauthorized
 
   /api/v1/chat/messages/{messageId}:
     delete:
       summary: Delete a message
-      description: Delete a specific chat message (sender only)
+      description: >
+        Soft-deletes a chat message: clears its content, marks it deleted,
+        and unpins it if pinned. Any participant of the room may delete a
+        message (not sender-only) — it is deleted for both/all sides; there
+        is no "delete for me" variant at the message level.
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -193,15 +331,29 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Message deleted" }
+                  data:
+                    type: object
+                    properties:
+                      messageId: { type: string }
+                      _id: { type: string }
+                      chatRoomId: { type: string }
         "401":
           description: Unauthorized
         "403":
-          description: Cannot delete another user's message
+          description: Caller is not a participant of this message's room
+        "404":
+          description: Message not found
 
   /api/v1/chat/conversations/{roomId}:
     delete:
-      summary: Delete a conversation
-      description: Delete an entire chat conversation and all its messages
+      summary: Delete a conversation (for the caller)
+      description: >
+        Soft-deletes the conversation for the caller only by adding their
+        user ID to the room's `deletedFor` list. The room and its messages
+        remain intact for other participants and are restored for the
+        caller if they start a new direct conversation with the same
+        recipient.
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -213,13 +365,151 @@ paths:
       responses:
         "200":
           description: Conversation deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Conversation deleted" }
         "401":
           description: Unauthorized
+        "404":
+          description: Conversation not found
+
+  /api/v1/chat/messages/{messageId}/pin:
+    post:
+      summary: Pin a message
+      description: >
+        Pins a message within its chat room. A room may have at most 5
+        pinned messages at once — pinning a 6th is rejected until one is
+        unpinned. Deleted messages cannot be pinned. Pinning an
+        already-pinned message is a no-op that returns the current message.
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Message pinned (or already pinned)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Message pinned" }
+                  data:
+                    type: object
+                    properties:
+                      _id: { type: string }
+                      chatRoom: { type: string }
+                      isPinned: { type: boolean, example: true }
+                      pinnedAt: { type: string, format: date-time }
+                      pinnedBy: { type: string }
+        "400":
+          description: Message is deleted, or the room already has 5 pinned messages
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not a participant of this message's room
+        "404":
+          description: Message not found
+
+    delete:
+      summary: Unpin a message
+      description: Removes a message's pinned state, clearing `pinnedAt`/`pinnedBy`.
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Message unpinned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Message unpinned" }
+                  data:
+                    type: object
+                    properties:
+                      _id: { type: string }
+                      chatRoom: { type: string }
+                      isPinned: { type: boolean, example: false }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not a participant of this message's room
+        "404":
+          description: Message not found
+
+  /api/v1/chat/conversations/{roomId}/pinned:
+    get:
+      summary: Get pinned messages for a conversation
+      description: >
+        Returns up to 5 pinned messages in the room, most-recently-pinned
+        first.
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pinned messages retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Pinned messages retrieved" }
+                  data:
+                    type: array
+                    maxItems: 5
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string }
+                        chatRoom: { type: string }
+                        content: { type: string, nullable: true }
+                        senderId: { type: string }
+                        pinnedAt: { type: string, format: date-time }
+                        pinnedBy: { type: string }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not a participant of this room
+        "404":
+          description: Conversation not found
 
   /api/v1/og-preview:
     get:
       summary: Fetch Open Graph preview for a URL
-      description: Returns Open Graph metadata (title, description, image) for a given URL, used for link previews in chat
+      description: >
+        Fetches a target URL server-side and extracts Open Graph / Twitter
+        card metadata (title, description, image, site name) for rendering
+        rich link previews in chat messages. Guards against SSRF: rejects
+        disallowed/unsafe URLs, re-resolves and re-checks the hostname's IP
+        after DNS resolution (anti DNS-rebinding), and refuses to follow
+        redirects. On any fetch/parse failure this still returns HTTP 200
+        with all metadata fields `null` rather than an error, so the client
+        can render a plain link.
       tags: [Chat]
       security:
         - bearerAuth: []
@@ -231,19 +521,23 @@ paths:
           example: "https://example.com/article"
       responses:
         "200":
-          description: OG metadata retrieved
+          description: OG metadata retrieved (or nulled out on fetch failure)
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "OK" }
                   data:
                     type: object
                     properties:
-                      title: { type: string }
-                      description: { type: string }
-                      image: { type: string, format: uri }
+                      title: { type: string, nullable: true }
+                      description: { type: string, nullable: true }
+                      image: { type: string, format: uri, nullable: true }
+                      siteName: { type: string, nullable: true }
                       url: { type: string, format: uri }
+        "400":
+          description: URL missing or fails SSRF/safety checks
         "401":
           description: Unauthorized

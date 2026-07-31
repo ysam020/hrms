@@ -1,0 +1,275 @@
+paths:
+  /api/v1/helpdesk/stats:
+    get:
+      summary: Get helpdesk statistics
+      description: >
+        HR/admin/owner-only (or `Helpdesk:manage` grantees) aggregated
+        dashboard metrics — ticket counts by status/category/priority, count
+        of open SLA breaches, and average resolution time in hours.
+      tags: [Helpdesk]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Helpdesk stats retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      byStatus: { type: object }
+                      byCategory: { type: object }
+                      byPriority: { type: object }
+                      slaBreachedOpen: { type: integer, example: 2 }
+                      avgResolutionHours:
+                        { type: number, example: 14.3, nullable: true }
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/helpdesk/tickets:
+    post:
+      summary: Raise a support ticket
+      description: >
+        Any authenticated employee can raise an HR/IT support ticket. An SLA
+        deadline is computed from priority (critical 4h, high 8h, medium 24h,
+        low 72h) and a delayed job is scheduled to flag SLA breach; the
+        ticket is auto-routed to the whole HR group (owner/admin/hr/
+        superuser/`Helpdesk:manage` grantees), who are notified.
+      tags: [Helpdesk]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description, category]
+              properties:
+                title: { type: string, example: "Cannot access payslip portal" }
+                description:
+                  {
+                    type: string,
+                    example: "Getting a 403 error when I try to view last month's payslip.",
+                  }
+                category:
+                  {
+                    type: string,
+                    enum: [IT, Payroll, Leave, Onboarding, HR, Other],
+                    example: "IT",
+                  }
+                priority:
+                  {
+                    type: string,
+                    enum: [low, medium, high, critical],
+                    default: medium,
+                  }
+                attachments:
+                  type: array
+                  items: { type: string }
+                  maxItems: 5
+      responses:
+        "201":
+          description: Ticket created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      ticketId: { type: string }
+                      ticketNo: { type: string, example: "TICK-00001" }
+                      slaDeadline: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+    get:
+      summary: List support tickets
+      description: >
+        HR/admin/owner (or `Helpdesk:manage` grantees) see every tenant
+        ticket; other employees see only tickets they personally raised.
+        Lazily flips any ticket past its SLA deadline to `slaBreached: true`
+        on read.
+      tags: [Helpdesk]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, in_progress, resolved, closed] }
+        - name: category
+          in: query
+          schema:
+            { type: string, enum: [IT, Payroll, Leave, Onboarding, HR, Other] }
+        - name: priority
+          in: query
+          schema: { type: string, enum: [low, medium, high, critical] }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Tickets retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: array, items: { type: object } }
+                  total: { type: integer, example: 25 }
+        "401":
+          description: Unauthorized
+
+  /api/v1/helpdesk/tickets/{ticketId}:
+    get:
+      summary: Get a support ticket
+      description: >
+        Returns full ticket detail with its comment thread. Internal
+        (HR-only) comments are stripped from the response for non-HR
+        callers. Non-HR may only view a ticket they raised.
+      tags: [Helpdesk]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Ticket retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Forbidden
+        "404":
+          description: Ticket not found
+        "401":
+          description: Unauthorized
+    patch:
+      summary: Update a support ticket
+      description: >
+        HR/admin/owner can update any field including status, priority, and
+        assignment (moving status to in_progress auto-assigns the ticket to
+        the acting HR user if unassigned; resolving records resolvedBy/
+        resolvedAt and fires a `ticket.resolved` webhook event). The ticket's
+        own raiser may only edit title/description, and only while the
+        ticket is still "open".
+      tags: [Helpdesk]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                category:
+                  {
+                    type: string,
+                    enum: [IT, Payroll, Leave, Onboarding, HR, Other],
+                  }
+                priority: { type: string, enum: [low, medium, high, critical] }
+                status:
+                  { type: string, enum: [open, in_progress, resolved, closed] }
+                assignedTo: { type: string }
+      responses:
+        "200":
+          description: Ticket updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+        "400":
+          description: You can only edit a ticket while it is open / no valid fields to update
+        "403":
+          description: Forbidden
+        "404":
+          description: Ticket not found
+        "401":
+          description: Unauthorized
+
+  /api/v1/helpdesk/tickets/{ticketId}/comments:
+    post:
+      summary: Add a comment to a ticket
+      description: >
+        Adds a comment to the ticket thread. The ticket's raiser or HR may
+        comment (not on a closed ticket); only HR/admin/owner may mark a
+        comment `isInternal: true`, which hides it from the raiser and
+        excludes them from its notification. When HR posts the first comment
+        on an "open" ticket, it is auto-moved to "in_progress" and
+        auto-assigned to that HR user if unassigned.
+      tags: [Helpdesk]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [comment]
+              properties:
+                comment: { type: string, example: "Looking into this now." }
+                isInternal:
+                  {
+                    type: boolean,
+                    description: "HR-only — hidden from the ticket raiser",
+                  }
+      responses:
+        "201":
+          description: Comment added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      commentId: { type: string }
+        "400":
+          description: Cannot comment on a closed ticket
+        "403":
+          description: Forbidden
+        "404":
+          description: Ticket not found
+        "401":
+          description: Unauthorized

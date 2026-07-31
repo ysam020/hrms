@@ -7,6 +7,7 @@ paths:
         be included as `X-CSRF-Token` on all state-changing requests (POST, PUT,
         DELETE). The client Axios interceptor calls this lazily on the first
         mutation and caches the result; it is invalidated on logout or 403.
+        Mounted directly in server.ts (not through a route file).
       tags: [Authentication]
       responses:
         "200":
@@ -22,88 +23,105 @@ paths:
     get:
       summary: Get authenticated user profile
       description: >
-        Returns the full profile of the currently authenticated user including
-        their active tenant context (`tenantId`, `tenantRole`, `dbName`) and
-        whether they are in a pending-setup flow.
+        Returns the full profile of the currently authenticated user, including
+        decrypted PII fields, salary-adjacent flags, and active tenant context
+        (`tenantName`, `tenantSlug`, `tenantRole`, `wfhEnabled`).
       tags: [Authentication]
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Profile retrieved successfully
+          description: Profile fetched
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string, example: "Profile fetched" }
                   data:
                     type: object
                     properties:
-                      id: { type: string, example: "6672a2501aa931b68b091faf" }
-                      email: { type: string, example: "user@example.com" }
-                      username: { type: string, example: "sameer_yadav" }
-                      first_name: { type: string, example: "Sameer" }
-                      last_name: { type: string, example: "Yadav" }
-                      role:
-                        {
-                          type: array,
-                          items: { type: string },
-                          example: ["admin"],
-                        }
-                      permissions: { type: array, items: { type: string } }
-                      isSuperUser: { type: boolean, example: false }
-                      tenantId:
-                        type: string
-                        nullable: true
-                        example: "6672a2501aa931b68b091faf"
-                        description: Active tenant ID. Null for pendingSetup users.
-                      tenantRole:
-                        type: string
-                        nullable: true
-                        enum: [owner, admin, hr, manager, employee]
-                        example: "admin"
-                        description: Role within the active tenant. Null for pendingSetup users.
-                      dbName:
-                        type: string
-                        nullable: true
-                        example: "hrms-acme-corp"
-                        description: Active tenant database name. Null for pendingSetup users.
-                      pendingSetup:
-                        type: boolean
-                        example: false
-                        description: >
-                          True if the user authenticated but has not yet created or
-                          joined an organisation. A pendingSetup user can only access
-                          tenant creation and payment endpoints.
-                      employeeStatus: { type: string, example: "Active" }
-                      designation:
-                        { type: string, example: "Full Stack Developer" }
-                      department: { type: string, example: "Engineering" }
-                      profile_photo: { type: string, nullable: true }
-                      kycStatus:
-                        type: string
-                        enum: [Pending, Submitted, Approved, Rejected]
-                        example: "Approved"
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            {
+                              type: string,
+                              example: "6672a2501aa931b68b091faf",
+                            }
+                          email: { type: string, example: "user@example.com" }
+                          username: { type: string, example: "sameer_yadav" }
+                          role:
+                            {
+                              type: array,
+                              items: { type: string },
+                              example: ["admin"],
+                            }
+                          isSuperUser: { type: boolean, example: false }
+                          permissions: { type: array, items: { type: string } }
+                          employeeStatus: { type: string, example: "Active" }
+                          firstName: { type: string, example: "Sameer" }
+                          lastName: { type: string, example: "Yadav" }
+                          fullName: { type: string, example: "Sameer Yadav" }
+                          dob: { type: string, example: "1995-06-10" }
+                          blood_group: { type: string, example: "O+" }
+                          mobile: { type: string, nullable: true }
+                          official_email: { type: string }
+                          personalEmail: { type: string }
+                          designation:
+                            { type: string, example: "Full Stack Developer" }
+                          department: { type: string, example: "Engineering" }
+                          joining_date: { type: string }
+                          employee_photo: { type: string }
+                          bank_account_no: { type: string, nullable: true }
+                          bank_name: { type: string }
+                          ifsc_code: { type: string }
+                          aadhar_no: { type: string, nullable: true }
+                          pan_no: { type: string, nullable: true }
+                          pf_no: { type: string }
+                          uan_no: { type: string }
+                          esic_no: { type: string }
+                          fcmTokens: { type: array, items: { type: object } }
+                          events: { type: array, items: { type: object } }
+                          face_descriptor:
+                            type: array
+                            nullable: true
+                            items: { type: number }
+                            description: 128-dimensional vector, or null if not enrolled
+                          tenantName: { type: string, nullable: true }
+                          tenantSlug: { type: string, nullable: true }
+                          tenantRole:
+                            type: string
+                            nullable: true
+                            enum: [owner, admin, hr, manager, employee]
+                          wfhEnabled: { type: boolean, example: true }
         "401":
           description: Unauthorized
+        "404":
+          description: User not found
 
   /api/v1/refresh-token:
     post:
       summary: Refresh access token
-      description: Issue a new access token using a valid refresh token
+      description: >
+        Issues a new access token from a valid refresh token. Web clients send
+        the refresh token via the `refresh_token` httpOnly cookie (AES-encrypted);
+        mobile clients (no shared cookie jar) send it in the request body
+        instead. On success, the response rotates the `refresh_token` cookie
+        for web callers and echoes the plain refresh token back to the caller
+        only when it was supplied in the body (mobile).
       tags: [Authentication]
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required: [refreshToken]
               properties:
                 refreshToken:
                   type: string
-                  description: Valid refresh token
+                  description: Required for mobile clients; web clients rely on the cookie instead.
                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
       responses:
         "200":
@@ -114,17 +132,22 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string }
                   data:
                     type: object
                     properties:
                       accessToken: { type: string }
+                      refreshToken:
+                        type: string
+                        nullable: true
+                        description: Only present when the request supplied a body refreshToken (mobile).
         "401":
-          description: Invalid or expired refresh token
+          description: Invalid, expired, or missing refresh token
 
   /api/v1/logout:
     get:
       summary: Logout current session
-      description: Invalidates the current session and clears auth cookies
+      description: Invalidates the current session server-side and clears the refresh_token cookie.
       tags: [Authentication]
       security:
         - bearerAuth: []
@@ -145,42 +168,29 @@ paths:
     get:
       summary: Initiate Google OAuth login
       description: >
-        Redirects the user to Google's OAuth 2.0 authorization page.
-        This is a browser redirect — not an AJAX endpoint.
-      tags: [Authentication]
-      responses:
-        "302":
-          description: Redirect to Google OAuth authorization page
-          headers:
-            Location:
-              schema:
-                type: string
-                example: "https://accounts.google.com/o/oauth2/auth?..."
-
-  /api/v1/auth/google/callback:
-    get:
-      summary: Google OAuth callback
-      description: >
-        Callback URL that Google redirects to after authentication.
-        On success, issues JWT tokens and redirects to the application.
+        Redirects the user to Google's OAuth 2.0 authorization page. This is a
+        browser redirect, not an AJAX endpoint. Pass `platform=mobile` with a
+        `redirect_uri` (must be `exp://` or `hrms://`) to have the callback hand
+        tokens back via app deep link instead of a web redirect.
       tags: [Authentication]
       parameters:
-        - name: code
+        - name: platform
           in: query
-          schema: { type: string }
-          description: Authorization code from Google
-        - name: state
+          required: false
+          schema: { type: string, enum: [mobile] }
+        - name: redirect_uri
           in: query
+          required: false
           schema: { type: string }
-          description: CSRF state parameter
+          description: Mobile deep-link target; only honored when platform=mobile and the scheme is exp:// or hrms://.
       responses:
         "302":
-          description: Redirect to dashboard on success, or login page on failure
+          description: Redirect to Google's OAuth authorization page
 
   /api/v1/webauthn-register:
     get:
       summary: Get WebAuthn registration options
-      description: Returns PublicKeyCredentialCreationOptions to begin passkey registration
+      description: Returns PublicKeyCredentialCreationOptions to begin passkey registration.
       tags: [WebAuthn]
       security:
         - bearerAuth: []
@@ -194,35 +204,43 @@ paths:
                 properties:
                   success: { type: boolean, example: true }
                   data:
-                    {
-                      type: object,
-                      description: "PublicKeyCredentialCreationOptions",
-                    }
+                    type: object
+                    description: Parsed PublicKeyCredentialCreationOptions (from auth-service).
+        "400":
+          description: Failed to generate registration options
         "401":
           description: Unauthorized
     post:
-      summary: Store WebAuthn registration options
-      description: Persists the registration challenge before verification
+      summary: Get WebAuthn registration options (duplicate RPC call)
+      description: >
+        Authenticated variant that calls the same auth-service
+        `WebAuthnRegistrationOptions` RPC as the GET on this path, but returns
+        the raw gRPC response spread at the top level (not nested under `data`).
+        No request body is read.
       tags: [WebAuthn]
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: PublicKeyCredentialCreationOptions from the browser
       responses:
         "200":
-          description: Registration options stored successfully
+          description: Registration options returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  status: { type: integer }
+                  options:
+                    type: string
+                    description: JSON-encoded PublicKeyCredentialCreationOptions
         "401":
           description: Unauthorized
 
   /api/v1/webauthn-verify-registration:
     post:
       summary: Verify WebAuthn registration
-      description: Verifies the attestation response and saves the credential
+      description: Verifies the attestation response and saves the credential for the authenticated user.
       tags: [WebAuthn]
       security:
         - bearerAuth: []
@@ -232,19 +250,41 @@ paths:
           application/json:
             schema:
               type: object
-              description: RegistrationResponseJSON from the browser
+              required: [credential]
+              properties:
+                credential:
+                  type: object
+                  description: RegistrationResponseJSON from the browser (may include a deviceInfo field).
       responses:
         "200":
-          description: Credential registered successfully
+          description: Credential registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  status: { type: integer }
+                  accessToken:
+                    {
+                      type: string,
+                      description: Unused for this flow; may be empty.,
+                    }
+                  refresh_token:
+                    {
+                      type: string,
+                      description: Unused for this flow; may be empty.,
+                    }
         "400":
-          description: Verification failed
+          description: Invalid request body
         "401":
           description: Unauthorized
 
   /api/v1/webauthn-credentials:
     get:
       summary: Get WebAuthn credentials
-      description: Returns all registered passkey credentials for the authenticated user
+      description: Returns all registered passkey credentials for the authenticated user.
       tags: [WebAuthn]
       security:
         - bearerAuth: []
@@ -258,20 +298,30 @@ paths:
                 properties:
                   success: { type: boolean, example: true }
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        credentialId: { type: string }
-                        deviceName: { type: string }
-                        createdAt: { type: string, format: date-time }
+                    type: object
+                    properties:
+                      credentials:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            credentialID: { type: string }
+                            transports: { type: array, items: { type: string } }
+                            createdAt: { type: string, format: date-time }
+                            lastUsed:
+                              {
+                                type: string,
+                                format: date-time,
+                                nullable: true,
+                              }
+                            deviceInfo: { type: object, nullable: true }
         "401":
           description: Unauthorized
 
   /api/v1/webauthn-credential-check:
     post:
-      summary: Check if WebAuthn credential exists for email
-      description: Returns whether a passkey is enrolled for the given email address
+      summary: Check if WebAuthn credentials exist for a username
+      description: Returns whether at least one passkey is enrolled for the given username. Not authenticated (used on the login screen before sign-in).
       tags: [WebAuthn]
       requestBody:
         required: true
@@ -279,12 +329,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [email]
+              required: [username]
               properties:
-                email:
+                username:
                   type: string
-                  format: email
-                  example: "user@example.com"
+                  minLength: 1
+                  maxLength: 64
+                  example: "sameer_yadav"
       responses:
         "200":
           description: Credential check result
@@ -294,60 +345,52 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  data:
-                    type: object
-                    properties:
-                      hasCredential: { type: boolean, example: true }
+                  hasCredentials: { type: boolean, example: true }
+        "400":
+          description: Missing or invalid username
 
   /api/v1/disable-webauthn:
     delete:
       summary: Disable WebAuthn / remove passkeys
-      description: Removes all WebAuthn credentials for the authenticated user
+      description: >
+        Removes either one credential (by `credentialId`) or all credentials
+        (`disableAll: true`) for the authenticated user. Exactly one of the two
+        must be provided.
       tags: [WebAuthn]
       security:
         - bearerAuth: []
-      responses:
-        "200":
-          description: WebAuthn disabled successfully
-        "401":
-          description: Unauthorized
-
-  /api/v1/webauthn-login-options:
-    post:
-      summary: Get WebAuthn login options
-      description: Returns PublicKeyCredentialRequestOptions to begin passkey login
-      tags: [WebAuthn]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [email]
               properties:
-                email:
-                  type: string
-                  format: email
-                  example: "user@example.com"
+                credentialId: { type: string }
+                disableAll: { type: boolean }
+              description: credentialId or disableAll is required.
       responses:
         "200":
-          description: Login options returned
+          description: WebAuthn credential(s) removed
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  data:
-                    {
-                      type: object,
-                      description: "PublicKeyCredentialRequestOptions",
-                    }
+                  message:
+                    { type: string, example: "WebAuthn credential removed" }
+        "400":
+          description: Neither credentialId nor disableAll provided
+        "401":
+          description: Unauthorized
+        "404":
+          description: Credential not found
 
-  /api/v1/webauthn-verify-login:
+  /api/v1/webauthn-login-options:
     post:
-      summary: Verify WebAuthn login assertion
-      description: Verifies the authentication response and issues JWT tokens
+      summary: Get WebAuthn login options
+      description: Returns PublicKeyCredentialRequestOptions to begin passkey login. Not authenticated.
       tags: [WebAuthn]
       requestBody:
         required: true
@@ -355,10 +398,106 @@ paths:
           application/json:
             schema:
               type: object
-              description: AuthenticationResponseJSON from the browser
+              required: [username]
+              properties:
+                username:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                  example: "sameer_yadav"
       responses:
         "200":
-          description: Login successful, tokens issued
+          description: >
+            HTTP 200 in both success and failure cases; check the `success` field
+            in the body to distinguish them.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success: { type: boolean, example: true }
+                      data:
+                        type: object
+                        description: Parsed PublicKeyCredentialRequestOptions
+                  - type: object
+                    properties:
+                      success: { type: boolean, example: true }
+                      data:
+                        type: object
+                        properties:
+                          success: { type: boolean, example: false }
+                          message: { type: string }
+
+  /api/v1/webauthn-verify-login:
+    post:
+      summary: Verify WebAuthn login assertion
+      description: >
+        Verifies the authentication response and issues a short-lived tempToken.
+        Not authenticated (this is the login step itself).
+      tags: [WebAuthn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, credential]
+              properties:
+                username:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                credential:
+                  type: object
+                  description: AuthenticationResponseJSON from the browser
+      responses:
+        "200":
+          description: >
+            HTTP 200 in both success and failure cases; check the `success` field
+            in the body to distinguish them.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success: { type: boolean, example: true }
+                      data:
+                        type: object
+                        properties:
+                          tempToken: { type: string }
+                          verified: { type: boolean, example: true }
+                  - type: object
+                    properties:
+                      success: { type: boolean, example: true }
+                      data:
+                        type: object
+                        properties:
+                          success: { type: boolean, example: false }
+                          message: { type: string }
+
+  /api/v1/webauthn-login:
+    post:
+      summary: WebAuthn login (final step)
+      description: >
+        Exchanges a verified tempToken (from webauthn-verify-login) for the
+        user's real accessToken and profile. Not authenticated via bearerAuth
+        — the tempToken itself is the credential.
+      tags: [WebAuthn]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tempToken]
+              properties:
+                tempToken:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
           content:
             application/json:
               schema:
@@ -369,26 +508,129 @@ paths:
                     type: object
                     properties:
                       accessToken: { type: string }
-                      refreshToken: { type: string }
-        "400":
-          description: Verification failed
+                      user:
+                        type: object
+                        description: Full profile object (same shape as GET /profile data.user, minus tenant fields).
         "401":
-          description: Invalid credential
+          description: Missing, invalid, or expired tempToken
 
-  /api/v1/webauthn-login:
-    post:
-      summary: WebAuthn login (combined)
-      description: Combined endpoint to perform a full WebAuthn login flow
-      tags: [WebAuthn]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: AuthenticationResponseJSON from the browser
+  /api/v1/auth/google-calendar/connect:
+    get:
+      summary: Get Google Calendar connect URL
+      description: >
+        Returns a Google OAuth consent URL (separate from the login OAuth flow)
+        for connecting the authenticated user's Google Calendar, used for
+        interview scheduling. The frontend opens this URL in a popup rather
+        than following a redirect.
+      tags: [Google Calendar]
+      security:
+        - bearerAuth: []
       responses:
         "200":
-          description: Login successful
+          description: Authorize URL returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        {
+                          type: string,
+                          example: "https://accounts.google.com/o/oauth2/v2/auth?...",
+                        }
         "401":
-          description: Authentication failed
+          description: Unauthorized
+
+  /api/v1/auth/google-calendar/status:
+    get:
+      summary: Get Google Calendar connection status
+      description: >
+        Polled by the frontend after the connect popup closes, to learn whether
+        the connect flow actually succeeded (window.opener messaging from the
+        popup is unreliable due to Google's Cross-Origin-Opener-Policy header).
+      tags: [Google Calendar]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      connected: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+
+  /api/auth/google/callback:
+    get:
+      summary: Google OAuth login callback
+      description: >
+        Callback URL that Google redirects to after login authentication. Lives
+        OUTSIDE /api/v1 (mounted directly in server.ts) so it exactly matches
+        the URI registered in Google Cloud Console and never needs a version
+        bump. Not part of any router. On success it sets the refresh_token
+        cookie (web) or appends tokens to the mobile deep link, then redirects
+        the browser; on failure it redirects to the login page (web) or the
+        mobile deep link with an `error` query param.
+      tags: [Authentication]
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+          description: Authorization code from Google
+        - name: state
+          in: query
+          schema: { type: string }
+          description: Echoes "mobile:<encoded redirect_uri>" when the login was initiated with platform=mobile; otherwise empty.
+        - name: error
+          in: query
+          schema: { type: string }
+          description: Present if the user cancelled or Google rejected the request.
+      responses:
+        "302":
+          description: >
+            Redirect to the web app (`{CLIENT_URL}/?oauth_success=1&access_token=...`,
+            optionally with tenant_setup/tenant_picker/tenants params) or to the
+            login page with an error, or — for mobile — to the hrms://
+            (or exp://) deep link with the same query params.
+
+  /api/auth/google-calendar/callback:
+    get:
+      summary: Google Calendar OAuth callback
+      description: >
+        Callback URL that Google redirects the connect popup to. Lives OUTSIDE
+        /api/v1 (mounted directly in server.ts), matching the registered
+        GOOGLE_CALENDAR_CALLBACK_URL. No Authorization header or session cookie
+        is available here (it's a bare popup redirect) — the connecting user's
+        identity is carried in a short-lived signed `state` JWT instead. Does
+        not return JSON; it responds with a small HTML page that best-effort
+        posts a message to `window.opener` and shows a manual close button.
+      tags: [Google Calendar]
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+          description: Short-lived JWT (10m) signed by the /auth/google-calendar/connect step, carrying the userId.
+        - name: error
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: HTML popup-result page (not JSON)
+          content:
+            text/html:
+              schema:
+                type: string

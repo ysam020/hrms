@@ -1,0 +1,89 @@
+paths:
+  /api/v1/onboarding-checklist:
+    get:
+      summary: Get the tenant's setup checklist state
+      description: >-
+        Returns which onboarding/setup checklist steps (e.g. add employees,
+        configure payroll, etc.) the current tenant has marked completed or
+        skipped. Open to any authenticated user with an active tenant; there
+        is one shared checklist state per tenant, not per user. Returns an
+        empty itemStatus map if the tenant hasn't touched the checklist yet.
+      tags: [Onboarding]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Checklist state fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      itemStatus:
+                        type: object
+                        additionalProperties:
+                          type: string
+                          enum: [completed, skipped]
+                        example:
+                          add_employees: "completed"
+                          configure_payroll: "skipped"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the request
+
+  /api/v1/onboarding-checklist/{stepKey}:
+    put:
+      summary: Mark a setup checklist step completed or skipped
+      description: >-
+        Updates the status of a single checklist step for the tenant.
+        Restricted to owners/admins/superusers ("Only owners and admins can
+        update the setup checklist."). Upserts the tenant's checklist state
+        row, merging the new step status into the existing itemStatus map.
+      tags: [Onboarding]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: stepKey
+          in: path
+          required: true
+          schema: { type: string }
+          example: "add_employees"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [completed, skipped]
+                  example: "completed"
+      responses:
+        "200":
+          description: Checklist updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Checklist updated." }
+                  data:
+                    type: object
+                    properties:
+                      itemStatus:
+                        type: object
+                        additionalProperties:
+                          type: string
+                          enum: [completed, skipped]
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant, or caller is not owner/admin/superuser

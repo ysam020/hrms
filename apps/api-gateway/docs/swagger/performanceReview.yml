@@ -1,0 +1,364 @@
+paths:
+  /api/v1/performance-reviews/cycles:
+    post:
+      summary: Create a performance review cycle
+      description: >
+        Creates a new performance review cycle covering a period (e.g. H1 2026)
+        and enrolls the given userIds, generating one Review record per user.
+        Restricted to HR/admin/owner (tenantRole), superusers, or a user
+        explicitly granted the `PerformanceReview:manage_cycles` permission.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, periodStart, periodEnd, userIds]
+              properties:
+                name: { type: string, example: "H1 2026 Review Cycle" }
+                periodStart: { type: string, example: "2026-01-01T00:00:00Z" }
+                periodEnd: { type: string, example: "2026-06-30T00:00:00Z" }
+                ratingScale:
+                  {
+                    type: integer,
+                    minimum: 1,
+                    maximum: 10,
+                    example: 5,
+                    description: "Defaults to service default when omitted",
+                  }
+                userIds:
+                  type: array
+                  items: { type: string }
+                  example: ["66f1a2b3c4d5e6f7a8b9c0d1"]
+      responses:
+        "201":
+          description: Review cycle created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Only HR, admin, or owner can create performance review cycles
+        "401":
+          description: Unauthorized
+    get:
+      summary: List performance review cycles
+      description: >
+        Lists review cycles for the tenant, optionally filtered by search text
+        or status. HR/admin/owner/superusers (and `PerformanceReview:manage_cycles`
+        grantees) see every cycle; everyone else only sees cycles they are
+        personally enrolled in.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, closed, deleted] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Cycles retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+
+  /api/v1/performance-reviews/cycles/{cycleId}:
+    get:
+      summary: Get a performance review cycle
+      description: >
+        Returns a single cycle's detail. Non-privileged callers may only view
+        a cycle they are enrolled in (enforced service-side by requesterId
+        scoping).
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cycle retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "404":
+          description: Cycle not found
+    patch:
+      summary: Update a performance review cycle
+      description: >
+        Updates a cycle's name, period, rating scale, or enrolled userIds.
+        Restricted to HR/admin/owner, superusers, or
+        `PerformanceReview:manage_cycles` grantees.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, example: "H1 2026 Review Cycle" }
+                periodStart: { type: string, example: "2026-01-01T00:00:00Z" }
+                periodEnd: { type: string, example: "2026-06-30T00:00:00Z" }
+                ratingScale: { type: integer, minimum: 1, maximum: 10 }
+                userIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Cycle updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Only HR, admin, or owner can edit performance review cycles
+        "401":
+          description: Unauthorized
+
+  /api/v1/performance-reviews/cycles/{cycleId}/status:
+    patch:
+      summary: Change a review cycle's status
+      description: >
+        Transitions a cycle between active, closed, and deleted states.
+        Restricted to HR/admin/owner, superusers, or
+        `PerformanceReview:manage_cycles` grantees.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cycleId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  {
+                    type: string,
+                    enum: [active, closed, deleted],
+                    example: "closed",
+                  }
+      responses:
+        "200":
+          description: Cycle status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Only HR, admin, or owner can change a review cycle's status
+        "401":
+          description: Unauthorized
+
+  /api/v1/performance-reviews:
+    get:
+      summary: List performance reviews
+      description: >
+        Lists individual reviews, filterable by cycleId, userId, reviewerId,
+        search, or status. Non-privileged callers must scope to their own
+        userId ("My Reviews") or reviewerId ("Team Reviews") — an unscoped
+        query or querying another employee's id returns 403. HR/admin/owner/
+        superusers may browse freely.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cycleId
+          in: query
+          schema: { type: string }
+        - name: userId
+          in: query
+          schema: { type: string }
+        - name: reviewerId
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reviews retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Forbidden — must scope query to own userId/reviewerId
+        "401":
+          description: Unauthorized
+
+  /api/v1/performance-reviews/{reviewId}:
+    get:
+      summary: Get a single performance review
+      description: >
+        Returns full review detail. Only the reviewee, the assigned reviewer,
+        or a superuser may view it.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Review retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Forbidden
+        "401":
+          description: Unauthorized
+
+  /api/v1/performance-reviews/{reviewId}/self-assessment:
+    post:
+      summary: Submit a self-assessment
+      description: >
+        The reviewee submits their own self-rating and comments for this
+        review. Only the review's own employee may submit it.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [selfRating]
+              properties:
+                selfRating:
+                  { type: number, minimum: 0, maximum: 10, example: 8 }
+                selfComments:
+                  {
+                    type: string,
+                    example: "Delivered all Q2 milestones on time.",
+                  }
+      responses:
+        "200":
+          description: Self-assessment submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: You can only submit a self-assessment for your own review
+        "401":
+          description: Unauthorized
+
+  /api/v1/performance-reviews/{reviewId}/manager-review:
+    post:
+      summary: Submit a manager review
+      description: >
+        The assigned reviewer submits manager comments, manager/overall
+        ratings, and an optional recommended salary increment percentage and
+        effective date. Only the assigned reviewer (or HR/admin/owner/
+        superuser) may submit it.
+      tags: [Performance Reviews]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [managerRating, overallRating]
+              properties:
+                managerRating:
+                  { type: number, minimum: 0, maximum: 10, example: 7.5 }
+                overallRating:
+                  { type: number, minimum: 0, maximum: 10, example: 8 }
+                managerComments:
+                  { type: string, example: "Strong quarter, exceeded targets." }
+                recommendedIncrementPct:
+                  { type: number, minimum: 0, maximum: 100, example: 10 }
+                effectiveFrom: { type: string, example: "2026-07-01" }
+      responses:
+        "200":
+          description: Manager review submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { type: object }
+        "403":
+          description: Only the assigned reviewer can submit this manager review
+        "401":
+          description: Unauthorized

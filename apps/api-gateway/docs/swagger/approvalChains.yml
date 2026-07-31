@@ -3,47 +3,170 @@ paths:
     get:
       summary: List configured approval chains
       description: >
-        Returns the tenant's configured `ApprovalChain` rows (optionally filtered
-        by `module`), each with its ordered steps. A module with no chains uses
-        the zero-config default: a single step resolved to the requester's
-        reporting manager, falling back to any owner/admin.
-      tags: [Approvals]
+        Returns the tenant's configured `ApprovalChain` rows (optionally
+        filtered by `module`), each with its ordered `steps`. A module with
+        no configured chain falls back to the zero-config default handled
+        elsewhere (a single step resolved to the requester's reporting
+        manager, falling back to any owner/admin). Requires only
+        `authenticate` (any tenant member may view).
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: query
           name: module
           schema:
-            {
-              type: string,
-              enum: [leave, resignation, wfh, salary_advance, overtime],
-            }
+            type: string
+            enum: [leave, resignation, wfh, salary_advance, overtime]
       responses:
-        "200": { description: List of approval chains with steps }
+        "200":
+          description: List of approval chains with steps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/ApprovalChain"
+                        - type: object
+                          properties:
+                            steps:
+                              type: array
+                              items:
+                                $ref: "#/components/schemas/ApprovalChainStep"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
     post:
       summary: Create an approval chain
-      description: Owner/admin only. Steps are ordered by array position.
-      tags: [Approvals]
+      description: >
+        Creates an `ApprovalChain` plus its ordered `ApprovalChainStep` rows
+        (order derived from array position). Restricted to `owner`/`admin`
+        roles or superusers (`isPrivileged`, checked in-handler).
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [module, name, steps]
+              properties:
+                module:
+                  type: string
+                  enum: [leave, resignation, wfh, salary_advance, overtime]
+                name:
+                  {
+                    type: string,
+                    maxLength: 120,
+                    example: "High-value leave escalation",
+                  }
+                conditionField: { type: string, maxLength: 60, example: "days" }
+                conditionOp:
+                  type: string
+                  enum: [gte, lte, eq, in]
+                conditionValue:
+                  description: Any JSON value compared against conditionField
+                  example: 5
+                priority:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  default: 0
+                  description: Higher priority chains are matched first when several qualify.
+                steps:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    $ref: "#/components/schemas/ApprovalChainStepInput"
       responses:
-        "200": { description: Chain created }
-        "403": { description: Not an owner/admin }
+        "200":
+          description: Chain created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Approval chain created." }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant, or not an owner/admin/superuser
 
   /api/v1/approval-chains/{id}:
     put:
       summary: Update an approval chain
-      tags: [Approvals]
+      description: >
+        Partially updates an `ApprovalChain`'s fields; if `steps` is
+        provided, all existing steps are replaced. Restricted to
+        `owner`/`admin` roles or superusers.
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: All fields optional — same shape as create, plus isActive.
+              properties:
+                module:
+                  type: string
+                  enum: [leave, resignation, wfh, salary_advance, overtime]
+                name: { type: string, maxLength: 120 }
+                conditionField: { type: string, maxLength: 60 }
+                conditionOp: { type: string, enum: [gte, lte, eq, in] }
+                conditionValue: {}
+                priority: { type: integer, minimum: 0, maximum: 100 }
+                isActive: { type: boolean }
+                steps:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    $ref: "#/components/schemas/ApprovalChainStepInput"
       responses:
-        "200": { description: Chain updated }
+        "200":
+          description: Chain updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Approval chain updated." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant, or not an owner/admin/superuser
+        "404":
+          description: Approval chain not found
+
     delete:
       summary: Delete an approval chain
-      description: Rejected if any approval is currently pending against this chain.
-      tags: [Approvals]
+      description: >
+        Deletes the chain and its steps. Rejected if any
+        `ApprovalInstance` against this chain is still `pending` —
+        deactivate the chain instead, or wait for those to resolve.
+        Restricted to `owner`/`admin` roles or superusers.
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
@@ -51,27 +174,113 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: Chain deleted }
-        "400": { description: Chain has in-progress approvals }
+        "200":
+          description: Chain deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Approval chain deleted." }
+        "400":
+          description: Chain has in-progress (pending) approval instances
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant, or not an owner/admin/superuser
+        "404":
+          description: Approval chain not found
 
   /api/v1/approval-delegates:
     get:
       summary: List approval delegates
-      tags: [Approvals]
+      description: >
+        Returns all `ApprovalDelegate` rows for the tenant (date-ranged
+        proxy-approver assignments), newest `startDate` first. Requires only
+        `authenticate`.
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
       responses:
-        "200": { description: List of delegates }
+        "200":
+          description: List of delegates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApprovalDelegate"
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
     post:
-      summary: Add a date-ranged proxy approver for yourself
-      tags: [Approvals]
+      summary: Add a date-ranged delegate for your own approvals
+      description: >
+        Creates an `ApprovalDelegate` row delegating the **caller's own**
+        pending approvals (`delegatorId` is always the authenticated user —
+        there is no way to delegate on another user's behalf through this
+        endpoint) to `delegateId` for the given date range, optionally
+        scoped to one `module`. Requires only `authenticate`.
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delegateId, startDate, endDate]
+              properties:
+                delegateId:
+                  { type: string, description: "User ID to delegate to" }
+                startDate:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  example: "2026-08-01"
+                endDate:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  example: "2026-08-15"
+                module:
+                  type: string
+                  enum: [leave, resignation, wfh, salary_advance, overtime]
+                  description: Omit to delegate across all modules.
+                note: { type: string, maxLength: 500 }
       responses:
-        "200": { description: Delegate added }
+        "200":
+          description: Delegate added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Delegate added." }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+        "400":
+          description: startDate is after endDate
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
 
   /api/v1/approval-delegates/{id}:
     delete:
       summary: Remove a delegate assignment
-      tags: [Approvals]
+      description: >
+        Deletes an `ApprovalDelegate` row. Callers may remove their own
+        delegate assignments (`delegatorId === callerId`); removing someone
+        else's requires `owner`/`admin` role or superuser.
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
@@ -79,32 +288,230 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: Delegate removed }
+        "200":
+          description: Delegate removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Delegate removed." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant, or not the delegator/owner/admin/superuser
+        "404":
+          description: Delegate not found
 
   /api/v1/approvals/pending:
     get:
       summary: List approvals awaiting the current user's decision
-      description: Across every module (leave, resignation, ...), not just one.
-      tags: [Approvals]
+      description: >
+        Returns pending `ApprovalInstance` steps resolved to the
+        authenticated user, across every module (leave, resignation,
+        overtime, wfh, ...), enriched with a human-readable `summary` and
+        module-specific `detail` fields for the inbox UI. Requires only
+        `authenticate`. Also folded into the aggregated
+        `GET /approvals/pending-all`.
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
       responses:
-        "200": { description: List of pending approval steps }
+        "200":
+          description: List of pending approval steps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        instanceId: { type: string }
+                        module: { type: string, example: "leave" }
+                        entityId: { type: string }
+                        stepOrder: { type: integer, example: 1 }
+                        requestedBy: { type: string }
+                        requestedByName: { type: string, example: "jane.doe" }
+                        createdAt: { type: string, format: date-time }
+                        summary:
+                          {
+                            type: string,
+                            example: "jane.doe applied for Sick leave (2 days)",
+                          }
+                        detail:
+                          type: object
+                          description: Module-specific fields (varies by module)
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+
+  /api/v1/approvals/pending-all:
+    get:
+      summary: List every pending action across all approval surfaces
+      description: >
+        Single aggregated source for every "Pending Approvals" surface
+        (sidebar badge, dashboard widget, `/approvals` inbox) — merges
+        chain-based approvals (`GET /approvals/pending`), pending KYC review
+        items, and pending tenant join requests
+        (`GET /tenants/join-requests/pending`) into one sorted list.
+        Replaces those three surfaces each independently polling their own
+        endpoint, which collided with the API client's same-URL GET
+        deduplication and silently dropped one caller's count. Each source
+        failing independently degrades to an empty list for that source
+        rather than failing the whole response. Requires only
+        `authenticate`.
+      tags: [Approval Chains]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Combined list of pending action items, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: >
+                        Shape varies by source — chain approvals include
+                        instanceId/entityId/stepOrder/summary/detail; KYC and
+                        join-request items include instanceId/module/
+                        requestedByName/createdAt/summary.
+        "401":
+          description: Unauthorized
 
   /api/v1/approvals/{instanceId}/act:
     put:
       summary: Approve or reject the current step of an approval
       description: >
-        Owners/admins may act on any pending approval regardless of who it's
-        resolved to (matches existing admin-override behavior). Approving a
-        non-final step advances the chain to the next approver instead of
-        completing it.
-      tags: [Approvals]
+        Records a decision on the current pending step of an
+        `ApprovalInstance`. Approving a non-final step advances the chain to
+        the next approver rather than completing it; on the final step, the
+        module-specific side effect fires (e.g. crediting a leave balance,
+        finalizing a resignation, marking WFH attendance, creating a salary
+        revision). Owners/admins/superusers may act on any pending approval
+        regardless of who it's resolved to (`allowOverride`). Requires only
+        `authenticate`.
+      tags: [Approval Chains]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: instanceId
           required: true
           schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approved, rejected]
+                comment: { type: string, maxLength: 1000 }
+                metadata:
+                  type: object
+                  description: >
+                    Module-specific extra decision fields (e.g. resignation's
+                    lastWorkingDay, buyoutAmount, noticePeriodWaived) —
+                    validated per-module inside the side effect, not here.
       responses:
-        "200": { description: Decision recorded }
-        "400": { description: Not the resolved approver, or already decided }
+        "200":
+          description: >
+            Decision recorded — `message` reflects whether this was the
+            final step ("Request approved."/"Request rejected.") or an
+            intermediate one ("Approved — forwarded to the next approver.")
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Request approved." }
+                  data:
+                    type: object
+                    properties:
+                      isFinal: { type: boolean }
+                      finalStatus:
+                        type: string
+                        nullable: true
+                        enum: [approved, rejected, null]
+        "400":
+          description: Not the resolved approver, or step already decided
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+        "404":
+          description: Approval instance not found
+
+components:
+  schemas:
+    ApprovalChainStepInput:
+      type: object
+      required: [approverType]
+      properties:
+        approverType:
+          type: string
+          enum: [reporting_manager, specific_user, role, team_leader]
+        approverUserId:
+          type: string
+          description: Required when approverType is "specific_user".
+        approverRole:
+          type: string
+          enum: [owner, admin, hr, manager, employee]
+          description: Required when approverType is "role".
+
+    ApprovalChainStep:
+      allOf:
+        - $ref: "#/components/schemas/ApprovalChainStepInput"
+        - type: object
+          properties:
+            id: { type: string }
+            tenantId: { type: string }
+            chainId: { type: string }
+            order: { type: integer, example: 1 }
+
+    ApprovalChain:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        module:
+          type: string
+          enum: [leave, resignation, wfh, salary_advance, overtime]
+        name: { type: string, example: "High-value leave escalation" }
+        conditionField: { type: string, nullable: true, example: "days" }
+        conditionOp:
+          type: string
+          nullable: true
+          enum: [gte, lte, eq, in]
+        conditionValue: { nullable: true }
+        priority: { type: integer, example: 0 }
+        isActive: { type: boolean, example: true }
+        createdBy: { type: string }
+
+    ApprovalDelegate:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        delegatorId: { type: string }
+        delegateId: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        module:
+          type: string
+          nullable: true
+          enum: [leave, resignation, wfh, salary_advance, overtime, null]
+        note: { type: string, nullable: true }

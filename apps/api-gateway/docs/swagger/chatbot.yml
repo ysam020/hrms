@@ -3,17 +3,28 @@ paths:
     post:
       summary: Send a message to the HRMS chatbot
       description: >
-        Sends a user message to the AI chatbot and streams the response as
-        Server-Sent Events (SSE). The chatbot can answer HR-related questions
-        by fetching real-time data (leave balance, attendance, salary, policies,
-        etc.) for the authenticated user. Non-HR questions are out of scope.
+        Sends a user message (plus optional recent conversation history) to
+        the Ollama-backed HRMS assistant (model `qwen2.5-coder:14b` by
+        default) and streams the reply as Server-Sent Events. The assistant
+        is HR-scoped: for questions about the caller's own profile, leave
+        balance, leave applications, attendance, salary/payslip, or company
+        policies, it calls internal tools to fetch real data (never
+        fabricates values) before answering. It will not reveal another
+        employee's personal data, and refuses off-topic (non-HR) questions
+        with a fixed message.
 
 
-        The response is streamed as `text/event-stream`. Each event is a JSON
-        object on a `data:` line. Token events carry `{ "token": "..." }`;
-        the final event carries `{ "done": true }`. On error, an event carries
-        `{ "error": "..." }`. Validation errors before the stream begins are
-        returned as regular JSON with `400`.
+        Request validation (message required, non-empty, max 1000 chars)
+        happens before SSE headers are sent, so validation failures still
+        return plain JSON with `400`. Once validation passes, the response
+        switches to `text/event-stream` and cannot report errors via HTTP
+        status — mid-stream failures (e.g. Ollama unreachable/timed out)
+        are instead sent as a final `{"error": "..."}` SSE event.
+
+
+        Rate-limited to 20 requests per minute per client (Redis-backed
+        limiter, shared across gateway replicas) to bound LLM cost; exceeding
+        it returns `429`.
       tags: [Chatbot]
       security:
         - bearerAuth: []
@@ -27,14 +38,16 @@ paths:
               properties:
                 message:
                   type: string
-                  description: The user's message (max 1000 characters)
+                  description: The user's message (required, non-empty, max 1000 characters)
                   example: "What is my leave balance?"
                   maxLength: 1000
                 history:
                   type: array
                   description: >
-                    Conversation history for context (up to last 10 messages).
-                    Each entry must have a role of "user" or "assistant".
+                    Prior turns for conversation context. Only the last 10
+                    entries are used; entries missing a valid `role`
+                    ("user"/"assistant") or non-empty string `content` are
+                    dropped.
                   items:
                     type: object
                     required: [role, content]
@@ -62,7 +75,8 @@ paths:
 
                   - `data: {"done": true}` — stream complete
 
-                  - `data: {"error": "..."}` — error during streaming
+                  - `data: {"error": "..."}` — error during streaming (e.g.
+                  Ollama unavailable or timed out)
               example: |
                 data: {"token":"You"}
                 data: {"token":" have"}
@@ -72,12 +86,25 @@ paths:
                 data: {"token":" remaining."}
                 data: {"done":true}
         "400":
-          description: Validation error (message missing or exceeds 1000 characters)
+          description: Validation error (message missing/empty or exceeds 1000 characters)
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  success: { type: boolean, example: false }
                   message: { type: string, example: "Message is required" }
         "401":
-          description: Unauthorized
+          description: Unauthorized, or the authenticated user no longer exists
+        "429":
+          description: Rate limit exceeded (max 20 requests/minute)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    {
+                      type: string,
+                      example: "Too many requests, please try again later",
+                    }

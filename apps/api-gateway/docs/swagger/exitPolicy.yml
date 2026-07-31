@@ -1,0 +1,708 @@
+paths:
+  /api/v1/exit-interview-templates:
+    get:
+      summary: Get the active exit interview template
+      description: >-
+        Returns the tenant's single active exit interview template (its
+        question set). If none has been configured yet, returns a synthetic
+        `{ id: null, questions: [...] }` payload built from a built-in
+        default question set (communication, manager support, culture,
+        suggestions) rather than 404ing. Requires an active tenant.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Template retrieved (or default questions if unconfigured)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, nullable: true }
+                      tenantId: { type: string }
+                      isActive: { type: boolean }
+                      questions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string, example: "communication" }
+                            label: { type: string }
+                            type:
+                              { type: string, enum: [rating, text, boolean] }
+                            required: { type: boolean }
+                      createdBy: { type: string }
+                      updatedAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the session
+    put:
+      summary: Update the exit interview template
+      description: >-
+        Replaces the active template's question set (creates it if none
+        exists yet). Restricted to owners, admins, HR, or a user holding the
+        `Organisation:edit_organisation_settings` permission — enforced
+        in-handler (403 with a descriptive message otherwise), not via route
+        middleware.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [questions]
+              properties:
+                questions:
+                  type: array
+                  maxItems: 30
+                  items:
+                    type: object
+                    required: [id, label, type]
+                    properties:
+                      id: { type: string }
+                      label: { type: string, maxLength: 300 }
+                      type: { type: string, enum: [rating, text, boolean] }
+                      required: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Exit interview questions updated.",
+                    }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+
+  /api/v1/resignations/{id}/exit-interview-response:
+    post:
+      summary: Submit an exit interview response
+      description: >-
+        Records the employee's answers to the exit interview for a specific
+        resignation, and stamps `feedbackSubmittedOn` on the resignation.
+        Only the resigning employee themself, or a privileged user
+        (owner/admin/HR/permitted), may submit. If the tenant has no exit
+        interview template yet, one is materialized from the default
+        question set on first use. Re-submitting updates the existing
+        response rather than creating a duplicate. Invalidates cached
+        resignation data for the tenant.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: array
+                  maxItems: 30
+                  items:
+                    type: object
+                    required: [questionId]
+                    properties:
+                      questionId: { type: string }
+                      value: {}
+      responses:
+        "200":
+          description: Response recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Exit interview submitted." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is neither the resigning employee nor
+            privileged
+        "404":
+          description: Resignation not found
+
+  /api/v1/exit-checklist-item-defs:
+    get:
+      summary: List exit checklist item definitions
+      description: >-
+        Returns the tenant's active exit-checklist item definitions (e.g.
+        "Return laptop", "Clear IT access"), ordered by their configured
+        `order`. This is tenant-level configuration, not a specific
+        employee's progress.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Checklist item definitions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        label:
+                          { type: string, example: "Return company laptop" }
+                        owningRole:
+                          {
+                            type: string,
+                            enum: [IT, Finance, HR, Admin, Manager],
+                          }
+                        isRequired: { type: boolean }
+                        order: { type: integer }
+                        isActive: { type: boolean }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the session
+    post:
+      summary: Create an exit checklist item definition
+      description: >-
+        Adds a new tenant-level checklist item definition. Restricted to
+        owners, admins, HR, or a user with
+        `Organisation:edit_organisation_settings`.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, owningRole]
+              properties:
+                label: { type: string, maxLength: 200 }
+                owningRole:
+                  { type: string, enum: [IT, Finance, HR, Admin, Manager] }
+                isRequired: { type: boolean, default: true }
+                order: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Checklist item added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Checklist item added." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+
+  /api/v1/exit-checklist-item-defs/{id}:
+    put:
+      summary: Update an exit checklist item definition
+      description: >-
+        Partial update of a checklist item definition (label, owningRole,
+        isRequired, order, isActive). Restricted to owners, admins, HR, or a
+        user with `Organisation:edit_organisation_settings`.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, maxLength: 200 }
+                owningRole:
+                  { type: string, enum: [IT, Finance, HR, Admin, Manager] }
+                isRequired: { type: boolean }
+                order: { type: integer }
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: Checklist item updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Checklist item updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+        "404":
+          description: Item not found in this tenant
+    delete:
+      summary: Remove an exit checklist item definition
+      description: >-
+        Deactivates the item definition (`isActive: false`) rather than
+        hard-deleting it, so historical per-resignation completion records
+        stay intact. Restricted to owners, admins, HR, or a user with
+        `Organisation:edit_organisation_settings`.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Checklist item removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Checklist item removed." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+        "404":
+          description: Item not found in this tenant
+
+  /api/v1/resignations/{id}/checklist:
+    get:
+      summary: Get a resignation's exit checklist status
+      description: >-
+        Joins the tenant's active checklist item definitions with this
+        resignation's per-item completion status (defs with no recorded
+        status default to `isComplete: false`). Only the resigning employee
+        themself, or a privileged user, may view it.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Checklist status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        itemDefId: { type: string }
+                        label: { type: string }
+                        owningRole: { type: string }
+                        isRequired: { type: boolean }
+                        isComplete: { type: boolean }
+                        completedBy: { type: string, nullable: true }
+                        completedAt:
+                          { type: string, format: date-time, nullable: true }
+                        notes: { type: string, nullable: true }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is neither the resigning employee nor
+            privileged
+        "404":
+          description: Resignation not found
+
+  /api/v1/resignations/{id}/checklist/{itemDefId}:
+    put:
+      summary: Update a resignation checklist item's completion status
+      description: >-
+        Marks a single checklist item complete/incomplete for this
+        resignation (upserted — created if no status row exists yet). When
+        marking complete, `completedBy`/`completedAt` are stamped from the
+        caller/now; when marking incomplete, they're cleared. Restricted to
+        owners, admins, HR, or a user with
+        `Organisation:edit_organisation_settings` — the resigning employee
+        cannot update their own clearance status.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+        - name: itemDefId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isComplete]
+              properties:
+                isComplete: { type: boolean }
+                notes: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Checklist item status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Checklist item updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+
+  /api/v1/resignations/{id}/renegotiate-notice:
+    put:
+      summary: Renegotiate a resignation's last working day
+      description: >-
+        Updates the resignation's `lastWorkingDay` and logs the change as a
+        ResignationNoticeEvent (previous date, new date, reason, who changed
+        it) so a date that moves more than once still has an audit trail.
+        Only allowed while the resignation is in "Submitted" or "Approved"
+        status. Note: unlike most other exit-policy write endpoints, this one
+        only requires authentication in-handler — it is not restricted to
+        privileged roles.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newLastWorkingDay]
+              properties:
+                newLastWorkingDay: { type: string, format: date }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Last working day updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Last working day updated." }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      resignationId: { type: string }
+                      previousLastWorkingDay:
+                        { type: string, format: date-time }
+                      newLastWorkingDay: { type: string, format: date-time }
+                      reason: { type: string, nullable: true }
+                      changedBy: { type: string }
+                      createdAt: { type: string, format: date-time }
+        "400":
+          description: Resignation is not in Submitted or Approved status
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant on the session
+        "404":
+          description: Resignation not found
+
+  /api/v1/resignations/{id}/notice-events:
+    get:
+      summary: List a resignation's notice-period change history
+      description: >-
+        Returns the audit trail of last-working-day changes for a
+        resignation, oldest first. Only the resigning employee themself, or
+        a privileged user, may view it.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Notice events retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        previousLastWorkingDay:
+                          { type: string, format: date-time }
+                        newLastWorkingDay: { type: string, format: date-time }
+                        reason: { type: string, nullable: true }
+                        changedBy: { type: string }
+                        createdAt: { type: string, format: date-time }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is neither the resigning employee nor
+            privileged
+        "404":
+          description: Resignation not found
+
+  /api/v1/resignations/{id}/rehire-eligibility:
+    put:
+      summary: Set rehire eligibility for a resigned employee
+      description: >-
+        Flags whether the employee is eligible for rehire. Restricted to
+        owners, admins, HR, or a user with
+        `Organisation:edit_organisation_settings`.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rehireEligible]
+              properties:
+                rehireEligible: { type: boolean }
+      responses:
+        "200":
+          description: Rehire eligibility updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Rehire eligibility updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+        "404":
+          description: Resignation not found
+
+  /api/v1/resignations/{id}/fnf-settlement:
+    get:
+      summary: Get a resignation's full-and-final settlement
+      description: >-
+        Returns the previously computed FnF settlement for this resignation,
+        or `null` if none has been computed yet. Restricted to owners,
+        admins, HR, or a user with `Organisation:edit_organisation_settings`.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Settlement retrieved (or null)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    nullable: true
+                    properties:
+                      id: { type: string }
+                      resignationId: { type: string }
+                      userId: { type: string }
+                      status: { type: string, example: "pending" }
+                      lineItems:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string }
+                            type: { type: string, enum: [earning, deduction] }
+                            amount: { type: number }
+                      leaveEncashmentAmount: { type: number }
+                      noticeShortfallDeduction: { type: number }
+                      grossPayable: { type: number }
+                      totalDeductions: { type: number }
+                      netPayable: { type: number }
+                      approvedBy: { type: string, nullable: true }
+                      approvedAt:
+                        { type: string, format: date-time, nullable: true }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+    post:
+      summary: Compute a resignation's full-and-final settlement
+      description: >-
+        Computes (or recomputes, via upsert) a draft FnF settlement from the
+        employee's latest salary structure, encashable leave balance, and
+        notice-period compliance. Leave encashment sums whichever leave
+        types the tenant's leave policy has `encashment.enabled`, capped at
+        `maxDaysPerYear` if configured, at `ratePerDay` or the derived daily
+        salary rate. Notice shortfall is deducted (days short of the
+        resolved notice period, times daily rate) unless the notice period
+        was waived. This is a first-pass number for HR to review — it does
+        not disburse payroll. Restricted to owners, admins, HR, or a user
+        with `Organisation:edit_organisation_settings`.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Settlement computed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Settlement computed." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+        "404":
+          description: Resignation not found
+
+  /api/v1/resignations/{id}/fnf-settlement/approve:
+    put:
+      summary: Approve a resignation's full-and-final settlement
+      description: >-
+        Approves a previously computed settlement (`status: "approved"`,
+        stamps `approvedBy`/`approvedAt`). Blocked with 400 if any of the
+        tenant's *required* active exit-checklist items have not been marked
+        complete for this resignation — this is the point in the exit flow
+        where `ExitChecklistItemDef.isRequired` is actually enforced, not
+        just displayed. Restricted to owners, admins, HR, or a user with
+        `Organisation:edit_organisation_settings`.
+      tags: [Exit Policy]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resignation id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Settlement approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Settlement approved." }
+                  data: { type: object }
+        "400":
+          description: One or more required exit checklist items are not yet complete
+        "401":
+          description: Unauthorized
+        "403":
+          description: >-
+            No active tenant, or caller is not an owner/admin/HR/permitted
+            user
+        "404":
+          description: Settlement not found — compute one first

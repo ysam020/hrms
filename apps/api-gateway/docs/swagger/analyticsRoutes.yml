@@ -1,0 +1,790 @@
+paths:
+  /api/v1/get-employment-type-breakdown:
+    get:
+      summary: Employment type breakdown
+      description: >
+        Returns the count of active employees working from home (WFH) vs. in-office.
+        Result is cached per tenant. Requires super-user privileges — the tenant owner,
+        or a user with `isSuperUser` set, via `requireSuperUser`.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Employment type breakdown retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Employment type breakdown retrieved",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      wfhCount: { type: integer, example: 12 }
+                      officeCount: { type: integer, example: 88 }
+                      totalEmployees: { type: integer, example: 100 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-employee-status-distribution:
+    get:
+      summary: Employee status distribution
+      description: >
+        Returns employee count grouped by `employeeStatus` (e.g. Active, Resigned,
+        Terminated, Absconded), sorted descending by count. Result is cached per tenant.
+        Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Employee status distribution retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string, example: "Active" }
+                        count: { type: integer, example: 91 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-employee-departments:
+    get:
+      summary: Employee count by department
+      description: >
+        Returns the number of active employees in each non-null department. Result is
+        cached per tenant. Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Employee departments retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string, example: "Engineering" }
+                        count: { type: integer, example: 15 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-employee-designations:
+    get:
+      summary: Employee count by designation
+      description: >
+        Returns the number of active employees at each non-null designation. Result is
+        cached per tenant. Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Employee designations retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string, example: "Software Engineer" }
+                        count: { type: integer, example: 10 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-age-distribution:
+    get:
+      summary: Employee age distribution
+      description: >
+        Buckets employees with a known date of birth into age bands (<25, 25-34, 35-44,
+        45-54, 55+) via a MongoDB `$bucket` aggregation. Requires a tenant context — fails
+        with 500 if none is present. Result is cached per tenant. Requires super-user
+        privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Age distribution retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          {
+                            type: string,
+                            enum: ["<25", "25-34", "35-44", "45-54", "55+"],
+                          }
+                        count: { type: integer }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request
+
+  /api/v1/get-joining-data:
+    get:
+      summary: Employee joining data over time
+      description: >
+        Returns employee joining counts grouped by year-month (`YYYY-MM`), sorted
+        ascending. Requires a tenant context — fails with 500 if none is present. Result
+        is cached per tenant. Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Joining data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        formattedDate: { type: string, example: "2026-03" }
+                        count: { type: integer, example: 4 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request
+
+  /api/v1/get-tenure-distribution:
+    get:
+      summary: Employee tenure distribution
+      description: >
+        Buckets active employees by years of service (<1, 1-2, 2-3, 3-5, 5+ years) via a
+        MongoDB `$bucket` aggregation. Requires a tenant context — fails with 500 if none
+        is present. Result is cached per tenant. Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Tenure distribution retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          {
+                            type: string,
+                            enum:
+                              [
+                                "<1 yr",
+                                "1-2 yrs",
+                                "2-3 yrs",
+                                "3-5 yrs",
+                                "5+ yrs",
+                              ],
+                          }
+                        count: { type: integer }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request
+
+  /api/v1/get-headcount-growth:
+    get:
+      summary: Headcount growth over the trailing 12 months
+      description: >
+        Returns per-month new joinings and cumulative headcount for the trailing 12
+        months, seeded from a baseline count of employees who joined before the window.
+        Requires a tenant context — fails with 500 if none is present. Result is cached
+        per tenant. Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Headcount growth data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        monthName: { type: string, example: "Jul" }
+                        year: { type: integer, example: 2026 }
+                        joinings: { type: integer, example: 3 }
+                        cumulativeHeadcount: { type: integer, example: 104 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request
+
+  /api/v1/get-leave-approval-rate:
+    get:
+      summary: Leave approval rate
+      description: >
+        Returns the percentage of leave applications approved, along with the underlying
+        approved/pending/rejected/total counts. Result is cached per tenant. Requires
+        super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Leave approval rate retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      approvalRate: { type: integer, example: 87 }
+                      approved: { type: integer, example: 87 }
+                      pending: { type: integer, example: 8 }
+                      rejected: { type: integer, example: 5 }
+                      total: { type: integer, example: 100 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-leave-type-breakdown:
+    get:
+      summary: Leave type breakdown
+      description: >
+        Returns leave application count and total days grouped by leave type. Result is
+        cached per tenant. Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Leave type breakdown retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string, example: "Sick Leave" }
+                        count: { type: integer, example: 20 }
+                        totalDays: { type: integer, example: 45 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-monthly-leave-patterns:
+    get:
+      summary: Monthly leave patterns
+      description: >
+        Returns the count of approved leave applications (by start date) grouped by
+        year-month over the trailing 12 months. Requires a tenant context — fails with 500
+        if none is present. Result is cached per tenant. Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Monthly leave patterns retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        month: { type: string, example: "2026-05" }
+                        count: { type: integer, example: 9 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request
+
+  /api/v1/get-attendance-trends:
+    get:
+      summary: Attendance trends
+      description: >
+        Returns monthly attendance rate and average working hours over the trailing 12
+        months. "Present" is counted as status in Present, Late, or Half Day. Requires a
+        tenant context — fails with 500 if none is present. Result is cached per tenant.
+        Requires super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Attendance trends retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: object
+                          properties:
+                            year: { type: integer, example: 2026 }
+                            month: { type: integer, example: 7 }
+                        attendanceRate: { type: number, example: 92.5 }
+                        avgWorkingHours: { type: number, example: 8.1 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request
+
+  /api/v1/get-working-hours-distribution:
+    get:
+      summary: Working hours distribution
+      description: >
+        Buckets attendance records (over the trailing 12 months) by daily working hours
+        (<4h, 4-6h, 6-8h, 8-9h, 9+h) via a MongoDB `$bucket` aggregation. Requires a tenant
+        context — fails with 500 if none is present. Result is cached per tenant. Requires
+        super-user privileges.
+      tags: [Workforce Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Working hours distribution retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          {
+                            type: string,
+                            enum: ["<4h", "4-6h", "6-8h", "8-9h", "9+h"],
+                          }
+                        count: { type: integer }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request
+
+  /api/v1/get-job-openings-by-status:
+    get:
+      summary: Job openings by status
+      description: >
+        Returns job opening count grouped by status. Result is cached per tenant. Requires
+        super-user privileges.
+      tags: [Recruitment Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Job openings by status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id: { type: string, example: "Active" }
+                        count: { type: integer, example: 6 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-applications-by-job-role:
+    get:
+      summary: Applications by job role
+      description: >
+        Returns application counts per job title, broken down into total, interviewing
+        (any status other than "Applied", "Hired", "Rejected" — e.g. "Round N
+        Scheduled/Completed/Cleared"), hired, and rejected. There is no "Shortlisted" or
+        "Offered" status in the recruitment pipeline, so those are not tracked separately.
+        Result is cached per tenant. Requires super-user privileges.
+      tags: [Recruitment Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Applications by job role retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        jobTitle: { type: string, example: "Backend Engineer" }
+                        totalApplications: { type: integer, example: 34 }
+                        interviewing: { type: integer, example: 10 }
+                        hired: { type: integer, example: 2 }
+                        rejected: { type: integer, example: 20 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-hiring-funnel:
+    get:
+      summary: Hiring funnel metrics
+      description: >
+        Returns candidate counts at each stage of the recruitment pipeline (applied,
+        interviewing, hired, rejected) plus the interviewing rate and hire rate as
+        percentages of total applications. Result is cached per tenant. Requires
+        super-user privileges.
+      tags: [Recruitment Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Hiring funnel data retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      applied: { type: integer, example: 120 }
+                      interviewing: { type: integer, example: 30 }
+                      hired: { type: integer, example: 10 }
+                      rejected: { type: integer, example: 70 }
+                      interviewingRate: { type: integer, example: 33 }
+                      hireRate: { type: integer, example: 8 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-hiring-manager-performance:
+    get:
+      summary: Hiring manager performance
+      description: >
+        Returns per-hiring-manager job counts (total, active, closed) and a success rate
+        (closed / total). "Closed" includes job openings with status "closed" or "hired";
+        everything else counts as active. Result is cached per tenant. Requires super-user
+        privileges.
+      tags: [Recruitment Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Hiring manager performance retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hiringManager: { type: string, example: "Jane Doe" }
+                        totalJobs: { type: integer, example: 8 }
+                        activeJobs: { type: integer, example: 3 }
+                        closedJobs: { type: integer, example: 5 }
+                        successRate: { type: integer, example: 63 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-salary-distribution-by-department:
+    get:
+      summary: Salary distribution by department
+      description: >
+        Returns min/max/average gross salary and employee count per department, based on
+        each employee's latest SalaryStructure row (most recent year/month). Result is
+        cached per tenant. Requires super-user privileges.
+      tags: [Compensation Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Salary distribution by department retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        department: { type: string, example: "Engineering" }
+                        minSalary: { type: number, example: 30000 }
+                        maxSalary: { type: number, example: 95000 }
+                        avgSalary: { type: number, example: 58000 }
+                        employeeCount: { type: integer, example: 15 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-compensation-breakdown:
+    get:
+      summary: Compensation breakdown
+      description: >
+        Returns organization-wide average salary component values (basic pay, HRA,
+        conveyance, PF, ESI, PT), based on each employee's latest SalaryStructure row.
+        Result is cached per tenant. Requires super-user privileges.
+      tags: [Compensation Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Compensation breakdown retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      employeeCount: { type: integer, example: 100 }
+                      avgBasicPay: { type: number, example: 25000 }
+                      avgHRA: { type: number, example: 10000 }
+                      avgConveyance: { type: number, example: 1600 }
+                      avgPF: { type: number, example: 1800 }
+                      avgESI: { type: number, example: 400 }
+                      avgPT: { type: number, example: 200 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-average-salary-by-designation:
+    get:
+      summary: Average salary by designation
+      description: >
+        Returns average/min/max gross salary and employee count per designation, sorted
+        descending by average salary, based on each employee's latest SalaryStructure
+        row. Result is cached per tenant. Requires super-user privileges.
+      tags: [Compensation Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Average salary by designation retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        designation:
+                          { type: string, example: "Software Engineer" }
+                        avgSalary: { type: number, example: 62000 }
+                        minSalary: { type: number, example: 45000 }
+                        maxSalary: { type: number, example: 80000 }
+                        employeeCount: { type: integer, example: 12 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+
+  /api/v1/get-salary-bands:
+    get:
+      summary: Salary bands
+      description: >
+        Buckets each employee's latest gross salary into bands (<20K, 20-40K, 40-60K,
+        60-100K, 100K+) via a MongoDB `$bucket` aggregation, returning count and average
+        salary per band. Requires a tenant context — fails with 500 if none is present.
+        Result is cached per tenant. Requires super-user privileges.
+      tags: [Compensation Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Salary bands retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        range:
+                          {
+                            type: string,
+                            enum:
+                              ["<20K", "20-40K", "40-60K", "60-100K", "100K+"],
+                          }
+                        count: { type: integer, example: 25 }
+                        avgSalary: { type: number, example: 32000 }
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires super-user privileges
+        "500":
+          description: Internal Server Error — no tenant context on request

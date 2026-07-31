@@ -1,0 +1,313 @@
+paths:
+  /api/v1/wfh/requests:
+    post:
+      summary: Request work from home
+      description: >-
+        Submits a WFH request for a single date, or an inclusive date range
+        (omit toDate for a single day). Rejected if WFH is disabled for the
+        tenant (org-wide kill switch, no override — not even for owners/
+        admins/superusers), if the range is entirely non-working days
+        (weekends/holidays are simply skipped, not the whole request), for
+        past dates, or if it overlaps an existing Pending/Approved leave
+        application or WFH request. Instantiated against the tenant's
+        Approval Chain for the "wfh" module (defaults to the requester's
+        reporting manager); HR and team leaders are notified in-app and by
+        email.
+      tags: [Work From Home]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date]
+              properties:
+                date:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  example: "2026-04-20"
+                toDate:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  example: "2026-04-21"
+                  description: Omit for a single-day request; defaults to date.
+                reason:
+                  type: string
+                  example: "Internet installation at home"
+      responses:
+        "201":
+          description: WFH request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "WFH request submitted" }
+                  data:
+                    type: object
+                    properties:
+                      requestId: { type: string }
+                      date: { type: string, format: date }
+                      toDate: { type: string, format: date }
+                      status: { type: string, example: "Pending" }
+        "400":
+          description: Invalid date range, past date, or no working days in the requested range
+        "401":
+          description: Unauthorized
+        "403":
+          description: WFH is disabled for this organisation, or no active tenant
+        "409":
+          description: Overlaps an existing leave application or WFH request
+    get:
+      summary: List WFH requests
+      description: >-
+        Approvers (owner/admin/HR/superuser, or anyone granted the
+        WFH:approve permission) see every request for the tenant, filterable
+        by userId/status/date range/search (matched against employee name or
+        username). Non-approvers always see only their own requests. Each
+        result is enriched with the requesting employee's profile. Paginated.
+      tags: [Work From Home]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Approved, Rejected, Cancelled]
+        - name: userId
+          in: query
+          schema: { type: string }
+          description: Approvers only.
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+          description: Include requests whose range overlaps on/after this date.
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+          description: Include requests whose range overlaps on/before this date.
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Matches first_name/last_name/username; approvers only.
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: WFH requests retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "WFH requests retrieved" }
+                  total: { type: integer, example: 3 }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WfhRequest"
+        "401":
+          description: Unauthorized
+        "403":
+          description: WFH is disabled for this organisation, or no active tenant
+
+  /api/v1/wfh/requests/status:
+    patch:
+      summary: Approve, reject, or cancel a WFH request
+      description: >-
+        Only a Pending request may be acted on. approve/reject route through
+        the tenant's Approval Chain for the "wfh" module (actOnApprovalForEntity)
+        — only the resolved approver, or an approver privileged via
+        owner/admin/HR role or an explicit WFH:approve grant, may act, and a
+        multi-step chain forwards to the next approver instead of finalizing
+        immediately. approve is additionally blocked if an Approved leave
+        application now overlaps the same date(s). cancel is self-service
+        only — a requester may cancel their own request, which also cancels
+        any still-pending approval instance.
+      tags: [Work From Home]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, action]
+              properties:
+                requestId: { type: string, example: "665f1c2e8a1b2c0012a3bd12" }
+                action:
+                  type: string
+                  enum: [approve, reject, cancel]
+                  example: "approve"
+                rejectionReason:
+                  {
+                    type: string,
+                    example: "Team needs full on-site coverage that week",
+                  }
+      responses:
+        "200":
+          description: WFH request updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "WFH request Approved" }
+        "400":
+          description: Request is not Pending, or approving it now overlaps an approved leave application
+        "401":
+          description: Unauthorized
+        "403":
+          description: Not the resolved approver and not privileged (or, for cancel, not the request's own owner); WFH disabled; or no active tenant
+        "404":
+          description: WFH request not found
+
+  /api/v1/wfh/requests/bulk-status:
+    patch:
+      summary: Bulk approve or reject WFH requests
+      description: >-
+        Approves or rejects up to 200 WFH requests in one call. cancel is
+        intentionally excluded — cancellation stays single-item and self-
+        service. Each id is resolved and acted on independently (same
+        Pending-only and leave-overlap checks as the single-item endpoint),
+        so one already-decided or overlapping request doesn't fail the whole
+        batch; per-id failures are returned in the response instead of
+        aborting.
+      tags: [Work From Home]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestIds, action]
+              properties:
+                requestIds:
+                  type: array
+                  items: { type: string }
+                  minItems: 1
+                  maxItems: 200
+                  example:
+                    ["665f1c2e8a1b2c0012a3bd12", "665f1c2e8a1b2c0012a3bd13"]
+                action:
+                  type: string
+                  enum: [approve, reject]
+                  example: "approve"
+                rejectionReason: { type: string }
+      responses:
+        "200":
+          description: Bulk action completed (see data.failed for any per-id errors)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "2 WFH request(s) approved" }
+                  data:
+                    type: object
+                    properties:
+                      succeeded:
+                        type: array
+                        items: { type: string }
+                      failed:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            message: { type: string }
+        "401":
+          description: Unauthorized
+        "403":
+          description: WFH is disabled for this organisation, or no active tenant
+
+  /api/v1/wfh/calendar:
+    get:
+      summary: Monthly WFH calendar
+      description: >-
+        Returns one entry per employee per WFH day (Approved requests only)
+        for the given month, for manager/team dashboards — a request
+        spanning multiple days is expanded into one entry per day, clamped to
+        the requested month. Approvers see the whole tenant; non-approvers
+        see only their own days.
+      tags: [Work From Home]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema: { type: integer }
+          example: 2026
+        - name: month
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+          example: 4
+      responses:
+        "200":
+          description: WFH calendar retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "WFH calendar retrieved" }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, format: date-time }
+                        employee:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            username: { type: string }
+                            first_name: { type: string }
+                            last_name: { type: string }
+        "400":
+          description: Valid year and month (1-12) are required
+        "401":
+          description: Unauthorized
+        "403":
+          description: WFH is disabled for this organisation, or no active tenant
+
+components:
+  schemas:
+    WfhRequest:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        userId: { type: string }
+        date: { type: string, format: date-time }
+        toDate: { type: string, format: date-time }
+        reason: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [Pending, Approved, Rejected, Cancelled]
+        employee:
+          type: object
+          properties:
+            id: { type: string }
+            username: { type: string }
+            first_name: { type: string }
+            last_name: { type: string }
+            department: { type: string }

@@ -1,0 +1,331 @@
+paths:
+  /api/v1/departments:
+    get:
+      summary: List departments
+      description: >-
+        Returns all active departments for the tenant, sorted by name. Open
+        to any authenticated user with an active tenant.
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Departments fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        tenantId: { type: string }
+                        name: { type: string, example: "Engineering" }
+                        headUserId: { type: string, nullable: true }
+                        isActive: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+    post:
+      summary: Create a department
+      description: >-
+        Creates a new department for the tenant. Requires HR/owner/admin/
+        superuser ("Only owners, admins, and HR can manage departments.").
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 160, example: "Engineering" }
+                headUserId: { type: string, example: "64f1c2..." }
+      responses:
+        "200":
+          description: Department added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Department added." }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      headUserId: { type: string, nullable: true }
+                      isActive: { type: boolean }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser, or no active tenant
+
+  /api/v1/departments/{id}:
+    put:
+      summary: Update a department
+      description: >-
+        Updates name, headUserId, and/or isActive for a department scoped to
+        the caller's tenant. Requires HR/owner/admin/superuser.
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 160 }
+                headUserId: { type: string }
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: Department updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Department updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser, or no active tenant
+        "404":
+          description: Department not found
+    delete:
+      summary: Deactivate a department
+      description: >-
+        Soft-deletes a department by setting isActive to false (no hard
+        delete). Requires HR/owner/admin/superuser.
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Department removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Department removed." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser, or no active tenant
+        "404":
+          description: Department not found
+
+  /api/v1/designations:
+    get:
+      summary: List designations
+      description: >-
+        Returns all active designations for the tenant, sorted by name. Open
+        to any authenticated user with an active tenant.
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Designations fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        tenantId: { type: string }
+                        name: { type: string, example: "Software Engineer" }
+                        departmentId: { type: string, nullable: true }
+                        level: { type: integer, nullable: true }
+                        isActive: { type: boolean, example: true }
+        "401":
+          description: Unauthorized
+        "403":
+          description: No active tenant
+    post:
+      summary: Create a designation
+      description: >-
+        Creates a new designation for the tenant, optionally scoped to a
+        department and/or given a seniority level. Requires HR/owner/admin/
+        superuser ("Only owners, admins, and HR can manage designations.").
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  { type: string, maxLength: 160, example: "Software Engineer" }
+                departmentId: { type: string, example: "64f1c2..." }
+                level: { type: integer, minimum: 0, example: 2 }
+      responses:
+        "200":
+          description: Designation added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Designation added." }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      departmentId: { type: string, nullable: true }
+                      level: { type: integer, nullable: true }
+                      isActive: { type: boolean }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser, or no active tenant
+
+  /api/v1/designations/{id}:
+    put:
+      summary: Update a designation
+      description: >-
+        Updates name, departmentId, level, and/or isActive for a designation
+        scoped to the caller's tenant. Requires HR/owner/admin/superuser.
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 160 }
+                departmentId: { type: string }
+                level: { type: integer, minimum: 0 }
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: Designation updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Designation updated." }
+                  data: { type: object }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser, or no active tenant
+        "404":
+          description: Designation not found
+    delete:
+      summary: Deactivate a designation
+      description: >-
+        Soft-deletes a designation by setting isActive to false (no hard
+        delete). Requires HR/owner/admin/superuser.
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Designation removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Designation removed." }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser, or no active tenant
+        "404":
+          description: Designation not found
+
+  /api/v1/org-structure/migrate-from-free-text:
+    post:
+      summary: Migrate free-text department/designation strings to structured records
+      description: >-
+        One-time, idempotent, per-tenant migration. Collects every distinct
+        non-null User.department/User.designation free-text string, creates a
+        matching Department/Designation row for any not already present
+        (matched by name), then backfills User.departmentId/designationId by
+        name match. Never runs automatically — tenants that don't call this
+        keep operating purely off the legacy free-text fields. Requires
+        HR/owner/admin/superuser.
+      tags: [Org Structure]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Migration completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Migrated 4 department(s), 6 designation(s), backfilled 41 employee(s).",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      departmentsCreated: { type: integer, example: 4 }
+                      designationsCreated: { type: integer, example: 6 }
+                      usersBackfilled: { type: integer, example: 41 }
+        "401":
+          description: Unauthorized
+        "403":
+          description: Caller is not HR/owner/admin/superuser, or no active tenant

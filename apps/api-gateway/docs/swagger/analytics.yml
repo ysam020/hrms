@@ -1,397 +1,364 @@
 paths:
-  /api/v1/get-employment-type-breakdown:
+  /api/v1/analytics/dashboard:
     get:
-      summary: Employment type breakdown
-      description: Returns employee count grouped by employment type (full-time, part-time, contract, etc.)
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Employment type breakdown retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        type: { type: string, example: "full-time" }
-                        count: { type: integer, example: 30 }
-                        percentage: { type: number, example: 66.7 }
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-employee-status-distribution:
-    get:
-      summary: Employee status distribution
-      description: Returns employee count grouped by status (active, on leave, resigned, etc.)
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Status distribution retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        status: { type: string }
-                        count: { type: integer }
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-employee-departments:
-    get:
-      summary: Employee count by department
-      description: Returns the number of employees in each department
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Department breakdown retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        department: { type: string, example: "Engineering" }
-                        count: { type: integer, example: 15 }
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-employee-designations:
-    get:
-      summary: Employee count by designation
-      description: Returns the number of employees at each designation/role
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Designation breakdown retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-age-distribution:
-    get:
-      summary: Employee age distribution
-      description: Returns employee count grouped by age bands
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Age distribution retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        ageBand: { type: string, example: "25-30" }
-                        count: { type: integer }
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-joining-data:
-    get:
-      summary: Employee joining data over time
-      description: Returns monthly/yearly employee joining counts
+      summary: Dashboard statistics
+      description: >
+        Returns aggregated top-line dashboard statistics (total employees, present today,
+        on leave, pending approvals, open job positions, average attendance rate) for a
+        given period/department. Proxies to the `GetDashboardStats` RPC on the
+        analytics-service. Requires role owner, admin, or hr. Rate-limited to 500
+        requests/minute per client (Redis-backed).
       tags: [Analytics]
       security:
         - bearerAuth: []
       parameters:
         - name: period
           in: query
-          schema: { type: string, enum: [monthly, yearly], default: "monthly" }
-      responses:
-        "200":
-          description: Joining trend data retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-tenure-distribution:
-    get:
-      summary: Employee tenure distribution
-      description: Returns employee count grouped by years of service bands
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Tenure distribution retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-headcount-growth:
-    get:
-      summary: Headcount growth over time
-      description: Returns net headcount change per period
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: period
+          required: false
+          schema: { type: string, default: "month" }
+          example: "month"
+          description: Reporting period passed through to the analytics service.
+        - name: department
           in: query
-          schema:
-            {
-              type: string,
-              enum: [monthly, quarterly, yearly],
-              default: "monthly",
-            }
-        - name: year
-          in: query
-          schema: { type: integer, example: 2026 }
+          required: false
+          schema: { type: string }
+          example: "Engineering"
       responses:
         "200":
-          description: Headcount growth data retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-leave-approval-rate:
-    get:
-      summary: Leave approval rate
-      description: Returns the percentage of leave applications approved vs rejected
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Leave approval rate retrieved
+          description: Dashboard statistics retrieved
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
-                  data:
-                    type: object
-                    properties:
-                      approvalRate: { type: number, example: 87.5 }
-                      total: { type: integer }
-                      approved: { type: integer }
-                      rejected: { type: integer }
+                  message: { type: string, example: "" }
+                  status: { type: integer, example: 200 }
+                  totalEmployees: { type: integer, example: 128 }
+                  presentToday: { type: integer, example: 110 }
+                  onLeave: { type: integer, example: 6 }
+                  pendingApprovals: { type: integer, example: 4 }
+                  openJobPositions: { type: integer, example: 9 }
+                  avgAttendanceRate: { type: number, example: 91.5 }
         "401":
           description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
 
-  /api/v1/get-leave-type-breakdown:
+  /api/v1/analytics/headcount:
     get:
-      summary: Leave type breakdown
-      description: Returns leave count grouped by leave type
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Leave type breakdown retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-monthly-leave-patterns:
-    get:
-      summary: Monthly leave patterns
-      description: Returns leave application counts by month
+      summary: Headcount metrics
+      description: >
+        Returns headcount metrics for a department/period. Requires role owner, admin, or
+        hr. NOTE — the handler calls a `GetHeadcount` RPC on the analytics-service, but the
+        current analytics.proto/analytics-service only implements GetDashboardStats,
+        GetAttendanceAnalytics, GetLeaveAnalytics, GetRecruitmentAnalytics,
+        GetSalaryAnalytics, and GetEmployeeGrowth — there is no GetHeadcount method. This
+        endpoint is expected to fail (UNIMPLEMENTED / 500) against the current service
+        until either the proto is extended or the handler is pointed at GetEmployeeGrowth.
       tags: [Analytics]
       security:
         - bearerAuth: []
       parameters:
-        - name: year
+        - name: department
           in: query
-          schema: { type: integer, example: 2026 }
-      responses:
-        "200":
-          description: Monthly leave patterns retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-attendance-trends:
-    get:
-      summary: Attendance trends
-      description: Returns daily/weekly attendance rate trends
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      parameters:
+          required: false
+          schema: { type: string }
         - name: period
           in: query
-          schema: { type: string, enum: [weekly, monthly], default: "monthly" }
-        - name: year
-          in: query
-          schema: { type: integer, example: 2026 }
+          required: false
+          schema: { type: string, default: "current" }
+      responses:
+        "200":
+          description: Headcount data retrieved (see description — currently unimplemented server-side)
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
+        "501":
+          description: Not Implemented — RPC method does not exist on analytics-service
+
+  /api/v1/analytics/attendance:
+    get:
+      summary: Attendance analytics
+      description: >
+        Returns attendance metric series (label/value/date points) for a month, year, and
+        optional department. Proxies to the `GetAttendanceAnalytics` RPC. Requires role
+        owner, admin, or hr.
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
         - name: month
           in: query
-          schema: { type: integer }
+          required: false
+          schema: { type: string }
+        - name: year
+          in: query
+          required: false
+          schema: { type: string }
+        - name: department
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
-          description: Attendance trends retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-working-hours-distribution:
-    get:
-      summary: Working hours distribution
-      description: Returns distribution of hours worked per day across employees
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Working hours distribution retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-job-openings-by-status:
-    get:
-      summary: Job openings by status
-      description: Returns job opening count grouped by status (open, closed, paused)
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Job openings by status retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-applications-by-job-role:
-    get:
-      summary: Applications by job role
-      description: Returns application count per job title/role
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Applications by job role retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-hiring-funnel:
-    get:
-      summary: Hiring funnel metrics
-      description: Returns candidate count at each stage of the recruitment pipeline
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Hiring funnel data retrieved
+          description: Attendance analytics retrieved
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string }
+                  status: { type: integer, example: 200 }
+                  total: { type: number, example: 91.2 }
                   data:
                     type: array
                     items:
                       type: object
                       properties:
-                        stage: { type: string, example: "screening" }
-                        count: { type: integer }
+                        label: { type: string, example: "2026-06" }
+                        value: { type: number, example: 92.3 }
+                        date: { type: string, example: "2026-06-01" }
         "401":
           description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
 
-  /api/v1/get-hiring-manager-performance:
+  /api/v1/analytics/leave:
     get:
-      summary: Hiring manager performance
-      description: Returns recruitment metrics grouped by hiring manager
+      summary: Leave analytics
+      description: >
+        Returns leave metric series for a month, year, department, and/or leave type.
+        Proxies to the `GetLeaveAnalytics` RPC. Requires role owner, admin, or hr.
       tags: [Analytics]
       security:
         - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema: { type: string }
+        - name: year
+          in: query
+          required: false
+          schema: { type: string }
+        - name: department
+          in: query
+          required: false
+          schema: { type: string }
+        - name: leaveType
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
-          description: Hiring manager performance retrieved
-        "401":
-          description: Unauthorized
-
-  /api/v1/get-salary-distribution-by-department:
-    get:
-      summary: Salary distribution by department
-      description: Returns average, min, and max salary per department
-      tags: [Analytics]
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Salary distribution retrieved
+          description: Leave analytics retrieved
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   success: { type: boolean, example: true }
+                  message: { type: string }
+                  status: { type: integer, example: 200 }
+                  total: { type: number }
                   data:
                     type: array
                     items:
                       type: object
                       properties:
-                        department: { type: string }
-                        avgSalary: { type: number }
-                        minSalary: { type: number }
-                        maxSalary: { type: number }
+                        label: { type: string, example: "Sick Leave" }
+                        value: { type: number, example: 14 }
+                        date: { type: string }
         "401":
           description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
 
-  /api/v1/get-compensation-breakdown:
+  /api/v1/analytics/recruitment:
     get:
-      summary: Compensation breakdown
-      description: Returns aggregate breakdown of salary components (basic, HRA, allowances, deductions)
+      summary: Recruitment analytics
+      description: >
+        Returns recruitment funnel metric series for a period/year. Proxies to the
+        `GetRecruitmentAnalytics` RPC. Requires role owner, admin, or hr.
       tags: [Analytics]
       security:
         - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema: { type: string, default: "month" }
+        - name: year
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
-          description: Compensation breakdown retrieved
+          description: Recruitment analytics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  status: { type: integer, example: 200 }
+                  total: { type: number }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        label: { type: string, example: "Applied" }
+                        value: { type: number, example: 42 }
+                        date: { type: string }
         "401":
           description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
 
-  /api/v1/get-average-salary-by-designation:
+  /api/v1/analytics/salary:
     get:
-      summary: Average salary by designation
-      description: Returns average salary grouped by designation
+      summary: Salary analytics
+      description: >
+        Returns salary metric series for a month, year, and/or department. Proxies to the
+        `GetSalaryAnalytics` RPC. Requires role owner, admin, or hr.
       tags: [Analytics]
       security:
         - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema: { type: string }
+        - name: year
+          in: query
+          required: false
+          schema: { type: string }
+        - name: department
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
-          description: Average salary by designation retrieved
+          description: Salary analytics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  status: { type: integer, example: 200 }
+                  total: { type: number }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        label: { type: string, example: "Engineering" }
+                        value: { type: number, example: 55000 }
+                        date: { type: string }
         "401":
           description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
 
-  /api/v1/get-salary-bands:
+  /api/v1/analytics/turnover:
     get:
-      summary: Salary bands
-      description: Returns employee count grouped by salary range bands
+      summary: Turnover analytics
+      description: >
+        Returns turnover metrics for a year/department. Requires role owner, admin, or hr.
+        NOTE — the handler calls a `GetTurnoverAnalytics` RPC, but the current
+        analytics.proto/analytics-service does not implement this method (only
+        GetDashboardStats, GetAttendanceAnalytics, GetLeaveAnalytics,
+        GetRecruitmentAnalytics, GetSalaryAnalytics, GetEmployeeGrowth exist). This
+        endpoint is expected to fail (UNIMPLEMENTED / 500) against the current service.
       tags: [Analytics]
       security:
         - bearerAuth: []
+      parameters:
+        - name: year
+          in: query
+          required: false
+          schema: { type: string }
+        - name: department
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
-          description: Salary bands retrieved
+          description: Turnover analytics retrieved (see description — currently unimplemented server-side)
         "401":
           description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
+        "501":
+          description: Not Implemented — RPC method does not exist on analytics-service
+
+  /api/v1/analytics/performance:
+    get:
+      summary: Performance analytics
+      description: >
+        Returns performance-review metrics for a period/department. Requires role owner,
+        admin, or hr. NOTE — the handler calls a `GetPerformanceAnalytics` RPC, but the
+        current analytics.proto/analytics-service does not implement this method (only
+        GetDashboardStats, GetAttendanceAnalytics, GetLeaveAnalytics,
+        GetRecruitmentAnalytics, GetSalaryAnalytics, GetEmployeeGrowth exist). This
+        endpoint is expected to fail (UNIMPLEMENTED / 500) against the current service.
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema: { type: string, default: "quarter" }
+        - name: department
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Performance analytics retrieved (see description — currently unimplemented server-side)
+        "401":
+          description: Unauthorized
+        "402":
+          description: Subscription expired
+        "403":
+          description: Forbidden — requires owner, admin, or hr role
+        "429":
+          description: Too many requests
+        "501":
+          description: Not Implemented — RPC method does not exist on analytics-service
