@@ -11,25 +11,18 @@ const ReactApexChart = lazy(() => import("react-apexcharts"));
 const HiringFunnel = ({ theme }) => {
   const { data, loading } = useFetchData("/get-hiring-funnel", "get", []);
 
-  // Transform data for funnel chart from object to array format
+  // Transform data for funnel chart from object to array format.
+  // Only Applied → Interviewing → Hired are real pipeline stages — the
+  // recruitment flow has no "Shortlisted"/"Offered" status. Rejected is
+  // shown separately below since it's a dropout, not a funnel stage.
   const funnelData =
     data.applied !== undefined
       ? [
           { stage: "Applied", count: data.applied || 0, rate: null },
           {
-            stage: "Shortlisted",
-            count: data.shortlisted || 0,
-            rate: data.shortlistRate || 0,
-          },
-          {
-            stage: "Interviewed",
-            count: data.interviewed || 0,
-            rate: data.interviewRate || 0,
-          },
-          {
-            stage: "Offered",
-            count: data.offered || 0,
-            rate: data.offerRate || 0,
+            stage: "Interviewing",
+            count: data.interviewing || 0,
+            rate: data.interviewingRate || 0,
           },
           { stage: "Hired", count: data.hired || 0, rate: data.hireRate || 0 },
         ]
@@ -82,7 +75,7 @@ const HiringFunnel = ({ theme }) => {
         colors: ["#fff"],
       },
     },
-    colors: ["#2196f3", "#4caf50", "#ff9800", "#9c27b0", "#f44336"],
+    colors: ["#2196f3", "#ff9800", "#4caf50"],
     xaxis: {
       categories: categories,
       labels: {
@@ -309,6 +302,38 @@ const HiringFunnel = ({ theme }) => {
             )}
           </Box>
         ))}
+        {data.rejected > 0 && (
+          <Box
+            sx={{
+              textAlign: "center",
+              p: 1.5,
+              borderRadius: "8px",
+              backgroundColor: theme === "dark" ? "#1a252c" : "#f8fafc",
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                color: theme === "dark" ? "#9ca3af" : "#64748b",
+                fontSize: "11px",
+                display: "block",
+                mb: 0.5,
+              }}
+            >
+              Rejected
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                color: theme === "dark" ? "#f44336" : "#dc2626",
+                fontWeight: 600,
+                fontSize: "16px",
+              }}
+            >
+              {data.rejected}
+            </Typography>
+          </Box>
+        )}
       </Box>
     </Paper>
   );

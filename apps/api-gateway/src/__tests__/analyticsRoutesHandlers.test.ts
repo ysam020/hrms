@@ -35,6 +35,10 @@ jest.mock("@hrms/db", () => {
       count: jest.fn(),
       groupBy: jest.fn(),
     },
+    jobApplication: {
+      count: jest.fn(),
+      findMany: jest.fn(),
+    },
     salaryStructure: {
       findMany: jest.fn(),
       aggregateRaw: jest.fn(),
@@ -85,6 +89,9 @@ const mockLeaveFindMany = prisma.leaveApplication.findMany as jest.Mock;
 const mockAttendanceFindMany = prisma.attendanceRecord.findMany as jest.Mock;
 const mockJobCount = prisma.jobOpening.count as jest.Mock;
 const mockJobGroupBy = prisma.jobOpening.groupBy as jest.Mock;
+const mockApplicationCount = (prisma as any).jobApplication.count as jest.Mock;
+const mockApplicationFindMany = (prisma as any).jobApplication
+  .findMany as jest.Mock;
 const mockStructureFindMany = (prisma as any).salaryStructure
   .findMany as jest.Mock;
 
@@ -343,25 +350,28 @@ describe("getLeaveTypeBreakdown", () => {
 // ─── getApplicationsByJobRole ────────────────────────────────────────────────
 
 describe("getApplicationsByJobRole", () => {
-  it("aggregates status counts per jobTitle", async () => {
-    mockJobGroupBy.mockResolvedValue([
-      { jobTitle: "Engineer", status: "shortlisted", _count: { _all: 5 } },
-      { jobTitle: "Engineer", status: "hired", _count: { _all: 3 } },
-      { jobTitle: "Designer", status: "interviewed", _count: { _all: 2 } },
+  it("aggregates status counts per jobTitle from the application pipeline", async () => {
+    mockApplicationFindMany.mockResolvedValue([
+      { status: "Round 1 Scheduled", jobOpening: { jobTitle: "Engineer" } },
+      { status: "Hired", jobOpening: { jobTitle: "Engineer" } },
+      { status: "Rejected", jobOpening: { jobTitle: "Engineer" } },
+      { status: "Applied", jobOpening: { jobTitle: "Engineer" } },
+      { status: "Round 1 Scheduled", jobOpening: { jobTitle: "Designer" } },
     ]);
     const res = makeRes();
     await getApplicationsByJobRole(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
     const eng = data.find((d: any) => d.jobTitle === "Engineer");
-    expect(eng.totalApplications).toBe(8);
-    expect(eng.shortlisted).toBe(5);
-    expect(eng.hired).toBe(3);
+    expect(eng.totalApplications).toBe(4);
+    expect(eng.interviewing).toBe(1);
+    expect(eng.hired).toBe(1);
+    expect(eng.rejected).toBe(1);
     const des = data.find((d: any) => d.jobTitle === "Designer");
-    expect(des.interviewed).toBe(2);
+    expect(des.interviewing).toBe(1);
   });
 
   it("returns 500 on DB error", async () => {
-    mockJobGroupBy.mockRejectedValue(new Error("DB error"));
+    mockApplicationFindMany.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getApplicationsByJobRole(makeReq(), res);
     expect(mockApiResponse).toHaveBeenCalledWith(
@@ -378,24 +388,24 @@ describe("getApplicationsByJobRole", () => {
 
 describe("getHiringFunnel", () => {
   it("computes funnel rates correctly", async () => {
-    mockJobCount
+    mockApplicationCount
       .mockResolvedValueOnce(100) // applied
-      .mockResolvedValueOnce(50) // shortlisted
-      .mockResolvedValueOnce(25) // interviewed
-      .mockResolvedValueOnce(10) // offered
-      .mockResolvedValueOnce(8); // hired
+      .mockResolvedValueOnce(25) // interviewing
+      .mockResolvedValueOnce(8) // hired
+      .mockResolvedValueOnce(10); // rejected
     const res = makeRes();
     await getHiringFunnel(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
     expect(data.applied).toBe(100);
-    expect(data.shortlistRate).toBe(50);
-    expect(data.interviewRate).toBe(50);
-    expect(data.offerRate).toBe(40);
-    expect(data.hireRate).toBe(80);
+    expect(data.interviewing).toBe(25);
+    expect(data.hired).toBe(8);
+    expect(data.rejected).toBe(10);
+    expect(data.interviewingRate).toBe(33);
+    expect(data.hireRate).toBe(8);
   });
 
   it("returns 500 on DB error", async () => {
-    mockJobCount.mockRejectedValue(new Error("DB error"));
+    mockApplicationCount.mockRejectedValue(new Error("DB error"));
     const res = makeRes();
     await getHiringFunnel(makeReq(), res);
     expect(mockApiResponse).toHaveBeenCalledWith(

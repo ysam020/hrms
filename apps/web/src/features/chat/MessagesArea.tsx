@@ -45,7 +45,7 @@ export function MessagesArea({
       style={{
         backgroundImage: isDark
           ? `linear-gradient(rgba(11,20,26,0.82),rgba(11,20,26,0.82)),url(/assets/images/chat-bg.png)`
-          : `linear-gradient(rgba(255,255,255,0.55),rgba(255,255,255,0.55)),url(/assets/images/chat-bg.png)`,
+          : `linear-gradient(rgba(255, 255, 255, 0.84),rgba(255,255,255,0.8)),url(/assets/images/chat-bg.png)`,
         backgroundSize: "412.5px 749.25px",
         backgroundRepeat: "repeat",
         backgroundBlendMode: isDark ? "unset" : "luminosity",

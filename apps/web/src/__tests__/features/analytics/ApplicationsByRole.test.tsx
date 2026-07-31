@@ -45,9 +45,9 @@ describe("ApplicationsByRole", () => {
         {
           jobTitle: "Engineer",
           totalApplications: 10,
-          shortlisted: 5,
-          interviewed: 3,
-          hired: 1,
+          interviewing: 5,
+          hired: 3,
+          rejected: 1,
         },
       ],
       loading: false,
@@ -60,9 +60,9 @@ describe("ApplicationsByRole", () => {
       JSON.parse((await screen.findByTestId("series")).textContent!),
     ).toEqual([
       { name: "Total Applications", data: [10] },
-      { name: "Shortlisted", data: [5] },
-      { name: "Interviewed", data: [3] },
-      { name: "Hired", data: [1] },
+      { name: "Interviewing", data: [5] },
+      { name: "Hired", data: [3] },
+      { name: "Rejected", data: [1] },
     ]);
   });
 

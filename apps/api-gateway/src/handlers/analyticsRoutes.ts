@@ -160,16 +160,8 @@ export async function getAgeDistribution(_req: Request, res: Response) {
         { $match: { ...tenantIdMatch, dob: { $ne: null } } },
         {
           $addFields: {
-            joiningDateParsed: {
-              $dateFromString: { dateString: "$dob", onError: null },
-            },
-          },
-        },
-        { $match: { joiningDateParsed: { $ne: null } } },
-        {
-          $addFields: {
             ageYears: {
-              $subtract: [{ $year: "$$NOW" }, { $year: "$joiningDateParsed" }],
+              $subtract: [{ $year: "$$NOW" }, { $year: "$dob" }],
             },
           },
         },
@@ -291,19 +283,8 @@ export async function getTenureDistribution(_req: Request, res: Response) {
         },
         {
           $addFields: {
-            joiningDateParsed: {
-              $dateFromString: { dateString: "$joining_date", onError: null },
-            },
-          },
-        },
-        { $match: { joiningDateParsed: { $ne: null } } },
-        {
-          $addFields: {
             tenureYears: {
-              $divide: [
-                { $subtract: ["$$NOW", "$joiningDateParsed"] },
-                YEAR_MS,
-              ],
+              $divide: [{ $subtract: ["$$NOW", "$joining_date"] }, YEAR_MS],
             },
           },
         },
@@ -358,7 +339,6 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
 
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const cutoff = `${twelveMonthsAgo.getFullYear()}-${String(twelveMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
 
     // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
     // unlike findMany/count/etc, it must be filtered by hand, and a missing
@@ -370,23 +350,29 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
       });
     }
     const tenantIdMatch = { tenantId: { $oid: tenantId } };
-    const result = await (prisma.user as any).aggregateRaw({
-      pipeline: [
-        {
-          $match: {
-            ...tenantIdMatch,
-            joining_date: { $ne: null, $gte: cutoff },
+    const cutoffDate = { $date: twelveMonthsAgo.toISOString() };
+    const [baselineResult, result] = await Promise.all([
+      prisma.user.count({
+        where: { joining_date: { lt: twelveMonthsAgo } },
+      }),
+      (prisma.user as any).aggregateRaw({
+        pipeline: [
+          {
+            $match: {
+              ...tenantIdMatch,
+              joining_date: { $ne: null, $gte: cutoffDate },
+            },
           },
-        },
-        {
-          $group: {
-            _id: { $substr: ["$joining_date", 0, 7] },
-            joinings: { $sum: 1 },
+          {
+            $group: {
+              _id: { $substr: ["$joining_date", 0, 7] },
+              joinings: { $sum: 1 },
+            },
           },
-        },
-        { $sort: { _id: 1 } },
-      ],
-    });
+          { $sort: { _id: 1 } },
+        ],
+      }),
+    ]);
     const monthlyMap: Record<string, number> = {};
     for (const r of result as any[]) {
       if (r._id) monthlyMap[r._id] = r.joinings;
@@ -405,7 +391,7 @@ export async function getHeadcountGrowth(_req: Request, res: Response) {
       "Nov",
       "Dec",
     ];
-    let cumulative = 0;
+    let cumulative = baselineResult as number;
     const data = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -504,7 +490,6 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
 
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
-    const twelveMonthsAgoStr = twelveMonthsAgo.toISOString().split("T")[0];
 
     // aggregateRaw bypasses the tenant-scoping $extends middleware entirely —
     // unlike findMany/count/etc, it must be filtered by hand, and a missing
@@ -522,7 +507,7 @@ export async function getMonthlyLeavePatterns(_req: Request, res: Response) {
           $match: {
             ...tenantIdMatch,
             status: "Approved",
-            from: { $gte: twelveMonthsAgoStr },
+            from: { $gte: { $date: twelveMonthsAgo.toISOString() } },
           },
         },
         {
@@ -737,36 +722,38 @@ export async function getApplicationsByJobRole(_req: Request, res: Response) {
         data: cached,
       });
 
-    const groups: any[] = await (prisma.jobOpening.groupBy as any)({
-      by: ["jobTitle", "status"],
-      _count: { _all: true },
+    // Grouped on JobApplication (the candidate pipeline), not JobOpening (the
+    // posting) — status here reflects real values written by the recruitment
+    // flow: "Applied" (default), "Round N Scheduled/Completed/Cleared" while
+    // mid-pipeline, or terminal "Hired"/"Rejected". There is no "Shortlisted"
+    // or "Offered" status anywhere in the pipeline, so those aren't tracked.
+    const applications = await prisma.jobApplication.findMany({
+      select: { status: true, jobOpening: { select: { jobTitle: true } } },
     });
     const byRole: Record<
       string,
       {
         jobTitle: string;
         totalApplications: number;
-        shortlisted: number;
-        interviewed: number;
+        interviewing: number;
         hired: number;
+        rejected: number;
       }
     > = {};
-    for (const g of groups) {
-      const title = g.jobTitle || "Unknown";
+    for (const app of applications) {
+      const title = app.jobOpening?.jobTitle || "Unknown";
       if (!byRole[title])
         byRole[title] = {
           jobTitle: title,
           totalApplications: 0,
-          shortlisted: 0,
-          interviewed: 0,
+          interviewing: 0,
           hired: 0,
+          rejected: 0,
         };
-      byRole[title].totalApplications += g._count._all;
-      const s = (g.status || "").toLowerCase();
-      if (s === "shortlisted") byRole[title].shortlisted += g._count._all;
-      else if (s === "interviewed") byRole[title].interviewed += g._count._all;
-      else if (s === "hired" || s === "closed")
-        byRole[title].hired += g._count._all;
+      byRole[title].totalApplications += 1;
+      if (app.status === "Hired") byRole[title].hired += 1;
+      else if (app.status === "Rejected") byRole[title].rejected += 1;
+      else if (app.status !== "Applied") byRole[title].interviewing += 1;
     }
     const data = Object.values(byRole);
     await cacheManager.set(cacheKey, data, "analytics");
@@ -791,34 +778,28 @@ export async function getHiringFunnel(_req: Request, res: Response) {
         data: cached,
       });
 
-    const [applied, shortlisted, interviewed, offered, hired] =
-      await Promise.all([
-        prisma.jobOpening.count(),
-        prisma.jobOpening.count({
-          where: { status: { in: ["shortlisted", "Shortlisted"] } },
-        }),
-        prisma.jobOpening.count({
-          where: { status: { in: ["interviewed", "Interviewed"] } },
-        }),
-        prisma.jobOpening.count({
-          where: { status: { in: ["offered", "Offered"] } },
-        }),
-        prisma.jobOpening.count({
-          where: { status: { in: ["hired", "Hired", "closed", "Closed"] } },
-        }),
-      ]);
+    // JobApplication is the candidate pipeline (JobOpening is just the
+    // posting). Real statuses are "Applied" (default), "Round N
+    // Scheduled/Completed/Cleared" while mid-pipeline, or terminal
+    // "Hired"/"Rejected" — there's no "Shortlisted"/"Offered" stage anywhere
+    // in the recruitment flow, so the funnel only tracks stages that exist.
+    const [applied, interviewing, hired, rejected] = await Promise.all([
+      prisma.jobApplication.count(),
+      prisma.jobApplication.count({
+        where: { status: { notIn: ["Applied", "Hired", "Rejected"] } },
+      }),
+      prisma.jobApplication.count({ where: { status: "Hired" } }),
+      prisma.jobApplication.count({ where: { status: "Rejected" } }),
+    ]);
     const pct = (n: number, d: number) =>
       d > 0 ? Math.round((n / d) * 100) : 0;
     const data = {
       applied,
-      shortlisted,
-      interviewed,
-      offered,
+      interviewing,
       hired,
-      shortlistRate: pct(shortlisted, applied),
-      interviewRate: pct(interviewed, shortlisted),
-      offerRate: pct(offered, interviewed),
-      hireRate: pct(hired, offered),
+      rejected,
+      interviewingRate: pct(interviewing + hired, applied),
+      hireRate: pct(hired, applied),
     };
     await cacheManager.set(cacheKey, data, "analytics");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
