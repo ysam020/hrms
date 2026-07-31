@@ -17,9 +17,9 @@ const ApplicationsByRole = ({ theme }) => {
 
   const categories = data.map((item) => item.jobTitle || "Unknown");
   const totalApplicationsData = data.map((item) => item.totalApplications || 0);
-  const shortlistedData = data.map((item) => item.shortlisted || 0);
-  const interviewedData = data.map((item) => item.interviewed || 0);
+  const interviewingData = data.map((item) => item.interviewing || 0);
   const hiredData = data.map((item) => item.hired || 0);
+  const rejectedData = data.map((item) => item.rejected || 0);
 
   // Calculate dynamic height based on number of categories
   const calculateHeight = () => {
@@ -68,7 +68,7 @@ const ApplicationsByRole = ({ theme }) => {
       },
       formatter: (val) => val || 0,
     },
-    colors: ["#2196f3", "#ff9800", "#4caf50", "#9c27b0"],
+    colors: ["#2196f3", "#ff9800", "#4caf50", "#f44336"],
     stroke: {
       show: true,
       width: 2,
@@ -216,16 +216,16 @@ const ApplicationsByRole = ({ theme }) => {
       data: totalApplicationsData,
     },
     {
-      name: "Shortlisted",
-      data: shortlistedData,
-    },
-    {
-      name: "Interviewed",
-      data: interviewedData,
+      name: "Interviewing",
+      data: interviewingData,
     },
     {
       name: "Hired",
       data: hiredData,
+    },
+    {
+      name: "Rejected",
+      data: rejectedData,
     },
   ];
 

@@ -27,18 +27,15 @@ describe("HiringFunnel", () => {
     ).toBeInTheDocument();
   });
 
-  it("builds the five funnel stages from the raw counts object", async () => {
+  it("builds the three funnel stages from the raw counts object", async () => {
     mockUseFetchData.mockReturnValue({
       data: {
         applied: 100,
-        shortlisted: 60,
-        shortlistRate: 60,
-        interviewed: 30,
-        interviewRate: 50,
-        offered: 10,
-        offerRate: 33,
+        interviewing: 30,
+        interviewingRate: 38,
         hired: 8,
-        hireRate: 80,
+        hireRate: 8,
+        rejected: 12,
       },
       loading: false,
       error: null,
@@ -49,11 +46,13 @@ describe("HiringFunnel", () => {
     expect(screen.getByText("Hiring Funnel")).toBeInTheDocument();
     const series = await screen.findByTestId("series");
     expect(JSON.parse(series.textContent!)).toEqual([
-      { name: "Applications", data: [100, 60, 30, 10, 8] },
+      { name: "Applications", data: [100, 30, 8] },
     ]);
     expect(screen.getByText("Applied")).toBeInTheDocument();
-    expect(screen.getByText("60% conversion")).toBeInTheDocument();
-    expect(screen.getByText("80% conversion")).toBeInTheDocument();
+    expect(screen.getByText("38% conversion")).toBeInTheDocument();
+    expect(screen.getByText("8% conversion")).toBeInTheDocument();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
   });
 
   it("does not render a conversion rate for the Applied stage (rate is always null)", () => {
@@ -77,7 +76,7 @@ describe("HiringFunnel", () => {
     render(<HiringFunnel theme="light" />);
     const series = await screen.findByTestId("series");
     expect(JSON.parse(series.textContent!)).toEqual([
-      { name: "Applications", data: [5, 0, 0, 0, 0] },
+      { name: "Applications", data: [5, 0, 0] },
     ]);
   });
 });
