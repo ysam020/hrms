@@ -7,7 +7,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1019.0",
+    "@aws-sdk/client-s3": "^3.1098.0",
     "@hrms/approval-engine": "workspace:*",
     "@hrms/cache": "workspace:*",
     "@hrms/common": "workspace:*",
@@ -17,13 +17,13 @@
     "@hrms/notifications": "workspace:*",
     "@hrms/proto": "workspace:^",
     "@hrms/queue": "workspace:*",
-    "dayjs": "^1.11.13",
+    "dayjs": "^1.11.21",
     "pdf-parse": "^1.1.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@hrms/typescript-config": "workspace:*",
     "@types/pdf-parse": "^1.1.5",
-    "tsx": "^4.19.2"
+    "tsx": "^4.23.1"
   }
 }
