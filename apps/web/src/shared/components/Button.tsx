@@ -112,18 +112,18 @@ function Button({
     > = {
       small: {
         fontSize: "12px",
-        padding: "6px 12px",
-        minHeight: "36px",
+        padding: "4px 10px",
+        minHeight: "28px",
       },
       medium: {
         fontSize: "14px",
-        padding: "8px 20px",
-        minHeight: "36px",
+        padding: "6px 16px",
+        minHeight: "32px",
       },
       large: {
         fontSize: "16px",
-        padding: "12px 24px",
-        minHeight: "44px",
+        padding: "10px 20px",
+        minHeight: "38px",
       },
     };
 

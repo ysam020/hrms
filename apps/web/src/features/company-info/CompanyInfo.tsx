@@ -225,7 +225,7 @@ export default function CompanyInfo() {
         </Box>
         {canEdit && (
           <Button
-            variant="outline"
+            variant="primary"
             size="small"
             icon={<EditIcon />}
             onClick={openEdit}

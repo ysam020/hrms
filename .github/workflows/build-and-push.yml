@@ -35,55 +35,81 @@ jobs:
           - name: api-gateway
             dockerfile: docker/base.Dockerfile
             repo: api-gateway
-            build_args: --build-arg APP_DIR=api-gateway --build-arg PROJECT=api-gateway-service --build-arg PORT=9002
+            app_dir: api-gateway
+            project: api-gateway-service
+            port: 9002
           - name: auth-service
             dockerfile: docker/base.Dockerfile
             repo: auth-service
-            build_args: --build-arg APP_DIR=auth-service --build-arg PROJECT=auth-service --build-arg PORT=50051
+            app_dir: auth-service
+            project: auth-service
+            port: 50051
           - name: user-service
             dockerfile: docker/base.Dockerfile
             repo: user-service
-            build_args: --build-arg APP_DIR=user-service --build-arg PROJECT=user-service --build-arg PORT=50052
+            app_dir: user-service
+            project: user-service
+            port: 50052
           - name: employee-service
             dockerfile: docker/base.Dockerfile
             repo: employee-service
-            build_args: --build-arg APP_DIR=employee-service --build-arg PROJECT=employee-service --build-arg PORT=50053
+            app_dir: employee-service
+            project: employee-service
+            port: 50053
           - name: attendance-service
             dockerfile: docker/base.Dockerfile
             repo: attendance-service
-            build_args: --build-arg APP_DIR=attendance-service --build-arg PROJECT=attendance-service --build-arg PORT=50054
+            app_dir: attendance-service
+            project: attendance-service
+            port: 50054
           - name: leave-service
             dockerfile: docker/base.Dockerfile
             repo: leave-service
-            build_args: --build-arg APP_DIR=leave-service --build-arg PROJECT=leave-service --build-arg PORT=50055
+            app_dir: leave-service
+            project: leave-service
+            port: 50055
           - name: recruitment-service
             dockerfile: docker/base.Dockerfile
             repo: recruitment-service
-            build_args: --build-arg APP_DIR=recruitment-service --build-arg PROJECT=recruitment-service --build-arg PORT=50056
+            app_dir: recruitment-service
+            project: recruitment-service
+            port: 50056
           - name: hrm-service
             dockerfile: docker/base.Dockerfile
             repo: hrm-service
-            build_args: --build-arg APP_DIR=hrm-service --build-arg PROJECT=hrm-service --build-arg PORT=50057
+            app_dir: hrm-service
+            project: hrm-service
+            port: 50057
           - name: salary-service
             dockerfile: docker/base.Dockerfile
             repo: salary-service
-            build_args: --build-arg APP_DIR=salary-service --build-arg PROJECT=salary-service --build-arg PORT=50058
+            app_dir: salary-service
+            project: salary-service
+            port: 50058
           - name: analytics-service
             dockerfile: docker/base.Dockerfile
             repo: analytics-service
-            build_args: --build-arg APP_DIR=analytics-service --build-arg PROJECT=analytics-service --build-arg PORT=50059
+            app_dir: analytics-service
+            project: analytics-service
+            port: 50059
           - name: notification-service
             dockerfile: docker/base.Dockerfile
             repo: notification-service
-            build_args: --build-arg APP_DIR=notification-service --build-arg PROJECT=notification-service --build-arg PORT=50060
+            app_dir: notification-service
+            project: notification-service
+            port: 50060
           - name: performance-review-service
             dockerfile: docker/base.Dockerfile
             repo: performance-review-service
-            build_args: --build-arg APP_DIR=performance-review-service --build-arg PROJECT=performance-review-service --build-arg PORT=50061
+            app_dir: performance-review-service
+            project: performance-review-service
+            port: 50061
           - name: scheduler-service
             dockerfile: docker/base.Dockerfile
             repo: scheduler-service
-            build_args: --build-arg APP_DIR=scheduler-service --build-arg PROJECT=scheduler-service --build-arg PORT=9111
+            app_dir: scheduler-service
+            project: scheduler-service
+            port: 9111
 
     steps:
       - name: Checkout repository
@@ -106,13 +132,25 @@ jobs:
           aws ecr describe-repositories --repository-names "${ECR_REPOSITORY_PREFIX}/${{ matrix.repo }}" >/dev/null 2>&1 || \
             aws ecr create-repository --repository-name "${ECR_REPOSITORY_PREFIX}/${{ matrix.repo }}" --image-scanning-configuration scanOnPush=true --encryption-configuration encryptionType=AES256 >/dev/null
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push ${{ matrix.name }}
-        run: |
-          set -e
-          IMAGE_NAME="${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX}/${{ matrix.repo }}"
-          docker build -f "${{ matrix.dockerfile }}" ${{ matrix.build_args }} \
-            -t "${IMAGE_NAME}:${IMAGE_TAG}" \
-            -t "${IMAGE_NAME}:latest" \
-            .
-          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
-          docker push "${IMAGE_NAME}:latest"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: |
+            APP_DIR=${{ matrix.app_dir }}
+            PROJECT=${{ matrix.project }}
+            PORT=${{ matrix.port }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_PREFIX }}/${{ matrix.repo }}:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_PREFIX }}/${{ matrix.repo }}:latest
+          # Scoped per service so the 13 matrix jobs cache independently
+          # instead of evicting each other; mode=max also caches
+          # intermediate stages (pruner/builder), not just the final layer,
+          # so unchanged deps/build steps are skipped on the next run.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
