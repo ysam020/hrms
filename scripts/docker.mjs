@@ -157,12 +157,12 @@ const pushProdImage = (serviceName) => {
 switch (command) {
   case "build":
     run("node scripts/generate-certs.mjs");
-    run(`cross-env COMPOSE_PARALLEL_LIMIT=2 ${compose} build${s}`);
+    run(`cross-env COMPOSE_PARALLEL_LIMIT=5 ${compose} build${s}`);
     break;
 
   case "build:force":
     run("node scripts/generate-certs.mjs");
-    run(`cross-env COMPOSE_PARALLEL_LIMIT=2 ${compose} build --no-cache${s}`);
+    run(`cross-env COMPOSE_PARALLEL_LIMIT=5 ${compose} build --no-cache${s}`);
     break;
 
   case "up":

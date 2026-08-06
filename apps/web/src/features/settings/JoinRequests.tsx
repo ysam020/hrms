@@ -135,7 +135,7 @@ export default function JoinRequests() {
                 <ListItemText primary={r.name || r.email} secondary={r.email} />
                 <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
                   <Button
-                    variant="outline"
+                    variant="danger"
                     size="small"
                     disabled={actingId === r.id}
                     loading={actingId === r.id}

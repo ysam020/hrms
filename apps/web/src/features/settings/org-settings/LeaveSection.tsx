@@ -225,7 +225,7 @@ export function LeaveSection({ settings, onChange, readOnly }: SectionProps) {
             </Grid>
             <Grid size={{ xs: 4, sm: 2 }}>
               <Button
-                variant="outline"
+                variant="primary"
                 size="small"
                 icon={<AddCircleOutlineIcon />}
                 onClick={addCustomType}
@@ -404,7 +404,7 @@ function LeavePolicyEditor({
 
       {!readOnly && (
         <Button
-          variant="outline"
+          variant="primary"
           size="small"
           icon={<AddCircleOutlineIcon />}
           onClick={openAdd}
