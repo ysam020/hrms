@@ -32,7 +32,7 @@
     "docker": "node scripts/docker.mjs"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
+    "@eslint/js": "^9.39.5",
     "@hrms/typescript-config": "workspace:*",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
