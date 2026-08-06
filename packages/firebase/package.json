@@ -15,7 +15,7 @@
   "dependencies": {
     "@hrms/db": "workspace:*",
     "@hrms/logger": "workspace:*",
-    "firebase-admin": "^12.0.0"
+    "firebase-admin": "^14.2.0"
   },
   "devDependencies": {
     "@hrms/typescript-config": "workspace:*",
