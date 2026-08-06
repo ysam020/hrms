@@ -4,8 +4,10 @@ import { FileTypeIcon } from "@web/features/chat/FileTypeIcon";
 describe("FileTypeIcon", () => {
   it("shows a generic file icon when mime is missing", async () => {
     render(<FileTypeIcon mime={undefined} />);
+    // First lazy-loaded icon in the file — the dynamic import + on-demand
+    // transform can outrun the default 1000ms findBy timeout under load.
     expect(
-      await screen.findByTestId("InsertDriveFileIcon"),
+      await screen.findByTestId("InsertDriveFileIcon", {}, { timeout: 5000 }),
     ).toBeInTheDocument();
   });
 

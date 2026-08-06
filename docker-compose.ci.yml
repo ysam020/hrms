@@ -4,7 +4,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=api-gateway
         - PROJECT=api-gateway-service
@@ -30,7 +29,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=auth-service
         - PROJECT=auth-service
@@ -44,7 +42,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=user-service
         - PROJECT=user-service
@@ -58,7 +55,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=employee-service
         - PROJECT=employee-service
@@ -72,7 +68,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=attendance-service
         - PROJECT=attendance-service
@@ -86,7 +81,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=leave-service
         - PROJECT=leave-service
@@ -100,7 +94,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=recruitment-service
         - PROJECT=recruitment-service
@@ -114,7 +107,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=hrm-service
         - PROJECT=hrm-service
@@ -128,7 +120,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=salary-service
         - PROJECT=salary-service
@@ -142,7 +133,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=analytics-service
         - PROJECT=analytics-service
@@ -156,7 +146,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=notification-service
         - PROJECT=notification-service
@@ -170,7 +159,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=performance-review-service
         - PROJECT=performance-review-service
@@ -184,7 +172,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/base.Dockerfile
-      no_cache: true
       args:
         - APP_DIR=scheduler-service
         - PROJECT=scheduler-service
@@ -196,6 +183,5 @@ services:
     build:
       context: .
       dockerfile: ./docker/web.Dockerfile
-      no_cache: true
     ports:
       - "80:80"
