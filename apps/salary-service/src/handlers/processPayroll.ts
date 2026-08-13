@@ -48,16 +48,54 @@ export const processPayroll = async (
 
     const payrollResults = [];
 
+    // Batch-fetch every employee's salary structure and attendance records
+    // in two queries instead of two sequential round trips per employee
+    // (previously 2n awaited queries for n employees), then index both into
+    // Maps keyed by userId for O(1) lookup while iterating in memory below.
+    const employeeIds = employees.map((e) => e.id);
+
+    const [salaryStructures, attendanceRecords] =
+      employeeIds.length > 0
+        ? await Promise.all([
+            prisma.salaryStructure.findMany({
+              where: {
+                userId: { in: employeeIds },
+                month: monthNum,
+                year: yearNum,
+              },
+              orderBy: { createdAt: "desc" },
+            }),
+            prisma.attendanceRecord.findMany({
+              where: {
+                userId: { in: employeeIds },
+                date: { gte: startDate, lte: endDate },
+              },
+            }),
+          ])
+        : [[], []];
+
+    // Results are ordered by createdAt desc, so the first entry seen per
+    // userId is the latest one — matches the original findFirst semantics.
+    const salaryStructureByUserId = new Map<
+      string,
+      (typeof salaryStructures)[number]
+    >();
+    for (const s of salaryStructures) {
+      if (!salaryStructureByUserId.has(s.userId)) {
+        salaryStructureByUserId.set(s.userId, s);
+      }
+    }
+
+    const attendanceByUserId = new Map<string, typeof attendanceRecords>();
+    for (const r of attendanceRecords) {
+      const existing = attendanceByUserId.get(r.userId);
+      if (existing) existing.push(r);
+      else attendanceByUserId.set(r.userId, [r]);
+    }
+
     for (const employee of employees) {
       try {
-        const salaryStructure = await prisma.salaryStructure.findFirst({
-          where: {
-            userId: employee.id,
-            month: monthNum,
-            year: yearNum,
-          },
-          orderBy: { createdAt: "desc" },
-        });
+        const salaryStructure = salaryStructureByUserId.get(employee.id);
 
         if (!salaryStructure) {
           payrollResults.push({
@@ -69,12 +107,7 @@ export const processPayroll = async (
           continue;
         }
 
-        const records = await prisma.attendanceRecord.findMany({
-          where: {
-            userId: employee.id,
-            date: { gte: startDate, lte: endDate },
-          },
-        });
+        const records = attendanceByUserId.get(employee.id) ?? [];
 
         const presentStatuses = ["present", "late", "half day"];
         const presentDays = records.filter((r) =>

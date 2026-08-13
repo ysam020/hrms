@@ -36,15 +36,12 @@ export class BoundedCache<K, V> {
     }
   }
 
+  // Map iteration order = insertion order, and get()/set() below always
+  // delete-then-reinsert the touched key, so the least-recently-used entry
+  // is always the first one the iterator yields. O(1) instead of scanning
+  // every entry for the minimum lastUsed.
   private evictLru(): void {
-    let lruKey: K | undefined;
-    let lruEntry: Entry<V> | undefined;
-    for (const [key, entry] of this.map) {
-      if (!lruEntry || entry.lastUsed < lruEntry.lastUsed) {
-        lruKey = key;
-        lruEntry = entry;
-      }
-    }
+    const lruKey = this.map.keys().next().value as K | undefined;
     if (lruKey !== undefined) this.map.delete(lruKey);
   }
 
@@ -56,6 +53,9 @@ export class BoundedCache<K, V> {
     const entry = this.map.get(key);
     if (!entry) return undefined;
     entry.lastUsed = Date.now();
+    // Move to MRU (end) position.
+    this.map.delete(key);
+    this.map.set(key, entry);
     return entry.value;
   }
 
@@ -63,6 +63,8 @@ export class BoundedCache<K, V> {
     if (!this.map.has(key) && this.map.size >= this.maxSize) {
       this.evictLru();
     }
+    // Delete first so re-setting an existing key also moves it to MRU.
+    this.map.delete(key);
     this.map.set(key, { value, lastUsed: Date.now() });
   }
 

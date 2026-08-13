@@ -134,20 +134,29 @@ async function processMonthlyAccrual(
   for (const lb of leaveBalances) {
     if (Array.isArray(lb.balances)) continue; // array-shaped rows use carry-forward, not this
     const balances = (lb.balances as Record<string, number>) ?? {};
+
+    // Merge every policy's accrual for this row into one balances object
+    // first, then issue a single write per row instead of one write per
+    // (row × monthly policy) pair.
+    let changed = false;
+    const nextBalances = { ...balances };
     for (const policy of monthlyPolicies) {
       const key = policy.key!;
       if (typeof balances[key] !== "number") continue; // not tracked for this user/type yet
       const monthlyAmount = policy.daysPerYear! / 12;
-      const newAmount = Math.min(
+      nextBalances[key] = Math.min(
         balances[key] + monthlyAmount,
         policy.daysPerYear!,
       );
-      const result = await (prismaWithTenant as any).leaveBalance.updateMany({
-        where: { id: lb.id, updatedAt: lb.updatedAt },
-        data: { balances: { ...balances, [key]: newAmount } },
-      });
-      if (result.count === 1) updated++;
+      changed = true;
     }
+    if (!changed) continue;
+
+    const result = await (prismaWithTenant as any).leaveBalance.updateMany({
+      where: { id: lb.id, updatedAt: lb.updatedAt },
+      data: { balances: nextBalances },
+    });
+    if (result.count === 1) updated++;
   }
   return updated;
 }

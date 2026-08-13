@@ -18,3 +18,41 @@ export async function resolveReviewerId(
   });
   return team?.teamLeaderId ?? fallbackUserId ?? null;
 }
+
+// Batched variant of resolveReviewerId for assigning/re-resolving reviewers
+// for many employees at once (bulk cycle create/edit). One query for the
+// whole set instead of one `team.findFirst` per employee, indexed into a
+// Map for O(1) per-employee lookup afterward — turns N sequential DB round
+// trips into a single query + O(n) in-memory pass.
+export async function resolveReviewerIds(
+  tenantId: string,
+  userIds: string[],
+  fallbackUserId?: string | null,
+): Promise<Map<string, string | null>> {
+  const reviewerByUserId = new Map<string, string | null>();
+  if (userIds.length === 0) return reviewerByUserId;
+
+  const teams = await prisma.team.findMany({
+    where: { tenantId, members: { hasSome: userIds } },
+  });
+
+  const wantedUserIds = new Set(userIds);
+  for (const team of teams) {
+    if (!team.teamLeaderId) continue;
+    for (const memberId of team.members) {
+      // First matching team wins, mirroring findFirst's single-match
+      // semantics for a user who happens to be on more than one team.
+      if (wantedUserIds.has(memberId) && !reviewerByUserId.has(memberId)) {
+        reviewerByUserId.set(memberId, team.teamLeaderId);
+      }
+    }
+  }
+
+  for (const userId of userIds) {
+    if (!reviewerByUserId.has(userId)) {
+      reviewerByUserId.set(userId, fallbackUserId ?? null);
+    }
+  }
+
+  return reviewerByUserId;
+}

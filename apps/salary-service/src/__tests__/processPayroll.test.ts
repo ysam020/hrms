@@ -6,7 +6,7 @@ import { MESSAGES } from "../constants/messages";
 jest.mock("@hrms/db", () => {
   const _db = {
     user: { findMany: jest.fn() },
-    salaryStructure: { findFirst: jest.fn() },
+    salaryStructure: { findMany: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
   };
   return {
@@ -24,8 +24,8 @@ const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
-const mockSalaryFindFirst = (prisma as any).salaryStructure
-  .findFirst as jest.Mock;
+const mockSalaryFindMany = (prisma as any).salaryStructure
+  .findMany as jest.Mock;
 const mockAttendanceFindMany = (prisma as any).attendanceRecord
   .findMany as jest.Mock;
 
@@ -39,11 +39,17 @@ const mockEmployee = {
 
 const mockSalary = {
   id: "sal-1",
+  userId: "emp-1",
   username: "john",
   grossSalary: 60000,
   netPayable: 55000,
   deductions: 5000,
 };
+
+// attendanceRecord.findMany is now batched across all employees, so mocked
+// records must carry userId for the handler's in-memory grouping to work.
+const attendanceRecordsFor = (userId: string, count: number, status: string) =>
+  Array.from({ length: count }, () => ({ userId, status }));
 
 describe("processPayroll", () => {
   beforeEach(() => {
@@ -86,7 +92,8 @@ describe("processPayroll", () => {
 
   it("marks employee as skipped when no salary structure exists", async () => {
     mockUserFindMany.mockResolvedValue([mockEmployee]);
-    mockSalaryFindFirst.mockResolvedValue(null);
+    mockSalaryFindMany.mockResolvedValue([]);
+    mockAttendanceFindMany.mockResolvedValue([]);
 
     const cb = makeCallback();
     await processPayroll(makeCall({ month: "3", year: "2024" }), cb);
@@ -105,11 +112,9 @@ describe("processPayroll", () => {
   it("processes payroll with full attendance (no LOP deduction)", async () => {
     // March 2024 has 31 days
     mockUserFindMany.mockResolvedValue([mockEmployee]);
-    mockSalaryFindFirst.mockResolvedValue(mockSalary);
+    mockSalaryFindMany.mockResolvedValue([mockSalary]);
     // All 31 days present
-    const records = Array.from({ length: 31 }, (_, i) => ({
-      status: "Present",
-    }));
+    const records = attendanceRecordsFor("emp-1", 31, "Present");
     mockAttendanceFindMany.mockResolvedValue(records);
 
     const cb = makeCallback();
@@ -126,8 +131,10 @@ describe("processPayroll", () => {
   it("calculates LOP deduction for absent days", async () => {
     // March 2024: 31 days, employee present for 21 days
     mockUserFindMany.mockResolvedValue([mockEmployee]);
-    mockSalaryFindFirst.mockResolvedValue({ ...mockSalary, netPayable: 31000 });
-    const records = Array.from({ length: 21 }, () => ({ status: "Present" }));
+    mockSalaryFindMany.mockResolvedValue([
+      { ...mockSalary, netPayable: 31000 },
+    ]);
+    const records = attendanceRecordsFor("emp-1", 21, "Present");
     mockAttendanceFindMany.mockResolvedValue(records);
 
     const cb = makeCallback();
@@ -143,13 +150,15 @@ describe("processPayroll", () => {
 
   it("counts half-day attendance as 0.5 effective days", async () => {
     mockUserFindMany.mockResolvedValue([mockEmployee]);
-    mockSalaryFindFirst.mockResolvedValue({ ...mockSalary, netPayable: 31000 });
+    mockSalaryFindMany.mockResolvedValue([
+      { ...mockSalary, netPayable: 31000 },
+    ]);
     // 30 Present + 1 Half Day.
     // "half day" is included in presentStatuses, so presentDays = 31.
     // halfDays = 1, effectiveDays = 31 - 0.5 = 30.5 → 0.5 LOP days.
     const records = [
-      ...Array.from({ length: 30 }, () => ({ status: "Present" })),
-      { status: "Half Day" },
+      ...attendanceRecordsFor("emp-1", 30, "Present"),
+      { userId: "emp-1", status: "Half Day" },
     ];
     mockAttendanceFindMany.mockResolvedValue(records);
 
@@ -179,7 +188,7 @@ describe("processPayroll", () => {
 
   it("includes processedCount, skippedCount, errorCount in response", async () => {
     mockUserFindMany.mockResolvedValue([mockEmployee]);
-    mockSalaryFindFirst.mockResolvedValue(mockSalary);
+    mockSalaryFindMany.mockResolvedValue([mockSalary]);
     mockAttendanceFindMany.mockResolvedValue([]);
 
     const cb = makeCallback();
