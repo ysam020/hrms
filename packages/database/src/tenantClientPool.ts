@@ -63,17 +63,14 @@ function evict(dbName: string, entry: PoolEntry): void {
   logger.info(`Tenant DB client evicted for "${dbName}"`);
 }
 
+// Map iteration order = insertion order, and getClientForDb()'s hit path
+// below deletes-then-reinserts the touched key, so the least-recently-used
+// entry is always the first one the iterator yields. O(1) instead of
+// scanning every entry for the minimum lastUsed.
 function evictLru(): void {
-  let lruDbName: string | null = null;
-  let lruEntry: PoolEntry | null = null;
-  for (const [dbName, entry] of pool) {
-    if (!lruEntry || entry.lastUsed < lruEntry.lastUsed) {
-      lruDbName = dbName;
-      lruEntry = entry;
-    }
-  }
-  if (lruDbName && lruEntry) {
-    evict(lruDbName, lruEntry);
+  const lruDbName = pool.keys().next().value as string | undefined;
+  if (lruDbName !== undefined) {
+    evict(lruDbName, pool.get(lruDbName)!);
   }
 }
 
@@ -91,6 +88,9 @@ export function getClientForDb(dbName: string): PrismaClient {
   const existing = pool.get(dbName);
   if (existing) {
     existing.lastUsed = Date.now();
+    // Move to MRU (end) position.
+    pool.delete(dbName);
+    pool.set(dbName, existing);
     return existing.client;
   }
 

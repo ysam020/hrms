@@ -205,9 +205,10 @@ export async function bulkDeleteHrActivities(req: Request, res: Response) {
     const ownedIds = existing
       .filter((a) => a.createdBy === user?.userId)
       .map((a) => a.id);
+    const ownedIdSet = new Set(ownedIds);
     const foundIds = new Set(existing.map((a) => a.id));
     const notFound = ids.filter(
-      (id) => !foundIds.has(id) || !ownedIds.includes(id),
+      (id) => !foundIds.has(id) || !ownedIdSet.has(id),
     );
 
     if (ownedIds.length > 0) {

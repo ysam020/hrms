@@ -678,9 +678,10 @@ export async function listAvailableTenants(req: AuthRequest, res: Response) {
       where: { id: { in: tenantIds }, isActive: true },
       select: { id: true, name: true, slug: true },
     });
+    const tenantById = new Map(tenants.map((t) => [t.id, t]));
     const result = memberships
       .map((m) => {
-        const t = tenants.find((t) => t.id === m.tenantId);
+        const t = tenantById.get(m.tenantId);
         return t ? { ...t, role: m.role } : null;
       })
       .filter(Boolean);
@@ -743,8 +744,9 @@ export async function listTenantMembers(req: AuthRequest, res: Response) {
       },
     });
 
+    const userById = new Map(users.map((u) => [u.id, u]));
     const members = memberships.map((m) => {
-      const u = users.find((u) => u.id === m.userId);
+      const u = userById.get(m.userId);
       return {
         userId: m.userId,
         role: m.role,
@@ -1183,8 +1185,9 @@ export async function listJoinRequests(req: AuthRequest, res: Response) {
       where: { id: { in: requests.map((r) => r.userId) } },
       select: { id: true, first_name: true, last_name: true, email: true },
     });
+    const userById = new Map(users.map((u) => [u.id, u]));
     const result = requests.map((r) => {
-      const u = users.find((u) => u.id === r.userId);
+      const u = userById.get(r.userId);
       return {
         id: r.id,
         userId: r.userId,

@@ -10,7 +10,7 @@ import { notify } from "@hrms/notifications";
 import { tenantFrom, tenantReplyTo, renderEmailHtml } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
 import { toPerformanceReviewCycleProto } from "./serializers";
-import { resolveReviewerId } from "./resolveReviewer";
+import { resolveReviewerIds } from "./resolveReviewer";
 
 export const createCycle = async (
   call: ServerUnaryCall<any, any>,
@@ -42,33 +42,47 @@ export const createCycle = async (
     });
 
     const employeeIds: string[] = Array.isArray(userIds) ? userIds : [];
-    const assignedUserIds: string[] = [];
 
-    // The cycle itself is already committed above — one bad userId (stale
-    // reference, duplicate submission, etc.) must not fail the whole
-    // request and leave the caller thinking no cycle was created at all
-    // while it silently sits in the DB with zero reviews.
-    for (const userId of employeeIds) {
-      try {
-        const reviewerId = await resolveReviewerId(tenantId, userId, createdBy);
-        await prisma.performanceReview.create({
+    // Resolve every employee's reviewer in one batched query instead of one
+    // `team.findFirst` per employee (see resolveReviewerIds), then run the
+    // per-employee creates concurrently. The cycle itself is already
+    // committed above — one bad userId (stale reference, duplicate
+    // submission, etc.) must not fail the whole request and leave the
+    // caller thinking no cycle was created at all while it silently sits in
+    // the DB with zero reviews, so failures are isolated per-item below.
+    const reviewerByUserId = await resolveReviewerIds(
+      tenantId,
+      employeeIds,
+      createdBy,
+    );
+
+    const createResults = await Promise.allSettled(
+      employeeIds.map((userId) =>
+        prisma.performanceReview.create({
           data: {
             tenantId,
             cycleId: cycle.id,
             userId,
-            reviewerId,
+            reviewerId: reviewerByUserId.get(userId) ?? null,
             status: "draft",
           },
-        });
+        }),
+      ),
+    );
+
+    const assignedUserIds: string[] = [];
+    createResults.forEach((result, i) => {
+      const userId = employeeIds[i];
+      if (result.status === "fulfilled") {
         assignedUserIds.push(userId);
-      } catch (err) {
+      } else {
         logger.error("CreateCycle: failed to create review for user", {
           cycleId: cycle.id,
           userId,
-          err,
+          err: result.reason,
         });
       }
-    }
+    });
 
     // Notify assigned employees (fire-and-forget, in-app + email).
     if (assignedUserIds.length > 0) {

@@ -3,7 +3,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 import { toPerformanceReviewCycleProto } from "./serializers";
-import { resolveReviewerId } from "./resolveReviewer";
+import { resolveReviewerIds } from "./resolveReviewer";
 
 export const updateCycle = async (
   call: ServerUnaryCall<any, any>,
@@ -51,20 +51,26 @@ export const updateCycle = async (
     // reviewerId unset and invisible to everyone's "Team Reviews" list.
     // Re-resolve it on every edit so fixing the underlying Team membership
     // (or just re-saving the cycle) unblocks it without a dedicated
-    // "reassign reviewer" UI.
-    for (const r of existingReviews) {
-      if (r.reviewerId) continue;
-      const reviewerId = await resolveReviewerId(
+    // "reassign reviewer" UI. Batched into one query for all unresolved
+    // reviews instead of one `team.findFirst` per review.
+    const unresolved = existingReviews.filter((r) => !r.reviewerId);
+    if (unresolved.length > 0) {
+      const reviewerByUserId = await resolveReviewerIds(
         tenantId,
-        r.userId,
+        unresolved.map((r) => r.userId),
         existing.createdBy,
       );
-      if (reviewerId) {
-        await prisma.performanceReview.update({
-          where: { id: r.id },
-          data: { reviewerId },
-        });
-      }
+      await Promise.all(
+        unresolved
+          .map((r) => ({ r, reviewerId: reviewerByUserId.get(r.userId) }))
+          .filter(({ reviewerId }) => !!reviewerId)
+          .map(({ r, reviewerId }) =>
+            prisma.performanceReview.update({
+              where: { id: r.id },
+              data: { reviewerId: reviewerId! },
+            }),
+          ),
+      );
     }
 
     // Membership diff — only runs when the caller actually sent a userIds
@@ -82,29 +88,38 @@ export const updateCycle = async (
         (r) => !desiredUserIds.has(r.userId) && r.status === "draft",
       );
 
-      for (const userId of toAdd) {
-        try {
-          const reviewerId = await resolveReviewerId(
-            tenantId,
-            userId,
-            existing.createdBy,
-          );
-          await prisma.performanceReview.create({
-            data: {
-              tenantId,
+      if (toAdd.length > 0) {
+        // Batched reviewer resolution (one query for all new members)
+        // instead of one `team.findFirst` per user, then create the new
+        // reviews concurrently with per-item failure isolation so one bad
+        // userId doesn't block the rest of the batch.
+        const reviewerByUserId = await resolveReviewerIds(
+          tenantId,
+          toAdd,
+          existing.createdBy,
+        );
+        const addResults = await Promise.allSettled(
+          toAdd.map((userId: string) =>
+            prisma.performanceReview.create({
+              data: {
+                tenantId,
+                cycleId: id,
+                userId,
+                reviewerId: reviewerByUserId.get(userId) ?? null,
+                status: "draft",
+              },
+            }),
+          ),
+        );
+        addResults.forEach((result, i) => {
+          if (result.status === "rejected") {
+            logger.error("UpdateCycle: failed to add review for user", {
               cycleId: id,
-              userId,
-              reviewerId,
-              status: "draft",
-            },
-          });
-        } catch (err) {
-          logger.error("UpdateCycle: failed to add review for user", {
-            cycleId: id,
-            userId,
-            err,
-          });
-        }
+              userId: toAdd[i],
+              err: result.reason,
+            });
+          }
+        });
       }
 
       if (toRemove.length > 0) {

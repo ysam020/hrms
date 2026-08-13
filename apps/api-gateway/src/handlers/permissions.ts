@@ -221,12 +221,14 @@ export async function saveUserPermissions(req: Request, res: Response) {
     }
 
     const oldPerms = user.permissions || [];
+    const oldPermsSet = new Set(oldPerms);
+    const newPermsSet = new Set(validPermissions);
     const addedPerms = validPermissions.filter(
-      (p: string) => !oldPerms.includes(p),
+      (p: string) => !oldPermsSet.has(p),
     );
     const addedCount = addedPerms.length;
     const removedCount = oldPerms.filter(
-      (p: string) => !validPermissions.includes(p),
+      (p: string) => !newPermsSet.has(p),
     ).length;
 
     // Notify the employee when a new permission is granted (fire-and-forget,

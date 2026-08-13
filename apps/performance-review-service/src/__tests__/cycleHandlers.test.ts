@@ -27,7 +27,7 @@ jest.mock("@hrms/db", () => {
       deleteMany: jest.fn(),
       findFirst: jest.fn(),
     },
-    team: { findFirst: jest.fn() },
+    team: { findFirst: jest.fn(), findMany: jest.fn() },
     user: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn() },
     tenant: { findUnique: jest.fn().mockResolvedValue(null) },
   };
@@ -83,7 +83,9 @@ describe("createCycle", () => {
       createdBy: "hr1",
       createdAt: new Date(),
     });
-    db.team.findFirst.mockResolvedValue({ teamLeaderId: "mgr1" });
+    db.team.findMany.mockResolvedValue([
+      { teamLeaderId: "mgr1", members: ["u1", "u2"] },
+    ]);
     db.performanceReview.create.mockResolvedValue({});
     const cb = makeCallback();
 
@@ -128,7 +130,7 @@ describe("createCycle", () => {
       id: "c1",
       createdAt: new Date(),
     });
-    db.team.findFirst.mockResolvedValue(null);
+    db.team.findMany.mockResolvedValue([]);
     db.performanceReview.create
       .mockRejectedValueOnce(new Error("bad userId"))
       .mockResolvedValueOnce({});
@@ -263,7 +265,9 @@ describe("updateCycle", () => {
     db.performanceReview.findMany.mockResolvedValue([
       { id: "r1", userId: "u1", reviewerId: null, status: "draft" },
     ]);
-    db.team.findFirst.mockResolvedValue({ teamLeaderId: "mgr1" });
+    db.team.findMany.mockResolvedValue([
+      { teamLeaderId: "mgr1", members: ["u1"] },
+    ]);
     db.performanceReview.update.mockResolvedValue({});
     const cb = makeCallback();
 
@@ -310,7 +314,9 @@ describe("updateCycle", () => {
       { id: "r1", userId: "u1", reviewerId: "mgr1", status: "draft" }, // will be removed
       { id: "r2", userId: "u2", reviewerId: "mgr1", status: "draft" }, // stays
     ]);
-    db.team.findFirst.mockResolvedValue({ teamLeaderId: "mgr2" });
+    db.team.findMany.mockResolvedValue([
+      { teamLeaderId: "mgr2", members: ["u3"] },
+    ]);
     db.performanceReview.create.mockResolvedValue({});
     db.performanceReview.deleteMany.mockResolvedValue({});
     const cb = makeCallback();
