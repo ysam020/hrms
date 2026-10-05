@@ -85,7 +85,7 @@ jest.mock("@hrms/common", () => ({
   // field through this to pick the HTTP status, so tests need the real
   // mapping rather than a stub that would just throw when called.
   grpcToHttpStatus: jest.requireActual("@hrms/common").grpcToHttpStatus,
-  tenantFrom: jest.fn((name: string) => `"${name}" <hr@praesto.cloud>`),
+  tenantFrom: jest.fn((name: string) => `"${name}" <hr@praesto.in>`),
   tenantReplyTo: jest.fn((helpEmail?: string | null) => helpEmail || undefined),
   renderEmailHtml: jest.fn(
     ({ bodyHtml }: { bodyHtml: string }) => `<html>${bodyHtml}</html>`,

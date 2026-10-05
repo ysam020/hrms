@@ -127,7 +127,7 @@ function TermsOfUsePage() {
       <h2>11. Contact Us</h2>
       <p>
         Questions about these Terms can be sent to{" "}
-        <a href="mailto:support@praesto.cloud">support@praesto.cloud</a>.
+        <a href="mailto:support@praesto.in">support@praesto.in</a>.
       </p>
     </LegalPageLayout>
   );

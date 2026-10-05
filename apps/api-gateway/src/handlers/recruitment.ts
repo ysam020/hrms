@@ -1306,9 +1306,9 @@ async function scheduleMeetEventAndNotifyCandidate(options: {
       scheduler?.username ||
       tenantName;
     const schedulerEmail =
-      scheduler?.email || tenant?.helpEmail || "noreply@praesto.cloud";
+      scheduler?.email || tenant?.helpEmail || "noreply@praesto.in";
     const icsInvite = buildIcsInvite({
-      uid: `interview-${options.applicationId}-round-${options.roundNumber}@praesto.cloud`,
+      uid: `interview-${options.applicationId}-round-${options.roundNumber}@praesto.in`,
       summary: `Interview: ${options.candidateName} — Round ${options.roundNumber}`,
       description: interviewerName
         ? `Interviewer: ${interviewerName}`

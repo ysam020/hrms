@@ -6,13 +6,13 @@ import { buildIcsInvite } from "../ics";
 const unfold = (ics: string): string => ics.replace(/\r\n /g, "");
 
 const baseOptions = {
-  uid: "interview-app-1-round-1@praesto.cloud",
+  uid: "interview-app-1-round-1@praesto.in",
   summary: "Interview: Jordan Candidate — Round 1",
   description: "Interviewer: Alice",
   location: "https://meet.google.com/abc-defg-hij",
   startTime: new Date("2026-06-25T15:00:00.000Z"),
   endTime: new Date("2026-06-25T16:00:00.000Z"),
-  organizerEmail: "hr@praesto.cloud",
+  organizerEmail: "hr@praesto.in",
   organizerName: "Acme Corp",
   attendees: [{ email: "jordan@candidate.example", name: "Jordan Candidate" }],
 };
@@ -30,7 +30,7 @@ describe("buildIcsInvite", () => {
     expect(logical).toContain("DTEND:20260625T160000Z");
     expect(logical).toContain("SUMMARY:Interview: Jordan Candidate — Round 1");
     expect(logical).toContain("LOCATION:https://meet.google.com/abc-defg-hij");
-    expect(logical).toContain("ORGANIZER;CN=Acme Corp:mailto:hr@praesto.cloud");
+    expect(logical).toContain("ORGANIZER;CN=Acme Corp:mailto:hr@praesto.in");
     expect(logical).toContain(
       "ATTENDEE;CN=Jordan Candidate;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:jordan@candidate.example",
     );
@@ -88,7 +88,7 @@ describe("buildIcsInvite", () => {
       attendees: [{ email: "jordan@candidate.example" }],
     });
     const logical = unfold(ics);
-    expect(logical).toContain("ORGANIZER:mailto:hr@praesto.cloud");
+    expect(logical).toContain("ORGANIZER:mailto:hr@praesto.in");
     expect(logical).toContain(
       "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:jordan@candidate.example",
     );

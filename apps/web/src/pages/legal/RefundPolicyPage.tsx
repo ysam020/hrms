@@ -54,7 +54,7 @@ function RefundPolicyPage() {
       <h2>6. Contact Us</h2>
       <p>
         For billing questions or to report a payment issue, contact{" "}
-        <a href="mailto:support@praesto.cloud">support@praesto.cloud</a>.
+        <a href="mailto:support@praesto.in">support@praesto.in</a>.
       </p>
     </LegalPageLayout>
   );
