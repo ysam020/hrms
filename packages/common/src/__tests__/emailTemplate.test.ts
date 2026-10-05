@@ -6,7 +6,7 @@ describe("renderEmailHtml", () => {
   // be a normal URL, not inlined base64.
   it("always shows the Praesto logo as a hosted https:// image in the header", () => {
     const html = renderEmailHtml({ title: "Hi", bodyHtml: "<p>hi</p>" });
-    expect(html).toContain('src="https://praesto.cloud/maskable_icon.png"');
+    expect(html).toContain('src="https://praesto.in/maskable_icon.png"');
     expect(html).toContain('alt="Praesto"');
   });
 

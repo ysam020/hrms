@@ -16,7 +16,7 @@ jest.mock("@hrms/db", () => {
 jest.mock("@hrms/common", () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
   tenantFrom: jest.fn(
-    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+    (name: string) => `"${name} HR" <hr@notifications.praesto.in>`,
   ),
   renderEmailHtml: jest.fn(
     ({ bodyHtml }: { bodyHtml: string }) => `<html>${bodyHtml}</html>`,
@@ -218,7 +218,7 @@ describe("sendKycReminders", () => {
 
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: '"Acme Corp HR" <hr@notifications.praesto.cloud>',
+        from: '"Acme Corp HR" <hr@notifications.praesto.in>',
       }),
     );
   });

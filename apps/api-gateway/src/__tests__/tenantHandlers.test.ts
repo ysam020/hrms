@@ -54,9 +54,9 @@ jest.mock("@hrms/common", () => ({
     INTERNAL_SERVER_ERROR: 500,
   },
   sendEmail: jest.fn(),
-  tenantFrom: jest.fn((name: string) => `"${name}" <hr@praesto.cloud>`),
+  tenantFrom: jest.fn((name: string) => `"${name}" <hr@praesto.in>`),
   tenantReplyTo: jest.fn((helpEmail?: string | null) => helpEmail || undefined),
-  PLATFORM_FROM: '"Praesto" <hr@praesto.cloud>',
+  PLATFORM_FROM: '"Praesto" <hr@praesto.in>',
   renderEmailHtml: jest.fn(
     ({ bodyHtml }: { bodyHtml: string }) => `<html>${bodyHtml}</html>`,
   ),

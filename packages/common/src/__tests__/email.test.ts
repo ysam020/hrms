@@ -26,7 +26,7 @@ describe("sendEmail", () => {
       to: "a@b.com",
       subject: "Hi",
       html: "<p>hi</p>",
-      from: '"Praesto" <noreply@praesto.cloud>',
+      from: '"Praesto" <noreply@praesto.in>',
     });
 
     expect(mockSend).toHaveBeenCalledWith(
@@ -34,7 +34,7 @@ describe("sendEmail", () => {
         to: "a@b.com",
         subject: "Hi",
         html: "<p>hi</p>",
-        from: '"Praesto" <noreply@praesto.cloud>',
+        from: '"Praesto" <noreply@praesto.in>',
       }),
     );
     expect(logger.info).toHaveBeenCalledWith("Email sent to a@b.com");
@@ -47,7 +47,7 @@ describe("sendEmail", () => {
       to: "a@b.com",
       subject: "Hi",
       html: "<p>hi</p>",
-      from: '"Acme Corp HR" <hr@notifications.praesto.cloud>',
+      from: '"Acme Corp HR" <hr@notifications.praesto.in>',
       replyTo: "hr@acme.example",
       attachments: [{ filename: "payslip.pdf", content: "base64content" }],
     });
@@ -67,7 +67,7 @@ describe("sendEmail", () => {
       to: "a@b.com",
       subject: "Interview invite",
       html: "<p>hi</p>",
-      from: '"Acme Corp" <hr@praesto.cloud>',
+      from: '"Acme Corp" <hr@praesto.in>',
       attachments: [
         {
           filename: "interview-invite.ics",
@@ -101,7 +101,7 @@ describe("sendEmail", () => {
         to: "a@b.com",
         subject: "Hi",
         html: "<p>hi</p>",
-        from: '"Praesto" <noreply@praesto.cloud>',
+        from: '"Praesto" <noreply@praesto.in>',
       }),
     ).rejects.toThrow("invalid from address");
 
@@ -120,7 +120,7 @@ describe("sendEmail", () => {
         to: "a@b.com",
         subject: "Hi",
         html: "<p>hi</p>",
-        from: '"Praesto" <noreply@praesto.cloud>',
+        from: '"Praesto" <noreply@praesto.in>',
       }),
     ).rejects.toThrow("Resend API down");
 

@@ -117,14 +117,6 @@ export class BaseGrpcClient {
     const caFile =
       process.env.GRPC_TLS_CA_FILE ??
       path.resolve(__dirname, "../../certificates/rootCA.pem");
-    // mTLS: present our own cert/key so the server can verify who's
-    // calling, not just that we trust the server's cert. See
-    // base-server.ts's buildServerCredentials, which now requires this.
-    //
-    // Must be a distinct identity from the servers' own cert.pem/key.pem:
-    // grpc-js resets the connection (ECONNRESET) if the client presents a
-    // certificate identical to the server's own — see the matching note in
-    // api-gateway's grpc/clients.ts, which hit and confirmed this.
     const certFile =
       process.env.GRPC_TLS_CLIENT_CRT_FILE ??
       path.resolve(__dirname, "../../certificates/client-cert.pem");

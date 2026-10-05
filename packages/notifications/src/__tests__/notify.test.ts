@@ -49,7 +49,7 @@ describe("notify", () => {
         to: "jordan@example.com",
         subject: "Leave approved",
         html: "<p>hi</p>",
-        from: '"Acme Corp" <hr@praesto.cloud>',
+        from: '"Acme Corp" <hr@praesto.in>',
       },
     });
 
@@ -60,7 +60,7 @@ describe("notify", () => {
         to: "jordan@example.com",
         subject: "Leave approved",
         html: "<p>hi</p>",
-        from: '"Acme Corp" <hr@praesto.cloud>',
+        from: '"Acme Corp" <hr@praesto.in>',
       }),
     );
   });
@@ -73,7 +73,7 @@ describe("notify", () => {
         to: ["hr-a@acme.example", "hr-b@acme.example"],
         subject: "WFH request",
         html: "<p>hi</p>",
-        from: '"Acme Corp" <hr@praesto.cloud>',
+        from: '"Acme Corp" <hr@praesto.in>',
       },
     });
 

@@ -10,7 +10,7 @@
 // only a real hosted https:// image survives. This is the same PNG as
 // apps/web/public/maskable_icon.png, served as a static asset off the
 // deployed web app's own domain — no separate asset host to maintain.
-const PRAESTO_LOGO_URL = "https://praesto.cloud/maskable_icon.png";
+const PRAESTO_LOGO_URL = "https://praesto.in/maskable_icon.png";
 
 const BRAND_FONT = "'Poppins','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const BRAND_PRIMARY = "#39a2cf";

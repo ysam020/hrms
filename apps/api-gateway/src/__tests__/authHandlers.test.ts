@@ -801,7 +801,7 @@ describe("authHandlers", () => {
 
   describe("googleCalendarCallback", () => {
     beforeEach(() => {
-      process.env.CLIENT_URL = "https://app.praesto.cloud";
+      process.env.CLIENT_URL = "https://app.praesto.in";
     });
 
     it("posts an error message and closes the popup when Google reports an error", async () => {
@@ -872,7 +872,7 @@ describe("authHandlers", () => {
       );
       // postMessage's targetOrigin must be the frontend origin, not "*".
       expect(res.send).toHaveBeenCalledWith(
-        expect.stringContaining("https://app.praesto.cloud"),
+        expect.stringContaining("https://app.praesto.in"),
       );
     });
 

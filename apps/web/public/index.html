@@ -303,7 +303,7 @@
               "https://192.168.1.107:9002",
               "http://172.20.10.10:9002",
               "https://172.20.10.10:9002",
-              "https://api.praesto.cloud",
+              "https://api.praesto.in",
             ];
 
         // WebSocket URLs
@@ -321,7 +321,9 @@
         ];
 
         // S3 URLs
-        const s3URLs = ["https://praesto-423437244709.s3.ap-south-1.amazonaws.com"];
+        const s3URLs = [
+          "https://praesto-423437244709.s3.ap-south-1.amazonaws.com",
+        ];
 
         // Firebase URLs
         const firebaseURLs = [
@@ -337,6 +339,9 @@
           "https://www.googletagmanager.com",
           "https://region1.google-analytics.com",
         ];
+
+        // Razorpay URLs
+        const razorpayUrls = ["https://checkout.razorpay.com"];
 
         // Build CSP policy
         const cspPolicy = {
@@ -359,6 +364,7 @@
             ...cdnURLs,
             ...analyticsURLs,
             ...s3URLs,
+            ...razorpayUrls,
           ],
 
           "style-src": ["'self'", "'unsafe-inline'", "https://unpkg.com"],

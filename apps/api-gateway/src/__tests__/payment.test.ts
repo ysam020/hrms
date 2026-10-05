@@ -41,7 +41,7 @@ jest.mock("@hrms/common", () => ({
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
   },
-  PLATFORM_FROM: '"Praesto" <noreply@praesto.cloud>',
+  PLATFORM_FROM: '"Praesto" <noreply@praesto.in>',
   renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
 }));
 

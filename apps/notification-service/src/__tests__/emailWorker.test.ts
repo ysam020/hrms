@@ -73,7 +73,7 @@ describe("startEmailWorker", () => {
         to: "a@b.com",
         subject: "Payslip",
         html: "<p>attached</p>",
-        from: '"Acme Corp HR" <hr@notifications.praesto.cloud>',
+        from: '"Acme Corp HR" <hr@notifications.praesto.in>',
         replyTo: "hr@acme.example",
         attachments: [{ filename: "payslip.pdf", content: "base64" }],
       },
@@ -83,7 +83,7 @@ describe("startEmailWorker", () => {
       to: "a@b.com",
       subject: "Payslip",
       html: "<p>attached</p>",
-      from: '"Acme Corp HR" <hr@notifications.praesto.cloud>',
+      from: '"Acme Corp HR" <hr@notifications.praesto.in>',
       replyTo: "hr@acme.example",
       attachments: [{ filename: "payslip.pdf", content: "base64" }],
     });

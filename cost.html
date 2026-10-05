@@ -21,7 +21,7 @@
       property="og:image"
       content="https://ysam020-praesto-guide.s3.ap-south-1.amazonaws.com/favicon.ico"
     />
-    <meta property="og:url" content="https://praesto.cloud" />
+    <meta property="og:url" content="https://praesto.in" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Praesto" />
 
@@ -747,11 +747,11 @@
                 ₹25k–1L implementation charge
               </li>
               <li>
-                Performance review cycles that actually move money — a
-                manager's recommended increment, once approved through the
-                same approval-chain engine used for leave/resignation, writes
-                a new salary structure automatically. Most competitors treat
-                review and comp revision as two disconnected modules
+                Performance review cycles that actually move money — a manager's
+                recommended increment, once approved through the same
+                approval-chain engine used for leave/resignation, writes a new
+                salary structure automatically. Most competitors treat review
+                and comp revision as two disconnected modules
               </li>
             </ul>
           </div>
@@ -759,11 +759,11 @@
             <h4>Behind, or unproven</h4>
             <ul>
               <li>
-                TDS/income-tax withholding is now calculated correctly
-                (see §06 — the bonus-month over-withholding bug is fixed),
-                but Form 16 is provisional/Part B only, marginal relief on the
-                Sec 87A rebate isn't implemented, and surcharge on >₹50L
-                income is hardcoded to zero
+                TDS/income-tax withholding is now calculated correctly (see §06
+                — the bonus-month over-withholding bug is fixed), but Form 16 is
+                provisional/Part B only, marginal relief on the Sec 87A rebate
+                isn't implemented, and surcharge on >₹50L income is hardcoded to
+                zero
               </li>
               <li>Zero reference customers, case studies, or reviews</li>
               <li>
@@ -861,13 +861,12 @@
         <p class="wide-measure" style="margin-top: 20px">
           The Atlas line is a dedicated <strong>M10</strong> cluster, not the
           free M0 tier — M0 caps at 512MB with no backups and shared compute,
-          which isn't viable once a paying tenant is producing real
-          attendance, leave, chat, and audit-log volume (the audit trail alone
-          writes a before/after diff on every action across 18 entity types,
-          so it's inherently write-heavy). $75/month is base cluster cost
-          (~$0.09/hr in ap-south-1) plus a small backup-storage allowance;
-          confirm against the actual Atlas invoice once real usage data
-          exists.
+          which isn't viable once a paying tenant is producing real attendance,
+          leave, chat, and audit-log volume (the audit trail alone writes a
+          before/after diff on every action across 18 entity types, so it's
+          inherently write-heavy). $75/month is base cluster cost (~$0.09/hr in
+          ap-south-1) plus a small backup-storage allowance; confirm against the
+          actual Atlas invoice once real usage data exists.
         </p>
 
         <div class="callout rust" style="margin-top: 8px">
@@ -875,19 +874,17 @@
           <p>
             <strong>Aurora PostgreSQL cluster</strong> and
             <strong>DocumentDB cluster</strong> (both named
-            <code>database-1</code>) were created the same day this audit
-            ran, both untagged, both console defaults. Nothing in the
-            codebase or either CloudFormation stack references Postgres or
-            DocumentDB. <strong>A Lambda function (<code
-              >hrms-scan-upload</code
-            >)</strong> has an S3 invoke permission scoped to the
+            <code>database-1</code>) were created the same day this audit ran,
+            both untagged, both console defaults. Nothing in the codebase or
+            either CloudFormation stack references Postgres or DocumentDB.
+            <strong>A Lambda function (<code>hrms-scan-upload</code>)</strong>
+            has an S3 invoke permission scoped to the
             <code>praesto</code> bucket, but that bucket has no notification
-            configuration wired up — so it never actually fires. Combined,
-            these are estimated to add
+            configuration wired up — so it never actually fires. Combined, these
+            are estimated to add
             <strong>~$150–200/month for infrastructure that does nothing</strong
-            >, on top of the $300 total above. Recommend confirming and
-            deleting — this is unrelated to the Atlas decision and still
-            open.
+            >, on top of the $300 total above. Recommend confirming and deleting
+            — this is unrelated to the Atlas decision and still open.
           </p>
         </div>
       </div>
@@ -1070,13 +1067,13 @@
         <div class="section-index">06</div>
         <h2>TDS &amp; Form 16 — implementation review</h2>
         <p class="wide-measure">
-          Reviewed twice — first against the unstaged working tree, now
-          against the merged, committed state (<code>feat: add tds in
-          payroll</code>, PR #86). New <code>IncomeTaxSlab</code> and
+          Reviewed twice — first against the unstaged working tree, now against
+          the merged, committed state (<code>feat: add tds in payroll</code>, PR
+          #86). New <code>IncomeTaxSlab</code> and
           <code>TaxDeclaration</code> Prisma models, a
           <code>tdsCalc.ts</code> calculation engine, a declare→prove→verify
-          workflow mirroring the existing KYC lock/revision pattern, and Form
-          16 generation via the same jsPDF approach as the payslip. This is a
+          workflow mirroring the existing KYC lock/revision pattern, and Form 16
+          generation via the same jsPDF approach as the payslip. This is a
           genuinely substantial build — both tax regimes, financial-year-scoped
           slabs, a YTD/running-total mechanism (which PF/ESI/PT never needed),
           and 20+ unit tests on the calculation core. The bug that blocked
@@ -1087,19 +1084,23 @@
 
         <div
           class="callout"
-          style="border-left-color: var(--accent); background: var(--accent-soft)"
+          style="
+            border-left-color: var(--accent);
+            background: var(--accent-soft);
+          "
         >
           <div class="label" style="color: var(--accent)">
             Fixed — confirmed against current committed code
           </div>
           <p>
             The bonus-month over-withholding bug is resolved.
-            <code>calcMonthlyTds</code> (<code>tdsCalc.ts:247-249</code>) is
-            now a thin wrapper around <code>computeTdsWorksheet</code>, so the
-            function that actually runs during <code>initiatePayrollRun</code>
-            and the printable worksheet share one implementation — a one-time
-            component (<code>SalaryComponentDefinition.isRecurring: false</code>)
-            is correctly excluded from the rest-of-year projection in both
+            <code>calcMonthlyTds</code> (<code>tdsCalc.ts:247-249</code>) is now
+            a thin wrapper around <code>computeTdsWorksheet</code>, so the
+            function that actually runs during
+            <code>initiatePayrollRun</code> and the printable worksheet share
+            one implementation — a one-time component (<code
+              >SalaryComponentDefinition.isRecurring: false</code
+            >) is correctly excluded from the rest-of-year projection in both
             places, so a bonus month no longer inflates withholding, and the
             worksheet PDF now matches what's actually deducted. This was
             originally flagged as the blocking issue in this review; it is no
@@ -1125,8 +1126,8 @@
               </li>
               <li>
                 YTD tax-already-deducted is tracked by summing prior
-                approved/disbursed <code>PayrollLineItem</code> rows within
-                the FY — a real running total, not a guess
+                approved/disbursed <code>PayrollLineItem</code> rows within the
+                FY — a real running total, not a guess
               </li>
               <li>
                 Declaration→proof→review workflow correctly mirrors the KYC
@@ -1134,8 +1135,8 @@
               </li>
               <li>
                 Form 16 Part B is genuinely itemized (exemptions, standard
-                deduction, Chapter VI-A, slab-by-slab tax, month-wise
-                breakup) — not a relabeled payslip
+                deduction, Chapter VI-A, slab-by-slab tax, month-wise breakup) —
+                not a relabeled payslip
               </li>
               <li>
                 20+ unit tests on the calculation core, with real boundary
@@ -1147,10 +1148,9 @@
             <h4>Not done yet</h4>
             <ul>
               <li>
-                Section 87A <strong>marginal relief</strong> isn't
-                implemented — an employee just above the ₹12L/₹5L rebate
-                cliff is overtaxed by several times the legally correct
-                amount
+                Section 87A <strong>marginal relief</strong> isn't implemented —
+                an employee just above the ₹12L/₹5L rebate cliff is overtaxed by
+                several times the legally correct amount
               </li>
               <li>
                 Surcharge for income above ₹50L is hardcoded to zero —
@@ -1164,8 +1164,8 @@
               <li>
                 No admin-side way to generate a Form 16 or TDS worksheet for
                 <em>another</em> employee via the API — a real gap for actual
-                year-end filing, where HR needs to produce every employee's
-                Form 16, not just their own
+                year-end filing, where HR needs to produce every employee's Form
+                16, not just their own
               </li>
               <li>
                 Employer NPS contribution (Sec 80CCD(2), valid under both
@@ -1212,8 +1212,8 @@
               <b>Decide the surcharge question explicitly</b
               ><span class="sub"
                 >— either implement it, or state clearly (in-app and in the
-                pitch) that income above ₹50L/year isn't supported yet,
-                instead of silently returning zero</span
+                pitch) that income above ₹50L/year isn't supported yet, instead
+                of silently returning zero</span
               >
             </div>
           </li>
@@ -1222,19 +1222,21 @@
             <div>
               <b>Scope Form 16 Part A</b
               ><span class="sub"
-                >— decide whether it ships before year-end, since Part B
-                alone isn't something a customer's CA can file with</span
+                >— decide whether it ships before year-end, since Part B alone
+                isn't something a customer's CA can file with</span
               >
             </div>
           </li>
           <li>
             <span class="box"></span>
             <div>
-              <b>Update the pitch to "TDS withholding is correct, Form 16 is provisional"</b
+              <b
+                >Update the pitch to "TDS withholding is correct, Form 16 is
+                provisional"</b
               ><span class="sub"
-                >— the withholding bug is fixed, so it's honest to claim TDS
-                is supported; just don't call Form 16 complete until Part A
-                exists and marginal relief/surcharge are handled</span
+                >— the withholding bug is fixed, so it's honest to claim TDS is
+                supported; just don't call Form 16 complete until Part A exists
+                and marginal relief/surcharge are handled</span
               >
             </div>
           </li>

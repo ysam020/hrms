@@ -9,7 +9,7 @@ Description: >
 Parameters:
   DomainName:
     Type: String
-    Description: Root domain, e.g. praesto.cloud
+    Description: Root domain, e.g. praesto.in
   ApiSubdomain:
     Type: String
     Default: api
@@ -121,7 +121,7 @@ Resources:
                     style-src 'self' 'unsafe-inline';
                     img-src 'self' data: blob: https://praesto-423437244709.s3.ap-south-1.amazonaws.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com;
                     font-src 'self' data:;
-                    connect-src 'self' https://api.praesto.cloud wss://api.praesto.cloud https://cdn.jsdelivr.net https://raw.githubusercontent.com https://nominatim.openstreetmap.org https://praesto-423437244709.s3.ap-south-1.amazonaws.com https://api.razorpay.com https://lumberjack.razorpay.com https://*.googleapis.com https://*.firebaseio.com;
+                    connect-src 'self' https://api.praesto.in wss://api.praesto.in https://cdn.jsdelivr.net https://raw.githubusercontent.com https://nominatim.openstreetmap.org https://praesto-423437244709.s3.ap-south-1.amazonaws.com https://api.razorpay.com https://lumberjack.razorpay.com https://*.googleapis.com https://*.firebaseio.com;
                     frame-src https://api.razorpay.com;
                     worker-src 'self' blob:;
                     manifest-src 'self';

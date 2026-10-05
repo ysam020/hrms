@@ -1030,59 +1030,33 @@ Resources:
             systemctl enable --now hrms.service
 
   Asg:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    # Separate concern from the batched/health-checked/auto-rollback rollout
-    # in .github/workflows/deploy-ec2.yml: that workflow deploys new app image
-    # tags to already-running instances in place (via SSM + docker compose)
-    # and never touches this template. This UpdatePolicy instead governs the
-    # rarer case of a stack update that changes the LaunchTemplate itself
-    # (AMI, instance type, UserData) — without it, CloudFormation leaves
-    # existing instances on the old launch config indefinitely, requiring a
-    # manual, unstaged instance-by-instance replacement.
-    # MinInstancesInService: 0 (not 1) because MaxSize is 1 on this
-    # single-instance demo deployment — there's no spare capacity slot to
-    # launch a replacement while keeping the current instance in service, so
-    # a launch-template-affecting update terminates the sole instance briefly
-    # before the replacement comes up healthy. Same interruption tolerance
-    # already accepted for Spot; only matters on template changes, not on
-    # ordinary app deploys (those go through deploy-ec2.yml above, in place).
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: 0
-        MaxBatchSize: 1
-        PauseTime: PT3M
-        WaitOnResourceSignals: false
-    Properties:
-      # 100% Spot (OnDemandBaseCapacity: 0) — this is a demo with no real
-      # traffic, so a Spot interruption is an acceptable brief blip (the ASG
-      # relaunches automatically), traded for a large discount off the
-      # on-demand price for InstanceType. Revert to a plain LaunchTemplate
-      # block (no MixedInstancesPolicy) if this ever needs to be reliable.
-      MixedInstancesPolicy:
-        LaunchTemplate:
-          LaunchTemplateSpecification:
-            LaunchTemplateId: !Ref LaunchTemplate
-            Version: !GetAtt LaunchTemplate.LatestVersionNumber
-        InstancesDistribution:
-          OnDemandBaseCapacity: 0
-          OnDemandPercentageAboveBaseCapacity: 0
-          SpotAllocationStrategy: price-capacity-optimized
-      MinSize: !Ref MinSize
-      MaxSize: !Ref MaxSize
-      DesiredCapacity: !Ref DesiredCapacity
-      VPCZoneIdentifier: !Ref PublicSubnetIds
-      # No target group to report app-level health anymore (no ALB) — this
-      # falls back to EC2 status checks only (hardware/instance-level, not
-      # "is api-gateway actually responding on /health"). A real app-level
-      # health signal would need CloudWatch Agent + a custom alarm feeding
-      # an ASG lifecycle action; out of scope for this single-instance demo.
-      HealthCheckType: EC2
-      HealthCheckGracePeriod: 180
-      Tags:
-        - Key: Name
-          Value: hrms-prod
-          PropagateAtLaunch: true
+  Type: AWS::AutoScaling::AutoScalingGroup
 
+  UpdatePolicy:
+    AutoScalingRollingUpdate:
+      MinInstancesInService: 0
+      MaxBatchSize: 1
+      PauseTime: PT3M
+      WaitOnResourceSignals: false
+
+  Properties:
+    LaunchTemplate:
+      LaunchTemplateSpecification:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+
+    MinSize: !Ref MinSize
+    MaxSize: !Ref MaxSize
+    DesiredCapacity: !Ref DesiredCapacity
+    VPCZoneIdentifier: !Ref PublicSubnetIds
+
+    HealthCheckType: EC2
+    HealthCheckGracePeriod: 180
+
+    Tags:
+      - Key: Name
+        Value: hrms-prod
+        PropagateAtLaunch: true
   # ─────────────────────────── DNS ───────────────────────────
   # Plain A record to the EIP (not an ALB alias anymore) — this only ever
   # needs to be set once, since ElasticIp's address doesn't change across

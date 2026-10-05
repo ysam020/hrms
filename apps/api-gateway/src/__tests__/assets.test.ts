@@ -76,7 +76,7 @@ jest.mock("@hrms/common", () => ({
     CONFLICT: 409,
   },
   tenantFrom: jest.fn(
-    (name: string) => `"${name} HR" <hr@notifications.praesto.cloud>`,
+    (name: string) => `"${name} HR" <hr@notifications.praesto.in>`,
   ),
   tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
   renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),

@@ -25,13 +25,13 @@ describe("Help", () => {
 
   it("shows support and business enquiry emails", () => {
     renderHelp();
-    expect(screen.getByText("support@praesto.cloud")).toHaveAttribute(
+    expect(screen.getByText("support@praesto.in")).toHaveAttribute(
       "href",
-      "mailto:support@praesto.cloud",
+      "mailto:support@praesto.in",
     );
-    expect(screen.getByText("hello@praesto.cloud")).toHaveAttribute(
+    expect(screen.getByText("hello@praesto.in")).toHaveAttribute(
       "href",
-      "mailto:hello@praesto.cloud",
+      "mailto:hello@praesto.in",
     );
   });
 

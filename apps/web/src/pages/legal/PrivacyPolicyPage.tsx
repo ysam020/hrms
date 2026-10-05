@@ -183,7 +183,7 @@ function PrivacyPolicyPage() {
       <h2>10. Contact Us</h2>
       <p>
         Questions about this Privacy Policy can be sent to{" "}
-        <a href="mailto:support@praesto.cloud">support@praesto.cloud</a>.
+        <a href="mailto:support@praesto.in">support@praesto.in</a>.
       </p>
     </LegalPageLayout>
   );

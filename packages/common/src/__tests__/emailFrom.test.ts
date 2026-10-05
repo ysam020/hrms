@@ -2,7 +2,7 @@ import { PLATFORM_FROM, tenantFrom, tenantReplyTo } from "../emailFrom";
 
 describe("tenantFrom", () => {
   it("uses the tenant name alone as the display name — no HR suffix/prefix, no personal name", () => {
-    expect(tenantFrom("Acme Corp")).toBe('"Acme Corp" <hr@praesto.cloud>');
+    expect(tenantFrom("Acme Corp")).toBe('"Acme Corp" <hr@praesto.in>');
   });
 
   it("never appends or prepends 'HR' regardless of what's in the tenant name", () => {
@@ -13,7 +13,7 @@ describe("tenantFrom", () => {
 
 describe("PLATFORM_FROM", () => {
   it("is the fixed Praesto platform identity, not tenant- or person-specific", () => {
-    expect(PLATFORM_FROM).toBe('"Praesto" <noreply@praesto.cloud>');
+    expect(PLATFORM_FROM).toBe('"Praesto" <noreply@praesto.in>');
   });
 });
 

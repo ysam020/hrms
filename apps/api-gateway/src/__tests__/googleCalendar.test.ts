@@ -38,7 +38,7 @@ describe("googleCalendar service (per-user OAuth)", () => {
       GOOGLE_CLIENT_ID: "client-id.apps.googleusercontent.com",
       GOOGLE_CLIENT_SECRET: "client-secret",
       GOOGLE_CALENDAR_CALLBACK_URL:
-        "https://api.praesto.cloud/api/auth/google-calendar/callback",
+        "https://api.praesto.in/api/auth/google-calendar/callback",
     };
   });
 
