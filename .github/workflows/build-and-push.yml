@@ -133,7 +133,7 @@ jobs:
             aws ecr create-repository --repository-name "${ECR_REPOSITORY_PREFIX}/${{ matrix.repo }}" --image-scanning-configuration scanOnPush=true --encryption-configuration encryptionType=AES256 >/dev/null
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and push ${{ matrix.name }}
         uses: docker/build-push-action@v6
