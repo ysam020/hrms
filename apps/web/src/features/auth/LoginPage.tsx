@@ -273,14 +273,17 @@ function LoginPage() {
                   icon={<KeyIcon aria-hidden="true" />}
                   onClick={() => setView(VIEW.WEBAUTHN)}
                   style={{
-                    paddingTop: 9.6,
-                    paddingBottom: 9.6,
+                    paddingTop: 11.2,
+                    paddingBottom: 11.2,
                     borderRadius: "8px",
-                    borderColor: "var(--text-input-border)",
+                    backgroundColor: "var(--card-background)",
                     color: "var(--text-color)",
+                    border: "1px solid var(--text-input-border)",
                     fontWeight: 500,
-                    fontSize: "13px",
+                    fontSize: "14px",
                     textTransform: "none",
+                    letterSpacing: 0.25,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
                   }}
                 >
                   <span style={{ marginLeft: "5px" }}>
