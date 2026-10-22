@@ -23,6 +23,9 @@ const WorkforceStatus = lazy(() => import("./WorkforceStatus"));
 
 const RIGHT_PANEL_WIDTH = 270;
 
+// Spacing between cards and around the dashboard edges (MUI spacing units: 1 = 8px)
+const CARD_GAP = 1.5;
+
 // Fixed dashboard arrangement — span is out of a 12-column grid, height in px.
 // Each row's spans sum to 12, so items simply flow in this order.
 const WIDGETS = [
@@ -37,13 +40,40 @@ const WIDGETS = [
   { id: "departmentBreakdown", span: 3, height: 282 },
 ];
 
+// Layout shared by every card (widget cards and right panel).
+const cardBaseSx = {
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  borderRadius: 1.5,
+  overflow: "hidden",
+} as const;
+
+// Widget cards: background from theme, soft shadow, no border.
+const widgetCardSx = {
+  ...cardBaseSx,
+  bgcolor: "background.paper",
+  border: "none",
+  boxShadow: "0 6px 12px rgba(30,10,58,.04)",
+} as const;
+
+// Right panel: gradient border (padding-box fill + border-box gradient), no shadow.
+const getRightPanelSurface = (isDark: boolean) => {
+  const fill = isDark ? "#1c262a" : "#fff";
+  return {
+    border: "1px solid transparent",
+    boxShadow: "none",
+    background: `linear-gradient(${fill}, ${fill}) padding-box, linear-gradient(87.1deg, rgba(60,118,255,0.2) 2.38%, rgba(173,38,236,0.2) 27.97%, rgba(255,9,147,0.2) 45.03%, rgba(253,29,29,0.2) 61.64%, rgba(255,187,0,0.2) 91.27%) border-box`,
+  };
+};
+
 const WidgetSkeleton = () => (
   <Box sx={{ p: 1, height: "100%", width: "100%" }}>
     <Skeleton variant="rounded" height="100%" animation="wave" />
   </Box>
 );
 
-function renderWidget(id) {
+function renderWidget(id: string) {
   switch (id) {
     case "quickStats":
       return <QuickStats />;
@@ -68,42 +98,27 @@ function renderWidget(id) {
   }
 }
 
-const WidgetCard = memo(
-  ({ isDark, children }: { isDark: boolean; children: ReactNode }) => (
-    <Box
-      sx={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        borderRadius: 2,
-        overflow: "hidden",
-        boxShadow: isDark
-          ? "0 1px 3px rgba(0,0,0,0.35)"
-          : "0 1px 4px rgba(0,0,0,0.08)",
-        bgcolor: isDark ? "#212e35" : "#fff",
-      }}
-    >
-      <Box sx={{ flex: 1, overflow: "hidden" }}>{children}</Box>
-    </Box>
-  ),
-);
+const WidgetCard = memo(({ children }: { children: ReactNode }) => (
+  <Box sx={widgetCardSx}>
+    <Box sx={{ flex: 1, overflow: "hidden" }}>{children}</Box>
+  </Box>
+));
 
 const RightPanel = memo(({ isDark }: { isDark: boolean }) => {
   const isMobile = useMediaQuery("(max-width:767px)");
   return (
     <Box
       sx={{
+        // shared layout
+        ...cardBaseSx,
+        // gradient border, no shadow
+        ...getRightPanelSurface(isDark),
+        // RightPanel-specific styles
+        height: "auto",
         width: isMobile ? "100%" : RIGHT_PANEL_WIDTH,
         maxHeight: isMobile ? "none" : "100%",
-        display: "flex",
-        flexDirection: "column",
-        borderRadius: 2,
-        border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
-        bgcolor: isDark ? "#1c262a" : "#fff",
+        overflow: isMobile ? "visible" : "hidden",
         overflowY: isMobile ? "visible" : "auto",
-        boxShadow: isDark
-          ? "0 1px 3px rgba(0,0,0,0.35)"
-          : "0 1px 4px rgba(0,0,0,0.08)",
       }}
     >
       <ErrorBoundary fallback={<ErrorFallback />}>
@@ -130,14 +145,14 @@ function DashboardInner() {
       sx={{
         display: "flex",
         flexDirection: isMobile ? "column" : "row",
-        height: isMobile ? "auto" : `calc(100vh - ${APPBAR_OFFSET})`,
+        height: isMobile ? "auto" : `calc(100vh - ${APPBAR_OFFSET}px)`,
         overflow: isMobile ? "visible" : "hidden",
         bgcolor: isDark ? "#111B21" : "#F9FAFB",
       }}
     >
       {/* On mobile: workspace panel stacks above the grid */}
       {isMobile && (
-        <Box sx={{ p: 1, pb: 0 }}>
+        <Box sx={{ p: CARD_GAP, pb: 0 }}>
           <RightPanel isDark={isDark} />
         </Box>
       )}
@@ -158,14 +173,14 @@ function DashboardInner() {
           sx={{
             flex: isMobile ? "none" : 1,
             overflow: isMobile ? "visible" : "auto",
-            p: 1,
+            p: CARD_GAP,
           }}
         >
           <Box
             sx={{
               display: "grid",
               gridTemplateColumns: isMobile ? "1fr" : "repeat(12, 1fr)",
-              gap: 1,
+              gap: CARD_GAP,
             }}
           >
             {WIDGETS.map(({ id, span, height }) => (
@@ -176,7 +191,7 @@ function DashboardInner() {
                   height,
                 }}
               >
-                <WidgetCard isDark={isDark}>
+                <WidgetCard>
                   <ErrorBoundary fallback={<ErrorFallback />}>
                     <Suspense fallback={<WidgetSkeleton />}>
                       {renderWidget(id)}
@@ -193,7 +208,7 @@ function DashboardInner() {
       {!isMobile && (
         <Box
           sx={{
-            p: 1,
+            p: CARD_GAP,
             pl: 0,
             flexShrink: 0,
             display: "flex",

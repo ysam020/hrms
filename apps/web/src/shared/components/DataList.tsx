@@ -13,8 +13,20 @@ import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Checkbox from "@mui/material/Checkbox";
+import type { Theme } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
 import EmptyState from "./EmptyState";
+
+// Gradient border — same as the dashboard right panel.
+// Fill is painted on the padding-box, the gradient shows through the transparent 1px border.
+const BORDER_GRADIENT =
+  "linear-gradient(87.1deg, rgba(60,118,255,0.2) 2.38%, rgba(173,38,236,0.2) 27.97%, rgba(255,9,147,0.2) 45.03%, rgba(253,29,29,0.2) 61.64%, rgba(255,187,0,0.2) 91.27%)";
+
+const gradientBorderSx = {
+  border: "1px solid transparent",
+  background: (t: Theme) =>
+    `linear-gradient(${t.palette.background.paper}, ${t.palette.background.paper}) padding-box, ${BORDER_GRADIENT} border-box`,
+} as const;
 
 export interface DataListSelection<T> {
   selectedIds: string[];
@@ -178,9 +190,8 @@ function CardRow<T>({
           : undefined
       }
       sx={{
-        bgcolor: "background.paper",
-        border: "1px solid",
-        borderColor: "divider",
+        // gradient border + paper fill
+        ...gradientBorderSx,
         borderRadius: 1.5,
         boxShadow: (t) =>
           t.palette.mode === "light"
@@ -191,11 +202,11 @@ function CardRow<T>({
         display: "flex",
         flexDirection: "column",
         gap: 0.75,
-        transition:
-          "box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease",
+        transition: "box-shadow 0.15s ease, border-color 0.15s ease",
         cursor: onRowClick ? "pointer" : "default",
         "&:hover": {
-          borderColor: onRowClick ? "primary.main" : "divider",
+          // clickable cards show a solid primary border on hover
+          borderColor: onRowClick ? "primary.main" : "transparent",
           boxShadow: (t) =>
             t.palette.mode === "light"
               ? "0 4px 14px rgba(15, 23, 42, 0.08)"
@@ -313,9 +324,7 @@ function SkeletonRows({
           <Box
             key={i}
             sx={{
-              bgcolor: "background.paper",
-              border: "1px solid",
-              borderColor: "divider",
+              ...gradientBorderSx,
               borderRadius: 1.5,
               px: 2,
               py: 1.5,
@@ -552,8 +561,8 @@ function DataList<T>({
           <Paper
             variant="outlined"
             sx={{
+              ...gradientBorderSx,
               borderRadius: 1.5,
-              borderColor: "divider",
               boxShadow: (t) =>
                 t.palette.mode === "light"
                   ? "0 1px 2px rgba(15, 23, 42, 0.04)"

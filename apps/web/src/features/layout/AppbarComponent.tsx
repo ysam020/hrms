@@ -195,7 +195,7 @@ function AppbarComponent({
           },
           ml: { md: `${drawerWidth}px` },
           backgroundColor:
-            theme === "light" ? "#f9fafb !important" : "#111b21 !important",
+            theme === "light" ? "#f8f9fa !important" : "#111b21 !important",
           boxShadow: "none !important",
           backgroundImage: "none !important",
         }}

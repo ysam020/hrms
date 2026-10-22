@@ -132,7 +132,7 @@ function HomePage(props) {
           <Box
             sx={{
               display: "flex",
-              bgcolor: theme === "light" ? "#F9FAFB" : "#111B21",
+              bgcolor: theme === "light" ? "#f8f9fa" : "#111B21",
             }}
           >
             <CssBaseline />
