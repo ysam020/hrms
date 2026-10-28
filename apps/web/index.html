@@ -4,9 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- theme-color follows the app's appearance (public/theme-init.js,
-         src/shell/appearance.ts). The status-bar style stays "default": iOS
-         reads it once, when the app is added to the Home Screen, and colours
-         that opaque bar from the top of the page (src/design/tokens.css). -->
+         src/shell/appearance.ts) for browsers that use it. iOS 26+ ignores
+         it: the installed app's status bar takes the colour of a fixed
+         element at the top of the page, else <body>'s background, so neither
+         may show a colour the theme doesn't. The status-bar style stays
+         "default"; iOS reads it once, at Add to Home Screen. -->
     <meta name="theme-color" content="#f2f3f5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -31,17 +33,17 @@
     <script src="/theme-init.js"></script>
 
     <style>
+      /* Transparent: the page background shows through (set for Dark by
+         theme-init.js, then by the app's tokens). A colour of its own would
+         go stale when the app takes over from theme-init.js, and iOS
+         colours its status bar from a fixed element like this one. */
       #initial-loader {
         position: fixed;
         inset: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #fff;
         z-index: 9999;
-      }
-      html.dark-theme #initial-loader {
-        background: #141416;
       }
       #initial-loader::after {
         content: "";

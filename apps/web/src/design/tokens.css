@@ -287,20 +287,6 @@
     --px-material-blur: none;
   }
 }
-/* The installed iOS app colours its status bar from the opaque strip at the
-   top of the page (the toolbar) and shows a light bar when that strip is
-   translucent, so materials are opaque there too. iOS only: Android and
-   desktop apps keep the translucent toolbar. */
-@supports (-webkit-touch-callout: none) {
-  @media (display-mode: standalone) {
-    :root,
-    :root:not([data-appearance="light"]),
-    :root[data-appearance] {
-      --px-material: var(--px-bg-window);
-      --px-material-blur: none;
-    }
-  }
-}
 
 /* Reduce Motion: no travel, only quick fades (durations stay non-zero so
    transitionend/animationend still fire and exits still unmount). */
