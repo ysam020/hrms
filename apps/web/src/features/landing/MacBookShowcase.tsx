@@ -52,6 +52,10 @@ export function MacBookShowcase({
   const [autoplay, setAutoplay] = useState(!reduced);
   const [held, setHeld] = useState(false);
   const [visible, setVisible] = useState(true);
+  // The other screens sit stacked in view behind the first, so "lazy" doesn't
+  // defer them; they're added once the first has loaded, leaving it the
+  // bandwidth (it's the page's largest paint).
+  const [warm, setWarm] = useState(false);
   const [hidden, setHidden] = useState(
     typeof document !== "undefined" && document.hidden,
   );
@@ -171,24 +175,27 @@ export function MacBookShowcase({
             role="tabpanel"
             aria-labelledby={tabId(index)}
           >
-            {scenes.map((sc, i) => (
-              <img
-                key={sc.id}
-                className={s.shot}
-                src={sc.src}
-                alt={i === index ? sc.alt : ""}
-                aria-hidden={i === index ? undefined : true}
-                data-active={i === index || undefined}
-                width={1440}
-                height={900}
-                decoding="async"
-                loading={priority && i === 0 ? "eager" : "lazy"}
-                {...(priority && i === 0
-                  ? { fetchPriority: "high" as const }
-                  : {})}
-                draggable={false}
-              />
-            ))}
+            {scenes.map((sc, i) =>
+              !warm && i !== index ? null : (
+                <img
+                  key={sc.id}
+                  className={s.shot}
+                  src={sc.src}
+                  alt={i === index ? sc.alt : ""}
+                  aria-hidden={i === index ? undefined : true}
+                  data-active={i === index || undefined}
+                  width={1440}
+                  height={900}
+                  decoding="async"
+                  loading={priority && i === 0 ? "eager" : "lazy"}
+                  {...(priority && i === 0
+                    ? { fetchPriority: "high" as const }
+                    : {})}
+                  draggable={false}
+                  onLoad={warm ? undefined : () => setWarm(true)}
+                />
+              ),
+            )}
           </div>
         </div>
         <div className={s.base} aria-hidden="true" />

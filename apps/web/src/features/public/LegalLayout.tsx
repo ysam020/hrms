@@ -1,11 +1,11 @@
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import s from "./public.module.css";
 
 /**
- * Stands in for Classic's pages/legal/LegalPageLayout (see the
- * praesto-legal-layout plugin in vite.config.ts), so the policy prose stays
- * in one place and renders in this app's reading layout.
+ * Stands in for Classic's pages/legal/LegalPageLayout, so the policy prose
+ * stays in one place and renders in this app's reading layout. Titles and
+ * descriptions for search live in src/app/seo.ts.
  */
 export default function LegalPageLayout({
   title,
@@ -16,9 +16,6 @@ export default function LegalPageLayout({
   lastUpdated: string;
   children: ReactNode;
 }) {
-  useEffect(() => {
-    document.title = `${title} · Praesto`;
-  }, [title]);
   return (
     <div className={s.publicPage}>
       <header className={s.publicBar}>
@@ -31,11 +28,20 @@ export default function LegalPageLayout({
           <Link to="/refund-policy">Refunds</Link>
         </nav>
       </header>
-      <article className={s.legal}>
-        <h1 className="px-display">{title}</h1>
-        <p className="px-meta">Last updated {lastUpdated}</p>
-        <div className={s.prose}>{children}</div>
-      </article>
+      <main>
+        <article className={s.legal}>
+          <h1 className="px-display">{title}</h1>
+          <p className="px-meta">Last updated {lastUpdated}</p>
+          <div className={s.prose}>{children}</div>
+        </article>
+      </main>
+      <footer className={s.legalFooter}>
+        <nav aria-label="Site">
+          <Link to="/">Praesto home</Link>
+          <a href="/#pricing">Pricing</a>
+          <a href="mailto:support@praesto.in">support@praesto.in</a>
+        </nav>
+      </footer>
     </div>
   );
 }

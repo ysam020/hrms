@@ -2,52 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-
-    <link rel="icon" href="/favicon.ico" />
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#000000" />
 
+    <title>Praesto</title>
     <meta
       name="description"
-      content="Praesto - Advanced HR Management Solution"
+      content="Praesto is HR software for attendance, leave, recruitment, payroll and approvals in one workspace."
     />
 
-    <!-- Open Graph -->
-    <meta property="og:title" content="Praesto" />
-    <meta
-      property="og:description"
-      content="Praesto offers an advanced HR management solution."
-    />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="/logo192.png" />
-
-    <link rel="apple-touch-icon" href="/logo192.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- DNS Prefetch -->
-    <link rel="dns-prefetch" href="//cdn.jsdelivr.net" />
-    <link rel="dns-prefetch" href="//unpkg.com" />
-    <link rel="dns-prefetch" href="//raw.githubusercontent.com" />
-
-    <!-- Preconnect -->
-    <link rel="preconnect" href="https://localhost:9002" />
-
-    <!-- Preload images -->
-    <link
-      rel="preload"
-      as="image"
-      href="/assets/images/m-bg.webp"
-      fetchpriority="high"
-    />
-
-    <title>Praesto - HR Management System</title>
+    <!-- scripts/prerender.mjs adds each public page's canonical URL, social
+         cards and structured data here. -->
+    <!--seo-head-->
 
     <script src="/theme-init.js"></script>
-
-    <style>
-      /* (your entire CSS unchanged) */
-    </style>
 
     <style>
       #initial-loader {
@@ -88,6 +60,7 @@
         aria-live="polite"
         aria-label="Application loading"
       ></div>
+      <!--prerender-->
     </div>
 
     <script type="module" src="/src/main.tsx"></script>

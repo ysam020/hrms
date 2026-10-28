@@ -94,8 +94,24 @@ Resources:
                 paths:
                   - ../../node_modules/**/*
                   - ../../.pnpm-store/**/*
+      # First match wins. One host: www redirects to the apex. The public
+      # pages are prerendered to <page>.html at build time
+      # (apps/web/scripts/prerender.mjs) and served at their clean URLs;
+      # everything else without a static file falls back to the SPA shell.
       CustomRules:
-        - Source: </^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>
+        - Source: !Sub "https://www.${DomainName}/<*>"
+          Target: !Sub "https://${DomainName}/<*>"
+          Status: "301"
+        - Source: /privacy-policy
+          Target: /privacy-policy.html
+          Status: "200"
+        - Source: /terms-of-use
+          Target: /terms-of-use.html
+          Status: "200"
+        - Source: /refund-policy
+          Target: /refund-policy.html
+          Status: "200"
+        - Source: </^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|xml|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>
           Target: /index.html
           Status: "200"
       CustomHeaders: |

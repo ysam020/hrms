@@ -51,6 +51,7 @@ coverage/
 
 # ── Vite / web ───────────────────────────────────────────────────────────────
 apps/web/dist/
+apps/web/dist-prerender/
 apps/web/.vite/
 stats.html
 

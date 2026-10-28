@@ -29,6 +29,7 @@ const { count, size, warnings } = await injectManifest({
     "firebase-messaging-sw.js",
     "**/*.map",
     "images/product-showcase/**",
+    "og-image.png", // for link previews, never shown in the app
   ],
   // Hashed filenames are their own version; don't add a revision query.
   dontCacheBustURLsMatching: /\/assets\/.+-[A-Za-z0-9_-]{8,}\./,

@@ -1,3 +1,7 @@
-# https://www.robotstxt.org/robotstxt.html
+# Public pages are prerendered and listed in the sitemap. Signed-in pages
+# are marked noindex by the app rather than blocked here, so crawlers can
+# still see that directive.
 User-agent: *
-Disallow:
+Allow: /
+
+Sitemap: https://praesto.in/sitemap.xml

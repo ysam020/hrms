@@ -1,0 +1,27 @@
+[
+  {
+    "source": "https://www.praesto.in/<*>",
+    "target": "https://praesto.in/<*>",
+    "status": "301"
+  },
+  {
+    "source": "/privacy-policy",
+    "target": "/privacy-policy.html",
+    "status": "200"
+  },
+  {
+    "source": "/terms-of-use",
+    "target": "/terms-of-use.html",
+    "status": "200"
+  },
+  {
+    "source": "/refund-policy",
+    "target": "/refund-policy.html",
+    "status": "200"
+  },
+  {
+    "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|xml|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>",
+    "target": "/index.html",
+    "status": "200"
+  }
+]

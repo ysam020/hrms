@@ -9,7 +9,7 @@ import path from "path";
 const sharedCore = path.resolve(__dirname, "src/shared-core");
 const certDir = path.resolve(__dirname, "../../packages/certificates");
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const apiTarget = env.PRAESTO_API_PROXY || "https://localhost:9002";
   // Non-secret default lives here (the repo ignores .env.* files): a
@@ -64,23 +64,29 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: { port: 5174 },
-    build: {
-      outDir: "dist",
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (
-              id.includes("/react-dom/") ||
-              id.includes("/react-router") ||
-              id.includes("/react/") ||
-              id.includes("/scheduler/")
-            )
-              return "vendor-react";
-            if (id.includes("framer-motion") || id.includes("motion-dom"))
-              return "vendor-motion";
+    // `vite build --ssr src/prerender/entry.tsx` renders the public pages
+    // at build time (scripts/prerender.mjs); the client build's manifest
+    // tells that script which CSS and chunks each page needs.
+    build: isSsrBuild
+      ? { outDir: "dist-prerender", emptyOutDir: true, copyPublicDir: false }
+      : {
+          outDir: "dist",
+          manifest: true,
+          rollupOptions: {
+            output: {
+              manualChunks(id) {
+                if (
+                  id.includes("/react-dom/") ||
+                  id.includes("/react-router") ||
+                  id.includes("/react/") ||
+                  id.includes("/scheduler/")
+                )
+                  return "vendor-react";
+                if (id.includes("framer-motion") || id.includes("motion-dom"))
+                  return "vendor-motion";
+              },
+            },
           },
         },
-      },
-    },
   };
 });
