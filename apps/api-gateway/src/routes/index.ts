@@ -15,6 +15,7 @@ import { analyticsRouter } from "./analytics";
 import { permissionsRouter } from "./permissions";
 import { chatRouter } from "./chat";
 import { chatbotRouter } from "./chatbot";
+import { dashboardRouter } from "./dashboard";
 import { aiInsightsRouter } from "./ai-insights";
 import { paymentRouter } from "./payment";
 import { tenantSettingsRouter } from "./tenantSettings";
@@ -39,6 +40,7 @@ import { webhooksRouter } from "./webhooks";
 import { reportsRouter } from "./reports";
 import { defaultLimiter } from "../middleware/rateLimiter";
 import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
+import { idempotency } from "../middleware/idempotency";
 import { authenticate, requireTenant } from "../middleware/authenticate";
 
 export const rootRouter: Router = Router();
@@ -70,11 +72,14 @@ rootRouter.use(publicRecruitmentRouter);
 // All business routes require an active subscription.
 // authenticate + requireTenant run again here (idempotent) so this guard
 // has the tenant context it needs, then the router's own middleware runs.
+// idempotency runs last: it needs the authenticated user to scope keys, and
+// only acts on mutations that carry an Idempotency-Key header.
 const subscriptionGuard = [
   defaultLimiter,
   authenticate,
   requireTenant,
   requireActiveSubscription,
+  idempotency,
 ];
 
 rootRouter.use(...subscriptionGuard, userRouter);
@@ -91,6 +96,7 @@ rootRouter.use("/analytics", ...subscriptionGuard, analyticsRouter);
 rootRouter.use(...subscriptionGuard, permissionsRouter);
 rootRouter.use(...subscriptionGuard, chatRouter);
 rootRouter.use(...subscriptionGuard, chatbotRouter);
+rootRouter.use(...subscriptionGuard, dashboardRouter);
 rootRouter.use(...subscriptionGuard, aiInsightsRouter);
 rootRouter.use(...subscriptionGuard, tenantSettingsRouter);
 rootRouter.use(...subscriptionGuard, approvalChainsRouter);

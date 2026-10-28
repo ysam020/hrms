@@ -1792,3 +1792,23 @@ model SavedReport {
   @@index([tenantId, createdBy])
   @@map("saved_reports")
 }
+
+// ─── Dashboard preferences ───────────────────────────────────────────────────
+// One row per person per organisation (tenant DB, so a person who belongs to
+// two organisations keeps two layouts — their access differs per tenant).
+// `widgets` is a list of { id, visible, size, settings }; it is always
+// re-validated against the caller's current access when read
+// (sanitizeLayout in api-gateway/src/config/dashboardWidgets.ts), so a stale
+// row can hide or reorder widgets but never grant one.
+model DashboardPreference {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  userId    String   @db.ObjectId
+  version   Int      @default(1)
+  widgets   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, userId])
+  @@map("dashboard_preferences")
+}

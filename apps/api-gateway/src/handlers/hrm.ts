@@ -132,7 +132,13 @@ export async function editHrActivity(req: Request, res: Response) {
   try {
     const existing = await prisma.hrActivity.findUnique({
       where: { id: String(req.params._id) },
-      select: { createdBy: true },
+      select: {
+        createdBy: true,
+        title: true,
+        description: true,
+        scheduledAt: true,
+        lastUpdatedOn: true,
+      },
     });
     if (!existing)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
@@ -142,6 +148,30 @@ export async function editHrActivity(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
         message: "Forbidden",
       });
+
+    // Optional optimistic concurrency: a client that edited an older copy
+    // (e.g. offline) sends the lastUpdatedOn it started from as If-Match.
+    // If someone has saved since, refuse and return the current version so
+    // the client can show both. Clients that omit the header are unaffected.
+    const ifMatch = req.headers?.["if-match"];
+    if (ifMatch && existing.lastUpdatedOn) {
+      const expected = new Date(ifMatch).getTime();
+      if (
+        Number.isNaN(expected) ||
+        expected !== existing.lastUpdatedOn.getTime()
+      ) {
+        return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+          message: "This announcement was changed by someone else.",
+          code: "VERSION_CONFLICT",
+          data: {
+            title: existing.title,
+            description: existing.description,
+            scheduledAt: existing.scheduledAt,
+            lastUpdatedOn: existing.lastUpdatedOn,
+          },
+        });
+      }
+    }
 
     const response = await grpcCall(hrmClient, "updateHrActivity", {
       ...req.body,

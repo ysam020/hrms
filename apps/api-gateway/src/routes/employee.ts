@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "../middleware/authenticate";
+import { authenticate, requireHrPrivileged } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import {
   editEmployeeDetailsSchema,
@@ -25,10 +25,15 @@ employeeRouter.get(
   authenticate,
   h.getEmployeeDetails,
 );
-// Aggregate counts only (no per-employee PII) — shared by the Dashboard
-// widgets (visible to everyone) and the Employee Management "Insights" tab
-// (frontend-gated to HR+ there), so this stays open to any authenticated user.
-employeeRouter.get("/employee-insights", authenticate, h.employeeInsights);
+// Organisation-wide counts — HR or above only. It used to be open because
+// Classic's dashboard showed it to everyone; the Today dashboard now gets its
+// own permission-scoped figures from /dashboard/data (docs/dashboard-data-inventory.md).
+employeeRouter.get(
+  "/employee-insights",
+  authenticate,
+  requireHrPrivileged,
+  h.employeeInsights,
+);
 employeeRouter.post(
   "/complete-kyc",
   authenticate,
@@ -48,9 +53,8 @@ employeeRouter.post(
   h.kycApproval,
 );
 employeeRouter.get("/view-all-kycs", authenticate, h.viewAllKycs);
-// Aggregate counts only (no per-employee PII) — shared by the Dashboard KYC
-// Status widget (visible to everyone) and the KYC "Insights" tab
-// (frontend-gated to HR+ there), so this stays open to any authenticated user.
+// Organisation-wide KYC counts — for KYC reviewers only (HR or above, or a
+// BasicKYCDetails view/approve "all" grant; enforced in the handler).
 employeeRouter.get("/get-kyc-insights", authenticate, h.getKycInsights);
 employeeRouter.post(
   "/request-kyc-edit-access",
