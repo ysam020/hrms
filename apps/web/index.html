@@ -3,9 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Browser and iOS status-bar colours. Both follow the app's
-         appearance: public/theme-init.js sets them before first paint and
-         src/shell/appearance.ts when it changes. -->
+    <!-- theme-color follows the app's appearance (public/theme-init.js,
+         src/shell/appearance.ts). The status-bar style stays "default": iOS
+         reads it once, when the app is added to the Home Screen, and colours
+         that opaque bar from the top of the page (src/design/tokens.css). -->
     <meta name="theme-color" content="#f2f3f5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
