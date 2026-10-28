@@ -20,9 +20,9 @@ const systemDark = () =>
   matchMedia("(prefers-color-scheme: dark)").matches;
 
 /**
- * Browser and status-bar colours follow the appearance (index.html; first
- * set by public/theme-init.js). iOS reads the status-bar style when the
- * installed app launches, so a change there shows from the next launch.
+ * The browser chrome colour (theme-color) follows the appearance; first set
+ * by public/theme-init.js. The installed iOS app doesn't use it: it matches
+ * its status bar to the opaque toolbar instead (src/design/tokens.css).
  */
 function syncChrome(a: Appearance) {
   const dark = a === "dark" || (a === "system" && systemDark());
@@ -32,9 +32,6 @@ function syncChrome(a: Appearance) {
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute("content", bg || (dark ? "#141416" : "#f2f3f5"));
-  document
-    .querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
-    ?.setAttribute("content", dark ? "black" : "default");
 }
 
 let followingSystem = false;

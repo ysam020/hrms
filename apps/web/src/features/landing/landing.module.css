@@ -172,6 +172,18 @@
     background: var(--l-surface);
   }
 }
+/* Installed iOS app: an opaque bar, which iOS matches its status bar to
+   (see src/design/tokens.css). */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    .nav[data-tone="dark"] {
+      background: var(--l-night);
+    }
+    .nav[data-tone="light"] {
+      background: var(--l-surface);
+    }
+  }
+}
 .navInner {
   position: relative;
   display: flex;
