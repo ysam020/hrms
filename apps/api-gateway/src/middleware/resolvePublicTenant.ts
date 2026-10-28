@@ -24,6 +24,29 @@ const tenantBySlugCache = new BoundedCache<
 >();
 
 /**
+ * An active tenant by its public slug, or null — shared with the public MCP
+ * tools (see mcp/tools.ts), which resolve a careers page the same way.
+ */
+export async function lookupPublicTenant(
+  slug: string,
+): Promise<{ id: string; dbName: string | null } | null> {
+  if (!SLUG_PATTERN.test(slug)) return null;
+  const cached = tenantBySlugCache.get(slug);
+  if (cached && Date.now() - cached.cachedAt <= SLUG_CACHE_MAX_AGE_MS) {
+    return cached;
+  }
+  // Missing, or past SLUG_CACHE_MAX_AGE_MS: force a fresh isActive check.
+  const row = await prisma.tenant.findUnique({
+    where: { slug },
+    select: { id: true, dbName: true, isActive: true },
+  });
+  if (!row || !row.isActive) return null;
+  const tenant = { id: row.id, dbName: row.dbName, cachedAt: Date.now() };
+  tenantBySlugCache.set(slug, tenant);
+  return tenant;
+}
+
+/**
  * Resolves tenant context for public, unauthenticated routes (the careers
  * page and job-application submission) from a `:slug` URL param instead of
  * a JWT — the only other place tenant context gets established is
@@ -47,30 +70,19 @@ export async function resolvePublicTenant(
   }
 
   try {
-    let tenant = tenantBySlugCache.get(slug);
-    if (tenant && Date.now() - tenant.cachedAt > SLUG_CACHE_MAX_AGE_MS) {
-      tenant = undefined; // force a fresh isActive check below
-    }
+    const tenant = await lookupPublicTenant(slug);
     if (!tenant) {
-      const row = await prisma.tenant.findUnique({
-        where: { slug },
-        select: { id: true, dbName: true, isActive: true },
+      apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "This careers page doesn't exist.",
       });
-      if (!row || !row.isActive) {
-        apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
-          message: "This careers page doesn't exist.",
-        });
-        return;
-      }
-      tenant = { id: row.id, dbName: row.dbName, cachedAt: Date.now() };
-      tenantBySlugCache.set(slug, tenant);
+      return;
     }
 
     const tenantClient = tenant.dbName ? getClientForDb(tenant.dbName) : null;
     gatewayTenantStorage.run(
       { tenantId: tenant.id, dbName: tenant.dbName },
       () => {
-        runWithTenant(tenant!.id, tenantClient, next);
+        runWithTenant(tenant.id, tenantClient, next);
       },
     );
   } catch (error: unknown) {

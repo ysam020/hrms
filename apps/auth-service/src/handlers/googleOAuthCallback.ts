@@ -3,9 +3,8 @@ import { prisma, canonicalizeEmail, generateUniqueUsername } from "@hrms/db";
 import { signAccessToken, signRefreshToken } from "../services/jwt";
 import { storeRefreshToken } from "../services/redis";
 import { logger } from "@hrms/logger";
+import { BLOCKED_EMPLOYEE_STATUSES as BLOCKED_STATUSES } from "@hrms/common";
 import { MESSAGES } from "../constants/messages";
-
-const BLOCKED_STATUSES = ["Terminated", "Absconded", "Resigned"];
 
 export const googleOAuthCallback = async (
   call: ServerUnaryCall<any, any>,

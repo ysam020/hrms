@@ -1812,3 +1812,51 @@ model DashboardPreference {
   @@unique([tenantId, userId])
   @@map("dashboard_preferences")
 }
+
+// ─── MCP (external AI assistants) ─────────────────────────────────────────────
+// Both live in the master DB (see MASTER_MODELS in prismaWithTenant.ts): a
+// client is registered before anyone signs in, and a grant has to be found
+// from a bearer token before any tenant context exists.
+
+// An OAuth client registered by an MCP client (Claude, ChatGPT, …) through
+// dynamic client registration (RFC 7591). Public clients only: no secret is
+// issued and PKCE (S256) is mandatory on every authorization.
+model McpOAuthClient {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  clientId     String   @unique
+  clientName   String
+  clientUri    String?
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  @@map("mcp_oauth_clients")
+}
+
+// One person's consent for one MCP client in one organisation. Access tokens
+// carry the grant id and are refused once revokedAt is set, so revoking here
+// cuts the client off on its very next call, not when its token expires.
+model McpGrant {
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String    @db.ObjectId
+  tenantId             String    @db.ObjectId
+  clientId             String
+  // Denormalized from McpOAuthClient so the connected-apps list survives a
+  // client record being cleaned up.
+  clientName           String
+  scopes               String[]
+  // SHA-256 of the current refresh token, and of the one it replaced —
+  // presenting the replaced one again means the token leaked, and the whole
+  // grant is revoked (OAuth 2.1 refresh-token reuse detection).
+  refreshTokenHash     String
+  prevRefreshTokenHash String?
+  createdAt            DateTime  @default(now())
+  lastUsedAt           DateTime?
+  expiresAt            DateTime
+  revokedAt            DateTime?
+  revokedReason        String?
+
+  @@index([userId, tenantId])
+  @@index([refreshTokenHash])
+  @@index([prevRefreshTokenHash])
+  @@map("mcp_grants")
+}

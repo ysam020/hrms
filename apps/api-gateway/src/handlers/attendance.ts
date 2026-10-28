@@ -37,7 +37,10 @@ export async function addAttendance(req: Request, res: Response) {
   }
 }
 
-function monthDateRange(year: string | string[], month: string | string[]) {
+export function monthDateRange(
+  year: string | string[],
+  month: string | string[],
+) {
   year = Array.isArray(year) ? year[0] : year;
   month = Array.isArray(month) ? month[0] : month;
   const y = parseInt(year, 10);

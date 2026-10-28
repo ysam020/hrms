@@ -18,6 +18,7 @@ import { resolveSocketUserId } from "./config/socketAuth";
 import { registerGracefulShutdown } from "./config/gracefulShutdown";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
+import { mcpRouter } from "./mcp/router";
 import { googleAuthCallback, googleCalendarCallback } from "./handlers/auth";
 import { handleWebhook } from "./handlers/payment";
 import { handleRazorpayXWebhook } from "./handlers/razorpayxWebhook";
@@ -55,6 +56,13 @@ app.use(
     crossOriginEmbedderPolicy: false,
   }),
 );
+// ─── MCP (external AI assistants) ────────────────────────────────────────────
+// Mounted before the web app's CORS policy and CSRF middleware: these
+// endpoints are called by AI clients from anywhere, authenticate with bearer
+// tokens or PKCE rather than cookies, and set their own open CORS policy and
+// rate limits. See mcp/router.ts.
+app.use(mcpRouter);
+
 app.use(cors({ credentials: true, origin: allowedOrigins }));
 app.use(cookieParser());
 

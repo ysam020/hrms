@@ -13,6 +13,7 @@ import { setAccessToken } from "@web/core/http/axiosConfig";
 import { Swap } from "@next/motion";
 import { Banner, Button, Field, Icon, TextInput } from "@next/ui";
 import { apiClient } from "@next/lib/api";
+import { rememberReturnPath } from "@next/app/returnPath";
 import { BrandLockup } from "./BrandMark";
 import { Showcase } from "./Showcase";
 import s from "./Login.module.css";
@@ -84,6 +85,8 @@ export default function Login() {
   const google = () => {
     if (busy) return;
     setBusy("google");
+    const from = (location.state as any)?.from;
+    rememberReturnPath(from ? `${from.pathname}${from.search ?? ""}` : null);
     window.location.href = `${import.meta.env.VITE_SERVER_URL || ""}/api/v1/auth/google`;
   };
 

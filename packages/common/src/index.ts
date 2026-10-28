@@ -12,6 +12,7 @@ export {
   PRIVILEGED_ROLES,
   HR_ROLES,
   hasPrivilegedRole,
+  BLOCKED_EMPLOYEE_STATUSES,
 } from "./constants";
 export {
   removeEmptyFields,

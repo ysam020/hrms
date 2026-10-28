@@ -32,4 +32,38 @@ export async function ensureMasterIndexes(): Promise<void> {
       error,
     });
   }
+
+  // The MCP collections' schema indexes, for deployments that never run
+  // `prisma db push` against the master DB. Bearer-token and refresh-token
+  // lookups hit these on every MCP call.
+  try {
+    await prisma.$runCommandRaw({
+      createIndexes: "mcp_oauth_clients",
+      indexes: [
+        {
+          key: { clientId: 1 },
+          name: "McpOAuthClient_clientId_key",
+          unique: true,
+        },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "mcp_grants",
+      indexes: [
+        {
+          key: { userId: 1, tenantId: 1 },
+          name: "McpGrant_userId_tenantId_idx",
+        },
+        { key: { refreshTokenHash: 1 }, name: "McpGrant_refreshTokenHash_idx" },
+        {
+          key: { prevRefreshTokenHash: 1 },
+          name: "McpGrant_prevRefreshTokenHash_idx",
+        },
+      ],
+    });
+  } catch (error: unknown) {
+    logger.error("ensureMasterIndexes: failed to create MCP indexes", {
+      error,
+    });
+  }
 }

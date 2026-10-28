@@ -24,6 +24,7 @@ import {
 import { scopeFromToken } from "@next/offline/state";
 import { Button, ConfirmDialog, Dialog, Spinner, ToastHost } from "@next/ui";
 import { PUBLIC_PAGES, applyPageMeta, normalizePath } from "./seo";
+import { takeReturnPath } from "./returnPath";
 
 // Session orchestration for Praesto Next. Everything security-relevant — the
 // in-memory access token, refresh-cookie exchange, CSRF, 401/402 handling —
@@ -138,12 +139,13 @@ export function SessionRoot() {
             scopeFromToken(getAccessToken()),
           );
           // Google sign-in returns to "/" (the landing page); carry on into
-          // the app rather than leaving the person on the marketing page.
+          // the app rather than leaving the person on the marketing page —
+          // to the page that sent them to sign in, if there was one.
           if (
             params.get("oauth_success") === "1" &&
             window.location.pathname === "/"
           )
-            navigate("/dashboard", { replace: true });
+            navigate(takeReturnPath() ?? "/dashboard", { replace: true });
         }
         setBooting(false);
       } catch (err: any) {

@@ -517,6 +517,13 @@ export const NAV: NavModule[][] = [
       keywords: "billing plan",
     },
     {
+      id: "ai-assistants",
+      label: "AI Assistants",
+      icon: "assistant",
+      path: "/ai-assistants",
+      keywords: "assistant chatbot claude chatgpt mcp connector ai",
+    },
+    {
       id: "help",
       label: "Help",
       icon: "help",

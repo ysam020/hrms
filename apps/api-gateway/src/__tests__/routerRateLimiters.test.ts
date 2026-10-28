@@ -30,8 +30,17 @@ jest.mock("../middleware/authenticate", () => ({
 // full handler export list of each module.
 const handlerProxy = () => new Proxy({}, { get: () => jest.fn() });
 jest.mock("../handlers/analytics", () => handlerProxy());
-jest.mock("../handlers/chatbot", () => handlerProxy());
 jest.mock("../handlers/ai-insights", () => handlerProxy());
+jest.mock("../mcp/oauth", () => handlerProxy());
+jest.mock("../mcp/principal", () => handlerProxy());
+jest.mock("../mcp/tools", () => ({ TOOLS: [], ToolError: class {} }));
+jest.mock("../mcp/audit", () => handlerProxy());
+jest.mock("@hrms/logger", () => ({
+  apiRequestLogger: jest.fn(),
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+  mcpToolCallsTotal: { inc: jest.fn() },
+  mcpToolCallDuration: { observe: jest.fn() },
+}));
 
 // Regression coverage for three rate limiters the platform audit found were
 // never caught by the original migration of config/rateLimiters.ts to a
@@ -52,11 +61,21 @@ describe("router-level Redis-backed limiters", () => {
     expect(findLimiterPrefix(/^rl:analytics:$/)).toBe("rl:analytics:");
   });
 
-  it("routes/chatbot.ts's limiter is Redis-backed under rl:chatbot:", () => {
+  it("mcp/router.ts's limiters are all Redis-backed under rl:mcp: / rl:oauth:", () => {
     jest.isolateModules(() => {
-      require("../routes/chatbot");
+      require("../mcp/router");
     });
-    expect(findLimiterPrefix(/^rl:chatbot:$/)).toBe("rl:chatbot:");
+    const prefixes = capturedOptions
+      .map((o) => o.store?.__options?.prefix)
+      .filter((p) => /^rl:(mcp|oauth):/.test(p ?? ""));
+    expect(prefixes.sort()).toEqual([
+      "rl:mcp:grant:",
+      "rl:mcp:ip:",
+      "rl:mcp:public:",
+      "rl:oauth:authorize:",
+      "rl:oauth:register:",
+      "rl:oauth:token:",
+    ]);
   });
 
   it("routes/ai-insights.ts's limiter is Redis-backed under rl:ai-insights:", () => {
@@ -69,7 +88,7 @@ describe("router-level Redis-backed limiters", () => {
   it("the three router-level prefixes are mutually distinct and namespaced separately from config/rateLimiters.ts's own limiters", () => {
     const routerPrefixes = [
       findLimiterPrefix(/^rl:analytics:$/),
-      findLimiterPrefix(/^rl:chatbot:$/),
+      findLimiterPrefix(/^rl:mcp:grant:$/),
       findLimiterPrefix(/^rl:ai-insights:$/),
     ];
     expect(new Set(routerPrefixes).size).toBe(3);

@@ -265,10 +265,10 @@ Real-time delivery via Socket.IO — see [Real-time Features](Real-time-Features
 
 ## AI Features
 
-| Method | Endpoint               | Auth               | Description                                      |
-| ------ | ---------------------- | ------------------ | ------------------------------------------------ |
-| POST   | `/api/chatbot/message` | JWT + subscription | HRMS-scoped AI chatbot with tool calling (SSE)   |
-| GET    | `/api/ai-insights`     | JWT + subscription | AI analytics report (`?module=…&period=…`) (SSE) |
+| Method | Endpoint                | Auth               | Description                                                               |
+| ------ | ----------------------- | ------------------ | ------------------------------------------------------------------------- |
+| POST   | `/mcp` (outside `/api`) | MCP bearer token   | MCP server for external AI assistants — see [docs/mcp.md](../docs/mcp.md) |
+| GET    | `/api/ai-insights`      | JWT + subscription | AI analytics report (`?module=…&period=…`) (SSE)                          |
 
 Both endpoints stream responses as `text/event-stream`.
 

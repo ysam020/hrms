@@ -116,26 +116,13 @@ For out-of-app delivery (browser tab closed), notifications are dispatched via *
 
 ## AI Features (SSE)
 
-The AI chatbot and AI Insights endpoints use **Server-Sent Events (SSE)** rather than WebSocket, because they are unidirectional streaming responses (server → client) that don't require bidirectional communication.
+AI Insights uses **Server-Sent Events (SSE)** rather than WebSocket, because it is a unidirectional streaming response (server → client) that doesn't need bidirectional communication.
 
-### AI Chatbot
-
-`POST /api/chatbot/message` — streams the assistant's reply in real time.
-
-The chatbot runs a **tool-calling loop** (up to 5 iterations):
-
-1. User message sent to Ollama (qwen2.5-coder:14b).
-2. If the model emits a tool call (e.g. `getAttendance`, `getLeaveBalance`), the gateway executes it against the tenant's database.
-3. The tool result is appended to the conversation context.
-4. The model generates the next token; loop repeats until the model emits a final text response.
-
-Available tools: `getAttendance`, `getLeaveBalance`, `getLeaveApplications`, `getEmployee`, `getJobOpenings`, `getHrActivities`.
-
-Custom error handling in the chatbot route bypasses the standard `handleError` utility because SSE requires writing to `res` (the stream) rather than returning a JSON response — this exception is intentional.
+The in-app AI chatbot that used to stream over SSE here has been replaced by an MCP server that people's own AI assistants connect to; see [docs/mcp.md](../docs/mcp.md).
 
 ### AI Insights
 
-`GET /api/ai-insights?module=<module>&period=<period>` — streams a one-shot analytical report for a given HRMS module and time period. Unlike the chatbot, this is a single generation with no tool calls.
+`GET /api/ai-insights?module=<module>&period=<period>` — streams a one-shot analytical report for a given HRMS module and time period. This is a single generation with no tool calls.
 
 ---
 

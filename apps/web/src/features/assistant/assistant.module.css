@@ -1,169 +1,111 @@
-.body {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
+/* AI Assistants page and the connect (consent) screen. */
+
+.steps {
+  display: grid;
+  gap: var(--px-space-3);
+  padding: var(--px-space-4);
+  margin: 0;
+  list-style-position: inside;
+  font: var(--px-type-body);
 }
-.body[data-compact] {
-  min-height: 50vh;
+.endpoint {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  min-width: 0;
+}
+.endpoint code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--px-font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  padding: 6px 10px;
+  border-radius: var(--px-radius-sm, 6px);
+  background: var(--px-bg-sunken, var(--px-fill-secondary));
+}
+.note {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
 }
 
-/* Empty state */
-.intro {
-  flex: 1;
+.row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: var(--px-space-3);
-  padding: var(--px-space-6) var(--px-space-2);
-  text-align: center;
+  padding: var(--px-space-3) var(--px-space-4);
+  border-bottom: 1px solid var(--px-separator);
 }
-.mark {
+.row:last-child {
+  border-bottom: 0;
+}
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.rowTitle {
+  font-weight: 600;
+}
+.rowDetail {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+
+/* ── Connect screen: standalone, outside the app shell ──────────────── */
+.screen {
+  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--px-radius-pill);
-  background: var(--px-accent-soft);
-  color: var(--px-accent);
+  padding: var(--px-space-8) 16px;
+  background: var(--px-bg-content);
 }
-.greeting {
-  font: var(--px-type-headline);
+.card {
+  width: min(460px, 100%);
+  display: grid;
+  gap: var(--px-space-6);
+}
+.heading {
+  display: grid;
+  gap: 8px;
+}
+/* Same title/subtitle as the sign-in screen this flow follows. */
+.title {
+  font: 600 28px/1.2 var(--px-font-display);
+  letter-spacing: -0.02em;
   color: var(--px-text-1);
+  margin: 0;
 }
-.hint {
-  max-width: 300px;
-  font: var(--px-type-callout);
+.subtitle {
+  font: 400 16px/1.5 var(--px-font);
   color: var(--px-text-2);
+  margin: 0;
 }
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--px-space-2);
-  margin-top: var(--px-space-2);
-}
-
-/* Thread */
-.thread {
-  display: flex;
-  flex-direction: column;
-  gap: var(--px-space-2);
+.scopes {
+  display: grid;
   margin: 0;
   padding: 0;
-  list-style: none;
-}
-.message {
-  display: flex;
-}
-.message[data-role="user"] {
-  justify-content: flex-end;
-}
-.bubble {
-  max-width: 85%;
-  padding: 8px 12px;
-  border-radius: 18px;
-  font: var(--px-type-body);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  background: var(--px-bg-grouped);
-  color: var(--px-text-1);
-}
-.message[data-role="user"] .bubble {
-  background: var(--px-accent);
-  color: var(--px-text-on-accent);
-}
-.caret {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  background: currentColor;
-  animation: blink 1s step-end infinite;
-}
-.typing {
-  display: inline-flex;
-  gap: 4px;
-  padding: 14px 14px;
-  border-radius: 18px;
-  background: var(--px-bg-grouped);
-}
-.typing i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--px-text-3);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-.typing i:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.typing i:nth-child(3) {
-  animation-delay: 0.3s;
-}
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-@keyframes pulse {
-  0%,
-  80%,
-  100% {
-    opacity: 0.35;
-  }
-  40% {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .caret,
-  .typing i {
-    animation: none;
-  }
-}
-
-/* Composer (sits in the sheet footer) */
-.composer {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  gap: var(--px-space-2);
-}
-.input {
-  flex: 1;
-  min-height: 36px;
-  max-height: 120px;
-  padding: 7px 14px;
-  border: 1px solid var(--px-separator-strong);
-  border-radius: 18px;
-  background: var(--px-bg-content);
-  color: var(--px-text-1);
-  font: var(--px-type-body);
-  resize: none;
-  field-sizing: content;
-}
-.input:focus-visible {
-  outline: 2px solid var(--px-accent);
-  outline-offset: 1px;
-}
-.send {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
   border: 0;
-  border-radius: 50%;
-  background: var(--px-accent);
-  color: var(--px-text-on-accent);
+}
+.scope {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--px-space-3);
+  padding: var(--px-space-3) var(--px-space-4);
+  border-bottom: 1px solid var(--px-separator);
   cursor: pointer;
 }
-.send:hover:not(:disabled) {
-  background: var(--px-accent-hover);
+.scope:last-child {
+  border-bottom: 0;
 }
-.send:disabled {
-  opacity: 0.35;
-  cursor: default;
+.scope input {
+  margin-top: 3px;
+}
+.actions {
+  display: flex;
+  gap: var(--px-space-3);
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }

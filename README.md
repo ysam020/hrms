@@ -46,7 +46,7 @@ HRMS covers the full lifecycle of an employee — from onboarding (KYC, biometri
 | **Permissions**         | Role-based access control, teams, superuser elevation               |
 | **Tenant settings**     | Per-org leave policy, attendance rules, geofencing, HR defaults     |
 | **Audit logs**          | Tamper-evident trail for all data mutations                         |
-| **AI Chatbot**          | HRMS-scoped assistant powered by a local Ollama model               |
+| **AI Assistants (MCP)** | Connect an MCP-capable AI assistant to your own HR data             |
 | **AI Insights**         | Per-module streaming analysis via Ollama                            |
 | **Security**            | Login risk scoring, impossible-travel detection, anomaly alerts     |
 | **Billing**             | Razorpay subscription management, grace periods, webhooks           |
@@ -221,7 +221,7 @@ Each org configures its own operational rules via `TenantSettings`. Settings are
 | Job queue          | BullMQ                                             |
 | Push notifications | Firebase Cloud Messaging (FCM)                     |
 | Payments           | Razorpay (subscriptions + webhooks)                |
-| AI inference       | Ollama (local LLM, default: `qwen2.5-coder:14b`)   |
+| AI inference       | Ollama, for AI Insights and resume scoring only    |
 | Observability      | Prometheus, Grafana, Loki, Winston, AWS CloudWatch |
 | Build system       | Turborepo, pnpm workspaces                         |
 | Containerisation   | Docker, nginx                                      |
@@ -231,30 +231,19 @@ Each org configures its own operational rules via `TenantSettings`. Settings are
 
 ## AI Features
 
-### AI Chatbot
+### AI Assistants (MCP)
 
-An interactive HR assistant available to every employee, powered by a locally-running Ollama instance. The chatbot is scoped exclusively to HR topics.
+Praesto doesn't host a chatbot. People connect the AI assistant they already use to Praesto's **MCP server** at `https://api.praesto.in/mcp`. The assistant runs the model; Praesto only answers tool calls, so no Ollama server, GPU or LLM API key is involved.
 
-**Flow:**
+- The assistant signs in through Praesto's normal Google / passkey sign-in, then the person approves what it may read (OAuth 2.1 + PKCE, consent screen in the web app).
+- Eleven read-only tools: the person's own profile, leave, attendance and salary; the organisation's policies, announcements and holidays; and public careers-page openings (also at `/mcp/public`, no sign-in).
+- No tool can address another user or organisation; every call re-checks the grant, membership and subscription inside the same tenant context as the web API.
 
-1. The frontend opens a streaming connection to `POST /api/chatbot/message` (SSE).
-2. The gateway runs a **tool-calling loop** (up to 5 iterations): if Ollama requests data, the gateway executes the tool against the tenant database and returns the result.
-3. Once the model has sufficient context, the final response streams back as SSE (`text/event-stream`).
-
-**Available tools** (tenant-scoped, authenticated user only):
-
-| Tool                     | Data                                            |
-| ------------------------ | ----------------------------------------------- |
-| `get_user_profile`       | Name, DOB, department, designation, blood group |
-| `get_leave_balance`      | Remaining leaves by type                        |
-| `get_leave_applications` | Recent leave history with status                |
-| `get_attendance`         | Attendance records and summary for any month    |
-| `get_salary_info`        | Salary components, deductions, latest payslip   |
-| `get_policies`           | Company HR policies, searchable by keyword      |
+See [docs/mcp.md](docs/mcp.md) for the flow, tools, security model and setup.
 
 ### AI Insights
 
-A separate analytical feature at `POST /api/ai-insights`. Unlike the interactive chatbot, this is a one-shot report:
+A separate analytical feature at `POST /api/ai-insights`, a one-shot report (this still uses Ollama):
 
 1. The gateway fetches data for the requested module and time period directly from the tenant database.
 2. Data is sent to Ollama with an analytical prompt.

@@ -1,0 +1,107 @@
+paths:
+  /api/v1/ai-connections/requests/{requestId}:
+    get:
+      summary: Show a pending AI assistant connection request
+      description: >
+        Called by the web app's consent screen (/connect/authorize/:requestId)
+        after an MCP client starts OAuth at /oauth/authorize. Returns which
+        client is asking, where approval redirects, the caller's organisation
+        and the requested scopes. Requests expire after 10 minutes. The MCP
+        endpoints themselves (/mcp, /oauth/*, /.well-known/*) live outside
+        /api/v1 and are described in docs/mcp.md.
+      tags: [AI Assistants]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Request details }
+        "401": { description: Not signed in }
+        "404": { description: Expired, already answered, or unknown }
+  /api/v1/ai-connections/requests/{requestId}/approve:
+    post:
+      summary: Approve an AI assistant connection
+      description: >
+        Issues a single-use authorization code bound to the signed-in user and
+        their current organisation (never values from the request body), for
+        a subset of the requested scopes, and returns the client redirect URL
+        carrying it. CSRF-protected.
+      tags: [AI Assistants]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scopes]
+              properties:
+                scopes:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    enum:
+                      [
+                        profile:read,
+                        leave:read,
+                        attendance:read,
+                        payroll:read,
+                        org:read,
+                      ]
+      responses:
+        "200": { description: "`data.redirectTo` — send the browser there" }
+        "400": { description: No or unknown scopes }
+        "404": { description: Expired, already answered, or unknown }
+  /api/v1/ai-connections/requests/{requestId}/deny:
+    post:
+      summary: Decline an AI assistant connection
+      tags: [AI Assistants]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: "`data.redirectTo` carries error=access_denied" }
+        "404": { description: Expired, already answered, or unknown }
+  /api/v1/ai-connections:
+    get:
+      summary: List your connected AI assistants
+      description: >
+        The caller's own active connections in their current organisation,
+        plus `mcpUrl`, the address to give an assistant.
+      tags: [AI Assistants]
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: "`data.connections` and `data.mcpUrl`" }
+  /api/v1/ai-connections/{grantId}:
+    delete:
+      summary: Disconnect one of your AI assistants
+      description: >
+        Revokes the connection immediately: its access tokens are refused on
+        the next call and its refresh token stops working. Someone else's
+        connection id returns 404.
+      tags: [AI Assistants]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: grantId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Disconnected }
+        "404": { description: Not one of your connections }
