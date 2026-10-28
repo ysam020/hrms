@@ -34,8 +34,8 @@ app isn't managed by a stack, so they are applied by hand. Order matters
 ```json
 [
   {
-    "source": "https://www.praesto.in/<*>",
-    "target": "https://praesto.in/<*>",
+    "source": "https://www.praesto.in",
+    "target": "https://praesto.in",
     "status": "301"
   },
   {

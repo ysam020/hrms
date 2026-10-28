@@ -323,16 +323,26 @@ export default function Landing() {
       <main id="main">
         <section className={s.hero} data-nav-dark aria-labelledby="hero-title">
           <div className={s.heroCopy}>
+            {/* The page's subject is the heading; the brand line below is
+                the headline people see. */}
             <motion.h1
               id="hero-title"
-              className={s.heroTitle}
+              className={s.eyebrow}
               initial={still ? false : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: [0.2, 0, 0, 1] }}
             >
+              HRMS software for attendance, leave and payroll
+            </motion.h1>
+            <motion.p
+              className={s.heroTitle}
+              initial={still ? false : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.05, ease: [0.2, 0, 0, 1] }}
+            >
               People operations,
               <br /> beautifully connected.
-            </motion.h1>
+            </motion.p>
             <motion.p
               className={s.heroLead}
               initial={still ? false : { opacity: 0, y: 12 }}
@@ -931,12 +941,8 @@ function Pricing({ user }: { user: any }) {
                     : `or ${rupees(PLAN_PRICING[tier].annual)} billed yearly`}
                 </p>
                 {!user ? (
-                  <Link
-                    to="/login"
-                    className={`${s.cta} ${s.planCta}`}
-                    aria-label={`Get started with ${PLAN_TIER_LABELS[tier]}`}
-                  >
-                    Get Started
+                  <Link to="/login" className={`${s.cta} ${s.planCta}`}>
+                    Choose {PLAN_TIER_LABELS[tier]}
                   </Link>
                 ) : manage ? (
                   <Link
@@ -964,8 +970,11 @@ function Pricing({ user }: { user: any }) {
           </ul>
           <p className={s.fine}>
             Prices in Indian rupees. Your plan follows the company size you
-            choose during organisation setup, and payment is handled securely by
-            Razorpay.
+            choose during organisation setup, and payment is handled securely by{" "}
+            <a href="https://razorpay.com/" rel="noopener">
+              Razorpay
+            </a>
+            .
           </p>
         </div>
       </Reveal>
@@ -986,34 +995,31 @@ function Footer({ signedIn }: { signedIn: boolean }) {
           <p>People operations, beautifully connected.</p>
         </div>
         <nav aria-label="Product" className={s.footerCol}>
-          <h2>Product</h2>
+          <p className={s.footerHead}>Product</p>
           <a href="#features">Features</a>
           <a href="#modules">Modules</a>
           <a href="#security">Security</a>
           <a href="#pricing">Pricing</a>
         </nav>
         <nav aria-label="Account" className={s.footerCol}>
-          <h2>Account</h2>
+          <p className={s.footerHead}>Account</p>
           {signedIn ? (
             <>
               <Link to="/dashboard">Dashboard</Link>
               <Link to="/profile">Profile</Link>
             </>
           ) : (
-            <>
-              <Link to="/login">Sign In</Link>
-              <Link to="/login">Get Started</Link>
-            </>
+            <Link to="/login">Sign In</Link>
           )}
         </nav>
         <nav aria-label="Legal" className={s.footerCol}>
-          <h2>Legal</h2>
+          <p className={s.footerHead}>Legal</p>
           <Link to="/privacy-policy">Privacy Policy</Link>
           <Link to="/terms-of-use">Terms of Use</Link>
           <Link to="/refund-policy">Refund Policy</Link>
         </nav>
         <div className={s.footerCol}>
-          <h2>Contact</h2>
+          <p className={s.footerHead}>Contact</p>
           <a href="mailto:support@praesto.in">support@praesto.in</a>
           <a href="mailto:hello@praesto.in">hello@praesto.in</a>
         </div>

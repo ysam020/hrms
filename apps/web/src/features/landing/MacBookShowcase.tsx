@@ -251,9 +251,9 @@ export function MacBookShowcase({
             exit="leave"
             variants={captionVariants}
           >
-            <motion.h3 className={s.title} variants={line}>
+            <motion.p className={s.title} variants={line}>
               {scene.title}
-            </motion.h3>
+            </motion.p>
             <motion.p className={s.body} variants={line}>
               {scene.body}
             </motion.p>
