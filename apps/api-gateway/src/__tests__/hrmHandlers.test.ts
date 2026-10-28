@@ -81,6 +81,7 @@ jest.mock("@hrms/common", () => ({
     SUCCESS: 200,
     BAD_REQUEST: 400,
     NOT_FOUND: 404,
+    CONFLICT: 409,
     INTERNAL_SERVER_ERROR: 500,
   },
 }));
@@ -254,6 +255,53 @@ describe("hrmHandlers", () => {
           id: "a1",
           title: "Updated Workshop",
           updatedBy: "user-1",
+        }),
+      );
+    });
+  });
+
+  describe("editHrActivity with If-Match", () => {
+    const current = {
+      createdBy: "user-1",
+      title: "Town hall",
+      description: "Q4",
+      scheduledAt: new Date("2026-11-01T10:00:00Z"),
+      lastUpdatedOn: new Date("2026-10-27T08:00:00Z"),
+    };
+
+    it("applies the edit when the version matches", async () => {
+      mockActivityFindUnique.mockResolvedValue(current);
+      mockGrpcCall.mockResolvedValue({ data: {} });
+      const res = makeRes();
+      await editHrActivity(
+        makeReq({
+          params: { _id: "a1" },
+          body: { title: "Town hall (moved)" },
+          headers: { "if-match": "2026-10-27T08:00:00.000Z" },
+        }),
+        res,
+      );
+      expect(mockGrpcCall).toHaveBeenCalled();
+    });
+
+    it("returns 409 with the current version when it has changed", async () => {
+      mockActivityFindUnique.mockResolvedValue(current);
+      mockGrpcCall.mockClear();
+      const res = makeRes();
+      await editHrActivity(
+        makeReq({
+          params: { _id: "a1" },
+          body: { title: "Stale edit" },
+          headers: { "if-match": "2026-10-20T08:00:00.000Z" },
+        }),
+        res,
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 409,
+          code: "VERSION_CONFLICT",
+          data: expect.objectContaining({ title: "Town hall" }),
         }),
       );
     });

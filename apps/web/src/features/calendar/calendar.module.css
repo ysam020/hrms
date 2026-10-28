@@ -1,0 +1,128 @@
+.layout {
+  display: grid;
+  gap: 32px;
+}
+@media (min-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+  }
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.monthName {
+  font: var(--px-type-section);
+  min-width: 170px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--px-separator);
+  border-left: 1px solid var(--px-separator);
+}
+.dow {
+  padding: 6px 8px;
+  font: var(--px-type-caption);
+  font-weight: 600;
+  color: var(--px-text-3);
+  border-right: 1px solid var(--px-separator);
+  border-bottom: 1px solid var(--px-separator);
+}
+.cell {
+  position: relative;
+  min-height: 96px;
+  padding: 6px;
+  border: 0;
+  border-right: 1px solid var(--px-separator);
+  border-bottom: 1px solid var(--px-separator);
+  background: transparent;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.cell:hover {
+  background: var(--px-bg-hover);
+}
+.cell[aria-selected="true"] {
+  background: var(--px-bg-selected);
+}
+.cell[data-outside] .num {
+  color: var(--px-text-3);
+  opacity: 0.6;
+}
+.num {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font: var(--px-type-label);
+  font-variant-numeric: tabular-nums;
+}
+.cell[data-today] .num {
+  background: var(--px-danger);
+  color: #fff;
+  font-weight: 600;
+}
+.chip {
+  display: block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font: var(--px-type-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip[data-kind="event"] {
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+}
+.chip[data-kind="holiday"] {
+  background: var(--px-warning-soft);
+  color: var(--px-warning);
+}
+.more {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+@media (max-width: 639px) {
+  .cell {
+    min-height: 52px;
+    align-items: center;
+  }
+  .chip {
+    display: none;
+  }
+  .dots {
+    display: flex !important;
+  }
+}
+.dots {
+  display: none;
+  gap: 3px;
+}
+.dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--px-accent);
+}
+.day {
+  display: grid;
+  gap: 14px;
+}
+.dayItem {
+  display: grid;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--px-separator);
+}
+.dayItem:last-child {
+  border-bottom: 0;
+}

@@ -1,8 +1,6 @@
 FROM node:20-alpine AS slim
-# Alpine's CDN mirror occasionally drops the TLS handshake mid-build in CI —
-# retry a few times before giving up, rather than failing the whole image
-# build on one transient network blip. Exits non-zero if every attempt
-# fails, so a genuine persistent failure still fails the build loudly.
+# Alpine's CDN mirror occasionally drops the TLS handshake mid-build — retry a
+# few times before giving up.
 RUN set -e; \
     for i in 1 2 3 4 5; do \
       if apk update && apk add --no-cache libc6-compat; then \
@@ -15,74 +13,37 @@ RUN set -e; \
     exit 1
 
 FROM slim AS base
-RUN npm install -g pnpm@8.15.6 turbo@2.10.5
+RUN npm install -g pnpm@8.15.6
 RUN pnpm config set store-dir /root/.pnpm-store && \
     pnpm config set fetch-retries 5 && \
     pnpm config set fetch-retry-mintimeout 20000 && \
     pnpm config set fetch-retry-maxtimeout 120000 && \
     pnpm config set fetch-timeout 300000
 
-FROM base AS pruner
-WORKDIR /app
-COPY . .
-RUN turbo prune --scope=web --docker
-
 FROM base AS builder
 WORKDIR /app
 
-# Override API URL so the bundle proxies through nginx, not the raw gateway port.
-# Must be set before secrets load (loadSecrets skips already-set env vars).
-ENV VITE_API_STRING=/api/v1
-ENV VITE_SERVER_URL=
-# Not a secret — plain config (MB). handleFileUpload.tsx's fallback is `|| 0`,
-# so leaving this unset silently caps uploads at 0 bytes rather than erroring.
-ENV VITE_MAX_FILE_SIZE=15
-# Local-dev bypass for AWS Secrets Manager — loadSecrets() (called by
-# load-build-secrets.mjs) reads this file instead of calling AWS whenever
-# it's set, so this only matters locally; a real deploy leaves it unset and
-# falls through to Secrets Manager as before. The path itself only exists
-# for the duration of the RUN below, via --mount=type=secret.
-ENV LOCAL_SECRETS_FILE=/run/secrets/local_secrets_file
-
-# Install against the FULL workspace's package.json files (from the pruner
-# stage's unpruned checkout), not turbo prune's out/json subset: turbo@2.10.5's
-# prune has a confirmed bug where a package that's a pure leaf (no
-# dependencies of its own — e.g. ua-parser-js's detect-europe-js/
-# is-standalone-pwa/ua-is-frozen) is referenced by its dependent but its own
-# resolution entry is silently dropped from the pruned pnpm-lock.yaml, so
-# --frozen-lockfile fails with ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY even
-# though the real lockfile is completely consistent — reproduced against a
-# genuinely cold, isolated pnpm store, so this isn't a caching artifact.
-# Installing against the full graph is exactly what already works at the
-# real repo root; it costs a slightly heavier builder-stage install (more
-# packages than web strictly needs), which doesn't affect the final image —
-# only apps/web/dist is copied into the nginx runner stage below. Source is
-# still swapped to turbo's correctly-pruned out/full/ afterward, so the
-# actual `turbo build` step stays scoped to just web.
-COPY --from=pruner /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=pruner /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=pruner /app/package.json ./package.json
-COPY --from=pruner /app/apps ./apps
-COPY --from=pruner /app/packages ./packages
+# The web app (apps/web) is self-contained: no workspace packages, no
+# secrets, no Prisma client. Copy the workspace and install against the
+# committed lockfile (frozen, so CI and local builds match). Only
+# apps/web/dist reaches the runner stage.
+COPY . .
 
 RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store \
     pnpm install --frozen-lockfile --ignore-scripts
 
-COPY --from=pruner /app/out/full/ .
+# Same-origin API (nginx proxies /api and /socket.io to api-gateway). No
+# secrets are needed: the build reads no other VITE_* value.
+ARG VITE_API_STRING=/api/v1
+ENV VITE_API_STRING=$VITE_API_STRING
 
-RUN pnpm db:generate
+RUN pnpm --filter web build
 
-RUN --mount=type=secret,id=aws_credentials,target=/root/.aws/credentials \
-    --mount=type=secret,id=aws_config,target=/root/.aws/config \
-    --mount=type=secret,id=local_secrets_file,target=/run/secrets/local_secrets_file \
-    turbo build --filter=web --force
-
-# Pinned (not the floating `alpine` tag) for reproducible builds — an
-# automatic base-image update landing between builds shouldn't be able to
-# change what ships to prod without that change going through review.
 FROM nginx:1.27-alpine AS runner
 
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+# TLS, /api + /socket.io proxy to the gateway, SPA fallback, and no-cache
+# headers for index.html and the service worker.
 COPY ./docker/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

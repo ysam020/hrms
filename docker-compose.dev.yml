@@ -389,16 +389,14 @@ services:
         condition: service_healthy
     <<: *backend-service
 
+  # The web app (apps/web), built for production and served by nginx at
+  # https://localhost.
   web:
     container_name: hrms-dev-web
     image: ysam090/hrms-web:latest
     build:
       context: .
       dockerfile: ./docker/web.Dockerfile
-      secrets:
-        - aws_credentials
-        - aws_config
-        - local_secrets_file
     ports:
       - "80:80"
       - "443:443"
@@ -524,11 +522,3 @@ volumes:
     driver: local
   grafana-data:
     driver: local
-
-secrets:
-  aws_credentials:
-    file: ${USERPROFILE:-${HOME}}/.aws/credentials
-  aws_config:
-    file: ${USERPROFILE:-${HOME}}/.aws/config
-  local_secrets_file:
-    file: ./local-secrets.json

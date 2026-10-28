@@ -1,25 +1,289 @@
-import { memo } from "react";
-import Box from "@mui/material/Box";
-import Tickets from "./Tickets";
+import { useContext, useEffect, useState, type FormEvent } from "react";
+import { AlertContext } from "@web/app/providers/AlertContext";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
+import { useTransitionNavigate, useSharedElement, vtName } from "@next/motion";
+import {
+  Button,
+  DataTable,
+  Dialog,
+  Field,
+  FormGrid,
+  Page,
+  Pagination,
+  PrimaryCell,
+  SearchField,
+  SegmentedControl,
+  Select,
+  StatusBadge,
+  TextArea,
+  TextInput,
+  fieldSpan2,
+  type Column,
+} from "@next/ui";
+import { DraftNote, sendOrQueue, useOfflineDraft } from "@next/offline";
+import { apiClient, errorMessage } from "@next/lib/api";
+import { searchParam, usePagedList } from "@next/lib/usePagedList";
+import { fromNow, personName } from "@next/lib/format";
+import {
+  CATEGORIES,
+  PRIORITIES,
+  label,
+  priorityTone,
+  statusTone,
+} from "./shared";
 
-/**
- * Helpdesk page — renders the ticket list directly.
- *
- * NOTE: We intentionally do NOT use TabsPanel here. TabsPanel turns a tab
- * label into a URL slug (e.g. "All Tickets" → /helpdesk/all-tickets), which
- * conflicts with the /:ticketId route used by TicketDetail. Since there is
- * currently only one tab, wrapping is unnecessary and causes routing issues.
- * The p:3 below matches the padding TabsPanel's CustomTabPanel would have
- * applied, so this page isn't flush against the viewport edge. height:100%
- * matches CustomTabPanel's own sizing too, so Tickets' DataList can fill it
- * and scroll its rows internally instead of the whole page scrolling.
- */
-function Helpdesk() {
+function TicketTitle({ t }: { t: any }) {
+  const style = useSharedElement(vtName("ticket", t.id), `/helpdesk/${t.id}`);
   return (
-    <Box sx={{ p: 3, height: "100%", boxSizing: "border-box" }}>
-      <Tickets />
-    </Box>
+    <PrimaryCell
+      style={style}
+      title={t.title}
+      subtitle={`#${t.ticketNo ?? t.id} · ${t.raisedByUser ? personName(t.raisedByUser) : "You"} · ${fromNow(t.createdAt)}`}
+    />
   );
 }
 
-export default memo(Helpdesk);
+export default function Helpdesk() {
+  const navigate = useTransitionNavigate();
+  const [status, setStatus] = useState("All");
+  const [creating, setCreating] = useState(false);
+  const list = usePagedList(
+    (p, l, q) =>
+      API_ENDPOINTS.TICKETS(
+        p,
+        l,
+        `${searchParam(q)}${status !== "All" ? `&status=${status}` : ""}`,
+      ),
+    {
+      deps: [status],
+      listKeys: ["tickets"],
+    },
+  );
+  const columns: Column<any>[] = [
+    {
+      key: "title",
+      header: "Ticket",
+      priority: "primary",
+      render: (t) => <TicketTitle t={t} />,
+    },
+    {
+      key: "category",
+      header: "Category",
+      priority: "hidden",
+      render: (t) => t.category || "—",
+    },
+    {
+      key: "priority",
+      header: "Priority",
+      priority: "secondary",
+      render: (t) => (
+        <StatusBadge tone={priorityTone(t.priority)} plain>
+          {label(t.priority)}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      priority: "trailing",
+      render: (t) => (
+        <span
+          className="px-row"
+          style={{ flexWrap: "nowrap", justifyContent: "flex-end" }}
+        >
+          {t.slaBreached && (
+            <StatusBadge tone="danger">SLA Breached</StatusBadge>
+          )}
+          <StatusBadge tone={statusTone(t.status)}>
+            {label(t.status)}
+          </StatusBadge>
+        </span>
+      ),
+    },
+  ];
+  return (
+    <Page
+      title="Helpdesk"
+      actions={
+        <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+          New Ticket
+        </Button>
+      }
+      tabs={
+        <>
+          <SegmentedControl
+            role="radiogroup"
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            segments={["All", "open", "in_progress", "resolved", "closed"].map(
+              (v) => ({ value: v, label: v === "All" ? "All" : label(v) }),
+            )}
+          />
+          <SearchField
+            label="Search tickets"
+            value={list.query}
+            onChange={(e) => list.search(e.target.value)}
+            style={{ width: 220, marginLeft: "auto" }}
+          />
+        </>
+      }
+    >
+      <DataTable
+        label="Tickets"
+        columns={columns}
+        rows={list.data}
+        rowId={(t) => String(t.id)}
+        loading={list.loading}
+        onRowClick={(t) => navigate(`/helpdesk/${t.id}`)}
+        stickyOffset={52}
+        empty={{
+          icon: "lifebuoy",
+          title: "No tickets here",
+          body: "Raise a ticket when you need help from HR, IT, or payroll.",
+        }}
+        footer={<Pagination {...list.pageProps} />}
+      />
+      <NewTicket
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={() => {
+          setCreating(false);
+          list.refresh();
+        }}
+      />
+    </Page>
+  );
+}
+
+const TICKET_EMPTY = {
+  title: "",
+  description: "",
+  category: "IT",
+  priority: "medium",
+};
+
+function NewTicket({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const { setAlert } = useContext(AlertContext);
+  const [v, setV] = useState(TICKET_EMPTY);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setV(TICKET_EMPTY);
+      setErrors({});
+    }
+  }, [open]);
+  const draft = useOfflineDraft({
+    formKey: "helpdesk.ticket",
+    values: v,
+    setValues: setV,
+    initial: TICKET_EMPTY,
+    enabled: open,
+  });
+  const set = (k: keyof typeof v) => (e: { target: { value: string } }) =>
+    setV((x) => ({ ...x, [k]: e.target.value }));
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const n: Record<string, string> = {};
+    if (!v.title.trim()) n.title = "Give the ticket a short title.";
+    if (!v.description.trim()) n.description = "Describe what you need.";
+    setErrors(n);
+    if (Object.keys(n).length) return;
+    setSaving(true);
+    try {
+      const result = await sendOrQueue({
+        kind: "helpdesk.ticket",
+        label: `Ticket · ${v.title.trim()}`,
+        method: "POST",
+        url: API_ENDPOINTS.CREATE_TICKET,
+        body: v,
+      });
+      await draft.clear();
+      setAlert({
+        open: true,
+        message: result.queued
+          ? "Saved on this device. Your ticket will be sent when you’re back online."
+          : "Ticket created.",
+        severity: result.queued ? "info" : "success",
+      });
+      onCreated();
+    } catch (err) {
+      setAlert({ open: true, message: errorMessage(err), severity: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      busy={saving}
+      title="New Ticket"
+      footer={
+        <>
+          <DraftNote
+            status={draft.status}
+            savedAt={draft.savedAt}
+            onDiscard={async () => {
+              await draft.clear();
+              setV(TICKET_EMPTY);
+            }}
+          />
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            type="submit"
+            form="ticket-form"
+            busy={saving}
+          >
+            Create Ticket
+          </Button>
+        </>
+      }
+    >
+      <form id="ticket-form" onSubmit={submit} noValidate>
+        <FormGrid columns={2}>
+          <Field label="Title" error={errors.title} className={fieldSpan2}>
+            <TextInput data-autofocus value={v.title} onChange={set("title")} />
+          </Field>
+          <Field label="Category">
+            <Select value={v.category} onChange={set("category")}>
+              {CATEGORIES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Priority">
+            <Select value={v.priority} onChange={set("priority")}>
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {label(p)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Description"
+            error={errors.description}
+            className={fieldSpan2}
+          >
+            <TextArea
+              rows={5}
+              value={v.description}
+              onChange={set("description")}
+            />
+          </Field>
+        </FormGrid>
+      </form>
+    </Dialog>
+  );
+}

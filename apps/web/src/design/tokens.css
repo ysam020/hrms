@@ -1,0 +1,296 @@
+/*
+ * Praesto Next design tokens — the single source for color, type, space,
+ * surfaces, and motion. Components read only these custom properties.
+ *
+ * Contrast (WCAG 2.x, computed from these hex values):
+ *   light  text-1 #1D1D1F 16.8:1 · text-2 #55565C 7.3:1 · text-3 #6B6C73 5.2:1
+ *          accent #166E96 5.7:1 on content, 5.1:1 on window, white on accent 5.7:1
+ *   dark   text-1 #F5F5F7 15.6:1 · text-2 #B4B5BB 8.3:1 · text-3 #9A9BA2 6.1:1
+ *          accent #5BBDE6 8.0:1 on content
+ *   control borders: 3.35:1 (light) / 3.40:1 (dark) — meets 3:1 for UI parts.
+ *   Brand cyan #39A2CF is 2.9:1 on white: decoration and fills only, never text.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── Surfaces ─────────────────────────────────────────────── */
+  --px-bg-window: #f2f3f5; /* sidebar + window chrome */
+  --px-bg-content: #ffffff; /* main reading surface */
+  --px-bg-grouped: #f6f7f9; /* grouped rail inside content */
+  --px-bg-raised: #ffffff; /* popovers, dialogs */
+  --px-bg-hover: rgb(0 0 0 / 0.045);
+  --px-bg-pressed: rgb(0 0 0 / 0.08);
+  --px-bg-selected: rgb(22 110 150 / 0.11);
+  --px-bg-scrim: rgb(20 22 26 / 0.32);
+  --px-material: rgb(246 247 249 / 0.78); /* translucent toolbar/sidebar */
+  --px-material-blur: saturate(180%) blur(20px);
+
+  /* ── Content ──────────────────────────────────────────────── */
+  --px-text-1: #1d1d1f;
+  --px-text-2: #55565c;
+  --px-text-3: #6b6c73;
+  --px-text-on-accent: #ffffff;
+  --px-separator: rgb(0 0 0 / 0.085);
+  --px-separator-strong: rgb(0 0 0 / 0.14);
+  --px-border-control: #8b8c93;
+
+  /* ── Accent & signal ──────────────────────────────────────── */
+  --px-brand: #39a2cf;
+  --px-accent: #166e96;
+  --px-accent-hover: #125d80;
+  --px-accent-soft: #e3f0f6;
+  --px-success: #1e7f45;
+  --px-success-soft: #e4f3ea;
+  --px-warning: #9a5b00;
+  --px-warning-soft: #fbf0dc;
+  --px-danger: #c42b2b;
+  --px-danger-soft: #fbe6e5;
+  --px-info: var(--px-accent);
+  --px-info-soft: var(--px-accent-soft);
+  --px-neutral-soft: #ececef;
+  --px-focus: #166e96;
+
+  /* ── Typography ───────────────────────────────────────────── */
+  --px-font:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+    "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --px-font-display:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    "Segoe UI Variable Display", "Segoe UI", Inter, Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --px-font-rounded:
+    ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Inter, Roboto, sans-serif;
+  --px-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* size / line-height / weight / tracking per role */
+  --px-type-display: 700 32px/38px var(--px-font-display);
+  --px-type-display-track: -0.024em;
+  --px-type-title: 650 22px/28px var(--px-font-display);
+  --px-type-title-track: -0.018em;
+  --px-type-section: 600 17px/22px var(--px-font-display);
+  --px-type-section-track: -0.01em;
+  --px-type-headline: 600 14px/20px var(--px-font);
+  --px-type-body: 400 14px/20px var(--px-font);
+  --px-type-callout: 400 13px/18px var(--px-font);
+  --px-type-label: 500 13px/18px var(--px-font);
+  --px-type-meta: 400 12px/16px var(--px-font);
+  --px-type-caption: 500 11px/14px var(--px-font);
+  --px-type-nav: 500 13px/18px var(--px-font);
+  --px-type-metric: 600 28px/32px var(--px-font-rounded);
+  --px-type-metric-sm: 600 20px/24px var(--px-font-rounded);
+
+  /* ── Space (4px grid) ─────────────────────────────────────── */
+  --px-space-1: 4px;
+  --px-space-2: 8px;
+  --px-space-3: 12px;
+  --px-space-4: 16px;
+  --px-space-5: 20px;
+  --px-space-6: 24px;
+  --px-space-8: 32px;
+  --px-space-10: 40px;
+  --px-space-12: 48px;
+  --px-space-16: 64px;
+
+  /* ── Layout ───────────────────────────────────────────────── */
+  --px-sidebar-w: 256px;
+  --px-toolbar-h: 52px;
+  --px-inspector-w: 400px;
+  --px-tabbar-h: 56px;
+  --px-content-max: 1240px;
+  --px-reading-max: 760px;
+  --px-gutter: 16px; /* compact */
+  --px-control-h: 32px; /* desktop control height (≥28pt HIG default) */
+  --px-control-h-lg: 40px;
+  --px-hit-min: 44px; /* touch targets on coarse pointers */
+
+  /* ── Shape & elevation ───────────────────────────────────── */
+  --px-radius-xs: 4px;
+  --px-radius-sm: 6px;
+  --px-radius-md: 10px;
+  --px-radius-lg: 14px;
+  --px-radius-pill: 999px;
+  --px-shadow-hairline: 0 0 0 0.5px rgb(0 0 0 / 0.12);
+  --px-shadow-1: 0 1px 2px rgb(0 0 0 / 0.06), 0 0 0 0.5px rgb(0 0 0 / 0.1);
+  --px-shadow-2:
+    0 8px 24px -6px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.06),
+    0 0 0 0.5px rgb(0 0 0 / 0.1);
+  --px-shadow-3:
+    0 24px 60px -12px rgb(0 0 0 / 0.28), 0 4px 12px rgb(0 0 0 / 0.08),
+    0 0 0 0.5px rgb(0 0 0 / 0.1);
+
+  /* ── Data visualization (dataviz reference palette, validated on
+     #ffffff: CVD ΔE ≥ 9.1, normal ΔE ≥ 19.6; slots 3/4/5 are < 3:1 on
+     white, so charts always carry labels, a legend, or a table) ── */
+  --px-series-1: #2a78d6;
+  --px-series-2: #eb6834;
+  --px-series-3: #1baf7a;
+  --px-series-4: #eda100;
+  --px-series-5: #e87ba4;
+  --px-series-6: #008300;
+  --px-series-7: #6250d6;
+  --px-series-8: #e34948;
+  --px-series-other: #a3a3aa;
+  --px-grid: rgb(0 0 0 / 0.07);
+
+  /* ── Stacking ─────────────────────────────────────────────── */
+  --px-z-sticky: 10;
+  --px-z-sidebar: 20;
+  --px-z-drawer: 100;
+  --px-z-dialog: 200;
+  --px-z-popover: 300;
+  --px-z-toast: 400;
+
+  /* ── Motion (mirrored in motion/tokens.ts for JS) ─────────── */
+  --px-dur-instant: 90ms;
+  --px-dur-fast: 150ms;
+  --px-dur-base: 220ms;
+  --px-dur-slow: 320ms;
+  --px-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --px-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --px-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --px-rise: 8px; /* small translateY for entrances */
+}
+
+@media (min-width: 640px) {
+  :root {
+    --px-gutter: 24px;
+  }
+}
+@media (min-width: 1280px) {
+  :root {
+    --px-gutter: 32px;
+  }
+}
+@media (pointer: coarse) {
+  :root {
+    --px-control-h: 40px;
+  }
+}
+
+/* Dark appearance: follows the system unless the viewer picked one
+   (data-appearance on <html>). The block is repeated for the explicit
+   choice because plain CSS can't share a rule body across the two. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-appearance="light"]) {
+    color-scheme: dark;
+    --px-bg-window: #141416;
+    --px-bg-content: #1c1c1f;
+    --px-bg-grouped: #232327;
+    --px-bg-raised: #2a2a2e;
+    --px-bg-hover: rgb(255 255 255 / 0.06);
+    --px-bg-pressed: rgb(255 255 255 / 0.1);
+    --px-bg-selected: rgb(91 189 230 / 0.16);
+    --px-bg-scrim: rgb(0 0 0 / 0.5);
+    --px-material: rgb(28 28 31 / 0.74);
+    --px-text-1: #f5f5f7;
+    --px-text-2: #b4b5bb;
+    --px-text-3: #9a9ba2;
+    --px-text-on-accent: #0b1a22;
+    --px-separator: rgb(255 255 255 / 0.09);
+    --px-separator-strong: rgb(255 255 255 / 0.16);
+    --px-border-control: #6e6f76;
+    --px-accent: #5bbde6;
+    --px-accent-hover: #7ccbed;
+    --px-accent-soft: rgb(91 189 230 / 0.16);
+    --px-success: #4cc77c;
+    --px-success-soft: rgb(76 199 124 / 0.15);
+    --px-warning: #f0a63a;
+    --px-warning-soft: rgb(240 166 58 / 0.15);
+    --px-danger: #ff6b66;
+    --px-danger-soft: rgb(255 107 102 / 0.15);
+    --px-neutral-soft: rgb(255 255 255 / 0.08);
+    --px-focus: #5bbde6;
+    --px-series-1: #3987e5;
+    --px-series-2: #d95926;
+    --px-series-3: #199e70;
+    --px-series-4: #c98500;
+    --px-series-5: #d55181;
+    --px-series-6: #008300;
+    --px-series-7: #9085e9;
+    --px-series-8: #e66767;
+    --px-series-other: #6e6f76;
+    --px-grid: rgb(255 255 255 / 0.08);
+    --px-shadow-1:
+      0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 0.5px rgb(255 255 255 / 0.1);
+    --px-shadow-2:
+      0 8px 24px -6px rgb(0 0 0 / 0.6), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+    --px-shadow-3:
+      0 24px 60px -12px rgb(0 0 0 / 0.7), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+  }
+}
+
+:root[data-appearance="dark"] {
+  color-scheme: dark;
+  --px-bg-window: #141416;
+  --px-bg-content: #1c1c1f;
+  --px-bg-grouped: #232327;
+  --px-bg-raised: #2a2a2e;
+  --px-bg-hover: rgb(255 255 255 / 0.06);
+  --px-bg-pressed: rgb(255 255 255 / 0.1);
+  --px-bg-selected: rgb(91 189 230 / 0.16);
+  --px-bg-scrim: rgb(0 0 0 / 0.5);
+  --px-material: rgb(28 28 31 / 0.74);
+  --px-text-1: #f5f5f7;
+  --px-text-2: #b4b5bb;
+  --px-text-3: #9a9ba2;
+  --px-text-on-accent: #0b1a22;
+  --px-separator: rgb(255 255 255 / 0.09);
+  --px-separator-strong: rgb(255 255 255 / 0.16);
+  --px-border-control: #6e6f76;
+  --px-accent: #5bbde6;
+  --px-accent-hover: #7ccbed;
+  --px-accent-soft: rgb(91 189 230 / 0.16);
+  --px-success: #4cc77c;
+  --px-success-soft: rgb(76 199 124 / 0.15);
+  --px-warning: #f0a63a;
+  --px-warning-soft: rgb(240 166 58 / 0.15);
+  --px-danger: #ff6b66;
+  --px-danger-soft: rgb(255 107 102 / 0.15);
+  --px-neutral-soft: rgb(255 255 255 / 0.08);
+  --px-focus: #5bbde6;
+  --px-series-1: #3987e5;
+  --px-series-2: #d95926;
+  --px-series-3: #199e70;
+  --px-series-4: #c98500;
+  --px-series-5: #d55181;
+  --px-series-6: #008300;
+  --px-series-7: #9085e9;
+  --px-series-8: #e66767;
+  --px-series-other: #6e6f76;
+  --px-grid: rgb(255 255 255 / 0.08);
+  --px-shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 0.5px rgb(255 255 255 / 0.1);
+  --px-shadow-2:
+    0 8px 24px -6px rgb(0 0 0 / 0.6), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+  --px-shadow-3:
+    0 24px 60px -12px rgb(0 0 0 / 0.7), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+}
+
+/* Increase Contrast: stronger separators and control borders. */
+@media (prefers-contrast: more) {
+  :root {
+    --px-separator: rgb(0 0 0 / 0.22);
+    --px-separator-strong: rgb(0 0 0 / 0.35);
+    --px-border-control: #5e5f66;
+    --px-text-3: #55565c;
+  }
+}
+
+/* Reduce Transparency: materials become opaque. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --px-material: var(--px-bg-window);
+    --px-material-blur: none;
+  }
+}
+
+/* Reduce Motion: no travel, only quick fades (durations stay non-zero so
+   transitionend/animationend still fire and exits still unmount). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --px-rise: 0px;
+    --px-dur-base: 120ms;
+    --px-dur-slow: 120ms;
+  }
+}

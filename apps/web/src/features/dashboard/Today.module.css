@@ -1,0 +1,224 @@
+.hero {
+  display: grid;
+  gap: 6px;
+  padding: var(--px-space-6) 0 var(--px-space-8);
+}
+.eyebrow {
+  font: var(--px-type-label);
+  color: var(--px-text-2);
+}
+.greeting {
+  font: var(--px-type-display);
+  letter-spacing: var(--px-type-display-track);
+}
+.brief {
+  max-width: 62ch;
+  font: 400 16px/24px var(--px-font);
+  color: var(--px-text-2);
+}
+.brief b {
+  font-weight: 600;
+  color: var(--px-text-1);
+}
+.brief a {
+  font-weight: 600;
+}
+
+/* Your day ─────────────────────────────────────────────────────────── */
+.day {
+  display: grid;
+  gap: var(--px-space-5);
+}
+.punchRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--px-space-4) var(--px-space-8);
+}
+.clock {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.clockState {
+  font: var(--px-type-label);
+  color: var(--px-text-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--px-success);
+  box-shadow: 0 0 0 3px var(--px-success-soft);
+}
+.clockValue {
+  font: 600 40px/44px var(--px-font-rounded);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.clockNote {
+  font: var(--px-type-callout);
+  color: var(--px-text-3);
+}
+.punchActions {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.timeline {
+  display: flex;
+  gap: var(--px-space-6);
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+.timeline b {
+  display: block;
+  font: var(--px-type-headline);
+  color: var(--px-text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Month ribbon: one mark per day, today ringed. */
+.ribbon {
+  display: grid;
+  grid-template-columns: repeat(var(--_days), minmax(0, 1fr));
+  gap: 3px;
+  align-items: end;
+}
+.mark {
+  height: 30px;
+  border-radius: 3px;
+  background: var(--px-neutral-soft);
+  position: relative;
+}
+.mark[data-kind="present"] {
+  background: var(--px-accent);
+}
+.mark[data-kind="partial"] {
+  background: color-mix(in srgb, var(--px-accent) 45%, transparent);
+}
+.mark[data-kind="holiday"] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--px-warning-soft) 0 3px,
+    color-mix(in srgb, var(--px-warning) 35%, transparent) 3px 5px
+  );
+}
+.mark[data-kind="leave"] {
+  background: var(--px-danger);
+  opacity: 0.75;
+}
+.mark[data-kind="weekoff"] {
+  height: 12px;
+}
+.mark[data-kind="future"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--px-separator);
+}
+.mark[data-today] {
+  outline: 2px solid var(--px-text-1);
+  outline-offset: 2px;
+}
+.ribbonAxis {
+  display: flex;
+  justify-content: space-between;
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font: var(--px-type-meta);
+  color: var(--px-text-2);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.legend b {
+  font-weight: 600;
+  color: var(--px-text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Announcements */
+.news {
+  display: grid;
+}
+.newsItem {
+  display: grid;
+  gap: 2px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--px-separator);
+}
+.newsItem:last-child {
+  border-bottom: 0;
+}
+.newsTitle {
+  font: var(--px-type-headline);
+}
+.newsBody {
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Agenda (rail) */
+.agendaDay + .agendaDay {
+  margin-top: var(--px-space-4);
+}
+.agendaDate {
+  font: var(--px-type-caption);
+  font-weight: 600;
+  color: var(--px-text-3);
+  margin-bottom: 6px;
+}
+.agendaDate[data-today] {
+  color: var(--px-accent);
+}
+.agendaItem {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 6px 0;
+}
+.agendaIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 15px;
+}
+.agendaText {
+  min-width: 0;
+  display: grid;
+}
+.agendaTitle {
+  font: var(--px-type-label);
+  overflow-wrap: anywhere;
+}
+.agendaMeta {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

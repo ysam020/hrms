@@ -1,0 +1,86 @@
+.matrix {
+  display: grid;
+  gap: 24px;
+}
+@media (min-width: 900px) {
+  .matrix {
+    grid-template-columns: 220px minmax(0, 1fr);
+    align-items: start;
+  }
+  .modules {
+    position: sticky;
+    top: calc(var(--px-toolbar-h) + 12px);
+  }
+}
+.modules ul {
+  display: grid;
+  gap: 1px;
+}
+.module {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: transparent;
+  text-align: left;
+  font: var(--px-type-label);
+  color: var(--px-text-1);
+}
+.module:hover {
+  background: var(--px-bg-hover);
+}
+.module[aria-current] {
+  background: var(--px-bg-selected);
+  font-weight: 600;
+}
+.grid {
+  min-width: 0;
+}
+.actionRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--px-separator);
+}
+.actionRow:last-child {
+  border-bottom: 0;
+}
+.actionName {
+  font: var(--px-type-body);
+}
+.stack {
+  display: inline-flex;
+}
+.stack > * + * {
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px var(--px-bg-content);
+}
+.users {
+  display: grid;
+  gap: 28px;
+}
+@media (min-width: 1000px) {
+  .users {
+    grid-template-columns: 260px minmax(0, 1fr);
+    align-items: start;
+  }
+  .userList {
+    position: sticky;
+    top: calc(var(--px-toolbar-h) + 12px);
+  }
+}
+.userList {
+  display: grid;
+  gap: 8px;
+}
+.userList ul {
+  max-height: 60vh;
+  overflow-y: auto;
+}

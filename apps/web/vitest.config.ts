@@ -8,24 +8,13 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    coverage: {
-      provider: "v8",
-      reporter: ["text", "html"],
-      include: ["src/**/*.{ts,tsx}"],
-      exclude: [
-        "src/**/*.d.ts",
-        "src/**/*.test.{ts,tsx}",
-        "src/test/**",
-        "src/**/*.scss",
-        "src/main.tsx",
-        "src/core/workers/**", // web workers — not run under jsdom
-        "src/core/wasm/**", // wasm bindings — not run under jsdom
-      ],
-    },
+    css: { modules: { classNameStrategy: "non-scoped" } },
   },
   resolve: {
     alias: {
-      "@web": path.resolve(__dirname, "src"),
+      "@web": path.resolve(__dirname, "src/shared-core"),
+      "@next": path.resolve(__dirname, "src"),
     },
+    dedupe: ["react", "react-dom", "react-router-dom", "framer-motion"],
   },
 });

@@ -1,0 +1,54 @@
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-2);
+  align-items: center;
+}
+.filters > * {
+  width: auto;
+  min-width: 140px;
+  flex: 1 1 0;
+  max-width: 220px;
+}
+
+.diff {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--px-type-callout);
+  table-layout: fixed;
+}
+.diff th,
+.diff td {
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--px-separator);
+  overflow-wrap: anywhere;
+}
+.diff thead th {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.diff tbody th {
+  font-weight: 400;
+  color: var(--px-text-2);
+  width: 34%;
+}
+.diff tr[data-changed] .to {
+  background: var(--px-accent-soft);
+  color: var(--px-text-1);
+}
+.diff tr[data-changed] .from {
+  color: var(--px-text-3);
+  text-decoration: line-through;
+}
+
+.raw {
+  margin: 0;
+  padding: var(--px-space-3);
+  border-radius: var(--px-radius-md);
+  background: var(--px-neutral-soft);
+  font: 12px/1.5 var(--px-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

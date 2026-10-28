@@ -1363,12 +1363,41 @@ describe("employeeHandlers", () => {
   });
 
   describe("getKycInsights", () => {
+    const hrReq = () =>
+      makeReq({ user: { userId: "user-1", tenantRole: "hr" } });
+
+    it("refuses an employee without KYC review access", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: [],
+      });
+      const res = makeRes();
+      await getKycInsights(makeReq(), res);
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.any(Object),
+      );
+      expect(mockUserAggregateRaw).not.toHaveBeenCalled();
+    });
+
+    it("admits a custom role with BasicKYCDetails:view_kyc:all", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: ["BasicKYCDetails:view_kyc:all"],
+      });
+      mockUserAggregateRaw.mockResolvedValue([]);
+      const res = makeRes();
+      await getKycInsights(makeReq(), res);
+      expect(mockApiResponse.mock.calls[0][1]).toBe(RESPONSE_STATUS.SUCCESS);
+    });
+
     it("returns KYC stats with completionRate", async () => {
       mockUserAggregateRaw.mockResolvedValue([
         { approved: 8, pending: 2, rejected: 1, total: 11 },
       ]);
       const res = makeRes();
-      await getKycInsights(makeReq(), res);
+      await getKycInsights(hrReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
@@ -1389,7 +1418,7 @@ describe("employeeHandlers", () => {
     it("returns zero stats when no rows returned", async () => {
       mockUserAggregateRaw.mockResolvedValue([]);
       const res = makeRes();
-      await getKycInsights(makeReq(), res);
+      await getKycInsights(hrReq(), res);
       const call = mockApiResponse.mock.calls[0];
       expect(call[2].data.overview.approvedKyc).toBe(0);
       expect(call[2].data.overview.completionRate).toBe(0);
@@ -1398,7 +1427,7 @@ describe("employeeHandlers", () => {
     it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
       mockUserAggregateRaw.mockRejectedValue(new Error("DB error"));
       const res = makeRes();
-      await getKycInsights(makeReq(), res);
+      await getKycInsights(hrReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
@@ -1409,7 +1438,7 @@ describe("employeeHandlers", () => {
     it("errors instead of returning unfiltered all-tenant data when tenant context is missing", async () => {
       mockGetTenantId.mockReturnValueOnce(null);
       const res = makeRes();
-      await getKycInsights(makeReq(), res);
+      await getKycInsights(hrReq(), res);
       expect(mockUserAggregateRaw).not.toHaveBeenCalled();
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,

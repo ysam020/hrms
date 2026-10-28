@@ -718,8 +718,24 @@ export async function viewAllKycs(req: Request, res: Response) {
   }
 }
 
-export async function getKycInsights(_req: Request, res: Response) {
+export async function getKycInsights(req: Request, res: Response) {
   try {
+    const authReq = req as AuthRequest;
+    const viewAll = await (async () => {
+      if (await canManageKyc(authReq, "approve_kyc")) return true;
+      const user = await prisma.user.findUnique({
+        where: { id: authReq.user!.userId },
+        select: { permissions: true },
+      });
+      return ((user?.permissions as string[]) ?? []).includes(
+        "BasicKYCDetails:view_kyc:all",
+      );
+    })();
+    if (!viewAll) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+    }
     const kycTenantId = getTenantId();
     if (!kycTenantId) {
       logger.error("get-kyc-insights error: no tenant context on request");

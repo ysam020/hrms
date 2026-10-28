@@ -1,0 +1,47 @@
+/* Small app-wide helpers shared by several features. */
+.px-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--px-radius-sm);
+  color: var(--px-accent);
+  font: var(--px-type-label);
+  text-decoration: none !important;
+}
+.px-back-link:hover {
+  background: var(--px-bg-hover);
+}
+@media (max-width: 639px) {
+  .px-back-link span {
+    display: none;
+  }
+}
+.px-link-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--px-accent);
+  font: var(--px-type-label);
+}
+.px-link-button:hover {
+  text-decoration: underline;
+}
+.px-row {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.px-row > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.px-hairline-list > li {
+  border-bottom: 1px solid var(--px-separator);
+}
+.px-hairline-list > li:last-child {
+  border-bottom: 0;
+}

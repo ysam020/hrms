@@ -1,0 +1,303 @@
+/* Buttons ─────────────────────────────────────────────────────────── */
+.button {
+  --_bg: var(--px-bg-content);
+  --_fg: var(--px-text-1);
+  --_ring: var(--px-separator-strong);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--px-control-h);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: var(--_bg);
+  color: var(--_fg);
+  box-shadow:
+    inset 0 0 0 1px var(--_ring),
+    0 1px 1px rgb(0 0 0 / 0.04);
+  font: var(--px-type-label);
+  white-space: nowrap;
+  transition:
+    background-color var(--px-dur-fast) var(--px-ease-standard),
+    box-shadow var(--px-dur-fast) var(--px-ease-standard),
+    transform var(--px-dur-instant) var(--px-ease-standard);
+  -webkit-tap-highlight-color: transparent;
+}
+.button:hover {
+  --_bg: color-mix(in srgb, var(--px-bg-content) 92%, var(--px-text-1));
+}
+.button:active {
+  transform: scale(0.98);
+}
+.button[disabled],
+.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+.button:focus-visible {
+  border-radius: var(--px-radius-sm);
+}
+
+.primary {
+  --_bg: var(--px-accent);
+  --_fg: var(--px-text-on-accent);
+  --_ring: transparent;
+}
+.primary:hover {
+  --_bg: var(--px-accent-hover);
+}
+.danger {
+  --_bg: var(--px-danger);
+  --_fg: #fff;
+  --_ring: transparent;
+}
+.danger:hover {
+  --_bg: color-mix(in srgb, var(--px-danger) 88%, #000);
+}
+.plain {
+  --_bg: transparent;
+  --_ring: transparent;
+  box-shadow: none;
+  color: var(--px-accent);
+  padding: 0 8px;
+}
+.plain:hover {
+  --_bg: var(--px-bg-hover);
+}
+.tinted {
+  --_bg: var(--px-accent-soft);
+  --_fg: var(--px-accent);
+  --_ring: transparent;
+  box-shadow: none;
+}
+.tinted:hover {
+  --_bg: color-mix(in srgb, var(--px-accent-soft) 80%, var(--px-accent));
+}
+.tintedDanger {
+  --_bg: var(--px-danger-soft);
+  --_fg: var(--px-danger);
+  --_ring: transparent;
+  box-shadow: none;
+}
+
+.large {
+  height: var(--px-control-h-lg);
+  padding: 0 20px;
+  font: var(--px-type-headline);
+  border-radius: var(--px-radius-md);
+}
+.small {
+  height: 26px;
+  padding: 0 10px;
+  font: var(--px-type-meta);
+  font-weight: 500;
+}
+.block {
+  width: 100%;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* opacity, not visibility: the label stays the button's accessible name
+   while the spinner shows. */
+.busyLabel {
+  opacity: 0;
+}
+.busyOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* Icon button: 32px visual on desktop, 44px hit area on touch. */
+.iconButton {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--px-control-h);
+  height: var(--px-control-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: transparent;
+  color: var(--px-text-2);
+  font-size: 18px;
+  transition: background-color var(--px-dur-fast) var(--px-ease-standard);
+}
+.iconButton:hover {
+  background: var(--px-bg-hover);
+  color: var(--px-text-1);
+}
+.iconButton:active {
+  background: var(--px-bg-pressed);
+}
+.iconButton[data-tone="danger"] {
+  color: var(--px-danger);
+}
+.iconButton[data-tone="danger"]:hover {
+  background: var(--px-danger-soft);
+  color: var(--px-danger);
+}
+.iconButton[aria-pressed="true"],
+.iconButton[aria-expanded="true"] {
+  background: var(--px-bg-pressed);
+  color: var(--px-text-1);
+}
+@media (pointer: coarse) {
+  .iconButton::after {
+    content: "";
+    position: absolute;
+    inset: calc((var(--px-hit-min) - 100%) / -2);
+    min-width: var(--px-hit-min);
+    min-height: var(--px-hit-min);
+  }
+}
+.iconBadge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-danger);
+  color: #fff;
+  font: 600 10px/16px var(--px-font);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--px-bg-content);
+}
+
+/* Segmented control ─────────────────────────────────────────────── */
+.segmented {
+  position: relative;
+  display: inline-flex;
+  justify-self: start; /* Field and form grids stretch children otherwise */
+  width: fit-content;
+  min-width: 0; /* shrink inside flex rows; scroll horizontally instead */
+  padding: 2px;
+  border-radius: calc(var(--px-radius-sm) + 2px);
+  background: var(--px-neutral-soft);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.segmented::-webkit-scrollbar {
+  display: none;
+}
+.segment {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: transparent;
+  color: var(--px-text-2);
+  font: var(--px-type-label);
+  white-space: nowrap;
+}
+.segment:hover {
+  color: var(--px-text-1);
+}
+.segment[aria-selected="true"],
+.segment[aria-checked="true"] {
+  color: var(--px-text-1);
+}
+.segmentThumb {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-1);
+}
+.segmentCount {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Switch ────────────────────────────────────────────────────────── */
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 38px;
+  height: 22px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-separator-strong);
+  transition: background-color var(--px-dur-fast) var(--px-ease-standard);
+}
+.switch[aria-checked="true"] {
+  background: var(--px-success);
+}
+.switchKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform var(--px-dur-base) var(--px-ease-enter);
+}
+.switch[aria-checked="true"] .switchKnob {
+  transform: translateX(16px);
+}
+
+/* Checkbox ──────────────────────────────────────────────────────── */
+.checkbox {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  border-radius: var(--px-radius-xs);
+  box-shadow: inset 0 0 0 1px var(--px-border-control);
+  background: var(--px-bg-content);
+  cursor: pointer;
+}
+.checkbox:checked,
+.checkbox:indeterminate {
+  background: var(--px-accent);
+  box-shadow: none;
+}
+.checkbox:checked::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 2px solid var(--px-text-on-accent);
+  border-bottom: 2px solid var(--px-text-on-accent);
+  transform: rotate(-45deg);
+}
+.checkbox:indeterminate::after {
+  content: "";
+  width: 8px;
+  height: 2px;
+  background: var(--px-text-on-accent);
+}

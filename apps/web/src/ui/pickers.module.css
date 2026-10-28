@@ -1,0 +1,207 @@
+/* Pop-up button (shared by the select and the date field) */
+.popup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: default;
+}
+.popup[aria-expanded="true"] {
+  box-shadow:
+    inset 0 0 0 1px var(--px-accent),
+    0 0 0 3px color-mix(in srgb, var(--px-accent) 28%, transparent);
+}
+.popupValue {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.popupIcon {
+  flex-shrink: 0;
+  color: var(--px-text-3);
+}
+.placeholder {
+  color: var(--px-text-3);
+}
+
+/* Listbox */
+.listbox {
+  /* Long lists (the 96 quarter hours, long option sets) scroll inside the
+     menu instead of running off the screen. */
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  outline: none;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px 4px 6px;
+  border-radius: var(--px-radius-sm);
+  font: var(--px-type-body);
+  color: var(--px-text-1);
+  cursor: default;
+  user-select: none;
+}
+.option[data-active] {
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+}
+.option[aria-disabled] {
+  color: var(--px-text-3);
+  background: transparent;
+}
+.check {
+  flex-shrink: 0;
+  visibility: hidden;
+}
+.option[aria-selected="true"] .check {
+  visibility: visible;
+}
+.optionLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.groupLabel {
+  padding: 8px 10px 3px 26px;
+  font: var(--px-type-meta);
+  font-weight: 600;
+  color: var(--px-text-3);
+}
+
+/* Calendar */
+.calendarPop {
+  min-width: 0;
+}
+.calendar {
+  width: 280px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+.calHead {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 4px;
+}
+.calTitle {
+  flex: 1;
+  font: var(--px-type-headline);
+}
+.calNav {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--px-accent);
+}
+.calNav:hover {
+  background: var(--px-bg-hover);
+}
+.weekdays,
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  justify-items: center;
+}
+.weekdays span {
+  height: 24px;
+  line-height: 24px;
+  font: var(--px-type-caption);
+  font-weight: 600;
+  color: var(--px-text-3);
+}
+.day,
+.monthCell {
+  border: 0;
+  background: transparent;
+  color: var(--px-text-1);
+  font: var(--px-type-callout);
+  font-variant-numeric: tabular-nums;
+}
+.day {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+.monthCell {
+  height: 40px;
+  border-radius: var(--px-radius-md);
+}
+.day:hover:not(:disabled),
+.monthCell:hover:not(:disabled) {
+  background: var(--px-bg-hover);
+}
+.day[data-outside] {
+  color: var(--px-text-3);
+}
+.day[data-today],
+.monthCell[data-today] {
+  color: var(--px-accent);
+  font-weight: 600;
+}
+.day[aria-selected="true"],
+.monthCell[aria-selected="true"] {
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+  font-weight: 600;
+}
+.day:disabled,
+.monthCell:disabled {
+  color: var(--px-text-3);
+  opacity: 0.4;
+}
+.day:focus-visible,
+.monthCell:focus-visible,
+.calNav:focus-visible,
+.calLink:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: 1px;
+}
+.months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.calFoot {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid var(--px-separator);
+}
+.calLink {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: var(--px-radius-sm);
+  color: var(--px-accent);
+  font: var(--px-type-callout);
+}
+.calLink:disabled {
+  color: var(--px-text-3);
+}
+
+/* Date + time: explicit tracks, so the shared `.control { width: 100% }`
+   can't let the time field swallow the row. */
+.dateTime {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(92px, 2fr);
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+.dateTime > * {
+  width: 100%;
+  min-width: 0;
+}

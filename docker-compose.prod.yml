@@ -6,7 +6,17 @@
 # Amplify, not on this stack.
 name: hrms-prod
 
+# Docker's default json-file driver never rotates, so container logs grew
+# until they filled the instance's root volume (SSM run-command and deploys
+# then fail with "No space left on device"). Caps each container at ~30 MB.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-backend-service: &backend-service
+  logging: *default-logging
   volumes:
     - ./packages/certificates:/app/packages/certificates:ro
   restart: on-failure
@@ -223,6 +233,7 @@ services:
   # `redis` service name (REDIS_URL in the hrms/config secret points here).
   redis:
     container_name: hrms-prod-redis
+    logging: *default-logging
     image: redis:7-alpine
     volumes:
       - redis-data:/data
@@ -247,6 +258,7 @@ services:
   # container restarts so it isn't re-issued every time.
   caddy:
     container_name: hrms-prod-caddy
+    logging: *default-logging
     image: caddy:2-alpine
     ports:
       - "80:80"

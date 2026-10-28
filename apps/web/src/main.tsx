@@ -1,47 +1,37 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "./index.scss";
-import App from "./app/App";
-import { BrowserRouter } from "react-router-dom";
-import "primereact/resources/themes/lara-light-cyan/theme.css";
-import "primeicons/primeicons.css";
-import { PrimeReactProvider } from "primereact/api";
-import { watchForServiceWorkerUpdates } from "@web/core/config/serviceWorkerUpdate";
+import { RouterProvider, type RouterProviderProps } from "react-router-dom";
+import "./design/base.css";
+import "./design/app.css";
+import { router } from "./app/router";
+import { applyAppearance } from "./shell/appearance";
 
-watchForServiceWorkerUpdates();
+applyAppearance();
+
+// A focused number field steps its value on mouse-wheel, so scrolling the page
+// past one silently edits it. Blurring it first lets the wheel scroll instead.
+document.addEventListener(
+  "wheel",
+  () => {
+    const el = document.activeElement;
+    if (
+      el instanceof HTMLInputElement &&
+      el.type === "number" &&
+      el.matches(":hover")
+    )
+      el.blur();
+  },
+  { passive: true },
+);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <BrowserRouter
-    future={{
-      v7_startTransition: true,
-      v7_relativeSplatPath: true,
-    }}
-  >
-    <PrimeReactProvider
-      value={{
-        hideOverlaysOnDocumentScrolling: true,
-        ripple: true,
-        inputStyle: "outlined",
-        autoZIndex: true,
-        // MUI's Modal (and its Backdrop) sits at z-index 1300 by default.
-        // PrimeReact's own defaults (overlay/menu: 1000, modal/tooltip:
-        // 1100) are lower, so any PrimeReact popup — Calendar, Dropdown,
-        // AutoComplete — appended outside the modal's own DOM subtree
-        // (e.g. via appendTo="#root .App" to escape overflow clipping)
-        // loses the raw z-index comparison and renders behind the modal.
-        // Push every PrimeReact overlay category above MUI's modal layer.
-        zIndex: {
-          modal: 1400,
-          overlay: 1400,
-          menu: 1400,
-          tooltip: 1400,
-          toast: 1500,
-        },
-      }}
-    >
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    </PrimeReactProvider>
-  </BrowserRouter>,
+  <React.StrictMode>
+    {/* The workspace override pins react-router@6.30.4 (@remix-run/router
+        1.23.3) under react-router-dom@6.30.3 (1.23.2); the two Router types
+        are identical patch releases, so bridge the nominal type mismatch. */}
+    <RouterProvider
+      router={router as unknown as RouterProviderProps["router"]}
+      future={{ v7_startTransition: true }}
+    />
+  </React.StrictMode>,
 );
