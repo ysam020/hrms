@@ -77,3 +77,32 @@ describe("search metadata", () => {
       expect(top).toContain(normalizePath(path));
   });
 });
+
+describe("landing page outline", () => {
+  it("has one descriptive H1, and footer labels and slide captions aren't headings", async () => {
+    const { render } = await import("@testing-library/react");
+    const { MemoryRouter } = await import("react-router-dom");
+    const { UserContext } = await import("@web/app/providers/UserContext");
+    const { default: Landing } = await import("@next/features/landing/Landing");
+    const { container } = render(
+      <MemoryRouter>
+        <UserContext.Provider
+          value={{ user: null, setUser: () => {}, handleLogout: () => {} }}
+        >
+          <Landing />
+        </UserContext.Provider>
+      </MemoryRouter>,
+    );
+    const h1s = container.querySelectorAll("h1");
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0].textContent).toMatch(/HRMS software/i);
+    expect(container.querySelector("footer h2, footer h3")).toBeNull();
+    // Headings never skip a level.
+    let last = 1;
+    for (const h of container.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+      const level = Number(h.tagName[1]);
+      expect(level).toBeLessThanOrEqual(last + 1);
+      last = level;
+    }
+  });
+});

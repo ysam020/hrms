@@ -20,7 +20,7 @@ export const PUBLIC_PAGES: Record<string, PageMeta> = {
   "/": {
     title: "Praesto | HRMS Software for Attendance, Leave & Payroll",
     description:
-      "Praesto is HR software for growing organisations: attendance, leave, recruitment, payroll, approvals and analytics in one workspace, at a flat price set by company size.",
+      "Praesto is HRMS software for growing businesses, combining employee attendance, leave management, recruitment, payroll and analytics in one workspace.",
     prerender: true,
   },
   "/privacy-policy": {
