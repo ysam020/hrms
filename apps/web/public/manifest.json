@@ -1,6 +1,7 @@
 {
-  "short_name": "Prasto",
-  "name": "Prasto",
+  "short_name": "Praesto",
+  "name": "Praesto",
+  "description": "HR software for attendance, leave, recruitment, payroll and approvals.",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,15 +9,16 @@
       "type": "image/x-icon"
     },
     {
-      "src": "maskable_icon.png",
+      "src": "icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "maskable_icon.png",
+      "src": "icon-512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": ".",

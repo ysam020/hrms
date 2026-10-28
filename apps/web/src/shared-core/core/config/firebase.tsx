@@ -31,7 +31,7 @@ export const getFirebaseMessaging = async () => {
       const title = payload.notification?.title || "New message";
       const options = {
         body: payload.notification?.body || "",
-        icon: "/logo192.png",
+        icon: "/icon-192.png",
         tag: payload.messageId || "chat-msg",
         renotify: true,
       };

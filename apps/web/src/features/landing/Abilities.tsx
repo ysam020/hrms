@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
+import { arrivedPrerendered } from "@next/app/seo";
 import s from "./abilities.module.css";
 
 /**
@@ -76,10 +77,12 @@ function Tile({
   body: string;
   children: ReactNode;
 }) {
+  // Prerendered: already on screen, so don't fade in (see Landing's Reveal).
+  const [still] = useState(() => arrivedPrerendered("/"));
   return (
     <motion.article
       className={s.tile}
-      initial={{ opacity: 0, y: 24 }}
+      initial={still ? false : { opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "0px 0px -10% 0px" }}
       transition={{ duration: 0.7, ease: EASE }}

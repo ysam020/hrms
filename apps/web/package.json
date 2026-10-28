@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "vite --clearScreen false",
-    "build": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.sw.json && vite build && vite build -c vite.sw.config.ts && node scripts/inject-sw-manifest.mjs",
+    "build": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.sw.json && vite build && vite build --ssr src/prerender/entry.tsx && node scripts/prerender.mjs && vite build -c vite.sw.config.ts && node scripts/inject-sw-manifest.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest",

@@ -332,6 +332,23 @@
 .legalNav a:hover {
   color: var(--px-text-1);
 }
+.legalFooter nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-5);
+  width: min(720px, 100% - 32px);
+  margin: 0 auto;
+  padding: var(--px-space-6) 0 var(--px-space-12);
+  border-top: 1px solid var(--px-separator);
+  font: var(--px-type-callout);
+}
+.legalFooter a {
+  color: var(--px-text-2);
+  text-decoration: none;
+}
+.legalFooter a:hover {
+  color: var(--px-text-1);
+}
 .legal {
   width: min(720px, 100% - 32px);
   margin: 0 auto;

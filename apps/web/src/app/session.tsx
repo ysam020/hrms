@@ -23,6 +23,7 @@ import {
 } from "@next/offline/session";
 import { scopeFromToken } from "@next/offline/state";
 import { Button, ConfirmDialog, Dialog, Spinner, ToastHost } from "@next/ui";
+import { PUBLIC_PAGES, applyPageMeta, normalizePath } from "./seo";
 
 // Session orchestration for Praesto Next. Everything security-relevant — the
 // in-memory access token, refresh-cookie exchange, CSRF, 401/402 handling —
@@ -229,6 +230,18 @@ export function SessionRoot() {
     }
   }, [user]);
 
+  useEffect(() => {
+    applyPageMeta(location.pathname);
+  }, [location.pathname]);
+
+  // The landing and policy pages don't depend on the session, so they show
+  // while it's checked rather than behind the boot screen (they usually
+  // arrive prerendered, already on screen). A Google sign-in return still
+  // waits, since it carries on into the app.
+  const showWhileBooting =
+    isMarketingPath(location.pathname) &&
+    !new URLSearchParams(initialSearch.current).has("oauth_success");
+
   const userValue = useMemo(
     () => ({ user, setUser, handleLogout }),
     [user, handleLogout],
@@ -240,7 +253,7 @@ export function SessionRoot() {
       <UserContext.Provider value={userValue}>
         <AlertContext.Provider value={alertValue as any}>
           <OfflineProvider user={user}>
-            {booting ? (
+            {booting && !showWhileBooting ? (
               <BootScreen />
             ) : setupPending && !user && !isPublicPath(location.pathname) ? (
               <Navigate
@@ -304,6 +317,10 @@ const isPublicPath = (p: string) =>
   p === "/org-setup" ||
   p.startsWith("/careers/") ||
   ["/privacy-policy", "/terms-of-use", "/refund-policy"].includes(p);
+
+/** The prerendered public pages (see ./seo). */
+const isMarketingPath = (p: string) =>
+  Boolean(PUBLIC_PAGES[normalizePath(p)]?.prerender);
 
 /** Protected area: signed-in users only, otherwise to /login with a return path. */
 export function RequireSession({ children }: { children: ReactNode }) {

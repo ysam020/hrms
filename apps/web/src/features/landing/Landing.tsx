@@ -12,6 +12,7 @@ import { PLAN_FEATURES } from "@web/features/auth/org-setup/constants";
 import { UserContext } from "@web/app/providers/UserContext";
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 import { Avatar, Icon, Menu, type IconName } from "@next/ui";
+import { arrivedPrerendered } from "@next/app/seo";
 import { BrandLockup } from "../auth/BrandMark";
 import { MacBookShowcase, type ShowcaseScene } from "./MacBookShowcase";
 import { Abilities } from "./Abilities";
@@ -38,7 +39,7 @@ const SCENES: ShowcaseScene[] = [
     label: "Overview",
     title: "Your day, at a glance.",
     body: "Hours worked, the requests waiting on you and what’s coming up — on one screen.",
-    src: `${SHOT}/today.png`,
+    src: `${SHOT}/today.webp`,
     alt: "Praesto’s Today screen: hours worked so far, a month of attendance, four requests awaiting a decision and upcoming events.",
   },
   {
@@ -46,7 +47,7 @@ const SCENES: ShowcaseScene[] = [
     label: "People",
     title: "Everyone, in one directory.",
     body: "Every employee with their role, department, joining date and KYC status.",
-    src: `${SHOT}/employees.png`,
+    src: `${SHOT}/employees.webp`,
     alt: "Praesto’s employee directory listing names, designations, departments, joining dates and KYC status.",
   },
   {
@@ -54,7 +55,7 @@ const SCENES: ShowcaseScene[] = [
     label: "Attendance",
     title: "Every workday, accounted for.",
     body: "Punches, hours and status for the month, with corrections tracked against your policy.",
-    src: `${SHOT}/attendance.png`,
+    src: `${SHOT}/attendance.webp`,
     alt: "Praesto’s attendance screen for October with present days, paid leave, corrections left and a day-by-day table.",
   },
   {
@@ -62,7 +63,7 @@ const SCENES: ShowcaseScene[] = [
     label: "Hiring",
     title: "Your hiring funnel, clearly.",
     body: "Applicants at every stage, by role and by hiring manager.",
-    src: `${SHOT}/recruitment.png`,
+    src: `${SHOT}/recruitment.webp`,
     alt: "Praesto’s recruitment analytics: a hiring funnel from applied to hired, applications by role and openings by status.",
   },
   {
@@ -70,7 +71,7 @@ const SCENES: ShowcaseScene[] = [
     label: "Payroll",
     title: "Payroll, run by run.",
     body: "Take each month from draft to approved to disbursed, with gross and net totals.",
-    src: `${SHOT}/payroll.png`,
+    src: `${SHOT}/payroll.webp`,
     alt: "Praesto’s payroll runs: six months of runs with employee counts, gross and net totals and their status.",
   },
 ];
@@ -82,7 +83,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Calendar",
     title: "One calendar for the whole company.",
     body: "Events and holidays across the month, with today’s schedule beside them.",
-    src: `${SHOT}/calendar.png`,
+    src: `${SHOT}/calendar.webp`,
     alt: "Praesto’s calendar for October with company events, a holiday and today’s schedule.",
   },
   {
@@ -90,7 +91,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Reports",
     title: "Build the report you need.",
     body: "Pick a data source and columns, add filters and sorting, then export to CSV or save it.",
-    src: `${SHOT}/reports.png`,
+    src: `${SHOT}/reports.webp`,
     alt: "Praesto’s report builder with chosen columns on the left and eleven employee rows of results.",
   },
   {
@@ -98,7 +99,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Roles",
     title: "Roles that match how you work.",
     body: "Bundle permissions into roles, scoped to a person’s own records, their team or everyone.",
-    src: `${SHOT}/permissions.png`,
+    src: `${SHOT}/permissions.webp`,
     alt: "Praesto’s roles screen: the Team Lead role with its members and leave permissions scoped to the team.",
   },
   {
@@ -106,7 +107,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Settings",
     title: "Set up the way you hire.",
     body: "Define interview rounds, who owns each one and where background verification happens.",
-    src: `${SHOT}/settings.png`,
+    src: `${SHOT}/settings.webp`,
     alt: "Praesto’s recruitment pipeline settings with a three-round default pipeline and an interns pipeline.",
   },
   {
@@ -114,7 +115,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Audit Log",
     title: "Every change, before and after.",
     body: "See who changed what, when and from where — field by field.",
-    src: `${SHOT}/audit-log.png`,
+    src: `${SHOT}/audit-log.webp`,
     alt: "Praesto’s audit log with an attendance-settings change open, showing each field’s value before and after.",
   },
   {
@@ -122,7 +123,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Helpdesk",
     title: "Requests with an owner and a deadline.",
     body: "Each ticket carries a priority, an SLA due date and a conversation, with internal notes for your team.",
-    src: `${SHOT}/helpdesk.png`,
+    src: `${SHOT}/helpdesk.webp`,
     alt: "A Praesto helpdesk ticket with its status, priority, SLA due date and a conversation including an internal note.",
   },
   {
@@ -130,7 +131,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Policies",
     title: "Policies people can find.",
     body: "Publish policies by category; everyone can read them and download a PDF.",
-    src: `${SHOT}/policies.png`,
+    src: `${SHOT}/policies.webp`,
     alt: "Praesto’s policies screen showing the leave policy alongside the list of company policies.",
   },
   {
@@ -138,7 +139,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Announcements",
     title: "News that reaches everyone.",
     body: "Post announcements to the whole organisation, and keep past ones on record.",
-    src: `${SHOT}/announcements.png`,
+    src: `${SHOT}/announcements.webp`,
     alt: "Praesto’s announcements screen listing three current company announcements.",
   },
   {
@@ -146,7 +147,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Payslips",
     title: "Payslips without the email chain.",
     body: "People see their net pay, deductions and TDS, and download their own payslips.",
-    src: `${SHOT}/payslips.png`,
+    src: `${SHOT}/payslips.webp`,
     alt: "Praesto’s payslips screen with the latest net pay and four months of payslips to download.",
   },
   {
@@ -154,7 +155,7 @@ const MORE_SCENES: ShowcaseScene[] = [
     label: "Billing",
     title: "Your plan, in plain sight.",
     body: "See your plan, renewal date and payment method, and change plans as you grow.",
-    src: `${SHOT}/subscription.png`,
+    src: `${SHOT}/subscription.webp`,
     alt: "Praesto’s subscription screen showing an active Growth plan, its renewal date and plan options.",
   },
 ];
@@ -174,7 +175,7 @@ const STACK: {
     label: "Approvals",
     title: "Every request. One inbox.",
     body: "Leave, work from home, salary advances and KYC reviews arrive in one place. Decide in a tap, and each request moves through the approval chain you set up.",
-    src: `${SHOT}/today.png`,
+    src: `${SHOT}/today.webp`,
     alt: "Praesto’s list of requests needing a decision: casual leave, work from home and a salary advance with Approve and Reject, and a KYC review.",
     crop: { x: 272, y: 524, w: 760, h: 336 },
   },
@@ -183,7 +184,7 @@ const STACK: {
     label: "Organisation",
     title: "Your organisation, mapped.",
     body: "See who leads each team and who belongs where. Permissions follow the structure, scoped to a person’s own records, their team or everyone.",
-    src: `${SHOT}/organisation.png`,
+    src: `${SHOT}/organisation.webp`,
     alt: "Praesto’s organisation view: the founder, five teams with their leads, and headcount totals.",
     crop: { x: 268, y: 0, w: 900, h: 560 },
   },
@@ -192,7 +193,7 @@ const STACK: {
     label: "Recruitment",
     title: "Hiring you can follow.",
     body: "Track every applicant from application to offer, with the funnel, roles and hiring managers at a glance.",
-    src: `${SHOT}/recruitment.png`,
+    src: `${SHOT}/recruitment.webp`,
     alt: "Praesto’s recruitment analytics: a hiring funnel from applied to hired, applications by role and openings by status.",
     crop: { x: 268, y: 0, w: 1100, h: 640 },
   },
@@ -201,7 +202,7 @@ const STACK: {
     label: "Analytics",
     title: "Answers, not spreadsheets.",
     body: "Workforce, attendance, recruitment and salary analytics are built in. When you need something specific, the report builder exports to CSV.",
-    src: `${SHOT}/analytics.png`,
+    src: `${SHOT}/analytics.webp`,
     alt: "Praesto’s workforce analytics: headcount growth by month, new joiners, employment status and department breakdown.",
     crop: { x: 268, y: 0, w: 1100, h: 640 },
   },
@@ -210,7 +211,7 @@ const STACK: {
     label: "Chat",
     title: "Conversations where the work is.",
     body: "One-to-one chat with replies, pinned messages, files and read receipts, right next to the rest of your HR.",
-    src: `${SHOT}/chat.png`,
+    src: `${SHOT}/chat.webp`,
     alt: "Praesto’s chat: a conversation with a reply, a pinned message and read receipts.",
     crop: { x: 256, y: 0, w: 1184, h: 600 },
   },
@@ -269,6 +270,12 @@ const SECURITY: { icon: IconName; title: string; body: string }[] = [
 
 const TIERS: PlanTier[] = ["starter", "growth", "enterprise"];
 
+/**
+ * Arrived as prerendered HTML: everything is already on screen, so nothing
+ * fades in (it would vanish and reappear). Client-side visits still animate.
+ */
+const settled = () => arrivedPrerendered("/");
+
 /** A signed-in person's display name. */
 function nameOf(user: any): string {
   return (
@@ -283,10 +290,7 @@ export default function Landing() {
   const { user } = useContext(UserContext);
   const signedIn = Boolean(user);
   const [overDark, setOverDark] = useState(true);
-
-  useEffect(() => {
-    document.title = "Praesto · People operations, beautifully connected";
-  }, []);
+  const [still] = useState(settled);
 
   // The bar takes the tone of whatever section is under it: dark over the
   // hero, security and closing sections, light everywhere else.
@@ -322,7 +326,7 @@ export default function Landing() {
             <motion.h1
               id="hero-title"
               className={s.heroTitle}
-              initial={{ opacity: 0, y: 16 }}
+              initial={still ? false : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: [0.2, 0, 0, 1] }}
             >
@@ -331,16 +335,17 @@ export default function Landing() {
             </motion.h1>
             <motion.p
               className={s.heroLead}
-              initial={{ opacity: 0, y: 12 }}
+              initial={still ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.1, ease: [0.2, 0, 0, 1] }}
             >
-              Attendance, leave, hiring, payroll and approvals for your whole
-              organisation — together in one workspace.
+              Praesto is HR software that brings attendance, leave, hiring,
+              payroll and approvals for your whole organisation together in one
+              workspace.
             </motion.p>
             <motion.div
               className={s.actions}
-              initial={{ opacity: 0, y: 10 }}
+              initial={still ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.18, ease: [0.2, 0, 0, 1] }}
             >
@@ -359,7 +364,7 @@ export default function Landing() {
 
           <motion.div
             className={s.heroDevice}
-            initial={{ opacity: 0, y: 40 }}
+            initial={still ? false : { opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.25, ease: [0.2, 0, 0, 1] }}
           >
@@ -419,16 +424,16 @@ export default function Landing() {
           </Reveal>
           <Reveal className={s.phones} delay={0.06}>
             <Phone
-              src={`${SHOT}/mobile-approvals.png`}
+              src={`${SHOT}/mobile-approvals.webp`}
               alt="Praesto on a phone: the Approvals inbox with leave, work-from-home, salary advance and KYC requests."
             />
             <Phone
-              src={`${SHOT}/mobile-today.png`}
+              src={`${SHOT}/mobile-today.webp`}
               alt="Praesto on a phone: the Today screen with hours worked, a month of attendance and requests to decide."
               front
             />
             <Phone
-              src={`${SHOT}/mobile-chat.png`}
+              src={`${SHOT}/mobile-chat.webp`}
               alt="Praesto on a phone: a chat conversation with a pinned message and a reply."
             />
           </Reveal>
@@ -484,9 +489,9 @@ export default function Landing() {
               Twenty-five modules. One workspace.
             </h2>
             <p className={s.lead}>
-              From someone’s first application to their last working day, every
-              part of the employee lifecycle shares the same people, the same
-              permissions and the same approvals.
+              A complete HRMS: from someone’s first application to their last
+              working day, every part of the employee lifecycle shares the same
+              people, the same permissions and the same approvals.
             </p>
           </Reveal>
           <Reveal className={s.modules} delay={0.06}>
@@ -520,7 +525,7 @@ export default function Landing() {
           </Reveal>
           <Reveal className={s.securityShot} delay={0.04}>
             <Shot
-              src={`${SHOT}/audit-log.png`}
+              src={`${SHOT}/audit-log.webp`}
               alt="Praesto’s audit log with a settings change open, listing each field’s value before and after."
               crop={{ x: 268, y: 0, w: 1172, h: 700 }}
             />
@@ -721,10 +726,11 @@ function Reveal({
   className?: string;
   delay?: number;
 }) {
+  const [still] = useState(settled);
   return (
     <motion.div
       className={className}
-      initial={{ opacity: 0, y: 24 }}
+      initial={still ? false : { opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "0px 0px -12% 0px" }}
       transition={{ duration: 0.7, delay, ease: [0.2, 0, 0, 1] }}
