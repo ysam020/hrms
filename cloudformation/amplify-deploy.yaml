@@ -99,8 +99,10 @@ Resources:
       # (apps/web/scripts/prerender.mjs) and served at their clean URLs;
       # everything else without a static file falls back to the SPA shell.
       CustomRules:
-        - Source: !Sub "https://www.${DomainName}/<*>"
-          Target: !Sub "https://${DomainName}/<*>"
+        # Host form: Amplify keeps the path and query; a "/<*>" host
+        # source never matches.
+        - Source: !Sub "https://www.${DomainName}"
+          Target: !Sub "https://${DomainName}"
           Status: "301"
         - Source: /privacy-policy
           Target: /privacy-policy.html

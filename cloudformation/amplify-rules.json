@@ -1,7 +1,7 @@
 [
   {
-    "source": "https://www.praesto.in/<*>",
-    "target": "https://praesto.in/<*>",
+    "source": "https://www.praesto.in",
+    "target": "https://praesto.in",
     "status": "301"
   },
   {
