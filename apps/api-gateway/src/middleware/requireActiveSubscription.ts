@@ -3,6 +3,58 @@ import { prisma } from "@hrms/db";
 import { AuthRequest } from "./authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 
+export type SubscriptionAccess =
+  | {
+      allowed: true;
+      subscriptionStatus: string | null;
+      planExpiresAt: Date | null;
+    }
+  | { allowed: false; message: string };
+
+// The access decision on its own, shared with the MCP endpoint (see
+// mcp/principal.ts), which has no Express middleware chain to run this in.
+// Throws on a DB error — callers fail open, as below.
+export async function getSubscriptionAccess(
+  tenantId: string,
+): Promise<SubscriptionAccess> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { subscriptionStatus: true, planExpiresAt: true },
+  });
+
+  if (!tenant)
+    return { allowed: true, subscriptionStatus: null, planExpiresAt: null };
+
+  if (tenant.subscriptionStatus === "expired") {
+    return {
+      allowed: false,
+      message: "Your subscription has expired. Please renew to continue.",
+    };
+  }
+
+  if (tenant.subscriptionStatus === "cancelled") {
+    // The tenant explicitly cancelled — cancel_at_cycle_end means they
+    // keep access through the period they already paid for. Checked live
+    // on every request rather than via a scheduled job, so access ends
+    // exactly when planExpiresAt passes, not whenever a batch job next runs.
+    const stillWithinPaidPeriod =
+      tenant.planExpiresAt && tenant.planExpiresAt > new Date();
+    if (!stillWithinPaidPeriod) {
+      return {
+        allowed: false,
+        message:
+          "Your subscription was cancelled and your access has ended. Please resubscribe to continue.",
+      };
+    }
+  }
+
+  return {
+    allowed: true,
+    subscriptionStatus: tenant.subscriptionStatus,
+    planExpiresAt: tenant.planExpiresAt,
+  };
+}
+
 // Applied after requireTenant — blocks expired orgs (and cancelled orgs past
 // their paid period), passes grace-period, cancelling (legacy), and
 // still-within-period cancelled orgs through with warning headers so the UI
@@ -16,28 +68,25 @@ export async function requireActiveSubscription(
   if (!tenantId) return next();
 
   try {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { subscriptionStatus: true, planExpiresAt: true },
-    });
+    const access = await getSubscriptionAccess(tenantId);
 
-    if (!tenant) return next();
-
-    if (tenant.subscriptionStatus === "expired") {
+    if (!access.allowed) {
       return apiResponse(res, RESPONSE_STATUS.PAYMENT_REQUIRES, {
-        message: "Your subscription has expired. Please renew to continue.",
+        message: access.message,
       });
     }
 
-    if (tenant.subscriptionStatus === "grace_period") {
+    const { subscriptionStatus, planExpiresAt } = access;
+
+    if (subscriptionStatus === "grace_period") {
       // Allow access but signal the UI to show a renewal banner.
       res.setHeader("X-Subscription-Grace-Period", "true");
-      if (tenant.planExpiresAt) {
-        res.setHeader("X-Plan-Expires-At", tenant.planExpiresAt.toISOString());
+      if (planExpiresAt) {
+        res.setHeader("X-Plan-Expires-At", planExpiresAt.toISOString());
       }
     }
 
-    if (tenant.subscriptionStatus === "cancelling") {
+    if (subscriptionStatus === "cancelling") {
       // Legacy transitional state — no longer set by current code
       // (cancelSubscription now sets "cancelled" synchronously), but a
       // pre-existing row could still carry this value. Fail open: full
@@ -45,22 +94,10 @@ export async function requireActiveSubscription(
       res.setHeader("X-Subscription-Cancelling", "true");
     }
 
-    if (tenant.subscriptionStatus === "cancelled") {
-      // The tenant explicitly cancelled — cancel_at_cycle_end means they
-      // keep access through the period they already paid for. Checked live
-      // on every request rather than via a scheduled job, so access ends
-      // exactly when planExpiresAt passes, not whenever a batch job next runs.
-      const stillWithinPaidPeriod =
-        tenant.planExpiresAt && tenant.planExpiresAt > new Date();
-      if (!stillWithinPaidPeriod) {
-        return apiResponse(res, RESPONSE_STATUS.PAYMENT_REQUIRES, {
-          message:
-            "Your subscription was cancelled and your access has ended. Please resubscribe to continue.",
-        });
-      }
+    if (subscriptionStatus === "cancelled") {
       res.setHeader("X-Subscription-Cancelled", "true");
-      if (tenant.planExpiresAt) {
-        res.setHeader("X-Plan-Expires-At", tenant.planExpiresAt.toISOString());
+      if (planExpiresAt) {
+        res.setHeader("X-Plan-Expires-At", planExpiresAt.toISOString());
       }
     }
 

@@ -23,7 +23,7 @@ HRMS manages the complete employee lifecycle — from onboarding (KYC, biometric
 | **Analytics**           | Workforce, attendance, salary and recruitment dashboards (Protobuf)         |
 | **Notifications**       | Real-time push (Firebase FCM) and in-app (Socket.IO + IndexedDB)            |
 | **Chat**                | Direct messaging, file attachments, offline queue, link previews            |
-| **AI Chatbot**          | HRMS-scoped assistant with tool calling (Ollama + SSE)                      |
+| **AI Assistants (MCP)** | Connect your own AI assistant; read-only, scoped to your own records        |
 | **AI Insights**         | On-demand analytical streaming reports per module                           |
 | **Security**            | WebAuthn passkeys, login risk scoring, audit logs, AES-256 field encryption |
 | **Billing**             | Razorpay subscription lifecycle with grace period handling                  |

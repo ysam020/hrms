@@ -26,18 +26,18 @@ All backend business logic is split across independent gRPC microservices. The A
 
 The following domains are handled directly by the API gateway via `prismaWithTenant`:
 
-| Domain            | Routes                       | Notes                                            |
-| ----------------- | ---------------------------- | ------------------------------------------------ |
-| Business Rules    | `/rules/*`                   | Full CRUD + dry-run testing + status toggle      |
-| Policies          | `/policies/*`                | CRUD + PDF generation/download                   |
-| Tenant Settings   | `/tenant-settings/*`         | Versioned CRUD + pending change management       |
-| Audit Logs        | (written inline in handlers) | Append-only; readable via Developer/Analytics    |
-| Chat              | `/chat/*`                    | REST (history) + Socket.IO (real-time)           |
-| AI Chatbot        | `/chatbot/message`           | SSE streaming, tool-calling loop (up to 5 iters) |
-| AI Insights       | `/ai-insights`               | One-shot analytical streaming report             |
-| Developer         | `/developer/*`               | Log streaming, identity verification             |
-| Payments          | `/payment/*`                 | Razorpay subscription lifecycle                  |
-| Tenant management | `/tenants/*`                 | Org setup, profile, tenant switching             |
+| Domain            | Routes                                  | Notes                                                       |
+| ----------------- | --------------------------------------- | ----------------------------------------------------------- |
+| Business Rules    | `/rules/*`                              | Full CRUD + dry-run testing + status toggle                 |
+| Policies          | `/policies/*`                           | CRUD + PDF generation/download                              |
+| Tenant Settings   | `/tenant-settings/*`                    | Versioned CRUD + pending change management                  |
+| Audit Logs        | (written inline in handlers)            | Append-only; readable via Developer/Analytics               |
+| Chat              | `/chat/*`                               | REST (history) + Socket.IO (real-time)                      |
+| AI Assistants     | `/mcp`, `/oauth/*`, `/ai-connections/*` | MCP server + OAuth for external AI assistants (docs/mcp.md) |
+| AI Insights       | `/ai-insights`                          | One-shot analytical streaming report                        |
+| Developer         | `/developer/*`                          | Log streaming, identity verification                        |
+| Payments          | `/payment/*`                            | Razorpay subscription lifecycle                             |
+| Tenant management | `/tenants/*`                            | Org setup, profile, tenant switching                        |
 
 ---
 

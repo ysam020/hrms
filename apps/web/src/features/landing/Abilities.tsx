@@ -56,9 +56,9 @@ export function Abilities() {
         <OfflineVignette />
       </Tile>
       <Tile
-        label="Assistant"
-        title="Ask instead of searching."
-        body="How much leave is left, what the work-from-home policy says, how this month’s attendance looks — just ask. The assistant only ever sees your own records."
+        label="AI Assistants"
+        title="Ask the assistant you already use."
+        body="Connect your own AI assistant to Praesto and ask how much leave is left, what the work-from-home policy says, or how this month’s attendance looks. It only ever reads your own records, and only what you allow."
       >
         <AssistantVignette />
       </Tile>

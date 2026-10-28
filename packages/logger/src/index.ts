@@ -67,6 +67,23 @@ export const cacheInvalidationSubscriberReconnectsTotal = new Counter({
   labelNames: ["service"],
 });
 
+// Tool calls from external AI assistants over MCP (see
+// api-gateway/src/mcp). `outcome` is ok | denied | invalid | error, so an
+// unusual rate of denied calls (an assistant probing for data its user
+// can't see) is something to alert on, not just a log line.
+export const mcpToolCallsTotal = new Counter({
+  name: "mcp_tool_calls_total",
+  help: "Total number of MCP tool calls",
+  labelNames: ["tool", "outcome", "service"],
+});
+
+export const mcpToolCallDuration = new Histogram({
+  name: "mcp_tool_call_duration_ms",
+  help: "Duration of MCP tool calls in milliseconds",
+  labelNames: ["tool", "service"],
+  buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
+});
+
 // ── Transports ───────────────────────────────────────────────────────────────
 const logGroupName =
   process.env.AWS_CLOUDWATCH_LOG_GROUP || `/hrms/${serviceName}/${env}`;

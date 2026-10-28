@@ -22,6 +22,16 @@ export function hasPrivilegedRole(
   return !!tenantRole && allowed.includes(tenantRole);
 }
 
+// Employee statuses that may no longer sign in — refused at Google sign-in
+// (auth-service googleOAuthCallback) and on every MCP call (api-gateway
+// mcp/principal.ts). "Pending" is deliberately absent: a new sign-up has to
+// reach the join-request/org-setup screens before anyone admits them.
+export const BLOCKED_EMPLOYEE_STATUSES: readonly string[] = [
+  "Terminated",
+  "Absconded",
+  "Resigned",
+];
+
 export enum LeaveTypeEnum {
   ANNUAL = "annual",
   SICK = "sick",

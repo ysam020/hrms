@@ -78,27 +78,28 @@ gRPC ports (50051–50060) are internal to the Docker network and are never expo
 
 ### API Gateway
 
-| Variable                  | Required | Description                                          |
-| ------------------------- | -------- | ---------------------------------------------------- |
-| `NODE_ENV`                | Yes      | `production` or `development`                        |
-| `API_GATEWAY_PORT`        | Yes      | Port to bind (default `9002`)                        |
-| `CLIENT_URL`              | Yes      | Allowed frontend origin(s), comma-separated          |
-| `JWT_SECRET_ACCESS`       | Yes      | Access token signing key (≥ 32 random bytes)         |
-| `JWT_SECRET_REFRESH`      | Yes      | Refresh token signing key (≥ 32 random bytes)        |
-| `CSRF_SECRET`             | Yes      | CSRF double-cookie secret (≥ 32 random bytes)        |
-| `GOOGLE_CLIENT_ID`        | Yes      | Google OAuth 2.0 client ID                           |
-| `GOOGLE_CLIENT_SECRET`    | Yes      | Google OAuth 2.0 client secret                       |
-| `GOOGLE_CALLBACK_URL`     | Yes      | OAuth redirect URI (must match Google Console)       |
-| `REDIS_HOST`              | Yes      | Redis hostname                                       |
-| `REDIS_PORT`              | No       | Redis port (default `6379`)                          |
-| `REDIS_PASSWORD`          | No       | Redis password (if auth enabled)                     |
-| `RAZORPAY_KEY_ID`         | Yes      | Razorpay API key ID                                  |
-| `RAZORPAY_KEY_SECRET`     | Yes      | Razorpay API key secret                              |
-| `RAZORPAY_WEBHOOK_SECRET` | Yes      | Razorpay webhook HMAC secret                         |
-| `OLLAMA_BASE_URL`         | No       | Ollama server URL (default `http://localhost:11434`) |
-| `AUTH_SERVICE_PORT`       | No       | Default `50051`                                      |
-| `EMPLOYEE_SERVICE_PORT`   | No       | Default `50053`                                      |
-| _(etc. for each service)_ |          |                                                      |
+| Variable                  | Required | Description                                                                                  |
+| ------------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                | Yes      | `production` or `development`                                                                |
+| `API_GATEWAY_PORT`        | Yes      | Port to bind (default `9002`)                                                                |
+| `CLIENT_URL`              | Yes      | Allowed frontend origin(s), comma-separated                                                  |
+| `JWT_SECRET_ACCESS`       | Yes      | Access token signing key (≥ 32 random bytes)                                                 |
+| `JWT_SECRET_REFRESH`      | Yes      | Refresh token signing key (≥ 32 random bytes)                                                |
+| `CSRF_SECRET`             | Yes      | CSRF double-cookie secret (≥ 32 random bytes)                                                |
+| `GOOGLE_CLIENT_ID`        | Yes      | Google OAuth 2.0 client ID                                                                   |
+| `GOOGLE_CLIENT_SECRET`    | Yes      | Google OAuth 2.0 client secret                                                               |
+| `GOOGLE_CALLBACK_URL`     | Yes      | OAuth redirect URI (must match Google Console)                                               |
+| `REDIS_HOST`              | Yes      | Redis hostname                                                                               |
+| `REDIS_PORT`              | No       | Redis port (default `6379`)                                                                  |
+| `REDIS_PASSWORD`          | No       | Redis password (if auth enabled)                                                             |
+| `RAZORPAY_KEY_ID`         | Yes      | Razorpay API key ID                                                                          |
+| `RAZORPAY_KEY_SECRET`     | Yes      | Razorpay API key secret                                                                      |
+| `RAZORPAY_WEBHOOK_SECRET` | Yes      | Razorpay webhook HMAC secret                                                                 |
+| `OLLAMA_BASE_URL`         | No       | Ollama server URL (default `http://localhost:11434`); AI Insights and resume scoring only    |
+| `MCP_ISSUER_URL`          | No       | Public gateway origin for the MCP/OAuth endpoints (default: origin of `GOOGLE_CALLBACK_URL`) |
+| `AUTH_SERVICE_PORT`       | No       | Default `50051`                                                                              |
+| `EMPLOYEE_SERVICE_PORT`   | No       | Default `50053`                                                                              |
+| _(etc. for each service)_ |          |                                                                                              |
 
 ### All backend services
 

@@ -203,29 +203,29 @@ Turborepo understands the dependency graph between workspace packages and builds
 
 ## Tech Stack
 
-| Layer                 | Technology                                                      |
-| --------------------- | --------------------------------------------------------------- |
-| Frontend              | React 18, Vite 8, TypeScript, MUI v6, PrimeReact v10            |
-| Forms / validation    | Formik, Zod                                                     |
-| HTTP client           | Axios (with interceptors + protobuf support)                    |
-| Real-time client      | Socket.IO client 4.8                                            |
-| Offline storage       | IndexedDB (6 stores via custom wrapper)                         |
-| Service worker        | Workbox                                                         |
-| API gateway           | Node.js, Express 4, Socket.IO 4, gRPC-js                        |
-| Microservices         | Node.js, TypeScript, gRPC                                       |
-| ORM                   | Prisma (MongoDB provider)                                       |
-| Database              | MongoDB (database-per-tenant silo)                              |
-| Cache                 | Two-tier: in-process LRU (L1) + Redis ioredis (L2)              |
-| Job queue             | BullMQ on Redis                                                 |
-| Payments              | Razorpay (subscriptions + webhooks)                             |
-| Push notifications    | Firebase Cloud Messaging                                        |
-| File storage          | AWS S3                                                          |
-| AI / LLM              | Ollama (qwen2.5-coder:14b) — chatbot, AI insights, resume score |
-| Build system          | Turborepo, pnpm workspaces                                      |
-| Containerisation      | Docker, nginx                                                   |
-| Observability (local) | Prometheus + Grafana + Loki                                     |
-| Observability (prod)  | AWS CloudWatch                                                  |
-| Code quality          | Husky, Prettier, ESLint, Conventional Commits                   |
+| Layer                 | Technology                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| Frontend              | React 18, Vite 8, TypeScript, MUI v6, PrimeReact v10                                        |
+| Forms / validation    | Formik, Zod                                                                                 |
+| HTTP client           | Axios (with interceptors + protobuf support)                                                |
+| Real-time client      | Socket.IO client 4.8                                                                        |
+| Offline storage       | IndexedDB (6 stores via custom wrapper)                                                     |
+| Service worker        | Workbox                                                                                     |
+| API gateway           | Node.js, Express 4, Socket.IO 4, gRPC-js                                                    |
+| Microservices         | Node.js, TypeScript, gRPC                                                                   |
+| ORM                   | Prisma (MongoDB provider)                                                                   |
+| Database              | MongoDB (database-per-tenant silo)                                                          |
+| Cache                 | Two-tier: in-process LRU (L1) + Redis ioredis (L2)                                          |
+| Job queue             | BullMQ on Redis                                                                             |
+| Payments              | Razorpay (subscriptions + webhooks)                                                         |
+| Push notifications    | Firebase Cloud Messaging                                                                    |
+| File storage          | AWS S3                                                                                      |
+| AI / LLM              | Ollama (qwen2.5-coder:14b) — AI insights, resume score; chat is via external MCP assistants |
+| Build system          | Turborepo, pnpm workspaces                                                                  |
+| Containerisation      | Docker, nginx                                                                               |
+| Observability (local) | Prometheus + Grafana + Loki                                                                 |
+| Observability (prod)  | AWS CloudWatch                                                                              |
+| Code quality          | Husky, Prettier, ESLint, Conventional Commits                                               |
 
 ---
 

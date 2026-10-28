@@ -148,6 +148,8 @@ const F = {
   help: () => import("@next/features/help/Help"),
   audit: () => import("@next/features/audit/AuditLog"),
   publicPages: () => import("@next/features/public/Public"),
+  aiAssistants: () => import("@next/features/assistant/AiAssistants"),
+  connectAuthorize: () => import("@next/features/assistant/ConnectAuthorize"),
   orgSetup: () => import("@next/features/public/OrgSetup"),
 };
 
@@ -365,6 +367,7 @@ const appRoutes: RouteObject[] = [
     ...page(F.subscription, "default", hasSubscriptionAccess),
   },
   { path: "help", ...page(F.help) },
+  { path: "ai-assistants", ...page(F.aiAssistants) },
   { path: "audit-logs", ...page(F.audit, "default", isOwnerOrAdmin) },
   { path: "*", element: <NotFound /> },
 ];
@@ -385,6 +388,21 @@ export const router = createBrowserRouter(
                 <LoginRoute>
                   <Login />
                 </LoginRoute>
+              ),
+            };
+          },
+        },
+        // An AI assistant's sign-in lands here (see the gateway's mcp/).
+        // Signed in, but outside the app shell: a focused consent screen.
+        {
+          path: "/connect/authorize/:requestId",
+          lazy: async () => {
+            const { default: ConnectAuthorize } = await F.connectAuthorize();
+            return {
+              Component: () => (
+                <RequireSession>
+                  <ConnectAuthorize />
+                </RequireSession>
               ),
             };
           },

@@ -55,11 +55,15 @@ const masterScopedPrisma = prisma.$extends({
 // - tenant / tenantMembership: cross-tenant admin data, no filter needed
 // - payoutTenantIndex: read by unauthenticated webhooks (no tenant context
 //   yet exists) specifically to resolve which tenant a payout belongs to
+// - mcpOAuthClient / mcpGrant: looked up from a bearer token before any
+//   tenant context exists (see apps/api-gateway/src/mcp)
 const MASTER_MODELS = new Set([
   "user",
   "tenant",
   "tenantMembership",
   "payoutTenantIndex",
+  "mcpOAuthClient",
+  "mcpGrant",
 ]);
 
 // Federated proxy:

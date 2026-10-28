@@ -98,6 +98,34 @@ export function sanitizePart(s: string | undefined): string | null {
 
 // Route handlers
 
+/**
+ * A year's holidays for the current tenant (cached per tenant). Shared with
+ * the MCP list_holidays tool (see mcp/tools.ts).
+ */
+export async function listHolidays(year: number): Promise<any[]> {
+  const tenantId = getTenantId() ?? "global";
+  const cacheKey = `t:${tenantId}:holiday:${year}`;
+  const cached = await cacheManager.get<any[]>(cacheKey);
+  if (cached) return cached;
+
+  const records = await prisma.holiday.findMany({ where: { year } });
+  const data = records.flatMap((record: any) => {
+    const list = Array.isArray(record.holidays)
+      ? (record.holidays as any[])
+      : [];
+    return list.map((h: any) => ({
+      name: h.name,
+      date: h.date,
+      createdBy: h.createdBy,
+      createdOn: h.createdOn,
+      month: record.month,
+    }));
+  });
+
+  await cacheManager.set(cacheKey, data, "holiday");
+  return data;
+}
+
 export async function getHolidays(req: Request, res: Response) {
   try {
     const year = parseInt(String(req.params.year));
@@ -108,31 +136,7 @@ export async function getHolidays(req: Request, res: Response) {
       });
     }
 
-    const tenantId = getTenantId() ?? "global";
-    const cacheKey = `t:${tenantId}:holiday:${year}`;
-    const cached = await cacheManager.get<any[]>(cacheKey);
-    if (cached) {
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-        message: "Holidays retrieved successfully",
-        data: cached,
-      });
-    }
-
-    const records = await prisma.holiday.findMany({ where: { year } });
-    const data = records.flatMap((record: any) => {
-      const list = Array.isArray(record.holidays)
-        ? (record.holidays as any[])
-        : [];
-      return list.map((h: any) => ({
-        name: h.name,
-        date: h.date,
-        createdBy: h.createdBy,
-        createdOn: h.createdOn,
-        month: record.month,
-      }));
-    });
-
-    await cacheManager.set(cacheKey, data, "holiday");
+    const data = await listHolidays(year);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Holidays retrieved successfully",
       data,

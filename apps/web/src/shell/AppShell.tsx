@@ -18,7 +18,6 @@ import { Sidebar } from "./Sidebar";
 import { CommandPalette } from "./CommandPalette";
 import { NotificationsButton } from "./Notifications";
 import { OfflineStatusButton } from "@next/offline";
-import { AssistantButton } from "@next/features/assistant/Assistant";
 import { applyAppearance } from "./appearance";
 import s from "./shell.module.css";
 
@@ -131,7 +130,6 @@ function ShellLayout() {
             />
           )}
           <OfflineStatusButton />
-          <AssistantButton />
           <NotificationsButton />
         </>
       ),

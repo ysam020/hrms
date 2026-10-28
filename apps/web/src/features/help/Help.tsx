@@ -38,7 +38,6 @@ export default function Help() {
         items: [
           { keys: [mod, "K"], label: "Search pages and people" },
           { keys: [mod, "\\"], label: "Show or hide the sidebar" },
-          { keys: ["⇧", mod, "A"], label: "Open or close the Assistant" },
           { keys: ["Esc"], label: "Close a dialog, sheet, or menu" },
         ],
       },

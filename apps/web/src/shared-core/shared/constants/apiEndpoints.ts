@@ -280,8 +280,17 @@ const POLICY = {
   DOWNLOAD_POLICY_PDF: (id: string | number) => `/policies/${id}/pdf`,
 };
 
-const CHATBOT = {
-  CHATBOT_MESSAGE: "/chatbot/message",
+// Connecting external AI assistants over MCP (gateway mcp/consent.ts).
+const AI_CONNECTIONS = {
+  AI_CONNECTIONS: "/ai-connections",
+  AI_CONNECTION: (grantId: string) =>
+    `/ai-connections/${encodeURIComponent(grantId)}`,
+  AI_CONNECTION_REQUEST: (requestId: string) =>
+    `/ai-connections/requests/${encodeURIComponent(requestId)}`,
+  AI_CONNECTION_APPROVE: (requestId: string) =>
+    `/ai-connections/requests/${encodeURIComponent(requestId)}/approve`,
+  AI_CONNECTION_DENY: (requestId: string) =>
+    `/ai-connections/requests/${encodeURIComponent(requestId)}/deny`,
 };
 
 const AI_INSIGHTS = {
@@ -454,7 +463,7 @@ export const API_ENDPOINTS = {
   ...USER,
   ...POLICY,
   ...UPLOAD,
-  ...CHATBOT,
+  ...AI_CONNECTIONS,
   ...AI_INSIGHTS,
   ...DEVELOPER,
   ...ORG_SETTINGS,

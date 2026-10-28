@@ -23,7 +23,7 @@ const jsRedirect = (res: Response, url: string) => {
   return res.redirect(302, url);
 };
 
-async function fetchFullProfile(userId: string) {
+export async function fetchFullProfile(userId: string) {
   const rows = (await prisma.user.aggregateRaw({
     pipeline: [
       { $match: { $expr: { $eq: ["$_id", { $toObjectId: userId }] } } },
