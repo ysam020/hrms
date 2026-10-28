@@ -745,7 +745,7 @@ Resources:
                   - s3:GetObject
                 Resource: !Sub "${PraestoBucket.Arn}/*"
               # Self-associates ElasticIp at boot (see LaunchTemplate UserData)
-              # since there's no ALB anymore to give api.praesto.cloud a stable
+              # since there's no ALB anymore to give api.praesto.in a stable
               # address — the instance has to carry its own. AssociateAddress
               # can't be scoped to a specific EIP allocation via resource ARN
               # (EC2 address actions don't support resource-level permissions),
@@ -891,7 +891,7 @@ Resources:
           CidrIp: 0.0.0.0/0
 
   # ─────────────────────────── Networking: static public address ───────────────────────────
-  # Without an ALB, something has to give api.praesto.cloud a stable address
+  # Without an ALB, something has to give api.praesto.in a stable address
   # across instance replacement (Spot interruption, AMI/launch-template
   # updates). A plain auto-assigned public IP changes every time the
   # instance is replaced; this EIP doesn't move, so DNS (ApiDnsRecord below)
@@ -931,7 +931,7 @@ Resources:
             set -euo pipefail
 
             # No ALB anymore — this instance needs its own stable public
-            # address for api.praesto.cloud to keep pointing at (see
+            # address for api.praesto.in to keep pointing at (see
             # ElasticIp's comment). --allow-reassociation because the EIP is
             # still attached to whatever instance this one is replacing.
             TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")

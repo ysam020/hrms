@@ -60,7 +60,7 @@
         z-index: 9999;
       }
       html.dark-theme #initial-loader {
-        background: #111b21;
+        background: #141416;
       }
       #initial-loader::after {
         content: "";
@@ -92,10 +92,6 @@
 
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Service Worker -->
-    <script src="/sw-register.js"></script>
-
-    <!-- Network status -->
-    <script src="/network-status.js"></script>
+    <!-- The service worker is registered by the app (src/offline/register.ts). -->
   </body>
 </html>

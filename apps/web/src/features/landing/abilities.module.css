@@ -1,0 +1,297 @@
+/* The three ability tiles on the landing page. Uses the landing palette
+   (--l-* from landing.module.css .page). */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 2vw, 24px);
+  max-width: var(--l-max);
+  margin: 0 auto;
+  text-align: left;
+}
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 560px;
+  }
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: clamp(20px, 2.2vw, 28px);
+  background: var(--l-tint);
+}
+.visual {
+  display: grid;
+  place-items: center;
+  height: 300px;
+  padding: 28px;
+}
+.copy {
+  padding: 4px clamp(24px, 2.4vw, 32px) clamp(28px, 2.8vw, 36px);
+}
+.label {
+  font: 600 14px/1.2 var(--px-font);
+  color: var(--l-accent);
+}
+.title {
+  margin: 8px 0 0;
+  font: 600 clamp(22px, 2vw, 26px) / 1.15 var(--px-font-display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.body {
+  margin: 10px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--l-ink-2);
+  text-wrap: pretty;
+}
+
+/* ── Face ─────────────────────────────────────────────────────────── */
+.face {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+.viewfinder {
+  position: relative;
+  width: 196px;
+  height: 196px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 38%,
+    #1f3442 0%,
+    #0d1b26 62%,
+    #0a1219 100%
+  );
+  box-shadow: 0 24px 48px -24px rgb(10 18 25 / 0.55);
+}
+.faceSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-linecap: round;
+}
+.ringTrack {
+  stroke: rgb(255 255 255 / 0.12);
+  stroke-width: 4;
+}
+.ring {
+  stroke: #5bbde6;
+  stroke-width: 4;
+  transform: rotate(-90deg);
+  transform-origin: 100px 100px;
+  transition: stroke 0.3s;
+}
+.ring[data-done] {
+  stroke: #34c759;
+}
+.head {
+  stroke: rgb(255 255 255 / 0.78);
+  stroke-width: 2.5;
+}
+.features {
+  stroke: rgb(255 255 255 / 0.78);
+  stroke-width: 4;
+}
+.check {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--l-tint);
+  border-radius: 50%;
+  background: #248a3d;
+}
+.check path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.caption {
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--l-surface);
+  box-shadow: 0 0 0 1px var(--l-line);
+  font: 500 14px/1.3 var(--px-font);
+  color: var(--l-ink-2);
+}
+.caption[data-done] {
+  color: #1d7a35;
+}
+
+/* ── Offline ──────────────────────────────────────────────────────── */
+.offline {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  width: 100%;
+  max-width: 330px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--l-surface);
+  box-shadow: 0 0 0 1px var(--l-line);
+  font: 600 13px/1.2 var(--px-font);
+}
+.chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b25000;
+  transition: background 0.3s;
+}
+.chip[data-tone="syncing"] i {
+  background: var(--l-accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+.chip[data-tone="done"] i {
+  background: #248a3d;
+}
+.queue {
+  display: grid;
+  width: 100%;
+  margin: 0;
+  padding: 4px 16px;
+  list-style: none;
+  border-radius: 16px;
+  background: var(--l-surface);
+  box-shadow:
+    0 0 0 1px var(--l-line),
+    0 20px 40px -24px rgb(10 18 25 / 0.3);
+}
+.queueItem {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+}
+.queueItem + .queueItem {
+  border-top: 1px solid var(--l-line);
+}
+.queueText {
+  display: grid;
+  gap: 2px;
+}
+.queueText b {
+  font: 600 14px/1.3 var(--px-font);
+}
+.queueText small {
+  font-size: 12px;
+  color: var(--l-ink-3);
+}
+.queueState {
+  justify-self: start;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #fdf0e1;
+  color: #8a4200;
+  font: 500 12px/1.3 var(--px-font);
+  transition:
+    background 0.3s,
+    color 0.3s;
+}
+.queueState[data-sent] {
+  background: #e3f4e7;
+  color: #1d6b31;
+}
+
+/* ── Assistant ────────────────────────────────────────────────────── */
+.chat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  max-width: 330px;
+  height: 100%;
+}
+.bubble {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 8px 13px;
+  border-radius: 18px;
+  background: var(--l-surface);
+  box-shadow: 0 0 0 1px var(--l-line);
+  font: 400 15px/1.4 var(--px-font);
+}
+.mine {
+  align-self: flex-end;
+  background: var(--l-accent);
+  box-shadow: none;
+  color: #fff;
+}
+.typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 13px 14px;
+}
+.typing i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--l-ink-3);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 5px 5px 5px 15px;
+  border-radius: 999px;
+  background: var(--l-surface);
+  box-shadow: 0 0 0 1px var(--l-line);
+  font: 400 15px/1.3 var(--px-font);
+  color: var(--l-ink-3);
+}
+.send {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--l-accent);
+}
+.send path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chip i,
+  .typing i {
+    animation: none;
+  }
+}

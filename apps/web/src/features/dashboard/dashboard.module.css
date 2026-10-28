@@ -1,0 +1,354 @@
+/* Today's widget grid and the shared pieces widgets are built from. Widgets
+   are sections, not cards: generous gaps plus a hairline above each one do
+   the separating, as on the rest of the app. */
+
+.wrap {
+  container-type: inline-size;
+}
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--px-space-12) var(--px-space-16);
+  align-items: start;
+}
+@container (min-width: 820px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cell[data-size="wide"] {
+    grid-column: 1 / -1;
+  }
+}
+.cell {
+  min-width: 0;
+  padding-top: var(--px-space-6);
+  border-top: 1px solid var(--px-separator);
+}
+/* Sections bring their own vertical rhythm; inside the grid the gap owns it. */
+.cell > section {
+  margin: 0;
+}
+
+/* ── Shared bits ─────────────────────────────────────────────────────── */
+.stack {
+  display: grid;
+  gap: var(--px-space-4);
+  min-width: 0;
+}
+.note {
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+.footnote {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+.lead {
+  font: var(--px-type-headline);
+}
+.subhead {
+  font: var(--px-type-label);
+  color: var(--px-text-2);
+}
+.stale {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+.more {
+  justify-self: start;
+  font: var(--px-type-callout);
+}
+.columns2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--px-space-6);
+}
+
+/* Rows: a short date or time, a title and a meta line, an optional badge. */
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--px-separator);
+  color: inherit;
+  text-decoration: none;
+}
+.rows > li:last-child > .row,
+.rows > .row:last-child {
+  border-bottom: 0;
+}
+a.row:hover .rowTitle {
+  color: var(--px-accent);
+}
+.when {
+  flex: none;
+  width: 84px;
+  font: var(--px-type-callout);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text-2);
+}
+.rowText {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
+.rowTitle {
+  font: var(--px-type-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rowMeta {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* People (team today). */
+.people {
+  display: grid;
+  gap: 0 var(--px-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.people[data-columns="2"] {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  min-height: 52px;
+  border-bottom: 1px solid var(--px-separator);
+}
+.personText {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
+.personName {
+  font: var(--px-type-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.personMeta {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+
+/* A queue: label, optional badge, count; the whole row is the link. */
+.queue {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.queueRow {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  min-height: 44px;
+  border-bottom: 1px solid var(--px-separator);
+  color: var(--px-text-1);
+  font: var(--px-type-body);
+  text-decoration: none;
+}
+.queue > li:last-child > .queueRow,
+.queue > .queueRow:last-child {
+  border-bottom: 0;
+}
+.queueRow > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.queueRow b {
+  font: 600 17px/1 var(--px-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.queueRow[data-zero] b {
+  color: var(--px-text-3);
+  font-weight: 500;
+}
+a.queueRow:hover > span:first-child {
+  color: var(--px-accent);
+}
+
+/* Leave balance: a number per type. */
+.balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--px-space-4);
+  margin: 0;
+}
+.balances dt {
+  font: var(--px-type-caption);
+  color: var(--px-text-2);
+}
+.balances dd {
+  margin: 2px 0 0;
+  font: 600 26px/1.1 var(--px-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.balances dd span {
+  margin-left: 3px;
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+
+/* Payroll run steps. */
+.steps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.steps li {
+  padding-top: 8px;
+  border-top: 3px solid var(--px-separator-strong);
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+.steps li[data-done] {
+  border-top-color: var(--px-accent);
+  color: var(--px-text-2);
+}
+.steps li[data-current] {
+  border-top-color: var(--px-accent);
+  color: var(--px-text-1);
+  font-weight: 600;
+}
+
+/* ── Customize sheet ─────────────────────────────────────────────────── */
+.customizeStatus {
+  margin-bottom: var(--px-space-4);
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+.customizeHead {
+  margin: var(--px-space-5) 0 var(--px-space-2);
+  font: var(--px-type-headline);
+}
+.customizeHead:first-of-type {
+  margin-top: 0;
+}
+.customizeGroup + .customizeGroup {
+  margin-top: var(--px-space-3);
+}
+.customizeGroupName {
+  margin: var(--px-space-2) 0 2px;
+  font: var(--px-type-label);
+  color: var(--px-text-2);
+}
+.customizeList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.customizeItem {
+  position: relative;
+  padding: var(--px-space-3) 0;
+  border-bottom: 1px solid var(--px-separator);
+  background: var(--px-bg-raised);
+}
+.customizeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  min-height: 44px;
+}
+li.customizeRow {
+  border-bottom: 1px solid var(--px-separator);
+}
+.customizeLabel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  min-width: 0;
+}
+.customizeIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+}
+.customizeText {
+  display: grid;
+  min-width: 0;
+}
+.customizeName {
+  font: var(--px-type-body);
+  font-weight: 600;
+}
+.customizeDesc {
+  font: var(--px-type-caption);
+  color: var(--px-text-2);
+}
+.handle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 32px;
+  color: var(--px-text-3);
+  cursor: grab;
+  touch-action: none;
+  rotate: 90deg;
+}
+.handle:active {
+  cursor: grabbing;
+}
+.customizeControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2) var(--px-space-3);
+  margin-top: var(--px-space-2);
+  padding-left: calc(20px + var(--px-space-3));
+}
+.moveButtons {
+  display: inline-flex;
+  gap: 2px;
+}
+.setting {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--px-space-2);
+  font: var(--px-type-caption);
+  color: var(--px-text-2);
+}
+.setting select {
+  width: auto;
+  min-width: 120px;
+}
+.customizeFooter {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--px-space-2);
+}
+.customizeNote {
+  margin-top: var(--px-space-5);
+}

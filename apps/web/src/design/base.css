@@ -1,0 +1,270 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* No rubber-band past the page edges: the app shell is a fixed frame, so the
+   bounce only drags the whole window (sidebar included) away from the top. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  font: var(--px-type-body);
+  color: var(--px-text-1);
+  background: var(--px-bg-window);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "cv11";
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+a {
+  color: var(--px-accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+[hidden] {
+  display: none !important;
+}
+
+/* One focus ring for the whole app — keyboard only. */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: 2px;
+  border-radius: var(--px-radius-sm);
+}
+
+/* Headings receive programmatic focus after navigation (for screen readers);
+   they aren't controls, so they don't show a ring. */
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+::selection {
+  background: var(--px-accent-soft);
+}
+
+/* Type roles — use these rather than ad-hoc font declarations. */
+.px-display {
+  font: var(--px-type-display);
+  letter-spacing: var(--px-type-display-track);
+}
+.px-title {
+  font: var(--px-type-title);
+  letter-spacing: var(--px-type-title-track);
+}
+.px-section {
+  font: var(--px-type-section);
+  letter-spacing: var(--px-type-section-track);
+}
+.px-headline {
+  font: var(--px-type-headline);
+}
+.px-body {
+  font: var(--px-type-body);
+}
+.px-callout {
+  font: var(--px-type-callout);
+}
+.px-label {
+  font: var(--px-type-label);
+}
+.px-meta {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.px-caption {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+.px-metric {
+  font: var(--px-type-metric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.px-secondary {
+  color: var(--px-text-2);
+}
+.px-tertiary {
+  color: var(--px-text-3);
+}
+.px-num {
+  font-variant-numeric: tabular-nums;
+}
+.px-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.px-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link for keyboard users. */
+.px-skip {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: var(--px-z-toast);
+  padding: 8px 12px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-bg-raised);
+  box-shadow: var(--px-shadow-2);
+  transform: translateY(-200%);
+}
+.px-skip:focus-visible {
+  transform: none;
+}
+
+/* Thin, unobtrusive scrollbars on desktop. */
+@media (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--px-separator-strong) transparent;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   View Transitions (same-document, driven by React Router)
+   The window chrome (root) never animates; only the named page
+   region cross-fades with a short rise, and named shared elements
+   (e.g. an employee's identity block) morph between views.
+   ────────────────────────────────────────────────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(px-page) {
+  animation-duration: var(--px-dur-base);
+  animation-timing-function: var(--px-ease-standard);
+}
+::view-transition-old(px-page) {
+  animation: px-vt-out var(--px-dur-fast) var(--px-ease-exit) both;
+}
+::view-transition-new(px-page) {
+  animation: px-vt-in var(--px-dur-base) var(--px-ease-enter) both;
+}
+
+/* Shared elements: let the group morph position/size; crossfade content. */
+::view-transition-group(*) {
+  animation-duration: var(--px-dur-slow);
+  animation-timing-function: var(--px-ease-standard);
+}
+
+@keyframes px-vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes px-vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--px-rise));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Shared CSS enter for content that only needs to appear once on mount.
+   fill-mode backwards (not both) so no transform lingers after the run. */
+@keyframes px-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--px-rise));
+  }
+}
+.px-enter {
+  animation: px-rise-in var(--px-dur-base) var(--px-ease-enter) backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .px-enter {
+    animation-name: px-fade-in;
+  }
+}
+@keyframes px-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Skeleton shimmer is the one continuous motion; reduced-motion stops it. */
+@keyframes px-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}

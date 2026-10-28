@@ -1,0 +1,241 @@
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--px-z-dialog);
+  display: grid;
+  place-items: center;
+  padding: var(--px-space-4);
+}
+.layerSheet {
+  z-index: var(--px-z-drawer);
+  place-items: stretch;
+  padding: 0;
+}
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--px-bg-scrim);
+}
+
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(86vh, 760px);
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-raised);
+  box-shadow: var(--px-shadow-3);
+  overflow: hidden;
+}
+.sm {
+  max-width: 420px;
+}
+.md {
+  max-width: 560px;
+}
+.lg {
+  max-width: 760px;
+}
+.dialogHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--px-space-3);
+  padding: var(--px-space-5) var(--px-space-5) var(--px-space-3);
+}
+.dialogTitle {
+  font: var(--px-type-section);
+  letter-spacing: var(--px-type-section-track);
+}
+.dialogDescription {
+  margin-top: 4px;
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+.dialogBody {
+  padding: var(--px-space-2) var(--px-space-5) var(--px-space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--px-space-2);
+  padding: var(--px-space-3) var(--px-space-5);
+  border-top: 1px solid var(--px-separator);
+  background: var(--px-bg-raised);
+}
+.alertIcon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 20px;
+}
+
+/* Sheet / drawer ───────────────────────────────────────────────── */
+.sheet {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: var(--px-bg-raised);
+  box-shadow: var(--px-shadow-3);
+  overscroll-behavior: contain;
+}
+.sheet[data-edge="right"] {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(var(--_w, var(--px-inspector-w)), 100vw);
+}
+.sheet[data-edge="left"] {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(var(--_w, 300px), 88vw);
+}
+.sheet[data-edge="bottom"] {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 88vh;
+  border-radius: var(--px-radius-lg) var(--px-radius-lg) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.grabber {
+  width: 36px;
+  height: 5px;
+  margin: 6px auto 0;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-separator-strong);
+}
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  min-height: var(--px-toolbar-h);
+  padding: 0 var(--px-space-2) 0 var(--px-space-5);
+  border-bottom: 1px solid var(--px-separator);
+}
+.sheetTitle {
+  flex: 1;
+  min-width: 0;
+  font: var(--px-type-headline);
+}
+.sheetBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--px-space-5);
+}
+.sheetFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--px-space-2);
+  padding: var(--px-space-3) var(--px-space-5);
+  border-top: 1px solid var(--px-separator);
+}
+
+/* Popover / menu ───────────────────────────────────────────────── */
+.popover {
+  position: fixed;
+  z-index: var(--px-z-popover);
+  min-width: 200px;
+  max-width: min(360px, calc(100vw - 16px));
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-raised);
+  box-shadow: var(--px-shadow-2);
+}
+.menu {
+  padding: 5px;
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: transparent;
+  text-align: left;
+  font: var(--px-type-body);
+  color: var(--px-text-1);
+}
+.menuItem:hover,
+.menuItem:focus-visible {
+  outline: none;
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+}
+.menuItem:hover .menuMeta,
+.menuItem:focus-visible .menuMeta {
+  color: inherit;
+}
+.menuItem[data-tone="danger"] {
+  color: var(--px-danger);
+}
+.menuItem[data-tone="danger"]:hover,
+.menuItem[data-tone="danger"]:focus-visible {
+  background: var(--px-danger);
+  color: #fff;
+}
+.menuItem svg {
+  font-size: 16px;
+}
+.menuMeta {
+  margin-left: auto;
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.menuSeparator {
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--px-separator);
+}
+.menuHeading {
+  padding: 6px 10px 4px;
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+/* One row: tone icon, message, dismiss — centred on a shared axis. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(480px, 100%);
+  min-height: 44px;
+  padding: 6px 6px 6px 14px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-raised);
+  box-shadow: var(--px-shadow-3);
+  color: var(--px-text-1);
+  font: var(--px-type-body);
+  pointer-events: auto;
+}
+.toastIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+.toastIcon svg {
+  display: block;
+}
+.toastText {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+}
+.toast > button {
+  flex: none;
+}

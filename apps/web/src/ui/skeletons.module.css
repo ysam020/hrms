@@ -1,0 +1,115 @@
+/* Layout for the shaped skeletons in skeletons.tsx. Spacing mirrors the
+   components they stand in for. */
+
+.text {
+  display: grid;
+  gap: 8px;
+}
+.stack {
+  display: grid;
+  gap: var(--px-space-4);
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+}
+.sections {
+  display: grid;
+  gap: 28px;
+}
+.section {
+  display: grid;
+  gap: var(--px-space-4);
+}
+.heading {
+  display: grid;
+  gap: 6px;
+}
+.page {
+  display: grid;
+  gap: 40px;
+}
+
+/* Charts */
+.bars {
+  display: grid;
+  gap: 12px;
+}
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(80px, 30%) 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.columns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: end;
+  gap: 10px;
+  height: 180px;
+}
+
+/* Lists */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--px-separator);
+}
+.rowText {
+  flex: 1;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+/* Tables */
+.table {
+  display: grid;
+}
+.tableHead,
+.tableRow {
+  display: grid;
+  align-items: center;
+  gap: 16px;
+}
+.tableHead {
+  min-height: 34px;
+  border-bottom: 1px solid var(--px-separator);
+}
+.tableRow {
+  min-height: 48px;
+  border-bottom: 1px solid var(--px-separator);
+}
+
+/* Documents */
+.article {
+  display: grid;
+  gap: 14px;
+  max-width: 720px;
+}
+.article > :nth-child(4) {
+  margin-top: 18px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.checklist {
+  display: grid;
+  gap: 10px 24px;
+}
+.checklist[data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

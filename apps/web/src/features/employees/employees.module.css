@@ -1,0 +1,52 @@
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.filters > :first-child {
+  flex: 1;
+  max-width: 340px;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0 24px;
+}
+.identityName {
+  font: var(--px-type-display);
+  letter-spacing: var(--px-type-display-track);
+}
+.identityRole {
+  font: 400 16px/22px var(--px-font);
+  color: var(--px-text-2);
+}
+.peek {
+  display: grid;
+  gap: 20px;
+}
+.peekHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.columns {
+  display: grid;
+  gap: var(--px-space-10);
+}
+@media (min-width: 1100px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.assetList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--px-separator);
+}
+.assetList li:last-child {
+  border-bottom: 0;
+}

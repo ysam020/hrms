@@ -1,0 +1,75 @@
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border-radius: var(--px-radius-sm);
+  color: inherit;
+  text-decoration: none !important;
+}
+a.person:hover {
+  background: var(--px-bg-hover);
+}
+.text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.name {
+  font: var(--px-type-headline);
+}
+.meta {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.chev {
+  color: var(--px-text-3);
+  font-size: 14px;
+}
+/* Indentation with a hairline spine carries the hierarchy. */
+.teams[data-root] {
+  margin-left: 24px;
+  padding-left: 12px;
+  border-left: 1px solid var(--px-separator);
+}
+.team {
+  padding: 8px 0;
+}
+.teamHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: transparent;
+  color: var(--px-text-2);
+  font: var(--px-type-caption);
+  font-weight: 600;
+}
+.teamHead:hover {
+  color: var(--px-text-1);
+}
+.disclosure {
+  font-size: 12px;
+  transition: transform var(--px-dur-base) var(--px-ease-standard);
+}
+.teamHead[aria-expanded="true"] .disclosure {
+  transform: rotate(90deg);
+}
+.teamName {
+  flex: 1;
+  text-align: left;
+}
+.count {
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text-3);
+}
+.members {
+  margin-left: 24px;
+  padding-left: 12px;
+  border-left: 1px solid var(--px-separator);
+}

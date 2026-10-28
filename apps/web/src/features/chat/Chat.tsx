@@ -5,42 +5,234 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
 } from "react";
 import axios from "axios";
-import Typography from "@mui/material/Typography";
+import { AnimatePresence, motion } from "framer-motion";
 import { UserContext } from "@web/app/providers/UserContext";
-import { ThemeContext } from "@web/app/providers/ThemeContext";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { ChatUnreadContext } from "@web/app/providers/ChatUnreadContext";
 import useChat from "@web/shared/hooks/useChat";
-import apiClient from "@web/core/http/axiosConfig";
-import { useApiClient } from "@web/shared/hooks/useApiClient";
-import "../../styles/chat.scss";
-import { API_ENDPOINTS } from "@web/shared/constants";
-import { ConversationsPanel } from "./ConversationsPanel";
-import { ThreadHeader } from "./ThreadHeader";
-import { PinnedMessagesBar } from "./PinnedMessagesBar";
-import { MessagesArea } from "./MessagesArea";
-import { ReplyBar } from "./ReplyBar";
-import { MessageInputArea } from "./MessageInputArea";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
-  DeleteConversationDialog,
-  DeleteMessageDialog,
-  ImageLightboxDialog,
-} from "./ChatDialogs";
-import {
-  flashMessage,
+  formatConvTime,
+  formatDateSeparator,
+  formatFileSize,
+  formatTime,
   getMessageType,
   getOtherParticipant,
-} from "./chatHelpers";
+} from "@web/features/chat/chatHelpers";
+import { useFileViewUrl } from "@web/features/chat/useFileViewUrl";
+import { duration, ease } from "@next/motion";
+import {
+  Avatar,
+  Button,
+  ConfirmDialog,
+  Icon,
+  IconButton,
+  Menu,
+  Page,
+  SearchField,
+  Skeleton,
+  Spinner,
+  type MenuEntry,
+} from "@next/ui";
+import { apiClient, errorMessage } from "@next/lib/api";
+import { useIsCompact } from "@next/lib/hooks";
+import s from "./chat.module.css";
 
-function Chat() {
+// Chat (Classic's features/chat). All socket and REST behaviour is Classic's
+// useChat hook; helpers, the presigned upload flow and signed file URLs are
+// Classic's too. This file is the conversation list, thread and composer.
+
+type Msg = any;
+type Room = any;
+
+const previewOf = (m: Msg | undefined) =>
+  !m
+    ? "No messages yet"
+    : m.isDeleted
+      ? "Message deleted"
+      : m.type === "text"
+        ? m.content
+        : m.type === "image"
+          ? "Photo"
+          : m.type === "video"
+            ? "Video"
+            : m.fileName || "File";
+
+function personOf(room: Room, myId?: string) {
+  const otherId = room?.participants?.find((p: string) => p !== myId);
+  return room?.participantDetails?.find(
+    (p: any) => p.id === otherId || p._id === otherId,
+  );
+}
+
+/** Scroll to a rendered message and flash it (Classic's flashMessage, with this app's class). */
+function flash(id?: string) {
+  const el = id && document.getElementById(`chat-msg-${id}`);
+  if (!el) return false;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.setAttribute("data-flash", "");
+  setTimeout(() => el.removeAttribute("data-flash"), 1500);
+  return true;
+}
+
+function Attachment({ msg }: { msg: Msg }) {
+  const url = useFileViewUrl(msg._id, Boolean(msg.fileUrl));
+  if (msg.type === "image")
+    return url ? (
+      <a href={url} target="_blank" rel="noreferrer" className={s.media}>
+        <img src={url} alt={msg.fileName || "Image"} loading="lazy" />
+      </a>
+    ) : (
+      <Skeleton width={220} height={160} />
+    );
+  if (msg.type === "video")
+    return url ? (
+      <video className={s.media} src={url} controls preload="metadata" />
+    ) : (
+      <Skeleton width={220} height={140} />
+    );
+  return (
+    <a
+      href={url ?? undefined}
+      target="_blank"
+      rel="noreferrer"
+      className={s.file}
+      aria-disabled={!url}
+    >
+      <Icon name="doc" size={22} />
+      <span style={{ display: "grid", minWidth: 0 }}>
+        <span className="px-truncate">{msg.fileName || "File"}</span>
+        <span className={s.fileMeta}>{formatFileSize(msg.fileSize)}</span>
+      </span>
+    </a>
+  );
+}
+
+function Bubble({
+  msg,
+  mine,
+  read,
+  replyName,
+  onReply,
+  onPin,
+  onDelete,
+  onJump,
+}: {
+  msg: Msg;
+  mine: boolean;
+  read: boolean;
+  replyName: string;
+  onReply: () => void;
+  onPin: () => void;
+  onDelete: () => void;
+  onJump: (id: string) => void;
+}) {
+  const [menu, setMenu] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const items: MenuEntry[] = msg.isDeleted
+    ? []
+    : [
+        { label: "Reply", icon: "chat", onSelect: onReply },
+        { label: msg.isPinned ? "Unpin" : "Pin", icon: "pin", onSelect: onPin },
+        ...(msg.type === "text"
+          ? [
+              {
+                label: "Copy",
+                icon: "doc" as const,
+                onSelect: () => navigator.clipboard?.writeText(msg.content),
+              },
+            ]
+          : []),
+        ...(mine
+          ? [
+              { separator: true } as MenuEntry,
+              {
+                label: "Delete",
+                icon: "trash" as const,
+                tone: "danger" as const,
+                onSelect: onDelete,
+              },
+            ]
+          : []),
+      ];
+  return (
+    <div
+      id={`chat-msg-${msg._id}`}
+      className={s.msgRow}
+      data-mine={mine || undefined}
+    >
+      <div className={s.bubble} data-deleted={msg.isDeleted || undefined}>
+        {msg.isPinned && !msg.isDeleted && (
+          <span className={s.pinned}>
+            <Icon name="pin" size={12} /> Pinned
+          </span>
+        )}
+        {msg.replyTo && (
+          <button
+            type="button"
+            className={s.quote}
+            onClick={() => onJump(msg.replyTo._id)}
+          >
+            <span className={s.quoteName}>{replyName}</span>
+            <span className="px-truncate">
+              {msg.replyTo.isDeleted
+                ? "Message deleted"
+                : msg.replyTo.content || msg.replyTo.fileName || "File"}
+            </span>
+          </button>
+        )}
+        {msg.isDeleted ? (
+          <span className={s.deleted}>Message deleted</span>
+        ) : (
+          <>
+            {msg.type !== "text" && msg.fileUrl && <Attachment msg={msg} />}
+            {(msg.type === "text" ||
+              (msg.content && msg.content !== msg.fileName)) && (
+              <p className={s.text}>{msg.content}</p>
+            )}
+          </>
+        )}
+        <span className={s.time}>
+          {formatTime(msg.createdAt)}
+          {mine && !msg.isDeleted && (
+            <span aria-label={read ? "Read" : "Sent"}>
+              {read ? " · Read" : ""}
+            </span>
+          )}
+        </span>
+      </div>
+      {items.length > 0 && (
+        <>
+          <IconButton
+            ref={anchor}
+            icon="more"
+            label="Message actions"
+            className={s.msgMore}
+            onClick={() => setMenu(true)}
+          />
+          <Menu
+            open={menu}
+            onClose={() => setMenu(false)}
+            anchorRef={anchor}
+            label="Message actions"
+            items={items}
+            placement={mine ? "bottom-end" : "bottom-start"}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function Chat() {
   const { user } = useContext(UserContext);
-  const { theme } = useContext(ThemeContext);
   const { setAlert } = useContext(AlertContext);
   const { clearRoomUnread } = useContext(ChatUnreadContext);
-  const api = useApiClient();
-
+  const compact = useIsCompact();
+  const chat = useChat();
   const {
     conversations,
     messages,
@@ -56,143 +248,100 @@ function Chat() {
     dbLoadedRoomsRef,
     startConversation,
     markRoomAsRead,
-    deleteMessage,
-    deleteConversation,
-    pinMessage,
-    unpinMessage,
     joinRoom,
     sendMessage,
     emitTyping,
     emitStopTyping,
     emitRead,
-  } = useChat();
+  } = chat;
 
   const [text, setText] = useState("");
-  const [replyTo, setReplyTo] = useState<any>(null);
+  const [replyTo, setReplyTo] = useState<Msg | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [userSearch, setUserSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [query, setQuery] = useState("");
+  const [people, setPeople] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [mobileShowThread, setMobileShowThread] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [deleteTargetMsg, setDeleteTargetMsg] = useState<any>(null);
-  const [deleteConvConfirm, setDeleteConvConfirm] = useState(false);
-  const [pinnedBarExpanded, setPinnedBarExpanded] = useState(false);
-  const [headerMenuAnchor, setHeaderMenuAnchor] = useState<HTMLElement | null>(
-    null,
-  );
+  const [deleteMsg, setDeleteMsg] = useState<Msg | null>(null);
+  const [deleteRoom, setDeleteRoom] = useState(false);
+  const [roomMenu, setRoomMenu] = useState(false);
+  const [pinIndex, setPinIndex] = useState(0);
+  const roomMenuRef = useRef<HTMLButtonElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTyping = useRef(false);
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isTypingRef = useRef(false);
-  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
-
-  const activeRoom = useMemo(
-    () => conversations.find((c) => c._id === activeRoomId),
+  const room = useMemo(
+    () => conversations.find((c: Room) => c._id === activeRoomId),
     [conversations, activeRoomId],
   );
-  const activeMessages = useMemo(
-    () => (activeRoomId ? messages[activeRoomId] : []) || [],
+  const thread: Msg[] = useMemo(
+    () => (activeRoomId ? messages[activeRoomId] : null) || [],
     [messages, activeRoomId],
   );
-  const activePinnedMessages = useMemo(
-    () => (activeRoomId ? pinnedMessages[activeRoomId] : []) || [],
+  const pins: Msg[] = useMemo(
+    () => (activeRoomId ? pinnedMessages[activeRoomId] : null) || [],
     [pinnedMessages, activeRoomId],
   );
-  const resolveParticipantName = useCallback(
-    (senderId: string) => {
-      const detail = activeRoom?.participantDetails?.find(
-        (p: any) => p.id === senderId || p._id === senderId,
+  const nameOf = useCallback(
+    (id: string) => {
+      if (id === user?.id) return "You";
+      const d = room?.participantDetails?.find(
+        (p: any) => p.id === id || p._id === id,
       );
-      return detail
-        ? `${detail.first_name || ""} ${detail.last_name || ""}`.trim() ||
-            detail.username ||
+      return d
+        ? `${d.first_name || ""} ${d.last_name || ""}`.trim() ||
+            d.username ||
             ""
         : "";
     },
-    [activeRoom],
+    [room, user?.id],
   );
+  const typing: string[] = (
+    (activeRoomId ? typingUsers[activeRoomId] : null) || []
+  ).map((id: string) => nameOf(id) || "Someone");
+  const other = room ? getOtherParticipant(room, user?.id) : "";
+  const otherPerson = room ? personOf(room, user?.id) : null;
 
-  // Jump to a replied-to/pinned message, WhatsApp-style: if it's already
-  // rendered, just scroll+flash it. If it's older than what's currently
-  // loaded (reply/pin targets are frequently much further back than the
-  // last ~50 messages), page further back a screen at a time until it
-  // turns up or there's genuinely nothing older left to fetch.
-  const jumpToMessage = useCallback(
-    async (messageId: string | undefined) => {
-      if (!messageId || !activeRoomId) return;
-      if (flashMessage(messageId)) return;
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [thread.length, typing.length, activeRoomId]);
 
-      let cursor = activeMessages[0]?.createdAt;
-      let guard = 0;
-      while (cursor && guard < 20) {
-        guard += 1;
-        const fetched = await fetchMessages(activeRoomId, cursor);
-        if (!fetched || fetched.length === 0) break;
-        // Let React commit the newly-fetched messages to the DOM before
-        // checking for the target node.
-        await new Promise((resolve) =>
-          requestAnimationFrame(() => resolve(null)),
+  // People search for a new conversation (Classic's /get-all-users query).
+  useEffect(() => {
+    if (!query.trim()) return setPeople([]);
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await apiClient.get(
+          `/get-all-users?search=${encodeURIComponent(query)}&limit=10`,
         );
-        if (flashMessage(messageId)) return;
-        cursor = fetched[0]?.createdAt;
+        const list = res.data.data?.users || res.data.data || [];
+        setPeople(list.filter((u: any) => u.id !== user?.id));
+      } catch {
+        setPeople([]);
+      } finally {
+        setSearching(false);
       }
-    },
-    [activeRoomId, activeMessages, fetchMessages],
-  );
-  const activeRoomParticipants = useMemo(
-    () => activeRoom?.participants || [],
-    [activeRoom],
-  );
-  const activeTypingUsers = useMemo(
-    () =>
-      ((activeRoomId ? typingUsers[activeRoomId] : []) || []).map(
-        (userId: string) => resolveParticipantName(userId) || "Someone",
-      ),
-    [typingUsers, activeRoomId, resolveParticipantName],
-  );
-  const otherUser = useMemo(
-    () => (activeRoom ? getOtherParticipant(activeRoom, user?.id) : null),
-    [activeRoom, user?.id],
-  );
-
-  // Auto-scroll
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeMessages, activeTypingUsers]);
-
-  // Close emoji picker on outside click
-  useEffect(() => {
-    if (!showEmojiPicker) return;
-    const handler = (e) => {
-      if (
-        emojiPickerRef.current &&
-        !emojiPickerRef.current.contains(e.target)
-      ) {
-        setShowEmojiPicker(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showEmojiPicker]);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, user?.id]);
 
   const openRoom = useCallback(
-    async (conv) => {
-      const roomId = conv._id;
-      setActiveRoomId(roomId);
+    async (conv: Room) => {
+      const id = conv._id;
+      setActiveRoomId(id);
       setReplyTo(null);
       setText("");
-      setMobileShowThread(true);
-      setShowEmojiPicker(false);
-      setPinnedBarExpanded(false);
-      joinRoom(roomId);
-      if (!dbLoadedRoomsRef.current.has(roomId)) await fetchMessages(roomId);
-      fetchPinnedMessages(roomId);
-      markRoomAsRead(roomId);
-      emitRead(roomId);
-      clearRoomUnread(roomId);
+      setPinIndex(0);
+      joinRoom(id);
+      if (!dbLoadedRoomsRef.current.has(id)) await fetchMessages(id);
+      fetchPinnedMessages(id);
+      markRoomAsRead(id);
+      emitRead(id);
+      clearRoomUnread(id);
+      if (!compact) requestAnimationFrame(() => inputRef.current?.focus());
     },
     [
       setActiveRoomId,
@@ -203,61 +352,35 @@ function Chat() {
       emitRead,
       clearRoomUnread,
       dbLoadedRoomsRef,
+      compact,
     ],
   );
 
-  // User search for new conversation
-  useEffect(() => {
-    if (!userSearch.trim()) {
-      setSearchResults([]);
-      return;
+  const start = async (person: any) => {
+    setQuery("");
+    setPeople([]);
+    try {
+      await openRoom(await startConversation(person.id));
+    } catch (err) {
+      setAlert({ open: true, message: errorMessage(err), severity: "error" });
     }
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await api.get(
-          `/get-all-users?search=${encodeURIComponent(userSearch)}&limit=10`,
-        );
-        const users = res.data.data?.users || res.data.data || [];
-        setSearchResults(users.filter((u) => u.id !== user?.id));
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [userSearch, user?.id]);
+  };
 
-  const handleStartConversation = useCallback(
-    async (targetUser) => {
-      setUserSearch("");
-      setSearchResults([]);
-      const room = await startConversation(targetUser.id);
-      await openRoom(room);
-    },
-    [startConversation, openRoom],
-  );
-
-  // Typing
-  const handleTextChange = useCallback(
-    (e) => {
-      setText(e.target.value);
-      if (!activeRoomId) return;
-      if (!isTypingRef.current) {
-        isTypingRef.current = true;
-        emitTyping(activeRoomId);
-      }
-      clearTimeout(typingTimerRef.current ?? undefined);
-      typingTimerRef.current = setTimeout(() => {
-        isTypingRef.current = false;
-        emitStopTyping(activeRoomId);
-      }, 1500);
-    },
-    [activeRoomId, emitTyping, emitStopTyping],
-  );
-
-  const handleSend = useCallback(() => {
+  const stopTyping = () => {
+    isTyping.current = false;
+    if (activeRoomId) emitStopTyping(activeRoomId);
+  };
+  const onType = (v: string) => {
+    setText(v);
+    if (!activeRoomId) return;
+    if (!isTyping.current) {
+      isTyping.current = true;
+      emitTyping(activeRoomId);
+    }
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(stopTyping, 1500);
+  };
+  const send = () => {
     if (!activeRoomId || (!text.trim() && !replyTo)) return;
     sendMessage({
       roomId: activeRoomId,
@@ -267,260 +390,442 @@ function Chat() {
     });
     setText("");
     setReplyTo(null);
-    isTypingRef.current = false;
-    emitStopTyping(activeRoomId);
-    setShowEmojiPicker(false);
-  }, [activeRoomId, text, replyTo, sendMessage, emitStopTyping]);
+    stopTyping();
+  };
+  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      send();
+    } else if (e.key === "Escape" && replyTo) {
+      e.stopPropagation();
+      setReplyTo(null);
+    }
+  };
 
-  const handleKeyDown = useCallback(
-    (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend],
-  );
-
-  const handleEmojiClick = useCallback((emojiData) => {
-    setText((prev) => prev + emojiData.emoji);
-  }, []);
-
-  // File upload — derive message type from MIME
-  const handleFileSelect = useCallback(
-    async (e) => {
-      const file = e.target.files?.[0];
-      if (!file || !activeRoomId) return;
-      setUploading(true);
-      try {
-        // Same presigned-URL flow as every other upload in the app: get a
-        // signed PUT URL, upload straight to S3, then send the resulting
-        // fileUrl in the message. There's no dedicated /chat/upload route.
-        const { data: presignedRes } = await apiClient.post(
-          API_ENDPOINTS.UPLOAD_PRESIGNED_URL,
-          {
-            fileName: file.name,
-            fileType: file.type,
-            folder: "chat",
-            username: user?.username,
-          },
-        );
-        const { url, fileUrl } = presignedRes.data;
-        await axios.put(url, file, {
-          headers: { "Content-Type": file.type },
-        });
-
-        const type = getMessageType(file.type);
-        sendMessage({
-          roomId: activeRoomId,
-          content: file.name,
-          type,
-          fileUrl,
+  // Same presigned-URL flow Classic uses: signed PUT to S3, then send fileUrl.
+  const upload = async (file?: File) => {
+    if (!file || !activeRoomId) return;
+    setUploading(true);
+    try {
+      const { data } = await apiClient.post(
+        API_ENDPOINTS.UPLOAD_PRESIGNED_URL,
+        {
           fileName: file.name,
-          fileMimeType: file.type,
-          fileSize: file.size,
-        });
-      } catch (err) {
-        console.error("Chat file upload failed:", err);
-      } finally {
-        setUploading(false);
-        e.target.value = "";
-      }
-    },
-    [activeRoomId, sendMessage, user?.username],
-  );
-
-  // Infinite scroll (load older messages)
-  const handleMessagesScroll = useCallback(
-    (e) => {
-      if (
-        e.target.scrollTop === 0 &&
-        activeMessages.length >= 50 &&
-        !loadingMessages
-      ) {
-        const oldest = activeMessages[0]?.createdAt;
-        if (oldest) fetchMessages(activeRoomId, oldest);
-      }
-    },
-    [activeMessages, loadingMessages, fetchMessages, activeRoomId],
-  );
-
-  // Pin / unpin message
-  const handlePinMessage = useCallback(
-    async (msg) => {
-      if (!activeRoomId) return;
-      try {
-        await pinMessage(msg._id, activeRoomId);
-      } catch (err: any) {
-        setAlert({
-          open: true,
-          message:
-            err?.response?.data?.message || "Could not pin this message.",
-          severity: "error",
-        });
-      }
-    },
-    [pinMessage, activeRoomId, setAlert],
-  );
-
-  const handleUnpinMessage = useCallback(
-    async (msg) => {
-      if (!activeRoomId) return;
-      try {
-        await unpinMessage(msg._id, activeRoomId);
-      } catch (err: any) {
-        setAlert({
-          open: true,
-          message:
-            err?.response?.data?.message || "Could not unpin this message.",
-          severity: "error",
-        });
-      }
-    },
-    [unpinMessage, activeRoomId, setAlert],
-  );
-
-  // Delete message
-  const handleDeleteMessage = useCallback(async () => {
-    if (!deleteTargetMsg) return;
-    try {
-      await deleteMessage(deleteTargetMsg._id, activeRoomId);
+          fileType: file.type,
+          folder: "chat",
+          username: user?.username,
+        },
+      );
+      const { url, fileUrl } = data.data;
+      await axios.put(url, file, { headers: { "Content-Type": file.type } });
+      sendMessage({
+        roomId: activeRoomId,
+        content: file.name,
+        type: getMessageType(file.type),
+        fileUrl,
+        fileName: file.name,
+        fileMimeType: file.type,
+        fileSize: file.size,
+      });
     } catch (err) {
-      console.error("Delete message failed:", err);
+      setAlert({
+        open: true,
+        message: `“${file.name}” couldn’t be sent. ${errorMessage(err)}`,
+        severity: "error",
+      });
     } finally {
-      setDeleteTargetMsg(null);
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
-  }, [deleteTargetMsg, deleteMessage, activeRoomId]);
+  };
 
-  // Delete conversation
-  const handleDeleteConversation = useCallback(async () => {
-    if (!activeRoomId) return;
+  // Jump to a reply/pin target, paging older history until it appears (Classic's jumpToMessage).
+  const jump = useCallback(
+    async (id?: string) => {
+      if (!id || !activeRoomId || flash(id)) return;
+      let cursor = thread[0]?.createdAt;
+      for (let guard = 0; cursor && guard < 20; guard++) {
+        const older = await fetchMessages(activeRoomId, cursor);
+        if (!older?.length) break;
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+        if (flash(id)) return;
+        cursor = older[0]?.createdAt;
+      }
+    },
+    [activeRoomId, thread, fetchMessages],
+  );
+
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (
+      e.currentTarget.scrollTop === 0 &&
+      thread.length >= 50 &&
+      !loadingMessages &&
+      thread[0]?.createdAt
+    )
+      fetchMessages(activeRoomId, thread[0].createdAt);
+  };
+
+  const act = async (fn: () => Promise<unknown>) => {
     try {
-      await deleteConversation(activeRoomId);
-      setActiveRoomId(null);
-      setMobileShowThread(false);
+      await fn();
     } catch (err) {
-      console.error("Delete conversation failed:", err);
-    } finally {
-      setDeleteConvConfirm(false);
-      setHeaderMenuAnchor(null);
+      setAlert({ open: true, message: errorMessage(err), severity: "error" });
     }
-  }, [activeRoomId, deleteConversation, setActiveRoomId]);
+  };
 
-  const isDark = theme === "dark";
+  const showList = !compact || !activeRoomId;
+  const showThread = !compact || Boolean(activeRoomId);
+  const pin = pins[Math.min(pinIndex, pins.length - 1)];
 
-  return (
-    <div className={`chat-root ${isDark ? "dark" : "light"}`}>
-      <ConversationsPanel
-        mobileShowThread={mobileShowThread}
-        userSearch={userSearch}
-        setUserSearch={setUserSearch}
-        searching={searching}
-        searchResults={searchResults}
-        onStartConversation={handleStartConversation}
-        loadingConversations={loadingConversations}
-        conversations={conversations}
-        myUserId={user?.id}
-        activeRoomId={activeRoomId}
-        onOpenRoom={openRoom}
-        unreadCounts={unreadCounts}
-      />
+  const list = (
+    <aside className={s.list} aria-label="Conversations">
+      <div className={s.listSearch}>
+        <SearchField
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          label="New message to…"
+        />
+      </div>
+      {query.trim() ? (
+        <ul className={s.rooms} aria-label="People">
+          {searching && people.length === 0 && (
+            <li className={s.hint}>
+              <Spinner label="Searching" /> Searching…
+            </li>
+          )}
+          {!searching && people.length === 0 && (
+            <li className={s.hint}>No one matches “{query}”.</li>
+          )}
+          {people.map((p) => {
+            const name =
+              `${p.first_name || ""} ${p.last_name || ""}`.trim() || p.username;
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className={s.room}
+                  onClick={() => start(p)}
+                >
+                  <Avatar
+                    name={name}
+                    src={p.employee_photo || undefined}
+                    size={36}
+                  />
+                  <span className={s.roomText}>
+                    <span className="px-headline px-truncate">{name}</span>
+                    <span className="px-meta px-truncate">
+                      {p.designation || p.email || p.username}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : loadingConversations && conversations.length === 0 ? (
+        <div style={{ padding: 12, display: "grid", gap: 8 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} height={48} />
+          ))}
+        </div>
+      ) : conversations.length === 0 ? (
+        <p className={s.hint}>
+          No conversations yet. Search for someone above to start one.
+        </p>
+      ) : (
+        <ul className={s.rooms}>
+          {conversations.map((c: Room) => {
+            const name = getOtherParticipant(c, user?.id);
+            const unread = unreadCounts[c._id] || 0;
+            return (
+              <li key={c._id}>
+                <button
+                  type="button"
+                  className={s.room}
+                  aria-current={c._id === activeRoomId || undefined}
+                  onClick={() => openRoom(c)}
+                  aria-label={`${name}${unread ? `, ${unread} unread` : ""}`}
+                >
+                  <Avatar
+                    name={name}
+                    src={personOf(c, user?.id)?.employee_photo || undefined}
+                    size={36}
+                  />
+                  <span className={s.roomText}>
+                    <span className={s.roomTop}>
+                      <span className="px-headline px-truncate">{name}</span>
+                      <span className="px-meta">
+                        {formatConvTime(
+                          c.lastActivity || c.lastMessage?.createdAt,
+                        )}
+                      </span>
+                    </span>
+                    <span className={s.roomBottom}>
+                      <span className="px-meta px-truncate">
+                        {previewOf(c.lastMessage)}
+                      </span>
+                      {unread > 0 && (
+                        <span className={s.unread}>
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </aside>
+  );
 
-      {/* right panel */}
-      <div
-        className={`chat-right-panel ${mobileShowThread ? "mobile-visible" : ""}`}
-      >
-        {!activeRoomId ? (
-          <div className="chat-empty-state">
-            <Typography variant="h6" color="text.secondary">
-              Select a conversation
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Choose a conversation from the left or search for a colleague.
-            </Typography>
-          </div>
-        ) : (
-          <>
-            <ThreadHeader
-              otherUser={otherUser}
-              headerMenuAnchor={headerMenuAnchor}
-              setHeaderMenuAnchor={setHeaderMenuAnchor}
-              onBack={() => {
-                setMobileShowThread(false);
-                setActiveRoomId(null);
-              }}
-              onDeleteChatClick={() => setDeleteConvConfirm(true)}
-            />
-
-            {activePinnedMessages.length > 0 && (
-              <PinnedMessagesBar
-                activePinnedMessages={activePinnedMessages}
-                pinnedBarExpanded={pinnedBarExpanded}
-                setPinnedBarExpanded={setPinnedBarExpanded}
-                resolveParticipantName={resolveParticipantName}
-                onJumpToMessage={jumpToMessage}
-                onUnpinMessage={handleUnpinMessage}
+  let lastDay = "";
+  const threadPane = (
+    <section
+      className={s.thread}
+      aria-label={room ? `Conversation with ${other}` : "Conversation"}
+    >
+      {!room ? (
+        <div className={s.emptyThread}>
+          <Icon name="chat" size={40} />
+          <p className="px-headline">Select a conversation</p>
+          <p className="px-meta">Or search for someone to start a new one.</p>
+        </div>
+      ) : (
+        <>
+          <header className={s.threadHead}>
+            {compact && (
+              <IconButton
+                icon="chevronLeft"
+                label="All conversations"
+                onClick={() => setActiveRoomId(null)}
               />
             )}
-
-            <MessagesArea
-              isDark={isDark}
-              loadingMessages={loadingMessages}
-              activeMessages={activeMessages}
-              activeTypingUsers={activeTypingUsers}
-              resolveParticipantName={resolveParticipantName}
-              currentUserId={user?.id}
-              onScroll={handleMessagesScroll}
-              onReply={(m, senderName) => setReplyTo({ ...m, senderName })}
-              onDelete={setDeleteTargetMsg}
-              onPin={handlePinMessage}
-              onUnpin={handleUnpinMessage}
-              onJumpToMessage={jumpToMessage}
-              activeRoomParticipants={activeRoomParticipants}
-              onImageClick={setLightboxUrl}
-              messagesEndRef={messagesEndRef}
+            <Avatar
+              name={other}
+              src={otherPerson?.employee_photo || undefined}
+              size={32}
             />
-
-            {replyTo && (
-              <ReplyBar replyTo={replyTo} onCancel={() => setReplyTo(null)} />
+            <span style={{ display: "grid", minWidth: 0, flex: 1 }}>
+              <span className="px-headline px-truncate">{other}</span>
+              <span className="px-meta" aria-live="polite">
+                {typing.length > 0
+                  ? "typing…"
+                  : otherPerson?.designation || " "}
+              </span>
+            </span>
+            <IconButton
+              ref={roomMenuRef}
+              icon="more"
+              label="Conversation actions"
+              onClick={() => setRoomMenu(true)}
+            />
+            <Menu
+              open={roomMenu}
+              onClose={() => setRoomMenu(false)}
+              anchorRef={roomMenuRef}
+              label="Conversation actions"
+              items={[
+                {
+                  label: "Delete Conversation",
+                  icon: "trash",
+                  tone: "danger" as const,
+                  onSelect: () => setDeleteRoom(true),
+                },
+              ]}
+            />
+          </header>
+          <AnimatePresence initial={false}>
+            {pin && (
+              <motion.button
+                type="button"
+                key="pins"
+                className={s.pinBar}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: duration.fast, ease: ease.standard }}
+                onClick={() => {
+                  jump(pin._id);
+                  setPinIndex((i) => (i + 1) % pins.length);
+                }}
+                aria-label={`Pinned message ${Math.min(pinIndex, pins.length - 1) + 1} of ${pins.length}. Show it.`}
+              >
+                <Icon name="pin" size={14} />
+                <span className="px-truncate">
+                  {pin.isDeleted
+                    ? "Message deleted"
+                    : pin.content || pin.fileName || "File"}
+                </span>
+                {pins.length > 1 && (
+                  <span className="px-meta px-num">
+                    {Math.min(pinIndex, pins.length - 1) + 1}/{pins.length}
+                  </span>
+                )}
+              </motion.button>
             )}
+          </AnimatePresence>
+          <div
+            className={s.messages}
+            onScroll={onScroll}
+            role="log"
+            aria-label="Messages"
+            aria-live="polite"
+          >
+            {loadingMessages && thread.length === 0 ? (
+              <div
+                style={{ display: "grid", placeItems: "center", padding: 32 }}
+              >
+                <Spinner />
+              </div>
+            ) : (
+              thread.map((m) => {
+                const day = formatDateSeparator(m.createdAt);
+                const sep = day !== lastDay;
+                lastDay = day;
+                const mine = m.senderId === user?.id;
+                return (
+                  <div key={m._id}>
+                    {sep && <div className={s.day}>{day}</div>}
+                    <Bubble
+                      msg={m}
+                      mine={mine}
+                      read={(room.participants || []).some(
+                        (p: string) =>
+                          p !== m.senderId && m.readBy?.includes(p),
+                      )}
+                      replyName={m.replyTo ? nameOf(m.replyTo.senderId) : ""}
+                      onReply={() => {
+                        setReplyTo(m);
+                        inputRef.current?.focus();
+                      }}
+                      onPin={() =>
+                        act(() =>
+                          m.isPinned
+                            ? chat.unpinMessage(m._id, activeRoomId)
+                            : chat.pinMessage(m._id, activeRoomId),
+                        )
+                      }
+                      onDelete={() => setDeleteMsg(m)}
+                      onJump={jump}
+                    />
+                  </div>
+                );
+              })
+            )}
+            {typing.length > 0 && (
+              <div className={s.msgRow}>
+                <div
+                  className={`${s.bubble} ${s.typing}`}
+                  aria-label={`${typing.join(", ")} typing`}
+                >
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+            )}
+            <div ref={endRef} />
+          </div>
+          <footer className={s.composer}>
+            <AnimatePresence initial={false}>
+              {replyTo && (
+                <motion.div
+                  key="reply"
+                  className={s.replyBar}
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: duration.fast, ease: ease.standard }}
+                >
+                  <span style={{ display: "grid", minWidth: 0, flex: 1 }}>
+                    <span className={s.quoteName}>
+                      Replying to {nameOf(replyTo.senderId)}
+                    </span>
+                    <span className="px-meta px-truncate">
+                      {previewOf(replyTo)}
+                    </span>
+                  </span>
+                  <IconButton
+                    icon="x"
+                    label="Cancel reply"
+                    onClick={() => setReplyTo(null)}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className={s.inputRow}>
+              <input
+                ref={fileRef}
+                type="file"
+                hidden
+                onChange={(e) => upload(e.target.files?.[0])}
+              />
+              <IconButton
+                icon="plus"
+                label="Attach a file"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+              />
+              <textarea
+                ref={inputRef}
+                className={s.input}
+                rows={1}
+                value={text}
+                placeholder={uploading ? "Sending file…" : "Message"}
+                aria-label={`Message ${other}`}
+                onChange={(e) => onType(e.target.value)}
+                onKeyDown={onKey}
+                onBlur={stopTyping}
+              />
+              <Button
+                variant="primary"
+                size="small"
+                disabled={!text.trim() && !replyTo}
+                onClick={send}
+                aria-label="Send"
+              >
+                Send
+              </Button>
+            </div>
+          </footer>
+        </>
+      )}
+    </section>
+  );
 
-            <MessageInputArea
-              isDark={isDark}
-              fileInputRef={fileInputRef}
-              uploading={uploading}
-              onFileSelect={handleFileSelect}
-              showEmojiPicker={showEmojiPicker}
-              setShowEmojiPicker={setShowEmojiPicker}
-              emojiPickerRef={emojiPickerRef}
-              onEmojiClick={handleEmojiClick}
-              text={text}
-              onTextChange={handleTextChange}
-              onKeyDown={handleKeyDown}
-              onSend={handleSend}
-            />
-          </>
-        )}
+  return (
+    <Page title="Chat" width="full">
+      <div className={s.chat} data-compact={compact || undefined}>
+        {showList && list}
+        {showThread && threadPane}
       </div>
-
-      <ImageLightboxDialog
-        lightboxUrl={lightboxUrl}
-        onClose={() => setLightboxUrl(null)}
+      <ConfirmDialog
+        open={deleteMsg !== null}
+        onClose={() => setDeleteMsg(null)}
+        onConfirm={() =>
+          act(() => chat.deleteMessage(deleteMsg._id, activeRoomId)).finally(
+            () => setDeleteMsg(null),
+          )
+        }
+        title="Delete this message?"
+        description="It’s removed for everyone in the conversation."
+        confirmLabel="Delete"
       />
-
-      <DeleteMessageDialog
-        open={Boolean(deleteTargetMsg)}
-        onCancel={() => setDeleteTargetMsg(null)}
-        onConfirm={handleDeleteMessage}
+      <ConfirmDialog
+        open={deleteRoom}
+        onClose={() => setDeleteRoom(false)}
+        onConfirm={() =>
+          act(async () => {
+            await chat.deleteConversation(activeRoomId);
+            setActiveRoomId(null);
+          }).finally(() => setDeleteRoom(false))
+        }
+        title={`Delete your conversation with ${other}?`}
+        description="All messages in it are removed."
+        confirmLabel="Delete"
       />
-
-      <DeleteConversationDialog
-        open={deleteConvConfirm}
-        onCancel={() => setDeleteConvConfirm(false)}
-        onConfirm={handleDeleteConversation}
-      />
-    </div>
+    </Page>
   );
 }
-
-export default Chat;

@@ -1,45 +1,42 @@
-import { useState, useContext, useEffect, useRef } from "react";
-import Container from "@mui/material/Container";
-import Paper from "@mui/material/Paper";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import Divider from "@mui/material/Divider";
-import Button from "@web/shared/components/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import Dialog from "@mui/material/Dialog";
-import SlideUpTransition from "@web/shared/components/SlideUpTransition";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
-import DialogActions from "@mui/material/DialogActions";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import ToggleButton from "@mui/material/ToggleButton";
-import Alert from "@mui/material/Alert";
-import CheckIcon from "@mui/icons-material/Check";
-import CreditCardIcon from "@mui/icons-material/CreditCard";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
-import WalletIcon from "@mui/icons-material/Wallet";
-import { alpha } from "@mui/material/styles";
-import apiClient from "@web/core/http/axiosConfig";
-import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
+import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
   PLAN_PRICING,
-  TIER_EMPLOYEE_LIMITS,
   PLAN_TIER_LABELS,
+  TIER_EMPLOYEE_LIMITS,
   amountPaise,
   formatINR,
   loadRazorpayScript,
   type Billing,
   type PlanTier,
 } from "@web/shared/constants/billing";
+import {
+  Banner,
+  Button,
+  ConfirmDialog,
+  ErrorState,
+  Icon,
+  KeyValues,
+  Page,
+  Section,
+  SegmentedControl,
+  Skeleton,
+  StatusBadge,
+  type Tone,
+  KeyValuesSkeleton,
+  TextSkeleton,
+} from "@next/ui";
+import { apiClient, errorMessage } from "@next/lib/api";
+import s from "./subscription.module.css";
+
+// Subscription (Classic's features/subscription/Subscription.tsx). Pricing,
+// tiers and the Razorpay script loader are Classic's billing constants; the
+// three checkout flows (renew, prorated upgrade, payment-method change) and
+// their confirm endpoints are reproduced exactly, consolidated into one
+// checkout helper.
 
 interface Tenant {
   id: string;
@@ -66,264 +63,233 @@ const PLAN_FEATURES = [
   "Push notifications",
   "Priority support",
 ];
+const TIERS: PlanTier[] = ["starter", "growth", "enterprise"];
+const ACCENT = "#166E96";
 
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+const longDate = (iso: string | null | undefined) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "—";
+const graceDeadline = (expires: string) =>
+  longDate(new Date(new Date(expires).getTime() + 7 * 864e5).toISOString());
+const safeTier = (t: string): PlanTier =>
+  t === "growth" || t === "enterprise" ? t : "starter";
+const billingOf = (t: Tenant): Billing =>
+  t.billing === "annual" ? "annual" : "monthly";
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  active: { label: "Active", tone: "success" },
+  grace_period: { label: "Grace Period", tone: "warning" },
+  cancelling: { label: "Cancelling", tone: "warning" },
+  cancelled: { label: "Cancelled", tone: "warning" },
+  expired: { label: "Expired", tone: "danger" },
+};
+const METHOD: Record<string, string> = {
+  card: "Card",
+  upi: "UPI",
+  netbanking: "Net Banking",
+  emandate: "e-Mandate",
+  nach: "e-Mandate",
+  wallet: "Wallet",
+};
+
+interface RazorpayResponse {
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  razorpay_subscription_id?: string;
+  razorpay_order_id?: string;
 }
 
-function graceDeadline(planExpiresAt: string): string {
-  const d = new Date(
-    new Date(planExpiresAt).getTime() + 7 * 24 * 60 * 60 * 1000,
+function PlanCard({
+  tier,
+  billing,
+  amount,
+  limit,
+}: {
+  tier: PlanTier;
+  billing: Billing;
+  amount: number;
+  limit?: number | null;
+}) {
+  const features =
+    limit === undefined
+      ? PLAN_FEATURES
+      : [
+          limit === null ? "Unlimited employees" : `Up to ${limit} employees`,
+          ...PLAN_FEATURES,
+        ];
+  return (
+    <div className={s.plan}>
+      <div className={s.planHead}>
+        <div>
+          <p className="px-headline">HRMS {PLAN_TIER_LABELS[tier]}</p>
+          <p className="px-meta">Full-featured HR management</p>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <p className={`px-title px-num ${s.price}`}>{formatINR(amount)}</p>
+          <p className="px-meta">
+            {billing === "annual" ? "per year" : "per month"}
+          </p>
+        </div>
+      </div>
+      <ul className={s.features}>
+        {features.map((f) => (
+          <li key={f}>
+            <Icon name="check" className={s.check} />
+            {f}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
-  return formatDate(d.toISOString());
-}
-
-function paymentMethodIcon(method: string | null) {
-  switch (method) {
-    case "card":
-      return <CreditCardIcon fontSize="small" />;
-    case "upi":
-      return <PhoneAndroidIcon fontSize="small" />;
-    case "netbanking":
-    case "emandate":
-    case "nach":
-      return <AccountBalanceIcon fontSize="small" />;
-    case "wallet":
-      return <WalletIcon fontSize="small" />;
-    default:
-      return <CreditCardIcon fontSize="small" />;
-  }
-}
-
-function paymentMethodLabel(method: string | null): string {
-  switch (method) {
-    case "card":
-      return "Card";
-    case "upi":
-      return "UPI";
-    case "netbanking":
-      return "Net Banking";
-    case "emandate":
-    case "nach":
-      return "e-Mandate";
-    case "wallet":
-      return "Wallet";
-    default:
-      return "Payment Method";
-  }
-}
-
-function statusLabel(s: string) {
-  if (s === "active") return "Active";
-  if (s === "grace_period") return "Grace Period";
-  if (s === "cancelling") return "Cancelling";
-  if (s === "cancelled") return "Cancelled";
-  return "Expired";
-}
-
-function statusColor(s: string): "success" | "warning" | "error" {
-  if (s === "active") return "success";
-  if (s === "grace_period" || s === "cancelling" || s === "cancelled")
-    return "warning";
-  return "error";
-}
-
-function safeTier(tier: string): PlanTier {
-  return tier === "growth" || tier === "enterprise" ? tier : "starter";
-}
-
-function tierLabel(tier: string): string {
-  return PLAN_TIER_LABELS[safeTier(tier)];
 }
 
 export default function Subscription() {
   const { user } = useContext(UserContext);
   const { setAlert } = useContext(AlertContext);
-
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [tenant, setTenant] = useState<Tenant | null | undefined>(undefined);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [busy, setBusy] = useState<
+    "cancel" | "renew" | "change" | "method" | null
+  >(null);
   const [renewBilling, setRenewBilling] = useState<Billing>("monthly");
-  const [renewing, setRenewing] = useState(false);
   const [changeTier, setChangeTier] = useState<PlanTier>("starter");
   const [changeBilling, setChangeBilling] = useState<Billing>("monthly");
-  const [changingPlan, setChangingPlan] = useState(false);
-  const [changingPaymentMethod, setChangingPaymentMethod] = useState(false);
+  // Razorpay's handler fires long after render; read the live choice from a ref (as Classic does).
+  const renewRef = useRef(renewBilling);
+  renewRef.current = renewBilling;
 
-  const renewBillingRef = useRef(renewBilling);
-  useEffect(() => {
-    renewBillingRef.current = renewBilling;
-  }, [renewBilling]);
-
-  const fetchTenant = () =>
-    apiClient
-      .get(API_ENDPOINTS.MY_TENANT)
-      .then((res) => {
-        if (res.data?.success) {
-          const t: Tenant = res.data.data.tenant;
+  const fail = (err: unknown, fallback: string) =>
+    setAlert({
+      open: true,
+      message: (err as any)?.response ? errorMessage(err) : fallback,
+      severity: "error",
+    });
+  const fetchTenant = useCallback(
+    () =>
+      apiClient
+        .get(API_ENDPOINTS.MY_TENANT)
+        .then((res) => {
+          const t: Tenant | undefined = res.data?.data?.tenant;
+          if (!t) return setTenant((prev) => prev ?? null);
           setTenant(t);
           setChangeTier(safeTier(t.planTier));
-          setChangeBilling(t.billing === "annual" ? "annual" : "monthly");
-        }
-      })
-      .catch(() => {});
-
+          setChangeBilling(billingOf(t));
+        })
+        .catch(() => setTenant((prev) => prev ?? null)),
+    [],
+  );
   useEffect(() => {
-    fetchTenant().finally(() => setLoading(false));
-  }, []);
+    fetchTenant();
+  }, [fetchTenant]);
 
-  const handleCancel = async () => {
-    setCancelling(true);
-    try {
-      const res = await apiClient.post(API_ENDPOINTS.CANCEL_SUBSCRIPTION);
-      if (res.data?.success) {
-        setTenant((prev) =>
-          prev ? { ...prev, subscriptionStatus: "cancelled" } : prev,
-        );
-        setAlert({
-          open: true,
-          message: "Subscription cancelled.",
-          severity: "success",
-        });
-        setCancelOpen(false);
-      } else {
-        setAlert({
-          open: true,
-          message: res.data?.message || "Failed to cancel.",
-          severity: "error",
-        });
-      }
-    } catch (err: any) {
+  /** Opens Razorpay Checkout; on payment, posts the confirm call and refreshes. */
+  const checkout = async (
+    kind: "renew" | "change" | "method",
+    options: Record<string, unknown>,
+    confirm: (
+      r: RazorpayResponse,
+    ) => Promise<{ data?: { success?: boolean; message?: string } }>,
+    messages: { ok: string; failed: string },
+  ) => {
+    if (!(await loadRazorpayScript())) {
       setAlert({
         open: true,
         message:
-          err.response?.data?.message || "Failed to cancel subscription.",
+          "The payment window couldn’t load. Check your connection and try again.",
         severity: "error",
       });
-    } finally {
-      setCancelling(false);
+      setBusy(null);
+      return;
     }
+    const rzp = new (window as any).Razorpay({
+      name: "Praesto",
+      image: `${window.location.origin}/favicon.ico`,
+      prefill: {
+        name: user
+          ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
+          : "",
+        email: user?.email ?? "",
+      },
+      theme: { color: ACCENT },
+      ...options,
+      handler: (response: RazorpayResponse) => {
+        confirm(response)
+          .then((res) => {
+            if (res.data?.success) {
+              setAlert({
+                open: true,
+                message: messages.ok,
+                severity: "success",
+              });
+              return fetchTenant();
+            }
+            setAlert({
+              open: true,
+              message: res.data?.message || messages.failed,
+              severity: "error",
+            });
+          })
+          .catch((err) => fail(err, messages.failed))
+          .finally(() => setBusy(null));
+      },
+      modal: { ondismiss: () => setBusy(null) },
+    });
+    rzp.open();
+    void kind;
   };
 
-  const handleRenew = async () => {
-    setRenewing(true);
+  const renew = async () => {
+    setBusy("renew");
     try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        setAlert({
-          open: true,
-          message: "Failed to load payment gateway. Check your connection.",
-          severity: "error",
-        });
-        setRenewing(false);
-        return;
-      }
-
-      const subRes = await apiClient.post(API_ENDPOINTS.CREATE_SUBSCRIPTION, {
-        billing: renewBillingRef.current,
+      const res = await apiClient.post(API_ENDPOINTS.CREATE_SUBSCRIPTION, {
+        billing: renewRef.current,
       });
-      if (!subRes.data?.success) {
-        setAlert({
-          open: true,
-          message: "Failed to create subscription.",
-          severity: "error",
-        });
-        setRenewing(false);
-        return;
-      }
-
-      const { subscriptionId, keyId } = subRes.data.data;
-
-      const options = {
-        key: keyId,
-        subscription_id: subscriptionId,
-        name: "Praesto",
-        image: `${window.location.origin}/favicon.ico`,
-        description: `HRMS ${renewBillingRef.current === "annual" ? "Annual" : "Monthly"} subscription`,
-        prefill: {
-          name: user
-            ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
-            : "",
-          email: user?.email ?? "",
+      if (!res.data?.success) throw new Error();
+      const { subscriptionId, keyId } = res.data.data;
+      await checkout(
+        "renew",
+        {
+          key: keyId,
+          subscription_id: subscriptionId,
+          description: `HRMS ${renewRef.current === "annual" ? "Annual" : "Monthly"} subscription`,
+          method: { card: false },
         },
-        method: { card: false },
-        theme: { color: "#1976d2" },
-        handler: (response: {
-          razorpay_payment_id: string;
-          razorpay_subscription_id: string;
-          razorpay_signature: string;
-        }) => {
-          const bill = renewBillingRef.current;
-          apiClient
-            .post("/payment/reactivate-subscription", {
-              billing: bill,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySubscriptionId: response.razorpay_subscription_id,
-              razorpaySignature: response.razorpay_signature,
-            })
-            .then((reactivateRes) => {
-              if (reactivateRes.data?.success) {
-                setAlert({
-                  open: true,
-                  message: "Subscription renewed successfully!",
-                  severity: "success",
-                });
-                return fetchTenant();
-              }
-              setAlert({
-                open: true,
-                message: reactivateRes.data?.message || "Renewal failed.",
-                severity: "error",
-              });
-              return null;
-            })
-            .catch((err: any) => {
-              setAlert({
-                open: true,
-                message: err.response?.data?.message || "Renewal failed.",
-                severity: "error",
-              });
-            })
-            .finally(() => setRenewing(false));
-        },
-        modal: { ondismiss: () => setRenewing(false) },
-      };
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
-    } catch (err: any) {
-      setAlert({
-        open: true,
-        message: err.response?.data?.message || "Something went wrong.",
-        severity: "error",
-      });
-      setRenewing(false);
+        (r) =>
+          apiClient.post(API_ENDPOINTS.REACTIVATE_SUBSCRIPTION, {
+            billing: renewRef.current,
+            razorpayPaymentId: r.razorpay_payment_id,
+            razorpaySubscriptionId: r.razorpay_subscription_id,
+            razorpaySignature: r.razorpay_signature,
+          }),
+        { ok: "Subscription renewed.", failed: "Renewal didn’t go through." },
+      );
+    } catch (err) {
+      fail(err, "The subscription couldn’t be created. Try again.");
+      setBusy(null);
     }
   };
 
-  const handleChangePlan = async () => {
-    setChangingPlan(true);
+  const changePlan = async () => {
+    setBusy("change");
+    const tier = changeTier;
+    const billing = changeBilling;
     try {
       const res = await apiClient.post(API_ENDPOINTS.CHANGE_PLAN, {
-        planTier: changeTier,
-        billing: changeBilling,
+        planTier: tier,
+        billing,
       });
       if (!res.data?.success) {
         setAlert({
           open: true,
-          message: res.data?.message || "Failed to change plan.",
+          message: res.data?.message || "The plan couldn’t be changed.",
           severity: "error",
         });
-        setChangingPlan(false);
-        return;
+        return setBusy(null);
       }
-
       const data = res.data.data;
       if (!data?.requiresPayment) {
         setAlert({
@@ -332,206 +298,90 @@ export default function Subscription() {
           severity: "success",
         });
         await fetchTenant();
-        setChangingPlan(false);
-        return;
+        return setBusy(null);
       }
-
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        setAlert({
-          open: true,
-          message: "Failed to load payment gateway. Check your connection.",
-          severity: "error",
-        });
-        setChangingPlan(false);
-        return;
-      }
-
-      const options = {
-        key: data.keyId,
-        order_id: data.orderId,
-        amount: data.amount,
-        currency: "INR",
-        name: "Praesto",
-        image: `${window.location.origin}/favicon.ico`,
-        description: "Plan upgrade — prorated charge",
-        prefill: {
-          name: user
-            ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
-            : "",
-          email: user?.email ?? "",
+      await checkout(
+        "change",
+        {
+          key: data.keyId,
+          order_id: data.orderId,
+          amount: data.amount,
+          currency: "INR",
+          description: "Plan upgrade — prorated charge",
         },
-        theme: { color: "#1976d2" },
-        handler: (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
-          apiClient
-            .post(API_ENDPOINTS.CONFIRM_PLAN_UPGRADE, {
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-              planTier: changeTier,
-              billing: changeBilling,
-            })
-            .then((confirmRes) => {
-              if (confirmRes.data?.success) {
-                setAlert({
-                  open: true,
-                  message: "Plan upgraded successfully!",
-                  severity: "success",
-                });
-                return fetchTenant();
-              }
-              setAlert({
-                open: true,
-                message: confirmRes.data?.message || "Upgrade failed.",
-                severity: "error",
-              });
-              return null;
-            })
-            .catch((err: any) => {
-              setAlert({
-                open: true,
-                message: err.response?.data?.message || "Upgrade failed.",
-                severity: "error",
-              });
-            })
-            .finally(() => setChangingPlan(false));
-        },
-        modal: { ondismiss: () => setChangingPlan(false) },
-      };
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
-    } catch (err: any) {
-      setAlert({
-        open: true,
-        message: err.response?.data?.message || "Failed to change plan.",
-        severity: "error",
-      });
-      setChangingPlan(false);
+        (r) =>
+          apiClient.post(API_ENDPOINTS.CONFIRM_PLAN_UPGRADE, {
+            razorpayOrderId: r.razorpay_order_id,
+            razorpayPaymentId: r.razorpay_payment_id,
+            razorpaySignature: r.razorpay_signature,
+            planTier: tier,
+            billing,
+          }),
+        { ok: "Plan upgraded.", failed: "The upgrade didn’t go through." },
+      );
+    } catch (err) {
+      fail(err, "The plan couldn’t be changed.");
+      setBusy(null);
     }
   };
 
-  const handleChangePaymentMethod = async () => {
-    setChangingPaymentMethod(true);
+  const changeMethod = async () => {
+    setBusy("method");
     try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        setAlert({
-          open: true,
-          message: "Failed to load payment gateway. Check your connection.",
-          severity: "error",
-        });
-        setChangingPaymentMethod(false);
-        return;
-      }
-
-      const subRes = await apiClient.post(
+      const res = await apiClient.post(
         API_ENDPOINTS.START_PAYMENT_METHOD_CHANGE,
       );
-      if (!subRes.data?.success) {
+      if (!res.data?.success) {
         setAlert({
           open: true,
           message:
-            subRes.data?.message || "Failed to start payment method change.",
+            res.data?.message || "The payment method change couldn’t start.",
           severity: "error",
         });
-        setChangingPaymentMethod(false);
-        return;
+        return setBusy(null);
       }
-
-      const { subscriptionId, keyId } = subRes.data.data;
-
-      const options = {
-        key: keyId,
-        subscription_id: subscriptionId,
-        name: "Praesto",
-        image: `${window.location.origin}/favicon.ico`,
-        description: "HRMS subscription — payment method update",
-        prefill: {
-          name: user
-            ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
-            : "",
-          email: user?.email ?? "",
+      const { subscriptionId, keyId } = res.data.data;
+      await checkout(
+        "method",
+        {
+          key: keyId,
+          subscription_id: subscriptionId,
+          description: "HRMS subscription — payment method update",
+          // Card only: UPI/e-Mandate subscriptions can't have their plan changed
+          // later, which is the reason this flow exists (Classic's note).
+          method: {
+            card: true,
+            netbanking: false,
+            wallet: false,
+            upi: false,
+            paylater: false,
+            emi: false,
+          },
         },
-        // Forced card-only — the whole point of this flow is to move the
-        // tenant onto a payment instrument Razorpay allows plan changes on
-        // (UPI/Emandate subscriptions can never have plan_id updated).
-        method: {
-          card: true,
-          netbanking: false,
-          wallet: false,
-          upi: false,
-          paylater: false,
-          emi: false,
+        (r) =>
+          apiClient.post(API_ENDPOINTS.CONFIRM_PAYMENT_METHOD_CHANGE, {
+            razorpayPaymentId: r.razorpay_payment_id,
+            razorpaySubscriptionId: r.razorpay_subscription_id,
+            razorpaySignature: r.razorpay_signature,
+          }),
+        {
+          ok: "Payment method updated.",
+          failed: "The payment method couldn’t be updated.",
         },
-        theme: { color: "#1976d2" },
-        handler: (response: {
-          razorpay_payment_id: string;
-          razorpay_subscription_id: string;
-          razorpay_signature: string;
-        }) => {
-          apiClient
-            .post(API_ENDPOINTS.CONFIRM_PAYMENT_METHOD_CHANGE, {
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySubscriptionId: response.razorpay_subscription_id,
-              razorpaySignature: response.razorpay_signature,
-            })
-            .then((confirmRes) => {
-              if (confirmRes.data?.success) {
-                setAlert({
-                  open: true,
-                  message: "Payment method updated successfully!",
-                  severity: "success",
-                });
-                return fetchTenant();
-              }
-              setAlert({
-                open: true,
-                message:
-                  confirmRes.data?.message ||
-                  "Failed to update payment method.",
-                severity: "error",
-              });
-              return null;
-            })
-            .catch((err: any) => {
-              setAlert({
-                open: true,
-                message:
-                  err.response?.data?.message ||
-                  "Failed to update payment method.",
-                severity: "error",
-              });
-            })
-            .finally(() => setChangingPaymentMethod(false));
-        },
-        modal: { ondismiss: () => setChangingPaymentMethod(false) },
-      };
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
-    } catch (err: any) {
-      setAlert({
-        open: true,
-        message:
-          err.response?.data?.message || "Failed to update payment method.",
-        severity: "error",
-      });
-      setChangingPaymentMethod(false);
+      );
+    } catch (err) {
+      fail(err, "The payment method couldn’t be updated.");
+      setBusy(null);
     }
   };
 
-  const handleCancelPendingChange = async () => {
+  const cancelPendingChange = async () => {
     if (!tenant) return;
-    setChangingPlan(true);
+    setBusy("change");
     try {
       const res = await apiClient.post(API_ENDPOINTS.CHANGE_PLAN, {
         planTier: safeTier(tenant.planTier),
-        billing: tenant.billing === "annual" ? "annual" : "monthly",
+        billing: billingOf(tenant),
       });
       if (res.data?.success) {
         setAlert({
@@ -540,585 +390,321 @@ export default function Subscription() {
           severity: "success",
         });
         await fetchTenant();
-      } else {
+      } else
         setAlert({
           open: true,
-          message: res.data?.message || "Failed to cancel scheduled change.",
+          message:
+            res.data?.message || "The scheduled change couldn’t be cancelled.",
           severity: "error",
         });
-      }
-    } catch (err: any) {
-      setAlert({
-        open: true,
-        message:
-          err.response?.data?.message || "Failed to cancel scheduled change.",
-        severity: "error",
-      });
+    } catch (err) {
+      fail(err, "The scheduled change couldn’t be cancelled.");
     } finally {
-      setChangingPlan(false);
+      setBusy(null);
     }
   };
 
-  const cancelledAccessEnded = Boolean(
-    tenant &&
-    tenant.subscriptionStatus === "cancelled" &&
-    (!tenant.planExpiresAt || new Date(tenant.planExpiresAt) <= new Date()),
-  );
-  const isExpired =
-    tenant?.subscriptionStatus === "expired" || cancelledAccessEnded;
-  const canChangePlan = ["active", "grace_period"].includes(
-    tenant?.subscriptionStatus ?? "",
-  );
-  const renewPrice =
-    PLAN_PRICING[tenant ? safeTier(tenant.planTier) : "starter"][renewBilling];
-  const changeAmountPaise = amountPaise(changeTier, changeBilling);
+  const cancel = async () => {
+    setBusy("cancel");
+    try {
+      const res = await apiClient.post(API_ENDPOINTS.CANCEL_SUBSCRIPTION);
+      if (res.data?.success) {
+        setTenant((t) => t && { ...t, subscriptionStatus: "cancelled" });
+        setAlert({
+          open: true,
+          message: "Subscription cancelled.",
+          severity: "success",
+        });
+        setCancelOpen(false);
+      } else
+        setAlert({
+          open: true,
+          message:
+            res.data?.message || "The subscription couldn’t be cancelled.",
+          severity: "error",
+        });
+    } catch (err) {
+      fail(err, "The subscription couldn’t be cancelled.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (tenant === undefined)
+    return (
+      <Page title="Subscription" width="reading">
+        <div style={{ display: "grid", gap: 32 }}>
+          <div style={{ display: "grid", gap: 14 }}>
+            <Skeleton width={180} height={26} />
+            <Skeleton width={240} height={13} />
+            <KeyValuesSkeleton rows={4} />
+          </div>
+          <div style={{ display: "grid", gap: 14 }}>
+            <Skeleton width={140} height={20} />
+            <Skeleton width={300} height={32} radius={8} />
+            <TextSkeleton lines={4} lastWidth="45%" />
+          </div>
+        </div>
+      </Page>
+    );
+  if (tenant === null)
+    return (
+      <Page title="Subscription" width="reading">
+        <ErrorState
+          message="Subscription details didn’t load."
+          onRetry={fetchTenant}
+        />
+      </Page>
+    );
+
+  const tier = safeTier(tenant.planTier);
+  const status = tenant.subscriptionStatus;
+  const accessEnded =
+    status === "cancelled" &&
+    (!tenant.planExpiresAt || new Date(tenant.planExpiresAt) <= new Date());
+  const isExpired = status === "expired" || accessEnded;
+  const canChangePlan = status === "active" || status === "grace_period";
+  const changeLimit = TIER_EMPLOYEE_LIMITS[changeTier];
+  const blockedByHeadcount =
+    changeLimit !== null && tenant.activeEmployeeCount > changeLimit;
   const isSameAsCurrent =
-    tenant &&
-    changeTier === safeTier(tenant.planTier) &&
-    changeBilling === (tenant.billing === "annual" ? "annual" : "monthly") &&
+    changeTier === tier &&
+    changeBilling === billingOf(tenant) &&
     !tenant.pendingPlanTier;
-  const changeTierLimit = TIER_EMPLOYEE_LIMITS[changeTier];
-  const tierBlockedByHeadcount =
-    changeTierLimit !== null &&
-    (tenant?.activeEmployeeCount ?? 0) > changeTierLimit;
+  const badge = accessEnded
+    ? { label: "Cancelled", tone: "danger" as Tone }
+    : (STATUS[status] ?? STATUS.expired);
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : !tenant ? (
-        <Alert severity="error">
-          Failed to load subscription details. Please refresh and try again.
-        </Alert>
-      ) : (
-        <>
-          {/* Current plan card */}
-          <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                mb: 2,
-              }}
-            >
-              <Box>
-                <Typography variant="h6" fontWeight={700}>
-                  HRMS {tierLabel(tenant.planTier)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {tenant.billing === "annual" ? "Annual" : "Monthly"} plan ·{" "}
-                  {formatINR(
-                    amountPaise(
-                      safeTier(tenant.planTier),
-                      tenant.billing === "annual" ? "annual" : "monthly",
-                    ),
-                  )}
-                  {tenant.billing === "annual" ? "/year" : "/month"}
-                  {` · ${tenant.activeEmployeeCount} employees`}
-                </Typography>
-              </Box>
-              <Chip
-                label={statusLabel(tenant.subscriptionStatus)}
-                color={
-                  tenant.subscriptionStatus === "cancelled" &&
-                  cancelledAccessEnded
-                    ? "error"
-                    : statusColor(tenant.subscriptionStatus)
-                }
-                size="small"
-                sx={{ fontWeight: 600 }}
-              />
-            </Box>
+    <Page title="Subscription" width="reading">
+      <section className={s.current}>
+        <div className={s.planHead}>
+          <div>
+            <h2 className="px-title">HRMS {PLAN_TIER_LABELS[tier]}</h2>
+            <p className="px-secondary px-callout">
+              {billingOf(tenant) === "annual" ? "Annual" : "Monthly"} ·{" "}
+              <span className="px-num">
+                {formatINR(amountPaise(tier, billingOf(tenant)))}
+              </span>
+              {billingOf(tenant) === "annual" ? "/year" : "/month"} ·{" "}
+              {tenant.activeEmployeeCount} employees
+            </p>
+          </div>
+          <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+        </div>
 
-            {tenant.pendingPlanTier && tenant.pendingPlanChangeAt && (
-              <Alert
-                severity="info"
-                sx={{ mb: 2 }}
-                action={
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={handleCancelPendingChange}
-                    disabled={changingPlan}
-                  >
-                    Cancel
-                  </Button>
-                }
-              >
-                Your plan will change to HRMS{" "}
-                {tierLabel(tenant.pendingPlanTier)} (
+        {tenant.pendingPlanTier && tenant.pendingPlanChangeAt && (
+          <Banner icon="calendar">
+            <span
+              className="px-row"
+              style={{ justifyContent: "space-between", width: "100%" }}
+            >
+              <span>
+                Changes to HRMS{" "}
+                {PLAN_TIER_LABELS[safeTier(tenant.pendingPlanTier)]} (
                 {tenant.pendingBilling === "annual" ? "Annual" : "Monthly"}) on{" "}
-                <strong>{formatDate(tenant.pendingPlanChangeAt)}</strong>.
-              </Alert>
-            )}
+                <strong>{longDate(tenant.pendingPlanChangeAt)}</strong>.
+              </span>
+              <Button
+                size="small"
+                variant="plain"
+                busy={busy === "change"}
+                onClick={cancelPendingChange}
+              >
+                Keep Current Plan
+              </Button>
+            </span>
+          </Banner>
+        )}
+        {status === "grace_period" && tenant.planExpiresAt && (
+          <Banner tone="warning">
+            Your subscription has lapsed. Renew before{" "}
+            <strong>{graceDeadline(tenant.planExpiresAt)}</strong> to keep
+            access.
+          </Banner>
+        )}
+        {status === "expired" && (
+          <Banner tone="danger">
+            Your subscription has expired. Renew below to restore access.
+          </Banner>
+        )}
+        {status === "cancelled" && !accessEnded && tenant.planExpiresAt && (
+          <Banner tone="warning">
+            Cancelled and won’t renew. Your team keeps access until{" "}
+            <strong>{longDate(tenant.planExpiresAt)}</strong>.
+          </Banner>
+        )}
+        {accessEnded && (
+          <Banner tone="danger">
+            Your subscription was cancelled and access has ended. Resubscribe
+            below to continue.
+          </Banner>
+        )}
 
-            {tenant.subscriptionStatus === "grace_period" &&
-              tenant.planExpiresAt && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  Your subscription has lapsed. Renew before{" "}
-                  <strong>{graceDeadline(tenant.planExpiresAt)}</strong> to
-                  avoid losing access.
-                </Alert>
-              )}
-
-            {tenant.subscriptionStatus === "expired" && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                Your subscription has expired. Renew below to restore access.
-              </Alert>
-            )}
-
-            {tenant.subscriptionStatus === "cancelled" &&
-              !cancelledAccessEnded &&
-              tenant.planExpiresAt && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  Your subscription is cancelled and won&apos;t renew.
-                  You&apos;ll keep access until{" "}
-                  <strong>{formatDate(tenant.planExpiresAt)}</strong>.
-                </Alert>
-              )}
-
-            {cancelledAccessEnded && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                Your subscription was cancelled and your access has ended.
-                Resubscribe below to continue.
-              </Alert>
-            )}
-
-            <Divider sx={{ my: 2 }} />
-
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 2,
-              }}
+        <KeyValues
+          items={[
+            ["Activated", longDate(tenant.planActivatedAt)],
+            [
+              status === "expired" ? "Expired" : "Renews",
+              longDate(tenant.planExpiresAt),
+            ],
+            ...(tenant.razorpaySubscriptionId
+              ? ([
+                  [
+                    "Subscription ID",
+                    <span
+                      style={{
+                        fontFamily: "var(--px-font-mono)",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {tenant.razorpaySubscriptionId}
+                    </span>,
+                  ],
+                ] as [string, React.ReactNode][])
+              : []),
+            ...(tenant.paymentMethod
+              ? ([
+                  [
+                    "Payment Method",
+                    <span>
+                      {tenant.paymentMethodSummary}{" "}
+                      <span className="px-meta">
+                        · {METHOD[tenant.paymentMethod] ?? "Payment method"}
+                      </span>
+                    </span>,
+                  ],
+                ] as [string, React.ReactNode][])
+              : []),
+          ]}
+        />
+        {tenant.paymentMethod &&
+          ["upi", "emandate", "nach"].includes(tenant.paymentMethod) && (
+            <p className="px-meta">Switch to a card to make plan changes.</p>
+          )}
+        <div className="px-row" style={{ justifyContent: "space-between" }}>
+          {tenant.paymentMethod && canChangePlan ? (
+            <Button
+              busy={busy === "method"}
+              disabled={busy !== null && busy !== "method"}
+              onClick={changeMethod}
             >
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                >
-                  Activated
-                </Typography>
-                <Typography variant="body2" fontWeight={500}>
-                  {formatDate(tenant.planActivatedAt)}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                >
-                  {tenant.subscriptionStatus === "expired"
-                    ? "Expired on"
-                    : "Renews on"}
-                </Typography>
-                <Typography variant="body2" fontWeight={500}>
-                  {formatDate(tenant.planExpiresAt)}
-                </Typography>
-              </Box>
-              {tenant.razorpaySubscriptionId && (
-                <Box sx={{ gridColumn: "1 / -1" }}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    display="block"
-                  >
-                    Subscription ID
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontFamily="monospace"
-                    sx={{ wordBreak: "break-all", color: "text.secondary" }}
-                  >
-                    {tenant.razorpaySubscriptionId}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-
-            {/* Payment method */}
-            {tenant.paymentMethod && (
-              <>
-                <Divider sx={{ my: 2 }} />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                  sx={{ mb: 1 }}
-                >
-                  Payment Method
-                </Typography>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.5,
-                    p: 1.5,
-                    borderRadius: 1.5,
-                    border: 1,
-                    borderColor: "divider",
-                    bgcolor: "action.hover",
-                  }}
-                >
-                  <Box sx={{ color: "text.secondary", display: "flex" }}>
-                    {paymentMethodIcon(tenant.paymentMethod)}
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="body2" fontWeight={600}>
-                      {tenant.paymentMethodSummary}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {paymentMethodLabel(tenant.paymentMethod)}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label="Active"
-                    size="small"
-                    color="success"
-                    variant="outlined"
-                    sx={{ fontSize: "0.7rem" }}
-                  />
-                </Box>
-                {["upi", "emandate", "nach"].includes(tenant.paymentMethod) && (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: "block", mt: 1 }}
-                  >
-                    Switch to a card to unlock plan changes.
-                  </Typography>
-                )}
-                {canChangePlan && (
-                  <Box sx={{ mt: 1.5 }}>
-                    <Button
-                      variant="ghost"
-                      size="small"
-                      onClick={handleChangePaymentMethod}
-                      disabled={changingPaymentMethod}
-                      loading={changingPaymentMethod}
-                    >
-                      Change Payment Method
-                    </Button>
-                  </Box>
-                )}
-              </>
-            )}
-
-            {!isExpired && tenant.subscriptionStatus !== "cancelled" && (
-              <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-                <Button
-                  variant="danger"
-                  size="small"
-                  onClick={() => setCancelOpen(true)}
-                >
-                  Cancel Subscription
-                </Button>
-              </Box>
-            )}
-          </Paper>
-
-          {/* Change Plan — upgrade/downgrade tier or billing period */}
-          {canChangePlan && (
-            <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Change Plan
-              </Typography>
-
-              <Box sx={{ display: "flex", justifyContent: "center", mb: 1.5 }}>
-                <ToggleButtonGroup
-                  value={changeTier}
-                  exclusive
-                  size="small"
-                  onChange={(_, v) => v && setChangeTier(v)}
-                >
-                  <ToggleButton value="starter" sx={{ px: 2.5 }}>
-                    Starter (≤{TIER_EMPLOYEE_LIMITS.starter})
-                  </ToggleButton>
-                  <ToggleButton value="growth" sx={{ px: 2.5 }}>
-                    Growth (≤{TIER_EMPLOYEE_LIMITS.growth})
-                  </ToggleButton>
-                  <ToggleButton value="enterprise" sx={{ px: 2.5 }}>
-                    Enterprise
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              </Box>
-
-              <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
-                <ToggleButtonGroup
-                  value={changeBilling}
-                  exclusive
-                  size="small"
-                  onChange={(_, v) => v && setChangeBilling(v)}
-                >
-                  <ToggleButton value="monthly" sx={{ px: 3 }}>
-                    Monthly
-                  </ToggleButton>
-                  <ToggleButton value="annual" sx={{ px: 3 }}>
-                    Annual
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              </Box>
-
-              {tierBlockedByHeadcount && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {PLAN_TIER_LABELS[changeTier]} supports up to{" "}
-                  {changeTierLimit} employees. You currently have{" "}
-                  {tenant.activeEmployeeCount}.
-                </Alert>
-              )}
-
-              <Box
-                sx={{
-                  border: 2,
-                  borderColor: "primary.main",
-                  borderRadius: 2,
-                  p: 2,
-                  mb: 2,
-                  bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    mb: 1,
-                  }}
-                >
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      HRMS {PLAN_TIER_LABELS[changeTier]}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Full-featured HR management
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography
-                      variant="h6"
-                      fontWeight={800}
-                      color="primary.main"
-                    >
-                      {formatINR(changeAmountPaise)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {changeBilling === "annual" ? "per year" : "per month"}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 1 }} />
-
-                <List dense disablePadding>
-                  {[
-                    changeTierLimit === null
-                      ? "Unlimited employees"
-                      : `Up to ${changeTierLimit} employees`,
-                    ...PLAN_FEATURES,
-                  ].map((f) => (
-                    <ListItem key={f} disableGutters sx={{ py: 0.25 }}>
-                      <ListItemIcon sx={{ minWidth: 26 }}>
-                        <CheckIcon fontSize="small" color="success" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={f}
-                        primaryTypographyProps={{ variant: "body2" }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mb: 1.5 }}
-              >
-                Upgrading the tier (same billing period) charges the prorated
-                difference now. Downgrades and billing-period changes take
-                effect at your next renewal — no charge today.
-              </Typography>
-
-              <Button
-                variant="primary"
-                fullWidth
-                size="large"
-                disabled={
-                  changingPlan || isSameAsCurrent || tierBlockedByHeadcount
-                }
-                onClick={handleChangePlan}
-                loading={changingPlan}
-              >
-                Change Plan
-              </Button>
-            </Paper>
+              Change Payment Method
+            </Button>
+          ) : (
+            <span />
           )}
-
-          {/* Renew section — shown when expired */}
-          {isExpired && (
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Renew Subscription
-              </Typography>
-
-              {/* Billing toggle */}
-              <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
-                <ToggleButtonGroup
-                  value={renewBilling}
-                  exclusive
-                  size="small"
-                  onChange={(_, v) => v && setRenewBilling(v)}
-                >
-                  <ToggleButton value="monthly" sx={{ px: 3 }}>
-                    Monthly
-                  </ToggleButton>
-                  <ToggleButton value="annual" sx={{ px: 3 }}>
-                    Annual
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              </Box>
-
-              {/* Plan card */}
-              <Box
-                sx={{
-                  border: 2,
-                  borderColor: "primary.main",
-                  borderRadius: 2,
-                  p: 2,
-                  mb: 2,
-                  bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    mb: 1,
-                  }}
-                >
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      HRMS {tierLabel(tenant.planTier)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Full-featured HR management
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography
-                      variant="h6"
-                      fontWeight={800}
-                      color="primary.main"
-                    >
-                      {formatINR(renewPrice)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {renewBilling === "annual" ? "per year" : "per month"}
-                    </Typography>
-                    {renewBilling === "annual" && (
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        color="success.main"
-                        fontWeight={600}
-                      >
-                        Save 10% vs. monthly
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 1 }} />
-
-                <List dense disablePadding>
-                  {PLAN_FEATURES.map((f) => (
-                    <ListItem key={f} disableGutters sx={{ py: 0.25 }}>
-                      <ListItemIcon sx={{ minWidth: 26 }}>
-                        <CheckIcon fontSize="small" color="success" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={f}
-                        primaryTypographyProps={{ variant: "body2" }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-
-              <Button
-                variant="primary"
-                fullWidth
-                size="large"
-                disabled={renewing}
-                onClick={handleRenew}
-                loading={renewing}
-              >
-                {`Pay ${formatINR(renewPrice)} & Renew`}
-              </Button>
-
-              <Typography
-                variant="caption"
-                sx={{
-                  display: "block",
-                  textAlign: "center",
-                  mt: 1.5,
-                  opacity: 0.6,
-                }}
-              >
-                By continuing you agree to our{" "}
-                <a href="/terms-of-use">Terms of Use</a> and{" "}
-                <a href="/refund-policy">Refund Policy</a>.
-              </Typography>
-            </Paper>
+          {!isExpired && status !== "cancelled" && (
+            <Button variant="tintedDanger" onClick={() => setCancelOpen(true)}>
+              Cancel Subscription
+            </Button>
           )}
-        </>
+        </div>
+      </section>
+
+      {canChangePlan && (
+        <Section title="Change Plan">
+          <div style={{ display: "grid", gap: 12 }}>
+            <SegmentedControl
+              role="radiogroup"
+              label="Plan"
+              value={changeTier}
+              onChange={setChangeTier}
+              segments={TIERS.map((t) => ({
+                value: t,
+                label:
+                  TIER_EMPLOYEE_LIMITS[t] === null
+                    ? PLAN_TIER_LABELS[t]
+                    : `${PLAN_TIER_LABELS[t]} (≤${TIER_EMPLOYEE_LIMITS[t]})`,
+              }))}
+            />
+            <SegmentedControl
+              role="radiogroup"
+              label="Billing"
+              value={changeBilling}
+              onChange={setChangeBilling}
+              segments={[
+                { value: "monthly", label: "Monthly" },
+                { value: "annual", label: "Annual" },
+              ]}
+            />
+            {blockedByHeadcount && (
+              <Banner tone="warning">
+                {PLAN_TIER_LABELS[changeTier]} supports up to {changeLimit}{" "}
+                employees. You have {tenant.activeEmployeeCount}.
+              </Banner>
+            )}
+            <PlanCard
+              tier={changeTier}
+              billing={changeBilling}
+              amount={amountPaise(changeTier, changeBilling)}
+              limit={changeLimit}
+            />
+            <p className="px-meta">
+              Upgrading the tier on the same billing period charges the prorated
+              difference now. Downgrades and billing-period changes take effect
+              at your next renewal, with no charge today.
+            </p>
+            <Button
+              variant="primary"
+              busy={busy === "change"}
+              disabled={busy !== null || isSameAsCurrent || blockedByHeadcount}
+              onClick={changePlan}
+            >
+              Change Plan
+            </Button>
+          </div>
+        </Section>
       )}
 
-      {/* Cancel confirmation dialog */}
-      <Dialog
+      {isExpired && (
+        <Section title="Renew Subscription">
+          <div style={{ display: "grid", gap: 12 }}>
+            <SegmentedControl
+              role="radiogroup"
+              label="Billing"
+              value={renewBilling}
+              onChange={setRenewBilling}
+              segments={[
+                { value: "monthly", label: "Monthly" },
+                { value: "annual", label: "Annual · Save 10%" },
+              ]}
+            />
+            <PlanCard
+              tier={tier}
+              billing={renewBilling}
+              amount={PLAN_PRICING[tier][renewBilling]}
+            />
+            <Button
+              variant="primary"
+              busy={busy === "renew"}
+              disabled={busy !== null}
+              onClick={renew}
+            >
+              Pay {formatINR(PLAN_PRICING[tier][renewBilling])} and Renew
+            </Button>
+            <p className="px-meta" style={{ textAlign: "center" }}>
+              By continuing you agree to the{" "}
+              <Link to="/terms-of-use">Terms of Use</Link> and{" "}
+              <Link to="/refund-policy">Refund Policy</Link>.
+            </p>
+          </div>
+        </Section>
+      )}
+
+      <ConfirmDialog
         open={cancelOpen}
-        onClose={() => !cancelling && setCancelOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        slots={{ transition: SlideUpTransition }}
-        transitionDuration={{ enter: 280, exit: 200 }}
-        aria-labelledby="cancel-sub-dialog-title"
-      >
-        <DialogTitle id="cancel-sub-dialog-title">
-          Cancel Subscription?
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {tenant?.planExpiresAt
-              ? `Your subscription will stop renewing. Your team will keep full access until ${formatDate(tenant.planExpiresAt)}, after which you'll need to resubscribe to continue.`
-              : "Your subscription will stop renewing. This action cannot be undone."}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            variant="ghost"
-            onClick={() => setCancelOpen(false)}
-            disabled={cancelling}
-          >
-            Keep Subscription
-          </Button>
-          <Button
-            variant="danger"
-            onClick={handleCancel}
-            disabled={cancelling}
-            loading={cancelling}
-          >
-            Cancel Subscription
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Container>
+        onClose={() => setCancelOpen(false)}
+        onConfirm={cancel}
+        busy={busy === "cancel"}
+        title="Cancel your subscription?"
+        description={
+          tenant.planExpiresAt
+            ? `It stops renewing. Your team keeps full access until ${longDate(tenant.planExpiresAt)}, then you’ll need to resubscribe.`
+            : "It stops renewing. This can’t be undone."
+        }
+        confirmLabel="Cancel Subscription"
+      />
+    </Page>
   );
 }

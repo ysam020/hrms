@@ -1,0 +1,28 @@
+.columns {
+  display: grid;
+  gap: 32px;
+}
+@media (min-width: 900px) {
+  .columns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.list {
+  margin-top: 8px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--px-separator);
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.amount {
+  width: 140px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,201 @@
+/* Offline status chip, Pending Changes sheet, draft note. */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: 260px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
+  font: var(--px-type-meta);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip[data-tone="warning"] {
+  background: var(--px-warning-soft);
+  color: var(--px-warning);
+}
+.chip[data-tone="danger"] {
+  background: var(--px-danger-soft);
+  color: var(--px-danger);
+}
+.chip[data-tone="accent"] {
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+}
+.chip:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 639px) {
+  .chip span {
+    display: none;
+  }
+}
+
+/* Announces changes to assistive tech without showing a second label. */
+.live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.body {
+  display: grid;
+  gap: 16px;
+}
+.connection {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--px-text-2);
+  font: var(--px-type-callout);
+}
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--px-success);
+}
+.connection[data-state="offline"] .dot,
+.connection[data-state="unreachable"] .dot {
+  background: var(--px-warning);
+}
+.bannerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--px-separator);
+}
+.itemHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.itemTitle {
+  color: var(--px-text-1);
+  font: var(--px-type-body);
+  font-weight: 600;
+}
+.badge {
+  flex: none;
+  color: var(--px-text-3);
+  font: var(--px-type-meta);
+}
+.badge[data-status="attention"],
+.badge[data-status="conflict"] {
+  color: var(--px-danger);
+}
+.badge[data-status="syncing"] {
+  color: var(--px-accent);
+}
+.meta {
+  color: var(--px-text-3);
+  font: var(--px-type-meta);
+}
+.error {
+  margin: 0;
+  color: var(--px-danger);
+  font: var(--px-type-callout);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.diff {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-hover);
+  font: var(--px-type-callout);
+}
+.diff dt {
+  color: var(--px-text-3);
+  font: var(--px-type-meta);
+  text-transform: capitalize;
+}
+.diff dd {
+  display: grid;
+  margin: 0;
+}
+.theirs {
+  color: var(--px-text-2);
+}
+.mine {
+  color: var(--px-text-1);
+  font-weight: 600;
+}
+.recent {
+  display: grid;
+  gap: 4px;
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.diag {
+  color: var(--px-text-3);
+  font: var(--px-type-meta);
+}
+.diag summary {
+  cursor: pointer;
+}
+.diag ol {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-family: var(--px-font-mono);
+}
+
+/* Draft note under a form. */
+.draftNote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--px-text-3);
+  font: var(--px-type-meta);
+}
+.draftNote button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--px-accent);
+  font: inherit;
+  cursor: pointer;
+}

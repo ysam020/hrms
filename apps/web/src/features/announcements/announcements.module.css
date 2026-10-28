@@ -1,0 +1,34 @@
+.feed {
+  display: grid;
+}
+.post {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 20px 44px 20px 0;
+  border-bottom: 1px solid var(--px-separator);
+}
+.post:last-child {
+  border-bottom: 0;
+}
+.when {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.title {
+  font: var(--px-type-section);
+  letter-spacing: var(--px-type-section-track);
+}
+.body {
+  font: var(--px-type-body);
+  color: var(--px-text-2);
+  max-width: 65ch;
+}
+.menu {
+  position: absolute;
+  top: 16px;
+  right: 0;
+}

@@ -1,0 +1,29 @@
+.columns {
+  display: grid;
+  gap: 32px;
+}
+.description {
+  max-width: 70ch;
+  white-space: pre-wrap;
+  font: 400 15px/24px var(--px-font);
+  margin-bottom: 8px;
+}
+.rounds {
+  display: grid;
+  gap: 2px;
+}
+.round {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--px-separator);
+}
+.round:last-child {
+  border-bottom: 0;
+}
+.roundForm {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 10px 0 4px;
+}

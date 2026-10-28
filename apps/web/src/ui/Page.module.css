@@ -1,0 +1,191 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 100%;
+}
+.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Unified toolbar: content scrolls beneath a translucent material, with a
+   hairline that appears only once something is under it (scroll edge). */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--px-z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  min-height: var(--px-toolbar-h);
+  padding: 8px var(--px-gutter);
+  background: var(--px-material);
+  -webkit-backdrop-filter: var(--px-material-blur);
+  backdrop-filter: var(--px-material-blur);
+  box-shadow: 0 1px 0 transparent;
+  transition: box-shadow var(--px-dur-base) var(--px-ease-standard);
+}
+.toolbar[data-scrolled] {
+  box-shadow: 0 1px 0 var(--px-separator);
+}
+.leading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: -6px;
+}
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+.title {
+  font: var(--px-type-title);
+  letter-spacing: var(--px-type-title-track);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title[data-collapsed] {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.title {
+  transition:
+    opacity var(--px-dur-base) var(--px-ease-standard),
+    transform var(--px-dur-base) var(--px-ease-standard);
+}
+.subtitle {
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  flex-shrink: 0;
+}
+.tabsRow > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.tabsRow {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  flex-wrap: wrap;
+  padding: 4px var(--px-gutter) 12px;
+}
+.body {
+  flex: 1;
+  width: 100%;
+  padding: var(--px-space-2) var(--px-gutter) var(--px-space-12);
+  /* Sibling blocks (sections, tables, banners) get section spacing. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--px-space-8);
+}
+.body[data-width="reading"] > * {
+  max-width: var(--px-reading-max);
+}
+.body[data-width="wide"] > * {
+  max-width: var(--px-content-max);
+}
+.sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+}
+@media (max-width: 639px) {
+  /* Compact: controls on the first line, the title on its own line beneath. */
+  .toolbar {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .titles {
+    order: 10;
+    flex-basis: 100%;
+  }
+  .titles:has(.title[data-collapsed]) {
+    display: none;
+  }
+  .actions {
+    margin-left: auto;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .body {
+    padding-bottom: calc(
+      var(--px-tabbar-h) + var(--px-space-8) + env(safe-area-inset-bottom)
+    );
+  }
+}
+
+/* Inline inspector (regular widths): a sticky column beside the content. */
+.inspector {
+  position: sticky;
+  top: 0;
+  width: var(--px-inspector-w);
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--px-separator);
+  background: var(--px-bg-content);
+}
+.inspectorHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--px-toolbar-h);
+  padding: 8px 8px 8px 20px;
+  border-bottom: 1px solid var(--px-separator);
+}
+.inspectorTitle {
+  flex: 1;
+  min-width: 0;
+  font: var(--px-type-headline);
+}
+.inspectorBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  overscroll-behavior: contain;
+}
+.inspectorFooter {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--px-separator);
+}
+
+/* Two-column page layout with a grouped rail (dashboard, detail pages). */
+.split {
+  display: grid;
+  gap: var(--px-space-10);
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+    gap: var(--px-space-10);
+  }
+}
+.rail {
+  display: grid;
+  gap: var(--px-space-8);
+  padding: var(--px-space-5);
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-grouped);
+}
+.stack {
+  display: grid;
+  gap: var(--px-space-10);
+  min-width: 0;
+}

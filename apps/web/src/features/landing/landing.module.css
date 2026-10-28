@@ -1,0 +1,931 @@
+/* Praesto landing. The same midnight surface as the sign-in brand panel
+   opens and closes the page (hero, security, closing call to action); the
+   story in between sits on the app's own light surfaces. Real screens carry
+   the visuals; type, space and one accent do the rest.
+
+   The landing is a marketing page, so it keeps its own light palette rather
+   than following the app's appearance setting. */
+
+.page {
+  --l-ink: #1d1d1f;
+  --l-ink-2: #5a5b62;
+  --l-ink-3: #6e6f76;
+  --l-surface: #ffffff;
+  --l-tint: #f5f5f7;
+  --l-line: rgb(0 0 0 / 0.08);
+  --l-accent: #166e96;
+  --l-accent-hover: #125d80;
+  --l-night: #0a1219;
+  --landing-focus: #5bbde6;
+  --l-gutter: clamp(16px, 5vw, 64px);
+  --l-max: 1180px;
+
+  min-height: 100%;
+  background: var(--l-surface);
+  color: var(--l-ink);
+  color-scheme: light;
+  font: 400 17px/1.5 var(--px-font);
+  overflow-x: clip;
+}
+:global(html):has(.page) {
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :global(html):has(.page) {
+    scroll-behavior: auto;
+  }
+}
+
+.page a:focus-visible,
+.page button:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+}
+.dark a:focus-visible,
+.hero a:focus-visible,
+.closing a:focus-visible,
+.nav[data-tone="dark"] a:focus-visible,
+.nav[data-tone="dark"] button:focus-visible {
+  outline-color: var(--landing-focus);
+}
+
+.skip {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 60;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--l-surface);
+  color: var(--l-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip:focus {
+  top: 12px;
+}
+
+/* ── Type ────────────────────────────────────────────────────────────── */
+.h2 {
+  margin: 0;
+  font: 600 clamp(32px, 4.4vw, 52px) / 1.08 var(--px-font-display);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.h3 {
+  margin: 0;
+  font: 600 17px/1.3 var(--px-font-display);
+  letter-spacing: -0.01em;
+}
+.lead {
+  margin: 18px 0 0;
+  max-width: 34em;
+  font: 400 clamp(17px, 1.5vw, 20px) / 1.5 var(--px-font);
+  color: var(--l-ink-2);
+  text-wrap: pretty;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: 999px;
+  font: 600 16px/1 var(--px-font);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+.cta:active {
+  transform: scale(0.98);
+}
+.ctaPrimary {
+  background: var(--l-accent);
+  color: #fff;
+}
+.ctaPrimary:hover {
+  background: var(--l-accent-hover);
+}
+.ctaGhost {
+  color: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent);
+}
+.ctaGhost:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.ctaSm {
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cta:active {
+    transform: none;
+  }
+}
+
+/* ── Navigation ──────────────────────────────────────────────────────── */
+.nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  transition:
+    background-color 250ms ease,
+    color 250ms ease,
+    box-shadow 250ms ease;
+}
+.nav[data-tone="dark"] {
+  color: #fff;
+  /* Near-opaque: bright screenshots scrolling underneath mustn't show
+     through the bar and fight the links. */
+  background: rgb(10 18 25 / 0.92);
+  backdrop-filter: saturate(160%) blur(24px);
+  -webkit-backdrop-filter: saturate(160%) blur(24px);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.nav[data-tone="light"] {
+  color: var(--l-ink);
+  background: rgb(255 255 255 / 0.92);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: 0 1px 0 var(--l-line);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .nav[data-tone="dark"] {
+    background: var(--l-night);
+  }
+  .nav[data-tone="light"] {
+    background: var(--l-surface);
+  }
+}
+.navInner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  max-width: var(--l-max);
+  height: 64px;
+  margin: 0 auto;
+  padding: 0 var(--l-gutter);
+}
+.brand {
+  display: inline-flex;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.navLinks {
+  display: flex;
+  gap: 28px;
+}
+.navLinks a,
+.signIn {
+  color: inherit;
+  opacity: 0.8;
+  font: 500 14px/1 var(--px-font);
+  text-decoration: none;
+  border-radius: 6px;
+}
+.navLinks a:hover,
+.signIn:hover {
+  opacity: 1;
+}
+.signIn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 4px;
+  opacity: 0.9;
+}
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+.menuButton {
+  display: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: var(--l-gutter);
+  display: grid;
+  min-width: 200px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--l-surface);
+  color: var(--l-ink);
+  box-shadow:
+    0 0 0 1px var(--l-line),
+    0 18px 40px -12px rgb(0 0 0 / 0.3);
+}
+.menu a {
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: inherit;
+  font: 500 16px/1.2 var(--px-font);
+  text-decoration: none;
+}
+.menu a:hover {
+  background: var(--l-tint);
+}
+@media (max-width: 760px) {
+  .navLinks {
+    display: none;
+  }
+  .menuButton {
+    display: grid;
+  }
+  .navActions {
+    gap: 8px;
+  }
+}
+@media (max-width: 400px) {
+  .signIn {
+    display: none;
+  }
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: clamp(40px, 6vw, 72px);
+  padding: calc(64px + clamp(56px, 9vw, 112px)) var(--l-gutter)
+    clamp(56px, 8vw, 104px);
+  color: #fff;
+  background:
+    radial-gradient(
+      55% 40% at 50% 62%,
+      rgb(58 167 214 / 0.22),
+      transparent 70%
+    ),
+    radial-gradient(35% 25% at 8% 100%, rgb(253 118 36 / 0.1), transparent 70%),
+    radial-gradient(
+      35% 25% at 94% 96%,
+      rgb(37 179 123 / 0.08),
+      transparent 70%
+    ),
+    linear-gradient(170deg, #0d1b26 0%, #0a1219 55%, #070c11 100%);
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(
+    rgb(255 255 255 / 0.05) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, transparent 5%, #000 60%);
+}
+.heroCopy {
+  display: grid;
+  justify-items: center;
+  max-width: 880px;
+  text-align: center;
+}
+.heroTitle {
+  margin: 0;
+  font: 600 clamp(40px, 7vw, 84px) / 1.03 var(--px-font-display);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.heroLead {
+  margin: 24px 0 0;
+  max-width: 32em;
+  font: 400 clamp(18px, 1.8vw, 22px) / 1.45 var(--px-font);
+  color: rgb(255 255 255 / 0.74);
+  text-wrap: balance;
+}
+.hero .ctaPrimary {
+  background: #fff;
+  color: var(--l-night);
+}
+.hero .ctaPrimary:hover {
+  background: #e8f4fa;
+}
+.heroDevice {
+  width: 100%;
+  max-width: 1080px;
+}
+@media (max-width: 520px) {
+  .heroTitle br {
+    display: none;
+  }
+}
+
+/* ── Sections ────────────────────────────────────────────────────────── */
+.anchor {
+  scroll-margin-top: 72px;
+}
+.section {
+  padding: clamp(80px, 11vw, 140px) var(--l-gutter);
+}
+.sectionHead {
+  max-width: var(--l-max);
+  margin: 0 auto clamp(40px, 6vw, 64px);
+}
+.tintSection {
+  background: var(--l-tint);
+}
+.dark {
+  color: #fff;
+  background: linear-gradient(170deg, #0d1b26 0%, #0a1219 60%, #070c11 100%);
+}
+.dark .lead {
+  color: rgb(255 255 255 / 0.7);
+}
+
+.shot {
+  margin: 0;
+  overflow: hidden;
+  border-radius: clamp(12px, 1.4vw, 18px);
+  background: #f5f5f7;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.06),
+    0 2px 6px rgb(0 0 0 / 0.04),
+    0 30px 60px -30px rgb(10 18 25 / 0.35);
+}
+.shot {
+  position: relative;
+}
+.shot img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  height: auto;
+  max-width: none;
+}
+
+/* Modules: a typographic index, not a grid of cards. */
+.modules {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 32px;
+  max-width: var(--l-max);
+  margin: 0 auto;
+}
+.moduleGroup {
+  padding-top: 16px;
+  border-top: 1px solid var(--l-line);
+}
+.moduleHead {
+  margin: 0 0 14px;
+  font: 600 13px/1.2 var(--px-font);
+  letter-spacing: 0.02em;
+  color: var(--l-ink-3);
+}
+.moduleList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 500 clamp(17px, 1.6vw, 20px) / 1.3 var(--px-font-display);
+  letter-spacing: -0.01em;
+}
+@media (max-width: 960px) {
+  .modules {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .modules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 20px;
+  }
+}
+
+/* Security: five claims, each one verifiable in the code. */
+.security {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: clamp(28px, 4vw, 48px) clamp(24px, 3vw, 40px);
+  max-width: var(--l-max);
+  margin: 0 auto;
+}
+.securityItem p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgb(255 255 255 / 0.68);
+}
+.securityIcon {
+  display: block;
+  margin-bottom: 14px;
+  color: #5bbde6;
+}
+
+/* ── Pricing ─────────────────────────────────────────────────────────── */
+.pricing {
+  display: grid;
+  justify-items: center;
+  gap: 40px;
+  max-width: var(--l-max);
+  margin: 0 auto;
+}
+.billing {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--l-tint);
+  box-shadow: inset 0 0 0 1px var(--l-line);
+}
+.billingOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--l-ink-2);
+  font: 600 15px/1 var(--px-font);
+  cursor: pointer;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease;
+}
+.billingOption[aria-checked="true"] {
+  background: var(--l-surface);
+  color: var(--l-ink);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.08),
+    0 0 0 1px var(--l-line);
+}
+.save {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e3f0f6;
+  color: var(--l-accent-hover);
+  font-size: 12px;
+}
+.plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  border-top: 1px solid var(--l-line);
+  border-bottom: 1px solid var(--l-line);
+}
+.plan {
+  display: grid;
+  align-content: start;
+  padding: 40px clamp(20px, 3vw, 40px);
+}
+.plan + .plan {
+  border-left: 1px solid var(--l-line);
+}
+.planName {
+  margin: 0;
+  font: 600 24px/1.2 var(--px-font-display);
+  letter-spacing: -0.015em;
+}
+.planSeats {
+  margin: 6px 0 0;
+  color: var(--l-ink-2);
+  font-size: 15px;
+}
+.price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 28px 0 0;
+}
+.amount {
+  font: 600 clamp(34px, 3.6vw, 44px) / 1 var(--px-font-display);
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+.per {
+  color: var(--l-ink-2);
+  font-size: 15px;
+}
+.planNote {
+  margin: 8px 0 0;
+  min-height: 1.5em;
+  color: var(--l-ink-3);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.planCta {
+  margin-top: 28px;
+  justify-self: start;
+  min-height: 44px;
+  color: var(--l-accent);
+  box-shadow: inset 0 0 0 1.5px var(--l-accent);
+}
+.planCta:hover {
+  background: var(--l-accent);
+  color: #fff;
+}
+.included {
+  width: 100%;
+  max-width: 820px;
+  text-align: center;
+}
+.included ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 28px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--l-ink-2);
+  font-size: 15px;
+}
+.included li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.check {
+  color: var(--l-accent);
+}
+.fine {
+  margin: 24px auto 0;
+  max-width: 40em;
+  color: var(--l-ink-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+@media (max-width: 820px) {
+  .plans {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .plan {
+    padding: 32px 4px;
+  }
+  .plan + .plan {
+    border-left: 0;
+    border-top: 1px solid var(--l-line);
+  }
+}
+
+/* ── Closing ─────────────────────────────────────────────────────────── */
+.closing {
+  padding: clamp(96px, 13vw, 160px) var(--l-gutter);
+  color: #fff;
+  text-align: center;
+  background:
+    radial-gradient(
+      50% 60% at 50% 100%,
+      rgb(58 167 214 / 0.22),
+      transparent 70%
+    ),
+    linear-gradient(170deg, #0d1b26 0%, #0a1219 60%, #070c11 100%);
+}
+.closingInner {
+  display: grid;
+  justify-items: center;
+}
+.closingTitle {
+  margin: 0;
+  max-width: 14em;
+  font: 600 clamp(36px, 5.6vw, 64px) / 1.05 var(--px-font-display);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.closing .lead {
+  color: rgb(255 255 255 / 0.72);
+}
+.closing .ctaPrimary {
+  background: #fff;
+  color: var(--l-night);
+}
+.closing .ctaPrimary:hover {
+  background: #e8f4fa;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+.footer {
+  padding: 56px var(--l-gutter) 40px;
+  background: var(--l-tint);
+  color: var(--l-ink-2);
+  font-size: 14px;
+}
+.footerInner {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr));
+  gap: 32px;
+  max-width: var(--l-max);
+  margin: 0 auto;
+}
+.footerBrand p {
+  margin: 14px 0 0;
+}
+.footerBrand a {
+  display: inline-flex;
+  border-radius: 6px;
+  color: var(--l-ink);
+  text-decoration: none;
+}
+.footerCol {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+.footerCol h2 {
+  margin: 0 0 4px;
+  color: var(--l-ink);
+  font: 600 13px/1.2 var(--px-font);
+}
+.footerCol a {
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.footerCol a:hover {
+  color: var(--l-ink);
+  text-decoration: underline;
+}
+.copyright {
+  max-width: var(--l-max);
+  margin: 40px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--l-line);
+  color: var(--l-ink-3);
+  font-size: 12px;
+}
+@media (max-width: 860px) {
+  .footerInner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .footerBrand {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Account (signed in) ─────────────────────────────────────────────── */
+.account {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  max-width: 240px;
+  padding: 4px 10px 4px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  font: 500 14px/1 var(--px-font);
+  cursor: pointer;
+}
+.account:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.accountName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .accountName {
+    display: none;
+  }
+}
+
+/* ── Gallery: the second showcase, on the light tint ─────────────────── */
+.gallery {
+  background: var(--l-tint);
+  color: var(--l-ink);
+  text-align: center;
+}
+.abilities {
+  padding-top: 0;
+  text-align: center;
+}
+.galleryHead {
+  display: grid;
+  justify-items: center;
+  max-width: 760px;
+  margin: 0 auto clamp(40px, 6vw, 64px);
+}
+
+/* Security: the audit trail, shown rather than described. */
+.securityShot {
+  max-width: var(--l-max);
+  margin: 0 auto clamp(48px, 6vw, 72px);
+}
+.securityShot figure {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 40px 80px -30px rgb(0 0 0 / 0.7);
+}
+
+/* ── Anywhere: real phone screens in an iPhone drawn in CSS ──────────── */
+.anywhere {
+  padding: clamp(80px, 11vw, 140px) var(--l-gutter);
+  text-align: center;
+  overflow: hidden;
+}
+.phones {
+  /* One em = ten app pixels: the 390-px-wide screen is 39em. */
+  font-size: clamp(5.4px, 0.5vw, 7.4px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+.phone {
+  flex: none;
+  margin: 0;
+  width: 41.6em;
+  padding: 1.3em;
+  border-radius: 7em;
+  background: #0d0d0f;
+  box-shadow:
+    0 0 0 0.22em #8a8d93,
+    0 0 0 0.42em #2e3034,
+    0 5em 8em -3em rgb(10 18 25 / 0.45);
+}
+.phone:not([data-front]) {
+  transform: scale(0.88) translateY(2em);
+  opacity: 0.96;
+}
+.phone:first-child {
+  margin-right: -3em;
+  transform-origin: right bottom;
+}
+.phone:last-child {
+  margin-left: -3em;
+  transform-origin: left bottom;
+}
+.phone[data-front] {
+  position: relative;
+  z-index: 1;
+}
+.phoneScreen {
+  position: relative;
+  overflow: hidden;
+  border-radius: 5.8em;
+  background: #f8f9fa;
+}
+.phoneScreen img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.statusBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 4.7em;
+  padding: 0.6em 2.6em 0 3.4em;
+  background: #f8f9fa;
+  color: #1d1d1f;
+}
+.statusTime {
+  font: 600 1.6em/1 var(--px-font);
+  letter-spacing: -0.01em;
+}
+.statusIcons {
+  width: 6.8em;
+  height: 1.2em;
+}
+.island {
+  position: absolute;
+  top: 1.1em;
+  left: 50%;
+  width: 12.4em;
+  height: 3.6em;
+  translate: -50% 0;
+  border-radius: 2em;
+  background: #050506;
+}
+.homeBar {
+  position: absolute;
+  bottom: 0.8em;
+  left: 50%;
+  width: 13.4em;
+  height: 0.5em;
+  translate: -50% 0;
+  border-radius: 1em;
+  background: rgb(0 0 0 / 0.85);
+}
+@media (max-width: 700px) {
+  .phones {
+    font-size: clamp(5.4px, 1.9vw, 7.4px);
+  }
+  .phone:not([data-front]) {
+    display: none;
+  }
+}
+
+/* ── Stacking feature cards ──────────────────────────────────────────────
+   Each card is sticky a little lower than the one before, so as the page
+   scrolls the next card slides up over it and the earlier cards' top edges
+   stay visible as a stack. Pure CSS: no scroll listeners. */
+.stackSection {
+  padding: clamp(80px, 11vw, 140px) var(--l-gutter) clamp(40px, 6vw, 80px);
+  background: var(--l-tint);
+  text-align: center;
+}
+.stack {
+  display: grid;
+  gap: clamp(40px, 8vh, 96px);
+  max-width: var(--l-max);
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.stackCard {
+  position: sticky;
+  top: calc(88px + var(--i) * 18px);
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 56px);
+  min-height: min(560px, calc(100vh - 160px));
+  padding: clamp(28px, 4vw, 56px);
+  border-radius: clamp(20px, 2.4vw, 32px);
+  background: var(--l-surface);
+  box-shadow:
+    0 0 0 1px var(--l-line),
+    0 -12px 40px -20px rgb(10 18 25 / 0.18),
+    0 30px 60px -36px rgb(10 18 25 / 0.3);
+  overflow: hidden;
+}
+.stackCard:nth-child(even) {
+  background: #0d1a24;
+  color: #fff;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 -12px 40px -20px rgb(10 18 25 / 0.35),
+    0 30px 60px -36px rgb(10 18 25 / 0.5);
+}
+.stackLabel {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--l-accent);
+  font: 600 14px/1.2 var(--px-font);
+}
+.stackCard:nth-child(even) .stackLabel {
+  color: #5bbde6;
+}
+.stackTitle {
+  margin: 0;
+  font: 600 clamp(28px, 3.2vw, 40px) / 1.1 var(--px-font-display);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.stackBody {
+  margin: 16px 0 0;
+  max-width: 30em;
+  color: var(--l-ink-2);
+  font: 400 clamp(16px, 1.4vw, 18px) / 1.5 var(--px-font);
+  text-wrap: pretty;
+}
+.stackCard:nth-child(even) .stackBody {
+  color: rgb(255 255 255 / 0.7);
+}
+.stackShot {
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .stackCard {
+    grid-template-columns: minmax(0, 1fr);
+    top: calc(76px + var(--i) * 12px);
+    min-height: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No pinning: cards simply follow one another. */
+  .stackCard {
+    position: relative;
+    top: auto;
+  }
+}

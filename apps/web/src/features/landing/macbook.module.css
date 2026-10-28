@@ -1,0 +1,251 @@
+/* A MacBook drawn in CSS: a near-black display lid with a thin aluminium
+   rim, and a wider silver base with the opening notch. Everything is sized
+   in percentages of the device width, so the frame and the screen stay
+   aligned at any size. The screen is exactly 16:10 — the screenshots'
+   own ratio — so nothing is stretched or letterboxed.
+
+   Colours come from the parent through currentColor/inherit, so the
+   showcase works on the dark hero and on light sections alike. */
+
+.showcase {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: clamp(20px, 3vw, 32px);
+  width: 100%;
+}
+
+/* ── Device ──────────────────────────────────────────────────────────── */
+.device {
+  position: relative;
+  width: min(100%, 1080px);
+  filter: drop-shadow(0 30px 40px rgb(0 0 0 / 0.28));
+}
+.device::after {
+  /* Contact shadow on the surface the laptop sits on. */
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -1.6%;
+  height: 3%;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.45);
+  filter: blur(14px);
+  z-index: -1;
+}
+
+.lid {
+  position: relative;
+  margin: 0 6.5%;
+  /* A slim bezel, as on current MacBook displays. */
+  padding: 1.15% 1.15% 1.6%;
+  border-radius: clamp(8px, 1.6vw, 20px) clamp(8px, 1.6vw, 20px) 0 0;
+  background: linear-gradient(180deg, #121316 0%, #0a0a0c 100%);
+  box-shadow:
+    0 0 0 1.5px #8e9097,
+    0 0 0 2.5px #4a4c51,
+    inset 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+.camera {
+  position: absolute;
+  top: 0.4%;
+  left: 50%;
+  width: 0.45%;
+  aspect-ratio: 1;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 35%,
+    #3b5566 0 22%,
+    #141c22 46%,
+    #08090b 70%
+  );
+}
+
+.screen {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: clamp(3px, 0.45vw, 6px);
+  background: #f5f5f7;
+  isolation: isolate;
+}
+.screen::after {
+  /* A faint glass reflection — the screen, not the app, catches the light. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    118deg,
+    rgb(255 255 255 / 0.07) 0%,
+    rgb(255 255 255 / 0.02) 38%,
+    transparent 38.2%
+  );
+}
+
+.shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.015);
+  transition:
+    opacity 650ms cubic-bezier(0.2, 0, 0, 1),
+    transform 1000ms cubic-bezier(0.2, 0, 0, 1);
+  user-select: none;
+}
+.shot[data-active] {
+  opacity: 1;
+  transform: none;
+  z-index: 1;
+}
+
+.base {
+  position: relative;
+  height: 0;
+  padding-top: 2.5%;
+  border-radius: 0 0 1.6% 1.6% / 0 0 70% 70%;
+  background: linear-gradient(
+    180deg,
+    #e6e7ea 0%,
+    #cdcfd3 22%,
+    #b1b3b8 60%,
+    #6d6f75 100%
+  );
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85);
+}
+.base::before {
+  /* The finger notch for opening the lid. */
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 14%;
+  height: 42%;
+  translate: -50% 0;
+  border-radius: 0 0 14px 14px / 0 0 100% 100%;
+  background: linear-gradient(180deg, #9a9ca1, #c4c6ca);
+}
+
+/* ── Selector ────────────────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+}
+.tabs {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  position: relative;
+  flex: none;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.66;
+  font: 500 14px/1 var(--px-font);
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    opacity 150ms ease,
+    background-color 200ms ease;
+}
+.tab:hover {
+  opacity: 1;
+}
+.tab[aria-selected="true"] {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.tab:focus-visible,
+.toggle:focus-visible {
+  outline: 2px solid var(--landing-focus, #5bbde6);
+  outline-offset: 2px;
+}
+.fill {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.7;
+  transform-origin: left;
+  transform: scaleX(var(--p, 0));
+}
+.toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+.toggle:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+/* ── Caption ─────────────────────────────────────────────────────────── */
+.caption {
+  /* Reserve two lines of title and two of body: no jump between scenes. */
+  min-height: calc(2 * 1.2 * 22px + 8px + 2 * 1.5 * 16px);
+  max-width: 560px;
+  text-align: center;
+}
+.title {
+  margin: 0;
+  font: 600 22px/1.2 var(--px-font-display);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.body {
+  margin: 8px 0 0;
+  font: 400 16px/1.5 var(--px-font);
+  opacity: 0.72;
+  text-wrap: pretty;
+}
+
+@media (max-width: 639px) {
+  .device {
+    filter: drop-shadow(0 16px 22px rgb(0 0 0 / 0.25));
+  }
+  .tab {
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .controls {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shot {
+    transform: none;
+    transition: opacity 200ms linear;
+  }
+}
