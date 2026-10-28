@@ -88,12 +88,16 @@ registerRoute(
     },
     {
       // The API, sockets, the worker itself and the OAuth return go to the
-      // network untouched.
+      // network untouched. So do files opened directly (sitemap.xml,
+      // robots.txt, images…): given the shell, the router would send them to
+      // sign-in. Same extensions as the hosting rewrite rule's static files
+      // (cloudformation/amplify-rules.json), plus the prerendered .html pages.
       denylist: [
         /^\/api\//,
         /^\/socket\.io\//,
         /^\/health/,
         /firebase-messaging-sw\.js$/,
+        /\.(?:css|gif|ico|jpe?g|js|png|txt|xml|svg|webp|wasm|woff2?|ttf|map|json|html)$/i,
       ],
     },
   ),
