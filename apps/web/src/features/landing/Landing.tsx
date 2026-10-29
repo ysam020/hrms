@@ -24,7 +24,7 @@ import s from "./landing.module.css";
  * fictional records (public/images/product-showcase), and pricing comes from
  * the same constants checkout uses. Nothing here calls the API. The one
  * exception to "real screens" is the abilities row (Abilities.tsx): face
- * punch-in, offline and the assistant are drawn, using the app's own words.
+ * punch-in, offline and the MCP server are drawn, using the app's own words.
  *
  * Getting started is Praesto's real onboarding: sign in with Google, and an
  * account without an organisation is taken through organisation setup and
@@ -262,6 +262,11 @@ const SECURITY: { icon: IconName; title: string; body: string }[] = [
     body: "Every change is recorded with its before and after values. Sensitive fields are redacted first.",
   },
   {
+    icon: "assistant",
+    title: "AI assistants on your terms",
+    body: "Assistants connect over MCP and sign in as the person: they read only that person’s records and what they allowed, can’t change anything, and every call is in the audit log.",
+  },
+  {
     icon: "alert",
     title: "Unusual sign-ins flagged",
     body: "Sign-ins from a new device, country or hour are scored for risk, and risky ones are emailed to the account owner.",
@@ -460,7 +465,7 @@ export default function Landing() {
             </h2>
             <p className={s.lead}>
               Punch in with your face, keep working when the signal drops, and
-              get answers without digging through menus.
+              ask your own AI assistant instead of digging through menus.
             </p>
           </Reveal>
           <Abilities />
