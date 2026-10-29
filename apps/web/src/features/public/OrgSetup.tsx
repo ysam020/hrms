@@ -164,6 +164,27 @@ export default function OrgSetup() {
   const form = useRef({ orgName, industry, companySize, workWeek, billing });
   form.current = { orgName, industry, companySize, workWeek, billing };
 
+  // The open checkout, so leaving setup (signing out, or setup finishing
+  // elsewhere) closes it instead of leaving Razorpay's overlay over the
+  // next screen. A payment that already went through is unaffected: its
+  // handler saved the form first, and setup resumes from it on next sign-in.
+  const checkout = useRef<{ close?: () => void } | null>(null);
+  // False once setup is left (e.g. signed out): a response that lands
+  // afterwards mustn't put a session back into this tab.
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+      try {
+        checkout.current?.close?.();
+      } catch {
+        // Already closed.
+      }
+      checkout.current = null;
+    },
+    [],
+  );
+
   const fail = (err: unknown, fallback: string) =>
     setAlert({
       open: true,
@@ -226,6 +247,7 @@ export default function OrgSetup() {
             },
           );
           localStorage.removeItem(PENDING_FORM_KEY);
+          if (!alive.current) return;
           if (created.data?.success) {
             setAccessToken(created.data.data.accessToken);
             setStep(2);
@@ -257,7 +279,7 @@ export default function OrgSetup() {
   const completeOrgSetup = useCallback(async () => {
     try {
       const res = await apiClient.post(API_ENDPOINTS.COMPLETE_ORG_SETUP);
-      if (res.data?.success && res.data.data?.accessToken)
+      if (alive.current && res.data?.success && res.data.data?.accessToken)
         setAccessToken(res.data.data.accessToken);
     } catch {
       // non-fatal: the token is corrected on the next refresh
@@ -333,8 +355,9 @@ export default function OrgSetup() {
             })
             .then((res) => {
               if (res.data?.success) {
-                setAccessToken(res.data.data.accessToken);
                 localStorage.removeItem(PENDING_FORM_KEY);
+                if (!alive.current) return;
+                setAccessToken(res.data.data.accessToken);
                 setStep(2);
               } else
                 setAlert({
@@ -348,8 +371,14 @@ export default function OrgSetup() {
             .catch((err) => fail(err, "The organisation couldn’t be created."))
             .finally(() => setLoading(false));
         },
-        modal: { ondismiss: () => setLoading(false) },
+        modal: {
+          ondismiss: () => {
+            checkout.current = null;
+            setLoading(false);
+          },
+        },
       });
+      checkout.current = rzp;
       rzp.open();
     } catch (err) {
       fail(err, "Something went wrong. Try again.");

@@ -226,7 +226,8 @@ export default function Wfh() {
             label="Search people"
             value={list.query}
             onChange={(e) => list.search(e.target.value)}
-            style={{ width: 220, marginLeft: "auto" }}
+            toolbarWidth={220}
+            trailing
           />
         </>
       }

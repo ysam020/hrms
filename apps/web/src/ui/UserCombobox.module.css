@@ -1,0 +1,58 @@
+/* Suggestions for UserCombobox: the shared popover surface, anchored under
+   (or above) the field by inline position from the component. */
+.wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.input {
+  /* Room for the leading search glyph, like SearchField; the bordered
+     control look (not SearchField's fill) since this is a form value. */
+  padding-left: 30px;
+}
+.popover {
+  position: fixed;
+  z-index: var(--px-z-popover);
+  overflow-y: auto;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-raised);
+  box-shadow: var(--px-shadow-2);
+  overscroll-behavior: contain;
+}
+.list {
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: var(--px-radius-sm);
+  cursor: pointer;
+}
+.option[aria-selected="true"] {
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+}
+.option[aria-selected="true"] :global(.px-meta) {
+  color: inherit;
+  opacity: 0.85;
+}
+.text {
+  display: grid;
+  min-width: 0;
+}
+.status {
+  padding: 10px;
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+@media (pointer: coarse) {
+  .option {
+    min-height: 44px;
+  }
+}

@@ -32,6 +32,7 @@ import {
   TextInput,
   inlineCheckClass,
   usePeople,
+  UserCombobox,
   type Column,
   TableSkeleton,
 } from "@next/ui";
@@ -960,7 +961,6 @@ function TeamDialog({
   onDone: () => void;
 }) {
   const { setAlert } = useContext(AlertContext);
-  const { people } = usePeople();
   const [name, setName] = useState("");
   const [lead, setLead] = useState("");
   const [members, setMembers] = useState<string[]>([]);
@@ -1029,14 +1029,7 @@ function TeamDialog({
           error={errors.lead}
           hint="Leads approve their members’ requests."
         >
-          <Select value={lead} onChange={(e) => setLead(e.target.value)}>
-            <option value="">Choose…</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+          <UserCombobox value={lead} onChange={(id) => setLead(id)} />
         </Field>
         <Field label="Members" optional>
           <PeoplePicker value={members} onChange={setMembers} height={200} />

@@ -25,7 +25,7 @@ import {
   TextArea,
   TextInput,
   fieldSpan2,
-  usePeople,
+  UserCombobox,
   type Column,
   type Tone,
 } from "@next/ui";
@@ -214,7 +214,8 @@ export default function Assets() {
             label="Search assets"
             value={list.query}
             onChange={(e) => list.search(e.target.value)}
-            style={{ width: 220, marginLeft: "auto" }}
+            toolbarWidth={220}
+            trailing
           />
         </>
       }
@@ -510,7 +511,6 @@ function AssignOrReturn({
   onClose: () => void;
   onSubmit: (body: Record<string, string>) => void;
 }) {
-  const { people } = usePeople();
   const [userId, setUserId] = useState("");
   const [condition, setCondition] = useState("good");
   const [notes, setNotes] = useState("");
@@ -557,19 +557,11 @@ function AssignOrReturn({
       <div style={{ display: "grid", gap: 14 }}>
         {assigning && (
           <Field label="Assign To">
-            <Select
+            <UserCombobox
               data-autofocus
               value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-            >
-              <option value="">Choose a person…</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.detail ? ` — ${p.detail}` : ""}
-                </option>
-              ))}
-            </Select>
+              onChange={(id) => setUserId(id)}
+            />
           </Field>
         )}
         <Field

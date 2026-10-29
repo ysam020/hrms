@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { flushSync } from "react-dom";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import apiClient, {
@@ -14,6 +21,7 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import useLogout from "@web/shared/hooks/useLogout";
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 import { clearFaviconDot } from "@web/shared/utils/faviconUtils";
+import { clearStorageOnSignOut } from "@web/shared/utils/signOutStorage";
 import { MotionProvider } from "@next/motion";
 import { OfflineProvider, useOfflineSummary } from "@next/offline";
 import {
@@ -47,14 +55,6 @@ type Alert = {
   severity: "error" | "info" | "success" | "warning";
 };
 
-const preserveAppearanceAndClear = () => {
-  const theme = localStorage.getItem("theme");
-  const appearance = localStorage.getItem("px-appearance");
-  localStorage.clear();
-  if (theme) localStorage.setItem("theme", theme);
-  if (appearance) localStorage.setItem("px-appearance", appearance);
-};
-
 export function SessionRoot() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -73,13 +73,26 @@ export function SessionRoot() {
   });
   const initialSearch = useRef(location.search);
 
+  // Setting the user also settles organisation setup: a session that ends
+  // (sign-out, or refused by the server) takes "setup pending" with it.
+  // Otherwise the guard below would keep sending /login back to /org-setup
+  // for someone who signed out mid-setup (no profile is loaded during setup,
+  // so `user` was already null and nothing else reset the flag).
+  const setSessionUser = useCallback((next: any) => {
+    if (!next) {
+      setSetupPending(false);
+      setupStart.current = 0;
+    }
+    setUser(next);
+  }, []);
+
   const { handleLogout, confirmOpen, cancelLogout, confirmLogout, loggingOut } =
-    useLogout(setUser);
+    useLogout(setSessionUser);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      preserveAppearanceAndClear();
-      setUser(null);
+      clearStorageOnSignOut();
+      setSessionUser(null);
     });
     setPaymentRequiredHandler(() => {
       if (hasSubscriptionAccess(userRef.current)) navigate("/subscription");
@@ -184,9 +197,11 @@ export function SessionRoot() {
       flushSync(() => setBooting(true));
       apiClient
         .get(API_ENDPOINTS.GET_PROFILE)
-        .then((res) => setUser(res.data?.success ? res.data.data.user : null))
+        .then((res) =>
+          setSessionUser(res.data?.success ? res.data.data.user : null),
+        )
         .catch((err) => {
-          if (err?.response?.status === 401) setUser(null);
+          if (err?.response?.status === 401) setSessionUser(null);
         })
         .finally(() => setBooting(false));
     };
@@ -207,7 +222,7 @@ export function SessionRoot() {
         const res = await apiClient.get(API_ENDPOINTS.GET_PROFILE);
         if (res.data?.success) setUser(res.data.data.user);
       } catch (err: any) {
-        if (err?.response?.status === 401) setUser(null);
+        if (err?.response?.status === 401) setSessionUser(null);
       } finally {
         busy = false;
       }
@@ -245,8 +260,8 @@ export function SessionRoot() {
     !new URLSearchParams(initialSearch.current).has("oauth_success");
 
   const userValue = useMemo(
-    () => ({ user, setUser, handleLogout }),
-    [user, handleLogout],
+    () => ({ user, setUser: setSessionUser, handleLogout }),
+    [user, setSessionUser, handleLogout],
   );
   const alertValue = useMemo(() => ({ alert, setAlert }), [alert]);
 

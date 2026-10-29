@@ -199,6 +199,12 @@
 .segmented::-webkit-scrollbar {
   display: none;
 }
+.segmentedPicker {
+  justify-self: start;
+  width: auto;
+  min-width: 160px;
+  max-width: 100%;
+}
 .segment {
   position: relative;
   z-index: 1;

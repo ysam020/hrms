@@ -32,6 +32,7 @@ import {
   HeaderSkeleton,
   KeyValuesSkeleton,
   ListSkeleton,
+  PrimaryCell,
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
 import { fmtDate } from "@next/lib/format";
@@ -814,13 +815,11 @@ export function JoinRequestsPage() {
             header: "Person",
             priority: "primary",
             render: (r) => (
-              <span className="px-row" style={{ flexWrap: "nowrap" }}>
-                <Avatar name={r.name || r.email} size={28} />
-                <span style={{ display: "grid", minWidth: 0 }}>
-                  <span className="px-headline">{r.name || r.email}</span>
-                  {r.name && <span className="px-meta">{r.email}</span>}
-                </span>
-              </span>
+              <PrimaryCell
+                leading={<Avatar name={r.name || r.email} size={28} />}
+                title={r.name || r.email}
+                subtitle={r.name ? r.email : undefined}
+              />
             ),
           },
           {

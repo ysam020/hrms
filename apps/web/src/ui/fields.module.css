@@ -55,6 +55,34 @@
 .control:disabled {
   opacity: 0.55;
 }
+/* Date and time inputs. Mobile WebKit draws these as native pills that
+   ignore the inset box-shadow every other control uses for its border, and
+   centres their value; drop the native appearance so they get the same
+   boundary, focus ring and invalid state, and keep the value left-aligned
+   at the control height. The system picker still opens on tap. */
+input.control[type="date"],
+input.control[type="time"],
+input.control[type="datetime-local"],
+input.control[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  min-height: var(--px-control-h);
+  line-height: var(--px-control-h);
+}
+input.control::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+input.control::-webkit-datetime-edit {
+  padding: 0;
+}
+input.control::-webkit-calendar-picker-indicator {
+  margin-left: auto;
+  opacity: 0.6;
+  cursor: pointer;
+}
 textarea.control {
   height: auto;
   min-height: 84px;
@@ -75,6 +103,20 @@ select.control {
   display: flex;
   align-items: center;
   min-width: 0;
+}
+.search[data-toolbar] {
+  flex: 0 1 var(--_search-w);
+  width: var(--_search-w);
+}
+.search[data-toolbar][data-trailing] {
+  margin-left: auto;
+}
+@media (max-width: 639px) {
+  .search[data-toolbar] {
+    flex: 1 1 100%;
+    width: 100%;
+    margin-left: 0;
+  }
 }
 .searchIcon {
   position: absolute;

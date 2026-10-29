@@ -38,6 +38,7 @@ import {
   Switch,
   TextArea,
   TextInput,
+  UserCombobox,
   fieldSpan2,
   inlineCheckClass,
   type Column,
@@ -45,7 +46,7 @@ import {
 import { PENDING_UPLOAD } from "@next/ui/FileField";
 import { DraftNote, sendOrQueue, useOfflineDraft } from "@next/offline";
 import { apiClient, errorMessage, isCanceled } from "@next/lib/api";
-import { useGet } from "@next/lib/hooks";
+import { useGet, useIsCompact } from "@next/lib/hooks";
 import { fmtDate, fmtTime, personName } from "@next/lib/format";
 
 // Attendance & Leave pages (one per sidebar entry, Classic's paths):
@@ -296,6 +297,11 @@ function LeaveApplications() {
   const searchRef = useRef("");
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // On phones, rows carry no checkbox until the manager chooses Select (an
+  // edit mode, as in iOS lists); wider screens keep the always-available
+  // checkbox column.
+  const compact = useIsCompact();
+  const [selecting, setSelecting] = useState(false);
   const [action, setAction] = useState<{
     ids: string[];
     verb: "approve" | "reject" | "cancel";
@@ -361,6 +367,7 @@ function LeaveApplications() {
     deps: [status, futureOnly],
   });
   useEffect(() => setSelected(new Set()), [list.data]);
+  useEffect(() => setSelecting(false), [status]);
 
   const onSearch = (v: string) => {
     setQuery(v);
@@ -403,6 +410,7 @@ function LeaveApplications() {
             : res.data?.message || `${ok.length} updated.`,
           severity: failed.length ? "warning" : "success",
         });
+        setSelecting(false);
       }
       setAction(null);
       list.refresh();
@@ -513,6 +521,13 @@ function LeaveApplications() {
   const pendingSelectable = list.data.filter(
     (r: any) => r.status === "Pending" && canActOn(r),
   );
+  const canBulk =
+    canManage && status === "Pending" && pendingSelectable.length > 1;
+  const showSelection = canBulk && (!compact || selecting);
+  const endSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <div className="px-row" style={{ justifyContent: "space-between" }}>
@@ -523,6 +538,16 @@ function LeaveApplications() {
           onChange={setStatus}
           segments={STATUSES.map((s) => ({ value: s, label: s }))}
         />
+        {compact && canBulk && (
+          <Button
+            size="small"
+            variant="plain"
+            aria-pressed={selecting}
+            onClick={() => (selecting ? endSelecting() : setSelecting(true))}
+          >
+            {selecting ? "Done" : "Select"}
+          </Button>
+        )}
         <div className="px-row">
           <label className={inlineCheckClass}>
             <Switch
@@ -536,7 +561,7 @@ function LeaveApplications() {
             label="Search people"
             value={query}
             onChange={(e) => onSearch(e.target.value)}
-            style={{ width: 220 }}
+            toolbarWidth={220}
           />
         </div>
       </div>
@@ -547,11 +572,7 @@ function LeaveApplications() {
         rowId={(r) => String(r.id || r._id)}
         loading={list.loading}
         stickyOffset={52}
-        selected={
-          canManage && status === "Pending" && pendingSelectable.length > 1
-            ? selected
-            : undefined
-        }
+        selected={showSelection ? selected : undefined}
         onSelectedChange={setSelected}
         bulkActions={
           <>
@@ -737,7 +758,7 @@ function TeamAttendance() {
           label="Search people"
           value={query}
           onChange={(e) => onSearch(e.target.value)}
-          style={{ width: 240 }}
+          toolbarWidth={240}
         />
       </div>
       <DataTable
@@ -768,25 +789,9 @@ function TeamAttendance() {
 
 function Correction() {
   const { setAlert } = useContext(AlertContext);
-  const [search, setSearch] = useState("");
-  const [people, setPeople] = useState<any[]>([]);
   const [values, setValues] = useState({ userId: "", timeIn: "", timeOut: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      apiClient
-        .get(
-          `/get-all-users${search ? `?search=${encodeURIComponent(search)}&limit=20` : "?limit=20"}`,
-        )
-        .then((res) =>
-          setPeople(Array.isArray(res.data?.data) ? res.data.data : []),
-        )
-        .catch(() => setPeople([]));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -813,7 +818,6 @@ function Correction() {
         severity: "success",
       });
       setValues({ userId: "", timeIn: "", timeOut: "" });
-      setSearch("");
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
     } finally {
@@ -832,27 +836,11 @@ function Correction() {
         employee’s monthly allowance.
       </p>
       <FormGrid columns={2}>
-        <Field label="Find Employee" className={fieldSpan2}>
-          <SearchField
-            label="Search by name or username"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </Field>
         <Field label="Employee" error={errors.userId} className={fieldSpan2}>
-          <Select
+          <UserCombobox
             value={values.userId}
-            onChange={(e) =>
-              setValues((v) => ({ ...v, userId: e.target.value }))
-            }
-          >
-            <option value="">Choose…</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {personName(p)} ({p.username})
-              </option>
-            ))}
-          </Select>
+            onChange={(userId) => setValues((v) => ({ ...v, userId }))}
+          />
         </Field>
         <Field label="Time In" error={errors.timeIn}>
           <TextInput

@@ -45,6 +45,14 @@ export function applyAppearance(a: Appearance = read()) {
       "change",
       () => read() === "system" && syncChrome("system"),
     );
+    // A choice made in another tab (or restored there) applies here too,
+    // without a reload; open appearance menus pick it up via useAppearance.
+    window.addEventListener("storage", (e) => {
+      if (e.key === KEY || e.key === null) {
+        applyAppearance(read());
+        window.dispatchEvent(new Event(CHANGED));
+      }
+    });
   }
   const root = document.documentElement;
   // Hand over from public/theme-init.js's pre-paint styles to the tokens.
@@ -56,9 +64,17 @@ export function applyAppearance(a: Appearance = read()) {
   syncChrome(a);
 }
 
+const CHANGED = "px-appearance-change";
+
 export function useAppearance() {
   const [appearance, set] = useState<Appearance>(read);
   useEffect(() => applyAppearance(appearance), [appearance]);
+  // Stay in step with a change made elsewhere (another tab).
+  useEffect(() => {
+    const sync = () => set(read());
+    window.addEventListener(CHANGED, sync);
+    return () => window.removeEventListener(CHANGED, sync);
+  }, []);
   const setAppearance = useCallback((a: Appearance) => {
     try {
       localStorage.setItem(KEY, a);

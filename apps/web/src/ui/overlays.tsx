@@ -191,6 +191,7 @@ export function Sheet({
   edge = "right",
   width,
   label,
+  back,
 }: {
   open: boolean;
   onClose: () => void;
@@ -201,6 +202,11 @@ export function Sheet({
   width?: number;
   /** Accessible name when there's no visible title. */
   label?: string;
+  /**
+   * A detail view pushed over a list: a leading "‹ {back}" control returns
+   * to it (closing the sheet), instead of the trailing close button.
+   */
+  back?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -240,13 +246,32 @@ export function Sheet({
               exit="exit"
             >
               {edge === "bottom" && <div className={s.grabber} aria-hidden />}
-              {title && (
-                <div className={s.sheetHeader}>
-                  <h2 id={titleId} className={s.sheetTitle}>
-                    {title}
-                  </h2>
-                  <IconButton icon="x" label="Close" onClick={onClose} />
+              {back ? (
+                <div className={s.sheetHeader} data-back="">
+                  <button
+                    type="button"
+                    className={s.sheetBack}
+                    onClick={onClose}
+                    aria-label={`Back to ${back}`}
+                  >
+                    <Icon name="chevronLeft" />
+                    <span>{back}</span>
+                  </button>
+                  {title && (
+                    <h2 id={titleId} className={s.sheetTitle}>
+                      {title}
+                    </h2>
+                  )}
                 </div>
+              ) : (
+                title && (
+                  <div className={s.sheetHeader}>
+                    <h2 id={titleId} className={s.sheetTitle}>
+                      {title}
+                    </h2>
+                    <IconButton icon="x" label="Close" onClick={onClose} />
+                  </div>
+                )
               )}
               <div
                 className={title ? s.sheetBody : undefined}

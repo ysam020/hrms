@@ -81,7 +81,7 @@ export function SalaryManagementPage() {
           label="Search employees"
           value={list.query}
           onChange={(e) => list.search(e.target.value)}
-          style={{ width: 280 }}
+          toolbarWidth={280}
         />
       }
     >

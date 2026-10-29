@@ -225,7 +225,11 @@ export function PrimaryCell({
   style?: CSSProperties;
 }) {
   return (
-    <div className={s.primaryCell} style={style}>
+    <div
+      className={s.primaryCell}
+      style={style}
+      data-leading={leading ? "" : undefined}
+    >
       {leading}
       <div className={s.primaryText}>
         <span>{title}</span>
