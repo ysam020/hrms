@@ -279,7 +279,13 @@ function KycFormPage({
       }
       actions={
         !locked && (
-          <Button variant="primary" type="submit" form="kyc-form" busy={saving}>
+          <Button
+            variant="primary"
+            icon="check"
+            type="submit"
+            form="kyc-form"
+            busy={saving}
+          >
             {mode === "edit" ? "Save Changes" : "Submit KYC"}
           </Button>
         )

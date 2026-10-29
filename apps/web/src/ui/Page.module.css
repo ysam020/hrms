@@ -100,34 +100,43 @@
   margin-bottom: -1px;
 }
 @media (max-width: 639px) {
-  /* Compact: the navigation control, title and actions share one row while
-     they fit. The title gives way first (it truncates down to a readable
-     minimum); past that, the actions wrap onto their own row, right-aligned,
-     and wrap again between buttons if needed. Nothing scrolls sideways out
-     of view. */
+  /* Compact: one row — navigation control, title, then the page's actions
+     (icon buttons here, see ToolbarActionsContext) and the global controls.
+     Only a title too long for what's left truncates. */
   .toolbar {
-    flex-wrap: wrap;
-    row-gap: 6px;
-  }
-  .titles {
-    flex: 1 1 7.5rem;
+    flex-wrap: nowrap;
+    gap: var(--px-space-2);
   }
   .titles:has(.title[data-collapsed]) {
     display: none;
   }
+  /* The inline-title size of a phone navigation bar (17–18pt semibold):
+     still the bar's largest text, small enough to sit beside its controls. */
+  .title {
+    font: 600 18px/24px var(--px-font-display);
+    letter-spacing: -0.01em;
+  }
   .actions {
     margin-left: auto;
-    flex: 0 1 auto;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    row-gap: var(--px-space-2);
-    min-width: 0;
-    max-width: 100%;
+    gap: 4px;
   }
   .body {
     padding-bottom: calc(
       var(--px-tabbar-h) + var(--px-space-8) + env(safe-area-inset-bottom)
     );
+  }
+}
+@media (max-width: 360px) {
+  /* Smallest phones: a touch less title and spacing, so short titles
+     still fit beside the controls; longer ones end in an ellipsis. */
+  .toolbar {
+    gap: 6px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .title {
+    font-size: 17px;
+    letter-spacing: -0.005em;
   }
 }
 

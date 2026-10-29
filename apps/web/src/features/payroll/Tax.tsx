@@ -206,6 +206,7 @@ export function MyTaxDeclarationPage() {
         editable && (
           <>
             <Button
+              icon="doc"
               onClick={() => call("draft", saveDraft, "Draft saved.")}
               busy={saving === "draft"}
             >
@@ -213,6 +214,7 @@ export function MyTaxDeclarationPage() {
             </Button>
             <Button
               variant="primary"
+              icon="check"
               busy={saving === "submit"}
               onClick={() =>
                 call(
@@ -606,12 +608,14 @@ export function TaxReviewPage() {
           <>
             <Button
               variant="tintedDanger"
+              icon="refresh"
               onClick={() => setRevise("RevisionRequested")}
             >
               Request Revision
             </Button>
             <Button
               variant="primary"
+              icon="checkCircle"
               busy={busy}
               onClick={() => decide("Declared")}
             >
@@ -622,12 +626,14 @@ export function TaxReviewPage() {
           <>
             <Button
               variant="tintedDanger"
+              icon="refresh"
               onClick={() => setRevise("ProofRevisionRequested")}
             >
               Request Proof Revision
             </Button>
             <Button
               variant="primary"
+              icon="checkCircle"
               busy={busy}
               onClick={() => decide("Verified")}
             >

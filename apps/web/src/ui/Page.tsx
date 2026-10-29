@@ -5,8 +5,8 @@ import {
   usePrefersReducedMotion,
 } from "@next/motion";
 import { useShell } from "@next/shell/context";
-import { useIsRegular } from "@next/lib/hooks";
-import { IconButton } from "./controls";
+import { useIsCompact, useIsRegular } from "@next/lib/hooks";
+import { IconButton, ToolbarActionsContext } from "./controls";
 import { Icon } from "./Icon";
 import { Sheet } from "./overlays";
 import s from "./Page.module.css";
@@ -47,6 +47,8 @@ export function Page({
     openNavigation,
     toolbarExtras,
   } = useShell();
+  // Compact: page actions show as icon buttons so the title fits beside them.
+  const compact = useIsCompact();
   const sentinel = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
 
@@ -102,7 +104,9 @@ export function Page({
             {subtitle && <p className={s.subtitle}>{subtitle}</p>}
           </div>
           <div className={s.actions}>
-            {actions}
+            <ToolbarActionsContext.Provider value={compact}>
+              {actions}
+            </ToolbarActionsContext.Provider>
             {toolbarExtras}
           </div>
         </header>

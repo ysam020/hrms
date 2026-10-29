@@ -219,7 +219,7 @@ export function ReportBuilderPage() {
           <Button icon="download" disabled={empty} onClick={csv}>
             CSV
           </Button>
-          <Button disabled={empty} onClick={() => setSaveOpen(true)}>
+          <Button icon="pin" disabled={empty} onClick={() => setSaveOpen(true)}>
             Save
           </Button>
           <Button
