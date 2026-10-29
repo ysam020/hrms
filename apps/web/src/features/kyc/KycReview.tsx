@@ -139,18 +139,23 @@ export default function KycReview() {
               !uneditable && (
                 <Button
                   variant="tintedDanger"
+                  icon="refresh"
                   onClick={() => setDialog("revise")}
                 >
                   Request Revision
                 </Button>
               )}
             {!isSelf && perm("approve_kyc") && !uneditable && (
-              <Button variant="primary" onClick={() => setDialog("approve")}>
+              <Button
+                variant="primary"
+                icon="checkCircle"
+                onClick={() => setDialog("approve")}
+              >
                 Approve KYC
               </Button>
             )}
             {isSelf && status === "Approved" && (
-              <Button onClick={() => setDialog("request")}>
+              <Button icon="edit" onClick={() => setDialog("request")}>
                 Request KYC Update
               </Button>
             )}

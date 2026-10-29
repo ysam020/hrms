@@ -194,9 +194,14 @@ export function OrgSettingsPage({
       actions={
         canEdit && (
           <>
-            {org.dirty && <Button onClick={org.reset}>Discard</Button>}
+            {org.dirty && (
+              <Button icon="x" onClick={org.reset}>
+                Discard
+              </Button>
+            )}
             <Button
               variant="primary"
+              icon="check"
               disabled={!org.dirty}
               onClick={() => setSaving(true)}
             >

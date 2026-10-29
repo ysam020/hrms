@@ -109,7 +109,7 @@ function PolicyEditor({ id }: { id?: string }) {
       width="reading"
       back={{ to: "/policy", label: "Policies" }}
       actions={
-        <Button variant="primary" busy={saving} onClick={save}>
+        <Button variant="primary" icon="check" busy={saving} onClick={save}>
           {id ? "Save Changes" : "Publish"}
         </Button>
       }

@@ -184,7 +184,11 @@ export default function Resignations() {
       title="Resignations"
       actions={
         !active && (
-          <Button variant="tintedDanger" onClick={() => setResigning(true)}>
+          <Button
+            variant="tintedDanger"
+            icon="door"
+            onClick={() => setResigning(true)}
+          >
             Submit Resignation…
           </Button>
         )

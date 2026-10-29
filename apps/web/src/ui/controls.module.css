@@ -125,6 +125,77 @@
 }
 
 /* Icon button: 32px visual on desktop, 44px hit area on touch. */
+/* Toolbar actions on compact widths (see ToolbarActionsContext): square,
+   icon only, same variant. The label is the accessible name and a tooltip
+   shown on hover, keyboard focus, or a long press on touch. */
+.iconOnly {
+  width: var(--px-control-h);
+  padding: 0;
+  flex-shrink: 0;
+}
+/* Same look as the toolbar's other icon buttons (search, notifications):
+   no fill or border, secondary ink, a soft fill on hover/press. Destructive
+   actions keep a red glyph, like IconButton's danger tone. */
+.button.iconOnly {
+  background: transparent;
+  box-shadow: none;
+  color: var(--px-text-2);
+  font-size: 18px;
+}
+.button.iconOnly:hover:not(:disabled) {
+  background: var(--px-bg-hover);
+  color: var(--px-text-1);
+}
+.button.iconOnly:active:not(:disabled) {
+  background: var(--px-bg-pressed);
+}
+.button.iconOnly.danger,
+.button.iconOnly.tintedDanger,
+.button.iconOnly.danger:hover:not(:disabled),
+.button.iconOnly.tintedDanger:hover:not(:disabled) {
+  color: var(--px-danger);
+}
+.button.iconOnly.danger:hover:not(:disabled),
+.button.iconOnly.tintedDanger:hover:not(:disabled) {
+  background: var(--px-danger-soft);
+}
+.iconOnly[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: var(--px-z-popover);
+  padding: 5px 9px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-bg-raised);
+  box-shadow: var(--px-shadow-2);
+  color: var(--px-text-1);
+  font: var(--px-type-meta);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity var(--px-dur-fast) var(--px-ease-standard),
+    transform var(--px-dur-fast) var(--px-ease-standard);
+}
+@media (hover: hover) {
+  .iconOnly[data-tip]:hover::after {
+    opacity: 1;
+    transform: none;
+    transition-delay: 400ms;
+  }
+}
+.iconOnly[data-tip]:focus-visible::after,
+.iconOnly[data-tip-open]::after {
+  opacity: 1;
+  transform: none;
+}
+.iconOnly {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
 .iconButton {
   position: relative;
   display: inline-grid;

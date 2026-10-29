@@ -1,6 +1,10 @@
 import { LayoutGroup, motion } from "framer-motion";
 import {
+  Children,
+  createContext,
   forwardRef,
+  isValidElement,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -36,6 +40,66 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   block?: boolean;
 }
 
+/**
+ * Set by Page around its toolbar actions on compact widths: buttons with an
+ * icon show just the icon there (their text becomes the accessible name and
+ * a tooltip), so the title and every action fit on one row.
+ */
+export const ToolbarActionsContext = createContext(false);
+
+/** The plain text of a button's children, for its icon-only name. */
+function textOf(node: ReactNode): string {
+  let out = "";
+  Children.forEach(node, (c) => {
+    if (typeof c === "string" || typeof c === "number") out += c;
+    else if (isValidElement<{ children?: ReactNode }>(c))
+      out += textOf(c.props.children);
+  });
+  return out.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Tooltip for icon-only buttons: hover and keyboard focus show it (CSS);
+ * on touch, a long press shows it — and doesn't also press the button.
+ */
+function useLongPressTip() {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const hide = useRef<ReturnType<typeof setTimeout>>();
+  const swallowClick = useRef(false);
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      clearTimeout(hide.current);
+    },
+    [],
+  );
+  const cancel = () => clearTimeout(timer.current);
+  return {
+    open,
+    swallowClick,
+    handlers: {
+      onPointerDown: (e: React.PointerEvent) => {
+        if (e.pointerType === "mouse") return;
+        swallowClick.current = false;
+        timer.current = setTimeout(() => {
+          swallowClick.current = true;
+          setOpen(true);
+          clearTimeout(hide.current);
+          hide.current = setTimeout(() => setOpen(false), 1500);
+        }, 450);
+      },
+      onPointerUp: cancel,
+      onPointerCancel: cancel,
+      onPointerLeave: cancel,
+      onContextMenu: (e: React.MouseEvent) => {
+        // The long press is ours; no text-selection or callout menu.
+        if (swallowClick.current || timer.current) e.preventDefault();
+      },
+    },
+  };
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
     {
@@ -53,6 +117,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref,
   ) {
+    const inToolbar = useContext(ToolbarActionsContext);
+    const labelText = icon && inToolbar ? textOf(children) : "";
+    const iconOnly = Boolean(labelText);
+    const tip = useLongPressTip();
     // An onClick that returns a promise (any async handler) puts the button in
     // its busy state until it settles, so every async action shows progress
     // and can't be triggered twice without each caller wiring `busy`.
@@ -67,6 +135,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       };
     }, []);
     const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
+      if (iconOnly && tip.swallowClick.current) {
+        // A long press showed the label; it isn't a tap.
+        tip.swallowClick.current = false;
+        e.preventDefault();
+        return;
+      }
       const result = onClick?.(e) as unknown;
       if (result && typeof (result as Promise<unknown>).then === "function") {
         setPending(true);
@@ -87,18 +161,25 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           variant !== "secondary" && s[variant],
           size !== "regular" && s[size],
           block && s.block,
+          iconOnly && s.iconOnly,
           className,
         )}
         disabled={disabled || busy}
         aria-busy={busy || undefined}
+        {...(iconOnly && {
+          "aria-label": labelText,
+          "data-tip": labelText,
+          "data-tip-open": tip.open || undefined,
+          ...tip.handlers,
+        })}
         {...rest}
       >
         <span
           className={cx(busy && s.busyLabel)}
           style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
         >
-          {icon && <Icon name={icon} size="1.15em" />}
-          {children}
+          {icon && <Icon name={icon} size={iconOnly ? undefined : "1.15em"} />}
+          {!iconOnly && children}
         </span>
         {busy && (
           <span className={s.busyOverlay}>

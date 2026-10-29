@@ -112,6 +112,7 @@ export default function Holidays() {
           {canDelete && selected.size > 0 && (
             <Button
               variant="tintedDanger"
+              icon="trash"
               onClick={() => setConfirm([...selected])}
             >
               Delete {selected.size}

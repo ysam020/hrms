@@ -341,10 +341,14 @@ export function SalaryStructurePage() {
       actions={
         editing ? (
           <>
-            <Button onClick={() => setEditing(false)} disabled={saving}>
+            <Button
+              icon="x"
+              onClick={() => setEditing(false)}
+              disabled={saving}
+            >
               Cancel
             </Button>
-            <Button variant="primary" onClick={save} busy={saving}>
+            <Button variant="primary" icon="check" onClick={save} busy={saving}>
               Save Structure
             </Button>
           </>
