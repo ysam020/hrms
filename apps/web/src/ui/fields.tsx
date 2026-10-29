@@ -3,6 +3,7 @@ import {
   forwardRef,
   isValidElement,
   useId,
+  type CSSProperties,
   type InputHTMLAttributes,
   type ReactElement,
   type ReactNode,
@@ -143,10 +144,32 @@ export const Select = forwardRef<
 
 export const SearchField = forwardRef<
   HTMLInputElement,
-  InputHTMLAttributes<HTMLInputElement> & { label: string; shortcut?: string }
->(function SearchField({ label, shortcut, className, ...rest }, ref) {
+  InputHTMLAttributes<HTMLInputElement> & {
+    label: string;
+    shortcut?: string;
+    /**
+     * For a search in a page's filter row: this width beside the filters on
+     * wider screens, the full row on compact ones.
+     */
+    toolbarWidth?: number;
+    /** With toolbarWidth: push to the trailing end of the row. */
+    trailing?: boolean;
+  }
+>(function SearchField(
+  { label, shortcut, className, toolbarWidth, trailing, ...rest },
+  ref,
+) {
   return (
-    <div className={cx(s.search, className)}>
+    <div
+      className={cx(s.search, className)}
+      data-toolbar={toolbarWidth ? "" : undefined}
+      data-trailing={trailing ? "" : undefined}
+      style={
+        toolbarWidth
+          ? ({ "--_search-w": `${toolbarWidth}px` } as CSSProperties)
+          : undefined
+      }
+    >
       <Icon name="search" className={s.searchIcon} size={15} />
       <input
         ref={ref}

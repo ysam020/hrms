@@ -130,7 +130,26 @@
     grid-column: 1 / -1;
     font: var(--px-type-meta);
     color: var(--px-text-2);
+    /* Same inset as the first cell's text (see td:first-child above). */
+    padding-left: 4px;
+    /* Wrap long values and let tags/badges sit on the text baseline. */
+    overflow-wrap: anywhere;
+  }
+  /* Line secondary details up with the title: past the avatar/icon when the
+     first cell has one, and past the selection checkbox when there is one. */
+  .table tr:has(.primaryCell[data-leading]) td[data-priority="secondary"] {
     padding-left: 42px;
+  }
+  /* With a selection checkbox the title cell isn't the first cell, so it
+     has no 4px inset: secondary lines start flush, or past the avatar. */
+  .table tr:has(td.check) td[data-priority="secondary"] {
+    grid-column: 2 / -1;
+    padding-left: 0;
+  }
+  .table
+    tr:has(td.check):has(.primaryCell[data-leading])
+    td[data-priority="secondary"] {
+    padding-left: 38px;
   }
   .table td[data-priority="secondary"][data-label]::before {
     content: attr(data-label) " · ";

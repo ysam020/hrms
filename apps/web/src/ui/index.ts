@@ -18,6 +18,7 @@ export {
   OTHER,
 } from "./charts";
 export { PeoplePicker, usePeople, type Person } from "./PeoplePicker";
+export { UserCombobox } from "./UserCombobox";
 export { RichTextEditor, sanitizeRich, plainText } from "./RichText";
 export {
   TextSkeleton,

@@ -101,7 +101,7 @@ export default function OrgTree() {
           label="Find a person or team"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          style={{ width: 300 }}
+          toolbarWidth={300}
         />
       }
     >

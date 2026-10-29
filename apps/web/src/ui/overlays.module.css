@@ -60,11 +60,37 @@
 .dialogFooter {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   flex-wrap: wrap;
   gap: var(--px-space-2);
   padding: var(--px-space-3) var(--px-space-5);
   border-top: 1px solid var(--px-separator);
   background: var(--px-bg-raised);
+}
+/* A leading note (draft status, helper text) takes the free space on the
+   left, so the buttons stay together on the trailing edge; when it can't
+   fit beside them it takes its own line above them. */
+.dialogFooter > :not(button):not(a):first-child {
+  flex: 1 1 14rem;
+  margin-right: auto;
+}
+@media (max-width: 639px) {
+  /* Compact: the actions share the row at equal widths (primary last,
+     nearest the thumb), and the dialog clears the home indicator. */
+  .dialogFooter > button,
+  .dialogFooter > a {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .dialogFooter > :not(button):not(a):first-child {
+    flex-basis: 100%;
+  }
+  .dialogFooter {
+    padding-bottom: calc(var(--px-space-3) + env(safe-area-inset-bottom));
+  }
+  .layer:not(.layerSheet) {
+    padding-bottom: calc(var(--px-space-4) + env(safe-area-inset-bottom));
+  }
 }
 .alertIcon {
   display: grid;
@@ -129,6 +155,33 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--px-space-5);
+}
+.sheetHeader[data-back] {
+  padding-left: var(--px-space-2);
+  border-bottom: 1px solid var(--px-separator);
+}
+.sheetBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0 10px 0 4px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  background: transparent;
+  color: var(--px-accent);
+  font: var(--px-type-label);
+  cursor: pointer;
+}
+.sheetBack:hover {
+  background: var(--px-bg-hover);
+}
+.sheetBack:focus-visible {
+  outline: 2px solid var(--px-accent);
+  outline-offset: -2px;
+}
+.sheetBack svg {
+  font-size: 20px;
 }
 .sheetFooter {
   display: flex;

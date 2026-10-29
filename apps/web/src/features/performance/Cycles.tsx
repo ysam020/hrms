@@ -187,7 +187,8 @@ export default function Cycles() {
             label="Search cycles"
             value={list.query}
             onChange={(e) => list.search(e.target.value)}
-            style={{ width: 220, marginLeft: "auto" }}
+            toolbarWidth={220}
+            trailing
           />
         </>
       }

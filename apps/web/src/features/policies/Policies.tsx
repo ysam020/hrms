@@ -202,7 +202,8 @@ export default function Policies() {
             <Sheet
               open={Boolean(current)}
               onClose={() => setCurrent(null)}
-              label="Policy"
+              label={current?.title || current?.category || "Policy"}
+              back="Policies"
               width={720}
             >
               <div style={{ padding: 20 }}>{reader}</div>

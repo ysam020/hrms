@@ -38,7 +38,8 @@ export const setAccessToken = (token: string) => {
   }
 };
 
-const clearAccessToken = () => {
+/** Drop the in-memory access token (and its CSRF token) — on sign-out. */
+export const clearAccessToken = () => {
   _accessToken = null;
   invalidateCsrfToken();
 };

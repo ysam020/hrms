@@ -12,6 +12,8 @@ import {
   type ReactNode,
 } from "react";
 import { duration, ease } from "@next/motion";
+import { useIsCompact } from "@next/lib/hooks";
+import { Select } from "./fields";
 import { Icon, type IconName } from "./Icon";
 import s from "./controls.module.css";
 
@@ -174,6 +176,7 @@ export function SegmentedControl<T extends string>({
   const group = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const isTabs = role === "tablist";
+  const compact = useIsCompact();
 
   const onKeyDown = (e: KeyboardEvent, index: number) => {
     const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
@@ -188,6 +191,28 @@ export function SegmentedControl<T extends string>({
     refs.current[next]?.focus();
     onChange(segments[next].value);
   };
+
+  // A filter with more choices than fit on a phone becomes a pop-up picker
+  // there instead of a strip whose later segments sit off-screen. The HIG
+  // suggests at most about five segments on iPhone; with this app's labels,
+  // five already overflow a 375pt screen, so the cut is above four. Tab
+  // sets keep their segments.
+  if (!isTabs && compact && segments.length > 4)
+    return (
+      <Select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className={s.segmentedPicker}
+      >
+        {segments.map((seg) => (
+          <option key={seg.value} value={seg.value}>
+            {typeof seg.label === "string" ? seg.label : seg.value}
+            {seg.count != null ? ` (${seg.count})` : ""}
+          </option>
+        ))}
+      </Select>
+    );
 
   return (
     <LayoutGroup id={group}>

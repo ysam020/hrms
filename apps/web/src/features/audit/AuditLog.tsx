@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { entityOptions } from "@web/assets/data/entityOptions";
 import { timePresets } from "@web/assets/data/timePresets";
 import { getDeviceInfo } from "@web/shared/utils/getDeviceInfo";
@@ -13,6 +13,7 @@ import {
   Section,
   Select,
   Tag,
+  UserCombobox,
   type Column,
 } from "@next/ui";
 import { asList } from "@next/lib/api";
@@ -111,15 +112,6 @@ export default function AuditLog() {
   const { data, loading, error, refetch } = useGet<Entry[]>(
     `/audit-logs?${params}`,
   );
-  const people = useGet<any>("/get-all-users?limit=200");
-  const usernames = useMemo(
-    () =>
-      asList(people.data, "users")
-        .map((u: any) => u.username)
-        .filter(Boolean)
-        .sort(),
-    [people.data],
-  );
 
   const q = query.trim().toLowerCase();
   const rows = asList(data).filter(
@@ -192,16 +184,13 @@ export default function AuditLog() {
               </option>
             ))}
           </Select>
-          <Select
-            aria-label="Person"
+          <UserCombobox
+            label="Person"
+            placeholder="Everyone"
+            valueKey="username"
             value={person}
-            onChange={(e) => setPerson(e.target.value)}
-          >
-            <option value="">Everyone</option>
-            {usernames.map((u: string) => (
-              <option key={u}>{u}</option>
-            ))}
-          </Select>
+            onChange={(username) => setPerson(username)}
+          />
           <SearchField
             value={query}
             onChange={(e) => setQuery(e.target.value)}

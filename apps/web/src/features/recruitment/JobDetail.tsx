@@ -38,13 +38,14 @@ import {
   PrimaryCell,
   Section,
   SegmentedControl,
-  Select,
   Skeleton,
   Status,
   TextArea,
   TextInput,
   fieldSpan2,
+  UserCombobox,
   type Column,
+  type Person,
 } from "@next/ui";
 import { apiClient, asList, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
@@ -306,9 +307,11 @@ function Candidate({
   const hasCleared =
     interviews.some((i) => i.interviewConducted && i.cleared) ||
     /Round \d+ Cleared/.test(status);
-  const people = asList<any>(interviewers.data)
-    .map((u) => u.username)
-    .filter(Boolean);
+  // Only people allowed to interview (GET /get-interviewer-list); the
+  // interview stores the username.
+  const people: Person[] = asList<any>(interviewers.data)
+    .filter((u) => u.username)
+    .map((u) => ({ id: String(u.id), username: u.username, name: u.name }));
   const minStart = (() => {
     const last = interviews[interviews.length - 1];
     const end = last?.interviewEndTime
@@ -581,15 +584,12 @@ function Candidate({
                     {round?.mode === "reassign" && (
                       <>
                         <Field label="Interviewer">
-                          <Select
+                          <UserCombobox
+                            valueKey="username"
+                            options={people}
                             value={interviewer}
-                            onChange={(e) => setInterviewer(e.target.value)}
-                          >
-                            <option value="">Choose…</option>
-                            {people.map((p) => (
-                              <option key={p}>{p}</option>
-                            ))}
-                          </Select>
+                            onChange={(username) => setInterviewer(username)}
+                          />
                         </Field>
                         <Button
                           variant="primary"
@@ -721,16 +721,13 @@ function Candidate({
       >
         <div style={{ display: "grid", gap: 14 }}>
           <Field label="Interviewer">
-            <Select
+            <UserCombobox
               data-autofocus
+              valueKey="username"
+              options={people}
               value={interviewer}
-              onChange={(e) => setInterviewer(e.target.value)}
-            >
-              <option value="">Choose…</option>
-              {people.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </Select>
+              onChange={(username) => setInterviewer(username)}
+            />
           </Field>
           <Field label="Starts">
             <TextInput
