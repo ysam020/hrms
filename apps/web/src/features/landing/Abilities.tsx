@@ -5,11 +5,10 @@ import s from "./abilities.module.css";
 
 /**
  * Three abilities that don't show well as a still screen — face punch-in,
- * working offline and the assistant — drawn as small live vignettes instead
+ * working offline and the MCP server — drawn as small live vignettes instead
  * of screenshots. The wording inside each one is the app's own (the punch
- * dialog's step messages, the Pending Changes states, the assistant's
- * suggested questions), so the drawing never promises more than the product
- * does. Each plays once when it scrolls into view; with reduced motion it
+ * dialog's step messages, the Pending Changes states, a real MCP tool name),
+ * so the drawing never promises more than the product does. Each plays once when it scrolls into view; with reduced motion it
  * shows its finished state.
  */
 
@@ -56,11 +55,11 @@ export function Abilities() {
         <OfflineVignette />
       </Tile>
       <Tile
-        label="AI Assistants"
-        title="Ask the assistant you already use."
-        body="Connect your own AI assistant to Praesto and ask how much leave is left, what the work-from-home policy says, or how this month’s attendance looks. It only ever reads your own records, and only what you allow."
+        label="MCP Server"
+        title="Ask the AI assistant you already use."
+        body="Praesto runs an MCP server, so the AI assistant you already use can answer from your HR records. It signs in through Praesto, reads only what you allow, and can’t change a thing."
       >
-        <AssistantVignette />
+        <McpVignette />
       </Tile>
     </div>
   );
@@ -197,11 +196,11 @@ function OfflineVignette() {
   );
 }
 
-// ── Assistant ──────────────────────────────────────────────────────────────
+// ── MCP server ─────────────────────────────────────────────────────────────
 
-function AssistantVignette() {
-  // 0 empty · 1 question · 2 thinking · 3 answer
-  const { ref, stage } = useStages(4, [400, 700, 1300]);
+function McpVignette() {
+  // 0 empty · 1 question · 2 tool running · 3 tool done · 4 answer
+  const { ref, stage } = useStages(5, [400, 600, 800, 450]);
   const pop = {
     initial: { opacity: 0, y: 10, scale: 0.96 },
     animate: { opacity: 1, y: 0, scale: 1 },
@@ -209,32 +208,40 @@ function AssistantVignette() {
   } as const;
   return (
     <div ref={ref} className={s.chat}>
+      <span className={s.server}>
+        <span className={s.serverDot} aria-hidden="true" />
+        Praesto MCP · connected
+      </span>
       {stage >= 1 && (
         <motion.span {...pop} className={`${s.bubble} ${s.mine}`}>
-          How many leaves do I have left?
+          How much leave do I have left?
         </motion.span>
       )}
-      {stage === 2 && (
-        <motion.span {...pop} className={`${s.bubble} ${s.typing}`}>
-          <i />
-          <i />
-          <i />
+      {stage >= 2 && (
+        <motion.span
+          {...pop}
+          className={s.tool}
+          data-done={stage >= 3 || undefined}
+        >
+          <span className={s.toolState} aria-hidden="true">
+            {stage >= 3 ? (
+              <svg viewBox="0 0 20 20" width="12" height="12">
+                <path d="m4.5 10.5 3.5 3.5 7.5-8" />
+              </svg>
+            ) : (
+              <i />
+            )}
+          </span>
+          <span className={s.toolName}>get_my_leave_balance</span>
+          <span className={s.toolTag}>read-only</span>
         </motion.span>
       )}
-      {stage === 3 && (
+      {stage >= 4 && (
         <motion.span {...pop} className={s.bubble}>
           You have 12 days of paid leave, 6 sick days and 4 casual days left
           this year.
         </motion.span>
       )}
-      <span className={s.composer}>
-        Ask a question
-        <span className={s.send}>
-          <svg viewBox="0 0 20 20" width="14" height="14">
-            <path d="M10 16V4M5.5 8.5 10 4l4.5 4.5" />
-          </svg>
-        </span>
-      </span>
     </div>
   );
 }

@@ -208,7 +208,7 @@
   color: #1d6b31;
 }
 
-/* ── Assistant ────────────────────────────────────────────────────── */
+/* ── MCP server ───────────────────────────────────────────────────── */
 .chat {
   display: flex;
   flex-direction: column;
@@ -217,6 +217,25 @@
   width: 100%;
   max-width: 330px;
   height: 100%;
+}
+.server {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--l-surface);
+  box-shadow: 0 0 0 1px var(--l-line);
+  font: 500 12px/1.3 var(--px-font);
+  color: var(--l-ink-3);
+}
+.serverDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34a853;
 }
 .bubble {
   align-self: flex-start;
@@ -233,50 +252,58 @@
   box-shadow: none;
   color: #fff;
 }
-.typing {
+/* The assistant calling a Praesto tool. */
+.tool {
+  align-self: flex-start;
   display: inline-flex;
-  gap: 4px;
-  padding: 13px 14px;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px 6px 7px;
+  border-radius: 10px;
+  background: var(--l-surface);
+  box-shadow: 0 0 0 1px var(--l-line);
+  font: 500 12.5px/1.3 var(--px-font);
 }
-.typing i {
-  width: 7px;
-  height: 7px;
+.toolState {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--l-line);
+  transition: background 0.3s;
+}
+.tool[data-done] .toolState {
+  background: #e3f4e7;
+}
+.toolState i {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--l-ink-3);
   animation: pulse 1.2s ease-in-out infinite;
 }
-.typing i:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.typing i:nth-child(3) {
-  animation-delay: 0.3s;
-}
-.composer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 8px;
-  padding: 5px 5px 5px 15px;
-  border-radius: 999px;
-  background: var(--l-surface);
-  box-shadow: 0 0 0 1px var(--l-line);
-  font: 400 15px/1.3 var(--px-font);
-  color: var(--l-ink-3);
-}
-.send {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--l-accent);
-}
-.send path {
+.toolState path {
   fill: none;
-  stroke: #fff;
-  stroke-width: 2;
+  stroke: #1d6b31;
+  stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.toolName {
+  font-family: var(--px-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toolTag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--l-line);
+  color: var(--l-ink-3);
+  font-size: 11px;
 }
 
 @keyframes pulse {
@@ -291,7 +318,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .chip i,
-  .typing i {
+  .toolState i {
     animation: none;
   }
 }

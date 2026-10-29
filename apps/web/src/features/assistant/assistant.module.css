@@ -1,34 +1,209 @@
 /* AI Assistants page and the connect (consent) screen. */
 
-.steps {
-  display: grid;
-  gap: var(--px-space-3);
-  padding: var(--px-space-4);
-  margin: 0;
-  list-style-position: inside;
-  font: var(--px-type-body);
+/* Surfaces on this page get a separator edge as well as the hairline:
+   the hairline shadow is black, so in Dark it vanishes against the page. */
+.surface {
+  box-shadow:
+    var(--px-shadow-hairline),
+    inset 0 0 0 1px var(--px-separator);
 }
-.endpoint {
+
+/* ── Server address (top card) ────────────────────────────────────── */
+.hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--px-space-4);
+  align-items: start;
+  padding: var(--px-space-5);
+}
+.heroIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+}
+.heroText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.heroTitle {
+  margin: 0;
+  font: var(--px-type-headline);
+  color: var(--px-text-1);
+}
+.heroBody {
+  margin: 0;
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+.hero .copy {
+  grid-column: 1 / -1;
+}
+
+/* A value with a copy button. */
+.copy {
   display: flex;
   align-items: center;
   gap: var(--px-space-2);
   min-width: 0;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-bg-grouped);
+  box-shadow: inset 0 0 0 1px var(--px-separator);
 }
-.endpoint code {
+.copy code {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-family: var(--px-font-mono, ui-monospace, monospace);
-  font-size: 0.92em;
-  padding: 6px 10px;
-  border-radius: var(--px-radius-sm, 6px);
-  background: var(--px-bg-sunken, var(--px-fill-secondary));
+  font: 500 14px/1.45 var(--px-font-mono);
+  color: var(--px-text-1);
+}
+.copyCompact {
+  margin-top: var(--px-space-2);
+}
+.copyCompact code {
+  font-size: 12.5px;
+}
+
+/* ── Set up ───────────────────────────────────────────────────────── */
+.setupPanel {
+  display: grid;
+  gap: var(--px-space-3);
+  margin-top: var(--px-space-3);
+}
+.steps {
+  display: grid;
+  gap: var(--px-space-4);
+  margin: 0;
+  padding: var(--px-space-5);
+  list-style: none;
+  counter-reset: step;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-content);
+  box-shadow:
+    var(--px-shadow-hairline),
+    inset 0 0 0 1px var(--px-separator);
+  font: var(--px-type-body);
+  color: var(--px-text-1);
+}
+.steps > li {
+  position: relative;
+  min-width: 0;
+  padding-left: 36px;
+  counter-increment: step;
+}
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: -1px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+  font: 600 13px/1 var(--px-font-rounded, var(--px-font));
+}
+.steps kbd,
+.tip code {
+  padding: 1px 6px;
+  border-radius: var(--px-radius-xs);
+  background: var(--px-bg-grouped);
+  box-shadow: inset 0 0 0 1px var(--px-separator);
+  font: 500 0.88em/1.4 var(--px-font-mono);
+  overflow-wrap: anywhere;
+}
+.tip {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  padding: 0 var(--px-space-1);
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+.tip svg {
+  flex: none;
+  position: relative;
+  top: 2px;
+}
+
+/* ── What you can ask ─────────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--px-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.askCard {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: var(--px-space-4);
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-content);
+  box-shadow:
+    var(--px-shadow-hairline),
+    inset 0 0 0 1px var(--px-separator);
+}
+.cardIcon {
+  color: var(--px-accent);
+  margin-bottom: 4px;
+}
+.cardTitle {
+  font: var(--px-type-label);
+  font-weight: 600;
+  color: var(--px-text-1);
+}
+.cardExample {
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+
+/* ── Promises ─────────────────────────────────────────────────────── */
+.promises {
+  display: grid;
+}
+.promise {
+  display: flex;
+  gap: var(--px-space-3);
+  align-items: flex-start;
+  padding: var(--px-space-4);
+  border-bottom: 1px solid var(--px-separator);
+}
+.promise:last-child {
+  border-bottom: 0;
+}
+.promiseIcon {
+  flex: none;
+  color: var(--px-success);
+  margin-top: 1px;
+}
+.promiseTitle {
+  font-weight: 600;
+  color: var(--px-text-1);
+}
+.promiseBody {
+  margin: 2px 0 0;
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
 }
 .note {
+  margin: 0;
+  padding: 0 var(--px-space-1);
   font: var(--px-type-caption);
   color: var(--px-text-3);
 }
 
+/* ── Connected assistants ─────────────────────────────────────────── */
 .row {
   display: flex;
   align-items: center;
@@ -39,18 +214,50 @@
 .row:last-child {
   border-bottom: 0;
 }
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+  font: 600 17px/1 var(--px-font-rounded, var(--px-font));
+}
 .rowMain {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 5px;
 }
 .rowTitle {
   font-weight: 600;
+  color: var(--px-text-1);
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .rowDetail {
   font: var(--px-type-caption);
   color: var(--px-text-3);
+}
+@media (max-width: 520px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--px-space-2);
+  }
+  .askCard {
+    padding: var(--px-space-3);
+  }
+  .row {
+    flex-wrap: wrap;
+  }
+  .row > button {
+    margin-left: 52px;
+  }
 }
 
 /* ── Connect screen: standalone, outside the app shell ──────────────── */
