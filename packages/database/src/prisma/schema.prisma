@@ -1994,3 +1994,137 @@ model McpGrant {
   @@index([prevRefreshTokenHash])
   @@map("mcp_grants")
 }
+
+// ─── Tenant support (organisations → the Praesto team) ───────────────────────
+// Tickets an organisation raises with Praesto itself (bugs, billing, feature
+// requests) — not the employee Helpdesk, whose Ticket model lives in each
+// tenant DB. These live in the master DB on purpose: the Praesto support team
+// works across every tenant, and fanning out over per-tenant databases would
+// need exactly the cross-tenant client this design avoids. Isolation is
+// enforced in the gateway instead: every tenant-facing query is scoped by the
+// tenantId from the verified JWT (see apps/api-gateway/src/handlers/support.ts),
+// never by a tenantId from the request. No HR records are stored here.
+//
+// Who works the queue isn't stored here: it's derived from Praesto's own
+// organisation (PLATFORM_TENANT_ID) — its owners/admins, superusers and
+// holders of PraestoSupport:handle_tickets (apps/api-gateway/src/services/
+// supportStore.ts). Indexes are also created at gateway boot
+// (ensureMasterIndexes), so a deployment that never runs `prisma db push`
+// against master still gets them.
+
+model SupportTicket {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  // PRA-<year>-<6 digits>, allocated from SupportCounter.
+  ticketNo          String    @unique
+  tenantId          String    @db.ObjectId
+  reporterId        String    @db.ObjectId
+  subject           String
+  description       String
+  // Keys of SUPPORT_CATEGORIES (apps/api-gateway/src/config/support.ts).
+  category          String
+  module            String?
+  // Optional category-specific fields (steps to reproduce, invoice ref, …).
+  details           Json?
+  // What the reporter asked for, kept separately from the working priority
+  // that only the support team sets.
+  requestedPriority String
+  priority          String
+  // open | in_progress | waiting_for_tenant | resolved | closed
+  status            String    @default("open")
+  // Always written (null when unassigned) — Prisma's Mongo connector doesn't
+  // match a missing field with `assigneeId: null`.
+  assigneeId        String?   @db.ObjectId
+  duplicateOfId     String?   @db.ObjectId
+  // Tenant users who have taken part (reporter + anyone who replied).
+  participantIds    String[]  @db.ObjectId
+  // Optimistic-concurrency counter: every state change is a conditional
+  // update on (id, version), so two agents can't silently overwrite each other.
+  version           Int       @default(0)
+  firstResponseAt   DateTime?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  reopenCount       Int       @default(0)
+  lastReopenedAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([tenantId, updatedAt])
+  @@index([tenantId, reporterId, updatedAt])
+  @@index([status, updatedAt])
+  @@index([assigneeId, status])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId   String   @db.ObjectId
+  tenantId   String   @db.ObjectId
+  authorId   String   @db.ObjectId
+  // tenant | staff
+  authorType String
+  body       String
+  // public | internal — internal notes are staff-only and are filtered out of
+  // every tenant-facing query, not just hidden in the UI.
+  visibility String
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@map("support_messages")
+}
+
+model SupportAttachment {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  // Null until the upload is attached to a ticket or reply.
+  ticketId     String?  @db.ObjectId
+  messageId    String?  @db.ObjectId
+  // The ticket's tenant once attached; the uploader's tenant before that
+  // (null for a support agent's upload).
+  tenantId     String?  @db.ObjectId
+  uploaderId   String   @db.ObjectId
+  uploaderType String
+  storageKey   String
+  fileName     String
+  // Verified from the file's own bytes, not the client's claim.
+  contentType  String
+  size         Int
+  // public | internal (inherits the message's visibility)
+  visibility   String   @default("public")
+  // pending (URL issued) | ready (bytes verified) | attached
+  status       String   @default("pending")
+  createdAt    DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([uploaderId, status])
+  @@map("support_attachments")
+}
+
+model SupportActivity {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId   String   @db.ObjectId
+  tenantId   String   @db.ObjectId
+  actorId    String?  @db.ObjectId
+  // tenant | staff | system
+  actorType  String
+  // created | replied | note_added | status_changed | priority_changed |
+  // assigned | reopened | marked_duplicate | security_viewed
+  type       String
+  fromValue  String?
+  toValue    String?
+  metadata   Json?
+  // public | internal — same rule as messages.
+  visibility String
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@map("support_activities")
+}
+
+// Atomic per-year sequence behind SupportTicket.ticketNo (findAndModify $inc,
+// see apps/api-gateway/src/services/supportStore.ts) — never a count of rows.
+model SupportCounter {
+  id  String @id @default(auto()) @map("_id") @db.ObjectId
+  key String @unique
+  seq Int    @default(0)
+
+  @@map("support_counters")
+}

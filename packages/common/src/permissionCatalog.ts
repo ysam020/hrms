@@ -112,10 +112,33 @@ const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
   Helpdesk: {
     manage: ["-"],
   },
+  // Tenant support (tickets to the Praesto team). Owners/admins/HR can raise
+  // tickets by role; these grant it to anyone else, widen the view to the
+  // whole organisation, and (separately) to its security reports.
+  Support: {
+    raise_tickets: ["-"],
+    view_org_tickets: ["-"],
+    view_security_tickets: ["-"],
+  },
   PerformanceReview: {
     manage_cycles: ["-"],
   },
+  // Platform-only: grantable solely inside Praesto's own organisation
+  // (PLATFORM_TENANT_ID), where it lets a member work the cross-tenant
+  // support queue. Any other organisation is told it doesn't exist — see
+  // PLATFORM_ONLY_MODULES below.
+  PraestoSupport: {
+    handle_tickets: ["-"],
+  },
 };
+
+// Modules only Praesto's own organisation may grant (the gateway rejects
+// them for every other tenant, and the web editor doesn't offer them).
+export const PLATFORM_ONLY_MODULES: readonly string[] = ["PraestoSupport"];
+
+export function isPlatformOnlyPermission(permission: string): boolean {
+  return PLATFORM_ONLY_MODULES.includes(permission.split(":")[0]);
+}
 
 const SUPERUSER_WILDCARD = "*:*:*";
 

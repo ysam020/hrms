@@ -6,6 +6,7 @@ import {
   type FormEvent,
 } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
+import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { permissionStructure } from "@web/assets/data/permissionStructure";
 import togglePermission from "@web/shared/utils/permissions/togglePermission";
@@ -49,6 +50,9 @@ import s from "./permissions.module.css";
 const modules = Object.keys(permissionStructure).sort((a, b) =>
   human(a).localeCompare(human(b)),
 );
+// Granted only inside Praesto's own organisation; the server rejects them
+// everywhere else (PLATFORM_ONLY_MODULES in @hrms/common).
+const PLATFORM_ONLY_MODULES = ["PraestoSupport"];
 function human(v: string) {
   return v
     .replace(/([A-Z])/g, " $1")
@@ -106,7 +110,11 @@ function PermissionMatrix({
   toggle: (m: string, a: string, sc: string) => void;
   disabled?: boolean;
 }) {
-  const [active, setActive] = useState(modules[0]);
+  const { user } = useContext(UserContext);
+  const shown = user?.isPlatformTenant
+    ? modules
+    : modules.filter((m) => !PLATFORM_ONLY_MODULES.includes(m));
+  const [active, setActive] = useState(shown[0]);
   const actions = (permissionStructure as any)[active]?.actions ?? {};
   const count = (m: string) =>
     Object.entries((permissionStructure as any)[m].actions).reduce(
@@ -119,7 +127,7 @@ function PermissionMatrix({
     <div className={s.matrix}>
       <nav aria-label="Modules" className={s.modules}>
         <ul>
-          {modules.map((m) => (
+          {shown.map((m) => (
             <li key={m}>
               <button
                 type="button"

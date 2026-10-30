@@ -1,0 +1,126 @@
+/* Help & Support → Keyboard Shortcuts. Tokens only (design/tokens.css). */
+
+/* ── "Need help?" card ────────────────────────────────────────────────── */
+.contact {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 4px 16px;
+  align-items: center;
+  padding: 20px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-accent-soft);
+}
+.contactIcon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+}
+.contactTitle {
+  font: var(--px-type-section);
+  letter-spacing: var(--px-type-section-track);
+}
+.contactBody {
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+  max-width: 60ch;
+}
+.contactActions {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+@media (min-width: 900px) {
+  .contact {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+  }
+  .contactActions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    margin-top: 0;
+    justify-content: flex-end;
+  }
+}
+
+/* ── Shortcut groups ──────────────────────────────────────────────────── */
+.groups {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  align-items: start;
+}
+.group {
+  display: grid;
+  gap: 4px;
+  padding: 16px 16px 8px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-grouped);
+  min-width: 0;
+}
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.groupIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-bg-content);
+  color: var(--px-accent);
+  box-shadow: 0 0 0 0.5px var(--px-separator);
+}
+.groupTitle {
+  font: var(--px-type-headline);
+}
+.groupHint {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  font: var(--px-type-body);
+}
+.row + .row {
+  border-top: 1px solid var(--px-separator);
+}
+.keys {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+.key {
+  min-width: 26px;
+  padding: 2px 7px;
+  border-radius: var(--px-radius-sm);
+  text-align: center;
+  font: var(--px-type-callout);
+  font-family: var(--px-font);
+  color: var(--px-text-1);
+  background: var(--px-bg-content);
+  box-shadow:
+    inset 0 -1px 0 var(--px-separator-strong),
+    0 0 0 0.5px var(--px-separator);
+}
+.footnote {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}

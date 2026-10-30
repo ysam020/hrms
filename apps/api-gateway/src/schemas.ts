@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  REPLY_STATUS_OPTIONS,
+  SUPPORT_ATTACHMENTS_PER_MESSAGE,
+  SUPPORT_CATEGORY_KEYS,
+  SUPPORT_LIMITS,
+  SUPPORT_PRIORITIES,
+  SUPPORT_STATUSES,
+} from "./config/support";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -957,3 +965,110 @@ export const bulkOnboardingUploadUrlSchema = z.object({
 export const bulkOnboardingKeySchema = z.object({
   key: z.string().min(1).max(1024),
 });
+
+// ── Tenant support (to the Praesto team) ─────────────────────────────────────
+// Vocabulary and limits come from config/support.ts.
+
+const supportId = z.string().regex(/^[a-f0-9]{24}$/i, "Invalid id");
+const supportText = (min: number, max: number, what: string) =>
+  z
+    .string()
+    .trim()
+    .min(min, `${what} must be at least ${min} characters`)
+    .max(max, `${what} must be at most ${max} characters`);
+
+export const createSupportTicketSchema = z
+  .object({
+    category: z.enum(SUPPORT_CATEGORY_KEYS, {
+      errorMap: () => ({ message: "Choose a valid category" }),
+    }),
+    subject: supportText(
+      SUPPORT_LIMITS.subjectMin,
+      SUPPORT_LIMITS.subjectMax,
+      "Subject",
+    ),
+    description: supportText(
+      SUPPORT_LIMITS.descriptionMin,
+      SUPPORT_LIMITS.descriptionMax,
+      "Description",
+    ),
+    priority: z
+      .enum(SUPPORT_PRIORITIES, {
+        errorMap: () => ({ message: "Choose a valid priority" }),
+      })
+      .default("normal"),
+    module: z.string().trim().max(SUPPORT_LIMITS.moduleMax).optional(),
+    details: z
+      .record(z.string().trim().max(SUPPORT_LIMITS.detailMax))
+      .optional(),
+    attachmentIds: z
+      .array(supportId)
+      .max(SUPPORT_ATTACHMENTS_PER_MESSAGE, "Too many attachments")
+      .default([]),
+  })
+  .strict();
+
+export const supportReplySchema = z
+  .object({
+    body: supportText(1, SUPPORT_LIMITS.replyMax, "Message"),
+    attachmentIds: z
+      .array(supportId)
+      .max(SUPPORT_ATTACHMENTS_PER_MESSAGE, "Too many attachments")
+      .default([]),
+  })
+  .strict();
+
+export const supportReopenSchema = z
+  .object({ body: supportText(1, SUPPORT_LIMITS.replyMax, "Message") })
+  .strict();
+
+export const platformSupportReplySchema = z
+  .object({
+    body: supportText(1, SUPPORT_LIMITS.replyMax, "Message"),
+    visibility: z.enum(["public", "internal"]),
+    // Public replies only: where the ticket goes next (default: waiting for
+    // the tenant). Ignored for internal notes, which never move status.
+    status: z.enum(REPLY_STATUS_OPTIONS as [string, ...string[]]).optional(),
+    attachmentIds: z
+      .array(supportId)
+      .max(SUPPORT_ATTACHMENTS_PER_MESSAGE, "Too many attachments")
+      .default([]),
+    version: z.number().int().min(0),
+  })
+  .strict();
+
+export const platformSupportUpdateSchema = z
+  .object({
+    status: z.enum(SUPPORT_STATUSES).optional(),
+    priority: z.enum(SUPPORT_PRIORITIES).optional(),
+    assigneeId: supportId.nullable().optional(),
+    version: z.number().int().min(0),
+  })
+  .strict()
+  .refine(
+    (v) =>
+      v.status !== undefined ||
+      v.priority !== undefined ||
+      v.assigneeId !== undefined,
+    { message: "Nothing to update" },
+  );
+
+export const platformSupportDuplicateSchema = z
+  .object({
+    duplicateOfTicketNo: z
+      .string()
+      .trim()
+      .regex(/^PRA-\d{4}-\d{6}$/i, {
+        message: "Enter a ticket number like PRA-2026-000123",
+      }),
+    version: z.number().int().min(0),
+  })
+  .strict();
+
+export const supportUploadSchema = z
+  .object({
+    fileName: z.string().trim().min(1).max(200),
+    contentType: z.string().trim().min(1).max(100),
+    size: z.number().int().positive(),
+  })
+  .strict();

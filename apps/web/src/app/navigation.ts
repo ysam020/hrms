@@ -10,6 +10,11 @@ import {
 } from "@web/shared/utils/permissions/navAccess";
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 import type { IconName } from "@next/ui";
+import {
+  canRaiseSupport,
+  canViewOrgSupport,
+  isSupportAgent,
+} from "@next/features/support/config";
 
 // The navigation model: one table drives the sidebar, the compact tab bar,
 // ⌘K search, and active-state matching. Each business module is its own
@@ -23,6 +28,9 @@ import type { IconName } from "@next/ui";
 type User = any;
 type Check = (u: User) => boolean;
 export const canAccessWfh: Check = (u) => Boolean(u?.wfhEnabled);
+/** Anyone who can raise support tickets or see the organization's. */
+export const canUseSupport: Check = (u) =>
+  canRaiseSupport(u) || canViewOrgSupport(u);
 export const canApproveJoinRequests: Check = (u) =>
   isOwnerOrAdmin(u) ||
   Boolean(u?.permissions?.includes("Organisation:approve_join_requests"));
@@ -524,11 +532,34 @@ export const NAV: NavModule[][] = [
       keywords: "assistant chatbot claude chatgpt mcp connector ai",
     },
     {
+      // One place for getting help: tickets to Praesto, the Praesto team's
+      // console (its own people only) and the shortcut reference.
       id: "help",
-      label: "Help",
+      label: "Help & Support",
       icon: "help",
-      path: "/help",
-      keywords: "shortcuts support",
+      pages: [
+        {
+          id: "support",
+          label: "Support Tickets",
+          path: "/support",
+          visible: canUseSupport,
+          keywords:
+            "praesto support contact bug report feature request billing issue",
+        },
+        {
+          id: "support-console",
+          label: "Support Console",
+          path: "/platform/support",
+          visible: isSupportAgent,
+          keywords: "praesto team tickets organizations",
+        },
+        {
+          id: "help-shortcuts",
+          label: "Keyboard Shortcuts",
+          path: "/help",
+          keywords: "help shortcuts keys",
+        },
+      ],
     },
   ],
 ];

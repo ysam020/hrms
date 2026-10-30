@@ -139,6 +139,19 @@ export const permissionStructure = {
       manage: ["-"],
     },
   },
+  Support: {
+    actions: {
+      raise_tickets: ["-"],
+      view_org_tickets: ["-"],
+      view_security_tickets: ["-"],
+    },
+  },
+  // Praesto's own organisation only (hidden elsewhere, rejected by the server).
+  PraestoSupport: {
+    actions: {
+      handle_tickets: ["-"],
+    },
+  },
   PerformanceReview: {
     actions: {
       manage_cycles: ["-"],

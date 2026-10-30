@@ -1016,3 +1016,105 @@ describe("permissionsHandlers", () => {
     });
   });
 });
+
+// PraestoSupport:* exists only inside Praesto's own organisation.
+describe("platform-only permissions", () => {
+  const PRAESTO = "bbbbbbbbbbbbbbbbbbbbbbbb";
+  const CUSTOMER = "cccccccccccccccccccccccc";
+  const reqIn = (tenantId: string, extra: object) =>
+    ({
+      user: { userId: "admin", tenantId, tenantRole: "owner" },
+      ...extra,
+    }) as any;
+  const res = () => ({ json: jest.fn() }) as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.PLATFORM_TENANT_ID = PRAESTO;
+    (prisma as any).role.findUnique.mockResolvedValue({
+      id: "r-1",
+      name: "Support",
+    });
+    (prisma as any).role.update.mockResolvedValue({});
+    (prisma as any).user.findFirst.mockResolvedValue({
+      id: "u1",
+      username: "jo",
+      role: [],
+    });
+    (prisma as any).user.update.mockResolvedValue({});
+  });
+  afterAll(() => {
+    delete process.env.PLATFORM_TENANT_ID;
+  });
+
+  it("lets Praesto grant it to a role and to a person", async () => {
+    await updateRolePermissions(
+      reqIn(PRAESTO, {
+        params: { _id: "r-1" },
+        body: { permissions: ["PraestoSupport:handle_tickets"] },
+      }),
+      res(),
+    );
+    await saveUserPermissions(
+      reqIn(PRAESTO, {
+        body: {
+          selectedUser: "jo",
+          permissions: ["PraestoSupport:handle_tickets"],
+        },
+      }),
+      res(),
+    );
+    expect((prisma as any).role.update).toHaveBeenCalled();
+    expect((prisma as any).user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          permissions: ["PraestoSupport:handle_tickets"],
+        }),
+      }),
+    );
+  });
+
+  it("treats it as unknown in any other organisation", async () => {
+    const r1 = res();
+    await updateRolePermissions(
+      reqIn(CUSTOMER, {
+        params: { _id: "r-1" },
+        body: { permissions: ["PraestoSupport:handle_tickets"] },
+      }),
+      r1,
+    );
+    const r2 = res();
+    await saveUserPermissions(
+      reqIn(CUSTOMER, {
+        body: {
+          selectedUser: "jo",
+          permissions: ["Leave:apply:self", "PraestoSupport:handle_tickets"],
+        },
+      }),
+      r2,
+    );
+    expect((prisma as any).role.update).not.toHaveBeenCalled();
+    expect((prisma as any).user.update).not.toHaveBeenCalled();
+    for (const r of [r1, r2]) {
+      expect(r.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 400,
+          message: "Unknown permission(s): PraestoSupport:handle_tickets",
+        }),
+      );
+    }
+  });
+
+  it("is unknown everywhere when no platform organisation is configured", async () => {
+    delete process.env.PLATFORM_TENANT_ID;
+    const r = res();
+    await updateRolePermissions(
+      reqIn(PRAESTO, {
+        params: { _id: "r-1" },
+        body: { permissions: ["PraestoSupport:handle_tickets"] },
+      }),
+      r,
+    );
+    expect((prisma as any).role.update).not.toHaveBeenCalled();
+  });
+});

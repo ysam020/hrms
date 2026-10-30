@@ -80,4 +80,74 @@ export async function ensureMasterIndexes(): Promise<void> {
       error,
     });
   }
+
+  // Tenant support: ticketNo / counter key uniqueness is what makes
+  // numbering race-safe; the rest back the tenant-scoped
+  // and support-queue list queries.
+  try {
+    await prisma.$runCommandRaw({
+      createIndexes: "support_tickets",
+      indexes: [
+        {
+          key: { ticketNo: 1 },
+          name: "SupportTicket_ticketNo_key",
+          unique: true,
+        },
+        {
+          key: { tenantId: 1, updatedAt: 1 },
+          name: "SupportTicket_tenantId_updatedAt_idx",
+        },
+        {
+          key: { tenantId: 1, reporterId: 1, updatedAt: 1 },
+          name: "SupportTicket_tenantId_reporterId_updatedAt_idx",
+        },
+        {
+          key: { status: 1, updatedAt: 1 },
+          name: "SupportTicket_status_updatedAt_idx",
+        },
+        {
+          key: { assigneeId: 1, status: 1 },
+          name: "SupportTicket_assigneeId_status_idx",
+        },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "support_messages",
+      indexes: [
+        {
+          key: { ticketId: 1, createdAt: 1 },
+          name: "SupportMessage_ticketId_createdAt_idx",
+        },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "support_attachments",
+      indexes: [
+        { key: { ticketId: 1 }, name: "SupportAttachment_ticketId_idx" },
+        {
+          key: { uploaderId: 1, status: 1 },
+          name: "SupportAttachment_uploaderId_status_idx",
+        },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "support_activities",
+      indexes: [
+        {
+          key: { ticketId: 1, createdAt: 1 },
+          name: "SupportActivity_ticketId_createdAt_idx",
+        },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "support_counters",
+      indexes: [
+        { key: { key: 1 }, name: "SupportCounter_key_key", unique: true },
+      ],
+    });
+  } catch (error: unknown) {
+    logger.error("ensureMasterIndexes: failed to create support indexes", {
+      error,
+    });
+  }
 }

@@ -57,6 +57,8 @@ const masterScopedPrisma = prisma.$extends({
 //   yet exists) specifically to resolve which tenant a payout belongs to
 // - mcpOAuthClient / mcpGrant: looked up from a bearer token before any
 //   tenant context exists (see apps/api-gateway/src/mcp)
+// - support*: Praesto's cross-tenant support queue; every tenant-facing query
+//   is scoped by tenantId explicitly (see apps/api-gateway/src/handlers/support.ts)
 const MASTER_MODELS = new Set([
   "user",
   "tenant",
@@ -65,6 +67,11 @@ const MASTER_MODELS = new Set([
   "mcpOAuthClient",
   "mcpGrant",
   "trialClaim",
+  "supportTicket",
+  "supportMessage",
+  "supportAttachment",
+  "supportActivity",
+  "supportCounter",
 ]);
 
 // Federated proxy:

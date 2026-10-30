@@ -20,7 +20,12 @@ import {
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 import { AppShell } from "@next/shell/AppShell";
 import { RequireSession, SessionRoot } from "./session";
-import { canAccessWfh, canApproveJoinRequests } from "./navigation";
+import {
+  canAccessWfh,
+  canApproveJoinRequests,
+  canUseSupport,
+} from "./navigation";
+import { canRaiseSupport, isSupportAgent } from "@next/features/support/config";
 import { NoAccess, NotFound, RouteError } from "@next/features/system/System";
 
 // Route table. Paths match Classic's (apps/web/src/app/router/routesConfig.tsx)
@@ -146,6 +151,13 @@ const F = {
   webhooks: () => import("@next/features/webhooks/Webhooks"),
   subscription: () => import("@next/features/subscription/Subscription"),
   help: () => import("@next/features/help/Help"),
+  support: () => import("@next/features/support/Support"),
+  supportNew: () => import("@next/features/support/NewTicket"),
+  supportTicket: () => import("@next/features/support/SupportTicket"),
+  platformSupport: () =>
+    import("@next/features/support/platform/PlatformSupport"),
+  platformTicket: () =>
+    import("@next/features/support/platform/PlatformTicket"),
   audit: () => import("@next/features/audit/AuditLog"),
   publicPages: () => import("@next/features/public/Public"),
   aiAssistants: () => import("@next/features/assistant/AiAssistants"),
@@ -367,6 +379,21 @@ const appRoutes: RouteObject[] = [
     ...page(F.subscription, "default", hasSubscriptionAccess),
   },
   { path: "help", ...page(F.help) },
+  // Tickets to the Praesto team; the console is Praesto staff only.
+  { path: "support", ...page(F.support, "default", canUseSupport) },
+  { path: "support/new", ...page(F.supportNew, "default", canRaiseSupport) },
+  {
+    path: "support/tickets/:ticketId",
+    ...page(F.supportTicket, "default", canUseSupport),
+  },
+  {
+    path: "platform/support",
+    ...page(F.platformSupport, "default", isSupportAgent),
+  },
+  {
+    path: "platform/support/tickets/:ticketId",
+    ...page(F.platformTicket, "default", isSupportAgent),
+  },
   { path: "ai-assistants", ...page(F.aiAssistants) },
   { path: "audit-logs", ...page(F.audit, "default", isOwnerOrAdmin) },
   { path: "*", element: <NotFound /> },

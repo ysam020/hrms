@@ -426,6 +426,37 @@ const HELPDESK = {
   HELPDESK_STATS: "/helpdesk/stats",
 };
 
+// Tickets to the Praesto team (not the employee helpdesk above).
+const SUPPORT = {
+  SUPPORT_CONTEXT: "/support/context",
+  SUPPORT_STATS: (scope: string) => `/support/stats?scope=${scope}`,
+  SUPPORT_TICKETS: (page: number, limit: number, params = "") =>
+    `/support/tickets?page=${page}&limit=${limit}${params}`,
+  CREATE_SUPPORT_TICKET: "/support/tickets",
+  SUPPORT_TICKET: (id: string) => `/support/tickets/${id}`,
+  SUPPORT_REPLY: (id: string) => `/support/tickets/${id}/replies`,
+  SUPPORT_REOPEN: (id: string) => `/support/tickets/${id}/reopen`,
+  SUPPORT_CLOSE: (id: string) => `/support/tickets/${id}/close`,
+  SUPPORT_UPLOAD: "/support/attachments",
+  SUPPORT_UPLOAD_COMPLETE: (id: string) =>
+    `/support/attachments/${id}/complete`,
+  SUPPORT_ATTACHMENT_URL: (id: string) => `/support/attachments/${id}/url`,
+  PLATFORM_SUPPORT_STATS: "/platform/support/stats",
+  PLATFORM_SUPPORT_AGENTS: "/platform/support/agents",
+  PLATFORM_SUPPORT_TICKETS: (page: number, limit: number, params = "") =>
+    `/platform/support/tickets?page=${page}&limit=${limit}${params}`,
+  PLATFORM_SUPPORT_TICKET: (id: string) => `/platform/support/tickets/${id}`,
+  PLATFORM_SUPPORT_REPLY: (id: string) =>
+    `/platform/support/tickets/${id}/replies`,
+  PLATFORM_SUPPORT_DUPLICATE: (id: string) =>
+    `/platform/support/tickets/${id}/duplicate`,
+  PLATFORM_SUPPORT_UPLOAD: "/platform/support/attachments",
+  PLATFORM_SUPPORT_UPLOAD_COMPLETE: (id: string) =>
+    `/platform/support/attachments/${id}/complete`,
+  PLATFORM_SUPPORT_ATTACHMENT_URL: (id: string) =>
+    `/platform/support/attachments/${id}/url`,
+};
+
 const WEBHOOKS = {
   WEBHOOK_ENDPOINTS: "/webhooks/endpoints",
   CREATE_WEBHOOK_ENDPOINT: "/webhooks/endpoints",
@@ -490,6 +521,7 @@ export const API_ENDPOINTS = {
   ...ASSETS,
   ...WFH,
   ...HELPDESK,
+  ...SUPPORT,
   ...WEBHOOKS,
   ...REPORTS,
   ...APPROVALS,
