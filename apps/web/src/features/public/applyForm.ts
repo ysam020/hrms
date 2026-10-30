@@ -101,11 +101,57 @@ export function buildSteps(job: any): Step[] {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Country codes offered beside the mobile number; India is the default.
+export const DIAL_CODES: [string, string][] = [
+  ["+91", "India"],
+  ["+1", "US / Canada"],
+  ["+44", "UK"],
+  ["+61", "Australia"],
+  ["+65", "Singapore"],
+  ["+971", "UAE"],
+  ["+966", "Saudi Arabia"],
+  ["+974", "Qatar"],
+  ["+49", "Germany"],
+  ["+33", "France"],
+  ["+31", "Netherlands"],
+  ["+353", "Ireland"],
+  ["+64", "New Zealand"],
+  ["+81", "Japan"],
+  ["+60", "Malaysia"],
+  ["+977", "Nepal"],
+  ["+880", "Bangladesh"],
+  ["+94", "Sri Lanka"],
+];
+export const DEFAULT_DIAL_CODE = "+91";
+
+/** Splits a stored "+91 98765 43210" into code and number. Numbers saved
+ * before the code picker existed (no "+") are Indian. */
+export function splitMobile(value: string): { code: string; number: string } {
+  const t = value.trim();
+  if (!t.startsWith("+")) return { code: DEFAULT_DIAL_CODE, number: t };
+  const digits = t.replace(/[^\d+]/g, "");
+  const code = [...DIAL_CODES.map(([c]) => c)]
+    .sort((a, b) => b.length - a.length)
+    .find((c) => digits.startsWith(c));
+  if (!code) return { code: DEFAULT_DIAL_CODE, number: t };
+  const rest = t.slice(t.indexOf(code.slice(1)) + code.length - 1).trim();
+  return { code, number: rest };
+}
+
+// An empty number keeps a non-default code, so choosing the country first
+// isn't undone before the number is typed.
+export const joinMobile = (code: string, number: string) =>
+  number.trim()
+    ? `${code} ${number.trim()}`
+    : code === DEFAULT_DIAL_CODE
+      ? ""
+      : code;
+
 export const validMobile = (m: string) => {
-  const t = m.trim();
-  const d = t.replace(/\D/g, "");
-  if (t.startsWith("+")) return d.length >= 8 && d.length <= 15;
-  return d.length === 10 || (d.length === 12 && d.startsWith("91"));
+  const { code, number } = splitMobile(m);
+  const d = number.replace(/\D/g, "");
+  if (code === "+91") return d.length === 10;
+  return d.length >= 6 && code.length - 1 + d.length <= 15;
 };
 const validUrl = (v: string) => {
   try {
@@ -131,7 +177,10 @@ export function validateStep(
     if (!EMAIL_RE.test(a.email.trim()))
       e.email = "Enter a valid email address.";
     if (!validMobile(a.mobile))
-      e.mobile = "Enter a 10-digit mobile number, or include the country code.";
+      e.mobile =
+        splitMobile(a.mobile).code === "+91"
+          ? "Enter a 10-digit mobile number."
+          : "Enter a valid mobile number.";
   }
   if (step.resume && form.resume === "required" && !a.resume)
     e.resume = "Attach your résumé.";
