@@ -319,6 +319,7 @@ const PAYMENT = {
   REACTIVATE_SUBSCRIPTION: "/payment/reactivate-subscription",
   PENDING_SETUP: "/payment/pending-setup",
   PLAN_PRICING: "/payment/plan-pricing",
+  TRIAL_ELIGIBILITY: "/payment/trial-eligibility",
   CHANGE_PLAN: "/payment/change-plan",
   CONFIRM_PLAN_UPGRADE: "/payment/confirm-plan-upgrade",
   START_PAYMENT_METHOD_CHANGE: "/payment/start-payment-method-change",

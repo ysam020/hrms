@@ -207,3 +207,113 @@ describe("requireActiveSubscription", () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 });
+
+describe("requireActiveSubscription — free trials", () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const run = async (tenant: Record<string, unknown>) => {
+    (prisma.tenant.findUnique as jest.Mock).mockResolvedValue(tenant);
+    const res = makeRes();
+    const next = jest.fn();
+    await requireActiveSubscription(
+      { user: { tenantId: "t1" } } as any,
+      res,
+      next,
+    );
+    return { res, next };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("lets a running trial through with trial headers", async () => {
+    const end = new Date(Date.now() + 5 * DAY_MS);
+    const { res, next } = await run({
+      subscriptionStatus: "trialing",
+      planExpiresAt: end,
+      trialEndsAt: end,
+      planActivatedAt: null,
+    });
+    expect(next).toHaveBeenCalled();
+    expect(res.setHeader).toHaveBeenCalledWith("X-Subscription-Trial", "true");
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "X-Plan-Expires-At",
+      end.toISOString(),
+    );
+  });
+
+  it("keeps a just-ended trial open while its first charge settles", async () => {
+    const end = new Date(Date.now() - 2 * DAY_MS);
+    const { next } = await run({
+      subscriptionStatus: "trialing",
+      planExpiresAt: end,
+      trialEndsAt: end,
+      planActivatedAt: null,
+    });
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("blocks a trial past its 7-day grace even if the scheduler never moved it", async () => {
+    const end = new Date(Date.now() - 8 * DAY_MS);
+    const { res, next } = await run({
+      subscriptionStatus: "trialing",
+      planExpiresAt: end,
+      trialEndsAt: end,
+      planActivatedAt: null,
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(402);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Your free trial has ended. Subscribe to continue.",
+      }),
+    );
+  });
+
+  it("says the trial ended when an unpaid trial has expired", async () => {
+    const { res } = await run({
+      subscriptionStatus: "expired",
+      planExpiresAt: new Date(Date.now() - 10 * DAY_MS),
+      trialEndsAt: new Date(Date.now() - 10 * DAY_MS),
+      planActivatedAt: null,
+    });
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Your free trial has ended. Subscribe to continue.",
+      }),
+    );
+  });
+
+  it("keeps a cancelled trial open until its end, then blocks it", async () => {
+    const running = await run({
+      subscriptionStatus: "cancelled",
+      planExpiresAt: new Date(Date.now() + DAY_MS),
+      trialEndsAt: new Date(Date.now() + DAY_MS),
+      planActivatedAt: null,
+    });
+    expect(running.next).toHaveBeenCalled();
+
+    const ended = await run({
+      subscriptionStatus: "cancelled",
+      planExpiresAt: new Date(Date.now() - DAY_MS),
+      trialEndsAt: new Date(Date.now() - DAY_MS),
+      planActivatedAt: null,
+    });
+    expect(ended.next).not.toHaveBeenCalled();
+    expect(ended.res.status).toHaveBeenCalledWith(402);
+  });
+
+  it("treats a converted trial like any paid subscription", async () => {
+    const { res, next } = await run({
+      subscriptionStatus: "active",
+      planExpiresAt: new Date(Date.now() + 20 * DAY_MS),
+      trialEndsAt: new Date(Date.now() - 10 * DAY_MS),
+      planActivatedAt: new Date(Date.now() - 10 * DAY_MS),
+    });
+    expect(next).toHaveBeenCalled();
+    expect(res.setHeader).not.toHaveBeenCalledWith(
+      "X-Subscription-Trial",
+      "true",
+    );
+  });
+});

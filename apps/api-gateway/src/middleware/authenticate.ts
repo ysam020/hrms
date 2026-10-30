@@ -196,6 +196,46 @@ export const requirePrivileged = async (
 };
 
 /**
+ * Billing actions on the current tenant's subscription: owners, admins,
+ * superusers and `Subscription:*` permission holders — the same people the
+ * web app shows the Subscription page to (hasSubscriptionAccess). A request
+ * with no tenant yet (org setup, before the organisation exists) passes:
+ * there's no subscription of anyone else's to act on.
+ */
+export const requireSubscriptionManager = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  if (!req.user.tenantId || hasPrivilegedRole(req.user.tenantRole ?? "")) {
+    next();
+    return;
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { isSuperUser: true, permissions: true },
+    });
+    const permitted =
+      user?.isSuperUser ||
+      ((user?.permissions as string[] | undefined) ?? []).some((p) =>
+        p.startsWith("Subscription:"),
+      );
+    if (!permitted) {
+      res.status(403).json({ message: "Forbidden" });
+      return;
+    }
+    next();
+  } catch {
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+/**
  * Like requirePrivileged, but also admits tenantRole "hr" — for
  * management-visibility screens (Insights/analytics/reports) that HR staff
  * need for their job, not just owners/admins.

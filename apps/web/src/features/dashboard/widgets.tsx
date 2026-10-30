@@ -588,14 +588,22 @@ export function OrgAdmin({ data }: { data: any }) {
                     : "Plan"}{" "}
                   plan
                 </span>
-                <StatusBadge tone={toneForStatus(sub.subscriptionStatus)}>
-                  {label(sub.subscriptionStatus)}
-                </StatusBadge>
+                {sub.subscriptionStatus === "trialing" ? (
+                  <StatusBadge tone="accent">Free trial</StatusBadge>
+                ) : (
+                  <StatusBadge tone={toneForStatus(sub.subscriptionStatus)}>
+                    {label(sub.subscriptionStatus)}
+                  </StatusBadge>
+                )}
               </TransitionLink>
             </li>
             {sub.planExpiresAt && (
               <li className={d.queueRow} data-static>
-                <span>Renews</span>
+                <span>
+                  {sub.subscriptionStatus === "trialing"
+                    ? "Trial ends"
+                    : "Renews"}
+                </span>
                 <b>{fmtDate(sub.planExpiresAt)}</b>
               </li>
             )}

@@ -50,13 +50,28 @@ model Tenant {
   // on every run while this is still set, so a failed cancel never silently
   // leaves the old subscription (and its old mandate) billing forever.
   previousRazorpaySubscriptionId String?
-  // active | grace_period | cancelled | expired | cancelling (legacy, no
-  // longer set — see cancelSubscription in payment.ts). "cancelled" means the
-  // user opted out; access continues until planExpiresAt (checked live by
-  // requireActiveSubscription), distinct from "expired" (involuntary lapse).
+  // trialing | active | grace_period | cancelled | expired | cancelling
+  // (legacy, no longer set — see cancelSubscription in payment.ts).
+  // "cancelled" means the user opted out; access continues until
+  // planExpiresAt (checked live by requireActiveSubscription), distinct from
+  // "expired" (involuntary lapse). "trialing" is a free trial whose Razorpay
+  // subscription is authorised but not yet charged (start_at = trialEndsAt);
+  // the first subscription.charged webhook moves it to "active".
   subscriptionStatus     String    @default("active")
+  // Null until the first real charge — a trial isn't an activation.
   planActivatedAt        DateTime?
+  // During a trial this equals trialEndsAt, so the expiry, grace and
+  // cancellation rules that key off it apply to trials unchanged.
   planExpiresAt          DateTime?
+  // Server-set once, when a trial tenant is created (buildTenant in
+  // tenant.ts); never changed afterwards, so they double as the record that
+  // this organisation has had its one trial. Null for tenants that paid at
+  // signup, including every tenant created before trials existed.
+  trialStartedAt         DateTime?
+  trialEndsAt            DateTime?
+  // Reminder keys already sent ("3d", "1d") — claimed atomically by the
+  // scheduler's sendTrialReminders job so a retry never emails twice.
+  trialRemindersSent     String[]  @default([])
   // "starter" (1-25 employees) | "growth" (26-100) | "enterprise" (101+) —
   // three flat-fee slabs, not per-employee billing. See
   // apps/api-gateway/src/config/billingPlans.ts for the actual prices.
@@ -107,6 +122,25 @@ model Tenant {
 
   @@index([domain])
   @@map("tenants")
+}
+
+// One row per organisation signal that has been used for a free trial — the
+// creating account, the company email domain, the payment instrument
+// (hashed). `key` is unique, so two concurrent signups sharing any signal
+// can't both get a trial: the second insert fails with P2002 (see
+// apps/api-gateway/src/services/trial.ts). Rows are never deleted — a trial
+// stays used even if its tenant is later deactivated.
+model TrialClaim {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  // "user:<userId>" | "domain:<domain>" | "instrument:<sha256>"
+  key            String   @unique
+  // The trial subscription that claimed it — a retried signup for the same
+  // subscription re-claims its own keys instead of being refused.
+  subscriptionId String
+  userId         String   @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  @@map("trial_claims")
 }
 
 model TenantMembership {

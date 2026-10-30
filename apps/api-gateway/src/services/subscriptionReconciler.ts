@@ -88,12 +88,18 @@ async function reconcile(): Promise<void> {
     const tenants = await prisma.tenant.findMany({
       where: {
         razorpaySubscriptionId: { not: null },
-        subscriptionStatus: { in: ["active", "grace_period", "cancelling"] },
+        // "trialing": Razorpay shows a trial's subscription "authenticated"
+        // until its first charge — no branch below acts on that — then
+        // "active", which heals a missed first subscription.charged webhook.
+        subscriptionStatus: {
+          in: ["trialing", "active", "grace_period", "cancelling"],
+        },
       },
       select: {
         id: true,
         razorpaySubscriptionId: true,
         previousRazorpaySubscriptionId: true,
+        planActivatedAt: true,
         planExpiresAt: true,
         planTier: true,
         billing: true,
@@ -160,6 +166,10 @@ async function reconcile(): Promise<void> {
 
           if (tenant.subscriptionStatus !== "active") {
             updates.subscriptionStatus = "active";
+          }
+          // A trial's first charge, as handleWebhook records it.
+          if (!tenant.planActivatedAt) {
+            updates.planActivatedAt = now;
           }
           // A new cycle has started if Razorpay's expiry moved past ours —
           // that's also the signal that a scheduled ("cycle_end") plan change

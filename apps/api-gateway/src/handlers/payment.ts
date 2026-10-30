@@ -22,6 +22,15 @@ import {
   type Billing,
 } from "../config/billingPlans";
 import { getActiveEmployeeCount, getSeatStatus } from "../utils/planLimits";
+import {
+  TRIAL_DAYS,
+  TRIAL_SIGNUP_PURPOSE,
+  trialEndFrom,
+} from "../config/trial";
+import {
+  checkTrialEligibility,
+  TRIAL_INELIGIBLE_MESSAGE,
+} from "../services/trial";
 
 function isPlanTier(v: unknown): v is PlanTier {
   return v === "starter" || v === "growth" || v === "enterprise";
@@ -169,11 +178,30 @@ export async function getOrCreatePlanId(
 export async function createSubscription(req: AuthRequest, res: Response) {
   const { userId, tenantId } = req.user!;
   try {
-    const { billing, planTier } = req.body as {
+    const { billing, planTier, trial } = req.body as {
       billing?: Billing;
       planTier?: PlanTier;
+      trial?: boolean;
     };
     const period: Billing = billing === "annual" ? "annual" : "monthly";
+
+    // A trial is only ever a new organisation's first subscription — an
+    // existing tenant renewing or resubscribing always pays now.
+    if (trial === true && tenantId) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Free trials are only available when creating an organisation.",
+      });
+    }
+    if (trial === true) {
+      const eligibility = await checkTrialEligibility(userId);
+      if (!eligibility.eligible) {
+        return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+          message: TRIAL_INELIGIBLE_MESSAGE[eligibility.reason],
+          code: "TRIAL_NOT_ELIGIBLE",
+        });
+      }
+    }
 
     // Pre-tenant (org-setup) signups pick a tier explicitly (derived from the
     // company-size step); an existing tenant renewing (Subscription.tsx's
@@ -188,14 +216,41 @@ export async function createSubscription(req: AuthRequest, res: Response) {
       if (isPlanTier(tenant?.planTier)) tier = tenant!.planTier as PlanTier;
     }
 
+    // An existing tenant renewing onto an explicit tier gets the same
+    // headcount guard as changePlan — pre-tenant signups have no employees yet.
+    const limit = TIER_EMPLOYEE_LIMITS[tier];
+    if (tenantId && limit !== null) {
+      const activeEmployeeCount = await getActiveEmployeeCount(tenantId);
+      if (activeEmployeeCount > limit) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message: `${TIER_LABEL[tier]} supports up to ${limit} employees. You currently have ${activeEmployeeCount} — choose a higher tier.`,
+        });
+      }
+    }
+
     const planId = await getOrCreatePlanId(tier, period);
     const rzp = getRazorpay();
 
+    // Trial: start_at defers the first charge to the trial's end, so
+    // Checkout only authorises the mandate (Razorpay's small, refunded
+    // authentication transaction) — the same mechanism
+    // startPaymentMethodChange uses to avoid a double charge. The notes are
+    // what buildTenant checks before treating the deferral as a trial.
+    const trialEndsAt = trial === true ? trialEndFrom(new Date()) : null;
     const subscription = await (rzp.subscriptions.create as any)({
       plan_id: planId,
       customer_notify: 1,
       total_count: totalCountFor(period),
       quantity: 1,
+      ...(trialEndsAt && {
+        start_at: Math.floor(trialEndsAt.getTime() / 1000),
+        notes: {
+          purpose: TRIAL_SIGNUP_PURPOSE,
+          userId,
+          planTier: tier,
+          billing: period,
+        },
+      }),
     });
 
     // Record pending subscription so the backend can recover without
@@ -210,6 +265,7 @@ export async function createSubscription(req: AuthRequest, res: Response) {
         keyId: process.env.RAZORPAY_KEY_ID,
         billing: period,
         planTier: tier,
+        ...(trialEndsAt && { trialEndsAt: trialEndsAt.toISOString() }),
       },
     });
   } catch (error: unknown) {
@@ -240,6 +296,33 @@ export async function getPlanPricing(req: AuthRequest, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("getPlanPricing error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// ─── GET /payment/trial-eligibility ───────────────────────────────────────────
+// Authenticated-only, like plan-pricing: org-setup's plan step asks before a
+// tenant exists. Advisory — createSubscription re-checks, and buildTenant's
+// claimTrial is the binding check.
+
+export async function getTrialEligibility(req: AuthRequest, res: Response) {
+  const { userId, tenantId } = req.user!;
+  try {
+    const eligibility = tenantId ? null : await checkTrialEligibility(userId);
+    const eligible = eligibility?.eligible === true;
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      data: {
+        eligible,
+        trialDays: TRIAL_DAYS,
+        ...(eligibility &&
+          !eligibility.eligible && {
+            reason: eligibility.reason,
+            message: TRIAL_INELIGIBLE_MESSAGE[eligibility.reason],
+          }),
+      },
+    });
+  } catch (error: unknown) {
+    logger.error("getTrialEligibility error:", { error });
     return handleError(res, error);
   }
 }
@@ -294,7 +377,11 @@ export async function cancelSubscription(req: AuthRequest, res: Response) {
         message: "No subscription found.",
       });
     }
-    if (!["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")) {
+    const trialing = tenant.subscriptionStatus === "trialing";
+    if (
+      !trialing &&
+      !["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")
+    ) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Subscription is not active.",
       });
@@ -304,9 +391,12 @@ export async function cancelSubscription(req: AuthRequest, res: Response) {
     // cancel_at_cycle_end: 1 — schedule the cancellation for the end of the
     // current paid period rather than cutting it off immediately: the
     // tenant already paid for this cycle, so access (and Razorpay billing)
-    // should continue until it actually ends.
+    // should continue until it actually ends. A trial has no paid cycle — its
+    // subscription hasn't started — so it's cancelled outright, which is what
+    // guarantees the deferred first charge never happens. Access still runs
+    // to trialEndsAt (= planExpiresAt) via the "cancelled" rule below.
     await (rzp.subscriptions.cancel as any)(tenant.razorpaySubscriptionId, {
-      cancel_at_cycle_end: 1,
+      cancel_at_cycle_end: trialing ? 0 : 1,
     });
 
     // Set "cancelled" synchronously — cancel_at_cycle_end returning success
@@ -335,7 +425,7 @@ export async function cancelSubscription(req: AuthRequest, res: Response) {
 // ─── POST /payment/reactivate-subscription ────────────────────────────────────
 
 export async function reactivateSubscription(req: AuthRequest, res: Response) {
-  const { tenantId } = req.user!;
+  const { userId, tenantId } = req.user!;
   try {
     const {
       billing,
@@ -374,11 +464,27 @@ export async function reactivateSubscription(req: AuthRequest, res: Response) {
 
     const pmInfo = await fetchPaymentMethod(razorpayPaymentId);
 
+    // The tier comes from what createSubscription recorded server-side for
+    // this exact subscription, never from the request body — the Razorpay
+    // plan was already priced for it.
+    const { getPendingSubscription, clearPendingSubscription } =
+      await import("../services/tenantTokenStore");
+    const pending = await getPendingSubscription(userId);
+    const renewedTier =
+      pending?.subscriptionId === razorpaySubscriptionId &&
+      isPlanTier(pending.planTier)
+        ? pending.planTier
+        : null;
+
     await prisma.tenant.update({
       where: { id: tenantId! },
       data: {
         razorpaySubscriptionId,
         billing: billing ?? "monthly",
+        ...(renewedTier && { planTier: renewedTier }),
+        pendingPlanTier: null,
+        pendingBilling: null,
+        pendingPlanChangeAt: null,
         subscriptionStatus: "active",
         planActivatedAt: now,
         planExpiresAt,
@@ -388,6 +494,8 @@ export async function reactivateSubscription(req: AuthRequest, res: Response) {
         }),
       },
     });
+
+    if (renewedTier) await clearPendingSubscription(userId);
 
     logger.info(`Subscription reactivated for tenant ${tenantId}`);
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -444,7 +552,11 @@ export async function changePlan(req: AuthRequest, res: Response) {
         message: "No subscription found.",
       });
     }
-    if (!["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")) {
+    const trialing = tenant.subscriptionStatus === "trialing";
+    if (
+      !trialing &&
+      !["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")
+    ) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Subscription is not active.",
       });
@@ -455,8 +567,12 @@ export async function changePlan(req: AuthRequest, res: Response) {
     // for card subscriptions. Every branch below eventually calls
     // subscriptions.update, and for the prorated-upgrade path that call
     // happens in confirmPlanUpgrade *after* the customer is charged — so
-    // this must be caught here, before any order is created.
-    if (BLOCKED_PLAN_UPDATE_METHODS.includes(tenant.paymentMethod ?? "")) {
+    // this must be caught here, before any order is created. A trial never
+    // calls update (see the trial branch below), so it isn't limited.
+    if (
+      !trialing &&
+      BLOCKED_PLAN_UPDATE_METHODS.includes(tenant.paymentMethod ?? "")
+    ) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message:
           "Plan changes aren't supported for subscriptions paid via UPI Autopay or e-Mandate. Change your payment method to a card, then try again.",
@@ -494,6 +610,49 @@ export async function changePlan(req: AuthRequest, res: Response) {
     }
 
     const newPlanId = await getOrCreatePlanId(planTier, billing);
+
+    // Trial: nothing has been charged, so there's nothing to prorate — the
+    // new plan simply becomes what's charged when the trial ends. Razorpay
+    // can't re-plan the trial's (UPI/e-Mandate) subscription, so this
+    // creates a replacement starting at the same trial end; the customer
+    // authorises it in Checkout and confirmPaymentMethodChange swaps it in
+    // and applies the tier — until then the tenant is unchanged.
+    if (trialing) {
+      if (
+        !tenant.planExpiresAt ||
+        tenant.planExpiresAt.getTime() <= Date.now() + 24 * 60 * 60 * 1000
+      ) {
+        return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+          message:
+            "Your trial ends within a day. You can change plan after your first payment.",
+        });
+      }
+      const rzp = getRazorpay();
+      const subscription = await (rzp.subscriptions.create as any)({
+        plan_id: newPlanId,
+        customer_notify: 1,
+        total_count: totalCountFor(billing),
+        quantity: 1,
+        start_at: Math.floor(tenant.planExpiresAt.getTime() / 1000),
+        notes: { tenantId: tenantId!, purpose: "trial_plan_change" },
+      });
+      const { storePendingPaymentMethodChange } =
+        await import("../services/tenantTokenStore");
+      await storePendingPaymentMethodChange(tenantId!, subscription.id, {
+        planTier,
+        billing,
+      });
+      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+        data: {
+          requiresPayment: false,
+          requiresAuthorization: true,
+          subscriptionId: subscription.id,
+          keyId: process.env.RAZORPAY_KEY_ID,
+          planTier,
+          billing,
+        },
+      });
+    }
 
     // Billing-period changes (with or without a tier change) always defer to
     // the next renewal — no proration. Only a same-billing tier change is
@@ -715,7 +874,11 @@ export async function startPaymentMethodChange(
         message: "No subscription found.",
       });
     }
-    if (!["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")) {
+    const trialing = tenant.subscriptionStatus === "trialing";
+    if (
+      !trialing &&
+      !["active", "grace_period"].includes(tenant.subscriptionStatus ?? "")
+    ) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Subscription is not active.",
       });
@@ -730,9 +893,17 @@ export async function startPaymentMethodChange(
     // minimum for start_at, and this also bounds how far confirm's
     // independent recompute of `deferred` could possibly drift from this one.
     const deferred =
-      tenant.subscriptionStatus === "active" &&
+      (tenant.subscriptionStatus === "active" || trialing) &&
       !!tenant.planExpiresAt &&
       tenant.planExpiresAt.getTime() > Date.now() + 24 * 60 * 60 * 1000;
+    // A trial's replacement must also start at the trial's end — without the
+    // deferral it would charge today, before the trial is over.
+    if (trialing && !deferred) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Your trial ends within a day. You can change your payment method after your first payment.",
+      });
+    }
 
     const planId = await getOrCreatePlanId(tier, billing);
     const rzp = getRazorpay();
@@ -839,13 +1010,43 @@ export async function confirmPaymentMethodChange(
     const pmInfo = await fetchPaymentMethod(razorpayPaymentId);
 
     const now = new Date();
+    // A trial's replacement was created with start_at = the trial's end
+    // (startPaymentMethodChange / changePlan), so it stays a trial with its
+    // dates untouched, however close that end now is.
+    const trialing = tenant.subscriptionStatus === "trialing";
     // Recomputed fresh (not trusted from start) — if something legitimately
     // changed planExpiresAt in between (e.g. a renewal webhook), this
     // reflects the tenant's true current state rather than a stale snapshot.
     const deferred =
-      tenant.subscriptionStatus === "active" &&
-      !!tenant.planExpiresAt &&
-      tenant.planExpiresAt.getTime() > now.getTime() + 24 * 60 * 60 * 1000;
+      trialing ||
+      (tenant.subscriptionStatus === "active" &&
+        !!tenant.planExpiresAt &&
+        tenant.planExpiresAt.getTime() > now.getTime() + 24 * 60 * 60 * 1000);
+    // Only a trial's plan change carries a plan; it was priced and
+    // headcount-checked server-side in changePlan, never taken from this body.
+    const newPlan =
+      isPlanTier(pending.planTier) &&
+      (pending.billing === "monthly" || pending.billing === "annual")
+        ? { planTier: pending.planTier, billing: pending.billing }
+        : null;
+    // The trial converted (or was cancelled) between start and confirm: the
+    // replacement's start_at is the old trial end, which has passed, so
+    // swapping it in now could charge a second time. Drop it instead.
+    if (newPlan && !trialing) {
+      await (getRazorpay().subscriptions.cancel as any)(
+        razorpaySubscriptionId,
+        { cancel_at_cycle_end: 0 },
+      ).catch((error: unknown) =>
+        logger.error(
+          "confirmPaymentMethodChange: failed to cancel stale trial plan change",
+          { error, razorpaySubscriptionId },
+        ),
+      );
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message:
+          "Your trial has ended, so this plan change wasn't applied. Change plan from the Subscription page.",
+      });
+    }
 
     let planActivatedAt: Date | undefined;
     let newPlanExpiresAt: Date | undefined;
@@ -866,7 +1067,13 @@ export async function confirmPaymentMethodChange(
       data: {
         razorpaySubscriptionId,
         previousRazorpaySubscriptionId: oldSubscriptionId,
-        subscriptionStatus: "active",
+        subscriptionStatus: trialing ? "trialing" : "active",
+        ...(newPlan && {
+          ...newPlan,
+          pendingPlanTier: null,
+          pendingBilling: null,
+          pendingPlanChangeAt: null,
+        }),
         ...(planActivatedAt && {
           planActivatedAt,
           planExpiresAt: newPlanExpiresAt,
@@ -894,9 +1101,13 @@ export async function confirmPaymentMethodChange(
       );
     }
 
-    logger.info(`Payment method changed for tenant ${tenantId}`);
+    logger.info(
+      newPlan
+        ? `Trial plan changed for tenant ${tenantId}: ${newPlan.planTier}/${newPlan.billing}`
+        : `Payment method changed for tenant ${tenantId}`,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      message: "Payment method updated.",
+      message: newPlan ? "Plan changed." : "Payment method updated.",
     });
   } catch (error: unknown) {
     logger.error("confirmPaymentMethodChange error:", { error });
@@ -1062,10 +1273,20 @@ export async function handleWebhook(req: Request, res: Response) {
             ? next.setFullYear(next.getFullYear() + 1)
             : next.setMonth(next.getMonth() + 1);
 
+          // A trial's first charge is its activation. Keyed off
+          // planActivatedAt rather than the status, which may already have
+          // moved on (grace_period after a slow first charge, or cancelled
+          // if a cancel raced the charge) — either way it's now paid.
+          // trialStartedAt keeps older paid tenants with no planActivatedAt
+          // (seeded rows) on the renewal path.
+          const firstCharge =
+            !tenant.planActivatedAt && !!tenant.trialStartedAt;
+
           await prisma.tenant.update({
             where: { id: tenant.id },
             data: {
               subscriptionStatus: "active",
+              ...(firstCharge && { planActivatedAt: now }),
               planExpiresAt: next,
               planTier: effectiveTier,
               billing,
@@ -1106,15 +1327,19 @@ export async function handleWebhook(req: Request, res: Response) {
                 event: "subscriptionRenewed",
                 email: {
                   to: owner.email,
-                  subject: `Your Praesto subscription has been renewed`,
+                  subject: firstCharge
+                    ? `Your Praesto subscription has started`
+                    : `Your Praesto subscription has been renewed`,
                   html: renderEmailHtml({
-                    title: "Subscription Renewed",
+                    title: firstCharge
+                      ? "Subscription Started"
+                      : "Subscription Renewed",
                     tenantName: tenant.name,
                     // Billing relationship is with Praesto, not tenant HR —
                     // keep the platform signature even though the tenant name
                     // is still shown in the header for context.
                     signature: "Praesto Team",
-                    bodyHtml: `<h2>Hello ${owner.username},</h2><p>Your Praesto subscription for <strong>${tenant.name}</strong> has been renewed. The invoice is attached.</p>`,
+                    bodyHtml: `<h2>Hello ${owner.username},</h2><p>Your Praesto subscription for <strong>${tenant.name}</strong> ${firstCharge ? "has started — thanks for choosing Praesto after your trial" : "has been renewed"}. The invoice is attached.</p>`,
                   }),
                   from: PLATFORM_FROM,
                   attachments: [

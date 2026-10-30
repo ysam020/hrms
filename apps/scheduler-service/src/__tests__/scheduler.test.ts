@@ -36,10 +36,10 @@ describe("registerScheduledJobs", () => {
     expect(mockRemoveRepeatableByKey).toHaveBeenCalledTimes(2);
   });
 
-  it("registers all 10 scheduled jobs with their cron patterns", async () => {
+  it("registers all 11 scheduled jobs with their cron patterns", async () => {
     await registerScheduledJobs();
 
-    expect(mockAdd).toHaveBeenCalledTimes(10);
+    expect(mockAdd).toHaveBeenCalledTimes(11);
     expect(mockAdd).toHaveBeenCalledWith(
       "updateExpiredHrActivities",
       { jobName: "updateExpiredHrActivities" },
@@ -51,6 +51,11 @@ describe("registerScheduledJobs", () => {
       { repeat: { pattern: "0 4 * * *" } },
     );
     expect(mockAdd).toHaveBeenCalledWith(
+      "sendTrialReminders",
+      { jobName: "sendTrialReminders" },
+      { repeat: { pattern: "30 9 * * *" } },
+    );
+    expect(mockAdd).toHaveBeenCalledWith(
       "retryFailedWebhooks",
       { jobName: "retryFailedWebhooks" },
       { repeat: { pattern: "0 6 * * *" } },
@@ -60,13 +65,13 @@ describe("registerScheduledJobs", () => {
   it("logs a summary once all jobs are registered", async () => {
     await registerScheduledJobs();
     expect(logger.info).toHaveBeenCalledWith(
-      "All 10 scheduled jobs registered",
+      "All 11 scheduled jobs registered",
     );
   });
 
   it("does nothing to remove when there are no existing repeatable jobs", async () => {
     await registerScheduledJobs();
     expect(mockRemoveRepeatableByKey).not.toHaveBeenCalled();
-    expect(mockAdd).toHaveBeenCalledTimes(10);
+    expect(mockAdd).toHaveBeenCalledTimes(11);
   });
 });

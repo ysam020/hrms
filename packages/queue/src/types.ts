@@ -69,6 +69,7 @@ export type SchedulerJobName =
   | "sendKycReminders"
   | "cleanupFcmTokens"
   | "checkSubscriptionExpiry"
+  | "sendTrialReminders"
   // New scheduler jobs
   | "checkTicketSla" // lazily mark helpdesk SLA as breached
   | "retryFailedWebhooks"; // sweep for pending/failed webhook deliveries
