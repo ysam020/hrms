@@ -34,6 +34,10 @@ export type NotificationEventType =
   | "assetIssueReported"
   | "helpdeskNotification"
   | "helpdeskSlaBreach"
+  // tenant support → Praesto team (api-gateway)
+  | "supportTicketCreated"
+  | "supportTicketReply"
+  | "supportTicketUpdated"
   // performance-review-service
   | "performanceReviewAssigned"
   | "performanceReviewFinalized"

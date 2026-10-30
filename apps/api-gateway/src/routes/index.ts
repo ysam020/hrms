@@ -38,10 +38,12 @@ import { wfhRouter } from "./wfh";
 import { helpdeskRouter } from "./helpdesk";
 import { webhooksRouter } from "./webhooks";
 import { reportsRouter } from "./reports";
+import { supportRouter, platformSupportRouter } from "./support";
 import { defaultLimiter } from "../middleware/rateLimiter";
 import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
 import { idempotency } from "../middleware/idempotency";
 import { authenticate, requireTenant } from "../middleware/authenticate";
+import { requireSupportAgent } from "../middleware/requireSupportAgent";
 
 export const rootRouter: Router = Router();
 
@@ -68,6 +70,27 @@ rootRouter.use(defaultLimiter, paymentRouter);
 // limiting is already applied globally by path regex (PUBLIC_ROUTES_REGEX in
 // config/rateLimiters.ts), so no limiter is attached here.
 rootRouter.use(publicRecruitmentRouter);
+
+// Support tickets to the Praesto team: tenant-scoped, but NOT behind the
+// subscription guard — an organisation whose subscription lapsed must still
+// be able to raise a billing issue. The platform console needs no tenant at
+// all; requireSupportAgent is its only gate besides authentication.
+rootRouter.use(
+  "/support",
+  defaultLimiter,
+  authenticate,
+  requireTenant,
+  idempotency,
+  supportRouter,
+);
+rootRouter.use(
+  "/platform/support",
+  defaultLimiter,
+  authenticate,
+  requireSupportAgent,
+  idempotency,
+  platformSupportRouter,
+);
 
 // All business routes require an active subscription.
 // authenticate + requireTenant run again here (idempotent) so this guard

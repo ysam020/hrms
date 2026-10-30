@@ -140,6 +140,14 @@ const PERM_DEFS = [
 
   // PerformanceReview (scopeless)
   ["PerformanceReview", "manage_cycles"],
+
+  // Support (scopeless)
+  ["Support", "raise_tickets"],
+  ["Support", "view_org_tickets"],
+  ["Support", "view_security_tickets"],
+
+  // PraestoSupport (scopeless, Praesto's own organisation only)
+  ["PraestoSupport", "handle_tickets"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }

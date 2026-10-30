@@ -9,6 +9,8 @@ import { handleError } from "../utils/handleError";
 import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
 import { recordLoginEvent } from "../services/loginEventService";
 import { getActiveSettings } from "./tenantSettings";
+import { hasSupportAccess } from "../services/supportStore";
+import { isPlatformTenant } from "../config/platform";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -162,6 +164,10 @@ export async function getProfile(req: Request, res: Response) {
       wfhEnabled = activeSettings?.wfhEnabled ?? true;
     }
 
+    // UI hint only (shows the Praesto support console link); every
+    // /platform/support request is checked again by requireSupportAgent.
+    const isSupportAgent = await hasSupportAccess(user!).catch(() => false);
+
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: {
         user: {
@@ -170,6 +176,9 @@ export async function getProfile(req: Request, res: Response) {
           tenantSlug,
           tenantRole: user?.tenantRole ?? null,
           wfhEnabled,
+          isSupportAgent,
+          // Lets the permission editor offer platform-only modules.
+          isPlatformTenant: isPlatformTenant(user?.tenantId),
         },
       },
       message: "Profile fetched",

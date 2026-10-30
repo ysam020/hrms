@@ -10,12 +10,24 @@ import {
   apiResponse,
   RESPONSE_STATUS,
   partitionPermissions,
+  isPlatformOnlyPermission,
   tenantFrom,
   tenantReplyTo,
   renderEmailHtml,
 } from "@hrms/common";
 import { notify } from "@hrms/notifications";
 import { handleError } from "../utils/handleError";
+import { isPlatformTenant } from "../config/platform";
+
+/**
+ * Platform-only permissions (e.g. PraestoSupport:*) as seen from this
+ * request's tenant: anywhere but Praesto's own organisation they don't
+ * exist, so they're reported exactly like an unknown permission.
+ */
+function platformOnlyRejected(req: Request, permissions: string[]): string[] {
+  if (isPlatformTenant((req as AuthRequest).user?.tenantId)) return [];
+  return permissions.filter(isPlatformOnlyPermission);
+}
 
 export async function getRoles(_req: Request, res: Response) {
   try {
@@ -103,9 +115,10 @@ export async function updateRolePermissions(req: Request, res: Response) {
       });
 
     const { valid, invalid } = partitionPermissions(permissions ?? []);
-    if (invalid.length > 0)
+    const rejected = [...invalid, ...platformOnlyRejected(req, valid)];
+    if (rejected.length > 0)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: `Unknown permission(s): ${invalid.join(", ")}`,
+        message: `Unknown permission(s): ${rejected.join(", ")}`,
       });
 
     await prisma.role.update({
@@ -172,9 +185,13 @@ export async function saveUserPermissions(req: Request, res: Response) {
 
     const { valid: validPermissions, invalid: invalidPermissions } =
       partitionPermissions(permissions ?? []);
-    if (invalidPermissions.length > 0)
+    const rejected = [
+      ...invalidPermissions,
+      ...platformOnlyRejected(req, validPermissions),
+    ];
+    if (rejected.length > 0)
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: `Unknown permission(s): ${invalidPermissions.join(", ")}`,
+        message: `Unknown permission(s): ${rejected.join(", ")}`,
       });
 
     const newRoleName: string | null = selectedRole
