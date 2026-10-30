@@ -272,7 +272,7 @@
 }
 @media (min-width: 900px) {
   .apply {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 560px);
   }
   .formCol {
     position: sticky;
@@ -492,4 +492,9 @@
 .privacy {
   display: grid;
   gap: 10px;
+}
+.mobile {
+  display: grid;
+  grid-template-columns: minmax(84px, auto) minmax(0, 1fr);
+  gap: 6px;
 }

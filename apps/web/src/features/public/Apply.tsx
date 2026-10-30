@@ -35,10 +35,13 @@ import {
   type ScreeningQuestion,
 } from "@next/features/recruitment/jobConfig";
 import {
+  DIAL_CODES,
   buildSteps,
   clearLocal,
   emptyAnswers,
+  joinMobile,
   readLocal,
+  splitMobile,
   reconcile,
   stepOfField,
   validateAll,
@@ -695,18 +698,13 @@ export function JobApplicationPage() {
                             onChange={setTop("email")}
                           />
                         </Field>
-                        <Field
-                          label="Mobile"
-                          hint="Include the country code if outside India"
-                          error={errors.mobile}
-                        >
-                          <TextInput
+                        <Field label="Mobile" error={errors.mobile}>
+                          <MobileInput
                             id="apply-mobile"
-                            type="tel"
-                            autoComplete="tel"
-                            maxLength={20}
                             value={answers.mobile}
-                            onChange={setTop("mobile")}
+                            onChange={(mobile) =>
+                              update((a) => ({ ...a, mobile }), ["mobile"])
+                            }
                           />
                         </Field>
                       </>
@@ -825,6 +823,46 @@ export function JobApplicationPage() {
 }
 
 // ── Pieces ──────────────────────────────────────────────────────────────────
+
+/** Country code (India by default) and number, stored as "+91 98765 43210".
+ * Field gives this its id/aria props, which belong on the number input. */
+function MobileInput({
+  value,
+  onChange,
+  ...aria
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  id?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+}) {
+  const { code, number } = splitMobile(value);
+  return (
+    <div className={s.mobile}>
+      <Select
+        aria-label="Country code"
+        value={code}
+        onChange={(e) => onChange(joinMobile(e.target.value, number))}
+      >
+        {DIAL_CODES.map(([c, country]) => (
+          <option key={c} value={c}>
+            {c} {country}
+          </option>
+        ))}
+      </Select>
+      <TextInput
+        {...aria}
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel-national"
+        maxLength={16}
+        value={number}
+        onChange={(e) => onChange(joinMobile(code, e.target.value))}
+      />
+    </div>
+  );
+}
 
 function JobSummary({ job }: { job: any }) {
   return (

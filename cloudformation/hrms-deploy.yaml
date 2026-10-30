@@ -118,7 +118,7 @@ Resources:
   PraestoBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: praesto-423437244709
+      BucketName: !Sub "praesto-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

@@ -3,7 +3,9 @@ import {
   buildSteps,
   clearLocal,
   emptyAnswers,
+  joinMobile,
   readLocal,
+  splitMobile,
   reconcile,
   stepOfField,
   validateAll,
@@ -175,6 +177,40 @@ describe("validateStep", () => {
     expect(stepOfField(steps, "noticePeriod")).toBe(2);
     expect(stepOfField(steps, "q:q1")).toBe(3);
     expect(stepOfField(steps, "consent")).toBe(4);
+  });
+});
+
+describe("mobile numbers", () => {
+  it("defaults to India and keeps the chosen country code", () => {
+    expect(splitMobile("")).toEqual({ code: "+91", number: "" });
+    expect(splitMobile("9876543210")).toEqual({
+      code: "+91",
+      number: "9876543210",
+    });
+    expect(splitMobile("+918377971782")).toEqual({
+      code: "+91",
+      number: "8377971782",
+    });
+    expect(splitMobile("+44 7700 900123")).toEqual({
+      code: "+44",
+      number: "7700 900123",
+    });
+    expect(splitMobile("+971 50 123 4567").code).toBe("+971");
+    expect(joinMobile("+91", " 98765 43210 ")).toBe("+91 98765 43210");
+    expect(joinMobile("+91", "")).toBe("");
+    expect(splitMobile(joinMobile("+44", "")).code).toBe("+44");
+  });
+
+  it("needs ten digits for India", () => {
+    const form = jobConfig(job()).form;
+    const step = buildSteps(job())[0];
+    expect(
+      validateStep(step, { ...filled(), mobile: "+91 98765" }, form).mobile,
+    ).toBe("Enter a 10-digit mobile number.");
+    expect(
+      validateStep(step, { ...filled(), mobile: "+91 98765 43210" }, form)
+        .mobile,
+    ).toBeUndefined();
   });
 });
 
