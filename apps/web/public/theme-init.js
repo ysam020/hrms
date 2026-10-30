@@ -26,3 +26,14 @@
     }
   } catch (e) {}
 })();
+
+// A prerendered page (scripts/prerender.mjs) served for another route (SPA
+// fallback, service worker shell): mark it so its CSS hides the static page
+// and shows the loader until the app mounts.
+(function () {
+  var meta = document.querySelector('meta[name="prerender-path"]');
+  if (!meta) return;
+  var path = location.pathname.replace(/\/+$/, "") || "/";
+  if (path !== meta.getAttribute("content"))
+    document.documentElement.setAttribute("data-spa", "");
+})();

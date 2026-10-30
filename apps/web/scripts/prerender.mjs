@@ -107,8 +107,9 @@ function head(pagePath, meta) {
     `<meta name="twitter:image" content="${OG_IMAGE}" />`,
     // Another route served this file (SPA fallback, service worker shell):
     // hide the prerendered page and show the loader until the app mounts.
+    // public/theme-init.js sets data-spa: the CSP allows no inline scripts.
     `<style>[data-prerender]{display:contents}html:not([data-spa]) #initial-loader{display:none}html[data-spa] [data-prerender]{display:none}</style>`,
-    `<script>if((location.pathname.replace(/\\/+$/,"")||"/")!==${JSON.stringify(pagePath)})document.documentElement.setAttribute("data-spa","")</script>`,
+    `<meta name="prerender-path" content="${esc(pagePath)}" />`,
     ...jsonLd,
   ].join("\n    ");
 }
