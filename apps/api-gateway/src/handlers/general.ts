@@ -147,50 +147,55 @@ export async function getHolidays(req: Request, res: Response) {
   }
 }
 
+/**
+ * A person's own calendar events, oldest first (cached per user), or null
+ * if the user doesn't exist. Shared with the MCP calendar tool.
+ */
+export async function listCalendarEvents(
+  userId: string,
+): Promise<any[] | null> {
+  const tenantId = getTenantId() ?? "global";
+  const cacheKey = `t:${tenantId}:calendar:events:${userId}`;
+
+  const cached = await cacheManager.get<any[]>(cacheKey);
+  if (cached) return cached;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { events: true },
+  });
+  if (!dbUser) return null;
+
+  const rawEvents = Array.isArray(dbUser.events)
+    ? (dbUser.events as any[])
+    : [];
+  const data = rawEvents
+    .map((e: any) => ({
+      _id: typeof e._id === "string" ? e._id : e._id?.$oid || e.id || "",
+      title: e.title,
+      date: e.date,
+      startTime: e.startTime,
+      endTime: e.endTime,
+      description: e.description,
+    }))
+    .sort(
+      (a: any, b: any) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf(),
+    );
+
+  await cacheManager.set(cacheKey, data, "user");
+  return data;
+}
+
 export async function getCalendarEvents(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const userId = user!.userId;
-    const tenantId = getTenantId() ?? "global";
-    const cacheKey = `t:${tenantId}:calendar:events:${userId}`;
-
-    const cached = await cacheManager.get<any[]>(cacheKey);
-    if (cached) {
-      return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-        message: "Calendar events retrieved successfully",
-        data: cached,
-      });
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { events: true },
-    });
-
-    if (!dbUser) {
+    const data = await listCalendarEvents(user!.userId);
+    if (!data) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "User not found",
         data: [],
       });
     }
-
-    const rawEvents = Array.isArray(dbUser.events)
-      ? (dbUser.events as any[])
-      : [];
-    const data = rawEvents
-      .map((e: any) => ({
-        _id: typeof e._id === "string" ? e._id : e._id?.$oid || e.id || "",
-        title: e.title,
-        date: e.date,
-        startTime: e.startTime,
-        endTime: e.endTime,
-        description: e.description,
-      }))
-      .sort(
-        (a: any, b: any) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf(),
-      );
-
-    await cacheManager.set(cacheKey, data, "user");
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Calendar events retrieved successfully",
       data,

@@ -45,23 +45,42 @@ export function consentPageUrl(requestId: string): string {
 
 // Each scope is what a person can tick on the consent screen. They only
 // narrow what the assistant may ask for — a scope never grants access the
-// person doesn't already have in Praesto, because every tool still reads
-// only that person's own records (or their organisation's shared ones).
+// person doesn't already have in Praesto: every tool reads the person's own
+// records, their organisation's shared ones, or (approvals, recruitment,
+// helpdesk, reports) exactly what the matching web screen's server-side
+// check lets this person see.
 export const MCP_SCOPES = {
   "profile:read":
     "Your profile: name, contact details, department and designation",
   "leave:read": "Your leave balance and leave applications",
-  "attendance:read": "Your attendance records",
+  "attendance:read": "Your attendance and work-from-home requests",
   "payroll:read": "Your salary structure and deductions",
   "org:read": "Your organisation’s HR policies, announcements and holidays",
+  "calendar:read": "Your calendar events",
+  "approvals:read": "Requests waiting for your approval",
+  "helpdesk:read":
+    "Your helpdesk tickets (every ticket, if you manage the helpdesk)",
+  "messages:read": "Your unread chat messages, including who sent them",
+  "recruitment:read":
+    "Recruitment pipelines, if you have access to recruitment",
+  "reports:read": "Saved reports, if you have access to reports",
 } as const;
 
 export type McpScope = keyof typeof MCP_SCOPES;
 
 export const ALL_SCOPES = Object.keys(MCP_SCOPES) as McpScope[];
 
-/** Off by default on the consent screen: salary is the most sensitive. */
-export const SCOPES_OFF_BY_DEFAULT: readonly McpScope[] = ["payroll:read"];
+/**
+ * Off by default on the consent screen. Salary is the most sensitive of a
+ * person's own data; the others pass on other people's data (coworkers'
+ * messages, candidates, organisation-wide reports) to the assistant.
+ */
+export const SCOPES_OFF_BY_DEFAULT: readonly McpScope[] = [
+  "payroll:read",
+  "messages:read",
+  "recruitment:read",
+  "reports:read",
+];
 
 export const isMcpScope = (s: string): s is McpScope =>
   Object.prototype.hasOwnProperty.call(MCP_SCOPES, s);

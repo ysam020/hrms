@@ -98,7 +98,8 @@ export default function ConnectAuthorize() {
                 {details.clientName} will be able to read the following for{" "}
                 <strong>{name}</strong>
                 {details.organisation && <> at {details.organisation}</>}. It
-                can’t change anything, and can’t see anyone else’s records.
+                can’t change anything, and only sees what you can see in
+                Praesto.
               </p>
             </div>
 

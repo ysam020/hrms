@@ -167,6 +167,10 @@
   font: var(--px-type-callout);
   color: var(--px-text-2);
 }
+.cardNote {
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
 
 /* ── Promises ─────────────────────────────────────────────────────── */
 .promises {

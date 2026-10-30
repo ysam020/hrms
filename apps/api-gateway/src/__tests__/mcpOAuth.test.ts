@@ -55,6 +55,7 @@ import {
   token,
 } from "../mcp/oauth";
 import { McpAuthError, verifyMcpAccessToken } from "../mcp/principal";
+import { ALL_SCOPES } from "../mcp/config";
 import { recordMcpAudit } from "../mcp/audit";
 
 const REDIRECT = "https://claude.ai/api/mcp/auth_callback";
@@ -236,13 +237,7 @@ describe("GET /oauth/authorize", () => {
   it("drops unknown scopes and defaults to all known ones", async () => {
     await authz({ ...valid(), scope: "openid offline_access" });
     const [pending] = [...mockRedisData.values()].map((v) => JSON.parse(v));
-    expect(pending.scopes).toEqual([
-      "profile:read",
-      "leave:read",
-      "attendance:read",
-      "payroll:read",
-      "org:read",
-    ]);
+    expect(pending.scopes).toEqual(ALL_SCOPES);
   });
 });
 

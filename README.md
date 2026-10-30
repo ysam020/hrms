@@ -236,8 +236,8 @@ Each org configures its own operational rules via `TenantSettings`. Settings are
 Praesto doesn't host a chatbot. People connect the AI assistant they already use to Praesto's **MCP server** at `https://api.praesto.in/mcp`. The assistant runs the model; Praesto only answers tool calls, so no Ollama server, GPU or LLM API key is involved.
 
 - The assistant signs in through Praesto's normal Google / passkey sign-in, then the person approves what it may read (OAuth 2.1 + PKCE, consent screen in the web app).
-- Eleven read-only tools: the person's own profile, leave, attendance and salary; the organisation's policies, announcements and holidays; and public careers-page openings (also at `/mcp/public`, no sign-in).
-- No tool can address another user or organisation; every call re-checks the grant, membership and subscription inside the same tenant context as the web API.
+- 21 read-only tools: the person's own profile, leave, attendance, WFH, salary, calendar, helpdesk tickets and unread messages; the organisation's policies, announcements and holidays; approvals, recruitment pipelines and saved reports where the person's role allows them; and public careers-page openings (also at `/mcp/public`, no sign-in).
+- No tool can address another user or organisation; role-gated tools reuse their web screen's server-side check, and every call re-checks the grant, membership and subscription inside the same tenant context as the web API.
 
 See [docs/mcp.md](docs/mcp.md) for the flow, tools, security model and setup.
 

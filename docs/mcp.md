@@ -128,7 +128,9 @@ separate connection.
 
 All tools are **read-only**, and none takes a user, employee or organisation
 argument. Input schemas are strict: an unexpected argument such as `userId` or
-`tenantId` is rejected, not ignored.
+`tenantId` is rejected, not ignored. Tools that read beyond the caller's own
+records apply the same server-side check as their web screen by calling that
+screen's own helper (see the second table).
 
 | Tool                         | Scope (consent item) | Sign-in | Reads                                                                                                                                                        | Implemented by                                                          |
 | ---------------------------- | -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
@@ -143,6 +145,25 @@ argument. Input schemas are strict: an unexpected argument such as `userId` or
 | `list_holidays`              | `org:read`           | Yes     | Organisation's holiday calendar for a year                                                                                                                   | `listHolidays` (same as `GET /get-holidays/:year`)                      |
 | `list_job_openings`          | public               | No      | Open positions on an organisation's public careers page                                                                                                      | recruitment-service `ListJobOpenings` (same as `/public/careers/:slug`) |
 | `get_job_opening`            | public               | No      | One open position on that page                                                                                                                               | recruitment-service `GetJobOpening`                                     |
+
+**Your own records, and work that involves other people:**
+
+| Tool                       | Scope (consent item) | Who can use it                                    | Reads                                                                                                             | Same rule as                                                                                    |
+| -------------------------- | -------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `list_my_wfh_requests`     | `attendance:read`    | Everyone, if the organisation has WFH on          | Own work-from-home requests                                                                                       | `/wfh` routes (`requireWfhEnabled`, own records)                                                |
+| `list_my_calendar`         | `calendar:read`      | Everyone                                          | Own calendar events + organisation holidays in a date range (≤ 1 year)                                            | Calendar page (`listCalendarEvents`, `listHolidays`)                                            |
+| `list_my_approvals`        | `approvals:read`     | Whoever the item is waiting on                    | Pending leave, WFH, overtime, resignation, KYC and join requests (summaries, ≤ 50)                                | Approvals inbox (`getPendingApprovalItems`, `getPendingKycItems`, `getPendingJoinRequestItems`) |
+| `list_unread_messages`     | `messages:read`      | Everyone                                          | Unread messages sent to the caller (sender, conversation, text; files listed, not linked). Doesn't mark them read | `GET /chat/unread-counts` (participant, not sender, not read)                                   |
+| `list_helpdesk_tickets`    | `helpdesk:read`      | Own tickets; all tickets for helpdesk managers    | Tickets with status, priority, SLA                                                                                | `listTickets` (`assertHrRole` in helpdesk.ts). SLA breach computed, not written                 |
+| `get_helpdesk_ticket`      | `helpdesk:read`      | Own tickets; any for helpdesk managers            | One ticket and its comments; internal notes only for managers                                                     | `getTicket`                                                                                     |
+| `get_recruitment_pipeline` | `recruitment:read`   | HR or above, or any `JobOpenings:*` permission    | Openings with candidate counts per status (no candidate names)                                                    | Web Job Openings gate (`canAccessJobOpenings`)                                                  |
+| `list_job_candidates`      | `recruitment:read`   | Owners, admins, superusers                        | One opening's candidates: name, status, stage, resume score. No contact, Aadhaar or resume                        | `requirePrivileged` on `/view-applications`                                                     |
+| `list_saved_reports`       | `reports:read`       | Whoever the reports API admits (see Known issues) | Saved reports' names and what they cover                                                                          | `assertHrRole` in reports.ts                                                                    |
+| `run_saved_report`         | `reports:read`       | Same                                              | One saved report's rows, capped at 200. Doesn't stamp "last run"                                                  | `executeReport` in reports.ts                                                                   |
+
+Messages, recruitment and reports are **off by default** on the consent
+screen, like salary: they pass other people's data (coworkers' words,
+candidates, organisation-wide figures) to the assistant.
 
 **Endpoints:**
 
@@ -186,6 +207,12 @@ person who connected it can, and in practice reads less**:
   from the verified access token, and organisation data comes from that
   token's organisation database. There is no argument to point a tool at
   someone else, and strict schemas reject attempts to add one.
+- **Role-gated tools reuse the web check, not a copy of it.** Approvals,
+  helpdesk, recruitment and reports call the same helper their web screen
+  calls, passing the token's user and the membership's _current_ role. Where
+  a tool returns less than the screen (no candidate contact details, no
+  report beyond 200 rows), it's narrower, never wider. A refusal reads as
+  "not available", so an assistant can't probe for what exists.
 - **Same isolation as the web app.** Each call runs inside the same tenant
   context `authenticate` establishes for web requests (`runWithTenant` and
   the gateway tenant storage). `prismaWithTenant` therefore reads that
@@ -226,7 +253,8 @@ Whatever a tool returns is sent to the company that runs the assistant and
 handled under that company's terms, which may include retention or model
 training depending on the person's plan and settings. This is why:
 
-- consent is per item, and salary is off by default;
+- consent is per item, and salary, messages, recruitment and reports are off
+  by default;
 - the profile tool never returns identity documents, bank details or
   addresses;
 - results are bounded (e.g. ≤ 20 rows, truncated long text).
@@ -237,11 +265,25 @@ disable MCP entirely is not built yet (see below).
 
 ## Limitations
 
-- **Read-only.** Applying for leave, approvals and every other write action
-  are not available through MCP yet.
-- **Self-service only.** Managers and HR see only their _own_ records through
-  MCP, not their team's, even where the web app would show more. Team and
-  organisation-wide tools need a scoped design of their own.
+- **Read-only.** Applying for leave, approving requests and every other write
+  action are not available through MCP yet.
+- **No team views of attendance or leave.** A manager can see what's waiting
+  for their approval, but not their team's attendance or leave history.
+- **Existing connections don't get new tools automatically.** Scopes are fixed
+  when someone allows a connection; to use tools added later (calendar,
+  approvals, helpdesk, messages, recruitment, reports), disconnect and
+  connect again.
+
+### Known issues in the existing app (not changed here)
+
+- **Reports are effectively superuser-only.** `/reports` checks the legacy
+  `User.role` field, which is never populated, while the web app shows Reports
+  to owners, admins and HR. The MCP report tools apply the server's rule, so
+  owners, admins and HR who aren't superusers get "not available" — the same
+  403 the web API gives them.
+- **Any member can read any application's interview-stage history**
+  (`GET /applications/:id/stage-events` checks only the organisation). MCP
+  doesn't expose stage history.
 - **No admin controls yet.** There is no per-organisation switch to disable
   MCP, and admins can't list or revoke other people's connections; they see
   them only in Audit Logs.

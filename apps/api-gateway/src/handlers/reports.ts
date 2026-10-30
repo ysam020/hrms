@@ -257,7 +257,8 @@ function toCSV(rows: Record<string, any>[]): string {
 // Role guard
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function assertHrRole(userId: string): Promise<boolean> {
+// Exported (with executeReport below) for the MCP report tools.
+export async function assertHrRole(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { role: true, isSuperUser: true },
@@ -271,7 +272,7 @@ async function assertHrRole(userId: string): Promise<boolean> {
 // Core query executor
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function executeReport(config: {
+export async function executeReport(config: {
   entity: string;
   filters?: ReportFilter[];
   columns: string[];
