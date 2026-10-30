@@ -33,6 +33,20 @@ export async function ensureMasterIndexes(): Promise<void> {
     });
   }
 
+  // TrialClaim.key's unique index is what makes trial eligibility race-safe
+  // (services/trial.ts in the gateway), so it can't depend on someone having
+  // run `prisma db push` against the master DB.
+  try {
+    await prisma.$runCommandRaw({
+      createIndexes: "trial_claims",
+      indexes: [{ key: { key: 1 }, name: "TrialClaim_key_key", unique: true }],
+    });
+  } catch (error: unknown) {
+    logger.error("ensureMasterIndexes: failed to create trial-claim index", {
+      error,
+    });
+  }
+
   // The MCP collections' schema indexes, for deployments that never run
   // `prisma db push` against the master DB. Bearer-token and refresh-token
   // lookups hit these on every MCP call.

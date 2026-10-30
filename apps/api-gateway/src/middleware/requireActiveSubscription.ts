@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { prisma } from "@hrms/db";
 import { AuthRequest } from "./authenticate";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { TRIAL_GRACE_MS } from "../config/trial";
 
 export type SubscriptionAccess =
   | {
@@ -19,17 +20,40 @@ export async function getSubscriptionAccess(
 ): Promise<SubscriptionAccess> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { subscriptionStatus: true, planExpiresAt: true },
+    select: {
+      subscriptionStatus: true,
+      planExpiresAt: true,
+      planActivatedAt: true,
+      trialEndsAt: true,
+    },
   });
 
   if (!tenant)
     return { allowed: true, subscriptionStatus: null, planExpiresAt: null };
 
+  // Never paid: the trial ended and its first charge didn't go through.
+  const trialOnly = Boolean(tenant.trialEndsAt && !tenant.planActivatedAt);
+
   if (tenant.subscriptionStatus === "expired") {
     return {
       allowed: false,
-      message: "Your subscription has expired. Please renew to continue.",
+      message: trialOnly
+        ? "Your free trial has ended. Subscribe to continue."
+        : "Your subscription has expired. Please renew to continue.",
     };
+  }
+
+  if (tenant.subscriptionStatus === "trialing") {
+    // The scheduler moves an unpaid trial to grace_period and then expired
+    // (checkSubscriptionExpiry); this live check ends access on time even
+    // if those runs are late or missed.
+    const end = tenant.trialEndsAt ?? tenant.planExpiresAt;
+    if (end && end.getTime() + TRIAL_GRACE_MS <= Date.now()) {
+      return {
+        allowed: false,
+        message: "Your free trial has ended. Subscribe to continue.",
+      };
+    }
   }
 
   if (tenant.subscriptionStatus === "cancelled") {
@@ -42,8 +66,9 @@ export async function getSubscriptionAccess(
     if (!stillWithinPaidPeriod) {
       return {
         allowed: false,
-        message:
-          "Your subscription was cancelled and your access has ended. Please resubscribe to continue.",
+        message: trialOnly
+          ? "Your free trial was cancelled and has ended. Subscribe to continue."
+          : "Your subscription was cancelled and your access has ended. Please resubscribe to continue.",
       };
     }
   }
@@ -56,7 +81,8 @@ export async function getSubscriptionAccess(
 }
 
 // Applied after requireTenant — blocks expired orgs (and cancelled orgs past
-// their paid period), passes grace-period, cancelling (legacy), and
+// their paid period, and trials past their grace), passes trialing,
+// grace-period, cancelling (legacy), and
 // still-within-period cancelled orgs through with warning headers so the UI
 // can show banners.
 export async function requireActiveSubscription(
@@ -81,6 +107,13 @@ export async function requireActiveSubscription(
     if (subscriptionStatus === "grace_period") {
       // Allow access but signal the UI to show a renewal banner.
       res.setHeader("X-Subscription-Grace-Period", "true");
+      if (planExpiresAt) {
+        res.setHeader("X-Plan-Expires-At", planExpiresAt.toISOString());
+      }
+    }
+
+    if (subscriptionStatus === "trialing") {
+      res.setHeader("X-Subscription-Trial", "true");
       if (planExpiresAt) {
         res.setHeader("X-Plan-Expires-At", planExpiresAt.toISOString());
       }

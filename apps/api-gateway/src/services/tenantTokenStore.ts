@@ -55,20 +55,26 @@ export async function clearPendingSubscription(userId: string): Promise<void> {
 // is enough.
 const PENDING_PM_CHANGE_TTL = 60 * 60; // 1h
 
+// `plan` is set only by a trial's plan change (changePlan in payment.ts): the
+// replacement subscription carries a different tier/billing, applied on
+// confirm. A plain payment-method swap keeps the tenant's plan.
 export async function storePendingPaymentMethodChange(
   tenantId: string,
   subscriptionId: string,
+  plan?: { planTier: string; billing: string },
 ): Promise<void> {
   await getClient().setex(
     `pending_pm_change:${tenantId}`,
     PENDING_PM_CHANGE_TTL,
-    JSON.stringify({ subscriptionId }),
+    JSON.stringify({ subscriptionId, ...plan }),
   );
 }
 
-export async function getPendingPaymentMethodChange(
-  tenantId: string,
-): Promise<{ subscriptionId: string } | null> {
+export async function getPendingPaymentMethodChange(tenantId: string): Promise<{
+  subscriptionId: string;
+  planTier?: string;
+  billing?: string;
+} | null> {
   const raw = await getClient().get(`pending_pm_change:${tenantId}`);
   if (!raw) return null;
   try {

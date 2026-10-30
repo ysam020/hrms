@@ -18,6 +18,7 @@ import { updateLeaveBalance } from "./jobs/updateLeaveBalance";
 import { sendKycReminders } from "./jobs/sendKycReminders";
 import { cleanupFcmTokens } from "./jobs/cleanupFcmTokens";
 import { checkSubscriptionExpiry } from "./jobs/checkSubscriptionExpiry";
+import { sendTrialReminders } from "./jobs/sendTrialReminders";
 import { checkTicketSla } from "./jobs/checkTicketSla";
 import { retryFailedWebhooks } from "./jobs/retryFailedWebhooks";
 import { deliverWebhook } from "./jobs/deliverWebhook";
@@ -32,6 +33,7 @@ const jobHandlers: Record<SchedulerJobName, (data?: any) => Promise<void>> = {
   sendKycReminders,
   cleanupFcmTokens,
   checkSubscriptionExpiry,
+  sendTrialReminders,
   checkTicketSla,
   retryFailedWebhooks,
 };

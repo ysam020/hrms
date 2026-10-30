@@ -158,6 +158,13 @@ export default function OrgSetup() {
     tenantName: string;
   } | null>(null);
   const [requesting, setRequesting] = useState(false);
+  // The server decides trial eligibility (one per organisation) and length;
+  // null until asked, or if the check fails — then only "pay now" is offered.
+  const [trialOffer, setTrialOffer] = useState<{
+    eligible: boolean;
+    trialDays: number;
+    message?: string;
+  } | null>(null);
   const planTier = planTierForCompanySize(companySize);
 
   // Razorpay's handler fires long after render; read the live form from a ref.
@@ -286,7 +293,28 @@ export default function OrgSetup() {
     }
   }, []);
 
-  const payAndCreate = async () => {
+  const fetchTrialOffer = useCallback(() => {
+    apiClient
+      .get(API_ENDPOINTS.TRIAL_ELIGIBILITY)
+      .then((res) => {
+        if (res.data?.success && alive.current) setTrialOffer(res.data.data);
+      })
+      .catch(() => {
+        // non-fatal: the plan step falls back to paying now
+      });
+  }, []);
+
+  // Refused by the server after all (the check is advisory until the
+  // organisation is created): show why, and drop the trial offer.
+  const trialRefused = (err: unknown) => {
+    const data = (err as any)?.response?.data;
+    if (data?.code !== "TRIAL_NOT_ELIGIBLE") return false;
+    setTrialOffer((o) => o && { ...o, eligible: false, message: data.message });
+    setAlert({ open: true, message: data.message, severity: "warning" });
+    return true;
+  };
+
+  const payAndCreate = async (trial: boolean) => {
     setLoading(true);
     try {
       if (!(await loadRazorpayScript())) {
@@ -301,6 +329,7 @@ export default function OrgSetup() {
       const sub = await apiClient.post(API_ENDPOINTS.CREATE_SUBSCRIPTION, {
         billing,
         planTier,
+        ...(trial && { trial: true }),
       });
       if (!sub.data?.success) {
         setAlert({
@@ -316,7 +345,9 @@ export default function OrgSetup() {
         subscription_id: subscriptionId,
         name: "Praesto",
         image: `${window.location.origin}/favicon.ico`,
-        description: `HRMS Pro – ${billing === "annual" ? "Annual" : "Monthly"} subscription`,
+        description: trial
+          ? `HRMS ${PLAN_TIER_LABELS[planTier]} – free trial, then ${billing === "annual" ? "annual" : "monthly"} subscription`
+          : `HRMS Pro – ${billing === "annual" ? "Annual" : "Monthly"} subscription`,
         prefill: {
           name: user
             ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
@@ -368,7 +399,10 @@ export default function OrgSetup() {
                   severity: "error",
                 });
             })
-            .catch((err) => fail(err, "The organisation couldn’t be created."))
+            .catch((err) => {
+              if (trialRefused(err)) localStorage.removeItem(PENDING_FORM_KEY);
+              else fail(err, "The organisation couldn’t be created.");
+            })
             .finally(() => setLoading(false));
         },
         modal: {
@@ -381,10 +415,14 @@ export default function OrgSetup() {
       checkout.current = rzp;
       rzp.open();
     } catch (err) {
-      fail(err, "Something went wrong. Try again.");
+      if (!trialRefused(err)) fail(err, "Something went wrong. Try again.");
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (step === 1 && !trialOffer) fetchTrialOffer();
+  }, [step, trialOffer, fetchTrialOffer]);
 
   const selectTenant = async (tenantId: string) => {
     setLoading(true);
@@ -518,7 +556,12 @@ export default function OrgSetup() {
       "Pick the organisation you want to sign in to.",
     ],
     step0: ["Set Up Your Organisation", "Tell us a little about your company."],
-    step1: ["Choose Billing", "Every feature is included. Cancel any time."],
+    step1: trialOffer?.eligible
+      ? [
+          "Start Your Free Trial",
+          `Every feature, free for ${trialOffer.trialDays} days. Cancel any time before it ends.`,
+        ]
+      : ["Choose Billing", "Every feature is included. Cancel any time."],
     step2: [
       "Organisation Profile",
       "Help your team find the right contacts. You can change these later.",
@@ -526,6 +569,19 @@ export default function OrgSetup() {
   };
   const [title, subtitle] = heading[view];
   const limit = TIER_EMPLOYEE_LIMITS[planTier];
+  const price = formatINR(PLAN_PRICING[planTier][billing]);
+  // Display only — the server sets the real trial end when it creates the
+  // subscription, from the same trialDays.
+  const trialEndDate = trialOffer?.eligible
+    ? new Date(Date.now() + trialOffer.trialDays * 864e5).toLocaleDateString(
+        "en-IN",
+        {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        },
+      )
+    : null;
 
   return (
     <div className={s.setup}>
@@ -726,14 +782,52 @@ export default function OrgSetup() {
                   ))}
                 </ul>
               </div>
+              {trialOffer?.eligible ? (
+                <p className="px-callout">
+                  Nothing is charged today. You’ll authorise UPI Autopay or an
+                  e-Mandate now (your bank may run a small verification that’s
+                  refunded); <span className="px-num">{price}</span> is
+                  collected on <strong>{trialEndDate}</strong> and{" "}
+                  {billing === "annual" ? "every year" : "every month"} after,
+                  unless you cancel from the Subscription page before then.
+                </p>
+              ) : (
+                trialOffer?.message && <Banner>{trialOffer.message}</Banner>
+              )}
               <div className={s.actions}>
                 <Button onClick={() => setStep(0)} disabled={loading}>
                   Back
                 </Button>
-                <Button variant="primary" busy={loading} onClick={payAndCreate}>
-                  Pay {formatINR(PLAN_PRICING[planTier][billing])} and Create
-                </Button>
+                {trialOffer?.eligible ? (
+                  <Button
+                    variant="primary"
+                    busy={loading}
+                    onClick={() => payAndCreate(true)}
+                  >
+                    Start {trialOffer.trialDays}-Day Free Trial
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    busy={loading}
+                    onClick={() => payAndCreate(false)}
+                  >
+                    Pay {price} and Create
+                  </Button>
+                )}
               </div>
+              {trialOffer?.eligible && (
+                <div style={{ textAlign: "center" }}>
+                  <Button
+                    variant="plain"
+                    size="small"
+                    disabled={loading}
+                    onClick={() => payAndCreate(false)}
+                  >
+                    Skip the Trial and Pay {price} Now
+                  </Button>
+                </div>
+              )}
               <p className="px-meta" style={{ textAlign: "center" }}>
                 By continuing you agree to the{" "}
                 <a href="/terms-of-use">Terms of Use</a> and{" "}

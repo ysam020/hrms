@@ -31,6 +31,18 @@ import { fetchPaymentMethod, getRazorpay } from "./payment";
 import { notify } from "@hrms/notifications";
 import { seedSalaryFromHire } from "./salary";
 import { getSeatStatus, getActiveEmployeeCount } from "../utils/planLimits";
+import {
+  MAX_TRIAL_START_DRIFT_MS,
+  TRIAL_DAYS,
+  TRIAL_SIGNUP_PURPOSE,
+} from "../config/trial";
+import {
+  checkTrialEligibility,
+  claimTrial,
+  instrumentKey,
+  trialKeysFor,
+  TRIAL_INELIGIBLE_MESSAGE,
+} from "../services/trial";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -142,6 +154,53 @@ async function tryReissueTokensForSubscription(
   return true;
 }
 
+type SignupTerms =
+  | { trial: false }
+  | {
+      trial: true;
+      trialEndsAt: Date;
+      planTier: string;
+      billing: string;
+    }
+  | { invalid: true };
+
+// What a signup subscription entitles the tenant to, read from Razorpay's own
+// record of it — never from the request. A future start_at is a trial only
+// when createSubscription wrote this user's trial notes and the trial length
+// it set; any other deferred subscription (a payment-method swap's, say) was
+// never paid for and can't create a tenant at all.
+function signupTermsOf(subscription: any, userId: string): SignupTerms {
+  const startAt =
+    typeof subscription?.start_at === "number"
+      ? new Date(subscription.start_at * 1000)
+      : null;
+  const notes = subscription?.notes ?? {};
+  const isTrialSignup = notes.purpose === TRIAL_SIGNUP_PURPOSE;
+  const now = Date.now();
+
+  if (!isTrialSignup) {
+    // An immediate subscription may carry its own start time once
+    // authenticated; the hour of slack keeps clock skew from refusing it.
+    return startAt && startAt.getTime() > now + 60 * 60 * 1000
+      ? { invalid: true }
+      : { trial: false };
+  }
+  if (
+    notes.userId !== userId ||
+    !startAt ||
+    startAt.getTime() >
+      now + TRIAL_DAYS * 24 * 60 * 60 * 1000 + MAX_TRIAL_START_DRIFT_MS
+  ) {
+    return { invalid: true };
+  }
+  return {
+    trial: true,
+    trialEndsAt: startAt,
+    planTier: String(notes.planTier ?? "starter"),
+    billing: notes.billing === "annual" ? "annual" : "monthly",
+  };
+}
+
 // Shared tenant provisioning — called after payment is verified (either via
 // client-side signature in createTenant or Razorpay API in completePendingSetup).
 async function buildTenant(
@@ -154,6 +213,8 @@ async function buildTenant(
     planTier?: string;
     razorpaySubscriptionId: string;
     razorpayPaymentId?: string;
+    // Already fetched by completePendingSetup; createTenant leaves it to us.
+    subscription?: any;
     workWeekPattern?: {
       type: "mon_fri" | "mon_sat" | "custom";
       workingDays: number[];
@@ -166,8 +227,6 @@ async function buildTenant(
     name,
     industry,
     companySize,
-    billing,
-    planTier,
     razorpaySubscriptionId,
     razorpayPaymentId,
     workWeekPattern,
@@ -180,6 +239,40 @@ async function buildTenant(
   ) {
     return;
   }
+
+  const subscription =
+    params.subscription ??
+    (await (getRazorpay().subscriptions.fetch as any)(razorpaySubscriptionId));
+  const terms = signupTermsOf(subscription, userId);
+  if ("invalid" in terms) {
+    logger.warn("[buildTenant] Rejected a subscription that isn't a signup", {
+      razorpaySubscriptionId,
+    });
+    return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+      message: "Payment verification failed.",
+    });
+  }
+  // A trial's tier and billing are the ones createSubscription priced the
+  // deferred plan at (its notes), not whatever this request says.
+  const planTier = terms.trial ? terms.planTier : params.planTier;
+  const billing = terms.trial ? terms.billing : params.billing;
+
+  // Nothing has been charged on a trial subscription, so refusing one just
+  // means cancelling it before its first charge.
+  const refuseTrial = async (message: string) => {
+    await (getRazorpay().subscriptions.cancel as any)(razorpaySubscriptionId, {
+      cancel_at_cycle_end: 0,
+    }).catch((error: unknown) =>
+      logger.error("[buildTenant] Failed to cancel a refused trial:", {
+        error,
+        razorpaySubscriptionId,
+      }),
+    );
+    return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+      message,
+      code: "TRIAL_NOT_ELIGIBLE",
+    });
+  };
 
   let slug = slugify(name);
   const existing = await prisma.tenant.findUnique({ where: { slug } });
@@ -240,6 +333,31 @@ async function buildTenant(
     ? await fetchPaymentMethod(razorpayPaymentId)
     : null;
 
+  if (terms.trial) {
+    // Re-checked here: the plan step's answer can be stale by the time
+    // Checkout finishes (e.g. this user created another organisation).
+    const eligibility = await checkTrialEligibility(userId, {
+      claims: false,
+      subscriptionId: razorpaySubscriptionId,
+    });
+    if (!eligibility.eligible) {
+      return refuseTrial(TRIAL_INELIGIBLE_MESSAGE[eligibility.reason]);
+    }
+    // The binding check: every signal of this organisation, including the
+    // UPI handle that authorised the mandate, is claimed for this trial —
+    // atomically, so two concurrent signups sharing one can't both win.
+    const instrument = pmInfo
+      ? instrumentKey(pmInfo.method, pmInfo.summary)
+      : null;
+    const keys = [
+      ...(await trialKeysFor(userId)),
+      ...(instrument ? [instrument] : []),
+    ];
+    if (!(await claimTrial(keys, razorpaySubscriptionId, userId))) {
+      return refuseTrial(TRIAL_INELIGIBLE_MESSAGE.trial_used);
+    }
+  }
+
   let tenant;
   try {
     tenant = await prisma.tenant.create({
@@ -256,9 +374,21 @@ async function buildTenant(
         ...(industry && { industry }),
         ...(companySize && { companySize }),
         razorpaySubscriptionId,
-        subscriptionStatus: "active",
-        planActivatedAt: now,
-        planExpiresAt,
+        // A trial runs until Razorpay's first charge (start_at); the
+        // subscription.charged webhook sets planActivatedAt and "active".
+        ...(terms.trial
+          ? {
+              subscriptionStatus: "trialing",
+              planExpiresAt: terms.trialEndsAt,
+              trialStartedAt: now,
+              trialEndsAt: terms.trialEndsAt,
+              trialRemindersSent: [],
+            }
+          : {
+              subscriptionStatus: "active",
+              planActivatedAt: now,
+              planExpiresAt,
+            }),
         ...(domain && { domain }),
         ...(pmInfo && {
           paymentMethod: pmInfo.method,
@@ -285,6 +415,12 @@ async function buildTenant(
       return;
     }
     throw error;
+  }
+
+  if (terms.trial) {
+    logger.info(
+      `[trial] Started for tenant ${tenant.id}; first charge ${terms.trialEndsAt.toISOString()}`,
+    );
   }
 
   // Attribute audit rows written during provisioning (tenantSettings.create,
@@ -422,7 +558,19 @@ async function buildTenant(
           // platform signature even though the tenant name is still shown
           // in the header for context.
           signature: "Praesto Team",
-          bodyHtml: `<h2>Welcome, ${creator.username ?? "there"}!</h2><p>Your organisation <strong>${tenant.name}</strong> is now set up on Praesto. You can log in and start inviting your team.</p>`,
+          bodyHtml: `<h2>Welcome, ${creator.username ?? "there"}!</h2><p>Your organisation <strong>${tenant.name}</strong> is now set up on Praesto. You can log in and start inviting your team.</p>${
+            terms.trial
+              ? `<p>Your free trial runs until <strong>${terms.trialEndsAt.toLocaleDateString(
+                  "en-IN",
+                  {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    timeZone: "Asia/Kolkata",
+                  },
+                )}</strong>. Your first payment is collected then through the mandate you authorised. Cancel from the Subscription page before that date and you won't be charged.</p>`
+              : ""
+          }`,
         }),
         from: PLATFORM_FROM,
       },
@@ -557,8 +705,10 @@ export async function completePendingSetup(req: AuthRequest, res: Response) {
       subscription_id: pending.subscriptionId,
       count: 10,
     });
-    const verifiedPayment = paymentsRes.items?.find(
-      (p: any) => p.status === "captured" || p.status === "authorized",
+    // "refunded" too: a trial's only payment is Razorpay's authentication
+    // transaction, refunded automatically — it still identifies the method.
+    const verifiedPayment = paymentsRes.items?.find((p: any) =>
+      ["captured", "authorized", "refunded"].includes(p.status),
     );
 
     await buildTenant(
@@ -571,6 +721,7 @@ export async function completePendingSetup(req: AuthRequest, res: Response) {
         planTier: pending.planTier,
         razorpaySubscriptionId: pending.subscriptionId,
         razorpayPaymentId: verifiedPayment?.id,
+        subscription,
         workWeekPattern,
       },
       res,

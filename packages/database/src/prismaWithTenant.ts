@@ -64,6 +64,7 @@ const MASTER_MODELS = new Set([
   "payoutTenantIndex",
   "mcpOAuthClient",
   "mcpGrant",
+  "trialClaim",
 ]);
 
 // Federated proxy:

@@ -52,6 +52,7 @@ export type NotificationEventType =
   | "kycMissing"
   | "kycRejected"
   | "kycPending"
+  | "trialEndingReminder"
   // employee-service
   | "employeeWelcome"
   | "kycSubmitted"

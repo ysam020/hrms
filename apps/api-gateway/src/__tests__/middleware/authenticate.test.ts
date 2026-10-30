@@ -7,6 +7,7 @@ import {
   requireSuperUser,
   requirePrivileged,
   requireHrPrivileged,
+  requireSubscriptionManager,
   type AuthRequest,
 } from "../../middleware/authenticate";
 import { gatewayTenantStorage } from "../../middleware/tenantContext";
@@ -336,6 +337,11 @@ describe.each([
   ["requireSuperUser", requireSuperUser, ["owner"]],
   ["requirePrivileged", requirePrivileged, ["owner", "admin"]],
   ["requireHrPrivileged", requireHrPrivileged, ["owner", "admin", "hr"]],
+  [
+    "requireSubscriptionManager",
+    requireSubscriptionManager,
+    ["owner", "admin"],
+  ],
 ] as const)("%s", (_name, middleware, fastPathRoles) => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -427,3 +433,54 @@ describe.each([
 function flushPromises(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
+
+describe("requireSubscriptionManager — beyond owner/admin", () => {
+  const employee = {
+    userId: "u1",
+    tenantId: "t1",
+    tenantRole: "employee",
+    pendingSetup: false,
+    dbName: "db",
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("admits a user with a Subscription:* permission", async () => {
+    mockUserFindUnique.mockResolvedValue({
+      isSuperUser: false,
+      permissions: ["Subscription:manage"],
+    });
+    const res = makeRes();
+    const next = jest.fn();
+    await requireSubscriptionManager(makeReq({ user: employee }), res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("refuses an ordinary employee (e.g. calling cancel-subscription directly)", async () => {
+    mockUserFindUnique.mockResolvedValue({
+      isSuperUser: false,
+      permissions: ["Leave:apply"],
+    });
+    const res = makeRes();
+    const next = jest.fn();
+    await requireSubscriptionManager(makeReq({ user: employee }), res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("passes a signup with no tenant yet (org setup) without a lookup", async () => {
+    const res = makeRes();
+    const next = jest.fn();
+    await requireSubscriptionManager(
+      makeReq({
+        user: { userId: "u1", pendingSetup: true } as any,
+      }),
+      res,
+      next,
+    );
+    expect(next).toHaveBeenCalled();
+    expect(mockUserFindUnique).not.toHaveBeenCalled();
+  });
+});

@@ -30,7 +30,17 @@ paths:
                   type: string
                   enum: [starter, growth, enterprise]
                   description: Defaults to "starter", or the existing tenant's planTier.
+                trial:
+                  type: boolean
+                  description: >
+                    Org setup only (400 with a tenant). Starts a free trial:
+                    the subscription's first charge is deferred to the trial
+                    end (`start_at`, `TRIAL_DAYS` from now), so Checkout only
+                    authorises the mandate. Eligibility (one trial per
+                    organisation) is re-checked server-side.
       responses:
+        "409":
+          description: "`trial: true` but the organisation isn't eligible (code TRIAL_NOT_ELIGIBLE)"
         "200":
           description: Subscription created — client completes payment via Razorpay Checkout
           content:
@@ -51,8 +61,48 @@ paths:
                         }
                       billing: { type: string, example: "monthly" }
                       planTier: { type: string, example: "starter" }
+                      trialEndsAt:
+                        type: string
+                        format: date-time
+                        description: Only for a trial — when the first charge is due.
         "401":
           description: Unauthorized
+
+  /api/v1/payment/trial-eligibility:
+    get:
+      summary: Can the caller's new organisation have a free trial?
+      description: >
+        Authenticated-only (no tenant yet), for the org-setup plan step.
+        Advisory: one trial per organisation, recognised by the creating
+        account, its company email domain and the mandate's UPI handle — the
+        binding, race-safe check runs when the organisation is created. Always
+        `eligible: false` from inside an existing tenant.
+      tags: [Payment]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Eligibility and trial length
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      eligible: { type: boolean }
+                      trialDays: { type: integer, example: 14 }
+                      reason:
+                        type: string
+                        enum:
+                          [
+                            owns_organisation,
+                            domain_has_organisation,
+                            trial_used,
+                          ]
+                      message: { type: string }
 
   /api/v1/payment/pending-setup:
     get:

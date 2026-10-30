@@ -51,6 +51,8 @@ interface Tenant {
   subscriptionStatus: string;
   planActivatedAt: string | null;
   planExpiresAt: string | null;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   razorpaySubscriptionId: string | null;
   paymentMethod: string | null;
   paymentMethodSummary: string | null;
@@ -80,7 +82,10 @@ const safeTier = (t: string): PlanTier =>
   t === "growth" || t === "enterprise" ? t : "starter";
 const billingOf = (t: Tenant): Billing =>
   t.billing === "annual" ? "annual" : "monthly";
+const daysUntil = (iso: string) =>
+  Math.max(Math.ceil((new Date(iso).getTime() - Date.now()) / 864e5), 0);
 const STATUS: Record<string, { label: string; tone: Tone }> = {
+  trialing: { label: "Free Trial", tone: "accent" },
   active: { label: "Active", tone: "success" },
   grace_period: { label: "Grace Period", tone: "warning" },
   cancelling: { label: "Cancelling", tone: "warning" },
@@ -95,6 +100,9 @@ const METHOD: Record<string, string> = {
   nach: "e-Mandate",
   wallet: "Wallet",
 };
+// Mirrors BLOCKED_PLAN_UPDATE_METHODS in the gateway's payment.ts — Razorpay
+// can't update UPI Autopay / e-Mandate subscriptions, so change-plan rejects them.
+const PLAN_CHANGE_BLOCKED_METHODS = ["upi", "emandate", "nach"];
 
 interface RazorpayResponse {
   razorpay_payment_id: string;
@@ -159,8 +167,11 @@ export default function Subscription() {
   const [changeTier, setChangeTier] = useState<PlanTier>("starter");
   const [changeBilling, setChangeBilling] = useState<Billing>("monthly");
   // Razorpay's handler fires long after render; read the live choice from a ref (as Classic does).
+  const [renewTier, setRenewTier] = useState<PlanTier>("starter");
   const renewRef = useRef(renewBilling);
   renewRef.current = renewBilling;
+  const renewTierRef = useRef(renewTier);
+  renewTierRef.current = renewTier;
 
   const fail = (err: unknown, fallback: string) =>
     setAlert({
@@ -178,6 +189,15 @@ export default function Subscription() {
           setTenant(t);
           setChangeTier(safeTier(t.planTier));
           setChangeBilling(billingOf(t));
+          // Renewal defaults to the current tier, or the smallest one that
+          // fits today's headcount if the team has outgrown it.
+          const fits = (x: PlanTier) =>
+            TIER_EMPLOYEE_LIMITS[x] === null ||
+            t.activeEmployeeCount <= TIER_EMPLOYEE_LIMITS[x]!;
+          const current = safeTier(t.planTier);
+          setRenewTier(
+            fits(current) ? current : (TIERS.find(fits) ?? "enterprise"),
+          );
         })
         .catch(() => setTenant((prev) => prev ?? null)),
     [],
@@ -247,6 +267,7 @@ export default function Subscription() {
     try {
       const res = await apiClient.post(API_ENDPOINTS.CREATE_SUBSCRIPTION, {
         billing: renewRef.current,
+        planTier: renewTierRef.current,
       });
       if (!res.data?.success) throw new Error();
       const { subscriptionId, keyId } = res.data.data;
@@ -255,7 +276,7 @@ export default function Subscription() {
         {
           key: keyId,
           subscription_id: subscriptionId,
-          description: `HRMS ${renewRef.current === "annual" ? "Annual" : "Monthly"} subscription`,
+          description: `HRMS ${PLAN_TIER_LABELS[renewTierRef.current]} ${renewRef.current === "annual" ? "Annual" : "Monthly"} subscription`,
           method: { card: false },
         },
         (r) =>
@@ -288,9 +309,34 @@ export default function Subscription() {
           message: res.data?.message || "The plan couldn’t be changed.",
           severity: "error",
         });
+        // The rejection usually means our copy of the subscription is stale
+        // (e.g. the reconciler just synced a Razorpay-side cancel) — refresh
+        // so the page stops offering a change the server won't accept.
+        void fetchTenant();
         return setBusy(null);
       }
       const data = res.data.data;
+      // Trial: the new plan needs its own mandate, starting when the trial
+      // ends — authorised now, charged then (changePlan in the gateway).
+      if (data?.requiresAuthorization) {
+        await checkout(
+          "change",
+          {
+            key: data.keyId,
+            subscription_id: data.subscriptionId,
+            description: `HRMS ${PLAN_TIER_LABELS[tier]} ${billing === "annual" ? "Annual" : "Monthly"} subscription — starts after your trial`,
+            method: { card: false },
+          },
+          (r) =>
+            apiClient.post(API_ENDPOINTS.CONFIRM_PAYMENT_METHOD_CHANGE, {
+              razorpayPaymentId: r.razorpay_payment_id,
+              razorpaySubscriptionId: r.razorpay_subscription_id,
+              razorpaySignature: r.razorpay_signature,
+            }),
+          { ok: "Plan changed.", failed: "The plan couldn’t be changed." },
+        );
+        return;
+      }
       if (!data?.requiresPayment) {
         setAlert({
           open: true,
@@ -321,6 +367,7 @@ export default function Subscription() {
       );
     } catch (err) {
       fail(err, "The plan couldn’t be changed.");
+      void fetchTenant();
       setBusy(null);
     }
   };
@@ -409,10 +456,13 @@ export default function Subscription() {
     try {
       const res = await apiClient.post(API_ENDPOINTS.CANCEL_SUBSCRIPTION);
       if (res.data?.success) {
+        const wasTrial = tenant?.subscriptionStatus === "trialing";
         setTenant((t) => t && { ...t, subscriptionStatus: "cancelled" });
         setAlert({
           open: true,
-          message: "Subscription cancelled.",
+          message: wasTrial
+            ? "Free trial cancelled."
+            : "Subscription cancelled.",
           severity: "success",
         });
         setCancelOpen(false);
@@ -463,7 +513,23 @@ export default function Subscription() {
     status === "cancelled" &&
     (!tenant.planExpiresAt || new Date(tenant.planExpiresAt) <= new Date());
   const isExpired = status === "expired" || accessEnded;
-  const canChangePlan = status === "active" || status === "grace_period";
+  const trialing = status === "trialing";
+  // Never paid: still on (or lapsed from) the free trial, whatever the status.
+  const trialOnly = Boolean(tenant.trialEndsAt && !tenant.planActivatedAt);
+  const trialOver =
+    trialing && !!tenant.trialEndsAt && daysUntil(tenant.trialEndsAt) === 0;
+  const canChangePlan =
+    status === "active" || status === "grace_period" || trialing;
+  // A trial's plan change swaps in a new mandate instead of updating the
+  // current one, so the UPI/e-Mandate restriction doesn't apply to it.
+  const methodBlocksPlanChange =
+    !trialing &&
+    !!tenant.paymentMethod &&
+    PLAN_CHANGE_BLOCKED_METHODS.includes(tenant.paymentMethod);
+  const firstPayment = formatINR(amountPaise(tier, billingOf(tenant)));
+  const renewLimit = TIER_EMPLOYEE_LIMITS[renewTier];
+  const renewBlockedByHeadcount =
+    renewLimit !== null && tenant.activeEmployeeCount > renewLimit;
   const changeLimit = TIER_EMPLOYEE_LIMITS[changeTier];
   const blockedByHeadcount =
     changeLimit !== null && tenant.activeEmployeeCount > changeLimit;
@@ -516,36 +582,84 @@ export default function Subscription() {
             </span>
           </Banner>
         )}
+        {trialing && tenant.trialEndsAt && !trialOver && (
+          <Banner icon="calendar">
+            Free trial ·{" "}
+            <strong>
+              {daysUntil(tenant.trialEndsAt) === 1
+                ? "1 day left"
+                : `${daysUntil(tenant.trialEndsAt)} days left`}
+            </strong>
+            . Your first payment of{" "}
+            <span className="px-num">{firstPayment}</span>
+            {tenant.paymentMethodSummary
+              ? ` from ${tenant.paymentMethodSummary}`
+              : ""}{" "}
+            is on <strong>{longDate(tenant.trialEndsAt)}</strong>. Cancel before
+            then and you won’t be charged.
+          </Banner>
+        )}
+        {trialOver && (
+          <Banner icon="calendar">
+            Your free trial has ended. Your first payment of{" "}
+            <span className="px-num">{firstPayment}</span> is being processed —
+            your team keeps full access meanwhile.
+          </Banner>
+        )}
         {status === "grace_period" && tenant.planExpiresAt && (
           <Banner tone="warning">
-            Your subscription has lapsed. Renew before{" "}
-            <strong>{graceDeadline(tenant.planExpiresAt)}</strong> to keep
-            access.
+            {trialOnly ? (
+              <>
+                Your first payment after the trial didn’t go through. Change
+                your payment method before{" "}
+                <strong>{graceDeadline(tenant.planExpiresAt)}</strong> to keep
+                access.
+              </>
+            ) : (
+              <>
+                Your subscription has lapsed. Renew before{" "}
+                <strong>{graceDeadline(tenant.planExpiresAt)}</strong> to keep
+                access.
+              </>
+            )}
           </Banner>
         )}
         {status === "expired" && (
           <Banner tone="danger">
-            Your subscription has expired. Renew below to restore access.
+            {trialOnly
+              ? "Your free trial has ended. Subscribe below to restore access — your organisation’s data is kept."
+              : "Your subscription has expired. Renew below to restore access."}
           </Banner>
         )}
         {status === "cancelled" && !accessEnded && tenant.planExpiresAt && (
           <Banner tone="warning">
-            Cancelled and won’t renew. Your team keeps access until{" "}
+            {trialOnly
+              ? "Free trial cancelled — you won’t be charged. Your team keeps access until "
+              : "Cancelled and won’t renew. Your team keeps access until "}
             <strong>{longDate(tenant.planExpiresAt)}</strong>.
           </Banner>
         )}
         {accessEnded && (
           <Banner tone="danger">
-            Your subscription was cancelled and access has ended. Resubscribe
-            below to continue.
+            {trialOnly
+              ? "Your free trial was cancelled and has ended. Subscribe below to continue — your organisation’s data is kept."
+              : "Your subscription was cancelled and access has ended. Resubscribe below to continue."}
           </Banner>
         )}
 
         <KeyValues
           items={[
-            ["Activated", longDate(tenant.planActivatedAt)],
+            trialOnly
+              ? ["Trial Started", longDate(tenant.trialStartedAt)]
+              : ["Activated", longDate(tenant.planActivatedAt)],
             [
-              status === "expired" ? "Expired" : "Renews",
+              trialOnly
+                ? status === "trialing" || status === "grace_period"
+                  ? "First Payment"
+                  : "Trial Ended"
+                : status === "expired"
+                  ? "Expired"
+                  : "Renews",
               longDate(tenant.planExpiresAt),
             ],
             ...(tenant.razorpaySubscriptionId
@@ -578,10 +692,9 @@ export default function Subscription() {
               : []),
           ]}
         />
-        {tenant.paymentMethod &&
-          ["upi", "emandate", "nach"].includes(tenant.paymentMethod) && (
-            <p className="px-meta">Switch to a card to make plan changes.</p>
-          )}
+        {methodBlocksPlanChange && (
+          <p className="px-meta">Switch to a card to make plan changes.</p>
+        )}
         <div className="px-row" style={{ justifyContent: "space-between" }}>
           {tenant.paymentMethod && canChangePlan ? (
             <Button
@@ -596,7 +709,7 @@ export default function Subscription() {
           )}
           {!isExpired && status !== "cancelled" && (
             <Button variant="tintedDanger" onClick={() => setCancelOpen(true)}>
-              Cancel Subscription
+              {trialing ? "Cancel Free Trial" : "Cancel Subscription"}
             </Button>
           )}
         </div>
@@ -641,14 +754,19 @@ export default function Subscription() {
               limit={changeLimit}
             />
             <p className="px-meta">
-              Upgrading the tier on the same billing period charges the prorated
-              difference now. Downgrades and billing-period changes take effect
-              at your next renewal, with no charge today.
+              {trialing
+                ? "Nothing is charged today. You’ll authorise the new plan, and it’s what your first payment uses when the trial ends."
+                : "Upgrading the tier on the same billing period charges the prorated difference now. Downgrades and billing-period changes take effect at your next renewal, with no charge today."}
             </p>
             <Button
               variant="primary"
               busy={busy === "change"}
-              disabled={busy !== null || isSameAsCurrent || blockedByHeadcount}
+              disabled={
+                busy !== null ||
+                isSameAsCurrent ||
+                blockedByHeadcount ||
+                methodBlocksPlanChange
+              }
               onClick={changePlan}
             >
               Change Plan
@@ -658,8 +776,21 @@ export default function Subscription() {
       )}
 
       {isExpired && (
-        <Section title="Renew Subscription">
+        <Section title={trialOnly ? "Subscribe" : "Renew Subscription"}>
           <div style={{ display: "grid", gap: 12 }}>
+            <SegmentedControl
+              role="radiogroup"
+              label="Plan"
+              value={renewTier}
+              onChange={setRenewTier}
+              segments={TIERS.map((t) => ({
+                value: t,
+                label:
+                  TIER_EMPLOYEE_LIMITS[t] === null
+                    ? PLAN_TIER_LABELS[t]
+                    : `${PLAN_TIER_LABELS[t]} (≤${TIER_EMPLOYEE_LIMITS[t]})`,
+              }))}
+            />
             <SegmentedControl
               role="radiogroup"
               label="Billing"
@@ -670,18 +801,26 @@ export default function Subscription() {
                 { value: "annual", label: "Annual · Save 10%" },
               ]}
             />
+            {renewBlockedByHeadcount && (
+              <Banner tone="warning">
+                {PLAN_TIER_LABELS[renewTier]} supports up to {renewLimit}{" "}
+                employees. You have {tenant.activeEmployeeCount}.
+              </Banner>
+            )}
             <PlanCard
-              tier={tier}
+              tier={renewTier}
               billing={renewBilling}
-              amount={PLAN_PRICING[tier][renewBilling]}
+              amount={PLAN_PRICING[renewTier][renewBilling]}
+              limit={renewLimit}
             />
             <Button
               variant="primary"
               busy={busy === "renew"}
-              disabled={busy !== null}
+              disabled={busy !== null || renewBlockedByHeadcount}
               onClick={renew}
             >
-              Pay {formatINR(PLAN_PRICING[tier][renewBilling])} and Renew
+              Pay {formatINR(PLAN_PRICING[renewTier][renewBilling])} and{" "}
+              {trialOnly ? "Subscribe" : "Renew"}
             </Button>
             <p className="px-meta" style={{ textAlign: "center" }}>
               By continuing you agree to the{" "}
@@ -697,13 +836,17 @@ export default function Subscription() {
         onClose={() => setCancelOpen(false)}
         onConfirm={cancel}
         busy={busy === "cancel"}
-        title="Cancel your subscription?"
-        description={
-          tenant.planExpiresAt
-            ? `It stops renewing. Your team keeps full access until ${longDate(tenant.planExpiresAt)}, then you’ll need to resubscribe.`
-            : "It stops renewing. This can’t be undone."
+        title={
+          trialing ? "Cancel your free trial?" : "Cancel your subscription?"
         }
-        confirmLabel="Cancel Subscription"
+        description={
+          trialing
+            ? `Your payment mandate is cancelled now, so you won’t be charged. Your team keeps full access until ${longDate(tenant.planExpiresAt)}, then you’ll need to subscribe. Your organisation’s data is kept.`
+            : tenant.planExpiresAt
+              ? `It stops renewing. Your team keeps full access until ${longDate(tenant.planExpiresAt)}, then you’ll need to resubscribe.`
+              : "It stops renewing. This can’t be undone."
+        }
+        confirmLabel={trialing ? "Cancel Free Trial" : "Cancel Subscription"}
       />
     </Page>
   );

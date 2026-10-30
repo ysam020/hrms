@@ -42,6 +42,7 @@ const mockGetOrCreatePlanId = getOrCreatePlanId as jest.Mock;
 const BASE_TENANT = {
   id: "t1",
   razorpaySubscriptionId: "sub_1",
+  planActivatedAt: new Date("2026-06-01T00:00:00Z"),
   planExpiresAt: new Date("2026-07-01T00:00:00Z"),
   planTier: "growth",
   billing: "monthly",
@@ -73,14 +74,16 @@ describe("startSubscriptionReconciler", () => {
     expect(getRazorpay).not.toHaveBeenCalled();
   });
 
-  it("queries only tenants with an active/grace/cancelling subscription", async () => {
+  it("queries only tenants with a trialing/active/grace/cancelling subscription", async () => {
     db.tenant.findMany.mockResolvedValue([]);
     await runReconcilerOnce();
     expect(db.tenant.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           razorpaySubscriptionId: { not: null },
-          subscriptionStatus: { in: ["active", "grace_period", "cancelling"] },
+          subscriptionStatus: {
+            in: ["trialing", "active", "grace_period", "cancelling"],
+          },
         },
       }),
     );
@@ -95,6 +98,52 @@ describe("startSubscriptionReconciler", () => {
     expect(db.tenant.update).toHaveBeenCalledWith({
       where: { id: "t1" },
       data: { subscriptionStatus: "active" },
+    });
+  });
+
+  describe("free trials", () => {
+    const TRIAL_TENANT = {
+      ...BASE_TENANT,
+      subscriptionStatus: "trialing",
+      planActivatedAt: null,
+      planExpiresAt: new Date("2026-07-01T00:00:00Z"),
+    };
+
+    it("leaves a trial alone while Razorpay still shows it authenticated (not yet charged)", async () => {
+      db.tenant.findMany.mockResolvedValue([TRIAL_TENANT]);
+      mockFetch.mockResolvedValue({
+        status: "authenticated",
+        current_end: null,
+      });
+      await runReconcilerOnce();
+      expect(db.tenant.update).not.toHaveBeenCalled();
+    });
+
+    it("activates a trial whose first charge webhook was missed", async () => {
+      db.tenant.findMany.mockResolvedValue([TRIAL_TENANT]);
+      const cycleEnd = Math.floor(
+        new Date("2026-08-01T00:00:00Z").getTime() / 1000,
+      );
+      mockFetch.mockResolvedValue({ status: "active", current_end: cycleEnd });
+      await runReconcilerOnce();
+      expect(db.tenant.update).toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: {
+          subscriptionStatus: "active",
+          planActivatedAt: expect.any(Date),
+          planExpiresAt: new Date(cycleEnd * 1000),
+        },
+      });
+    });
+
+    it("marks a trial cancelled when its subscription was cancelled on Razorpay's side", async () => {
+      db.tenant.findMany.mockResolvedValue([TRIAL_TENANT]);
+      mockFetch.mockResolvedValue({ status: "cancelled", current_end: null });
+      await runReconcilerOnce();
+      expect(db.tenant.update).toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: { subscriptionStatus: "cancelled" },
+      });
     });
   });
 
