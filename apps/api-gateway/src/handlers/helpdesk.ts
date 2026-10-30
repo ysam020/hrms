@@ -44,7 +44,11 @@ const SLA_HOURS: Record<string, number> = {
 // User.role is a legacy, never-populated field and must not be used here
 // (same bug already found and fixed in assets.ts/wfh.ts). Falls through to
 // the explicit Helpdesk:manage permission grant for anyone else.
-async function assertHrRole(authUser: AuthUser | undefined): Promise<boolean> {
+// Exported for the MCP helpdesk tools (mcp/tools.ts), so they apply exactly
+// this rule rather than a copy of it.
+export async function assertHrRole(
+  authUser: AuthUser | undefined,
+): Promise<boolean> {
   if (!authUser) return false;
   if (hasPrivilegedRole(authUser.tenantRole ?? "", HR_ROLES)) return true;
   const user = await prisma.user.findUnique({

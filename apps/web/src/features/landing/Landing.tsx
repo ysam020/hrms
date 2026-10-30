@@ -264,7 +264,7 @@ const SECURITY: { icon: IconName; title: string; body: string }[] = [
   {
     icon: "assistant",
     title: "AI assistants on your terms",
-    body: "Assistants connect over MCP and sign in as the person: they read only that person’s records and what they allowed, can’t change anything, and every call is in the audit log.",
+    body: "Assistants connect over MCP and sign in as the person: they see only what that person can see and allowed, can’t change anything, and every call is in the audit log.",
   },
   {
     icon: "alert",

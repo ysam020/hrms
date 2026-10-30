@@ -41,18 +41,47 @@ interface Connection {
 const SCOPE_LABEL: Record<string, string> = {
   "profile:read": "Profile",
   "leave:read": "Leave",
-  "attendance:read": "Attendance",
+  "attendance:read": "Attendance & WFH",
   "payroll:read": "Salary",
   "org:read": "Policies & holidays",
+  "calendar:read": "Calendar",
+  "approvals:read": "Approvals",
+  "helpdesk:read": "Helpdesk",
+  "messages:read": "Messages",
+  "recruitment:read": "Recruitment",
+  "reports:read": "Reports",
 };
 
 const CAN_ASK: { icon: IconName; title: string; example: string }[] = [
-  { icon: "person", title: "Your profile", example: "What’s my joining date?" },
-  { icon: "leave", title: "Leave", example: "How much leave do I have left?" },
   {
-    icon: "clock",
-    title: "Attendance",
-    example: "How was my attendance in October?",
+    icon: "leave",
+    title: "Leave, attendance & WFH",
+    example: "How much leave do I have left?",
+  },
+  {
+    icon: "inbox",
+    title: "Approvals",
+    example: "What’s waiting for my approval?",
+  },
+  {
+    icon: "calendar",
+    title: "Calendar & holidays",
+    example: "What’s on my calendar this week?",
+  },
+  {
+    icon: "chat",
+    title: "Messages",
+    example: "Do I have any unread messages?",
+  },
+  {
+    icon: "lifebuoy",
+    title: "Helpdesk",
+    example: "What’s the status of my laptop ticket?",
+  },
+  {
+    icon: "doc",
+    title: "Policies & announcements",
+    example: "What’s our work-from-home policy?",
   },
   {
     icon: "banknote",
@@ -60,12 +89,19 @@ const CAN_ASK: { icon: IconName; title: string; example: string }[] = [
     example: "What was deducted from my last salary?",
   },
   {
-    icon: "doc",
-    title: "Policies & announcements",
-    example: "What’s our work-from-home policy?",
+    icon: "briefcase",
+    title: "Recruitment",
+    example: "How many candidates are in interviews?",
   },
-  { icon: "flag", title: "Holidays", example: "When’s the next holiday?" },
+  {
+    icon: "table",
+    title: "Reports",
+    example: "Run the monthly attendance report.",
+  },
 ];
+
+/** Shown under the cards that depend on someone's role. */
+const ROLE_GATED = new Set(["Approvals", "Recruitment", "Reports"]);
 
 const PROMISES: { icon: IconName; title: string; body: string }[] = [
   {
@@ -75,8 +111,8 @@ const PROMISES: { icon: IconName; title: string; body: string }[] = [
   },
   {
     icon: "person",
-    title: "Only your records",
-    body: "It sees what you can see — never another employee’s data.",
+    title: "Only what you can see",
+    body: "It sees exactly what you can see in Praesto — never more.",
   },
   {
     icon: "shield",
@@ -122,7 +158,7 @@ export default function AiAssistants() {
   return (
     <Page
       title="AI Assistants"
-      subtitle="Ask the AI assistant you already use about your leave, attendance, salary and policies."
+      subtitle="Ask the AI assistant you already use about your leave, approvals, calendar, tickets and more."
       width="reading"
     >
       <Group className={`${s.hero} ${s.surface}`}>
@@ -295,6 +331,9 @@ export default function AiAssistants() {
               <Icon name={c.icon} size={20} className={s.cardIcon} />
               <span className={s.cardTitle}>{c.title}</span>
               <span className={s.cardExample}>“{c.example}”</span>
+              {ROLE_GATED.has(c.title) && (
+                <span className={s.cardNote}>If your role has access</span>
+              )}
             </li>
           ))}
         </ul>

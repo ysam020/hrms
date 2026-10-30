@@ -28,6 +28,14 @@ const mockRunAsTenant = jest.fn((_t: any, _a: any, fn: any) => fn());
 jest.mock("../mcp/principal", () => ({
   runAsTenant: (...a: any[]) => (mockRunAsTenant as any)(...a),
 }));
+// Helpers the role-gated tools reuse; exercised in mcpWorkTools.test.ts.
+jest.mock("../handlers/approvalChains", () => ({}));
+jest.mock("../handlers/employee", () => ({}));
+jest.mock("../handlers/tenant", () => ({}));
+jest.mock("../handlers/helpdesk", () => ({}));
+jest.mock("../handlers/reports", () => ({}));
+jest.mock("../handlers/tenantSettings", () => ({}));
+jest.mock("../utils/user", () => ({}));
 const mockDb = {
   tenant: { findUnique: jest.fn() },
   policy: { findMany: jest.fn(), findFirst: jest.fn() },
