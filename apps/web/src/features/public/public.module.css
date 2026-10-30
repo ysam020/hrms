@@ -278,6 +278,27 @@
     position: sticky;
     top: calc(var(--px-toolbar-h) + var(--px-space-6));
   }
+  /* The multi-step application fills the viewport under the bar and each
+     column scrolls on its own, so a long review step doesn't drag the role
+     description along (and vice versa). Phones keep one scrolling page. */
+  .apply:has(> .formCol[data-steps]) {
+    height: calc(100dvh - var(--px-toolbar-h));
+    grid-template-rows: minmax(0, 1fr);
+    padding-block: 0;
+    align-items: stretch;
+  }
+  .apply:has(> .formCol[data-steps]) > .jobCol {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--px-space-10) var(--px-space-1) var(--px-space-16) 0;
+  }
+  .apply > .formCol[data-steps] {
+    align-self: start;
+    max-height: calc(100% - 2 * var(--px-space-10));
+    margin-block: var(--px-space-10);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 .jobCol {
   min-width: 0;
