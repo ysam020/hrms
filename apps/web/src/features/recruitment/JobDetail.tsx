@@ -1,5 +1,11 @@
 import dayjs from "dayjs";
-import { useContext, useEffect, useMemo, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -50,6 +56,14 @@ import {
 import { apiClient, asList, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
 import { fmtDate, fmtDateTime, fmtMoney } from "@next/lib/format";
+import {
+  PROFILE_FIELDS,
+  employmentTypeLabel,
+  experienceLabel,
+  jobConfig,
+  locationSummary,
+  workplaceTypeLabel,
+} from "./jobConfig";
 import s from "./job.module.css";
 
 // One opening and its pipeline — Classic's ViewIndividualJob, JobApplications,
@@ -200,24 +214,50 @@ export default function JobDetail() {
               <KeyValues
                 items={[
                   ["Posted", fmtDate(j.jobPostingDate || j.createdAt)],
-                  ["Experience", j.experience],
+                  ["Department", j.department || null],
+                  [
+                    "Employment Type",
+                    employmentTypeLabel(j.employmentType) || null,
+                  ],
+                  ["Workplace", workplaceTypeLabel(j.workplaceType) || null],
+                  ["Location", locationSummary(j) || null],
+                  ["Experience", experienceLabel(j)],
                   [
                     "Budget",
-                    Array.isArray(j.budget)
-                      ? `${j.budget[0]}–${j.budget[1]} LPA`
-                      : j.budget
+                    Array.isArray(j.budget) && j.budget.length
+                      ? `${j.budget[0]}–${j.budget[1]} LPA${j.budgetDisclosed === false ? " (not shown publicly)" : ""}`
+                      : !Array.isArray(j.budget) && j.budget
                         ? fmtMoney(j.budget)
                         : null,
                   ],
                   ["Hiring Manager", j.hiringManager],
+                  ["Recruiter", j.recruiter || null],
                   [
                     "Skills",
                     Array.isArray(j.requiredSkills)
                       ? j.requiredSkills.join(", ")
                       : j.requiredSkills,
                   ],
+                  ["Preferred Skills", j.preferredSkills || null],
+                  ["Minimum Qualification", j.minQualification || null],
+                  [
+                    "Screening Questions",
+                    jobConfig(j).questions.length || null,
+                  ],
                 ]}
               />
+              {j.responsibilities && (
+                <>
+                  <h3 className="px-headline">Responsibilities</h3>
+                  <p className={s.description}>{j.responsibilities}</p>
+                </>
+              )}
+              {j.qualifications && (
+                <>
+                  <h3 className="px-headline">Required Qualifications</h3>
+                  <p className={s.description}>{j.qualifications}</p>
+                </>
+              )}
             </Section>
           </div>
           {perm("view_applications") || user?.isSuperUser ? (
@@ -394,7 +434,6 @@ function Candidate({
         interviewer,
         jobTitle,
         name: a.name,
-        aadharNo: a.aadharNo,
         interviewRound: interviews[i]?.roundNumber ?? i + 1,
         _id: a.id,
       }),
@@ -413,7 +452,6 @@ function Candidate({
         status: `Round ${n} ${outcome}`,
         jobTitle,
         name: a.name,
-        aadharNo: a.aadharNo,
         interviewRound: n,
         ...(completing && { feedback: feedback.trim() }),
         id: a.id,
@@ -446,12 +484,18 @@ function Candidate({
           </span>
         </div>
       </div>
+      {a.possibleDuplicateOfCandidateId && (
+        <Banner tone="warning">
+          Someone with the same email or mobile has applied before. They may be
+          the same person — check before treating them as a new candidate.
+        </Banner>
+      )}
       <KeyValues
         items={[
           ["Email", a.email],
           ["Phone", a.mobile || a.phone],
-          ["Experience", a.experience],
-          ["Applied", fmtDate(a.createdAt)],
+          ["Applied", fmtDate(a.submittedAt || a.createdAt)],
+          ...profileRows(a.profile),
           [
             "Résumé",
             a.resume ? (
@@ -466,6 +510,26 @@ function Candidate({
           ],
         ]}
       />
+
+      {(a.screeningAnswers?.length > 0 || a.coverLetter) && (
+        <section style={{ display: "grid", gap: 10 }}>
+          <h3 className="px-headline">Application Answers</h3>
+          <dl className={s.answers}>
+            {(a.screeningAnswers ?? []).map((ans: any) => (
+              <div key={ans.questionId}>
+                <dt>{ans.label}</dt>
+                <dd>{answerText(ans)}</dd>
+              </div>
+            ))}
+            {a.coverLetter && (
+              <div>
+                <dt>Cover Letter</dt>
+                <dd>{a.coverLetter}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
 
       <section style={{ display: "grid", gap: 10 }}>
         <h3 className="px-headline">Interviews</h3>
@@ -748,7 +812,6 @@ function Candidate({
             apiClient.put(API_ENDPOINTS.REJECT_CANDIDATE, {
               reason,
               name: a.name,
-              aadharNo: a.aadharNo,
               jobTitle,
               id: a.id,
               jobId,
@@ -765,7 +828,6 @@ function Candidate({
           call(() =>
             apiClient.put(API_ENDPOINTS.HIRE_CANDIDATE, {
               ...payload,
-              aadharNo: a.aadharNo,
               jobTitle,
               email: a.email,
               name: a.name,
@@ -980,3 +1042,43 @@ function HireDialog({
     </Dialog>
   );
 }
+
+// Profile answers from the configurable application form, in form order.
+function profileRows(profile: any): [string, ReactNode][] {
+  if (!profile || typeof profile !== "object") return [];
+  return PROFILE_FIELDS.filter(
+    (f) => profile[f.key] != null && profile[f.key] !== "",
+  ).map((f) => {
+    const v = profile[f.key];
+    const text =
+      f.type === "yesno"
+        ? v
+          ? "Yes"
+          : "No"
+        : f.type === "years"
+          ? `${v} years`
+          : f.type === "lpa"
+            ? `₹${v} LPA`
+            : f.type === "days"
+              ? `${v} days`
+              : String(v);
+    return [
+      f.label,
+      f.type === "url" && /^https?:\/\//.test(String(v)) ? (
+        <a href={String(v)} target="_blank" rel="noopener noreferrer nofollow">
+          {String(v)}
+        </a>
+      ) : (
+        text
+      ),
+    ];
+  });
+}
+
+const answerText = (ans: any) => {
+  const v = ans?.value;
+  if (Array.isArray(v)) return v.join(", ");
+  if (ans?.type === "yes_no") return v === "yes" ? "Yes" : "No";
+  if (ans?.type === "date" && v) return fmtDate(v);
+  return String(v ?? "");
+};

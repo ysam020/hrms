@@ -13,6 +13,11 @@ jest.mock("@hrms/db", () => {
     },
     interviewPipelineTemplate: { findFirst: jest.fn() },
     user: { findMany: jest.fn(), findFirst: jest.fn() },
+    candidate: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
   };
   return {
     prisma: _db,
@@ -53,6 +58,9 @@ const mockPipelineTemplateFindFirst = (prisma as any).interviewPipelineTemplate
   .findFirst as jest.Mock;
 const mockInvalidate = cacheManager.invalidatePattern as jest.Mock;
 const mockNotify = notify as jest.Mock;
+const mockCandidateFindFirst = (prisma as any).candidate.findFirst as jest.Mock;
+const mockCandidateCreate = (prisma as any).candidate.create as jest.Mock;
+const mockCandidateUpdate = (prisma as any).candidate.update as jest.Mock;
 
 const openJob = {
   id: "job-1",
@@ -72,6 +80,8 @@ describe("applyForJob", () => {
     mockInvalidate.mockResolvedValue(undefined);
     mockUserFindMany.mockResolvedValue([]);
     mockPipelineTemplateFindFirst.mockResolvedValue(null);
+    mockCandidateFindFirst.mockResolvedValue(null);
+    mockCandidateCreate.mockResolvedValue({ id: "cand-new" });
   });
 
   it("returns INVALID_ARGUMENT when jobTitleId, name, or email is missing", async () => {
@@ -130,6 +140,20 @@ describe("applyForJob", () => {
     });
   });
 
+  it("returns NOT_FOUND when the job's apply-by date has passed", async () => {
+    mockJobFindUnique.mockResolvedValue({
+      ...openJob,
+      applicationDeadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    });
+    const cb = makeCallback();
+    await applyForJob(makeCall(validRequest), cb);
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.JOB_NOT_FOUND_OR_CLOSED,
+      status: status.NOT_FOUND,
+    });
+    expect(mockAppCreate).not.toHaveBeenCalled();
+  });
+
   it("returns ALREADY_EXISTS when applicant has already applied", async () => {
     mockJobFindUnique.mockResolvedValue(openJob);
     mockAppFindFirst.mockResolvedValue({
@@ -182,6 +206,7 @@ describe("applyForJob", () => {
         status: application.status,
         resumeScore: 0,
         aiNotes: "",
+        candidateId: "",
       },
     });
   });
@@ -199,7 +224,6 @@ describe("applyForJob", () => {
           mobile: null,
           resume: null,
           reason: null,
-          aadharNo: null,
         }),
       }),
     );
@@ -258,6 +282,142 @@ describe("applyForJob", () => {
         data: expect.objectContaining({ pipelineTemplateId: "default-tpl" }),
       }),
     );
+  });
+
+  it("never stores Aadhaar, even when an old client still sends it", async () => {
+    mockJobFindUnique.mockResolvedValue(openJob);
+    mockAppFindFirst.mockResolvedValue(null);
+    mockAppCreate.mockResolvedValue({ id: "app-1" });
+    await applyForJob(
+      makeCall({ ...validRequest, aadharNo: "123412341234" }),
+      makeCallback(),
+    );
+    expect(mockAppCreate.mock.calls[0][0].data).not.toHaveProperty("aadharNo");
+    expect(JSON.stringify(mockCandidateCreate.mock.calls)).not.toContain(
+      "123412341234",
+    );
+  });
+
+  it("checks for an earlier application case-insensitively on a normalised email", async () => {
+    mockJobFindUnique.mockResolvedValue(openJob);
+    mockAppFindFirst.mockResolvedValue({ id: "old" });
+    const cb = makeCallback();
+    await applyForJob(
+      makeCall({ ...validRequest, email: "  Alice@Example.COM " }),
+      cb,
+    );
+    expect(mockAppFindFirst).toHaveBeenCalledWith({
+      where: {
+        jobTitleId: "job-1",
+        email: { equals: "alice@example.com", mode: "insensitive" },
+      },
+    });
+    expect(cb.mock.calls[0][1].status).toBe(status.ALREADY_EXISTS);
+  });
+
+  describe("candidate identity", () => {
+    beforeEach(() => {
+      mockJobFindUnique.mockResolvedValue(openJob);
+      mockAppFindFirst.mockResolvedValue(null);
+      mockAppCreate.mockImplementation(async ({ data }: any) => ({
+        id: "app-1",
+        ...data,
+      }));
+    });
+
+    it("creates a new candidate for a first-time applicant, without Aadhaar", async () => {
+      await applyForJob(makeCall(validRequest), makeCallback());
+      expect(mockCandidateCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: "t1",
+          email: "alice@example.com",
+          emailVerifiedAt: null,
+        }),
+      });
+      expect(mockAppCreate.mock.calls[0][0].data).toMatchObject({
+        candidateId: "cand-new",
+        possibleDuplicateOfCandidateId: null,
+      });
+    });
+
+    it("reuses the verified candidate when the applicant verified the same email", async () => {
+      mockCandidateFindFirst.mockResolvedValueOnce({ id: "cand-verified" });
+      await applyForJob(
+        makeCall({
+          ...validRequest,
+          emailVerified: true,
+          mobile: "+919876543210",
+        }),
+        makeCallback(),
+      );
+      expect(mockCandidateFindFirst.mock.calls[0][0].where).toEqual({
+        email: "alice@example.com",
+        emailVerifiedAt: { not: null },
+      });
+      expect(mockCandidateUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "cand-verified" } }),
+      );
+      expect(mockCandidateCreate).not.toHaveBeenCalled();
+      expect(mockAppCreate.mock.calls[0][0].data.candidateId).toBe(
+        "cand-verified",
+      );
+    });
+
+    it("does not merge on an unverified email match — flags it for review instead", async () => {
+      mockCandidateFindFirst.mockResolvedValueOnce({ id: "cand-old" });
+      await applyForJob(makeCall(validRequest), makeCallback());
+      expect(mockCandidateCreate).toHaveBeenCalled();
+      expect(mockAppCreate.mock.calls[0][0].data).toMatchObject({
+        candidateId: "cand-new",
+        possibleDuplicateOfCandidateId: "cand-old",
+      });
+    });
+
+    it("looks for lookalikes by mobile number too", async () => {
+      await applyForJob(
+        makeCall({ ...validRequest, mobile: "+919876543210" }),
+        makeCallback(),
+      );
+      expect(mockCandidateFindFirst.mock.calls[0][0].where).toEqual({
+        OR: [{ email: "alice@example.com" }, { mobile: "+919876543210" }],
+      });
+    });
+
+    it("verified applicant with no earlier verified record gets a new candidate, flagged if an unverified lookalike exists", async () => {
+      mockCandidateFindFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: "cand-typed" });
+      await applyForJob(
+        makeCall({ ...validRequest, emailVerified: true }),
+        makeCallback(),
+      );
+      expect(
+        mockCandidateCreate.mock.calls[0][0].data.emailVerifiedAt,
+      ).toBeInstanceOf(Date);
+      expect(
+        mockAppCreate.mock.calls[0][0].data.possibleDuplicateOfCandidateId,
+      ).toBe("cand-typed");
+    });
+
+    it("stores the profile, screening answers and submission time", async () => {
+      await applyForJob(
+        makeCall({
+          ...validRequest,
+          profileJson: JSON.stringify({ totalExperience: 4 }),
+          screeningAnswersJson: JSON.stringify([
+            { questionId: "q1", label: "Visa?", type: "yes_no", value: "yes" },
+          ]),
+          coverLetter: "Hello",
+        }),
+        makeCallback(),
+      );
+      expect(mockAppCreate.mock.calls[0][0].data).toMatchObject({
+        profile: { totalExperience: 4 },
+        screeningAnswers: [{ questionId: "q1", value: "yes" }],
+        coverLetter: "Hello",
+        submittedAt: expect.any(Date),
+      });
+    });
   });
 
   it("returns INTERNAL on database error", async () => {

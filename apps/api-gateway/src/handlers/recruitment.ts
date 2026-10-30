@@ -28,6 +28,13 @@ import { cacheManager } from "@hrms/cache";
 import { handleError, handleActionError } from "../utils/handleError";
 import { parsePagination, PAGINATION } from "../utils/pagination";
 import { isSuperUser } from "../utils/user";
+import { isPastDeadline } from "../utils/jobDeadline";
+import {
+  ValidationError,
+  readJobConfig,
+  validateJobOpening,
+} from "../services/recruitmentForms";
+import { submitApplication } from "../services/careerApplications";
 import { actOnApprovalForEntity, isPrivileged } from "./approvalChains";
 import { getActiveSettings, SETTINGS_DEFAULTS } from "./tenantSettings";
 import { createInterviewMeetEvent } from "../services/googleCalendar";
@@ -64,35 +71,50 @@ export async function addJobOpening(req: Request, res: Response) {
       jobTitle,
       jobDescription,
       requiredSkills,
-      experience,
       hiringManager,
       applicationDeadline,
-      budget,
       numberOfVacancies,
       jobStatus,
       createdBy,
       pipelineTemplateId,
-      visibility,
     } = req.body;
+    const extra = validateJobOpening(req.body);
     const response = await grpcCall(recruitmentClient, "createJobOpening", {
       jobTitle: jobTitle || "",
       jobDescription: jobDescription || "",
       requiredSkills: requiredSkills || "",
-      experience: String(experience || "0"),
       hiringManager: hiringManager || "",
       applicationDeadline: applicationDeadline || "",
-      budget: Array.isArray(budget) ? budget.map(Number) : [],
       numberOfVacancies: parseInt(String(numberOfVacancies || "0")) || 0,
       jobStatus: jobStatus || "Active",
       createdBy: createdBy || "",
       pipelineTemplateId: pipelineTemplateId || "",
-      visibility: visibility || "external",
+      ...extra,
+      visibility: extra.visibility || "external",
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
+    if (error instanceof ValidationError)
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: error.message,
+        field: error.field,
+      });
     return handleError(res, error);
   }
 }
+
+// Optional fields the editor may have emptied on purpose. The service treats
+// "" as "unchanged", so these are listed in clearedFields to really clear.
+const CLEARABLE_JOB_FIELDS = [
+  "department",
+  "experienceMax",
+  "preferredSkills",
+  "minQualification",
+  "responsibilities",
+  "qualifications",
+  "recruiter",
+  "remoteScope",
+];
 
 export async function editJobOpening(req: Request, res: Response) {
   try {
@@ -100,29 +122,33 @@ export async function editJobOpening(req: Request, res: Response) {
       jobTitle,
       jobDescription,
       requiredSkills,
-      experience,
       hiringManager,
       applicationDeadline,
-      budget,
       numberOfVacancies,
       jobStatus,
       pipelineTemplateId,
-      visibility,
     } = req.body;
+    const current: any = await grpcCall(recruitmentClient, "getJobOpening", {
+      id: req.params._id,
+    });
+    if (!current?.data?.id)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Job opening not found",
+      });
+    const extra = validateJobOpening(req.body, current.data);
     const grpcPayload: Record<string, any> = {
       id: req.params._id,
       jobTitle: jobTitle || "",
       jobDescription: jobDescription || "",
       requiredSkills: requiredSkills || "",
-      experience: String(experience || "0"),
       hiringManager: hiringManager || "",
       applicationDeadline: applicationDeadline || "",
-      budget: Array.isArray(budget) ? budget.map(Number) : [],
       numberOfVacancies: parseInt(String(numberOfVacancies || "0")) || 0,
+      ...extra,
+      clearedFields: CLEARABLE_JOB_FIELDS.filter((f) => !extra[f]),
     };
     if (jobStatus) grpcPayload.jobStatus = jobStatus;
     if (pipelineTemplateId) grpcPayload.pipelineTemplateId = pipelineTemplateId;
-    if (visibility) grpcPayload.visibility = visibility;
     const response = await grpcCall(
       recruitmentClient,
       "updateJobOpening",
@@ -130,6 +156,11 @@ export async function editJobOpening(req: Request, res: Response) {
     );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
   } catch (error: unknown) {
+    if (error instanceof ValidationError)
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: error.message,
+        field: error.field,
+      });
     return handleError(res, error);
   }
 }
@@ -177,18 +208,64 @@ export async function deleteJobOpening(req: Request, res: Response) {
   }
 }
 
+// Whether a stored opening is on the public careers page right now.
+// Nothing flips status to "Expired" on its own, so the deadline is checked
+// alongside it; internal-only openings are for employees, not the public.
+export const isOpenToPublic = (j: any) =>
+  j?.status === "Active" &&
+  j.visibility !== "internal" &&
+  !isPastDeadline(j.applicationDeadline);
+
+/**
+ * What anonymous visitors see of an opening: what they need to decide and
+ * apply, and nothing internal (who created it, the hiring manager, internal
+ * notes, or a budget the organisation chose not to disclose).
+ */
+export function toPublicJobOpening(j: any) {
+  const { form, questions, locations } = readJobConfig(j);
+  return {
+    id: j.id,
+    jobTitle: j.jobTitle,
+    department: j.department || "",
+    employmentType: j.employmentType || "",
+    workplaceType: j.workplaceType || "",
+    locations,
+    remoteScope: j.remoteScope || "",
+    remoteRegions: j.remoteRegions ?? [],
+    numberOfVacancies: j.numberOfVacancies || 0,
+    experience: j.experience ?? 0,
+    experienceMax: j.hasExperienceMax ? j.experienceMax : null,
+    requiredSkills: j.requiredSkills || "",
+    preferredSkills: j.preferredSkills || "",
+    minQualification: j.minQualification || "",
+    qualifications: j.qualifications || "",
+    responsibilities: j.responsibilities || "",
+    jobDescription: j.jobDescription || "",
+    jobPostingDate: j.jobPostingDate || "",
+    applicationDeadline: j.applicationDeadline || "",
+    budget: j.budgetDisclosed !== false ? (j.budget ?? []) : [],
+    applicationForm: form,
+    screeningQuestions: [...questions].sort((a, b) => a.order - b.order),
+  };
+}
+
 export async function publicCareers(req: Request, res: Response) {
   try {
-    // "Open" was never a real status value — job openings are stored with
-    // status "Active"/"Expired"/"Deleted" (see listJobOpenings.ts's status
-    // normalization) — so this always returned zero results. Default to
-    // "Active" but still honor an explicit ?status= from the caller.
-    const response = await grpcCall(recruitmentClient, "listJobOpenings", {
+    // Only "Active" openings are ever public; the old ?status= override let
+    // anyone list expired or deleted ones.
+    const response: any = await grpcCall(recruitmentClient, "listJobOpenings", {
       page: 1,
       limit: 100,
-      jobStatus: (req.query.status as string) || "Active",
+      jobStatus: "Active",
     });
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    const open = (response?.data ?? [])
+      .filter(isOpenToPublic)
+      .map(toPublicJobOpening);
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: response?.message,
+      data: open,
+      total: open.length,
+    });
   } catch (error: unknown) {
     return handleError(res, error);
   }
@@ -199,14 +276,17 @@ export async function publicJobOpening(req: Request, res: Response) {
     const response: any = await grpcCall(recruitmentClient, "getJobOpening", {
       id: req.params.id,
     });
-    // Never expose a non-Active opening (expired/deleted) on the public
+    // Never expose a closed, internal or past-deadline opening on the public
     // apply page even if a stale/guessed link is used.
-    if (response?.data?.status && response.data.status !== "Active") {
+    if (!isOpenToPublic(response?.data)) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "This job opening is no longer accepting applications.",
       });
     }
-    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: response.message,
+      data: toPublicJobOpening(response.data),
+    });
   } catch (error: unknown) {
     return handleError(res, error);
   }
@@ -225,36 +305,27 @@ export async function getJobTitles(_req: Request, res: Response) {
   }
 }
 
+/**
+ * POST /apply-for-job/:slug — one-shot application without a draft, kept for
+ * existing integrations. Validated against the opening's stored form exactly
+ * like a draft submission (an old client that only sends name/email/mobile
+ * is refused if the opening now requires more). Aadhaar is no longer
+ * collected; an aadharNo in the body is ignored.
+ */
 export async function applyForJob(req: Request, res: Response) {
   try {
-    const { name, mobile, email, aadharNo, jobTitleId, jobTitle, resume } =
-      req.body;
-
-    // resume is populated client-side from the presigned-upload response
-    // (getResumeUploadUrl below), never uploaded inline — reject anything
-    // that isn't a URL to this tenant's own job_applications/ prefix so an
-    // anonymous caller can't stuff an arbitrary string into the field.
-    if (
-      resume &&
-      !String(resume).startsWith(
-        s3FileUrl(`job_applications/${getTenantId()}/`),
-      )
-    ) {
-      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
-        message: "Invalid resume upload.",
+    const jobId = String(req.body?.jobTitleId || req.body?.jobTitle || "");
+    const job: any = jobId
+      ? await grpcCall(recruitmentClient, "getJobOpening", { id: jobId })
+      : null;
+    if (!isOpenToPublic(job?.data))
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "This job opening is no longer accepting applications.",
       });
-    }
-
-    const response = await grpcCall(recruitmentClient, "applyForJob", {
-      jobTitleId: jobTitleId || jobTitle || "",
-      name: name || "",
-      email: email || "",
-      mobile: mobile || "",
-      resume: resume || "",
-      aadharNo: aadharNo || "",
+    const result = await submitApplication(job.data, req.body, {
+      emailVerified: false,
     });
-    const resp = response as any;
-    return apiResponse(res, grpcToHttpStatus(resp.status), resp);
+    return apiResponse(res, result.httpStatus, result.body);
   } catch (error: unknown) {
     return handleError(res, error);
   }
@@ -368,14 +439,25 @@ export async function viewApplications(req: Request, res: Response) {
       ),
     })) as { data?: any[] };
 
-    // Proto strips interviews/aadharNo/reason — fetch them directly and merge
+    // Proto strips these — fetch them directly and merge. Aadhaar is
+    // deliberately not among them: it's never shown in application lists.
     const ids: string[] = (response.data ?? [])
       .map((a: any) => a.id)
       .filter(Boolean);
     if (ids.length > 0) {
       const extras = await prisma.jobApplication.findMany({
         where: { id: { in: ids } },
-        select: { id: true, interviews: true, aadharNo: true, reason: true },
+        select: {
+          id: true,
+          interviews: true,
+          reason: true,
+          profile: true,
+          screeningAnswers: true,
+          coverLetter: true,
+          submittedAt: true,
+          candidateId: true,
+          possibleDuplicateOfCandidateId: true,
+        },
       });
       const extrasMap = new Map(extras.map((e) => [e.id, e]));
       response.data = response.data!.map((a: any) => {
@@ -384,8 +466,14 @@ export async function viewApplications(req: Request, res: Response) {
           ? {
               ...a,
               interviews: (extra.interviews as any[]) ?? [],
-              aadharNo: extra.aadharNo ?? "",
               reason: extra.reason ?? "",
+              profile: extra.profile ?? null,
+              screeningAnswers: extra.screeningAnswers ?? [],
+              coverLetter: extra.coverLetter ?? "",
+              submittedAt: extra.submittedAt ?? null,
+              candidateId: extra.candidateId ?? "",
+              possibleDuplicateOfCandidateId:
+                extra.possibleDuplicateOfCandidateId ?? "",
             }
           : a;
       });

@@ -53,11 +53,11 @@ export const listApplications = async (
       mobile: a.mobile || "",
       resume: a.resume || "",
       status: a.status || "",
-      appliedAt: "",
+      appliedAt: a.submittedAt ? a.submittedAt.toISOString() : "",
       resumeScore: a.resumeScore ?? 0,
       aiNotes: a.aiNotes || "",
+      candidateId: a.candidateId || "",
       // Extra fields used by the frontend (not in proto, passed through as-is)
-      aadharNo: a.aadharNo || "",
       interviews: a.interviews ?? [],
       reason: a.reason || "",
       assignedOfficialEmail: a.assignedOfficialEmail || "",

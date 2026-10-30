@@ -8,6 +8,7 @@ import {
 import { validate } from "../middleware/validate";
 import { resolvePublicTenant } from "../middleware/resolvePublicTenant";
 import * as h from "../handlers/recruitment";
+import * as drafts from "../handlers/careerDrafts";
 import {
   submitResignationSchema,
   bulkDeleteJobOpeningsSchema,
@@ -40,6 +41,43 @@ publicRecruitmentRouter.post(
   "/public/careers/:slug/resume-upload-url",
   resolvePublicTenant,
   h.getResumeUploadUrl,
+);
+// Application drafts: created once name/email/mobile are given, then read,
+// autosaved and submitted with the X-Draft-Token header.
+publicRecruitmentRouter.post(
+  "/public/careers/:slug/jobs/:jobId/drafts",
+  resolvePublicTenant,
+  drafts.createApplicationDraft,
+);
+publicRecruitmentRouter.post(
+  "/public/careers/:slug/jobs/:jobId/drafts/recover",
+  resolvePublicTenant,
+  drafts.requestDraftRecovery,
+);
+publicRecruitmentRouter.post(
+  "/public/careers/:slug/jobs/:jobId/drafts/recover/verify",
+  resolvePublicTenant,
+  drafts.verifyDraftRecovery,
+);
+publicRecruitmentRouter.get(
+  "/public/careers/:slug/drafts/:draftId",
+  resolvePublicTenant,
+  drafts.getApplicationDraft,
+);
+publicRecruitmentRouter.put(
+  "/public/careers/:slug/drafts/:draftId",
+  resolvePublicTenant,
+  drafts.saveApplicationDraft,
+);
+publicRecruitmentRouter.delete(
+  "/public/careers/:slug/drafts/:draftId",
+  resolvePublicTenant,
+  drafts.discardApplicationDraft,
+);
+publicRecruitmentRouter.post(
+  "/public/careers/:slug/drafts/:draftId/submit",
+  resolvePublicTenant,
+  drafts.submitApplicationDraft,
 );
 
 recruitmentRouter.get("/view-job-openings", authenticate, h.viewJobOpenings);

@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 import { toJobOpeningProto } from "./jobOpeningSerializer";
+import { jobOpeningExtraFields } from "./jobOpeningFields";
 
 export const updateJobOpening = async (
   call: ServerUnaryCall<any, any>,
@@ -41,7 +42,6 @@ export const updateJobOpening = async (
     };
     const allowedFields = [
       "jobTitle",
-      "department",
       "jobDescription",
       "requiredSkills",
       "numberOfVacancies",
@@ -61,11 +61,16 @@ export const updateJobOpening = async (
           cleanedData[field] = new Date(val);
         } else if (field === "jobStatus") {
           cleanedData["status"] = val;
+        } else if (field === "experience") {
+          // Arrives as a proto string; the column is a Float.
+          const n = parseFloat(val);
+          if (Number.isFinite(n)) cleanedData[field] = n;
         } else {
           cleanedData[field] = val;
         }
       }
     }
+    Object.assign(cleanedData, jobOpeningExtraFields(call.request, "update"));
     const updatedJobOpening = await prisma.jobOpening.update({
       where: { id },
       data: cleanedData,

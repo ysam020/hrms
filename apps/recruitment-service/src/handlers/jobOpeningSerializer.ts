@@ -29,5 +29,25 @@ export function toJobOpeningProto(j: any): recruitment.JobOpening {
     createdOn: j.createdOn ? j.createdOn.toISOString() : "",
     pipelineTemplateId: j.pipelineTemplateId || "",
     visibility: j.visibility || "external",
+    employmentType: j.employmentType || "",
+    workplaceType: j.workplaceType || "",
+    locationsJson: j.locations ? JSON.stringify(j.locations) : "",
+    remoteScope: j.remoteScope || "",
+    remoteRegions: Array.isArray(j.remoteRegions) ? j.remoteRegions : [],
+    experienceMax: j.experienceMax ?? 0,
+    hasExperienceMax: j.experienceMax != null,
+    preferredSkills: j.preferredSkills || "",
+    minQualification: j.minQualification || "",
+    responsibilities: j.responsibilities || "",
+    qualifications: j.qualifications || "",
+    // null predates the setting; those openings always showed their budget.
+    budgetDisclosed: j.budgetDisclosed ?? true,
+    recruiter: j.recruiter || "",
+    applicationFormJson: j.applicationForm
+      ? JSON.stringify(j.applicationForm)
+      : "",
+    screeningQuestionsJson: j.screeningQuestions
+      ? JSON.stringify(j.screeningQuestions)
+      : "",
   };
 }

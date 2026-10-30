@@ -221,16 +221,29 @@ describe("recruitmentHandlers", () => {
     );
   });
 
+  const validJobBody = () => ({
+    jobTitle: "SWE",
+    experience: 3,
+    employmentType: "full_time",
+    workplaceType: "remote",
+    applicationDeadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10),
+  });
+
   it("addJobOpening calls createJobOpening with body data", async () => {
     const res = makeRes();
-    await addJobOpening(
-      makeReq({ body: { jobTitle: "SWE", experience: 3 } }),
-      res,
-    );
+    await addJobOpening(makeReq({ body: validJobBody() }), res);
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "createJobOpening",
-      expect.objectContaining({ jobTitle: "SWE" }),
+      expect.objectContaining({
+        jobTitle: "SWE",
+        experience: "3",
+        employmentType: "full_time",
+        workplaceType: "remote",
+        remoteScope: "anywhere",
+      }),
     );
     expect(mockApiResponse).toHaveBeenCalledWith(
       res,
@@ -239,15 +252,64 @@ describe("recruitmentHandlers", () => {
     );
   });
 
+  it("addJobOpening refuses an on-site opening with no location, before calling the service", async () => {
+    const res = makeRes();
+    await addJobOpening(
+      makeReq({ body: { ...validJobBody(), workplaceType: "onsite" } }),
+      res,
+    );
+    expect(mockGrpcCall).not.toHaveBeenCalled();
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.BAD_REQUEST,
+      expect.objectContaining({ field: "locations" }),
+    );
+  });
+
   it("editJobOpening calls updateJobOpening with params id", async () => {
+    mockGrpcCall.mockResolvedValueOnce({
+      data: { id: "j-1", applicationDeadline: "2020-01-01T00:00:00.000Z" },
+    });
     await editJobOpening(
-      makeReq({ params: { _id: "j-1" }, body: { jobTitle: "Senior SWE" } }),
+      makeReq({
+        params: { _id: "j-1" },
+        body: {
+          ...validJobBody(),
+          jobTitle: "Senior SWE",
+          // An already-past deadline that isn't being changed doesn't block edits.
+          applicationDeadline: "2020-01-01",
+        },
+      }),
       makeRes(),
     );
-    expect(mockGrpcCall).toHaveBeenCalledWith(
+    expect(mockGrpcCall).toHaveBeenLastCalledWith(
       expect.anything(),
       "updateJobOpening",
-      expect.objectContaining({ id: "j-1" }),
+      expect.objectContaining({
+        id: "j-1",
+        jobTitle: "Senior SWE",
+        clearedFields: expect.arrayContaining(["department", "experienceMax"]),
+      }),
+    );
+  });
+
+  it("editJobOpening refuses moving the deadline into the past", async () => {
+    mockGrpcCall.mockResolvedValueOnce({
+      data: { id: "j-1", applicationDeadline: "2099-01-01T00:00:00.000Z" },
+    });
+    const res = makeRes();
+    await editJobOpening(
+      makeReq({
+        params: { _id: "j-1" },
+        body: { ...validJobBody(), applicationDeadline: "2020-01-01" },
+      }),
+      res,
+    );
+    expect(mockGrpcCall).toHaveBeenCalledTimes(1);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.BAD_REQUEST,
+      expect.objectContaining({ field: "applicationDeadline" }),
     );
   });
 
@@ -269,13 +331,47 @@ describe("recruitmentHandlers", () => {
     );
   });
 
-  it("publicCareers honors an explicit ?status= query param", async () => {
+  it("publicCareers ignores ?status= so expired or deleted openings can't be listed", async () => {
     await publicCareers(makeReq({ query: { status: "Expired" } }), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
       expect.anything(),
       "listJobOpenings",
-      expect.objectContaining({ jobStatus: "Expired" }),
+      expect.objectContaining({ jobStatus: "Active" }),
     );
+  });
+
+  it("publicCareers hides internal-only openings and strips internal fields", async () => {
+    mockGrpcCall.mockResolvedValue({
+      data: [
+        { id: "int", status: "Active", visibility: "internal" },
+        {
+          id: "ext",
+          status: "Active",
+          visibility: "external",
+          hiringManager: "AAKASH IYER",
+          createdBy: "u-1",
+          budget: [5, 9],
+          budgetDisclosed: false,
+          workplaceType: "hybrid",
+          locationsJson: JSON.stringify([
+            {
+              country: "India",
+              state: "Karnataka",
+              city: "Bengaluru",
+              office: "",
+            },
+          ]),
+        },
+      ],
+    });
+    const res = makeRes();
+    await publicCareers(makeReq(), res);
+    const body = mockApiResponse.mock.calls[0][2];
+    expect(body.data.map((j: any) => j.id)).toEqual(["ext"]);
+    expect(body.data[0]).not.toHaveProperty("hiringManager");
+    expect(body.data[0]).not.toHaveProperty("createdBy");
+    expect(body.data[0].budget).toEqual([]);
+    expect(body.data[0].locations[0].city).toBe("Bengaluru");
   });
 
   it("publicJobOpening returns the job when it's Active", async () => {
@@ -309,6 +405,64 @@ describe("recruitmentHandlers", () => {
     );
   });
 
+  it("publicCareers drops openings whose apply-by date has passed, but keeps today's", async () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    mockGrpcCall.mockResolvedValue({
+      data: [
+        {
+          id: "past",
+          status: "Active",
+          applicationDeadline: new Date(Date.now() - 2 * DAY).toISOString(),
+        },
+        {
+          id: "today",
+          status: "Active",
+          applicationDeadline: today.toISOString(),
+        },
+        {
+          id: "future",
+          status: "Active",
+          applicationDeadline: new Date(Date.now() + 5 * DAY).toISOString(),
+        },
+      ],
+      total: 3,
+    });
+    const res = makeRes();
+    await publicCareers(makeReq(), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.SUCCESS,
+      expect.objectContaining({
+        data: [
+          expect.objectContaining({ id: "today" }),
+          expect.objectContaining({ id: "future" }),
+        ],
+        total: 2,
+      }),
+    );
+  });
+
+  it("publicJobOpening returns NOT_FOUND for an Active job past its apply-by date", async () => {
+    mockGrpcCall.mockResolvedValue({
+      data: {
+        id: "j-1",
+        status: "Active",
+        applicationDeadline: new Date(
+          Date.now() - 2 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      },
+    });
+    const res = makeRes();
+    await publicJobOpening(makeReq({ params: { id: "j-1" } }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.NOT_FOUND,
+      expect.any(Object),
+    );
+  });
+
   it("getJobTitles calls listJobOpenings with large limit", async () => {
     await getJobTitles(makeReq(), makeRes());
     expect(mockGrpcCall).toHaveBeenCalledWith(
@@ -318,15 +472,87 @@ describe("recruitmentHandlers", () => {
     );
   });
 
-  it("applyForJob calls applyForJob with body data", async () => {
+  const openJob = {
+    id: "j-1",
+    jobTitle: "SWE",
+    status: "Active",
+    applicationFormJson: JSON.stringify({
+      fields: { currentLocation: "required" },
+      resume: "optional",
+    }),
+    screeningQuestionsJson: JSON.stringify([
+      {
+        id: "q1",
+        label: "Notice?",
+        type: "select",
+        required: true,
+        options: ["0", "30"],
+        order: 0,
+      },
+    ]),
+  };
+  const validApplicant = {
+    jobTitleId: "j-1",
+    name: "Jane Doe",
+    email: " Jane@Example.com ",
+    mobile: "98765 43210",
+    aadharNo: "123412341234",
+    profile: { currentLocation: "Pune", totalExperience: 2 },
+    answers: { q1: "30" },
+    consent: true,
+  };
+
+  it("applyForJob validates against the stored form and sends normalised contact details, never Aadhaar", async () => {
+    mockGrpcCall
+      .mockResolvedValueOnce({ data: openJob })
+      .mockResolvedValueOnce({ status: 0, data: { id: "app-1", email: "x" } });
+    const res = makeRes();
+    await applyForJob(makeReq({ body: validApplicant }), res);
+    const payload = mockGrpcCall.mock.calls[1][2];
+    expect(mockGrpcCall.mock.calls[1][1]).toBe("applyForJob");
+    expect(payload).toMatchObject({
+      jobTitleId: "j-1",
+      email: "jane@example.com",
+      mobile: "+919876543210",
+    });
+    expect(JSON.stringify(payload)).not.toContain("123412341234");
+    expect(JSON.parse(payload.screeningAnswersJson)).toEqual([
+      { questionId: "q1", label: "Notice?", type: "select", value: "30" },
+    ]);
+    // Only the new id goes back to the anonymous caller.
+    expect(mockApiResponse.mock.calls[0][2].data).toEqual({ id: "app-1" });
+  });
+
+  it("applyForJob refuses missing required answers and options the question doesn't offer", async () => {
+    mockGrpcCall.mockResolvedValueOnce({ data: openJob });
+    const res = makeRes();
     await applyForJob(
-      makeReq({ body: { jobTitleId: "j-1", name: "Jane Doe" } }),
-      makeRes(),
+      makeReq({
+        body: { ...validApplicant, profile: {}, answers: { q1: "90" } },
+      }),
+      res,
     );
-    expect(mockGrpcCall).toHaveBeenCalledWith(
-      expect.anything(),
-      "applyForJob",
-      expect.objectContaining({ jobTitleId: "j-1" }),
+    expect(mockGrpcCall).toHaveBeenCalledTimes(1);
+    const [, status, body] = mockApiResponse.mock.calls[0];
+    expect(status).toBe(RESPONSE_STATUS.BAD_REQUEST);
+    // totalExperience is required by default when the stored form doesn't say.
+    expect(Object.keys(body.errors).sort()).toEqual([
+      "currentLocation",
+      "q:q1",
+      "totalExperience",
+    ]);
+  });
+
+  it("applyForJob refuses an internal-only or expired opening", async () => {
+    mockGrpcCall.mockResolvedValueOnce({
+      data: { ...openJob, visibility: "internal" },
+    });
+    const res = makeRes();
+    await applyForJob(makeReq({ body: validApplicant }), res);
+    expect(mockApiResponse).toHaveBeenCalledWith(
+      res,
+      RESPONSE_STATUS.NOT_FOUND,
+      expect.any(Object),
     );
   });
 

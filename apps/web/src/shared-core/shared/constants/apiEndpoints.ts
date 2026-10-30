@@ -101,6 +101,16 @@ const JOB_OPENINGS = {
   APPLY_FOR_JOB: (slug: string) => `/apply-for-job/${slug}`,
   RESUME_UPLOAD_URL: (slug: string) =>
     `/public/careers/${slug}/resume-upload-url`,
+  PUBLIC_DRAFTS: (slug: string, jobId: string) =>
+    `/public/careers/${slug}/jobs/${jobId}/drafts`,
+  PUBLIC_DRAFT_RECOVER: (slug: string, jobId: string) =>
+    `/public/careers/${slug}/jobs/${jobId}/drafts/recover`,
+  PUBLIC_DRAFT_VERIFY: (slug: string, jobId: string) =>
+    `/public/careers/${slug}/jobs/${jobId}/drafts/recover/verify`,
+  PUBLIC_DRAFT: (slug: string, draftId: string) =>
+    `/public/careers/${slug}/drafts/${draftId}`,
+  PUBLIC_DRAFT_SUBMIT: (slug: string, draftId: string) =>
+    `/public/careers/${slug}/drafts/${draftId}/submit`,
   HIRE_CANDIDATE: "/hire-candidate",
   UPDATE_ASSIGNED_OFFICIAL_EMAIL: "/update-assigned-official-email",
   REJECT_CANDIDATE: "/reject-application",

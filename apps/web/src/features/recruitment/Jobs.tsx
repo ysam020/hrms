@@ -21,6 +21,7 @@ import {
 } from "@next/ui";
 import { searchParam, usePagedList } from "@next/lib/usePagedList";
 import { fmtDate, fmtMoney } from "@next/lib/format";
+import { employmentTypeLabel, locationSummary } from "./jobConfig";
 
 // Recruitment: job openings (GET /view-job-openings, same filters as
 // Classic). Opening a job morphs its title into the detail header.
@@ -34,7 +35,13 @@ function JobTitle({ j }: { j: any }) {
       style={style}
       title={j.jobTitle}
       subtitle={
-        [j.department, j.location].filter(Boolean).join(" · ") || undefined
+        [
+          j.department,
+          employmentTypeLabel(j.employmentType),
+          locationSummary(j),
+        ]
+          .filter(Boolean)
+          .join(" · ") || undefined
       }
     />
   );
@@ -78,7 +85,14 @@ export default function Jobs() {
       header: "Budget",
       align: "right",
       priority: "hidden",
-      render: (j) => (j.budget ? fmtMoney(j.budget) : "—"),
+      render: (j) =>
+        Array.isArray(j.budget)
+          ? j.budget.length
+            ? `${j.budget[0]}–${j.budget[1]} LPA`
+            : "—"
+          : j.budget
+            ? fmtMoney(j.budget)
+            : "—",
     },
     {
       key: "deadline",

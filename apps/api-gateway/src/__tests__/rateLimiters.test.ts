@@ -34,7 +34,12 @@ jest.mock("@hrms/cache", () => ({
   getRedisClient: jest.fn(() => ({ call: jest.fn() })),
 }));
 
-import { authLimiter, applyRateLimiters } from "../config/rateLimiters";
+import {
+  authLimiter,
+  applyRateLimiters,
+  DRAFT_RECOVERY_REGEX,
+  isApplicationWrite,
+} from "../config/rateLimiters";
 
 function makeReq(overrides: Partial<any> = {}) {
   return { headers: {}, cookies: {}, ip: "1.2.3.4", ...overrides };
@@ -144,10 +149,14 @@ describe("applyRateLimiters", () => {
         "/api/v1/refresh-token",
         "/api/v1/profile",
         expect.any(RegExp), // PUBLIC_ROUTES_REGEX
+        expect.any(RegExp), // DRAFT_RECOVERY_REGEX
         "/api",
       ]),
     );
-    expect(app.use).toHaveBeenCalledTimes(5);
+    // + the application-write limiter, mounted as plain middleware.
+    expect(app.use).toHaveBeenCalledTimes(7);
+    // The catch-all general limiter stays last.
+    expect(calls[calls.length - 1][0]).toBe("/api");
   });
 
   it("applies the auth limiter's regex to a known webauthn login route", () => {
@@ -167,5 +176,47 @@ describe("applyRateLimiters", () => {
     );
     expect(publicRegexCall).toBeDefined();
     expect(publicRegexCall[0].test("/api/v1/employee")).toBe(false);
+  });
+
+  it("gives draft recovery its own tight limiter", () => {
+    expect(
+      DRAFT_RECOVERY_REGEX.test(
+        "/api/v1/public/careers/acme/jobs/abc/drafts/recover",
+      ),
+    ).toBe(true);
+    expect(
+      DRAFT_RECOVERY_REGEX.test(
+        "/api/v1/public/careers/acme/jobs/abc/drafts/recover/verify",
+      ),
+    ).toBe(true);
+    expect(DRAFT_RECOVERY_REGEX.test("/api/v1/public/careers/acme")).toBe(
+      false,
+    );
+  });
+
+  it("limits only the POSTs that create drafts or applications", () => {
+    expect(isApplicationWrite("POST", "/api/v1/apply-for-job/acme")).toBe(true);
+    expect(
+      isApplicationWrite("POST", "/api/v1/public/careers/acme/jobs/abc/drafts"),
+    ).toBe(true);
+    expect(
+      isApplicationWrite(
+        "POST",
+        "/api/v1/public/careers/acme/drafts/d1/submit",
+      ),
+    ).toBe(true);
+    // Autosaves and reads stay on the ordinary public budget.
+    expect(
+      isApplicationWrite("PUT", "/api/v1/public/careers/acme/drafts/d1"),
+    ).toBe(false);
+    expect(isApplicationWrite("GET", "/api/v1/public/careers/acme")).toBe(
+      false,
+    );
+    expect(
+      isApplicationWrite(
+        "POST",
+        "/api/v1/public/careers/acme/jobs/abc/drafts/recover",
+      ),
+    ).toBe(false);
   });
 });
