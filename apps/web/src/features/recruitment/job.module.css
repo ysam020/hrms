@@ -27,3 +27,59 @@
   justify-items: start;
   padding: 10px 0 4px;
 }
+
+/* ── Job editor: location rows, screening questions ── */
+.editor {
+  display: grid;
+  gap: 8px;
+}
+.questions {
+  display: grid;
+  gap: 12px;
+}
+.question {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--px-separator);
+  border-radius: var(--px-radius-md, 10px);
+  min-width: 0;
+}
+.location {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+.location > :nth-child(4) {
+  grid-column: 1 / 4;
+}
+@media (max-width: 640px) {
+  .location {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .location > * {
+    grid-column: 1 / 2;
+  }
+  .location > :nth-child(4) {
+    grid-column: 1 / 2;
+  }
+  .location > :last-child {
+    grid-column: 2 / 3;
+    grid-row: 1;
+  }
+}
+.answers {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.answers dt {
+  font: var(--px-type-caption);
+  color: var(--px-text-2);
+}
+.answers dd {
+  margin: 0;
+  white-space: pre-wrap;
+}

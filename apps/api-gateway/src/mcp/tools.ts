@@ -23,6 +23,8 @@ import {
 import { getActiveSettings } from "../handlers/tenantSettings";
 import { isSuperUser } from "../utils/user";
 import { lookupPublicTenant } from "../middleware/resolvePublicTenant";
+import { isPastDeadline } from "../utils/jobDeadline";
+import { readJobConfig } from "../services/recruitmentForms";
 import { runAsTenant, type McpPrincipal } from "./principal";
 import type { McpScope } from "./config";
 
@@ -446,8 +448,13 @@ function toPublicJob(j: any) {
     id: j.id,
     title: j.jobTitle,
     department: j.department || null,
+    employmentType: j.employmentType || null,
+    workplaceType: j.workplaceType || null,
+    locations: readJobConfig(j).locations,
+    remoteRegions: j.workplaceType === "remote" ? (j.remoteRegions ?? []) : [],
     vacancies: j.numberOfVacancies || null,
     experienceYears: j.experience ?? null,
+    experienceMaxYears: j.hasExperienceMax ? j.experienceMax : null,
     requiredSkills: cap(j.requiredSkills, 1_000),
     description: cap(j.jobDescription, 10_000),
     postedOn: j.jobPostingDate || null,
@@ -456,7 +463,9 @@ function toPublicJob(j: any) {
 }
 
 const isPubliclyListed = (j: any) =>
-  j?.status === "Active" && j.visibility !== "internal";
+  j?.status === "Active" &&
+  j.visibility !== "internal" &&
+  !isPastDeadline(j.applicationDeadline);
 
 async function asPublicTenant<T>(slug: string, fn: () => Promise<T>) {
   const tenant = await lookupPublicTenant(slug);

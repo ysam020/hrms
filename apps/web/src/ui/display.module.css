@@ -52,8 +52,8 @@
   height: 20px;
   padding: 0 7px;
   border-radius: var(--px-radius-xs);
-  background: var(--px-neutral-soft);
-  color: var(--px-text-2);
+  background: var(--_soft, var(--px-neutral-soft));
+  color: var(--_fg, var(--px-text-2));
   font: var(--px-type-caption);
   white-space: nowrap;
 }

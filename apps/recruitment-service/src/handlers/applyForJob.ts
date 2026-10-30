@@ -11,8 +11,25 @@ export const applyForJob = async (
   callback: sendUnaryData<any>,
 ) => {
   try {
-    const { jobTitleId, name, email, mobile, resume, reason, aadharNo } =
-      call.request;
+    // aadharNo is still on the wire for old callers but is never stored or
+    // used to identify anyone — candidates are matched in matchCandidate().
+    const {
+      jobTitleId,
+      name,
+      email: rawEmail,
+      mobile,
+      resume,
+      reason,
+      profileJson,
+      screeningAnswersJson,
+      coverLetter,
+      emailVerified,
+      consentAt,
+      privacyNoticeVersion,
+    } = call.request;
+    const email = String(rawEmail || "")
+      .trim()
+      .toLowerCase();
 
     if (!jobTitleId || !name || !email) {
       return callback(null, {
@@ -36,15 +53,27 @@ export const applyForJob = async (
     const jobOpening = await prisma.jobOpening.findUnique({
       where: { id: jobTitleId },
     });
-    if (!jobOpening || !["Open", "Active"].includes(jobOpening.status)) {
+    // "Apply by" a date means through the end of that day (stored as its
+    // midnight), so the opening closes a full day after the stored instant.
+    const pastDeadline =
+      !!jobOpening?.applicationDeadline &&
+      jobOpening.applicationDeadline.getTime() + 24 * 60 * 60 * 1000 <=
+        Date.now();
+    if (
+      !jobOpening ||
+      !["Open", "Active"].includes(jobOpening.status) ||
+      pastDeadline
+    ) {
       return callback(null, {
         message: MESSAGES.JOB_NOT_FOUND_OR_CLOSED,
         status: status.NOT_FOUND,
       });
     }
 
+    // Case-insensitive so applications stored before emails were normalised
+    // still count as "already applied".
     const existing = await prisma.jobApplication.findFirst({
-      where: { jobTitleId, email },
+      where: { jobTitleId, email: { equals: email, mode: "insensitive" } },
     });
     if (existing) {
       return callback(null, {
@@ -67,6 +96,18 @@ export const applyForJob = async (
       pipelineTemplateId = defaultTemplate?.id ?? null;
     }
 
+    const profile = parseJson(profileJson) ?? null;
+    const screeningAnswers = parseJson(screeningAnswersJson) ?? null;
+    const { candidateId, possibleDuplicateOfCandidateId } =
+      await matchCandidate({
+        tenantId,
+        name,
+        email,
+        mobile: mobile || null,
+        emailVerified: emailVerified === true,
+        profile: profile ?? {},
+      });
+
     const application = await prisma.jobApplication.create({
       data: {
         tenantId,
@@ -76,10 +117,17 @@ export const applyForJob = async (
         mobile: mobile || null,
         resume: resume || null,
         reason: reason || null,
-        aadharNo: aadharNo || null,
         status: "Applied",
         pipelineTemplateId,
         currentStageOrder: 0,
+        candidateId,
+        possibleDuplicateOfCandidateId,
+        profile,
+        screeningAnswers,
+        coverLetter: coverLetter || null,
+        submittedAt: new Date(),
+        consentAt: consentAt ? new Date(consentAt) : null,
+        privacyNoticeVersion: privacyNoticeVersion || null,
       },
     });
 
@@ -153,6 +201,7 @@ export const applyForJob = async (
         status: application.status,
         resumeScore: application.resumeScore ?? 0,
         aiNotes: application.aiNotes ?? "",
+        candidateId: application.candidateId ?? "",
       },
     });
   } catch (err) {
@@ -163,3 +212,88 @@ export const applyForJob = async (
     });
   }
 };
+
+const parseJson = (v: unknown) => {
+  if (typeof v !== "string" || !v) return undefined;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return undefined;
+  }
+};
+
+const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+const numOrNull = (v: unknown) =>
+  typeof v === "number" && Number.isFinite(v) ? v : null;
+
+/**
+ * Finds or creates the Candidate for an application. An earlier candidate is
+ * reused only when this applicant proved they own the email (one-time code)
+ * and that earlier record's email was verified the same way — an email or
+ * mobile number someone merely typed can be mistyped, shared or someone
+ * else's, so it never merges two people. Such a match is instead recorded as
+ * possibleDuplicateOfCandidateId for HR to look at. Aadhaar plays no part.
+ */
+export async function matchCandidate(input: {
+  tenantId: string;
+  name: string;
+  email: string;
+  mobile: string | null;
+  emailVerified: boolean;
+  profile: Record<string, unknown>;
+}): Promise<{
+  candidateId: string;
+  possibleDuplicateOfCandidateId: string | null;
+}> {
+  const { tenantId, name, email, mobile, emailVerified, profile } = input;
+  const details = {
+    name,
+    mobile,
+    currentLocation: str(profile.currentLocation),
+    linkedinUrl: str(profile.linkedinUrl),
+    portfolioUrl: str(profile.portfolioUrl),
+    githubUrl: str(profile.githubUrl),
+    skills: str(profile.skills),
+    totalExperience: numOrNull(profile.totalExperience),
+    highestQualification: str(profile.highestQualification),
+  };
+
+  if (emailVerified) {
+    const verified = await prisma.candidate.findFirst({
+      where: { email, emailVerifiedAt: { not: null } },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (verified) {
+      // Same verified person: keep their profile current, but never blank
+      // out something they told us before with an empty answer now.
+      const updates = Object.fromEntries(
+        Object.entries(details).filter(([, v]) => v !== null && v !== ""),
+      );
+      await prisma.candidate.update({
+        where: { id: verified.id },
+        data: updates,
+      });
+      return { candidateId: verified.id, possibleDuplicateOfCandidateId: null };
+    }
+  }
+
+  const lookalike = await prisma.candidate.findFirst({
+    where: {
+      OR: [{ email }, ...(mobile ? [{ mobile }] : [])],
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  const created = await prisma.candidate.create({
+    data: {
+      tenantId,
+      email,
+      emailVerifiedAt: emailVerified ? new Date() : null,
+      ...details,
+    },
+  });
+  return {
+    candidateId: created.id,
+    possibleDuplicateOfCandidateId: lookalike?.id ?? null,
+  };
+}

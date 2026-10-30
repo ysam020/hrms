@@ -4,6 +4,7 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 import { toJobOpeningProto } from "./jobOpeningSerializer";
+import { jobOpeningExtraFields } from "./jobOpeningFields";
 
 export const createJobOpening = async (
   call: ServerUnaryCall<any, any>,
@@ -49,6 +50,7 @@ export const createJobOpening = async (
         createdBy: createdBy || "",
         pipelineTemplateId: pipelineTemplateId || null,
         visibility: visibility || "external",
+        ...jobOpeningExtraFields(call.request, "create"),
       },
     });
 

@@ -490,8 +490,90 @@ model JobOpening {
   pipelineTemplateId String?   @db.ObjectId
   visibility         String    @default("external") // internal | external | both
 
+  // All optional so openings created before these existed keep working.
+  // `experience` stays the minimum years; experienceMax is the upper bound.
+  employmentType     String?   // full_time | part_time | contract | internship | temporary | other
+  workplaceType      String?   // onsite | hybrid | remote
+  // [{ country, state, city, office }] — required for onsite/hybrid only.
+  locations          Json?
+  remoteScope        String?   // anywhere | country | regions (remote only)
+  remoteRegions      String[]
+  experienceMax      Float?
+  preferredSkills    String?
+  minQualification   String?
+  responsibilities   String?
+  qualifications     String?
+  // null on openings that predate the switch — those always showed their
+  // budget publicly, so null is read as "disclosed" rather than reinterpreted.
+  budgetDisclosed    Boolean?
+  recruiter          String?
+  // { fields: { <profileField>: hidden|optional|required }, resume, coverLetter }
+  applicationForm    Json?
+  // [{ id, label, type, required, options, helpText, order }]
+  screeningQuestions Json?
+
   @@index([status, createdOn])
   @@map("jobopenings")
+}
+
+// A person who has applied, independent of any one job. Created at
+// submission time. Matched to an earlier record only through an email the
+// applicant proved they own (emailVerifiedAt); an unverified email/mobile
+// match is recorded on the application for HR to review, never merged.
+model Candidate {
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId             String?   @db.ObjectId
+  name                 String
+  email                String    // normalised: trimmed, lower-case
+  mobile               String?   // normalised: +<country code><number>
+  emailVerifiedAt      DateTime?
+  currentLocation      String?
+  linkedinUrl          String?
+  portfolioUrl         String?
+  githubUrl            String?
+  skills               String?
+  totalExperience      Float?
+  highestQualification String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  applications         JobApplication[]
+
+  @@index([email])
+  @@index([mobile])
+  @@map("candidates")
+}
+
+// An application in progress on the public careers page. Kept apart from
+// JobApplication on purpose: every recruitment count, insight and pipeline
+// query reads jobapplications directly, so a draft there would be counted as
+// an applicant. On submit the data is copied into a JobApplication and this
+// row keeps applicationId so a retried submit returns the same application.
+model ApplicationDraft {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId              String?   @db.ObjectId
+  jobOpeningId          String    @db.ObjectId
+  email                 String    // normalised; recovery looks drafts up by this
+  data                  Json
+  // Bumped on every save; a save carrying an older revision is refused so
+  // two devices can't silently overwrite each other.
+  revision              Int       @default(1)
+  // SHA-256 of the bearer tokens allowed to read/write this draft (one per
+  // device that created or recovered it, newest last, capped).
+  tokenHashes           String[]
+  emailVerifiedAt       DateTime?
+  recoveryCodeHash      String?
+  recoveryCodeExpiresAt DateTime?
+  recoveryCodeSentAt    DateTime?
+  recoveryAttempts      Int       @default(0)
+  status                String    @default("draft") // draft | submitting | submitted | discarded
+  applicationId         String?   @db.ObjectId
+  expiresAt             DateTime
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([jobOpeningId, email, status])
+  @@map("applicationdrafts")
 }
 
 model JobApplication {
@@ -535,12 +617,30 @@ model JobApplication {
   currentStageOrder  Int      @default(0)
   referredByUserId   String?  @db.ObjectId
 
+  // Null on applications from before candidates existed.
+  candidateId        String?  @db.ObjectId
+  // Set when an earlier candidate shares this applicant's email or mobile
+  // but the match couldn't be confirmed — for HR to review, not a merge.
+  possibleDuplicateOfCandidateId String? @db.ObjectId
+  // Answers to the opening's configurable form fields (experience, notice
+  // period, CTC, links…) — see applicationForm on JobOpening.
+  profile            Json?
+  // [{ questionId, label, type, value }] — label/type are snapshotted so
+  // answers stay readable after the opening's questions are edited.
+  screeningAnswers   Json?
+  coverLetter        String?
+  submittedAt        DateTime?
+  consentAt          DateTime?
+  privacyNoticeVersion String?
+
   jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id], onDelete: SetNull)
+  candidate    Candidate?  @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   stageEvents  ApplicationStageEvent[]
   offers       Offer[]
 
   @@index([jobTitleId])
   @@index([status])
+  @@index([candidateId])
   @@map("jobapplications")
 }
 

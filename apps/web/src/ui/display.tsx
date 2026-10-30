@@ -132,8 +132,12 @@ export function Status({ value }: { value?: string | null }) {
   return <StatusBadge tone={toneForStatus(value)}>{value}</StatusBadge>;
 }
 
-export function Tag({ children }: { children: ReactNode }) {
-  return <span className={s.tag}>{children}</span>;
+export function Tag({ children, tone }: { children: ReactNode; tone?: Tone }) {
+  return (
+    <span className={s.tag} style={tone ? toneVars(tone) : undefined}>
+      {children}
+    </span>
+  );
 }
 
 // ── Metrics ─────────────────────────────────────────────────────────────────

@@ -94,10 +94,54 @@ const publicLimiter = rateLimit({
   store: redisStore("rl:public:"),
 });
 
+// Draft recovery sends email and checks 6-digit codes, so it gets a far
+// tighter budget than the rest of the careers page: per IP, 10 requests per
+// 15 minutes across both the "send code" and "verify code" calls. (Each code
+// also dies after 5 wrong guesses — see services/careerApplications.ts.)
+const draftRecoveryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req: any) =>
+    req.ip ? `ip:${ipKeyGenerator(req)}` : "ip:unknown",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Try again in a few minutes." },
+  store: redisStore("rl:draft-recovery:"),
+});
+
+// Creating drafts and submitting applications writes to the tenant's DB, so
+// they're held well below the general public budget.
+const applicationWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: (req: any) =>
+    req.ip ? `ip:${ipKeyGenerator(req)}` : "ip:unknown",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests, please try again later" },
+  store: redisStore("rl:apply-write:"),
+});
+
+export const DRAFT_RECOVERY_REGEX =
+  /^\/api\/v1\/public\/careers\/[^/]+\/jobs\/[^/]+\/drafts\/recover/;
+const APPLICATION_WRITE_REGEX =
+  /^\/api\/v1\/(apply-for-job\/|public\/careers\/[^/]+\/(jobs\/[^/]+\/drafts$|drafts\/[^/]+\/submit$))/;
+
 export function applyRateLimiters(app: Application) {
   app.use(AUTH_ROUTES_REGEX, authLimiter);
   app.use("/api/v1/refresh-token", authLimiter);
   app.use("/api/v1/profile", profileLimiter);
   app.use(PUBLIC_ROUTES_REGEX, publicLimiter);
+  // Stricter budgets on top of the public one for the careers routes that
+  // write or send email.
+  app.use(DRAFT_RECOVERY_REGEX, draftRecoveryLimiter);
+  app.use((req, res, next) =>
+    isApplicationWrite(req.method, req.originalUrl)
+      ? applicationWriteLimiter(req, res, next)
+      : next(),
+  );
   app.use("/api", generalLimiter);
 }
+
+export const isApplicationWrite = (method: string, url: string) =>
+  method === "POST" && APPLICATION_WRITE_REGEX.test(url.split("?")[0]);

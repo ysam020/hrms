@@ -19,6 +19,23 @@ message JobOpening {
   string created_on = 15;
   string pipeline_template_id = 16; // "" = tenant default template
   string visibility = 17;           // internal | external (default) | both
+  // Fields below were added with the location / application-form upgrade;
+  // nested config travels as JSON (as kyc_revision_notes_json does).
+  string employment_type = 18;
+  string workplace_type = 19;
+  string locations_json = 20;
+  string remote_scope = 21;
+  repeated string remote_regions = 22;
+  float experience_max = 23;
+  bool has_experience_max = 24;
+  string preferred_skills = 25;
+  string min_qualification = 26;
+  string responsibilities = 27;
+  string qualifications = 28;
+  bool budget_disclosed = 29;
+  string recruiter = 30;
+  string application_form_json = 31;
+  string screening_questions_json = 32;
 }
 
 message JobApplication {
@@ -32,6 +49,7 @@ message JobApplication {
   string appliedAt = 8;
   float resumeScore = 9;
   string aiNotes = 10;
+  string candidateId = 11;
 }
 
 message Resignation {
@@ -98,6 +116,25 @@ message CreateJobRequest {
   string id = 11; // set on update
   string pipeline_template_id = 12;
   string visibility = 13;
+  string job_posting_date = 14;
+  string department = 15;
+  string employment_type = 16;
+  string workplace_type = 17;
+  string locations_json = 18;
+  string remote_scope = 19;
+  repeated string remote_regions = 20;
+  string experience_max = 21; // "" = no upper bound
+  string preferred_skills = 22;
+  string min_qualification = 23;
+  string responsibilities = 24;
+  string qualifications = 25;
+  string budget_disclosed = 26; // "true" | "false" | "" (unchanged on update)
+  string recruiter = 27;
+  string application_form_json = 28;
+  string screening_questions_json = 29;
+  // Update only: these send "" to mean "leave as is", so a field the editor
+  // cleared on purpose is listed here to be written as empty/null instead.
+  repeated string cleared_fields = 30;
 }
 
 message JobResponse {
@@ -127,8 +164,18 @@ message ApplyJobRequest {
   string email = 3;
   string mobile = 4;
   string resume = 5;
-  string aadharNo = 6;
+  string aadharNo = 6; // no longer collected; kept so old callers still parse
   string reason = 7;
+  // Answers to the opening's application form, already validated against
+  // its configuration by the gateway.
+  string profile_json = 8;
+  string screening_answers_json = 9;
+  string cover_letter = 10;
+  // Set only when the applicant proved they own `email` with a one-time
+  // code — the one case an earlier candidate record may be reused.
+  bool email_verified = 11;
+  string consent_at = 12;
+  string privacy_notice_version = 13;
 }
 
 message ApplicationResponse {

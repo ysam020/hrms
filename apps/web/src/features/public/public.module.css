@@ -391,3 +391,105 @@
 .prose :global(a) {
   color: var(--px-accent);
 }
+
+/* ── Locations, multi-step application ── */
+.where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.formCol[data-steps] {
+  /* A long step mustn't be stuck taller than the viewport. */
+  position: static;
+}
+.stepHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--px-space-3);
+  flex-wrap: wrap;
+}
+.stepHead h2:focus {
+  outline: none;
+}
+.steps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.steps li {
+  height: 4px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+}
+.steps li[data-state="done"],
+.steps li[data-state="current"] {
+  background: var(--px-accent);
+}
+.stepActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--px-space-3);
+}
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--px-accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.linkButton:disabled {
+  color: var(--px-text-3);
+  cursor: default;
+}
+.choiceGroup {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.choiceGroup legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+.review {
+  display: grid;
+  gap: var(--px-space-5);
+}
+.reviewGroup {
+  display: grid;
+  gap: 8px;
+  padding-bottom: var(--px-space-4);
+  border-bottom: 1px solid var(--px-separator);
+}
+.reviewList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.reviewList dt {
+  font: var(--px-type-caption);
+  color: var(--px-text-2);
+}
+.reviewList dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reviewError {
+  color: var(--px-danger);
+}
+.privacy {
+  display: grid;
+  gap: 10px;
+}
