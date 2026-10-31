@@ -1,3 +1,4 @@
+import { readableCase } from "@next/lib/format";
 import { useContext, useMemo, useState } from "react";
 import { UserContext } from "@web/app/providers/UserContext";
 import {
@@ -11,8 +12,8 @@ import {
   EmptyState,
   ErrorState,
   Icon,
-  Metric,
-  Metrics,
+  StatTiles,
+  StatTile,
   Page,
   SearchField,
   Skeleton,
@@ -72,9 +73,10 @@ export default function OrgTree() {
       <>
         <Avatar name={p.name} src={p.employeePhoto} size={32} />
         <span className={s.text}>
-          <span className={s.name}>{p.name}</span>
+          <span className={s.name}>{readableCase(p.name)}</span>
           <span className={s.meta}>
-            {[p.designation, role].filter(Boolean).join(" · ") || p.username}
+            {[readableCase(p.designation), role].filter(Boolean).join(" · ") ||
+              p.username}
           </span>
         </span>
       </>
@@ -95,7 +97,7 @@ export default function OrgTree() {
   return (
     <Page
       title="Organization"
-      width="reading"
+      width="wide"
       tabs={
         <SearchField
           label="Find a person or team"
@@ -129,17 +131,50 @@ export default function OrgTree() {
         </EmptyState>
       ) : (
         <div style={{ display: "grid", gap: 32 }}>
-          <Metrics label="Headcount">
-            <Metric label="Total" value={data.totalEmployeeCount ?? "—"} />
-            <Metric label="Active" value={b.active ?? "—"} />
-            <Metric label="Teams" value={(data.teams ?? []).length} />
-            <Metric label="Unassigned" value={(data.unassigned ?? []).length} />
-          </Metrics>
+          <StatTiles label="Headcount" min={160}>
+            <StatTile
+              label="Total"
+              icon="people"
+              tone="accent"
+              value={data.totalEmployeeCount ?? "—"}
+            />
+            <StatTile
+              label="Active"
+              icon="checkCircle"
+              tone="success"
+              value={b.active ?? "—"}
+              progress={
+                data.totalEmployeeCount
+                  ? (b.active ?? 0) / data.totalEmployeeCount
+                  : undefined
+              }
+            />
+            <StatTile
+              label="Teams"
+              icon="org"
+              value={(data.teams ?? []).length}
+            />
+            <StatTile
+              label="Unassigned"
+              icon="person"
+              tone={(data.unassigned ?? []).length ? "warning" : "neutral"}
+              value={(data.unassigned ?? []).length}
+              note={
+                (data.unassigned ?? []).length ? "Not in any team" : undefined
+              }
+            />
+          </StatTiles>
           <div>
             {data.ceo && match(data.ceo) && (
-              <PersonRow p={data.ceo} role="Leads the organization" />
+              <div className={s.ceo}>
+                <PersonRow p={data.ceo} role="Leads the organization" />
+              </div>
             )}
-            <ul className={s.teams} data-root={data.ceo ? "" : undefined}>
+            <ul
+              className={s.teams}
+              data-root={data.ceo ? "" : undefined}
+              data-tour="org-chart"
+            >
               {teams.map((t: any) => {
                 const expanded =
                   open.has(t._id) || Boolean(query && t.shown.length);
@@ -161,11 +196,24 @@ export default function OrgTree() {
                     >
                       <Icon name="chevronRight" className={s.disclosure} />
                       <span className={s.teamName}>{t.teamName}</span>
-                      <span className={s.count}>{t.members.length + 1}</span>
+                      <span className={s.count}>
+                        {t.members.length + 1}{" "}
+                        <span className="px-sr-only">people</span>
+                      </span>
                     </button>
                     <div className={s.leader}>
                       <PersonRow p={t.leader} role="Team lead" />
                     </div>
+                    {!expanded && t.members.length > 0 && (
+                      <button
+                        type="button"
+                        className={s.more}
+                        onClick={() => setOpen((o) => new Set(o).add(t._id))}
+                      >
+                        Show {t.members.length}{" "}
+                        {t.members.length === 1 ? "member" : "members"}
+                      </button>
+                    )}
                     <Collapse open={expanded} id={`team-${t._id}`}>
                       <ul className={s.members}>
                         {(query ? t.shown : t.members).map((m: Person) => (

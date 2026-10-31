@@ -355,7 +355,7 @@ export default function OrgSetup() {
           email: user?.email ?? "",
         },
         method: { card: false },
-        theme: { color: "#166E96" },
+        theme: { color: "#2A78D6" },
         handler: (r: {
           razorpay_payment_id: string;
           razorpay_subscription_id: string;

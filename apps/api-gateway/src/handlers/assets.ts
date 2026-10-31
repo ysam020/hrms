@@ -32,7 +32,6 @@ import {
 import { handleError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import { notify } from "@hrms/notifications";
 
 // Prisma's MongoDB connector treats an explicit `null` and "field was never
@@ -450,12 +449,6 @@ export async function assignAsset(req: Request, res: Response) {
       },
     });
 
-    await emitWebhookEvent("asset.assigned", {
-      assetId,
-      assetCode: (asset as any).assetCode,
-      assignedTo: employee.username,
-    });
-
     logger.info(
       `Asset ${(asset as any).assetCode} assigned to ${employee.username}`,
       {
@@ -571,12 +564,6 @@ export async function returnAsset(req: Request, res: Response) {
         status: conditionIn === "damaged" ? "maintenance" : "available",
         condition: conditionIn,
       },
-    });
-
-    await emitWebhookEvent("asset.returned", {
-      assetId,
-      assetCode: (asset as any).assetCode,
-      conditionIn,
     });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -756,15 +743,6 @@ export async function reportAssetIssue(req: Request, res: Response) {
         title,
         description,
       },
-    });
-
-    await emitWebhookEvent("asset.issue_reported", {
-      issueId: (issue as any).id,
-      assetId,
-      assetCode: (asset as any).assetCode,
-      type,
-      priority: (issue as any).priority,
-      reportedBy: user!.userId,
     });
 
     // Notify everyone who can manage assets (in-app + push) — fire-and-forget
@@ -1089,11 +1067,6 @@ export async function updateAssetIssueStatus(req: Request, res: Response) {
             },
           });
         }
-        await emitWebhookEvent("asset.retired", {
-          assetId: (issue as any).assetId,
-          assetCode: (asset as any)?.assetCode,
-          reason: issueType,
-        });
       } else if (issueType === "damage") {
         // Send to maintenance — HR decides when to bring it back.
         await prisma.asset.update({
@@ -1116,19 +1089,8 @@ export async function updateAssetIssueStatus(req: Request, res: Response) {
           where: { id: (issue as any).assetId },
           data: { status: "available" },
         });
-        await emitWebhookEvent("asset.returned", {
-          assetId: (issue as any).assetId,
-          assetCode: (asset as any)?.assetCode,
-          via: "return_request",
-        });
       }
     }
-
-    await emitWebhookEvent("asset.issue_updated", {
-      issueId,
-      status,
-      type: issueType,
-    });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: effectsSkipped

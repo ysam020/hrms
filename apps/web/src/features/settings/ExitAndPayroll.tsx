@@ -39,6 +39,7 @@ import {
   inlineCheckClass,
   TextSkeleton,
   TableSkeleton,
+  Tag,
 } from "@next/ui";
 import { apiClient, asList, errorMessage } from "@next/lib/api";
 import { fmtMoney } from "@next/lib/format";
@@ -180,7 +181,11 @@ export function ExitPolicyPage() {
               header: "Tenure",
               priority: "secondary",
               render: (p) =>
-                `${p.minTenureMonths}–${p.maxTenureMonths ?? "∞"} months`,
+                p.maxTenureMonths == null
+                  ? Number(p.minTenureMonths) > 0
+                    ? `${p.minTenureMonths}+ months`
+                    : "Any tenure"
+                  : `${p.minTenureMonths}–${p.maxTenureMonths} months`,
             },
             {
               key: "days",
@@ -195,7 +200,7 @@ export function ExitPolicyPage() {
               header: "Priority",
               align: "right",
               priority: "hidden",
-              render: (p) => p.priority,
+              render: (p) => <Tag>{p.priority}</Tag>,
             },
           ]}
           crud={{

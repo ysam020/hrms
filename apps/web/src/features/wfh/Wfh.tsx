@@ -10,6 +10,7 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
+  DateTile,
   Dialog,
   Field,
   FormGrid,
@@ -22,6 +23,7 @@ import {
   TextArea,
   TextInput,
   fieldSpan2,
+  toneForStatus,
   type Column,
 } from "@next/ui";
 import { DraftNote, sendOrQueue, useOfflineDraft } from "@next/offline";
@@ -131,20 +133,52 @@ export default function Wfh() {
       key: "dates",
       header: "Dates",
       priority: "secondary",
-      render: (r) => (
-        <span className="px-num">
-          {fmtDate(r.date)}
-          {r.toDate && !dayjs(r.toDate).isSame(r.date, "day")
-            ? ` – ${fmtDate(r.toDate)}`
-            : ""}
-        </span>
-      ),
+      render: (r) => {
+        const days = r.toDate
+          ? dayjs(r.toDate).diff(dayjs(r.date), "day") + 1
+          : 1;
+        return (
+          <span className="px-row" style={{ flexWrap: "nowrap", gap: 10 }}>
+            <DateTile
+              date={r.date}
+              size="small"
+              tone={toneForStatus(r.status)}
+            />
+            <span style={{ display: "grid" }}>
+              <span className="px-num" style={{ whiteSpace: "nowrap" }}>
+                {days > 1 && dayjs(r.toDate).isSame(r.date, "month")
+                  ? `${dayjs(r.date).format("D")}–${fmtDate(r.toDate)}`
+                  : days > 1
+                    ? `${fmtDate(r.date)} – ${fmtDate(r.toDate)}`
+                    : fmtDate(r.date)}
+              </span>
+              <span className="px-meta">
+                {days} day{days === 1 ? "" : "s"}
+              </span>
+            </span>
+          </span>
+        );
+      },
     },
     {
       key: "reason",
       header: "Reason",
       priority: "secondary",
-      render: (r) => <span className="px-secondary">{r.reason || "—"}</span>,
+      render: (r) => (
+        <span
+          className="px-secondary"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            maxWidth: "48ch",
+          }}
+          title={r.reason || undefined}
+        >
+          {r.reason || "—"}
+        </span>
+      ),
     },
     {
       key: "status",
@@ -204,8 +238,14 @@ export default function Wfh() {
   return (
     <Page
       title="Work From Home"
+      description={
+        isApprover
+          ? "Your requests and your team’s, in one place. Pending requests wait for an approver."
+          : "Ask to work from home for a day or a stretch of days. Your approver decides."
+      }
       actions={
         <Button
+          data-tour="wfh-request"
           variant="primary"
           icon="plus"
           onClick={() => setRequesting(true)}
@@ -234,6 +274,7 @@ export default function Wfh() {
     >
       <DataTable
         label="Work from home requests"
+        tour="wfh-table"
         columns={columns}
         rows={list.data}
         rowId={(r) => String(r.id)}
@@ -261,10 +302,26 @@ export default function Wfh() {
         }
         empty={{
           icon: "wfh",
-          title:
-            status === "All"
-              ? "No WFH requests"
+          title: list.query
+            ? "No requests match your search"
+            : status === "All"
+              ? "No work from home requests yet"
               : `No ${status.toLowerCase()} requests`,
+          body: list.query
+            ? "Try a different name or clear the search."
+            : status === "Pending"
+              ? isApprover
+                ? "You’re all caught up. New requests appear here for a decision."
+                : "Nothing is waiting for a decision."
+              : status === "All"
+                ? "Requests you make appear here with their status."
+                : undefined,
+          action:
+            !list.query && (status === "All" || status === "Pending") ? (
+              <Button icon="plus" onClick={() => setRequesting(true)}>
+                Request WFH
+              </Button>
+            ) : undefined,
         }}
         footer={<Pagination {...list.pageProps} />}
       />
@@ -357,12 +414,18 @@ function RequestWfh({
     }
   };
   const today = dayjs().format("YYYY-MM-DD");
+  const span =
+    v.date && (!v.toDate || !dayjs(v.toDate).isBefore(v.date))
+      ? dayjs(v.toDate || v.date).diff(dayjs(v.date), "day") + 1
+      : 0;
   return (
     <Dialog
       open={open}
       onClose={onClose}
       busy={saving}
       title="Request Work From Home"
+      description="Leave To empty for a single day."
+      icon={{ name: "wfh", tone: "accent" }}
       footer={
         <>
           <DraftNote
@@ -399,10 +462,20 @@ function RequestWfh({
               onChange={(e) => setV((x) => ({ ...x, toDate: e.target.value }))}
             />
           </Field>
-          <Field label="Reason" error={errors.reason} className={fieldSpan2}>
+          <Field
+            label="Reason"
+            error={errors.reason}
+            hint={
+              span
+                ? `${span} day${span === 1 ? "" : "s"} from home · your approver sees this note`
+                : "Your approver sees this note."
+            }
+            className={fieldSpan2}
+          >
             <TextArea
               rows={3}
               value={v.reason}
+              placeholder="e.g. Waiting at home for a repair visit"
               onChange={(e) => setV((x) => ({ ...x, reason: e.target.value }))}
             />
           </Field>

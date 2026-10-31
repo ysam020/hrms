@@ -34,10 +34,12 @@ describe("support navigation and gates", () => {
       "support",
       "support-console",
       "help-shortcuts",
+      "help-tours",
     ]);
-    // Everyone still has the shortcuts page.
+    // Everyone still has the shortcuts page and the product tours.
     expect(helpPages({ tenantRole: "employee", permissions: [] })).toEqual([
       "help-shortcuts",
+      "help-tours",
     ]);
   });
 
@@ -81,6 +83,7 @@ describe("support navigation and gates", () => {
       "support-console",
     );
     expect(activeEntry("/help").page?.id).toBe("help-shortcuts");
+    expect(activeEntry("/help/tours").page?.id).toBe("help-tours");
   });
 
   it("mirrors the server's organisation-scope rule", () => {

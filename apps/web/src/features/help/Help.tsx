@@ -65,7 +65,7 @@ export default function Help() {
       width="wide"
     >
       <ContactCard />
-      <div className={s.groups}>
+      <div className={s.groups} data-tour="help-shortcuts">
         {groups.map((g) => (
           <section
             key={g.title}

@@ -25,11 +25,14 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  border-top: 1px solid var(--px-separator);
-  border-left: 1px solid var(--px-separator);
+  overflow: hidden;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
 }
 .dow {
-  padding: 6px 8px;
+  padding: 8px 10px;
+  background: var(--px-bg-grouped);
   font: var(--px-type-caption);
   font-weight: 600;
   color: var(--px-text-3);
@@ -50,8 +53,17 @@
   gap: 3px;
   min-width: 0;
 }
+/* Weekends sit on a faint tint so the working week reads at a glance. */
+.cell:nth-of-type(7n + 1),
+.cell:nth-of-type(7n) {
+  background: color-mix(in srgb, var(--px-bg-grouped) 60%, transparent);
+}
 .cell:hover {
   background: var(--px-bg-hover);
+}
+.cell:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: -2px;
 }
 .cell[aria-selected="true"] {
   background: var(--px-bg-selected);
@@ -70,12 +82,14 @@
   font-variant-numeric: tabular-nums;
 }
 .cell[data-today] .num {
-  background: var(--px-danger);
-  color: #fff;
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
   font-weight: 600;
 }
 .chip {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   padding: 1px 6px;
   border-radius: 4px;
   font: var(--px-type-caption);
@@ -121,12 +135,82 @@
   display: grid;
   gap: 14px;
 }
+.day {
+  gap: 8px;
+}
 .dayItem {
   display: grid;
-  gap: 2px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--px-separator);
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-content);
+  box-shadow:
+    inset 3px 0 0 var(--px-accent),
+    var(--px-shadow-card);
 }
-.dayItem:last-child {
-  border-bottom: 0;
+.dayItem[data-kind="holiday"] {
+  box-shadow:
+    inset 3px 0 0 var(--px-warning),
+    var(--px-shadow-card);
+}
+.dayWhen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: var(--px-space-6) var(--px-space-4);
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-grouped);
+  color: var(--px-text-2);
+  font: var(--px-type-callout);
+}
+.empty > svg {
+  color: var(--px-accent);
+}
+.upcoming {
+  display: grid;
+  gap: 8px;
+  margin-top: var(--px-space-6);
+}
+.upcoming ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.upTitle {
+  font: var(--px-type-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--px-text-3);
+}
+.upItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--px-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.upItem:hover {
+  background: var(--px-bg-hover);
+}
+.upItem:focus-visible {
+  outline: 2px solid var(--px-focus);
+}
+.upText {
+  display: grid;
+  min-width: 0;
 }

@@ -1,0 +1,65 @@
+.question {
+  display: grid;
+  gap: var(--px-space-4);
+  padding: var(--px-space-5);
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
+  transition: box-shadow var(--px-dur-fast) var(--px-ease-standard);
+}
+.question:focus-within {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--px-accent) 45%, transparent),
+    0 1px 2px rgb(0 0 0 / 0.04);
+}
+.qHead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--px-space-3);
+}
+.qNum {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
+  font: 600 12px/1 var(--px-font-rounded);
+}
+.question[data-answered] .qNum {
+  background: var(--px-success-soft);
+  color: var(--px-success);
+}
+.qLabel {
+  flex: 1;
+  min-width: 0;
+  padding-top: 3px;
+  font: var(--px-type-headline);
+}
+.submitBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--px-space-3);
+  padding: var(--px-space-3) 0;
+  background: var(--px-bg-content);
+  border-top: 1px solid var(--px-separator);
+}
+.progress {
+  flex: 1 1 120px;
+  height: 6px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+  overflow: hidden;
+}
+.progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--px-success);
+  transition: width var(--px-dur-base) var(--px-ease-standard);
+}

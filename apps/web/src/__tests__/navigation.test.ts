@@ -45,11 +45,6 @@ describe("navigation mirrors Classic's route gates", () => {
     expect(modules({ tenantRole: "owner", wfhEnabled: true })).toEqual(
       expect.arrayContaining(["analytics", "settings", "wfh", "audit"]),
     );
-    // Webhooks is reachable from Search only, not the sidebar.
-    expect(modules({ tenantRole: "owner" })).not.toContain("webhooks");
-    expect(
-      searchableNav({ tenantRole: "owner" } as never).map((e) => e.path),
-    ).toContain("/webhooks/endpoints");
     // Permissions needs superuser or the explicit grant (Classic's canManagePermissions).
     expect(modules({ tenantRole: "owner" })).not.toContain("permissions");
     expect(

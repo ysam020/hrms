@@ -185,6 +185,7 @@ export default function Resignations() {
       actions={
         !active && (
           <Button
+            data-tour="resign-submit"
             variant="tintedDanger"
             icon="door"
             onClick={() => setResigning(true)}
@@ -257,6 +258,7 @@ export default function Resignations() {
         )}
         <DataTable
           label="Resignations"
+          tour="resign-table"
           columns={columns}
           rows={list.data}
           rowId={(r) => String(r.id)}

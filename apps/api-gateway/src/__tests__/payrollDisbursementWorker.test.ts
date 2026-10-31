@@ -1,6 +1,5 @@
 import { prisma } from "@hrms/db";
 import { requestIdStorage } from "@hrms/logger";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import { runPayrollDisbursement } from "../services/payrollDisbursement";
 import { startPayrollDisbursementWorker } from "../workers/payrollDisbursementWorker";
 
@@ -40,10 +39,6 @@ jest.mock("@hrms/db", () => {
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
   requestIdStorage: { run: jest.fn((_id: string, fn: () => any) => fn()) },
-}));
-
-jest.mock("../utils/webhookEmitter", () => ({
-  emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../services/payrollDisbursement", () => ({
@@ -120,22 +115,12 @@ describe("payrollDisbursementWorker", () => {
     });
   });
 
-  it("emits the payroll.disbursed webhook only after the job actually completes", async () => {
-    await runProcessor();
-
-    expect(emitWebhookEvent).toHaveBeenCalledWith(
-      "payroll.disbursed",
-      expect.objectContaining({ runId: "r1", month: 6, year: 2024 }),
-    );
-  });
-
   it("tolerates the run already being 'disbursed' (a retry-payouts call that found no full-job status to flip)", async () => {
     mockPayrollRunUpdate.mockRejectedValue(
       Object.assign(new Error("no record"), { code: "P2025" }),
     );
 
     await expect(runProcessor()).resolves.toBeDefined();
-    expect(emitWebhookEvent).toHaveBeenCalled(); // still completes normally
   });
 
   it("runs the job inside the producer's requestId context when the job carries one", async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
@@ -9,11 +9,14 @@ import {
 import { states } from "@web/assets/data/statesData";
 import { StaggerItem, StaggerList } from "@next/motion";
 import {
+  Icon,
+  FormSection,
   Avatar,
   Button,
   ConfirmDialog,
   DataTable,
   Dialog,
+  EmptyState,
   Field,
   FormGrid,
   IconButton,
@@ -33,9 +36,11 @@ import {
   KeyValuesSkeleton,
   ListSkeleton,
   PrimaryCell,
+  type IconName,
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
-import { fmtDate } from "@next/lib/format";
+import { fmtDate, fromNow } from "@next/lib/format";
+import pc from "./settings.module.css";
 
 // Company Info, Recruitment Pipeline and Join Requests (Classic's
 // CompanyInfo, RecruitmentPipelineSettings and JoinRequests). Endpoints,
@@ -119,6 +124,12 @@ export function CompanyInfoPage() {
     }
   };
 
+  const lab = (icon: IconName, text: string) => (
+    <span className={pc.kvLabel}>
+      <Icon name={icon} size={14} />
+      {text}
+    </span>
+  );
   const link = (href: string | null | undefined, text?: string | null) =>
     href ? (
       <a href={href} target="_blank" rel="noreferrer">
@@ -129,9 +140,10 @@ export function CompanyInfoPage() {
   return (
     <Page
       title="Company Info"
+      width="wide"
       actions={
         canEdit && profile !== undefined ? (
-          <Button icon="edit" onClick={edit}>
+          <Button data-tour="company-edit" icon="edit" onClick={edit}>
             Edit
           </Button>
         ) : undefined
@@ -144,7 +156,7 @@ export function CompanyInfoPage() {
         </div>
       ) : (
         <>
-          <header className="px-row" style={{ gap: 16, flexWrap: "nowrap" }}>
+          <header className={pc.companyHero} data-tour="company-hero">
             {profile?.logoUrl ? (
               <img
                 src={profile.logoUrl}
@@ -165,52 +177,81 @@ export function CompanyInfoPage() {
               <span className="px-meta">
                 Contact and statutory details for your organization
               </span>
+              <span className={pc.heroChips}>
+                {profile?.website && (
+                  <Tag>
+                    <Icon name="link" size={12} />
+                    {profile.website.replace(/^https?:\/\//, "")}
+                  </Tag>
+                )}
+                {profile?.workState && (
+                  <Tag>
+                    <Icon name="pin" size={12} />
+                    {profile.workState}
+                  </Tag>
+                )}
+              </span>
             </div>
           </header>
-          <Section title="Contact">
-            <KeyValues
-              items={[
-                [
-                  "Help Phone",
-                  link(
-                    profile?.helpPhone && `tel:${profile.helpPhone}`,
-                    profile?.helpPhone,
-                  ),
-                ],
-                [
-                  "Help Email",
-                  link(
-                    profile?.helpEmail && `mailto:${profile.helpEmail}`,
-                    profile?.helpEmail,
-                  ),
-                ],
-                ["Website", link(profile?.website)],
-                ["Office Address", profile?.officeAddress],
-                ["State", profile?.workState],
-              ]}
-            />
-          </Section>
-          <Section title="Statutory">
-            <KeyValues
-              items={[
-                [
-                  "TAN",
-                  profile?.tan && <span className="px-num">{profile.tan}</span>,
-                ],
-                [
-                  "CIN",
-                  profile?.cin && <span className="px-num">{profile.cin}</span>,
-                ],
-                [
-                  "Authorized Signatory",
-                  profile?.signatoryName &&
-                    [profile.signatoryName, profile.signatoryDesignation]
-                      .filter(Boolean)
-                      .join(", "),
-                ],
-              ]}
-            />
-          </Section>
+          <div className={pc.companyGrid}>
+            <FormSection
+              icon="chat"
+              title="Contact"
+              description="Shown to employees when they need help"
+            >
+              <KeyValues
+                items={[
+                  [
+                    lab("device", "Help Phone"),
+                    link(
+                      profile?.helpPhone && `tel:${profile.helpPhone}`,
+                      profile?.helpPhone,
+                    ),
+                  ],
+                  [
+                    lab("inbox", "Help Email"),
+                    link(
+                      profile?.helpEmail && `mailto:${profile.helpEmail}`,
+                      profile?.helpEmail,
+                    ),
+                  ],
+                  [lab("link", "Website"), link(profile?.website)],
+                  [lab("pin", "Office Address"), profile?.officeAddress],
+                  [lab("flag", "State"), profile?.workState],
+                ]}
+              />
+            </FormSection>
+            <FormSection
+              icon="shield"
+              tone="warning"
+              title="Statutory"
+              description="CIN and the signatory appear on offer letters"
+            >
+              <KeyValues
+                items={[
+                  [
+                    lab("doc", "TAN"),
+                    profile?.tan && (
+                      <span className="px-num">{profile.tan}</span>
+                    ),
+                  ],
+                  [
+                    lab("idcard", "CIN"),
+                    profile?.cin && (
+                      <span className="px-num">{profile.cin}</span>
+                    ),
+                  ],
+                  [
+                    lab("edit", "Authorized Signatory"),
+                    profile?.signatoryName &&
+                      [profile.signatoryName, profile.signatoryDesignation]
+                        .filter(Boolean)
+                        .join(", "),
+                  ],
+                ]}
+              />
+            </FormSection>
+          </div>
         </>
       )}
       <Dialog
@@ -360,6 +401,9 @@ export function PipelinePage() {
     stages: PipelineStage[];
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  // Shown after a Save attempt, so an untouched new pipeline isn't all red.
+  const [showErrors, setShowErrors] = useState(false);
+  const roundsEnd = useRef<HTMLDivElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<PipelineTemplate | null>(
     null,
   );
@@ -400,6 +444,15 @@ export function PipelinePage() {
 
   const save = async () => {
     if (!editing) return;
+    if (!valid) {
+      setShowErrors(true);
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')
+          ?.focus(),
+      );
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -464,36 +517,35 @@ export function PipelinePage() {
   return (
     <Page
       title="Recruitment Pipeline"
+      description="The interview rounds a job goes through, who owns each one, and whether it includes background verification. Jobs use the default pipeline unless you pick another."
       actions={
         canEdit ? (
           <Button
+            data-tour="pipeline-new"
             variant="primary"
             icon="plus"
-            onClick={() =>
+            onClick={() => {
+              setShowErrors(false);
               setEditing({
                 id: null,
                 name: "",
                 isDefault: (templates?.length ?? 0) === 0,
                 stages: DEFAULT_STAGES.map((st) => ({ ...st })),
-              })
-            }
+              });
+            }}
           >
             New Pipeline
           </Button>
         ) : undefined
       }
     >
-      <p className="px-secondary px-callout" style={{ maxWidth: 640 }}>
-        The interview rounds a job goes through, who owns each one, and whether
-        it includes background verification. Jobs use the default pipeline
-        unless you pick another.
-      </p>
       {templates === null ? (
         <ListSkeleton rows={2} trailing />
       ) : templates.length === 0 ? (
-        <p className="px-tertiary px-callout">
-          No pipelines yet. New jobs use the standard three-round process.
-        </p>
+        <EmptyState icon="checklist" title="No pipelines yet">
+          New jobs use the standard three-round process: screening, technical,
+          and HR.
+        </EmptyState>
       ) : (
         <StaggerList style={{ display: "grid", gap: 28 }}>
           {templates.map((t, i) => (
@@ -526,20 +578,21 @@ export function PipelinePage() {
                       <Button
                         size="small"
                         variant="plain"
-                        onClick={() =>
+                        onClick={() => {
+                          setShowErrors(false);
                           setEditing({
                             id: t.id,
                             name: t.name,
                             isDefault: t.isDefault,
                             stages: t.stages.map((st) => ({ ...st })),
-                          })
-                        }
+                          });
+                        }}
                       >
                         Edit
                       </Button>
                       <Button
                         size="small"
-                        variant="plain"
+                        variant="plainDanger"
                         onClick={() => setDeleteTarget(t)}
                       >
                         Delete
@@ -579,16 +632,12 @@ export function PipelinePage() {
         busy={saving}
         size="lg"
         title={editing?.id ? "Edit Pipeline" : "New Pipeline"}
+        description="Rounds run in this order. Use the arrows to reorder them."
         footer={
           <>
             <Button onClick={() => setEditing(null)}>Cancel</Button>
-            <Button
-              variant="primary"
-              busy={saving}
-              disabled={!valid}
-              onClick={save}
-            >
-              Save
+            <Button variant="primary" busy={saving} onClick={save}>
+              {editing?.id ? "Save Changes" : "Create Pipeline"}
             </Button>
           </>
         }
@@ -596,7 +645,14 @@ export function PipelinePage() {
         {editing && (
           <div style={{ display: "grid", gap: 16 }}>
             <FormGrid columns={2}>
-              <Field label="Pipeline Name">
+              <Field
+                label="Pipeline Name"
+                error={
+                  showErrors && !editing.name.trim()
+                    ? "Name the pipeline, e.g. Engineering."
+                    : null
+                }
+              >
                 <TextInput
                   data-autofocus
                   value={editing.name}
@@ -618,24 +674,26 @@ export function PipelinePage() {
                 Default for new jobs
               </label>
             </FormGrid>
-            <h3 className="px-headline">Rounds</h3>
-            <ol style={{ display: "grid", gap: 10 }}>
+            <div className={pc.roundsHeader}>
+              <h3 className="px-headline">Rounds</h3>
+              <span className="px-meta">
+                {editing.stages.length}{" "}
+                {editing.stages.length === 1 ? "round" : "rounds"}
+              </span>
+            </div>
+            <ol className={pc.rounds}>
               {editing.stages.map((st, i) => (
-                <li
-                  key={i}
-                  style={{
-                    display: "grid",
-                    gap: 8,
-                    padding: 12,
-                    borderRadius: 12,
-                    background: "var(--px-neutral-soft)",
-                  }}
-                >
-                  <div
-                    className="px-row"
-                    style={{ justifyContent: "space-between" }}
-                  >
-                    <span className="px-meta px-secondary">Round {i + 1}</span>
+                <li key={i} className={pc.round}>
+                  <div className={pc.roundHeader}>
+                    <span className={pc.roundNumber} aria-hidden>
+                      {i + 1}
+                    </span>
+                    <span className={pc.roundTitle}>
+                      {st.name.trim() || `Round ${i + 1}`}
+                      {st.isBgvStage && (
+                        <StatusBadge tone="accent">BGV</StatusBadge>
+                      )}
+                    </span>
                     <span
                       className="px-row"
                       style={{ flexWrap: "nowrap", gap: 2 }}
@@ -666,10 +724,19 @@ export function PipelinePage() {
                     </span>
                   </div>
                   <FormGrid columns={2}>
-                    <Field label="Name">
+                    <Field
+                      label="Name"
+                      error={
+                        showErrors && !st.name.trim()
+                          ? "Name this round."
+                          : null
+                      }
+                    >
                       <TextInput
+                        data-round-name={i}
                         value={st.name}
                         onChange={(e) => stage(i, { name: e.target.value })}
+                        placeholder="e.g. Technical Round"
                       />
                     </Field>
                     <Field label="Interviewer Role" optional>
@@ -681,13 +748,18 @@ export function PipelinePage() {
                         placeholder="Hiring Manager"
                       />
                     </Field>
-                    <label className={inlineCheckClass}>
+                    <label className={`${inlineCheckClass} ${fieldSpan2}`}>
                       <Switch
                         label="Background verification"
                         checked={st.isBgvStage}
                         onChange={(v) => stage(i, { isBgvStage: v })}
                       />
-                      Background verification
+                      <span style={{ display: "grid" }}>
+                        <span>Background verification</span>
+                        <span className="px-meta px-tertiary">
+                          This round checks the candidate’s background.
+                        </span>
+                      </span>
                     </label>
                     {st.isBgvStage && (
                       <Field label="BGV Vendor" optional>
@@ -703,19 +775,28 @@ export function PipelinePage() {
                 </li>
               ))}
             </ol>
+            <div ref={roundsEnd} />
             <span>
               <Button
                 size="small"
                 icon="plus"
-                onClick={() =>
+                onClick={() => {
+                  const next = editing.stages.length;
                   setEditing({
                     ...editing,
-                    stages: [
-                      ...editing.stages,
-                      emptyStage(editing.stages.length + 1),
-                    ],
-                  })
-                }
+                    stages: [...editing.stages, emptyStage(next + 1)],
+                  });
+                  // Bring the new round into view and start typing its name.
+                  requestAnimationFrame(() => {
+                    roundsEnd.current?.scrollIntoView({
+                      block: "end",
+                      behavior: "smooth",
+                    });
+                    document
+                      .querySelector<HTMLElement>(`[data-round-name="${next}"]`)
+                      ?.focus({ preventScroll: true });
+                  });
+                }}
               >
                 Add Round
               </Button>
@@ -754,13 +835,23 @@ export function JoinRequestsPage() {
     decision: "approve" | "reject";
   } | null>(null);
   const [acting, setActing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setRequests(null);
+    setLoadError(null);
     apiClient
       .get(API_ENDPOINTS.JOIN_REQUESTS)
       .then((r) => setRequests(r.data?.data?.requests ?? []))
-      .catch(() => setRequests([]));
+      .catch((err) => {
+        // A failed load isn't "no requests": say so and offer a retry.
+        setLoadError(errorMessage(err));
+        setRequests([]);
+      });
   }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const decide = async () => {
     if (!pending) return;
@@ -798,10 +889,21 @@ export function JoinRequestsPage() {
   };
 
   return (
-    <Page title="Join Requests">
+    <Page
+      title="Join Requests"
+      subtitle={
+        requests && requests.length > 0
+          ? `${requests.length} waiting for a decision`
+          : undefined
+      }
+      description="People who signed up and asked to join your organisation. Approving makes them an employee; rejecting declines the request."
+    >
       <DataTable
         label="Join requests"
+        tour="join-table"
         loading={requests === null}
+        error={loadError}
+        onRetry={load}
         rows={requests ?? []}
         rowId={(r) => r.id}
         empty={{
@@ -826,7 +928,18 @@ export function JoinRequestsPage() {
             key: "when",
             header: "Requested",
             priority: "secondary",
-            render: (r) => fmtDate(r.createdAt),
+            render: (r) => (
+              <span style={{ display: "grid" }}>
+                <span className="px-num">{fmtDate(r.createdAt)}</span>
+                <span className="px-meta">{fromNow(r.createdAt)}</span>
+              </span>
+            ),
+          },
+          {
+            key: "status",
+            header: "Status",
+            priority: "hidden",
+            render: () => <StatusBadge tone="warning">Waiting</StatusBadge>,
           },
           {
             key: "act",
@@ -840,6 +953,7 @@ export function JoinRequestsPage() {
               >
                 <Button
                   size="small"
+                  variant="tintedDanger"
                   onClick={() => setPending({ r, decision: "reject" })}
                 >
                   Reject

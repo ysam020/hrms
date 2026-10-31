@@ -1,0 +1,253 @@
+/* Walkthrough tooltip, "loading the next step" pill and the Product Tours
+   launcher. Built from the app's tokens so it follows light/dark and the
+   accent like everything else. */
+
+.tooltip {
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(70vh, 520px);
+  overflow: auto;
+  padding: 16px 16px 14px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-raised);
+  color: var(--px-text-1);
+  box-shadow:
+    var(--px-shadow-3),
+    0 0 0 1px var(--px-separator);
+  text-align: start;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -6px -8px -4px 0;
+}
+
+.eyebrow {
+  margin: 0;
+  font: var(--px-type-meta);
+  color: var(--px-text-2);
+}
+
+.module {
+  font-weight: 600;
+  color: var(--px-accent);
+}
+
+.title {
+  margin: 0;
+  font: var(--px-type-section);
+  letter-spacing: var(--px-type-section-track);
+}
+
+.body {
+  font: var(--px-type-body);
+  color: var(--px-text-2);
+}
+.body p {
+  margin: 0 0 6px;
+}
+.body p:last-child {
+  margin-bottom: 0;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.bar {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+  overflow: hidden;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--px-accent);
+  transition: width var(--px-dur-base) var(--px-ease-standard);
+}
+
+.count {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.primary {
+  display: flex;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.link {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--px-text-2);
+  font: var(--px-type-label);
+  cursor: pointer;
+}
+.link:hover {
+  color: var(--px-text-1);
+  text-decoration: underline;
+}
+
+/* Shown only when a step takes a moment (a page loading its data). */
+.waiting {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 350;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin-inline: auto;
+  padding: 6px 6px 6px 14px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-bg-raised);
+  box-shadow:
+    var(--px-shadow-2),
+    0 0 0 1px var(--px-separator);
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+
+@media (max-width: 639px) {
+  /* Clear the tab bar. */
+  .waiting {
+    bottom: calc(var(--px-tabbar-h) + 16px + env(safe-area-inset-bottom));
+  }
+  .tooltip {
+    max-height: 60vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar > span {
+    transition: none;
+  }
+}
+
+/* ── Product Tours page & onboarding card ─────────────────────────────── */
+
+.hero {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border-radius: var(--px-radius-lg);
+  background: color-mix(in srgb, var(--px-accent) 8%, var(--px-bg-content));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--px-accent) 18%, transparent);
+}
+
+.heroHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.heroIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+}
+
+.heroTitle {
+  margin: 0;
+  font: var(--px-type-section);
+  letter-spacing: var(--px-type-section-track);
+}
+
+.heroText {
+  margin: 4px 0 0;
+  font: var(--px-type-body);
+  color: var(--px-text-2);
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modules {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--px-radius-lg);
+  overflow: hidden;
+  background: var(--px-separator);
+  box-shadow: 0 0 0 1px var(--px-separator);
+}
+
+.moduleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--px-bg-content);
+}
+
+.moduleText {
+  flex: 1;
+  min-width: 0;
+}
+
+.moduleName {
+  margin: 0;
+  font: var(--px-type-headline);
+}
+
+.moduleSummary {
+  margin: 2px 0 0;
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+
+.moduleMeta {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .moduleRow {
+    flex-wrap: wrap;
+  }
+  .moduleMeta {
+    order: 3;
+  }
+}

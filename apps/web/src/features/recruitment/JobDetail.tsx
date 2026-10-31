@@ -27,6 +27,8 @@ import {
 } from "@web/shared/utils/salaryCalc";
 import { Collapse, TransitionLink, sharedName, vtName } from "@next/motion";
 import {
+  Tag,
+  FormSection,
   Avatar,
   Banner,
   Button,
@@ -55,7 +57,7 @@ import {
 } from "@next/ui";
 import { apiClient, asList, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
-import { fmtDate, fmtDateTime, fmtMoney } from "@next/lib/format";
+import { fmtDate, fmtDateTime, fmtMoney, readableCase } from "@next/lib/format";
 import {
   PROFILE_FIELDS,
   employmentTypeLabel,
@@ -194,71 +196,151 @@ export default function JobDetail() {
             </span>
           </header>
           <Metrics label="Hiring progress">
-            <Metric label="Openings" value={j.numberOfVacancies ?? "—"} />
-            <Metric label="Hired" value={j.candidatesHired ?? 0} />
+            <Metric
+              label="Openings"
+              tone="accent"
+              icon="briefcase"
+              value={j.numberOfVacancies ?? "—"}
+            />
+            <Metric
+              label="Hired"
+              tone="success"
+              icon="checkCircle"
+              value={j.candidatesHired ?? 0}
+            />
             <Metric
               label="Applicants"
+              tone="neutral"
+              icon="people"
               value={apps.loading || stage ? "—" : applicants.length}
             />
             <Metric
               label="Apply By"
+              tone="warning"
+              icon="calendar"
               value={fmtDate(j.applicationDeadline)}
               size="sm"
             />
           </Metrics>
-          <div className={s.columns}>
-            <Section title="About the Role">
-              {j.jobDescription && (
-                <p className={s.description}>{j.jobDescription}</p>
-              )}
+          {/* Role and Hiring pair up at equal height; the long-form
+              sections run full width beneath them. */}
+          <div className={s.detailGrid}>
+            <FormSection icon="briefcase" title="Role">
               <KeyValues
                 items={[
-                  ["Posted", fmtDate(j.jobPostingDate || j.createdAt)],
-                  ["Department", j.department || null],
                   [
-                    "Employment Type",
-                    employmentTypeLabel(j.employmentType) || null,
+                    "Department",
+                    j.department ? readableCase(j.department) : null,
                   ],
+                  ["Employment", employmentTypeLabel(j.employmentType) || null],
                   ["Workplace", workplaceTypeLabel(j.workplaceType) || null],
                   ["Location", locationSummary(j) || null],
-                  ["Experience", experienceLabel(j)],
+                  ["Posted", fmtDate(j.jobPostingDate || j.createdAt)],
+                ]}
+              />
+            </FormSection>
+            <FormSection icon="people" tone="warning" title="Hiring">
+              <KeyValues
+                items={[
                   [
                     "Budget",
-                    Array.isArray(j.budget) && j.budget.length
-                      ? `${j.budget[0]}–${j.budget[1]} LPA${j.budgetDisclosed === false ? " (not shown publicly)" : ""}`
-                      : !Array.isArray(j.budget) && j.budget
-                        ? fmtMoney(j.budget)
-                        : null,
+                    Array.isArray(j.budget) && j.budget.length ? (
+                      <span>
+                        <b className="px-num">
+                          ₹{j.budget[0]}–{j.budget[1]} LPA
+                        </b>
+                        {j.budgetDisclosed === false && (
+                          <span className="px-meta"> · not public</span>
+                        )}
+                      </span>
+                    ) : !Array.isArray(j.budget) && j.budget ? (
+                      fmtMoney(j.budget)
+                    ) : null,
                   ],
-                  ["Hiring Manager", j.hiringManager],
-                  ["Recruiter", j.recruiter || null],
                   [
-                    "Skills",
-                    Array.isArray(j.requiredSkills)
-                      ? j.requiredSkills.join(", ")
-                      : j.requiredSkills,
+                    "Hiring Manager",
+                    j.hiringManager ? readableCase(j.hiringManager) : null,
                   ],
-                  ["Preferred Skills", j.preferredSkills || null],
-                  ["Minimum Qualification", j.minQualification || null],
+                  ["Recruiter", j.recruiter ? readableCase(j.recruiter) : null],
+                  ["Min. Qualification", j.minQualification || null],
                   [
-                    "Screening Questions",
-                    jobConfig(j).questions.length || null,
+                    "Screening",
+                    jobConfig(j).questions.length
+                      ? `${jobConfig(j).questions.length} questions`
+                      : null,
                   ],
                 ]}
               />
+            </FormSection>
+            <FormSection
+              icon="doc"
+              title="About the Role"
+              description={
+                [
+                  employmentTypeLabel(j.employmentType),
+                  workplaceTypeLabel(j.workplaceType),
+                  locationSummary(j),
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
+              }
+            >
+              {j.jobDescription ? (
+                <p className={s.description}>{j.jobDescription}</p>
+              ) : (
+                <p className="px-tertiary">No description yet.</p>
+              )}
               {j.responsibilities && (
-                <>
-                  <h3 className="px-headline">Responsibilities</h3>
+                <div className={s.block}>
+                  <h3 className={s.blockTitle}>Responsibilities</h3>
                   <p className={s.description}>{j.responsibilities}</p>
-                </>
+                </div>
               )}
               {j.qualifications && (
-                <>
-                  <h3 className="px-headline">Required Qualifications</h3>
+                <div className={s.block}>
+                  <h3 className={s.blockTitle}>Required Qualifications</h3>
                   <p className={s.description}>{j.qualifications}</p>
-                </>
+                </div>
               )}
-            </Section>
+            </FormSection>
+            <FormSection
+              icon="checklist"
+              tone="success"
+              title="Skills"
+              description={
+                experienceLabel(j)
+                  ? `${experienceLabel(j)} of experience`
+                  : undefined
+              }
+            >
+              <div className={s.skillChips}>
+                {(Array.isArray(j.requiredSkills)
+                  ? j.requiredSkills
+                  : String(j.requiredSkills ?? "").split(",")
+                )
+                  .map((x: string) => x.trim())
+                  .filter(Boolean)
+                  .map((x: string) => (
+                    <Tag key={x} tone="accent">
+                      {x}
+                    </Tag>
+                  ))}
+              </div>
+              {j.preferredSkills && (
+                <div className={s.block}>
+                  <h3 className={s.blockTitle}>Nice to have</h3>
+                  <div className={s.skillChips}>
+                    {String(j.preferredSkills)
+                      .split(",")
+                      .map((x) => x.trim())
+                      .filter(Boolean)
+                      .map((x) => (
+                        <Tag key={x}>{x}</Tag>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </FormSection>
           </div>
           {perm("view_applications") || user?.isSuperUser ? (
             <Section

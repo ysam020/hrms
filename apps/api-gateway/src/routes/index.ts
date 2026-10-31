@@ -16,6 +16,7 @@ import { permissionsRouter } from "./permissions";
 import { chatRouter } from "./chat";
 import { aiConnectionsRouter } from "./aiConnections";
 import { dashboardRouter } from "./dashboard";
+import { walkthroughRouter } from "./walkthrough";
 import { aiInsightsRouter } from "./ai-insights";
 import { paymentRouter } from "./payment";
 import { tenantSettingsRouter } from "./tenantSettings";
@@ -36,7 +37,6 @@ import { performanceReviewRouter } from "./performanceReview";
 import { assetsRouter } from "./assets";
 import { wfhRouter } from "./wfh";
 import { helpdeskRouter } from "./helpdesk";
-import { webhooksRouter } from "./webhooks";
 import { reportsRouter } from "./reports";
 import { supportRouter, platformSupportRouter } from "./support";
 import { defaultLimiter } from "../middleware/rateLimiter";
@@ -120,6 +120,14 @@ rootRouter.use(...subscriptionGuard, permissionsRouter);
 rootRouter.use(...subscriptionGuard, chatRouter);
 rootRouter.use(...subscriptionGuard, aiConnectionsRouter);
 rootRouter.use(...subscriptionGuard, dashboardRouter);
+rootRouter.use(
+  "/walkthrough",
+  defaultLimiter,
+  authenticate,
+  requireTenant,
+  idempotency,
+  walkthroughRouter,
+);
 rootRouter.use(...subscriptionGuard, aiInsightsRouter);
 rootRouter.use(...subscriptionGuard, tenantSettingsRouter);
 rootRouter.use(...subscriptionGuard, approvalChainsRouter);
@@ -142,6 +150,5 @@ rootRouter.use(
 rootRouter.use("/assets", ...subscriptionGuard, assetsRouter);
 rootRouter.use("/wfh", ...subscriptionGuard, wfhRouter);
 rootRouter.use("/helpdesk", ...subscriptionGuard, helpdeskRouter);
-rootRouter.use("/webhooks", ...subscriptionGuard, webhooksRouter);
 rootRouter.use("/reports", ...subscriptionGuard, reportsRouter);
 rootRouter.use("/tax-declarations", ...subscriptionGuard, taxDeclarationRouter);

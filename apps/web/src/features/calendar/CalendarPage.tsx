@@ -12,6 +12,9 @@ import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { addEventSchema } from "@web/shared/schemas/addEvent";
 import { StaggerItem, StaggerList, Swap } from "@next/motion";
 import {
+  Tag,
+  Icon,
+  DateTile,
   Button,
   ConfirmDialog,
   Dialog,
@@ -71,6 +74,15 @@ export default function CalendarPage() {
       );
     return m;
   }, [events.data, holidays.data]);
+  // The next few things after the selected day, from the same data.
+  const upcoming = useMemo(() => {
+    const from = day.format("YYYY-MM-DD");
+    return [...byDate.entries()]
+      .filter(([d]) => d > from)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([d, items]) => items.map((it) => [d, it] as const))
+      .slice(0, 5);
+  }, [byDate, day]);
 
   const cells = useMemo(() => {
     const start = month.startOf("week");
@@ -116,7 +128,12 @@ export default function CalendarPage() {
     <Page
       title="Calendar"
       actions={
-        <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>
+        <Button
+          variant="primary"
+          icon="plus"
+          onClick={() => setAdding(true)}
+          data-tour="calendar-new"
+        >
           New Event
         </Button>
       }
@@ -150,6 +167,7 @@ export default function CalendarPage() {
           <Swap id={month.format("YYYY-MM")}>
             <div
               className={s.grid}
+              data-tour="calendar-month"
               role="grid"
               aria-label={month.format("MMMM YYYY")}
               onKeyDown={onGridKey}
@@ -179,12 +197,20 @@ export default function CalendarPage() {
                   >
                     <span className={s.num}>{d.date()}</span>
                     {items.slice(0, 2).map((it, i) => (
-                      <span key={i} className={s.chip} data-kind={it.kind}>
+                      <span
+                        key={i}
+                        className={s.chip}
+                        data-kind={it.kind}
+                        title={`${it.kind === "holiday" ? "Holiday" : "Event"}: ${it.title}`}
+                      >
+                        {it.kind === "holiday" && (
+                          <Icon name="flag" size={10} />
+                        )}
                         {it.title}
                       </span>
                     ))}
                     {items.length > 2 && (
-                      <span className={s.more}>{items.length - 2} more</span>
+                      <span className={s.more}>+{items.length - 2} more</span>
                     )}
                     {items.length > 0 && (
                       <span className={s.dots} aria-hidden>
@@ -206,19 +232,39 @@ export default function CalendarPage() {
         >
           <Swap id={day.format("YYYY-MM-DD")}>
             {dayItems.length === 0 ? (
-              <p className="px-tertiary px-callout">Nothing scheduled.</p>
+              <div className={s.empty}>
+                <Icon name="calendar" size={20} />
+                <span>Nothing scheduled</span>
+                <Button
+                  size="small"
+                  icon="plus"
+                  onClick={() => setAdding(true)}
+                >
+                  Add Event
+                </Button>
+              </div>
             ) : (
               <StaggerList className={s.day}>
                 {dayItems.map((it, i) => (
-                  <StaggerItem key={i} index={i} className={s.dayItem}>
-                    <span className="px-meta">
-                      {it.kind === "holiday"
-                        ? "Holiday"
-                        : it.item.startTime
-                          ? [it.item.startTime, it.item.endTime]
-                              .filter(Boolean)
-                              .join("–")
-                          : "All day"}
+                  <StaggerItem
+                    key={i}
+                    index={i}
+                    className={s.dayItem}
+                    data-kind={it.kind}
+                  >
+                    <span className={s.dayWhen}>
+                      <Tag tone={it.kind === "holiday" ? "warning" : "accent"}>
+                        {it.kind === "holiday" ? "Holiday" : "Event"}
+                      </Tag>
+                      <span className="px-meta px-num">
+                        {it.kind === "holiday"
+                          ? "All day"
+                          : it.item.startTime
+                            ? [it.item.startTime, it.item.endTime]
+                                .filter(Boolean)
+                                .join("–")
+                            : "All day"}
+                      </span>
                     </span>
                     <span className="px-headline">{it.title}</span>
                     {it.item.description && (
@@ -233,7 +279,8 @@ export default function CalendarPage() {
                         <span>
                           <Button
                             size="small"
-                            variant="plain"
+                            variant="plainDanger"
+                            icon="trash"
                             onClick={() => setDeleting(it.item)}
                           >
                             Delete Event
@@ -245,6 +292,39 @@ export default function CalendarPage() {
               </StaggerList>
             )}
           </Swap>
+          {upcoming.length > 0 && (
+            <div className={s.upcoming}>
+              <h3 className={s.upTitle}>Upcoming</h3>
+              <ul>
+                {upcoming.map(([date, it], i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      className={s.upItem}
+                      onClick={() => {
+                        const d = dayjs(date);
+                        setDay(d);
+                        setMonth(d.startOf("month"));
+                      }}
+                    >
+                      <DateTile
+                        date={date}
+                        size="small"
+                        tone={it.kind === "holiday" ? "warning" : "accent"}
+                      />
+                      <span className={s.upText}>
+                        <span className="px-truncate">{it.title}</span>
+                        <span className="px-meta">
+                          {it.kind === "holiday" ? "Holiday" : "Event"} ·{" "}
+                          {dayjs(date).format("ddd D MMM")}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Section>
       </div>
       <NewEvent

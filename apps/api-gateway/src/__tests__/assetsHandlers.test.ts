@@ -37,10 +37,6 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-jest.mock("../utils/webhookEmitter", () => ({
-  emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
-}));
-
 jest.mock("@hrms/notifications", () => ({
   notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
 }));

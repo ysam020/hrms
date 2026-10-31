@@ -1,0 +1,264 @@
+/* Wizard: a step rail beside the current step (wide), or a compact
+   progress header above it (narrow). Container-sized so it adapts to the
+   space it's given, not the viewport (an inspector may be open). */
+.layout {
+  container-type: inline-size;
+  min-width: 0;
+}
+.grid {
+  display: grid;
+  gap: var(--px-space-6);
+  align-items: start;
+}
+.main {
+  display: grid;
+  gap: var(--px-space-5);
+  min-width: 0;
+}
+@container (min-width: 860px) {
+  .grid {
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: var(--px-space-10);
+  }
+  .rail {
+    position: sticky;
+    top: calc(var(--px-toolbar-h) + var(--px-space-4));
+  }
+}
+
+/* ── Stepper ── */
+.compact {
+  display: grid;
+  gap: 10px;
+}
+.list {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@container (min-width: 860px) {
+  .compact {
+    display: none;
+  }
+  .list {
+    display: grid;
+    gap: 2px;
+  }
+}
+.compactText {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--px-space-3);
+}
+.compactNext {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compactCount {
+  font: var(--px-type-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--px-accent);
+}
+.progress {
+  display: grid;
+  grid-template-columns: repeat(var(--_n), 1fr);
+  gap: 4px;
+}
+.progress > span {
+  height: 4px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+  transition: background-color var(--px-dur-base) var(--px-ease-standard);
+}
+.progress > span[data-state] {
+  background: var(--px-accent);
+}
+.progress > span[data-state="done"] {
+  background: color-mix(in srgb, var(--px-accent) 55%, transparent);
+}
+.progress > span[data-flagged] {
+  background: var(--px-danger);
+}
+
+.item {
+  position: relative;
+}
+/* The connector between markers. */
+.item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 21px;
+  top: 38px;
+  bottom: -6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--px-separator-strong);
+}
+.item[data-state="done"]:not(:last-child)::after {
+  background: color-mix(in srgb, var(--px-accent) 45%, transparent);
+}
+.stepButton {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--px-radius-md);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--px-dur-fast) var(--px-ease-standard);
+}
+.stepButton:hover:not(:disabled) {
+  background: var(--px-bg-hover);
+}
+.stepButton:disabled {
+  cursor: default;
+}
+.stepButton[aria-current="step"] {
+  background: var(--px-bg-selected);
+}
+.stepButton:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: 1px;
+}
+.marker {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font: 600 13px/1 var(--px-font-rounded);
+  font-variant-numeric: tabular-nums;
+  background: var(--px-bg-content);
+  color: var(--px-text-3);
+  box-shadow: inset 0 0 0 1.5px var(--px-separator-strong);
+  transition:
+    background-color var(--px-dur-base) var(--px-ease-standard),
+    color var(--px-dur-base) var(--px-ease-standard);
+}
+.item[data-state="visited"] .marker {
+  color: var(--px-text-2);
+}
+.item[data-state="done"] .marker {
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+  box-shadow: none;
+}
+.item[data-state="current"] .marker {
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--px-accent) 18%, transparent);
+}
+.stepButton[data-flagged] .marker {
+  background: var(--px-danger-soft);
+  color: var(--px-danger);
+  box-shadow: none;
+}
+.stepText {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding-top: 4px;
+}
+.stepTitle {
+  font: var(--px-type-headline);
+  color: var(--px-text-1);
+}
+.item[data-state="upcoming"] .stepTitle {
+  color: var(--px-text-2);
+  font-weight: 500;
+}
+.stepSummary {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+
+/* ── Step header ── */
+.stepHeader {
+  display: grid;
+  gap: 4px;
+  scroll-margin-top: calc(var(--px-toolbar-h) + var(--px-space-4));
+}
+.eyebrow {
+  font: var(--px-type-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--px-accent);
+}
+.stepHeading {
+  font: var(--px-type-title);
+  letter-spacing: var(--px-type-title-track);
+  scroll-margin-top: calc(var(--px-toolbar-h) + var(--px-space-8));
+}
+.stepHeading:focus {
+  outline: none;
+}
+.stepHeading:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.stepDescription {
+  max-width: 64ch;
+  font: 400 15px/22px var(--px-font);
+  color: var(--px-text-2);
+}
+/* On compact the progress header above already says "Step 2 of 5". */
+@container (max-width: 859px) {
+  .eyebrow {
+    display: none;
+  }
+}
+
+/* ── Footer ── */
+.footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--px-space-2);
+  padding: var(--px-space-3) 0;
+}
+.footerLeading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+@media (min-width: 640px) {
+  .footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0 calc(-1 * var(--px-space-3));
+    padding: var(--px-space-3);
+    border-radius: var(--px-radius-lg) var(--px-radius-lg) 0 0;
+    background: var(--px-material);
+    -webkit-backdrop-filter: var(--px-material-blur);
+    backdrop-filter: var(--px-material-blur);
+    box-shadow: 0 -1px 0 var(--px-separator);
+  }
+}
+@media (max-width: 639px) {
+  .footer > button {
+    flex: 1;
+  }
+  .footerLeading {
+    flex-basis: 100%;
+  }
+  .footerLeading:empty {
+    display: none;
+  }
+}

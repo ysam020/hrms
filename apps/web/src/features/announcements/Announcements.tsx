@@ -15,6 +15,8 @@ import useServerPagination from "@web/shared/hooks/useServerPagination";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { StaggerItem, StaggerList } from "@next/motion";
 import {
+  Icon,
+  DateTile,
   Button,
   ConfirmDialog,
   Dialog,
@@ -118,6 +120,7 @@ export default function Announcements() {
       actions={
         perm("create") && (
           <Button
+            data-tour="announce-new"
             variant="primary"
             icon="plus"
             onClick={() => setEditing("new")}
@@ -159,18 +162,38 @@ export default function Announcements() {
           }
         />
       ) : (
-        <StaggerList className={s.feed}>
+        <StaggerList className={s.feed} data-tour="announce-feed">
           {list.data.map((a: any, i: number) => (
-            <StaggerItem key={a.id || a._id} index={i} className={s.post}>
-              <div className={s.when}>
-                <span className="px-num">{fmtDate(a.date)}</span>
-                {a.time && <span className="px-num"> · {a.time}</span>}
-                {a.status && a.status !== "Active" && (
-                  <Status value={a.status} />
-                )}
+            <StaggerItem
+              key={a.id || a._id}
+              index={i}
+              className={s.post}
+              data-past={status === "Expired" || undefined}
+            >
+              {a.date ? (
+                <DateTile date={a.date} muted={status === "Expired"} />
+              ) : (
+                <span aria-hidden />
+              )}
+              <div className={s.content}>
+                <h2 className={s.title}>{a.title}</h2>
+                <div className={s.when}>
+                  <span className={s.whenPart}>
+                    <Icon name="calendar" size={14} />
+                    <span className="px-num">{fmtDate(a.date)}</span>
+                  </span>
+                  {a.time && (
+                    <span className={s.whenPart}>
+                      <Icon name="clock" size={14} />
+                      <span className="px-num">{a.time}</span>
+                    </span>
+                  )}
+                  {a.status && a.status !== "Active" && (
+                    <Status value={a.status} />
+                  )}
+                </div>
+                <p className={s.body}>{stripHtml(a.description)}</p>
               </div>
-              <h2 className={s.title}>{a.title}</h2>
-              <p className={s.body}>{stripHtml(a.description)}</p>
               {(perm("edit") || perm("delete")) && (
                 <PostMenu
                   canEdit={perm("edit")}
@@ -356,6 +379,8 @@ function EditAnnouncement({
       onClose={onClose}
       busy={saving}
       title={isNew ? "New Announcement" : "Edit Announcement"}
+      description="Everyone in the organisation sees it on the Announcements page."
+      icon={{ name: "megaphone", tone: "accent" }}
       footer={
         <>
           <DraftNote
@@ -401,10 +426,10 @@ function EditAnnouncement({
               rows={4}
             />
           </Field>
-          <Field label="Date" error={errors.date}>
+          <Field label="Date" error={errors.date} hint="When it happens">
             <TextInput type="date" value={v.date} onChange={set("date")} />
           </Field>
-          <Field label="Time" error={errors.time}>
+          <Field label="Time" error={errors.time} hint="Shown with the date">
             <TextInput type="time" value={v.time} onChange={set("time")} />
           </Field>
         </FormGrid>

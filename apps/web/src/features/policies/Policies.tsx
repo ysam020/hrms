@@ -98,7 +98,11 @@ export default function Policies() {
   const reader = current && (
     <article className={s.doc}>
       <header className={s.docHead}>
-        <Tag>{current.category || "Policy"}</Tag>
+        {/* The category only adds something when it differs from the title. */}
+        {current.category &&
+          current.title &&
+          current.category.trim().toLowerCase() !==
+            current.title.trim().toLowerCase() && <Tag>{current.category}</Tag>}
         <h2 className={s.docTitle}>{current.title || current.category}</h2>
         <p className="px-meta">
           Updated {fmtDate(current.updatedAt || current.createdAt)}
@@ -121,7 +125,7 @@ export default function Policies() {
           {canDelete && (
             <Button
               size="small"
-              variant="plain"
+              variant="plainDanger"
               onClick={() => setDeleting(current)}
             >
               Delete
@@ -144,7 +148,7 @@ export default function Policies() {
       actions={
         canWrite && (
           <TransitionLink to="/policy/new">
-            <Button variant="primary" icon="plus">
+            <Button data-tour="policies-new" variant="primary" icon="plus">
               New Policy
             </Button>
           </TransitionLink>
@@ -169,7 +173,11 @@ export default function Policies() {
         </EmptyState>
       ) : (
         <div className={s.split}>
-          <nav aria-label="Policies" className={s.source}>
+          <nav
+            aria-label="Policies"
+            className={s.source}
+            data-tour="policies-list"
+          >
             <ul>
               {list.data.map((p: any) => (
                 <li key={p.id}>
@@ -182,7 +190,17 @@ export default function Policies() {
                     <span className={s.sourceTitle}>
                       {p.title || p.category}
                     </span>
-                    <span className="px-meta">{p.category}</span>
+                    {p.category &&
+                      p.title &&
+                      p.category.trim().toLowerCase() !==
+                        p.title.trim().toLowerCase() && (
+                        <span className="px-meta">{p.category}</span>
+                      )}
+                    {p.updatedAt && (
+                      <span className="px-meta">
+                        Updated {fmtDate(p.updatedAt)}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}

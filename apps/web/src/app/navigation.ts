@@ -501,22 +501,6 @@ export const NAV: NavModule[][] = [
       keywords: "activity history changes security",
     },
     {
-      id: "webhooks",
-      label: "Webhooks",
-      icon: "link",
-      visible: isOwnerOrAdmin,
-      searchOnly: true,
-      pages: [
-        {
-          id: "wh-endpoints",
-          label: "Endpoints",
-          path: "/webhooks/endpoints",
-          also: ["/webhooks"],
-        },
-        { id: "wh-log", label: "Delivery Log", path: "/webhooks/delivery-log" },
-      ],
-    },
-    {
       id: "subscription",
       label: "Subscription",
       icon: "card",
@@ -558,6 +542,12 @@ export const NAV: NavModule[][] = [
           label: "Keyboard Shortcuts",
           path: "/help",
           keywords: "help shortcuts keys",
+        },
+        {
+          id: "help-tours",
+          label: "Product Tours",
+          path: "/help/tours",
+          keywords: "tour walkthrough onboarding guide getting started learn",
         },
       ],
     },

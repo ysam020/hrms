@@ -16,7 +16,7 @@
   place-items: center;
   color: #fff;
   font: 700 14px/1 var(--px-font-rounded);
-  background: linear-gradient(160deg, var(--px-brand), var(--px-accent));
+  background: var(--px-accent);
 }
 .check {
   color: var(--px-success);

@@ -52,3 +52,35 @@ export function greeting(d = new Date()) {
         ? "Good afternoon"
         : "Good evening";
 }
+
+/**
+ * Display text stored in ALL CAPS ("FULL STACK DEVELOPER") in readable case
+ * ("Full Stack Developer"). Short all-letter words (HR, IT, QA, CEO) stay as
+ * acronyms. Mixed-case text is returned untouched, so names someone typed
+ * deliberately ("McDonald", "iOS") are never altered. Display only — never
+ * use it on values sent back to the server.
+ */
+export function readableCase(v?: string | null): string {
+  const s = (v ?? "").trim();
+  if (!s || s !== s.toUpperCase() || !/[A-Z]/.test(s)) return v ?? "";
+  return s
+    .toLowerCase()
+    .replace(/[a-z0-9]+/g, (w) =>
+      w.length <= 3 &&
+      [
+        "hr",
+        "it",
+        "qa",
+        "ceo",
+        "cto",
+        "cfo",
+        "coo",
+        "vp",
+        "ui",
+        "ux",
+        "seo",
+      ].includes(w)
+        ? w.toUpperCase()
+        : w[0].toUpperCase() + w.slice(1),
+    );
+}

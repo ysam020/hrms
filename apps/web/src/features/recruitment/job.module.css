@@ -83,3 +83,60 @@
   margin: 0;
   white-space: pre-wrap;
 }
+
+/* Wizard: each location is its own small group. */
+.locationCard {
+  margin: 0;
+  padding: 12px 14px 14px;
+  border: 0;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-grouped);
+  min-width: 0;
+}
+.locationLegend {
+  float: left;
+  width: 100%;
+  margin-bottom: 8px;
+  font: var(--px-type-caption);
+  font-weight: 600;
+  color: var(--px-text-2);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -8px;
+}
+
+/* ── Opening detail ── */
+.detailGrid {
+  display: grid;
+  gap: var(--px-space-4);
+}
+@media (min-width: 900px) {
+  .detailGrid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  /* Role and Hiring share the first row; About and Skills span it. */
+  .detailGrid > :nth-child(n + 3) {
+    grid-column: 1 / -1;
+  }
+}
+.block {
+  display: grid;
+  gap: 6px;
+  padding-top: var(--px-space-4);
+  border-top: 1px solid var(--px-separator);
+}
+.blockTitle {
+  font: var(--px-type-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--px-text-3);
+}
+.skillChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

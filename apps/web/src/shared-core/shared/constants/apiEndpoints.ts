@@ -457,18 +457,6 @@ const SUPPORT = {
     `/platform/support/attachments/${id}/url`,
 };
 
-const WEBHOOKS = {
-  WEBHOOK_ENDPOINTS: "/webhooks/endpoints",
-  CREATE_WEBHOOK_ENDPOINT: "/webhooks/endpoints",
-  UPDATE_WEBHOOK_ENDPOINT: (id: string) => `/webhooks/endpoints/${id}`,
-  DELETE_WEBHOOK_ENDPOINT: (id: string) => `/webhooks/endpoints/${id}`,
-  WEBHOOK_DELIVERIES: (endpointId: string, page: number, limit: number) =>
-    `/webhooks/endpoints/${endpointId}/deliveries?page=${page}&limit=${limit}`,
-  RETRY_WEBHOOK_DELIVERY: (deliveryId: string) =>
-    `/webhooks/deliveries/${deliveryId}/retry`,
-  TEST_WEBHOOK_ENDPOINT: "/webhooks/test",
-};
-
 const APPROVALS = {
   GET_PENDING_APPROVALS: "/approvals/pending",
   GET_ALL_PENDING_APPROVALS: "/approvals/pending-all",
@@ -522,7 +510,6 @@ export const API_ENDPOINTS = {
   ...WFH,
   ...HELPDESK,
   ...SUPPORT,
-  ...WEBHOOKS,
   ...REPORTS,
   ...APPROVALS,
   ...TAX_DECLARATION,

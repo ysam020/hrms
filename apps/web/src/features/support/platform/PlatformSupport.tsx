@@ -363,6 +363,7 @@ export default function PlatformSupport() {
 
         <DataTable
           label="Support tickets"
+          tour="console-table"
           columns={columns}
           rows={list.data}
           rowId={(t) => String(t.id)}

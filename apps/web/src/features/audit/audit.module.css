@@ -52,3 +52,116 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ── Redesign ── */
+.actionIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 9px;
+  --_bg: var(--px-neutral-soft);
+  --_fg: var(--px-text-2);
+  background: var(--_bg);
+  color: var(--_fg);
+}
+.actionIcon[data-tone="success"] {
+  --_bg: var(--px-success-soft);
+  --_fg: var(--px-success);
+}
+.actionIcon[data-tone="accent"] {
+  --_bg: var(--px-accent-soft);
+  --_fg: var(--px-accent);
+}
+.actionIcon[data-tone="danger"] {
+  --_bg: var(--px-danger-soft);
+  --_fg: var(--px-danger);
+}
+.actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.system {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
+}
+.when {
+  display: grid;
+  white-space: nowrap;
+}
+.mono {
+  font: 13px/18px var(--px-font-mono);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.json {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-bg-grouped);
+  font: 12px/1.5 var(--px-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.detail {
+  display: grid;
+  gap: var(--px-space-6);
+  min-width: 0;
+}
+.detailHead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--px-space-3);
+  padding-bottom: var(--px-space-4);
+  border-bottom: 1px solid var(--px-separator);
+}
+.detailTitle {
+  font: var(--px-type-section);
+  letter-spacing: var(--px-type-section-track);
+  overflow-wrap: anywhere;
+}
+.rawLine {
+  display: block;
+  padding: 8px 10px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-bg-grouped);
+  font: 12px/1.5 var(--px-font-mono);
+  overflow-wrap: anywhere;
+}
+.redacted {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
+  font: var(--px-type-caption);
+}
+.long {
+  display: inline;
+  overflow-wrap: anywhere;
+}
+.long button {
+  margin-left: 6px;
+}
+.stacked {
+  display: grid;
+  gap: 4px;
+}
+.stacked .to {
+  padding: 4px;
+  border-radius: var(--px-radius-sm);
+}
+.diff tr[data-changed] .stacked .to {
+  background: var(--px-accent-soft);
+}

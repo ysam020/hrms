@@ -1,5 +1,4 @@
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import {
   listPayrollRuns,
   getPayrollRun,
@@ -86,10 +85,6 @@ jest.mock("@hrms/cache", () => ({
     delete: jest.fn(),
     invalidatePattern: jest.fn(),
   },
-}));
-
-jest.mock("../utils/webhookEmitter", () => ({
-  emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 const db: any = prisma;
@@ -308,7 +303,6 @@ describe("payroll run lifecycle handlers", () => {
         where: { id: "r1", status: "draft" },
         data: { status: "processing" },
       });
-      expect(emitWebhookEvent).not.toHaveBeenCalled();
     });
 
     it("returns CONFLICT when the run's status changed concurrently (lost the CAS race)", async () => {
@@ -325,22 +319,6 @@ describe("payroll run lifecycle handlers", () => {
       });
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ status: 409 }),
-      );
-    });
-
-    it("emits a webhook on approval", async () => {
-      db.payrollRun.findFirst.mockResolvedValue({
-        id: "r1",
-        status: "processing",
-        initiatedBy: "someone-else",
-      });
-      db.payrollRun.update.mockResolvedValue({});
-      const req = makeReq({ body: { runId: "r1", status: "approved" } });
-      const res = makeRes();
-      await updatePayrollRunStatus(req, res);
-      expect(emitWebhookEvent).toHaveBeenCalledWith(
-        "payroll.approved",
-        expect.objectContaining({ runId: "r1" }),
       );
     });
 
@@ -393,7 +371,6 @@ describe("payroll run lifecycle handlers", () => {
         runId: "r1",
         disbursedBy: "u1",
       });
-      expect(emitWebhookEvent).not.toHaveBeenCalled(); // fires from the worker instead
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 202,

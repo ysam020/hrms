@@ -18,17 +18,14 @@ async function bootstrap() {
   // loadSecrets runs, permanently locking the client onto the
   // redis://localhost:6379 fallback.
   const { registerScheduledJobs } = await import("./scheduler");
-  const { startSchedulerWorker, startWebhookWorker } = await import("./worker");
+  const { startSchedulerWorker } = await import("./worker");
 
   await registerScheduledJobs();
 
   // Cron/business logic jobs (serial).
   startSchedulerWorker();
 
-  // Webhook HTTP delivery (high-concurrency, separate queue).
-  startWebhookWorker();
-
-  logger.info("Scheduler service started (schedulerWorker + webhookWorker)");
+  logger.info("Scheduler service started (schedulerWorker)");
 }
 
 bootstrap().catch((err) => {

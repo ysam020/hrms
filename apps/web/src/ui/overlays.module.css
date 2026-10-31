@@ -23,6 +23,8 @@
   flex-direction: column;
   width: 100%;
   max-height: min(86vh, 760px);
+  /* Dynamic units follow the phone browser's collapsing bars. */
+  max-height: min(86dvh, 760px);
   border-radius: var(--px-radius-lg);
   background: var(--px-bg-raised);
   box-shadow: var(--px-shadow-3);

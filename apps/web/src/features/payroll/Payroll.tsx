@@ -10,6 +10,7 @@ import {
 import {
   Avatar,
   Button,
+  Card,
   ConfirmDialog,
   DataTable,
   Dialog,
@@ -18,14 +19,20 @@ import {
   Page,
   Pagination,
   PrimaryCell,
+  Section,
   SegmentedControl,
+  Skeleton,
   Status,
+  StatusBadge,
   TextArea,
   TextInput,
+  Icon,
   fieldSpan2,
   type Column,
+  type Tone,
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
+import s from "./salary.module.css";
 import { searchParam, usePagedList } from "@next/lib/usePagedList";
 import { fmtDate, fmtMoney, personName } from "@next/lib/format";
 
@@ -34,7 +41,10 @@ import { fmtDate, fmtMoney, personName } from "@next/lib/format";
 
 export function PayslipsPage() {
   return (
-    <Page title="My Payslips">
+    <Page
+      title="My Payslips"
+      description="Your monthly salary statements and TDS worksheets, newest first."
+    >
       <Payslips />
     </Page>
   );
@@ -54,8 +64,10 @@ export function RunsPage() {
   return (
     <Page
       title="Payroll Runs"
+      description="Each run calculates a month’s salaries. It’s reviewed and approved before anyone is paid."
       actions={
         <Button
+          data-tour="runs-new"
           variant="primary"
           icon="plus"
           onClick={() => setInitiating(true)}
@@ -134,9 +146,13 @@ function Payslips() {
       key: "deductions",
       header: "Deductions",
       align: "right",
-      priority: "hidden",
-      render: (r) =>
-        fmtMoney((r.pf || 0) + (r.tds || 0) + (r.advanceDeduction || 0)),
+      priority: "secondary",
+      stackLabel: "Deductions",
+      render: (r) => (
+        <span className="px-secondary">
+          {fmtMoney((r.pf || 0) + (r.tds || 0) + (r.advanceDeduction || 0))}
+        </span>
+      ),
     },
     {
       key: "net",
@@ -160,13 +176,16 @@ function Payslips() {
             variant="plain"
             icon="download"
             onClick={() => download(r, "tds")}
+            aria-label={`Download TDS worksheet for ${period(r)}`}
           >
-            TDS
+            TDS Worksheet
           </Button>
           <Button
             size="small"
+            variant="tinted"
             icon="download"
             onClick={() => download(r, "slip")}
+            aria-label={`Download payslip for ${period(r)}`}
           >
             Payslip
           </Button>
@@ -175,40 +194,124 @@ function Payslips() {
     },
   ];
   return (
-    <div style={{ display: "grid", gap: 24 }}>
-      {latest && (
-        <div style={{ display: "grid", gap: 4 }}>
-          <span className="px-meta">Latest net pay · {period(latest)}</span>
-          <span
-            className="px-metric"
-            style={{ fontSize: 36, lineHeight: "40px" }}
-          >
-            {fmtMoney(latest.netPayable)}
-          </span>
-          <span className="px-meta">
-            Gross {fmtMoney(latest.grossSalary)} · PF {fmtMoney(latest.pf)} ·
-            TDS {fmtMoney(latest.tds)}
-            {latest.advanceDeduction
-              ? ` · Advance EMI ${fmtMoney(latest.advanceDeduction)}`
-              : ""}
-          </span>
-        </div>
-      )}
-      <DataTable
-        label="Payslips"
-        columns={columns}
-        rows={list.data}
-        rowId={(r) => `${r.year}-${r.month}`}
-        loading={list.loading}
-        stickyOffset={52}
-        empty={{
-          icon: "banknote",
-          title: "No payslips yet",
-          body: "Payslips appear here once a payroll run that includes you is approved.",
-        }}
-        footer={<Pagination {...list.pageProps} />}
-      />
+    <div style={{ display: "grid", gap: 28 }}>
+      {latest ? (
+        <LatestPayslip
+          r={latest}
+          onDownload={(kind) => download(latest, kind)}
+        />
+      ) : list.loading ? (
+        <Card>
+          <div style={{ display: "grid", gap: 10 }}>
+            <Skeleton width={140} />
+            <Skeleton width={200} height={36} />
+            <Skeleton height={10} radius={5} />
+          </div>
+        </Card>
+      ) : null}
+      <Section
+        title="History"
+        detail={
+          list.data.length
+            ? "Payslips and TDS worksheets are PDFs you can download any time."
+            : undefined
+        }
+      >
+        <DataTable
+          label="Payslips"
+          tour="payslips-table"
+          columns={columns}
+          rows={list.data}
+          rowId={(r) => `${r.year}-${r.month}`}
+          loading={list.loading}
+          stickyOffset={52}
+          empty={{
+            icon: "banknote",
+            title: "No payslips yet",
+            body: "Payslips appear here once a payroll run that includes you is disbursed.",
+          }}
+          footer={<Pagination {...list.pageProps} />}
+        />
+      </Section>
     </div>
+  );
+}
+
+/** The most recent payslip: net pay first, then where gross pay went. */
+function LatestPayslip({
+  r,
+  onDownload,
+}: {
+  r: any;
+  onDownload: (kind: "slip" | "tds") => Promise<void>;
+}) {
+  const gross = Number(r.grossSalary) || 0;
+  const parts = [
+    { label: "PF", value: Number(r.pf) || 0 },
+    { label: "TDS", value: Number(r.tds) || 0 },
+    { label: "Advance EMI", value: Number(r.advanceDeduction) || 0 },
+  ];
+  const deductions = parts.reduce((a, p) => a + p.value, 0);
+  const net = Number(r.netPayable) || 0;
+  return (
+    <Card>
+      <div className={s.payslip}>
+        <div className={s.payslipHead}>
+          <div style={{ display: "grid", gap: 2 }}>
+            <span className="px-label px-secondary">
+              Latest payslip · {period(r)}
+            </span>
+            <span className={s.netPay}>{fmtMoney(net)}</span>
+            <span className="px-meta">Take-home after deductions</span>
+          </div>
+          <div className={s.payslipActions}>
+            <Button
+              variant="primary"
+              icon="download"
+              onClick={() => onDownload("slip")}
+            >
+              Download Payslip
+            </Button>
+            <Button icon="download" onClick={() => onDownload("tds")}>
+              TDS Worksheet
+            </Button>
+          </div>
+        </div>
+        <div
+          className={s.payBar}
+          role="img"
+          aria-label={`Of ${fmtMoney(gross)} gross, ${fmtMoney(deductions)} deducted and ${fmtMoney(net)} paid`}
+        >
+          <span
+            className={s.payBarNet}
+            style={{ flexGrow: Math.max(net, 0) || 1 }}
+          />
+          {deductions > 0 && (
+            <span className={s.payBarDeduct} style={{ flexGrow: deductions }} />
+          )}
+        </div>
+        <dl className={s.payFigures}>
+          <div>
+            <dt>Gross Pay</dt>
+            <dd className="px-num">{fmtMoney(gross)}</dd>
+          </div>
+          <div data-kind="deduct">
+            <dt>Deductions</dt>
+            <dd className="px-num">− {fmtMoney(deductions)}</dd>
+            <dd className="px-meta">
+              {parts
+                .filter((p) => p.value > 0 || p.label !== "Advance EMI")
+                .map((p) => `${p.label} ${fmtMoney(p.value)}`)
+                .join(" · ")}
+            </dd>
+          </div>
+          <div data-kind="net">
+            <dt>Net Pay</dt>
+            <dd className="px-num">{fmtMoney(net)}</dd>
+          </div>
+        </dl>
+      </div>
+    </Card>
   );
 }
 
@@ -351,12 +454,17 @@ function Advances() {
           onChange={setStatus}
           segments={ADV_STATUSES.map((s) => ({ value: s, label: s }))}
         />
-        <Button icon="plus" onClick={() => setRequesting(true)}>
+        <Button
+          data-tour="advances-request"
+          icon="plus"
+          onClick={() => setRequesting(true)}
+        >
           Request Advance
         </Button>
       </div>
       <DataTable
         label="Salary advances"
+        tour="advances-table"
         columns={columns}
         rows={list.data}
         rowId={(r) => String(r.id)}
@@ -513,6 +621,32 @@ const RUN_STATUSES = [
 ];
 const runLabel = (s?: string) =>
   s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : "—";
+/** Run states have their own meaning, so they get an explicit tone. */
+const RUN_TONE: Record<string, Tone> = {
+  draft: "neutral",
+  processing: "warning",
+  approved: "accent",
+  disbursing: "warning",
+  disbursed: "success",
+  disbursement_failed: "danger",
+  cancelled: "neutral",
+};
+const RunStatus = ({ status }: { status?: string }) => (
+  <StatusBadge tone={RUN_TONE[status ?? ""] ?? "neutral"}>
+    {runLabel(status)}
+  </StatusBadge>
+);
+/** The happy path, for the latest run's progress track. */
+const RUN_TRACK = [
+  { key: "draft", label: "Draft" },
+  { key: "processing", label: "In Review" },
+  { key: "approved", label: "Approved" },
+  { key: "disbursed", label: "Disbursed" },
+];
+const trackIndex = (status: string) =>
+  status === "disbursing" || status === "disbursement_failed"
+    ? 3
+    : RUN_TRACK.findIndex((t) => t.key === status);
 
 type RunAction = {
   id: string;
@@ -688,8 +822,11 @@ function Runs() {
       key: "gross",
       header: "Total Gross",
       align: "right",
-      priority: "hidden",
-      render: (r) => fmtMoney(r.totalGross),
+      priority: "secondary",
+      stackLabel: "Gross",
+      render: (r) => (
+        <span className="px-num px-secondary">{fmtMoney(r.totalGross)}</span>
+      ),
     },
     {
       key: "net",
@@ -703,7 +840,7 @@ function Runs() {
       key: "status",
       header: "Status",
       priority: "trailing",
-      render: (r) => <Status value={runLabel(r.status)} />,
+      render: (r) => <RunStatus status={r.status} />,
     },
     {
       key: "act",
@@ -738,8 +875,103 @@ function Runs() {
     },
   ];
   const copy = action ? ACTION_COPY[action.status] : null;
+  const latest = status === "All" && !list.query ? list.data[0] : null;
   return (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div style={{ display: "grid", gap: 20 }}>
+      {latest && (
+        <Card>
+          <div className={s.runCard}>
+            <div className={s.runHead}>
+              <div style={{ display: "grid", gap: 2 }}>
+                <span className="px-label px-secondary">Latest run</span>
+                <span className="px-title">{period(latest)}</span>
+                <span className="px-meta">
+                  Started {fmtDate(latest.createdAt)}
+                </span>
+              </div>
+              <RunStatus status={latest.status} />
+            </div>
+            {latest.status !== "cancelled" && (
+              <ol className={s.stages} aria-label="Run progress">
+                {RUN_TRACK.map((st, i) => {
+                  const at = trackIndex(latest.status);
+                  const failed =
+                    latest.status === "disbursement_failed" && i === 3;
+                  const state =
+                    latest.status === "disbursed" || i < at
+                      ? "done"
+                      : i === at
+                        ? "current"
+                        : "upcoming";
+                  return (
+                    <li
+                      key={st.key}
+                      data-state={state}
+                      data-failed={failed || undefined}
+                      aria-current={state === "current" ? "step" : undefined}
+                    >
+                      <span className={s.stageDot} aria-hidden>
+                        {state === "done" ? (
+                          <Icon name="check" size={12} />
+                        ) : failed ? (
+                          <Icon name="alert" size={12} />
+                        ) : (
+                          i + 1
+                        )}
+                      </span>
+                      {failed
+                        ? "Payouts Failed"
+                        : latest.status === "disbursing" && i === 3
+                          ? "Disbursing…"
+                          : st.label}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            <dl className={s.runFigures}>
+              <div>
+                <dt>Employees</dt>
+                <dd className="px-num">{latest.employeeCount ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Total Gross</dt>
+                <dd className="px-num">{fmtMoney(latest.totalGross)}</dd>
+              </div>
+              <div>
+                <dt>Total Net</dt>
+                <dd className="px-num">{fmtMoney(latest.totalNet)}</dd>
+              </div>
+            </dl>
+            {actionsFor(latest).length > 0 && (
+              <div className="px-row" style={{ justifyContent: "flex-end" }}>
+                {actionsFor(latest).map((st) => (
+                  <Button
+                    key={st}
+                    variant={
+                      st === "cancelled"
+                        ? "plain"
+                        : st === "retry-payouts" &&
+                            latest.status === "disbursed"
+                          ? "secondary"
+                          : "primary"
+                    }
+                    onClick={() =>
+                      setAction({
+                        id: latest.id,
+                        status: st,
+                        period: period(latest),
+                      })
+                    }
+                  >
+                    {ACTION_COPY[st].label}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
       <SegmentedControl
         role="radiogroup"
         label="Status"
@@ -752,16 +984,25 @@ function Runs() {
       />
       <DataTable
         label="Payroll runs"
+        tour="runs-table"
         columns={columns}
         rows={list.data}
         rowId={(r) => String(r.id)}
         loading={list.loading}
         stickyOffset={52}
-        empty={{
-          icon: "banknote",
-          title: "No payroll runs yet",
-          body: "Start a run for a month to calculate everyone’s salary.",
-        }}
+        empty={
+          status === "All"
+            ? {
+                icon: "banknote",
+                title: "No payroll runs yet",
+                body: "Start a run for a month to calculate everyone’s salary.",
+              }
+            : {
+                icon: "banknote",
+                title: `No ${runLabel(status).toLowerCase()} runs`,
+                body: "Runs move from Draft through In Review and Approved to Disbursed.",
+              }
+        }
         footer={<Pagination {...list.pageProps} />}
       />
       <ConfirmDialog

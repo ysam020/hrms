@@ -72,26 +72,39 @@ export default function RecruitmentInsights() {
       <Metrics label="Recruitment overview">
         <Metric
           label="Active Openings"
+          tone="accent"
+          icon="briefcase"
           value={o.activeJobOpenings ?? "—"}
           note={`${o.totalJobOpenings ?? 0} total`}
         />
         <Metric
           label="Applications"
+          tone="success"
+          icon="doc"
           value={
             o.totalApplications ?? data?.applications?.totalApplications ?? "—"
           }
         />
         <Metric
           label="Per Opening"
+          tone="neutral"
+          icon="chart"
           value={
             o.averageApplicationsPerJob != null
               ? Number(o.averageApplicationsPerJob).toFixed(1)
               : "—"
           }
         />
-        <Metric label="Hiring Success" value={pct(o.hiringSuccessRate)} />
+        <Metric
+          label="Hiring Success"
+          tone="success"
+          icon="trendUp"
+          value={pct(o.hiringSuccessRate)}
+        />
         <Metric
           label="Overdue"
+          tone="warning"
+          icon="alert"
           value={deadlines.overdueJobs ?? 0}
           note={`${deadlines.deadlinesThisWeek ?? 0} due this week`}
         />

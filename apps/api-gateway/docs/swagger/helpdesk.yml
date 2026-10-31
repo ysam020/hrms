@@ -172,7 +172,7 @@ paths:
         HR/admin/owner can update any field including status, priority, and
         assignment (moving status to in_progress auto-assigns the ticket to
         the acting HR user if unassigned; resolving records resolvedBy/
-        resolvedAt and fires a `ticket.resolved` webhook event). The ticket's
+        resolvedAt). The ticket's
         own raiser may only edit title/description, and only while the
         ticket is still "open".
       tags: [Helpdesk]

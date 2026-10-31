@@ -1,0 +1,39 @@
+.hero {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-4);
+  padding: var(--px-space-5);
+  border-radius: var(--px-radius-xl);
+  background: linear-gradient(
+    180deg,
+    var(--px-accent-soft),
+    color-mix(in srgb, var(--px-accent-soft) 30%, var(--px-bg-content))
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--px-accent) 12%, transparent);
+}
+.heroText {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.meter {
+  height: 6px;
+  max-width: 360px;
+  border-radius: var(--px-radius-pill);
+  background: color-mix(in srgb, var(--px-accent) 14%, transparent);
+  overflow: hidden;
+}
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--px-success);
+}
+.groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--px-space-4);
+  align-items: start;
+}

@@ -51,7 +51,7 @@ export async function checkTicketSla(data?: {
 }): Promise<void> {
   const ticketId = data?.ticketId;
   if (!ticketId) {
-    // Called as a cron job (retryFailedWebhooks path) — do bulk sweep instead.
+    // Called as the daily cron job (no ticketId) — do a bulk sweep instead.
     const now = new Date();
     const toBreach = await prisma.ticket.findMany({
       where: {

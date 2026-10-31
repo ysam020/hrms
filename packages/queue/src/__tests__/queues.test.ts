@@ -6,7 +6,6 @@ import {
   getResumeParsingQueue,
   getSchedulerQueue,
   getDeadLetterQueue,
-  getWebhookQueue,
   getPayrollDisbursementQueue,
 } from "../queues";
 
@@ -46,7 +45,6 @@ describe("queue singletons", () => {
     ["getResumeParsingQueue", getResumeParsingQueue, "resumeParsingQueue"],
     ["getSchedulerQueue", getSchedulerQueue, "schedulerQueue"],
     ["getDeadLetterQueue", getDeadLetterQueue, "deadLetterQueue"],
-    ["getWebhookQueue", getWebhookQueue, "webhookQueue"],
     [
       "getPayrollDisbursementQueue",
       getPayrollDisbursementQueue,
@@ -85,16 +83,6 @@ describe("queue singletons", () => {
     const q = getDeadLetterQueue() as any;
     expect(q.opts.defaultJobOptions.removeOnFail).toBe(false);
     expect(q.opts.defaultJobOptions.removeOnComplete).toBe(500);
-  });
-
-  it("gives webhookQueue 3 attempts with a 5s exponential backoff, distinct from the default queues' options", () => {
-    const q = getWebhookQueue() as any;
-    expect(q.opts.defaultJobOptions).toEqual({
-      removeOnComplete: 200,
-      removeOnFail: false,
-      attempts: 3,
-      backoff: { type: "exponential", delay: 5000 },
-    });
   });
 
   it("gives the standard queues (email/notification) 3 attempts with a 2s exponential backoff by default", () => {

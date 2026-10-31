@@ -48,10 +48,6 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-jest.mock("../utils/webhookEmitter", () => ({
-  emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
-}));
-
 // payroll.ts imports getActiveSettings from ./tenantSettings, which imports
 // the real @hrms/cache (ioredis) at module load — without this mock, a
 // Redis connection attempt against a nonexistent local instance hangs the

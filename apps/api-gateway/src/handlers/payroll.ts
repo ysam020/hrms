@@ -26,7 +26,6 @@ import {
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import { getActiveSettings } from "./tenantSettings";
 import {
   calcStatutoryDeductions,
@@ -1157,17 +1156,6 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
         message:
           "Payroll disbursement started. Poll GET /payroll/runs/:runId for progress.",
         data: { runId: run.id, status: "disbursing" },
-      });
-    }
-
-    // Fire webhook (disburse's own "payroll.disbursed" event fires from the
-    // worker once the job actually completes, not here).
-    if (action === "approve") {
-      await emitWebhookEvent("payroll.approved", {
-        runId: run.id,
-        month: (run as any).month,
-        year: (run as any).year,
-        employeeCount: (run as any).employeeCount,
       });
     }
 

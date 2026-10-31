@@ -32,7 +32,6 @@ import {
   performanceReviewClient,
   grpcCall,
 } from "../grpc/clients";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import { notify } from "@hrms/notifications";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -657,12 +656,6 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
           }),
         ),
       );
-      await emitWebhookEvent("wfh.approved", {
-        requestId: entityId,
-        userId: wfhReq.userId,
-        date: wfhReq.date,
-        toDate: wfhReq.toDate,
-      });
     }
 
     // Informs the requester of the decision — unlike the submission itself

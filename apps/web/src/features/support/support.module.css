@@ -272,3 +272,98 @@
   gap: 28px;
   min-width: 0;
 }
+
+/* ── Ticket detail (redesign) ─────────────────────────────────────────── */
+.headCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: var(--px-space-5);
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
+}
+.refSmall {
+  font: 600 12px/16px var(--px-font-mono);
+  letter-spacing: 0.03em;
+  color: var(--px-accent);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.chips :global(.px-meta) {
+  margin-left: auto;
+}
+/* Priority chip: tinted by tone, with a flag so it never relies on colour. */
+.priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
+  font: var(--px-type-meta);
+  font-weight: 500;
+  width: fit-content;
+}
+.priority[data-tone="warning"] {
+  background: var(--px-warning-soft);
+  color: var(--px-warning);
+}
+.priority[data-tone="danger"] {
+  background: var(--px-danger-soft);
+  color: var(--px-danger);
+}
+.sideGroup {
+  display: grid;
+  gap: 4px;
+}
+.sideTitle {
+  font: var(--px-type-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--px-text-3);
+}
+/* Thread: a rail on the left ties messages and events together. */
+.thread {
+  position: relative;
+  gap: 10px;
+}
+.thread::before {
+  content: "";
+  position: absolute;
+  left: 25px;
+  top: 16px;
+  bottom: 16px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--px-separator);
+}
+.message {
+  position: relative;
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
+}
+.message[data-staff] {
+  box-shadow:
+    inset 3px 0 0 var(--px-accent),
+    var(--px-shadow-card);
+}
+.event {
+  position: relative;
+  padding: 2px 12px 2px 18px;
+}
+.event > svg {
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--px-bg-grouped);
+  box-shadow: 0 0 0 3px var(--px-bg-content);
+  font-size: 18px;
+}

@@ -6,18 +6,21 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import ps from "./performance.module.css";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { Swap } from "@next/motion";
 import {
+  ScorePips,
+  RatingScale,
+  Icon,
   Avatar,
   Button,
   DataTable,
   Field,
   FormGrid,
   Inspector,
-  KeyValues,
   Page,
   PrimaryCell,
   SegmentedControl,
@@ -124,25 +127,44 @@ export default function Performance() {
     {
       key: "self",
       header: "Self",
-      align: "right",
       priority: "secondary",
       stackLabel: "Self",
-      render: (r) => <span className="px-num">{r.selfRating ?? "—"}</span>,
+      render: (r) => (
+        <ScorePips
+          value={r.selfRating}
+          max={cycleName[r.cycleId]?.ratingScale || 5}
+          label="Self rating"
+        />
+      ),
     },
     {
       key: "mgr",
       header: "Manager",
-      align: "right",
       priority: "secondary",
       stackLabel: "Manager",
-      render: (r) => <span className="px-num">{r.managerRating ?? "—"}</span>,
+      render: (r) => (
+        <ScorePips
+          value={r.managerRating}
+          max={cycleName[r.cycleId]?.ratingScale || 5}
+          label="Manager rating"
+        />
+      ),
     },
     {
       key: "overall",
       header: "Overall",
       align: "right",
-      priority: "hidden",
-      render: (r) => <b className="px-num">{r.overallRating ?? "—"}</b>,
+      priority: "secondary",
+      stackLabel: "Overall",
+      render: (r) =>
+        r.overallRating != null ? (
+          <span className={ps.overall}>
+            {r.overallRating}
+            <small>/{cycleName[r.cycleId]?.ratingScale || 5}</small>
+          </span>
+        ) : (
+          <span className="px-tertiary">—</span>
+        ),
     },
     {
       key: "status",
@@ -155,6 +177,11 @@ export default function Performance() {
   return (
     <Page
       title="Performance Reviews"
+      description={
+        view === "mine"
+          ? "Your reviews in each cycle: rate yourself first, then your manager reviews you."
+          : "Reviews where you’re the reviewer or approver. Select one to review it."
+      }
       tabs={
         <SegmentedControl
           label="Reviews"
@@ -205,6 +232,7 @@ export default function Performance() {
       <Swap id={view}>
         <DataTable
           label={view === "mine" ? "My reviews" : "Reviews I give"}
+          tour="performance-table"
           columns={columns}
           rows={rows}
           rowId={(r) => String(r.id)}
@@ -335,37 +363,96 @@ function ReviewDetail({
     }
   };
 
+  const stage =
+    review.status === "approved"
+      ? 4
+      : review.status === "manager_review_submitted"
+        ? 2
+        : review.status === "self_assessment_submitted"
+          ? 1
+          : 0;
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      <div style={{ display: "grid", gap: 6 }}>
-        <p className="px-section">{subject}</p>
-        <p className="px-meta">{cycle}</p>
-        <span>{badge}</span>
+    <div className={ps.detail}>
+      <header className={ps.who}>
+        <Avatar name={subject || "?"} size={44} />
+        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+          <p className={ps.whoName}>{subject}</p>
+          <p className="px-meta">{cycle}</p>
+        </div>
+        {badge}
+      </header>
+      <ol className={ps.track} aria-label="Review progress">
+        {["Self", "Manager", "Approval", "Final"].map((label, i) => {
+          const state =
+            review.status === "rejected" && i === 2
+              ? "returned"
+              : i < stage || stage === 4
+                ? "done"
+                : i === stage
+                  ? "current"
+                  : "upcoming";
+          return (
+            <li
+              key={label}
+              data-state={state}
+              aria-current={state === "current" ? "step" : undefined}
+            >
+              <span aria-hidden />
+              {label}
+            </li>
+          );
+        })}
+      </ol>
+      <div className={ps.scores}>
+        {(
+          [
+            ["Self", review.selfRating],
+            ["Manager", review.managerRating],
+            ["Overall", review.overallRating],
+          ] as const
+        ).map(([label, value]) => (
+          <div
+            key={label}
+            className={ps.score}
+            data-overall={label === "Overall" || undefined}
+          >
+            <span className="px-meta">{label}</span>
+            <span className={ps.scoreValue}>
+              {value != null ? value : "—"}
+              {value != null && <small>/{scale}</small>}
+            </span>
+            <ScorePips
+              value={value}
+              max={scale}
+              label={`${label} rating`}
+              showValue={false}
+            />
+          </div>
+        ))}
       </div>
-      <KeyValues
-        items={[
-          [
-            "Self Rating",
-            review.selfRating ? `${review.selfRating} / ${scale}` : null,
-          ],
-          ["Self Comments", review.selfComments],
-          [
-            "Manager Rating",
-            review.managerRating ? `${review.managerRating} / ${scale}` : null,
-          ],
-          ["Manager Comments", review.managerComments],
-          [
-            "Overall",
-            review.overallRating ? `${review.overallRating} / ${scale}` : null,
-          ],
-          [
-            "Recommended Increment",
-            review.recommendedIncrementPct != null
-              ? `${review.recommendedIncrementPct}%`
-              : null,
-          ],
-        ]}
-      />
+      {(review.selfComments || review.managerComments) && (
+        <section className={ps.comments} aria-label="Comments">
+          {review.selfComments && (
+            <blockquote className={ps.quote}>
+              <span className="px-meta">Self-assessment</span>
+              <p>{review.selfComments}</p>
+            </blockquote>
+          )}
+          {review.managerComments && (
+            <blockquote className={ps.quote} data-manager>
+              <span className="px-meta">Manager</span>
+              <p>{review.managerComments}</p>
+            </blockquote>
+          )}
+        </section>
+      )}
+      {review.recommendedIncrementPct != null && (
+        <div className={ps.increment}>
+          <Icon name="trendUp" />
+          <span>Recommended increment</span>
+          <b className="px-num">{review.recommendedIncrementPct}%</b>
+        </div>
+      )}
       {instanceId && (
         <div className="px-row" style={{ justifyContent: "flex-end" }}>
           <Button
@@ -386,20 +473,30 @@ function ReviewDetail({
       )}
       {(canSelf || canManager) && (
         <form onSubmit={submit} noValidate style={{ display: "grid", gap: 14 }}>
-          <h3 className="px-headline">
+          <h3 className={ps.formTitle}>
             {canSelf ? "Your Self-Assessment" : "Your Review"}
           </h3>
           <FormGrid columns={2}>
             {canSelf ? (
               <>
                 <Field label="Rating" className={fieldSpan2}>
-                  <SegmentedControl
-                    role="radiogroup"
-                    label="Rating"
-                    value={v.selfRating}
-                    onChange={(r) => setV((x) => ({ ...x, selfRating: r }))}
-                    segments={ratings.map((r) => ({ value: r, label: r }))}
-                  />
+                  {scale === 5 ? (
+                    <RatingScale
+                      label="Your rating"
+                      value={v.selfRating ? Number(v.selfRating) : undefined}
+                      onChange={(r) =>
+                        setV((x) => ({ ...x, selfRating: String(r) }))
+                      }
+                    />
+                  ) : (
+                    <SegmentedControl
+                      role="radiogroup"
+                      label="Rating"
+                      value={v.selfRating}
+                      onChange={(r) => setV((x) => ({ ...x, selfRating: r }))}
+                      segments={ratings.map((r) => ({ value: r, label: r }))}
+                    />
+                  )}
                 </Field>
                 <Field label="Comments" className={fieldSpan2}>
                   <TextArea
@@ -411,28 +508,31 @@ function ReviewDetail({
               </>
             ) : (
               <>
-                <Field label="Manager Rating">
-                  <Select
-                    value={v.managerRating}
-                    onChange={set("managerRating")}
-                  >
-                    <option value="">Choose…</option>
-                    {ratings.map((r) => (
-                      <option key={r}>{r}</option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Overall Rating">
-                  <Select
-                    value={v.overallRating}
-                    onChange={set("overallRating")}
-                  >
-                    <option value="">Choose…</option>
-                    {ratings.map((r) => (
-                      <option key={r}>{r}</option>
-                    ))}
-                  </Select>
-                </Field>
+                {(
+                  [
+                    ["managerRating", "Manager Rating"],
+                    ["overallRating", "Overall Rating"],
+                  ] as const
+                ).map(([k, label]) => (
+                  <Field key={k} label={label} className={fieldSpan2}>
+                    {scale === 5 ? (
+                      <RatingScale
+                        label={label}
+                        value={v[k] ? Number(v[k]) : undefined}
+                        onChange={(r) =>
+                          setV((x) => ({ ...x, [k]: String(r) }))
+                        }
+                      />
+                    ) : (
+                      <Select value={v[k]} onChange={set(k)}>
+                        <option value="">Choose…</option>
+                        {ratings.map((r) => (
+                          <option key={r}>{r}</option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                ))}
                 <Field label="Comments" className={fieldSpan2}>
                   <TextArea
                     rows={5}
@@ -468,8 +568,8 @@ function ReviewDetail({
             </p>
           )}
           <div>
-            <Button type="submit" variant="primary" busy={saving}>
-              Submit
+            <Button type="submit" variant="primary" icon="check" busy={saving}>
+              {canSelf ? "Submit Self-Assessment" : "Submit Review"}
             </Button>
           </div>
         </form>

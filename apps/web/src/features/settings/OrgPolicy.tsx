@@ -7,7 +7,6 @@ import {
   Dialog,
   Field,
   FormGrid,
-  Section,
   Select,
   Switch,
   TextInput,
@@ -16,6 +15,7 @@ import {
   type Column,
 } from "@next/ui";
 import {
+  SettingsGroup,
   NumberInput,
   OrgSettingsPage,
   SettingRow,
@@ -165,7 +165,7 @@ export function LeavePolicyPage() {
         ];
         return (
           <>
-            <Section title="Statutory Entitlement">
+            <SettingsGroup title="Statutory Entitlement">
               <div>
                 <SettingRow label="Paid leave" help="Days per year">
                   <NumberInput
@@ -209,8 +209,8 @@ export function LeavePolicyPage() {
                   />
                 </SettingRow>
               </div>
-            </Section>
-            <Section
+            </SettingsGroup>
+            <SettingsGroup
               title="Leave Types"
               detail="Accrual, carry forward, encashment, and comp off"
               action={
@@ -241,7 +241,7 @@ export function LeavePolicyPage() {
                   body: "Statutory paid, sick, and casual leave apply.",
                 }}
               />
-            </Section>
+            </SettingsGroup>
             <LeaveTypeDialog
               value={editing?.policy ?? null}
               onClose={() => setEditing(null)}
@@ -550,7 +550,7 @@ export function AttendanceRulesPage() {
           d.workStartHour * 60 + d.workStartMinute + d.lateGracePeriodMinutes;
         return (
           <>
-            <Section title="Working Day">
+            <SettingsGroup title="Working Day">
               <div>
                 <SettingRow
                   label="Workday starts"
@@ -630,8 +630,8 @@ export function AttendanceRulesPage() {
                   />
                 </SettingRow>
               </div>
-            </Section>
-            <Section title="Work From Home">
+            </SettingsGroup>
+            <SettingsGroup title="Work From Home">
               <SettingRow
                 label="Allow work-from-home requests"
                 help="Turning this off hides WFH for everyone"
@@ -643,8 +643,8 @@ export function AttendanceRulesPage() {
                   onChange={(v) => org.change({ wfhEnabled: v })}
                 />
               </SettingRow>
-            </Section>
-            <Section
+            </SettingsGroup>
+            <SettingsGroup
               title="Geofencing"
               detail="Only accept punches made near the office"
             >
@@ -727,7 +727,7 @@ export function AttendanceRulesPage() {
                   </div>
                 </FormGrid>
               </Collapse>
-            </Section>
+            </SettingsGroup>
           </>
         );
       }}
@@ -742,7 +742,7 @@ export function HrPolicyPage() {
   return (
     <OrgSettingsPage title="HR Policy" org={org}>
       {(d, ro) => (
-        <Section title="Employment">
+        <SettingsGroup title="Employment">
           <div>
             <SettingRow label="Probation period">
               <NumberInput
@@ -779,7 +779,7 @@ export function HrPolicyPage() {
               />
             </SettingRow>
           </div>
-        </Section>
+        </SettingsGroup>
       )}
     </OrgSettingsPage>
   );
@@ -828,13 +828,14 @@ export function WorkWeekPage() {
             },
           });
         return (
-          <Section
+          <SettingsGroup
             title="Working Days"
             detail="Days off count as week offs in attendance and leave"
           >
             <div style={{ display: "grid", gap: 16 }}>
               <Field label="Pattern">
                 <Select
+                  style={{ maxWidth: 280 }}
                   value={ww.type}
                   disabled={ro}
                   onChange={(e) => setType(e.target.value)}
@@ -859,12 +860,17 @@ export function WorkWeekPage() {
                   </button>
                 ))}
               </div>
-              <p className="px-meta">
-                {ww.workingDays.map((i: number) => DAYS[i]).join(", ") ||
-                  "No working days selected"}
+              <p className="px-meta" aria-live="polite">
+                {ww.workingDays.length === 0
+                  ? "No working days selected"
+                  : `${ww.workingDays.length} working ${ww.workingDays.length === 1 ? "day" : "days"} a week · ${
+                      DAYS.filter((_, i) => !ww.workingDays.includes(i))
+                        .join(", ")
+                        .replace(/, ([^,]*)$/, " and $1") || "no days"
+                    } off`}
               </p>
             </div>
-          </Section>
+          </SettingsGroup>
         );
       }}
     </OrgSettingsPage>

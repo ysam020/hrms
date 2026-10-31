@@ -816,6 +816,9 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      react-joyride:
+        specifier: ^3.2.0
+        version: 3.2.0(@types/react@18.3.28)(react-dom@18.3.1)(react@18.3.1)
       react-router-dom:
         specifier: ^6.28.1
         version: 6.30.3(react-dom@18.3.1)(react@18.3.1)
@@ -4957,6 +4960,13 @@ packages:
       }
     dev: false
 
+  /@fastify/deepmerge@3.2.4:
+    resolution:
+      {
+        integrity: sha512-kc8GQq5gX9RRhw0rov3DMrN8wS8yRlxJRdDzsYwwdBV/wazuVgc/1K7CKL90tlvu3RlHan6Y0R0aE3nJtBz2eQ==,
+      }
+    dev: false
+
   /@firebase/ai@1.4.1(@firebase/app-types@0.9.3)(@firebase/app@0.13.2):
     resolution:
       {
@@ -5660,6 +5670,74 @@ packages:
       {
         integrity: sha512-2xCRM9q9FlzGZCdgDMJwc0gyUkWFtkosy7Xxr6sFgQwn+wMNIWd7xIvYNauU1r64B5L5rsGKy/n9TKJ0aAFeqQ==,
       }
+    dev: false
+
+  /@floating-ui/core@1.8.0:
+    resolution:
+      {
+        integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==,
+      }
+    dependencies:
+      "@floating-ui/utils": 0.2.12
+    dev: false
+
+  /@floating-ui/dom@1.8.0:
+    resolution:
+      {
+        integrity: sha512-yXSrzeHZBTZadLOlfyhCkJHNeLJnHRnRInwdZ40L7ZiaAtrBwoYlsDrX3v5zB1Utk7CLfzcOVnVVWoXEky7Ceg==,
+      }
+    dependencies:
+      "@floating-ui/core": 1.8.0
+      "@floating-ui/utils": 0.2.12
+    dev: false
+
+  /@floating-ui/react-dom@2.1.9(react-dom@18.3.1)(react@18.3.1):
+    resolution:
+      {
+        integrity: sha512-JDjEFGCpImxDCA7JJKviA0M9+RtmJdj0m/NVU5IMgBK+AmZouAQQ7/+2GLH0GXXY0YMw9oXPB8hKdbPYg5QLYg==,
+      }
+    peerDependencies:
+      react: ">=16.8.0"
+      react-dom: ">=16.8.0"
+    dependencies:
+      "@floating-ui/dom": 1.8.0
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+    dev: false
+
+  /@floating-ui/utils@0.2.12:
+    resolution:
+      {
+        integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==,
+      }
+    dev: false
+
+  /@gilbarbara/deep-equal@0.4.1:
+    resolution:
+      {
+        integrity: sha512-QF2BGeQjsa59T59XvFdR3is5jrl28Eg0J6giXAC5919bcqvR8XP4B+07tpbs6Y6/IQd4FBncaL2WVXIBgSxt4w==,
+      }
+    dev: false
+
+  /@gilbarbara/hooks@0.11.0(react@18.3.1):
+    resolution:
+      {
+        integrity: sha512-CIVazdxqFRplUfm9wZL3/0X1TURJekhPMWGFdWzEmyJrGPiotX2yxA1KiB8N7VnhawIaMtb2Apnda4Y6DRwi2Q==,
+      }
+    peerDependencies:
+      react: 16.8 - 19
+    dependencies:
+      "@gilbarbara/deep-equal": 0.4.1
+      react: 18.3.1
+    dev: false
+
+  /@gilbarbara/types@0.2.2:
+    resolution:
+      {
+        integrity: sha512-QuQDBRRcm1Q8AbSac2W1YElurOhprj3Iko/o+P1fJxUWS4rOGKMVli98OXS7uo4z+cKAif6a+L9bcZFSyauQpQ==,
+      }
+    dependencies:
+      type-fest: 4.41.0
     dev: false
 
   /@google-cloud/firestore@7.11.6:
@@ -17114,6 +17192,13 @@ packages:
     engines: { node: ">=8" }
     dev: true
 
+  /is-lite@2.0.0:
+    resolution:
+      {
+        integrity: sha512-70f2BMIQlbSUXVKaZUd9a9fJH3IH1PDckV0m4BIIO4LjnNYvOh4Ng7vXIXEwpA0KDZknRq+7fHwGTu0jIdx28g==,
+      }
+    dev: false
+
   /is-map@2.0.3:
     resolution:
       {
@@ -20626,6 +20711,19 @@ packages:
       }
     dev: false
 
+  /react-innertext@1.1.5(@types/react@18.3.28)(react@18.3.1):
+    resolution:
+      {
+        integrity: sha512-PWAqdqhxhHIv80dT9znP2KvS+hfkbRovFp4zFYHFFlOoQLRiawIic81gKb3U1wEyJZgMwgs3JoLtwryASRWP3Q==,
+      }
+    peerDependencies:
+      "@types/react": ">=0.0.0 <=99"
+      react: ">=0.0.0 <=99"
+    dependencies:
+      "@types/react": 18.3.28
+      react: 18.3.1
+    dev: false
+
   /react-is@16.13.1:
     resolution:
       {
@@ -20652,6 +20750,31 @@ packages:
       {
         integrity: sha512-W+EWGn2v0ApPKgKKCy/7s7WHXkboGcsrXE+2joLyVxkbyVQfO3MUEaUQDHoSmb8TFFrSKYa9mw64WZHNHSDzYA==,
       }
+    dev: false
+
+  /react-joyride@3.2.0(@types/react@18.3.28)(react-dom@18.3.1)(react@18.3.1):
+    resolution:
+      {
+        integrity: sha512-UrA/XWdWElMLNnjZt2eWmPFmpHl1IZ2CeI9XhS+PuEVvfqHMD9U4tavCq1csDAGVoj0YEGfaCDmhZwgNc9yE2g==,
+      }
+    peerDependencies:
+      react: 16.8 - 19
+      react-dom: 16.8 - 19
+    dependencies:
+      "@fastify/deepmerge": 3.2.4
+      "@floating-ui/react-dom": 2.1.9(react-dom@18.3.1)(react@18.3.1)
+      "@gilbarbara/deep-equal": 0.4.1
+      "@gilbarbara/hooks": 0.11.0(react@18.3.1)
+      "@gilbarbara/types": 0.2.2
+      is-lite: 2.0.0
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      react-innertext: 1.1.5(@types/react@18.3.28)(react@18.3.1)
+      scroll: 3.0.1
+      scrollparent: 2.1.0
+      use-sync-external-store: 1.6.0(react@18.3.1)
+    transitivePeerDependencies:
+      - "@types/react"
     dev: false
 
   /react-leaflet@4.2.1(leaflet@1.9.4)(react-dom@18.3.1)(react@18.3.1):
@@ -21392,6 +21515,20 @@ packages:
       }
     dependencies:
       loose-envify: 1.4.0
+
+  /scroll@3.0.1:
+    resolution:
+      {
+        integrity: sha512-pz7y517OVls1maEzlirKO5nPYle9AXsFzTMNJrRGmT951mzpIBy7sNHOg5o/0MQd/NqliCiWnAi0kZneMPFLcg==,
+      }
+    dev: false
+
+  /scrollparent@2.1.0:
+    resolution:
+      {
+        integrity: sha512-bnnvJL28/Rtz/kz2+4wpBjHzWoEzXhVg/TE8BeVGJHUqE8THNIRnDxDWMktwM+qahvlRdvlLdsQfYe+cuqfZeA==,
+      }
+    dev: false
 
   /seedrandom@2.4.3:
     resolution:

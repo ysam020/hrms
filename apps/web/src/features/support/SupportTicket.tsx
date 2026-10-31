@@ -10,6 +10,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
+  Icon,
   Banner,
   Button,
   ConfirmDialog,
@@ -22,13 +23,15 @@ import {
   Section,
   StatusBadge,
   TextArea,
+  Tag,
 } from "@next/ui";
 import { apiClient, errorMessage, unwrap } from "@next/lib/api";
-import { fmtDateTime } from "@next/lib/format";
+import { fmtDateTime, fromNow } from "@next/lib/format";
 import { AttachmentPicker } from "./Attachments";
 import { Timeline } from "./Timeline";
 import type { UploadedFile } from "./api";
 import {
+  categoryOf,
   LIMITS,
   REOPEN_WINDOW_DAYS,
   categoryLabel,
@@ -97,20 +100,36 @@ export default function SupportTicket() {
                   The Praesto team is waiting for your reply.
                 </Banner>
               )}
-              <header className={s.head}>
-                <span className={s.ref}>{t.ticketNo}</span>
+              <header className={s.headCard}>
+                <span className={s.refSmall}>{t.ticketNo}</span>
                 <h2 className={`px-title ${s.subject}`}>{t.subject}</h2>
-                <div className="px-row">
+                <div className={s.chips}>
                   <StatusBadge tone={statusTone(t.status)}>
                     {statusLabel(t.status, true)}
                   </StatusBadge>
-                  <StatusBadge tone={priorityTone(t.priority)} plain>
+                  <span
+                    className={s.priority}
+                    data-tone={priorityTone(t.priority)}
+                  >
+                    <Icon name="flag" size={12} />
                     {priorityLabel(t.priority)} priority
-                  </StatusBadge>
-                  <span className="px-meta">{categoryLabel(t.category)}</span>
+                  </span>
+                  <Tag>
+                    {categoryOf(t.category) && (
+                      <Icon name={categoryOf(t.category)!.icon} size={12} />
+                    )}
+                    {categoryLabel(t.category)}
+                  </Tag>
+                  <span className="px-meta">
+                    Opened {fromNow(t.createdAt)} · updated{" "}
+                    {fromNow(t.updatedAt)}
+                  </span>
                 </div>
               </header>
-              <Section title="Conversation">
+              <Section
+                title="Conversation"
+                detail={`${data.messages.length + 1} ${data.messages.length === 0 ? "message" : "messages"}`}
+              >
                 <Timeline
                   side="tenant"
                   tenant
@@ -135,39 +154,74 @@ export default function SupportTicket() {
               {data.permissions.canReply && (
                 <ReplyForm ticketId={t.id} onSent={load} />
               )}
-              {t.status === "closed" && (
-                <p className="px-meta">
-                  This ticket is closed. If the problem comes back, raise a new
+              {!data.permissions.canReply && t.status === "closed" && (
+                <Banner
+                  tone="neutral"
+                  icon="lock"
+                  title="This ticket is closed"
+                >
+                  Replies are turned off. If the problem comes back, raise a new
                   ticket and mention {t.ticketNo}.
-                </p>
+                </Banner>
+              )}
+              {!data.permissions.canReply && t.status === "resolved" && (
+                <Banner tone="success" title="Resolved">
+                  Replies are turned off while it’s resolved. Reopen it from the
+                  panel if the problem isn’t fixed.
+                </Banner>
               )}
             </div>
             <aside className={s.side} aria-label="Ticket details">
-              <KeyValues
-                items={[
-                  ["Reference", <span className={s.ref}>{t.ticketNo}</span>],
-                  ["Status", statusLabel(t.status, true)],
-                  [
-                    "Priority",
-                    t.requestedPriority !== t.priority
-                      ? `${priorityLabel(t.priority)} (you asked for ${priorityLabel(t.requestedPriority)})`
-                      : priorityLabel(t.priority),
-                  ],
-                  ["Category", categoryLabel(t.category)],
-                  ["Module", t.module || "—"],
-                  ["Reported by", t.isMine ? "You" : t.reporterName],
-                  ["Created", fmtDateTime(t.createdAt)],
-                  ["Last updated", fmtDateTime(t.updatedAt)],
-                  ...(t.resolvedAt
-                    ? [
-                        ["Resolved", fmtDateTime(t.resolvedAt)] as [
-                          string,
-                          string,
-                        ],
-                      ]
-                    : []),
-                ]}
-              />
+              <section className={s.sideGroup} aria-label="Ticket">
+                <h3 className={s.sideTitle}>Ticket</h3>
+                <KeyValues
+                  items={[
+                    ["Reference", <span className={s.ref}>{t.ticketNo}</span>],
+                    [
+                      "Status",
+                      <StatusBadge tone={statusTone(t.status)}>
+                        {statusLabel(t.status, true)}
+                      </StatusBadge>,
+                    ],
+                    [
+                      "Priority",
+                      <span style={{ display: "grid", gap: 2 }}>
+                        <span
+                          className={s.priority}
+                          data-tone={priorityTone(t.priority)}
+                        >
+                          {priorityLabel(t.priority)}
+                        </span>
+                        {t.requestedPriority !== t.priority && (
+                          <span className="px-meta">
+                            You asked for {priorityLabel(t.requestedPriority)}
+                          </span>
+                        )}
+                      </span>,
+                    ],
+                    ["Category", categoryLabel(t.category)],
+                    ["Module", t.module || null],
+                    ["Reported by", t.isMine ? "You" : t.reporterName],
+                  ]}
+                />
+              </section>
+              <section className={s.sideGroup} aria-label="Dates">
+                <h3 className={s.sideTitle}>Dates</h3>
+                <KeyValues
+                  items={[
+                    ["Created", fmtDateTime(t.createdAt)],
+                    ["Last updated", fmtDateTime(t.updatedAt)],
+                    ...(t.resolvedAt
+                      ? [
+                          ["Resolved", fmtDateTime(t.resolvedAt)] as [
+                            string,
+                            string,
+                          ],
+                        ]
+                      : []),
+                  ]}
+                />
+              </section>
               <TicketActions
                 ticket={t}
                 canReopen={data.permissions.canReopen}
@@ -220,12 +274,22 @@ function ReplyForm({
   };
   return (
     <form onSubmit={send} className={s.composer} aria-label="Reply">
-      <Field label="Reply to Praesto Support">
+      <Field
+        label="Reply to Praesto Support"
+        hint={`${body.length}/${LIMITS.replyMax} · ⌘ Enter to send`}
+      >
         <TextArea
           rows={4}
           value={body}
           maxLength={LIMITS.replyMax}
           onChange={(e) => setBody(e.target.value)}
+          onKeyDown={(e) => {
+            // ⌘/Ctrl + Enter sends, as in most support tools.
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
           placeholder="Add details, answer a question, or share a screenshot…"
         />
       </Field>
@@ -243,8 +307,9 @@ function ReplyForm({
             variant="primary"
             busy={sending}
             disabled={!body.trim() || uploading}
+            icon="arrowRight"
           >
-            Send Reply
+            {uploading ? "Uploading…" : "Send Reply"}
           </Button>
         </div>
       </div>

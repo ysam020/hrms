@@ -43,6 +43,8 @@ export interface DataTableProps<T> {
   };
   footer?: ReactNode;
   stickyOffset?: number;
+  /** Walkthrough target id (`data-tour`), kept on the empty and error states too. */
+  tour?: string;
 }
 
 export function DataTable<T>({
@@ -61,6 +63,7 @@ export function DataTable<T>({
   empty,
   footer,
   stickyOffset = 0,
+  tour,
 }: DataTableProps<T>) {
   const selectable = Boolean(selected && onSelectedChange);
   const allIds = rows.map(rowId);
@@ -81,15 +84,22 @@ export function DataTable<T>({
   };
 
   if (error && !loading)
-    return <ErrorState message={error} onRetry={onRetry} />;
+    return tour ? (
+      <div data-tour={tour}>
+        <ErrorState message={error} onRetry={onRetry} />
+      </div>
+    ) : (
+      <ErrorState message={error} onRetry={onRetry} />
+    );
 
   const showSkeleton = loading && rows.length === 0;
   if (!showSkeleton && rows.length === 0 && empty) {
-    return (
+    const state = (
       <EmptyState icon={empty.icon} title={empty.title} action={empty.action}>
         {empty.body}
       </EmptyState>
     );
+    return tour ? <div data-tour={tour}>{state}</div> : state;
   }
 
   const onKey = (e: KeyboardEvent<HTMLTableRowElement>, row: T) => {
@@ -104,6 +114,7 @@ export function DataTable<T>({
     <div
       className={s.wrap}
       style={{ "--_sticky": `${stickyOffset}px` } as CSSProperties}
+      data-tour={tour}
     >
       <table
         className={s.table}

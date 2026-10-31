@@ -31,7 +31,8 @@ export type ButtonVariant =
   | "danger"
   | "plain"
   | "tinted"
-  | "tintedDanger";
+  | "tintedDanger"
+  | "plainDanger";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -245,6 +246,7 @@ export function SegmentedControl<T extends string>({
   label,
   role = "tablist",
   idPrefix,
+  tour,
 }: {
   segments: Segment<T>[];
   value: T;
@@ -254,6 +256,8 @@ export function SegmentedControl<T extends string>({
   role?: "tablist" | "radiogroup";
   /** For tablists: panel ids are `${idPrefix}-panel-${value}`. */
   idPrefix?: string;
+  /** Walkthrough target id (`data-tour`). */
+  tour?: string;
 }) {
   const group = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -286,6 +290,7 @@ export function SegmentedControl<T extends string>({
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
         className={s.segmentedPicker}
+        data-tour={tour}
       >
         {segments.map((seg) => (
           <option key={seg.value} value={seg.value}>
@@ -298,7 +303,12 @@ export function SegmentedControl<T extends string>({
 
   return (
     <LayoutGroup id={group}>
-      <div className={s.segmented} role={role} aria-label={label}>
+      <div
+        className={s.segmented}
+        role={role}
+        aria-label={label}
+        data-tour={tour}
+      >
         {segments.map((seg, i) => {
           const selected = seg.value === value;
           return (

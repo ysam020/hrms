@@ -86,17 +86,19 @@ export default function Helpdesk() {
       key: "status",
       header: "Status",
       priority: "trailing",
+      width: 200,
+      // Status first so the column reads down cleanly; an SLA breach is a
+      // second line under it rather than a badge competing beside it.
       render: (t) => (
-        <span
-          className="px-row"
-          style={{ flexWrap: "nowrap", justifyContent: "flex-end" }}
-        >
-          {t.slaBreached && (
-            <StatusBadge tone="danger">SLA Breached</StatusBadge>
-          )}
+        <span style={{ display: "grid", gap: 4, justifyItems: "start" }}>
           <StatusBadge tone={statusTone(t.status)}>
             {label(t.status)}
           </StatusBadge>
+          {t.slaBreached && (
+            <StatusBadge tone="danger" plain>
+              SLA breached
+            </StatusBadge>
+          )}
         </span>
       ),
     },
@@ -104,8 +106,14 @@ export default function Helpdesk() {
   return (
     <Page
       title="Helpdesk"
+      description="Questions and requests for IT, HR, payroll and leave. Tickets past their target response time are marked SLA breached."
       actions={
-        <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+        <Button
+          data-tour="helpdesk-new"
+          variant="primary"
+          icon="plus"
+          onClick={() => setCreating(true)}
+        >
           New Ticket
         </Button>
       }
@@ -132,6 +140,7 @@ export default function Helpdesk() {
     >
       <DataTable
         label="Tickets"
+        tour="helpdesk-table"
         columns={columns}
         rows={list.data}
         rowId={(t) => String(t.id)}
@@ -229,6 +238,8 @@ function NewTicket({
       onClose={onClose}
       busy={saving}
       title="New Ticket"
+      description="Ask IT, HR, payroll or leave for help. You’ll see replies and status changes on the ticket."
+      icon={{ name: "lifebuoy", tone: "accent" }}
       footer={
         <>
           <DraftNote
@@ -253,7 +264,12 @@ function NewTicket({
     >
       <form id="ticket-form" onSubmit={submit} noValidate>
         <FormGrid columns={2}>
-          <Field label="Title" error={errors.title} className={fieldSpan2}>
+          <Field
+            label="Title"
+            error={errors.title}
+            hint="A short summary, e.g. “VPN disconnects every hour”"
+            className={fieldSpan2}
+          >
             <TextInput data-autofocus value={v.title} onChange={set("title")} />
           </Field>
           <Field label="Category">

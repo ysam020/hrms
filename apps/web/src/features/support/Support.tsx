@@ -3,10 +3,10 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { useTransitionNavigate } from "@next/motion";
 import {
+  StatTiles,
+  StatTile,
   Button,
   DataTable,
-  Metric,
-  Metrics,
   Page,
   Pagination,
   PrimaryCell,
@@ -146,6 +146,7 @@ export default function Support() {
       actions={
         canRaise && (
           <Button
+            data-tour="support-new"
             variant="primary"
             icon="plus"
             onClick={() => navigate("/support/new")}
@@ -179,25 +180,40 @@ export default function Support() {
       }
     >
       <div className={s.stack}>
-        <Metrics label="Ticket summary">
-          <Metric label="Total" value={stats?.total ?? "—"} loading={!stats} />
-          <Metric label="Open" value={stats?.open ?? "—"} loading={!stats} />
-          <Metric
+        <StatTiles label="Ticket summary">
+          <StatTile
+            label="Total"
+            icon="ticket"
+            value={stats?.total ?? "—"}
+            loading={!stats}
+          />
+          <StatTile
+            label="Open"
+            icon="inbox"
+            tone="accent"
+            value={stats?.open ?? "—"}
+            loading={!stats}
+          />
+          <StatTile
             label="Waiting for You"
+            icon="chat"
+            tone={stats?.awaitingYou ? "warning" : "neutral"}
             value={stats?.awaitingYou ?? "—"}
             loading={!stats}
             note={
               stats?.awaitingYou
                 ? "The Praesto team needs your reply"
-                : undefined
+                : "Nothing needs your reply"
             }
           />
-          <Metric
+          <StatTile
             label="Resolved"
+            icon="checkCircle"
+            tone="success"
             value={stats?.resolved ?? "—"}
             loading={!stats}
           />
-        </Metrics>
+        </StatTiles>
         <div className={s.filters} role="group" aria-label="Filters">
           <Select
             aria-label="Status"
@@ -245,6 +261,7 @@ export default function Support() {
         </div>
         <DataTable
           label="Support tickets"
+          tour="support-table"
           columns={columns}
           rows={list.data}
           rowId={(t) => String(t.id)}

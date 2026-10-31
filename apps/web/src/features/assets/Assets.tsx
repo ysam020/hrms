@@ -6,6 +6,7 @@ import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import useAssetCategoryOptions from "@web/features/assets/useAssetCategoryOptions";
 import {
+  FieldGroup,
   Button,
   ConfirmDialog,
   DataTable,
@@ -187,6 +188,7 @@ export default function Assets() {
       actions={
         manager && (
           <Button
+            data-tour="assets-add"
             variant="primary"
             icon="plus"
             onClick={() => setCreating(true)}
@@ -286,6 +288,7 @@ export default function Assets() {
     >
       <DataTable
         label="Assets"
+        tour="assets-table"
         columns={columns}
         rows={list.data}
         rowId={(a) => String(a.id)}
@@ -429,6 +432,8 @@ function CreateAsset({
       onClose={onClose}
       busy={saving}
       title="Add Asset"
+      description="Add equipment to the inventory. You can assign it to someone once it’s added."
+      icon={{ name: "laptop", tone: "accent" }}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -444,57 +449,71 @@ function CreateAsset({
       }
     >
       <form id="asset-form" onSubmit={submit} noValidate>
-        <FormGrid columns={2}>
-          <Field label="Name" error={errors.name} className={fieldSpan2}>
-            <TextInput
-              data-autofocus
-              value={f.name}
-              onChange={set("name")}
-              placeholder="MacBook Pro 14″"
-            />
-          </Field>
-          <Field label="Asset Code" error={errors.assetCode}>
-            <TextInput
-              value={f.assetCode}
-              onChange={set("assetCode")}
-              placeholder="LAP-0042"
-            />
-          </Field>
-          <Field label="Category" error={errors.category}>
-            <TextInput
-              list="asset-categories"
-              value={f.category}
-              onChange={set("category")}
-            />
-          </Field>
-          <datalist id="asset-categories">
-            {(options as any[]).map((o) => (
-              <option
-                key={String(o.value ?? o)}
-                value={String(o.value ?? o.label ?? o)}
+        <FieldGroup title="Asset">
+          <FormGrid columns={2}>
+            <Field label="Name" error={errors.name} className={fieldSpan2}>
+              <TextInput
+                data-autofocus
+                value={f.name}
+                onChange={set("name")}
+                placeholder="MacBook Pro 14″"
               />
-            ))}
-          </datalist>
-          <Field label="Purchased On" optional>
-            <TextInput
-              type="date"
-              value={f.purchaseDate}
-              onChange={set("purchaseDate")}
-            />
-          </Field>
-          <Field label="Value (₹)" optional>
-            <TextInput
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={f.purchaseValue}
-              onChange={set("purchaseValue")}
-            />
-          </Field>
-          <Field label="Notes" optional className={fieldSpan2}>
-            <TextArea rows={2} value={f.notes} onChange={set("notes")} />
-          </Field>
-        </FormGrid>
+            </Field>
+            <Field label="Asset Code" error={errors.assetCode}>
+              <TextInput
+                value={f.assetCode}
+                onChange={set("assetCode")}
+                placeholder="LAP-0042"
+              />
+            </Field>
+            <Field
+              label="Category"
+              error={errors.category}
+              hint="Pick one or type a new one"
+            >
+              <TextInput
+                list="asset-categories"
+                value={f.category}
+                onChange={set("category")}
+              />
+            </Field>
+            <datalist id="asset-categories">
+              {(options as any[]).map((o) => (
+                <option
+                  key={String(o.value ?? o)}
+                  value={String(o.value ?? o.label ?? o)}
+                />
+              ))}
+            </datalist>
+          </FormGrid>
+        </FieldGroup>
+        <FieldGroup
+          title="Purchase"
+          description="Optional. Shown in the asset’s details."
+        >
+          <FormGrid columns={2}>
+            <Field label="Purchased On" optional>
+              <TextInput
+                type="date"
+                value={f.purchaseDate}
+                onChange={set("purchaseDate")}
+              />
+            </Field>
+            <Field label="Value (₹)" optional hint="Whole rupees">
+              <TextInput
+                type="number"
+                min={0}
+                inputMode="numeric"
+                placeholder="0"
+                value={f.purchaseValue}
+                onChange={set("purchaseValue")}
+              />
+            </Field>
+            <Field label="Notes" optional className={fieldSpan2}>
+              <TextArea rows={2} value={f.notes} onChange={set("notes")} />
+            </Field>
+          </FormGrid>
+        </FieldGroup>
       </form>
     </Dialog>
   );

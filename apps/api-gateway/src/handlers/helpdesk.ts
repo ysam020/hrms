@@ -29,7 +29,6 @@ import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
 import { getSchedulerQueue } from "@hrms/queue";
 import { notify } from "@hrms/notifications";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import dayjs from "dayjs";
 
 // SLA hours keyed by priority.
@@ -187,15 +186,6 @@ export async function createTicket(req: Request, res: Response) {
         qErr,
       });
     }
-
-    await emitWebhookEvent("ticket.created", {
-      ticketId: ticket.id,
-      ticketNo,
-      title,
-      category,
-      priority,
-      raisedBy: user!.userId,
-    });
 
     // Auto-assigned to the HR group (owner/admin/hr/superuser/explicit
     // Helpdesk:manage) as a whole, not a specific person — notify all of
@@ -476,14 +466,6 @@ export async function updateTicket(req: Request, res: Response) {
       where: { id: String(req.params.ticketId) },
       data,
     });
-
-    if (data.status === "resolved") {
-      await emitWebhookEvent("ticket.resolved", {
-        ticketId: (ticket as any).id,
-        ticketNo: (ticket as any).ticketNo,
-        resolvedBy: user!.userId,
-      });
-    }
 
     // Notify the HR group + the ticket's raiser (whoever of those isn't the
     // one who just made this change).

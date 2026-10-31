@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { useContext, useState } from "react";
 import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
@@ -47,6 +48,34 @@ function JobTitle({ j }: { j: any }) {
   );
 }
 
+/** Apply By date plus how soon it closes; the last week is amber. */
+function Deadline({ date }: { date?: string }) {
+  if (!date) return <span className="px-tertiary">—</span>;
+  const days = dayjs(date).startOf("day").diff(dayjs().startOf("day"), "day");
+  const tone = days < 0 ? "neutral" : days <= 7 ? "warning" : undefined;
+  return (
+    <span style={{ display: "grid" }}>
+      <span className="px-num">{fmtDate(date)}</span>
+      <span
+        className="px-meta"
+        style={
+          tone === "warning"
+            ? { color: "var(--px-warning)", fontWeight: 500 }
+            : undefined
+        }
+      >
+        {days < 0
+          ? "Closed"
+          : days === 0
+            ? "Closes today"
+            : days === 1
+              ? "Closes tomorrow"
+              : `${days} days left`}
+      </span>
+    </span>
+  );
+}
+
 export default function Jobs() {
   const { user } = useContext(UserContext);
   const navigate = useTransitionNavigate();
@@ -77,7 +106,9 @@ export default function Jobs() {
       priority: "secondary",
       stackLabel: "Openings",
       render: (j) => (
-        <span className="px-num">{j.numberOfVacancies ?? "—"}</span>
+        <span className="px-num" style={{ fontWeight: 600 }}>
+          {j.numberOfVacancies ?? "—"}
+        </span>
       ),
     },
     {
@@ -86,22 +117,36 @@ export default function Jobs() {
       align: "right",
       priority: "hidden",
       render: (j) =>
-        Array.isArray(j.budget)
-          ? j.budget.length
-            ? `${j.budget[0]}–${j.budget[1]} LPA`
-            : "—"
-          : j.budget
-            ? fmtMoney(j.budget)
-            : "—",
+        Array.isArray(j.budget) ? (
+          j.budget.length ? (
+            <span
+              className="px-num"
+              title={
+                j.budgetDisclosed === false
+                  ? "Not shown on the careers page"
+                  : undefined
+              }
+            >
+              ₹{j.budget[0]}–{j.budget[1]} LPA
+              {j.budgetDisclosed === false && (
+                <span className="px-tertiary"> · internal</span>
+              )}
+            </span>
+          ) : (
+            <span className="px-tertiary">Not set</span>
+          )
+        ) : j.budget ? (
+          fmtMoney(j.budget)
+        ) : (
+          <span className="px-tertiary">Not set</span>
+        ),
     },
     {
       key: "deadline",
       header: "Apply By",
       priority: "secondary",
       stackLabel: "Apply by",
-      render: (j) => (
-        <span className="px-num">{fmtDate(j.applicationDeadline)}</span>
-      ),
+      render: (j) => <Deadline date={j.applicationDeadline} />,
     },
     {
       key: "status",
@@ -113,6 +158,7 @@ export default function Jobs() {
   return (
     <Page
       title="Job Openings"
+      description="Roles you’re hiring for. Open one to see its candidates and pipeline."
       actions={
         <>
           {user?.tenantSlug && (
@@ -121,14 +167,14 @@ export default function Jobs() {
               target="_blank"
               rel="noopener"
             >
-              <Button variant="plain" icon="external">
+              <Button data-tour="jobs-careers" variant="plain" icon="external">
                 Careers Page
               </Button>
             </a>
           )}
           {isHrOrAbove(user) && (
             <TransitionLink to="/job-openings/new">
-              <Button variant="primary" icon="plus">
+              <Button data-tour="jobs-new" variant="primary" icon="plus">
                 New Opening
               </Button>
             </TransitionLink>
@@ -159,6 +205,7 @@ export default function Jobs() {
     >
       <DataTable
         label="Job openings"
+        tour="jobs-table"
         columns={columns}
         rows={list.data}
         rowId={(j) => String(j.id || j._id)}
@@ -167,7 +214,20 @@ export default function Jobs() {
         stickyOffset={52}
         empty={{
           icon: "briefcase",
-          title: `No ${status === "All" ? "" : status.toLowerCase() + " "}openings`,
+          title: list.query
+            ? "No openings match your search"
+            : `No ${status === "All" ? "" : status.toLowerCase() + " "}openings`,
+          body: list.query
+            ? "Try another role name or clear the search."
+            : status === "Active"
+              ? "Openings that are live and taking applications appear here."
+              : undefined,
+          action:
+            !list.query && status === "Active" && isHrOrAbove(user) ? (
+              <TransitionLink to="/job-openings/new">
+                <Button icon="plus">New Opening</Button>
+              </TransitionLink>
+            ) : undefined,
         }}
         footer={<Pagination {...list.pageProps} />}
       />

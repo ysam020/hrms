@@ -66,7 +66,7 @@ const PLAN_FEATURES = [
   "Priority support",
 ];
 const TIERS: PlanTier[] = ["starter", "growth", "enterprise"];
-const ACCENT = "#166E96";
+const ACCENT = "#2A78D6";
 
 const longDate = (iso: string | null | undefined) =>
   iso
@@ -111,16 +111,77 @@ interface RazorpayResponse {
   razorpay_order_id?: string;
 }
 
+/**
+ * The three tiers side by side as radio cards: name, employee limit and the
+ * price for the selected billing period. Prices come from PLAN_PRICING
+ * (amountPaise); nothing here computes a charge.
+ */
+function PlanPicker({
+  value,
+  onChange,
+  billing,
+  currentTier,
+  headcount,
+}: {
+  value: PlanTier;
+  onChange: (t: PlanTier) => void;
+  billing: Billing;
+  /** The tier the organisation is on, when that's the same billing period. */
+  currentTier?: PlanTier;
+  headcount: number;
+}) {
+  return (
+    <div className={s.tiers} role="radiogroup" aria-label="Plan">
+      {TIERS.map((t) => {
+        const limit = TIER_EMPLOYEE_LIMITS[t];
+        const tooSmall = limit !== null && headcount > limit;
+        return (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={value === t}
+            className={s.tier}
+            data-current={currentTier === t || undefined}
+            onClick={() => onChange(t)}
+          >
+            <span className={s.tierHead}>
+              <span className="px-headline">{PLAN_TIER_LABELS[t]}</span>
+              {currentTier === t && (
+                <StatusBadge tone="neutral">Current</StatusBadge>
+              )}
+            </span>
+            <span className={`px-num ${s.tierPrice}`}>
+              {formatINR(amountPaise(t, billing))}
+              <small>{billing === "annual" ? "/year" : "/month"}</small>
+            </span>
+            <span className="px-meta" data-warn={tooSmall || undefined}>
+              {limit === null
+                ? "Unlimited employees"
+                : tooSmall
+                  ? `Up to ${limit} employees — you have ${headcount}`
+                  : `Up to ${limit} employees`}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function PlanCard({
   tier,
   billing,
   amount,
   limit,
+  current,
 }: {
   tier: PlanTier;
   billing: Billing;
   amount: number;
   limit?: number | null;
+  /** The organisation is already on exactly this tier and billing period. */
+  current?: boolean;
 }) {
   const features =
     limit === undefined
@@ -130,10 +191,13 @@ function PlanCard({
           ...PLAN_FEATURES,
         ];
   return (
-    <div className={s.plan}>
+    <div className={s.plan} data-current={current || undefined}>
       <div className={s.planHead}>
         <div>
-          <p className="px-headline">HRMS {PLAN_TIER_LABELS[tier]}</p>
+          <p className="px-headline px-row" style={{ gap: 8 }}>
+            HRMS {PLAN_TIER_LABELS[tier]}
+            {current && <StatusBadge tone="neutral">Current Plan</StatusBadge>}
+          </p>
           <p className="px-meta">Full-featured HR management</p>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -543,7 +607,7 @@ export default function Subscription() {
 
   return (
     <Page title="Subscription" width="reading">
-      <section className={s.current}>
+      <section className={s.current} data-tour="subscription-current">
         <div className={s.planHead}>
           <div>
             <h2 className="px-title">HRMS {PLAN_TIER_LABELS[tier]}</h2>
@@ -719,19 +783,7 @@ export default function Subscription() {
         <Section title="Change Plan">
           <div style={{ display: "grid", gap: 12 }}>
             <SegmentedControl
-              role="radiogroup"
-              label="Plan"
-              value={changeTier}
-              onChange={setChangeTier}
-              segments={TIERS.map((t) => ({
-                value: t,
-                label:
-                  TIER_EMPLOYEE_LIMITS[t] === null
-                    ? PLAN_TIER_LABELS[t]
-                    : `${PLAN_TIER_LABELS[t]} (≤${TIER_EMPLOYEE_LIMITS[t]})`,
-              }))}
-            />
-            <SegmentedControl
+              tour="subscription-change"
               role="radiogroup"
               label="Billing"
               value={changeBilling}
@@ -740,6 +792,15 @@ export default function Subscription() {
                 { value: "monthly", label: "Monthly" },
                 { value: "annual", label: "Annual" },
               ]}
+            />
+            <PlanPicker
+              value={changeTier}
+              onChange={setChangeTier}
+              billing={changeBilling}
+              currentTier={
+                changeBilling === billingOf(tenant) ? tier : undefined
+              }
+              headcount={tenant.activeEmployeeCount}
             />
             {blockedByHeadcount && (
               <Banner tone="warning">
@@ -752,6 +813,7 @@ export default function Subscription() {
               billing={changeBilling}
               amount={amountPaise(changeTier, changeBilling)}
               limit={changeLimit}
+              current={isSameAsCurrent}
             />
             <p className="px-meta">
               {trialing
@@ -769,7 +831,9 @@ export default function Subscription() {
               }
               onClick={changePlan}
             >
-              Change Plan
+              {isSameAsCurrent
+                ? "This Is Your Current Plan"
+                : `Switch to ${PLAN_TIER_LABELS[changeTier]} (${changeBilling === "annual" ? "Annual" : "Monthly"})`}
             </Button>
           </div>
         </Section>
@@ -780,19 +844,6 @@ export default function Subscription() {
           <div style={{ display: "grid", gap: 12 }}>
             <SegmentedControl
               role="radiogroup"
-              label="Plan"
-              value={renewTier}
-              onChange={setRenewTier}
-              segments={TIERS.map((t) => ({
-                value: t,
-                label:
-                  TIER_EMPLOYEE_LIMITS[t] === null
-                    ? PLAN_TIER_LABELS[t]
-                    : `${PLAN_TIER_LABELS[t]} (≤${TIER_EMPLOYEE_LIMITS[t]})`,
-              }))}
-            />
-            <SegmentedControl
-              role="radiogroup"
               label="Billing"
               value={renewBilling}
               onChange={setRenewBilling}
@@ -800,6 +851,12 @@ export default function Subscription() {
                 { value: "monthly", label: "Monthly" },
                 { value: "annual", label: "Annual · Save 10%" },
               ]}
+            />
+            <PlanPicker
+              value={renewTier}
+              onChange={setRenewTier}
+              billing={renewBilling}
+              headcount={tenant.activeEmployeeCount}
             />
             {renewBlockedByHeadcount && (
               <Banner tone="warning">

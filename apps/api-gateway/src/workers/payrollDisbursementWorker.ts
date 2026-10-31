@@ -3,7 +3,6 @@ import { prisma, runWithTenant, getClientForDb } from "@hrms/db";
 import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import type { PayrollDisbursementJobData } from "@hrms/queue";
 import { logger, requestIdStorage } from "@hrms/logger";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import { runPayrollDisbursement } from "../services/payrollDisbursement";
 
 // Mirrors notificationWorker.ts's tenant-resolution pattern: this worker
@@ -103,14 +102,6 @@ async function processJob(job: Job<PayrollDisbursementJobData>) {
       .catch((err: any) => {
         if (err?.code !== "P2025") throw err;
       });
-
-    const run = await prisma.payrollRun.findFirst({ where: { id: runId } });
-    await emitWebhookEvent("payroll.disbursed", {
-      runId,
-      month: (run as any)?.month,
-      year: (run as any)?.year,
-      employeeCount: (run as any)?.employeeCount,
-    });
 
     logger.info(`Payroll disbursement job ${job.id} completed`, summary);
     return summary;

@@ -165,7 +165,12 @@ export default function Cycles() {
     <Page
       title="Review Cycles"
       actions={
-        <Button variant="primary" icon="plus" onClick={() => setEditing("new")}>
+        <Button
+          data-tour="cycles-new"
+          variant="primary"
+          icon="plus"
+          onClick={() => setEditing("new")}
+        >
           New Cycle
         </Button>
       }
@@ -195,6 +200,7 @@ export default function Cycles() {
     >
       <DataTable
         label="Review cycles"
+        tour="cycles-table"
         columns={columns}
         rows={list.data}
         rowId={(c) => String(c.id)}

@@ -5,6 +5,8 @@ import { TransitionLink } from "@next/motion";
 export function NoAccess() {
   return (
     <Page title="No Access">
+      {/* Tells the walkthrough this route was refused (skip, don't wait). */}
+      <span data-tour-blocked="" hidden />
       <EmptyState
         icon="lock"
         title="You don’t have access to this page"
@@ -23,6 +25,7 @@ export function NoAccess() {
 export function NotFound() {
   return (
     <Page title="Page Not Found">
+      <span data-tour-blocked="" hidden />
       <EmptyState
         icon="search"
         title="There’s nothing at this address"

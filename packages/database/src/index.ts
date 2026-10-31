@@ -25,6 +25,7 @@ export {
   type UserHistoricalRecordsResult,
 } from "./userDeletionGuard";
 export { canonicalizeEmail, getEmailDomain } from "./email";
+export { redactAuditValue, isSensitiveAuditField } from "./auditMiddleware";
 export { generateUniqueUsername } from "./username";
 export {
   isPublicEmailDomain,

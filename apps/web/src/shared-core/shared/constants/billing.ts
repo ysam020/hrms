@@ -45,7 +45,11 @@ export function amountPaise(tier: PlanTier, billing: Billing): number {
 }
 
 export function formatINR(paise: number): string {
+  // Whole rupees show none; anything with paise shows both digits
+  // (₹3,23,989.20, never ₹3,23,989.2). Display only — amounts are unchanged.
+  const fractional = paise % 100 !== 0;
   return `₹${(paise / 100).toLocaleString("en-IN", {
+    minimumFractionDigits: fractional ? 2 : 0,
     maximumFractionDigits: 2,
   })}`;
 }

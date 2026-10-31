@@ -1,3 +1,4 @@
+import r from "./review.module.css";
 import { useCallback, useContext, useState } from "react";
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -8,6 +9,7 @@ import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import useSocketEvent from "@web/shared/hooks/useSocketEvent";
 import { Collapse, TransitionLink } from "@next/motion";
 import {
+  FormSection,
   Avatar,
   Banner,
   Button,
@@ -27,10 +29,12 @@ import {
   inlineCheckClass,
   HeaderSkeleton,
   KeyValuesSkeleton,
+  type IconName,
+  type Tone,
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
-import { fmtDate, personName } from "@next/lib/format";
+import { fmtDate, personName, readableCase } from "@next/lib/format";
 import { ALL_KYC_FIELDS, KYC_GROUPS, KYC_LABEL, UNEDITABLE } from "./fields";
 
 // One person's KYC (Classic's ViewIndividualKyc): GET /get-user-data/:username,
@@ -39,6 +43,17 @@ import { ALL_KYC_FIELDS, KYC_GROUPS, KYC_LABEL, UNEDITABLE } from "./fields";
 // Permission checks and status rules are Classic's.
 
 const mask = (v: string) => (v.length > 4 ? `•••• ${v.slice(-4)}` : v);
+
+const GROUP_ICON: Record<string, { icon: IconName; tone: Tone }> = {
+  Personal: { icon: "person", tone: "accent" },
+  "Permanent Address": { icon: "pin", tone: "accent" },
+  "Communication Address": { icon: "wfh", tone: "accent" },
+  "Identity Documents": { icon: "idcard", tone: "warning" },
+  "Education & Experience": { icon: "graduation", tone: "success" },
+  Bank: { icon: "bank", tone: "success" },
+};
+const isEmpty = (v: unknown) =>
+  v == null || (Array.isArray(v) ? v.length === 0 : String(v).trim() === "");
 
 export default function KycReview() {
   const { username = "" } = useParams();
@@ -74,6 +89,8 @@ export default function KycReview() {
   useSocketEvent("kyc-edit-resolved", onSocket);
 
   const k = data && !data.message ? data : null;
+  const required = ALL_KYC_FIELDS.filter((f) => !f.optional);
+  const filled = k ? required.filter((f) => !isEmpty(k[f.key])).length : 0;
   const status: string | undefined = k?.kyc_approval;
   const isSelf = user?.username === username;
   const uneditable = UNEDITABLE.includes(status ?? "");
@@ -181,12 +198,22 @@ export default function KycReview() {
         <EmptyState icon="idcard" title="No KYC record found" />
       ) : (
         <div style={{ display: "grid", gap: 32 }}>
-          <div className="px-row" style={{ gap: 14 }}>
-            <Avatar name={personName(k)} size={48} />
-            <div style={{ display: "grid", gap: 4 }}>
-              <span className="px-section">{personName(k)}</span>
-              <span>
+          <div className={r.hero}>
+            <Avatar name={personName(k)} size={56} />
+            <div className={r.heroText}>
+              <span className="px-title">{readableCase(personName(k))}</span>
+              <span className="px-row" style={{ gap: 8 }}>
                 <Status value={status || "Not Submitted"} />
+                <span className="px-meta">
+                  {filled} of {required.length} required details provided
+                </span>
+              </span>
+              <span className={r.meter} aria-hidden>
+                <span
+                  style={{
+                    width: `${required.length ? (filled / required.length) * 100 : 0}%`,
+                  }}
+                />
               </span>
             </div>
           </div>
@@ -228,30 +255,44 @@ export default function KycReview() {
               )}
             </Banner>
           )}
-          <div className="px-row">
-            <label className={inlineCheckClass}>
-              <Checkbox
-                checked={revealed}
-                onChange={(e) => setRevealed(e.target.checked)}
-              />
-              Show full ID and account numbers
-            </label>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gap: 32,
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(100%, 380px), 1fr))",
-            }}
-          >
-            {KYC_GROUPS.map((g) => (
-              <Section key={g.title} title={g.title}>
-                <KeyValues
-                  items={g.fields.map((f) => [f.label, value(f.key)])}
-                />
-              </Section>
-            ))}
+          <div className={r.groups}>
+            {KYC_GROUPS.map((g) => {
+              const meta = GROUP_ICON[g.title] ?? {
+                icon: "doc",
+                tone: "accent",
+              };
+              const missing = g.fields.filter(
+                (f) => !f.optional && isEmpty(k[f.key]),
+              ).length;
+              return (
+                <FormSection
+                  key={g.title}
+                  icon={meta.icon}
+                  tone={meta.tone}
+                  title={g.title}
+                  description={
+                    missing
+                      ? `${missing} required ${missing === 1 ? "detail" : "details"} missing`
+                      : "Complete"
+                  }
+                  action={
+                    g.title === "Identity Documents" || g.title === "Bank" ? (
+                      <label className={inlineCheckClass}>
+                        <Checkbox
+                          checked={revealed}
+                          onChange={(e) => setRevealed(e.target.checked)}
+                        />
+                        Show full numbers
+                      </label>
+                    ) : undefined
+                  }
+                >
+                  <KeyValues
+                    items={g.fields.map((f) => [f.label, value(f.key)])}
+                  />
+                </FormSection>
+              );
+            })}
           </div>
         </div>
       )}

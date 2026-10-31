@@ -12,6 +12,10 @@ import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { isOwnerOrAdmin } from "@web/shared/utils/permissions/navAccess";
 import { useCrudDialog } from "@web/shared/hooks/useCrudDialog";
 import {
+  Icon,
+  FormSection,
+  IconButton,
+  StatusBadge,
   Banner,
   Button,
   ConfirmDialog,
@@ -25,6 +29,8 @@ import {
   TextInput,
   type Column,
   SectionsSkeleton,
+  type IconName,
+  type Tone,
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
 import { fmtDate } from "@next/lib/format";
@@ -191,19 +197,24 @@ export function OrgSettingsPage({
       title={title}
       subtitle={subtitle}
       width="reading"
+      description="These settings apply to everyone in the organisation. Nothing changes until you save, and saving asks when the change should take effect."
       actions={
         canEdit && (
           <>
             {org.dirty && (
-              <Button icon="x" onClick={org.reset}>
-                Discard
-              </Button>
+              <>
+                <StatusBadge tone="warning">Unsaved changes</StatusBadge>
+                <Button icon="x" onClick={org.reset}>
+                  Discard
+                </Button>
+              </>
             )}
             <Button
               variant="primary"
               icon="check"
               disabled={!org.dirty}
               onClick={() => setSaving(true)}
+              data-tour="settings-save"
             >
               Save Changes…
             </Button>
@@ -214,7 +225,7 @@ export function OrgSettingsPage({
       {org.loading || !org.draft ? (
         <SectionsSkeleton sections={3} fields={4} toggles={1} />
       ) : (
-        <div style={{ display: "grid", gap: 28 }}>
+        <div style={{ display: "grid", gap: 28 }} data-tour="settings-body">
           {!canEdit && (
             <Banner tone="neutral">
               You can view these settings. Changing them needs
@@ -372,6 +383,62 @@ function SaveDialog({
 }
 
 /** A labelled numeric setting with its unit and help. */
+// Icons for settings, looked up by the visible title/label so every page
+// gets them without each call site naming one. Unknown labels get none.
+const GROUP_ICONS: Record<string, { icon: IconName; tone: Tone }> = {
+  "Working Day": { icon: "clock", tone: "accent" },
+  "Work From Home": { icon: "wfh", tone: "success" },
+  Geofencing: { icon: "pin", tone: "warning" },
+  Employment: { icon: "briefcase", tone: "accent" },
+  "Statutory Entitlement": { icon: "shield", tone: "success" },
+  "Leave Types": { icon: "leave", tone: "accent" },
+  "Working Days": { icon: "calendar", tone: "accent" },
+};
+const ROW_ICONS: [RegExp, IconName][] = [
+  [/workday start/i, "sun"],
+  [/grace/i, "clock"],
+  [/full day|half day/i, "halfDay"],
+  [/correction/i, "edit"],
+  [/overtime/i, "trendUp"],
+  [/work-from-home|wfh/i, "wfh"],
+  [/punching|geofenc|radius|latitude|longitude|office/i, "pin"],
+  [/probation/i, "star"],
+  [/notice/i, "door"],
+  [/interview/i, "people"],
+  [/sick|medical/i, "heart"],
+  [/casual|paid leave|leave/i, "leave"],
+  [/carry|encash|accrual|prorate|balance/i, "banknote"],
+];
+
+/** A titled card of settings with an icon, matched from the title. */
+export function SettingsGroup({
+  title,
+  detail,
+  action,
+  children,
+}: {
+  title: string;
+  detail?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  const meta = GROUP_ICONS[title] ?? {
+    icon: "gear" as IconName,
+    tone: "neutral" as Tone,
+  };
+  return (
+    <FormSection
+      icon={meta.icon}
+      tone={meta.tone}
+      title={title}
+      description={detail}
+      action={action}
+    >
+      <div>{children}</div>
+    </FormSection>
+  );
+}
+
 export function SettingRow({
   label,
   help,
@@ -381,8 +448,14 @@ export function SettingRow({
   help?: ReactNode;
   children: ReactNode;
 }) {
+  const icon = ROW_ICONS.find(([re]) => re.test(label))?.[1];
   return (
-    <div className={s.row}>
+    <div className={s.row} data-icon={icon ? "" : undefined}>
+      {icon && (
+        <span className={s.rowIcon} aria-hidden>
+          <Icon name={icon} size={16} />
+        </span>
+      )}
       <div className={s.rowText}>
         <span className="px-label">{label}</span>
         {help && <span className="px-meta">{help}</span>}
@@ -491,20 +564,16 @@ export function CrudSection<T, F>({
               className="px-row"
               style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}
             >
-              <Button
-                size="small"
-                variant="plain"
+              <IconButton
+                icon="edit"
+                label={`Edit ${noun.toLowerCase()}`}
                 onClick={() => c.openEdit(item)}
-              >
-                Edit
-              </Button>
-              <Button
-                size="small"
-                variant="plain"
+              />
+              <IconButton
+                icon="trash"
+                label={`Delete ${noun.toLowerCase()}`}
                 onClick={() => c.setDeleteTarget(item)}
-              >
-                Delete
-              </Button>
+              />
             </span>
           ),
         },
@@ -528,7 +597,14 @@ export function CrudSection<T, F>({
         columns={withActions}
         rows={items}
         rowId={(i) => String(crud.getId(i))}
-        empty={{ title: empty ?? `No ${noun.toLowerCase()}s yet` }}
+        empty={{
+          title: empty ?? `No ${noun.toLowerCase()}s yet`,
+          action: canEdit ? (
+            <Button icon="plus" onClick={c.openAdd}>
+              Add {noun}
+            </Button>
+          ) : undefined,
+        }}
       />
       <Dialog
         open={c.dialogOpen}
@@ -539,7 +615,7 @@ export function CrudSection<T, F>({
           <>
             <Button onClick={() => c.setDialogOpen(false)}>Cancel</Button>
             <Button variant="primary" busy={c.saving} onClick={() => c.save()}>
-              Save
+              {c.editing ? "Save Changes" : `Add ${noun}`}
             </Button>
           </>
         }

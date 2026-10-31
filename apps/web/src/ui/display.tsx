@@ -105,9 +105,17 @@ export function StatusBadge({
 
 /** Map the backend's status vocabulary onto tones in one place. */
 export function toneForStatus(status?: string | null): Tone {
-  const v = (status || "").toLowerCase();
+  const v = (status || "").toLowerCase().trim();
+  // Attendance and calendar states. Leave and holidays are planned time
+  // away, not a problem, so they take the informational accent; a late
+  // punch or half day needs a look, so amber.
+  if (/^(on.?leave|leave|holiday|wfh|work from home)$/.test(v)) return "accent";
+  if (/^(late|half.?day)$/.test(v)) return "warning";
+  if (v === "disbursing") return "warning";
+  // Before the success test, which would otherwise match its "active".
+  if (v === "inactive") return "danger";
   if (
-    /(approved|active|present|complete|completed|resolved|closed|paid|hired|verified|published|success)/.test(
+    /(approved|active|present|complete|completed|resolved|closed|paid|hired|verified|published|success|disbursed)/.test(
       v,
     )
   )
@@ -162,16 +170,32 @@ export function Metric({
   note,
   size,
   loading,
+  tone,
+  icon,
 }: {
   label: ReactNode;
   value: ReactNode;
   note?: ReactNode;
   size?: "sm";
   loading?: boolean;
+  /** Tints the tile by meaning (success, warning…); neutral when omitted. */
+  tone?: Tone;
+  icon?: IconName;
 }) {
   return (
-    <div className={s.metric}>
-      <dt className={s.metricLabel}>{label}</dt>
+    <div
+      className={s.metric}
+      data-tone={tone && tone !== "neutral" ? "" : undefined}
+      style={tone ? toneVars(tone) : undefined}
+    >
+      <dt className={s.metricLabel}>
+        {icon && (
+          <span className={s.metricIcon} aria-hidden>
+            <Icon name={icon} size={15} />
+          </span>
+        )}
+        {label}
+      </dt>
       <dd className={s.metricValue} data-size={size}>
         {loading ? <Skeleton width={48} height={size ? 20 : 26} /> : value}
       </dd>
@@ -253,15 +277,19 @@ export function EmptyState({
   title,
   children,
   action,
+  tone = "accent",
 }: {
   icon?: IconName;
   title: ReactNode;
   children?: ReactNode;
   action?: ReactNode;
+  tone?: Tone;
 }) {
   return (
     <div className={s.empty}>
-      <Icon name={icon} className={s.emptyIcon} size={28} />
+      <span className={s.emptyIcon} style={toneVars(tone)} aria-hidden>
+        <Icon name={icon} size={24} />
+      </span>
       <p className={s.emptyTitle}>{title}</p>
       {children && <p className={s.emptyBody}>{children}</p>}
       {action && <div className={s.emptyAction}>{action}</div>}
@@ -279,6 +307,7 @@ export function ErrorState({
   return (
     <EmptyState
       icon="alert"
+      tone="danger"
       title="This couldn’t be loaded"
       action={
         onRetry && (
@@ -296,23 +325,39 @@ export function ErrorState({
 export function Banner({
   tone = "accent",
   icon,
+  title,
   children,
+  action,
 }: {
   tone?: Tone;
   icon?: IconName;
+  /** A bold first line; the children become its explanation. */
+  title?: ReactNode;
   children: ReactNode;
+  action?: ReactNode;
 }) {
   const name: IconName =
     icon ??
-    (tone === "danger" ? "alert" : tone === "success" ? "checkCircle" : "info");
+    (tone === "danger"
+      ? "alert"
+      : tone === "success"
+        ? "checkCircle"
+        : tone === "warning"
+          ? "alert"
+          : "info");
   return (
     <div
       className={s.banner}
       style={toneVars(tone)}
       role={tone === "danger" ? "alert" : "status"}
+      data-titled={title ? "" : undefined}
     >
       <Icon name={name} />
-      <div>{children}</div>
+      <div className={s.bannerBody}>
+        {title && <p className={s.bannerTitle}>{title}</p>}
+        {children}
+      </div>
+      {action && <div className={s.bannerAction}>{action}</div>}
     </div>
   );
 }
@@ -333,6 +378,7 @@ export function Skeleton({
       className={s.skeleton}
       style={{ width, height, borderRadius: radius, ...style }}
       aria-hidden
+      data-skeleton=""
     />
   );
 }
