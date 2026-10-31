@@ -412,41 +412,6 @@ export const addTicketCommentSchema = z.object({
   isInternal: z.boolean().optional(),
 });
 
-// ── Webhooks ──────────────────────────────────────────────────────────────────
-
-const ALLOWED_WEBHOOK_EVENTS = [
-  "employee.created",
-  "employee.updated",
-  "employee.terminated",
-  "leave.applied",
-  "leave.approved",
-  "leave.rejected",
-  "attendance.checkin",
-  "attendance.absent",
-  "payroll.approved",
-  "payroll.disbursed",
-  "resignation.submitted",
-  "resignation.approved",
-  "asset.assigned",
-  "asset.returned",
-  "asset.retired",
-  "asset.issue_reported",
-  "asset.issue_updated",
-  "ticket.created",
-  "ticket.resolved",
-] as const;
-
-export const createWebhookSchema = z.object({
-  url: z.string().url().max(2048),
-  events: z.array(z.enum(ALLOWED_WEBHOOK_EVENTS)).min(1).max(20),
-});
-
-export const updateWebhookSchema = z.object({
-  url: z.string().url().max(2048).optional(),
-  events: z.array(z.enum(ALLOWED_WEBHOOK_EVENTS)).min(1).max(20).optional(),
-  isActive: z.boolean().optional(),
-});
-
 // ── Custom Reports ────────────────────────────────────────────────────────────
 
 const reportFilterSchema = z.object({

@@ -167,3 +167,16 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+.noData {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 88px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-grouped);
+  box-shadow: inset 0 0 0 1px var(--px-separator);
+  font: var(--px-type-callout);
+  color: var(--px-text-3);
+}

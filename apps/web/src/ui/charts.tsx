@@ -1,9 +1,15 @@
 import { useId, useState, type CSSProperties, type ReactNode } from "react";
-import { EmptyState } from "./display";
+import { Icon } from "./Icon";
 import s from "./charts.module.css";
 
 /** Same centered treatment as an empty table, so side-by-side panels align. */
-const NoData = () => <EmptyState icon="chart" title="No data yet" />;
+// Compact, so an empty chart doesn't take a chart's height of whitespace.
+const NoData = () => (
+  <div className={s.noData}>
+    <Icon name="chart" size={18} />
+    <span>No data yet</span>
+  </div>
+);
 
 // A deliberately small chart kit (dataviz method): one baseline, thin marks
 // with 4px rounded data-ends, recessive grid, text in text tokens (never the

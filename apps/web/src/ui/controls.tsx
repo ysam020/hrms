@@ -19,6 +19,7 @@ import { duration, ease } from "@next/motion";
 import { useIsCompact } from "@next/lib/hooks";
 import { Select } from "./fields";
 import { Icon, type IconName } from "./Icon";
+import { SpinnerMark } from "./Spinner";
 import s from "./controls.module.css";
 
 const cx = (...c: (string | false | null | undefined)[]) =>
@@ -30,7 +31,8 @@ export type ButtonVariant =
   | "danger"
   | "plain"
   | "tinted"
-  | "tintedDanger";
+  | "tintedDanger"
+  | "plainDanger";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -183,7 +185,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         </span>
         {busy && (
           <span className={s.busyOverlay}>
-            <span className={s.spinner} />
+            <SpinnerMark size="1.6em" tone="mono" />
           </span>
         )}
       </button>
@@ -244,6 +246,7 @@ export function SegmentedControl<T extends string>({
   label,
   role = "tablist",
   idPrefix,
+  tour,
 }: {
   segments: Segment<T>[];
   value: T;
@@ -253,6 +256,8 @@ export function SegmentedControl<T extends string>({
   role?: "tablist" | "radiogroup";
   /** For tablists: panel ids are `${idPrefix}-panel-${value}`. */
   idPrefix?: string;
+  /** Walkthrough target id (`data-tour`). */
+  tour?: string;
 }) {
   const group = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -285,6 +290,7 @@ export function SegmentedControl<T extends string>({
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
         className={s.segmentedPicker}
+        data-tour={tour}
       >
         {segments.map((seg) => (
           <option key={seg.value} value={seg.value}>
@@ -297,7 +303,12 @@ export function SegmentedControl<T extends string>({
 
   return (
     <LayoutGroup id={group}>
-      <div className={s.segmented} role={role} aria-label={label}>
+      <div
+        className={s.segmented}
+        role={role}
+        aria-label={label}
+        data-tour={tour}
+      >
         {segments.map((seg, i) => {
           const selected = seg.value === value;
           return (

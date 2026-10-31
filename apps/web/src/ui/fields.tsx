@@ -3,6 +3,7 @@ import {
   forwardRef,
   isValidElement,
   useId,
+  useState,
   type CSSProperties,
   type InputHTMLAttributes,
   type ReactElement,
@@ -199,3 +200,51 @@ export function FormGrid({
 }
 export const fieldSpan2 = s.span2;
 export const inlineCheckClass = s.inlineCheck;
+
+const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+
+/**
+ * Whole-rupee amount with a ₹ prefix. Shows Indian digit grouping
+ * (1,50,000) while not being edited and plain digits while focused, so the
+ * caret never jumps as commas move.
+ */
+export const AmountInput = forwardRef<
+  HTMLInputElement,
+  Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & {
+    value: number;
+    onValue: (n: number) => void;
+  }
+>(function AmountInput(
+  { value, onValue, className, onFocus, onBlur, ...rest },
+  ref,
+) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div className={cx(s.amount, className)}>
+      <span className={s.amountPrefix} aria-hidden>
+        ₹
+      </span>
+      <input
+        ref={ref}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        className={s.control}
+        value={focused ? (value ? String(value) : "") : inr.format(value || 0)}
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 12);
+          onValue(digits ? Number(digits) : 0);
+        }}
+        {...rest}
+      />
+    </div>
+  );
+});

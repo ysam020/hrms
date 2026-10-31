@@ -14,12 +14,18 @@ import {
 } from "@web/shared/utils/salaryCalc";
 import { TransitionLink, useTransitionNavigate } from "@next/motion";
 import {
+  Tag,
+  StatusBadge,
+  StatTiles,
+  StatTile,
+  PeriodStepper,
+  Field,
+  EmptyState,
+  Card,
   Avatar,
   Banner,
   Button,
   DataTable,
-  Metric,
-  Metrics,
   Page,
   Pagination,
   PrimaryCell,
@@ -87,6 +93,7 @@ export function SalaryManagementPage() {
     >
       <DataTable
         label="Employees"
+        tour="salary-table"
         columns={columns}
         rows={list.data}
         rowId={(r) => String(r.id ?? r.username)}
@@ -308,13 +315,18 @@ export function SalaryStructurePage() {
   const totals = sum(merged, shown);
   const earnings = merged.filter((c) => c.type === "earning");
   const deductions = merged.filter((c) => c.type !== "earning");
+  const money2 = (n: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n || 0);
   const row = (c: SalaryComponentDef) => (
-    <li key={c.code} className={s.row}>
-      <span>
+    <li key={c.code} className={s.compRow}>
+      <span className={s.compName}>
         {c.name}
-        {editing && locked.has(c.code) && (
-          <span className="px-meta"> · calculated</span>
-        )}
+        {editing && locked.has(c.code) && <Tag>Calculated</Tag>}
       </span>
       {editing && !locked.has(c.code) ? (
         <TextInput
@@ -327,10 +339,16 @@ export function SalaryStructurePage() {
           onChange={(e) => setAmount(c.code, Number(e.target.value) || 0)}
         />
       ) : (
-        <span className="px-num">{fmtMoney(shown[c.code] ?? 0)}</span>
+        <span className={s.compAmount} data-zero={!shown[c.code] || undefined}>
+          {money2(shown[c.code] ?? 0)}
+        </span>
       )}
     </li>
   );
+  const maxMonth = dayjs().subtract(1, "month").format("YYYY-MM");
+  const monthD = dayjs(`${month}-01`);
+  const empty = source === "none" && !editing && !loading;
+  const deductionTotal = totals.earnings - totals.net;
 
   return (
     <Page
@@ -354,85 +372,170 @@ export function SalaryStructurePage() {
           </>
         ) : (
           <Button icon="edit" onClick={startEdit} disabled={loading || !u}>
-            Edit
+            {empty ? "Set Up Salary" : "Edit"}
           </Button>
         )
-      }
-      tabs={
-        <TextInput
-          type="month"
-          aria-label="Month"
-          value={month}
-          max={dayjs().subtract(1, "month").format("YYYY-MM")}
-          onChange={(e) => setMonth(e.target.value)}
-          disabled={editing}
-          style={{ width: 180 }}
-        />
       }
     >
       {person.loading || (loading && !values) ? (
         <SectionsSkeleton sections={2} fields={4} toggles={0} />
       ) : (
-        <div style={{ display: "grid", gap: 28 }}>
+        <div style={{ display: "grid", gap: 20 }}>
+          <Card>
+            <div className={s.salaryHead}>
+              <Avatar name={u ? personName(u) : "?"} size={48} />
+              <div className={s.salaryWho}>
+                <span className="px-title">
+                  {u ? personName(u) : "Employee"}
+                </span>
+                <span className="px-meta">
+                  {[u?.designation, u?.department]
+                    .filter(Boolean)
+                    .join(" · ") || "Salary structure"}
+                </span>
+              </div>
+              <div className={s.salaryMeta}>
+                <span className="px-meta">Monthly gross on profile</span>
+                <span className={s.amountCell}>
+                  {baseGross ? fmtMoney(baseGross) : "Not set"}
+                </span>
+              </div>
+            </div>
+            <div className={s.salaryBar}>
+              {editing ? (
+                <span className="px-headline">
+                  {monthD.format("MMMM YYYY")}
+                </span>
+              ) : (
+                <PeriodStepper
+                  label={monthD.format("MMMM YYYY")}
+                  previousLabel="Previous month"
+                  nextLabel="Next month"
+                  onPrevious={() =>
+                    setMonth(monthD.subtract(1, "month").format("YYYY-MM"))
+                  }
+                  onNext={() =>
+                    setMonth(monthD.add(1, "month").format("YYYY-MM"))
+                  }
+                  nextDisabled={month >= maxMonth}
+                />
+              )}
+              {source === "saved" && !editing && (
+                <StatusBadge tone="success">Saved structure</StatusBadge>
+              )}
+              {source === "prorated" && !editing && (
+                <StatusBadge tone="warning">Estimate · not saved</StatusBadge>
+              )}
+              {editing && <StatusBadge tone="accent">Editing</StatusBadge>}
+            </div>
+          </Card>
           {source === "prorated" && !editing && (
-            <Banner tone="accent">
-              No structure is saved for {dayjs(month).format("MMMM YYYY")}.
-              These amounts are prorated from attendance — edit and save to
-              confirm them.
+            <Banner tone="warning" title="Not saved for this month">
+              These amounts are prorated from {dayjs(month).format("MMMM")}’s
+              attendance. Edit and save to confirm them.
             </Banner>
           )}
-          {source === "none" && !editing && (
-            <Banner tone="warning">
-              No salary is set for this employee yet. Edit to create a
-              structure.
-            </Banner>
-          )}
-          <Metrics label="Totals">
-            {editing ? (
-              <Metric
-                label="Monthly Gross"
-                value={
-                  <TextInput
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    aria-label="Monthly gross"
-                    value={draft.gross}
-                    onChange={(e) => setGross(Number(e.target.value) || 0)}
-                    style={{ width: 160, font: "var(--px-type-metric-sm)" }}
-                  />
+          {empty ? (
+            <Card>
+              <EmptyState
+                icon="banknote"
+                tone="neutral"
+                title={`No salary for ${monthD.format("MMMM YYYY")}`}
+                action={
+                  <Button variant="primary" icon="plus" onClick={startEdit}>
+                    Set Up Salary
+                  </Button>
                 }
-              />
-            ) : (
-              <Metric
-                label="Gross Earnings"
-                value={fmtMoney(totals.earnings)}
-              />
-            )}
-            <Metric
-              label="Deductions"
-              value={fmtMoney(totals.earnings - totals.net)}
-            />
-            <Metric label="Net Pay" value={fmtMoney(totals.net)} />
-          </Metrics>
-          <div className={s.columns}>
-            <section>
-              <h2 className="px-section">Earnings</h2>
-              <ul className={s.list}>{earnings.map(row)}</ul>
-            </section>
-            <section>
-              <h2 className="px-section">Deductions</h2>
-              <ul className={s.list}>{deductions.map(row)}</ul>
-            </section>
-          </div>
+              >
+                {baseGross
+                  ? "There’s no saved structure for this month."
+                  : "This employee has no monthly gross on their profile and no saved structure. Set one up to include them in payroll runs."}
+              </EmptyState>
+            </Card>
+          ) : (
+            <>
+              {editing && (
+                <Card>
+                  <div style={{ maxWidth: 320 }}>
+                    <Field
+                      label="Monthly Gross"
+                      hint="Changing it rescales earnings in proportion."
+                    >
+                      <TextInput
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        value={draft.gross}
+                        onChange={(e) => setGross(Number(e.target.value) || 0)}
+                      />
+                    </Field>
+                  </div>
+                </Card>
+              )}
+              <StatTiles label="Totals" min={180}>
+                <StatTile
+                  label="Gross Earnings"
+                  icon="trendUp"
+                  tone="success"
+                  value={money2(totals.earnings)}
+                />
+                <StatTile
+                  label="Deductions"
+                  icon="percent"
+                  tone="warning"
+                  value={money2(deductionTotal)}
+                  note={
+                    totals.earnings
+                      ? `${((deductionTotal / totals.earnings) * 100).toFixed(1)}% of gross`
+                      : undefined
+                  }
+                />
+                <StatTile
+                  label="Net Pay"
+                  icon="banknote"
+                  tone="accent"
+                  value={money2(totals.net)}
+                />
+              </StatTiles>
+              <div className={s.columns}>
+                <section className={s.compCard} data-kind="earning">
+                  <header className={s.compHead}>
+                    <h2 className="px-headline">Earnings</h2>
+                    <span className="px-meta">
+                      {earnings.length}{" "}
+                      {earnings.length === 1 ? "component" : "components"}
+                    </span>
+                  </header>
+                  <ul className={s.compList}>{earnings.map(row)}</ul>
+                  <footer className={s.compTotal}>
+                    <span>Total earnings</span>
+                    <span>{money2(totals.earnings)}</span>
+                  </footer>
+                </section>
+                <section className={s.compCard} data-kind="deduction">
+                  <header className={s.compHead}>
+                    <h2 className="px-headline">Deductions</h2>
+                    <span className="px-meta">
+                      {deductions.length}{" "}
+                      {deductions.length === 1 ? "component" : "components"}
+                    </span>
+                  </header>
+                  <ul className={s.compList}>{deductions.map(row)}</ul>
+                  <footer className={s.compTotal}>
+                    <span>Total deductions</span>
+                    <span>{money2(deductionTotal)}</span>
+                  </footer>
+                </section>
+              </div>
+            </>
+          )}
           {editing && (
             <p className="px-meta">
-              Changing the gross rescales earnings in proportion. PF, ESI, and
-              professional tax follow Basic automatically ({" "}
+              PF, ESI and professional tax follow Basic automatically.{" "}
               <TransitionLink to="/settings/payroll">
                 Payroll Setup
               </TransitionLink>{" "}
-              defines the components).
+              defines the components.
             </p>
           )}
         </div>

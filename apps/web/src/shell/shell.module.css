@@ -75,7 +75,7 @@
   height: 30px;
   flex-shrink: 0;
   border-radius: 8px;
-  background: linear-gradient(160deg, var(--px-brand), var(--px-accent));
+  background: var(--px-accent);
   color: #fff;
   font: 700 14px/1 var(--px-font-rounded);
 }
@@ -204,13 +204,23 @@ button.item {
   background: var(--px-bg-hover);
 }
 .item svg {
+  /* Module icons carry the accent; the current item stands out by its
+     selected background and bolder label. */
   color: var(--px-accent);
   font-size: 17px;
   position: relative;
 }
+/* The expand/collapse chevron is a control, not a module icon. */
+.item svg.disclosure {
+  color: var(--px-text-3);
+}
 .item[aria-current="page"] {
   color: var(--px-text-1);
   font-weight: 600;
+}
+.item[aria-current="page"] svg,
+.item[data-parent-active] svg {
+  color: var(--px-accent);
 }
 .itemLabel {
   position: relative;

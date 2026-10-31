@@ -1,4 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import {
   Presence,
   TransitionLink,
@@ -27,9 +36,12 @@ export function Page({
   children,
   documentTitle,
   largeTitle,
+  description,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
+  /** One or two sentences under the toolbar saying what the page is for. */
+  description?: ReactNode;
   actions?: ReactNode;
   tabs?: ReactNode;
   back?: { to: string; label: string };
@@ -80,6 +92,7 @@ export function Page({
                   icon="sidebar"
                   label={docked ? "Show Sidebar" : "Open Navigation"}
                   onClick={docked ? toggleSidebar : openNavigation}
+                  data-tour="page-nav"
                 />
               )}
               {back && (
@@ -94,7 +107,7 @@ export function Page({
               )}
             </div>
           )}
-          <div className={s.titles}>
+          <div className={s.titles} data-tour="page-title">
             <h1
               className={s.title}
               data-collapsed={largeTitle && !scrolled ? "" : undefined}
@@ -111,7 +124,16 @@ export function Page({
           </div>
         </header>
         <div ref={sentinel} className={s.sentinel} aria-hidden />
-        {tabs && <div className={s.tabsRow}>{tabs}</div>}
+        {description && (
+          <div className={s.leadRow} data-width={width}>
+            <p className={s.lead}>{description}</p>
+          </div>
+        )}
+        {tabs && (
+          <div className={s.tabsRow} data-tour="page-tabs">
+            {tabs}
+          </div>
+        )}
         <div id="px-content" className={s.body} data-width={width}>
           {children}
         </div>
@@ -133,6 +155,7 @@ export function Inspector({
   children,
   footer,
   id,
+  resizeKey,
 }: {
   open: boolean;
   onClose: () => void;
@@ -141,9 +164,13 @@ export function Inspector({
   footer?: ReactNode;
   /** Changing id swaps content in place instead of closing/reopening. */
   id?: string;
+  /** Makes the inline inspector resizable; the width is remembered under
+   *  this key on this device. */
+  resizeKey?: string;
 }) {
   const inline = useIsRegular();
   const reduced = usePrefersReducedMotion();
+  const [width, setWidth] = useInspectorWidth(resizeKey);
 
   // Escape closes the inline inspector too (the Sheet handles its own).
   useEffect(() => {
@@ -173,11 +200,17 @@ export function Inspector({
       show={open}
       variant="slide"
       className={s.inspector}
+      style={
+        width
+          ? ({ "--px-inspector-w": `${width}px` } as CSSProperties)
+          : undefined
+      }
       elementProps={{
         role: "complementary",
         "aria-label": typeof title === "string" ? title : "Details",
       }}
     >
+      {resizeKey && <ResizeHandle width={width} onWidth={setWidth} />}
       <div className={s.inspectorHeader}>
         <h2 className={s.inspectorTitle}>{title}</h2>
         <IconButton icon="x" label="Close" onClick={onClose} />
@@ -187,6 +220,111 @@ export function Inspector({
       </div>
       {footer && <div className={s.inspectorFooter}>{footer}</div>}
     </Presence>
+  );
+}
+
+// ── Resizable inspector ────────────────────────────────────────────────────
+
+const INSPECTOR_MIN = 320;
+const INSPECTOR_DEFAULT = 400;
+/** The page beside the inspector keeps at least this much room. */
+const CONTENT_MIN = 520;
+const maxInspector = () =>
+  Math.max(
+    INSPECTOR_MIN,
+    Math.min(
+      760,
+      window.innerWidth -
+        CONTENT_MIN -
+        (document.querySelector("[data-px-sidebar]")?.getBoundingClientRect()
+          .width ?? 0),
+    ),
+  );
+const clampWidth = (w: number) =>
+  Math.round(Math.min(maxInspector(), Math.max(INSPECTOR_MIN, w)));
+
+function useInspectorWidth(key?: string) {
+  const storageKey = key ? `px-inspector-w:${key}` : null;
+  const [width, setWidthState] = useState<number | null>(() => {
+    if (!storageKey) return null;
+    try {
+      const n = Number(localStorage.getItem(storageKey));
+      return n ? clampWidth(n) : null;
+    } catch {
+      return null;
+    }
+  });
+  const setWidth = useCallback(
+    (w: number) => {
+      const next = clampWidth(w);
+      setWidthState(next);
+      if (storageKey)
+        try {
+          localStorage.setItem(storageKey, String(next));
+        } catch {
+          /* private mode: keep it for this session only */
+        }
+    },
+    [storageKey],
+  );
+  return [width, setWidth] as const;
+}
+
+/**
+ * The inspector's leading edge: drag to resize (pointer events, so mouse,
+ * trackpad and touch), or focus it and use ←/→ (Shift for bigger steps),
+ * Home/End for the narrowest/widest. Double-click resets.
+ */
+function ResizeHandle({
+  width,
+  onWidth,
+}: {
+  width: number | null;
+  onWidth: (w: number) => void;
+}) {
+  const current = width ?? INSPECTOR_DEFAULT;
+  const start = useRef<{ x: number; w: number } | null>(null);
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    start.current = { x: e.clientX, w: current };
+    document.body.dataset.pxResizing = "";
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!start.current) return;
+    // Dragging left widens: the handle is on the inspector's left edge.
+    onWidth(start.current.w + (start.current.x - e.clientX));
+  };
+  const end = () => {
+    start.current = null;
+    delete document.body.dataset.pxResizing;
+  };
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 64 : 16;
+    if (e.key === "ArrowLeft") onWidth(current + step);
+    else if (e.key === "ArrowRight") onWidth(current - step);
+    else if (e.key === "Home") onWidth(INSPECTOR_MIN);
+    else if (e.key === "End") onWidth(maxInspector());
+    else return;
+    e.preventDefault();
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize details panel"
+      aria-valuenow={current}
+      aria-valuemin={INSPECTOR_MIN}
+      aria-valuemax={typeof window === "undefined" ? 760 : maxInspector()}
+      tabIndex={0}
+      className={s.resize}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onKeyDown={onKeyDown}
+      onDoubleClick={() => onWidth(INSPECTOR_DEFAULT)}
+    />
   );
 }
 

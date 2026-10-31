@@ -21,6 +21,7 @@ import {
 import { activeEntry, visibleNav, type NavModule } from "@next/app/navigation";
 import { personName } from "@next/lib/format";
 import { useAppearance } from "./appearance";
+import { useWalkthrough } from "@next/walkthrough/WalkthroughProvider";
 import s from "./shell.module.css";
 
 export function Sidebar({
@@ -48,6 +49,13 @@ export function Sidebar({
   const navigate = useTransitionNavigate();
   const accountRef = useRef<HTMLButtonElement>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const walkthrough = useWalkthrough();
+  const pausedTour =
+    walkthrough?.ready && walkthrough.state.active
+      ? walkthrough.state.tours[walkthrough.state.active]?.status === "paused"
+        ? walkthrough.state.active
+        : null
+      : null;
 
   const toggle = (id: string) => setOpen((cur) => (cur === id ? null : id));
 
@@ -61,6 +69,23 @@ export function Sidebar({
         onNavigate?.();
       },
     },
+    pausedTour
+      ? {
+          label: "Resume Tour",
+          icon: "play",
+          onSelect: () => {
+            void walkthrough!.start(pausedTour);
+            onNavigate?.();
+          },
+        }
+      : {
+          label: "Product Tours",
+          icon: "sparkle",
+          onSelect: () => {
+            navigate("/help/tours");
+            onNavigate?.();
+          },
+        },
     { separator: true },
     { heading: "Appearance" },
     ...(["system", "light", "dark"] as const).map((a) => ({
@@ -78,12 +103,13 @@ export function Sidebar({
   ];
 
   return (
-    <div className={s.sidebar}>
+    <div className={s.sidebar} data-px-sidebar="">
       <div className={s.sidebarHead}>
         <button
           ref={accountRef}
           type="button"
           className={s.orgButton}
+          data-tour="sidebar-account"
           aria-haspopup="menu"
           aria-expanded={accountOpen}
           onClick={() => setAccountOpen((v) => !v)}
@@ -109,18 +135,23 @@ export function Sidebar({
         placement="bottom-start"
       />
 
-      <button type="button" className={s.searchButton} onClick={onSearch}>
+      <button
+        type="button"
+        className={s.searchButton}
+        onClick={onSearch}
+        data-tour="sidebar-search"
+      >
         <Icon name="search" size={15} />
         Search
         <kbd aria-hidden>⌘K</kbd>
       </button>
 
-      <nav className={s.nav} aria-label="Primary">
+      <nav className={s.nav} aria-label="Primary" data-tour="sidebar-nav">
         <LayoutGroup id="sidebar">
           {clusters.map((cluster, ci) => (
             <ul key={ci} className={s.cluster}>
               {cluster.map((m) => (
-                <li key={m.id}>
+                <li key={m.id} data-tour={`nav-${m.id}`}>
                   {m.pages ? (
                     <ModuleGroup
                       module={m}

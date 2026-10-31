@@ -2,6 +2,7 @@ export * from "./Icon";
 export * from "./controls";
 export * from "./fields";
 export * from "./display";
+export { Spinner, LoadingScreen, type SpinnerSize } from "./Spinner";
 export * from "./overlays";
 export * from "./Table";
 export * from "./Page";
@@ -35,3 +36,25 @@ export {
   HeaderSkeleton,
   ChecklistSkeleton,
 } from "./skeletons";
+export {
+  StatTiles,
+  StatTile,
+  Card,
+  FormSection,
+  DateTile,
+  PeriodStepper,
+  ReviewSection,
+  SummaryRow,
+  RatingScale,
+  ScorePips,
+  FieldGroup,
+} from "./blocks";
+export {
+  useWizard,
+  Stepper,
+  WizardLayout,
+  StepHeader,
+  WizardFooter,
+  focusFirstInvalid,
+  type WizardStep,
+} from "./Wizard";

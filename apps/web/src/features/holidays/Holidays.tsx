@@ -13,9 +13,11 @@ import {
   EmptyState,
   ErrorState,
   Field,
-  IconButton,
   Page,
+  PeriodStepper,
   Skeleton,
+  StatTile,
+  StatTiles,
   Tag,
   TextInput,
 } from "@next/ui";
@@ -25,6 +27,10 @@ import s from "./holidays.module.css";
 
 // Holidays: a year at a glance, grouped by month. Add/delete follow Classic's
 // Holidays:add / Holidays:delete permissions and endpoints.
+
+const MONTHS = Array.from({ length: 12 }, (_, i) =>
+  dayjs().month(i).format("MMMM"),
+);
 
 export default function Holidays() {
   const { user } = useContext(UserContext);
@@ -59,15 +65,18 @@ export default function Holidays() {
         .sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf()),
     [data],
   );
-  const byMonth = useMemo(() => {
-    const m = new Map<string, any[]>();
+  const byMonthIndex = useMemo(() => {
+    const m = new Map<number, any[]>();
     for (const h of holidays) {
-      const k = dayjs(h.date).format("MMMM");
+      const k = dayjs(h.date).month();
       m.set(k, [...(m.get(k) || []), h]);
     }
-    return [...m.entries()];
+    return m;
   }, [holidays]);
   const next = holidays.find((h) => !dayjs(h.date).isBefore(dayjs(), "day"));
+  const upcoming = holidays.filter(
+    (h) => !dayjs(h.date).isBefore(dayjs(), "day"),
+  ).length;
   const key = (h: any) => dayjs(h.date).format("YYYY-MM-DD");
 
   const remove = async () => {
@@ -101,12 +110,8 @@ export default function Holidays() {
   return (
     <Page
       title="Holidays"
-      subtitle={
-        next
-          ? `Next: ${next.name || next.title}, ${dayjs(next.date).format("ddd D MMM")}`
-          : undefined
-      }
-      width="reading"
+      width="wide"
+      description="Days the whole organisation is off. They show on everyone’s calendar and count in attendance."
       actions={
         <>
           {canDelete && selected.size > 0 && (
@@ -120,6 +125,7 @@ export default function Holidays() {
           )}
           {canAdd && (
             <Button
+              data-tour="holidays-add"
               variant="primary"
               icon="plus"
               onClick={() => setAdding(true)}
@@ -130,21 +136,17 @@ export default function Holidays() {
         </>
       }
       tabs={
-        <div className="px-row">
-          <IconButton
-            icon="chevronLeft"
-            label="Previous year"
-            onClick={() => setYear((y) => y - 1)}
-          />
-          <span className="px-section px-num" aria-live="polite">
-            {year}
-          </span>
-          <IconButton
-            icon="chevronRight"
-            label="Next year"
-            onClick={() => setYear((y) => y + 1)}
-          />
-        </div>
+        <PeriodStepper
+          label={year}
+          previousLabel="Previous year"
+          nextLabel="Next year"
+          onPrevious={() => setYear((y) => y - 1)}
+          onNext={() => setYear((y) => y + 1)}
+          onReset={
+            year === dayjs().year() ? undefined : () => setYear(dayjs().year())
+          }
+          resetLabel="This Year"
+        />
       }
     >
       {loading ? (
@@ -168,50 +170,160 @@ export default function Holidays() {
           Holidays you add appear on everyone’s calendar and attendance.
         </EmptyState>
       ) : (
-        <div className={s.months}>
-          {byMonth.map(([month, items]) => (
-            <section key={month} aria-labelledby={`m-${month}`}>
-              <h2 id={`m-${month}`} className={s.month}>
-                {month}
-              </h2>
-              <StaggerList className={s.list}>
-                {items.map((h, i) => {
-                  const d = dayjs(h.date);
-                  const past = d.isBefore(dayjs(), "day");
-                  return (
-                    <StaggerItem
-                      key={key(h)}
-                      index={i}
-                      className={s.item}
-                      data-past={past || undefined}
-                    >
-                      {canDelete && (
-                        <Checkbox
-                          aria-label={`Select ${h.name}`}
-                          checked={selected.has(key(h))}
-                          onChange={() =>
-                            setSelected((sel) => {
-                              const n = new Set(sel);
-                              if (n.has(key(h))) n.delete(key(h));
-                              else n.add(key(h));
-                              return n;
-                            })
-                          }
-                        />
-                      )}
-                      <span className={s.date}>
-                        <span className={s.day}>{d.format("D")}</span>
-                        <span className={s.weekday}>{d.format("ddd")}</span>
-                      </span>
-                      <span className={s.name}>{h.name || h.title}</span>
-                      {next && key(next) === key(h) && <Tag>Next</Tag>}
-                    </StaggerItem>
-                  );
-                })}
-              </StaggerList>
-            </section>
-          ))}
-        </div>
+        <>
+          <StatTiles label={`${year} summary`} min={180}>
+            <StatTile
+              label="Holidays"
+              icon="flag"
+              tone="accent"
+              value={holidays.length}
+              note={`in ${year}`}
+            />
+            <StatTile
+              label="Still to Come"
+              icon="calendar"
+              tone={upcoming ? "success" : "neutral"}
+              value={upcoming}
+              progress={
+                holidays.length ? upcoming / holidays.length : undefined
+              }
+              note={
+                year < dayjs().year()
+                  ? "This year has passed"
+                  : year > dayjs().year()
+                    ? "All ahead"
+                    : upcoming
+                      ? `of ${holidays.length} after today`
+                      : "None left this year"
+              }
+            />
+            <StatTile
+              label="Next Holiday"
+              icon="sun"
+              tone={next ? "warning" : "neutral"}
+              value={
+                <span className={s.nextValue}>
+                  {next ? dayjs(next.date).format("D MMM") : "—"}
+                </span>
+              }
+              note={
+                next
+                  ? `${next.name || next.title} · ${
+                      dayjs(next.date).isSame(dayjs(), "day")
+                        ? "today"
+                        : dayjs(next.date).diff(
+                              dayjs().startOf("day"),
+                              "day",
+                            ) === 1
+                          ? "tomorrow"
+                          : `in ${dayjs(next.date).diff(dayjs().startOf("day"), "day")} days`
+                    }`
+                  : "None scheduled"
+              }
+            />
+          </StatTiles>
+          <div className={s.months}>
+            {MONTHS.map((month, mi) => {
+              const items = byMonthIndex.get(mi) ?? [];
+              const monthPast =
+                year < dayjs().year() ||
+                (year === dayjs().year() && mi < dayjs().month());
+              return (
+                <section
+                  key={month}
+                  aria-labelledby={`m-${month}`}
+                  className={s.monthCard}
+                  data-empty={items.length === 0 || undefined}
+                  data-current={
+                    (year === dayjs().year() && mi === dayjs().month()) ||
+                    undefined
+                  }
+                  data-past={monthPast || undefined}
+                >
+                  <header className={s.monthHeader}>
+                    <h2 id={`m-${month}`} className={s.month}>
+                      {month}
+                    </h2>
+                    {items.length > 0 && (
+                      <span className={s.count}>{items.length}</span>
+                    )}
+                  </header>
+                  {items.length === 0 ? (
+                    <p className={s.none}>No holidays</p>
+                  ) : (
+                    <StaggerList className={s.list}>
+                      {items.map((h, i) => {
+                        const d = dayjs(h.date);
+                        const past = d.isBefore(dayjs(), "day");
+                        const isNext = Boolean(next && key(next) === key(h));
+                        const weekend = d.day() === 0 || d.day() === 6;
+                        const inDays = d
+                          .startOf("day")
+                          .diff(dayjs().startOf("day"), "day");
+                        return (
+                          <StaggerItem
+                            key={key(h)}
+                            index={i}
+                            className={s.item}
+                            data-past={past || undefined}
+                            data-next={isNext || undefined}
+                          >
+                            <span className={s.dateBadge} aria-hidden>
+                              <span className={s.dateDay}>{d.format("D")}</span>
+                              <span className={s.dateDow}>
+                                {d.format("ddd")}
+                              </span>
+                            </span>
+                            <span className={s.itemText}>
+                              <span className={s.name}>
+                                {h.name || h.title}
+                              </span>
+                              <span className={s.tags}>
+                                <span className="px-sr-only">
+                                  {d.format("dddd D MMMM")}.
+                                </span>
+                                {isNext && (
+                                  <Tag tone="accent">
+                                    {inDays === 0
+                                      ? "Today"
+                                      : inDays === 1
+                                        ? "Tomorrow"
+                                        : `Next · in ${inDays} days`}
+                                  </Tag>
+                                )}
+                                {!past && !isNext && (
+                                  <span className="px-meta">
+                                    in {inDays} days
+                                  </span>
+                                )}
+                                {weekend && <Tag tone="warning">Weekend</Tag>}
+                                {past && <span className="px-meta">Past</span>}
+                              </span>
+                            </span>
+                            {canDelete && (
+                              <Checkbox
+                                aria-label={`Select ${h.name || h.title}`}
+                                checked={selected.has(key(h))}
+                                onChange={() =>
+                                  setSelected((sel) => {
+                                    const n = new Set(sel);
+                                    if (n.has(key(h))) n.delete(key(h));
+                                    else n.add(key(h));
+                                    return n;
+                                  })
+                                }
+                              />
+                            )}
+                          </StaggerItem>
+                        );
+                      })}
+                    </StaggerList>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        </>
       )}
       <AddHoliday
         open={adding}
@@ -281,6 +393,8 @@ function AddHoliday({
       onClose={onClose}
       busy={saving}
       title="Add Holiday"
+      description="It’s added to everyone’s calendar and counted in attendance."
+      icon={{ name: "flag", tone: "accent" }}
       size="sm"
       footer={
         <>

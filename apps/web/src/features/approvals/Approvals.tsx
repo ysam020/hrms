@@ -53,6 +53,7 @@ export default function Approvals() {
           <SegmentedControl
             role="radiogroup"
             label="Filter by type"
+            tour="approvals-filter"
             value={filter}
             onChange={setFilter}
             segments={[
@@ -67,33 +68,35 @@ export default function Approvals() {
         ) : undefined
       }
     >
-      {loadingPendingApprovals && items.length === 0 ? (
-        <div style={{ display: "grid", gap: 18, paddingTop: 12 }}>
-          {[0, 1, 2].map((i) => (
-            <div key={i} style={{ display: "grid", gap: 6 }}>
-              <Skeleton width="55%" height={16} />
-              <Skeleton width="30%" height={12} />
-            </div>
-          ))}
-        </div>
-      ) : shown.length === 0 ? (
-        <EmptyState icon="checkCircle" title="You’re all caught up">
-          Leave, WFH, resignation, overtime, advance, and KYC requests that need
-          your decision will appear here.
-        </EmptyState>
-      ) : (
-        <StaggerList>
-          {shown.map((item, i) => (
-            <ApprovalRow
-              key={item.instanceId}
-              item={item}
-              index={i}
-              onApprove={() => approve(item)}
-              onReject={() => reject(item)}
-            />
-          ))}
-        </StaggerList>
-      )}
+      <div data-tour="approvals-list">
+        {loadingPendingApprovals && items.length === 0 ? (
+          <div style={{ display: "grid", gap: 18, paddingTop: 12 }}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} style={{ display: "grid", gap: 6 }}>
+                <Skeleton width="55%" height={16} />
+                <Skeleton width="30%" height={12} />
+              </div>
+            ))}
+          </div>
+        ) : shown.length === 0 ? (
+          <EmptyState icon="checkCircle" title="You’re all caught up">
+            Leave, WFH, resignation, overtime, advance, and KYC requests that
+            need your decision will appear here.
+          </EmptyState>
+        ) : (
+          <StaggerList>
+            {shown.map((item, i) => (
+              <ApprovalRow
+                key={item.instanceId}
+                item={item}
+                index={i}
+                onApprove={() => approve(item)}
+                onReject={() => reject(item)}
+              />
+            ))}
+          </StaggerList>
+        )}
+      </div>
       {dialog}
     </Page>
   );

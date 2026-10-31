@@ -183,6 +183,7 @@ export function PopUpSelect({
         aria-label={aria["aria-label"]}
         aria-describedby={aria["aria-describedby"]}
         aria-invalid={aria["aria-invalid"]}
+        data-tour={(aria as Record<string, unknown>)["data-tour"] as string}
         onClick={() => (open ? setOpen(false) : show())}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {

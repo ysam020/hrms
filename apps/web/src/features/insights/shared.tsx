@@ -34,13 +34,15 @@ export function InsightsFrame({
       subtitle={updated ? `Updated ${fmtDate(updated)}` : undefined}
       tabs={tabs}
     >
-      {loading ? (
-        <InsightsSkeleton />
-      ) : error ? (
-        <ErrorState message={error} onRetry={onRetry} />
-      ) : (
-        <div style={{ display: "grid", gap: 40 }}>{children}</div>
-      )}
+      <div data-tour="insights-body">
+        {loading ? (
+          <InsightsSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={onRetry} />
+        ) : (
+          <div style={{ display: "grid", gap: 40 }}>{children}</div>
+        )}
+      </div>
     </Page>
   );
 }

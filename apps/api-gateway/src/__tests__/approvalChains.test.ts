@@ -23,10 +23,6 @@ jest.mock("@hrms/db", () => {
   };
 });
 
-jest.mock("../utils/webhookEmitter", () => ({
-  emitWebhookEvent: jest.fn(),
-}));
-
 jest.mock("@hrms/approval-engine", () => ({
   actOnStep: jest.fn(),
   getPendingApprovalsFor: jest.fn(),

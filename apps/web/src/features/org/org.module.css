@@ -3,6 +3,7 @@
   align-items: center;
   gap: 12px;
   min-height: 48px;
+  min-width: 0;
   padding: 6px 8px;
   border-radius: var(--px-radius-sm);
   color: inherit;
@@ -11,6 +12,10 @@
 a.person:hover {
   background: var(--px-bg-hover);
 }
+a.person:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: -2px;
+}
 .text {
   flex: 1;
   min-width: 0;
@@ -18,43 +23,86 @@ a.person:hover {
 }
 .name {
   font: var(--px-type-headline);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .meta {
   font: var(--px-type-meta);
-  color: var(--px-text-3);
+  color: var(--px-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chev {
   color: var(--px-text-3);
   font-size: 14px;
 }
-/* Indentation with a hairline spine carries the hierarchy. */
+/* The organisation's head sits on its own card; teams hang below it on a
+   spine, each as a card holding its lead and (expanded) its members. */
+.ceo {
+  padding: 6px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-accent-soft);
+  max-width: 560px;
+}
+.teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--px-space-3);
+  align-items: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .teams[data-root] {
-  margin-left: 24px;
-  padding-left: 12px;
-  border-left: 1px solid var(--px-separator);
+  position: relative;
+  margin-top: var(--px-space-4);
+  padding-top: var(--px-space-4);
+}
+.teams[data-root]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 28px;
+  width: 2px;
+  height: var(--px-space-4);
+  background: var(--px-separator-strong);
 }
 .team {
-  padding: 8px 0;
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
+  min-width: 0;
 }
 .teamHead {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-  height: 28px;
-  padding: 0 8px 0 4px;
+  min-height: 30px;
+  padding: 0 6px 0 4px;
   border: 0;
   border-radius: var(--px-radius-sm);
   background: transparent;
-  color: var(--px-text-2);
-  font: var(--px-type-caption);
+  color: var(--px-text-1);
+  font: var(--px-type-label);
   font-weight: 600;
+  cursor: pointer;
 }
 .teamHead:hover {
-  color: var(--px-text-1);
+  background: var(--px-bg-hover);
+}
+.teamHead:focus-visible {
+  outline: 2px solid var(--px-focus);
+  outline-offset: 1px;
 }
 .disclosure {
   font-size: 12px;
+  color: var(--px-text-3);
   transition: transform var(--px-dur-base) var(--px-ease-standard);
 }
 .teamHead[aria-expanded="true"] .disclosure {
@@ -62,14 +110,44 @@ a.person:hover {
 }
 .teamName {
   flex: 1;
+  min-width: 0;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+  font: 600 12px/18px var(--px-font-rounded);
   font-variant-numeric: tabular-nums;
-  color: var(--px-text-3);
+  text-align: center;
 }
+.leader {
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-grouped);
+}
+.more {
+  justify-self: start;
+  margin: 2px 0 0 8px;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--px-accent);
+  font: var(--px-type-meta);
+  cursor: pointer;
+}
+/* Long teams scroll inside their card, so one big team doesn't stretch
+   its row of the grid and leave the neighbours with empty space. */
 .members {
-  margin-left: 24px;
-  padding-left: 12px;
-  border-left: 1px solid var(--px-separator);
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 4px 0 0 22px;
+  padding: 0 4px 0 10px;
+  list-style: none;
+  border-left: 2px solid var(--px-separator);
 }

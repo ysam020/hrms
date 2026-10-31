@@ -4,6 +4,7 @@ import {
   useMemo,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -15,22 +16,33 @@ import { TransitionLink } from "@next/motion";
 import {
   Banner,
   Button,
+  Card,
   EmptyState,
   Field,
   FileField,
+  FileLink,
   FormGrid,
+  FormSection,
   Page,
+  ReviewSection,
   Select,
-  Skeleton,
+  StepHeader,
+  Stepper,
   Switch,
   TextInput,
+  WizardFooter,
+  WizardLayout,
   fieldSpan2,
+  focusFirstInvalid,
   inlineCheckClass,
   SectionsSkeleton,
+  useWizard,
+  type IconName,
+  type WizardStep,
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
-import { personName } from "@next/lib/format";
+import { fmtDate, personName } from "@next/lib/format";
 import {
   ALL_KYC_FIELDS,
   BLOOD_GROUPS,
@@ -39,9 +51,14 @@ import {
   type KycField,
 } from "./fields";
 
-// Complete / edit KYC. Same endpoints as Classic (POST /complete-kyc,
-// PUT /edit-kyc), validated with Classic's kycSchema, documents uploaded
-// through Classic's upload pipeline to the same "employee_kyc" folder.
+// Complete / edit KYC as a guided, five-step form. Same endpoints as Classic
+// (POST /complete-kyc, PUT /edit-kyc), validated with Classic's kycSchema,
+// documents uploaded through the same pipeline to the "employee_kyc" folder.
+//
+// Answers live only in this component's state: moving between steps keeps
+// them, but nothing is written to browser storage (identity numbers and
+// documents don't belong there) and the backend has no KYC draft, so
+// leaving the page before submitting discards them.
 
 type Values = Record<string, string | string[]>;
 
@@ -49,6 +66,104 @@ const blank = (): Values =>
   Object.fromEntries(
     ALL_KYC_FIELDS.map((f) => [f.key, f.kind === "files" ? [] : ""]),
   );
+
+const GROUP = Object.fromEntries(KYC_GROUPS.map((g) => [g.title, g]));
+const ADDRESS_PARTS = ["line_1", "line_2", "city", "state", "pincode"];
+
+const GROUP_META: Record<string, { icon: IconName; description: string }> = {
+  Personal: {
+    icon: "person",
+    description: "Your photo, date of birth, and how HR can reach you.",
+  },
+  "Permanent Address": {
+    icon: "pin",
+    description: "The address on your official documents.",
+  },
+  "Communication Address": {
+    icon: "wfh",
+    description: "Where you live now and where post should reach you.",
+  },
+  "Identity Documents": {
+    icon: "idcard",
+    description:
+      "Numbers exactly as printed, with a clear photo of each side of the card.",
+  },
+  Bank: {
+    icon: "bank",
+    description: "The account your salary is paid into.",
+  },
+  "Education & Experience": {
+    icon: "graduation",
+    description: "Optional, but HR may ask for these during verification.",
+  },
+};
+
+type Step = WizardStep & { groups: string[]; description: string };
+
+const STEPS: Step[] = [
+  {
+    id: "personal",
+    title: "Personal",
+    summary: "Photo, contact, education",
+    groups: ["Personal"],
+    description: "Start with the basics HR uses on your employee record.",
+  },
+  {
+    id: "address",
+    title: "Address",
+    summary: "Permanent and current",
+    groups: ["Permanent Address", "Communication Address"],
+    description:
+      "If you live at your permanent address, turn on “Same as permanent address” to skip retyping it.",
+  },
+  {
+    id: "identity",
+    title: "Identity",
+    summary: "Aadhaar and PAN",
+    groups: ["Identity Documents"],
+    description:
+      "Used for statutory compliance and payroll. Only HR can see these.",
+  },
+  {
+    id: "bank",
+    title: "Bank & Records",
+    summary: "Salary account, certificates",
+    groups: ["Bank", "Education & Experience"],
+    description: "Where your salary goes, plus any supporting documents.",
+  },
+  {
+    id: "review",
+    title: "Review",
+    summary: "Check and submit",
+    groups: [],
+    description:
+      "Check everything once before it goes to HR. Use Edit to change a section.",
+  },
+];
+const REVIEW = STEPS.length - 1;
+
+const stepOfKey: Record<string, number> = Object.fromEntries(
+  STEPS.flatMap((st, i) =>
+    st.groups.flatMap((g) => GROUP[g].fields.map((f) => [f.key, i])),
+  ),
+);
+const stepOfGroup = (title: string) =>
+  STEPS.findIndex((st) => st.groups.includes(title));
+
+/** Every schema problem, keyed by field (first message per field). */
+function validate(values: Values): Record<string, string> {
+  const parsed = kycSchema.safeParse(values);
+  const out: Record<string, string> = {};
+  if (!parsed.success)
+    for (const i of parsed.error.issues) out[String(i.path[0])] ??= i.message;
+  return out;
+}
+
+const isEmpty = (v: string | string[] | undefined) =>
+  Array.isArray(v) ? v.length === 0 : !String(v ?? "").trim();
+
+const masked = (v: string) =>
+  v.length > 4 ? `•••• ${v.slice(-4)}` : v ? "••••" : "";
 
 export function CompleteKycPage() {
   const { user } = useContext(UserContext);
@@ -77,31 +192,49 @@ function KycFormPage({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sameAddress, setSameAddress] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const wizard = useWizard(STEPS.length);
+  const { reachAll } = wizard;
 
-  // Prefill from the stored record (as Classic does when editing).
+  // Prefill from the stored record (as Classic does when editing). A
+  // record with answers already has every step "visited", so any step can
+  // be opened directly.
   useEffect(() => {
     if (!record) return;
-    setValues((v) => {
-      const next = { ...v };
-      for (const f of ALL_KYC_FIELDS) {
-        const r = record[f.key];
-        if (r != null)
-          next[f.key] =
-            f.kind === "files" ? (Array.isArray(r) ? r : []) : String(r);
+    let any = false;
+    const next = blank();
+    for (const f of ALL_KYC_FIELDS) {
+      const r = record[f.key];
+      if (r != null && r !== "") {
+        any = true;
+        next[f.key] =
+          f.kind === "files" ? (Array.isArray(r) ? r : []) : String(r);
       }
-      return next;
-    });
-  }, [record]);
+    }
+    setValues(next);
+    const same = ADDRESS_PARTS.every(
+      (p) =>
+        next[`permanent_address_${p}`] &&
+        next[`permanent_address_${p}`] === next[`communication_address_${p}`],
+    );
+    setSameAddress(same);
+    if (any) reachAll();
+  }, [record, reachAll]);
 
   // "Same as permanent" mirrors the address while it's on.
   useEffect(() => {
     if (!sameAddress) return;
     setValues((v) => {
       const next = { ...v };
-      for (const part of ["line_1", "line_2", "city", "state", "pincode"]) {
+      for (const part of ADDRESS_PARTS)
         next[`communication_address_${part}`] = v[`permanent_address_${part}`];
-      }
       return next;
+    });
+    setErrors((e) => {
+      const n = { ...e };
+      for (const part of ADDRESS_PARTS)
+        delete n[`communication_address_${part}`];
+      return n;
     });
   }, [
     sameAddress,
@@ -122,26 +255,69 @@ function KycFormPage({
       : mode === "edit"
         ? "Edit My KYC"
         : "Complete My KYC";
+  const finishLabel = mode === "edit" ? "Save Changes" : "Submit KYC";
+
+  const problems = useMemo(() => validate(values), [values]);
+  // Steps to mark in the rail: shown errors, or fields HR flagged.
+  const flagged = useMemo(() => {
+    const out = new Set<number>();
+    for (const k of Object.keys(errors))
+      if (errors[k] && stepOfKey[k] != null) out.add(stepOfKey[k]);
+    if (status === "Revision Requested")
+      for (const k of Object.keys(notes))
+        if (stepOfKey[k] != null) out.add(stepOfKey[k]);
+    return [...out];
+  }, [errors, notes, status]);
+
+  const complete = useMemo(
+    () =>
+      STEPS.map((st, i) => i).filter((i) =>
+        i === REVIEW
+          ? false
+          : STEPS[i].groups.every((g) =>
+              GROUP[g].fields.every((f) => !problems[f.key]),
+            ),
+      ),
+    [problems],
+  );
 
   const set = (key: string, v: string | string[]) => {
     setValues((x) => ({ ...x, [key]: v }));
     if (errors[key]) setErrors((e) => ({ ...e, [key]: "" }));
   };
 
+  /** Show this step's problems; true when it can be left forwards. */
+  const checkStep = (i: number) => {
+    const keys = STEPS[i].groups.flatMap((g) =>
+      GROUP[g].fields.map((f) => f.key),
+    );
+    const found = Object.fromEntries(
+      keys.filter((k) => problems[k]).map((k) => [k, problems[k]]),
+    );
+    setErrors((e) => {
+      const n = { ...e };
+      for (const k of keys) delete n[k];
+      return { ...n, ...found };
+    });
+    if (Object.keys(found).length) {
+      focusFirstInvalid();
+      return false;
+    }
+    return true;
+  };
+
+  const onContinue = () => {
+    if (checkStep(wizard.current)) wizard.next();
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const parsed = kycSchema.safeParse(values);
-    if (!parsed.success) {
-      const n: Record<string, string> = {};
-      for (const i of parsed.error.issues) n[String(i.path[0])] ??= i.message;
-      setErrors(n);
-      const first = Object.keys(n)[0];
-      document
-        .getElementById(`kyc-${first}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (wizard.current !== REVIEW) return onContinue();
+    if (Object.keys(problems).length) {
+      setErrors(problems);
       setAlert({
         open: true,
-        message: `${Object.keys(n).length} field(s) need attention.`,
+        message: `${Object.keys(problems).length} field(s) need attention.`,
         severity: "error",
       });
       return;
@@ -160,6 +336,7 @@ function KycFormPage({
         message: res.data?.message || "KYC submitted.",
         severity: "success",
       });
+      setSubmitted(true);
       person.refetch();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
@@ -228,6 +405,15 @@ function KycFormPage({
               ? "numeric"
               : undefined
           }
+          autoComplete={
+            f.key === "mobile"
+              ? "tel-national"
+              : f.key === "email"
+                ? "email"
+                : f.key.endsWith("pincode")
+                  ? "postal-code"
+                  : undefined
+          }
           autoCapitalize={
             f.key === "pan_no" || f.key === "ifsc_code"
               ? "characters"
@@ -246,13 +432,22 @@ function KycFormPage({
         />
       );
     }
-    // Hidden inputs don't take an id via Field, so anchor scroll targets on a wrapper.
+    // File pickers don't take Field's id, so the wrapper carries the
+    // invalid marker that focusFirstInvalid looks for.
     return (
       <div
         key={f.key}
         id={`kyc-${f.key}`}
         className={wide ? fieldSpan2 : undefined}
         style={{ minWidth: 0 }}
+        data-invalid={
+          error && (f.kind === "file" || f.kind === "files")
+            ? "true"
+            : undefined
+        }
+        tabIndex={
+          error && (f.kind === "file" || f.kind === "files") ? -1 : undefined
+        }
       >
         <Field
           label={f.label}
@@ -266,29 +461,135 @@ function KycFormPage({
     );
   };
 
-  const flagged = useMemo(() => Object.keys(notes), [notes]);
+  const renderGroup = (title: string) => {
+    const g = GROUP[title];
+    const meta = GROUP_META[title];
+    const isCommunication = title === "Communication Address";
+    return (
+      <FormSection
+        key={title}
+        id={`kyc-group-${stepOfGroup(title)}-${title.replace(/\W+/g, "-")}`}
+        icon={meta.icon}
+        title={title}
+        description={meta.description}
+      >
+        {isCommunication && (
+          <label className={inlineCheckClass}>
+            <Switch
+              checked={sameAddress}
+              onChange={setSameAddress}
+              label="Same as permanent address"
+            />
+            Same as permanent address
+          </label>
+        )}
+        {isCommunication && sameAddress ? (
+          <p className="px-secondary">
+            We’ll use your permanent address:{" "}
+            <b style={{ color: "var(--px-text-1)" }}>
+              {ADDRESS_PARTS.map((p) => values[`permanent_address_${p}`])
+                .filter(Boolean)
+                .join(", ") || "not entered yet"}
+            </b>
+          </p>
+        ) : (
+          <FormGrid columns={2}>{g.fields.map(renderField)}</FormGrid>
+        )}
+      </FormSection>
+    );
+  };
+
+  const displayValue = (f: KycField): ReactNode => {
+    const v = values[f.key];
+    if (f.kind === "files") {
+      const list = Array.isArray(v) ? v : [];
+      return list.length ? (
+        <span style={{ display: "grid", gap: 4 }}>
+          {list.map((u) => (
+            <FileLink key={u} url={u} />
+          ))}
+        </span>
+      ) : (
+        ""
+      );
+    }
+    const str = String(v ?? "");
+    if (!str) return "";
+    if (f.kind === "file") return <FileLink url={str} />;
+    if (f.kind === "date") return fmtDate(str);
+    if (f.mask) return <span className="px-num">{masked(str)}</span>;
+    return str;
+  };
+
+  const review = (
+    <div style={{ display: "grid", gap: 16 }}>
+      {Object.keys(problems).length > 0 ? (
+        <Banner
+          tone="warning"
+          title={`${Object.keys(problems).length} required answer${Object.keys(problems).length === 1 ? " is" : "s are"} missing or invalid`}
+        >
+          They’re listed in the sections below. Use Edit to fix each one.
+        </Banner>
+      ) : (
+        <Banner tone="success" title="Everything required is filled in">
+          {mode === "edit"
+            ? "Save to update the record."
+            : "Submit to send it to HR for verification. You’ll be notified when it’s reviewed."}
+        </Banner>
+      )}
+      {STEPS.flatMap((st) => st.groups.map((title) => GROUP[title])).map(
+        (g) => {
+          const step = stepOfGroup(g.title);
+          const communicationSame =
+            g.title === "Communication Address" && sameAddress;
+          return (
+            <ReviewSection
+              key={g.title}
+              title={g.title}
+              icon={GROUP_META[g.title].icon}
+              onEdit={() => wizard.go(step)}
+              issues={g.fields
+                .filter((f) => problems[f.key])
+                .map((f) =>
+                  isEmpty(values[f.key])
+                    ? `${f.label} is required`
+                    : `${f.label}: ${problems[f.key]}`,
+                )}
+              items={
+                communicationSame
+                  ? [["Address", "Same as permanent address"]]
+                  : g.fields.map((f) => [
+                      <>
+                        {f.label}
+                        {f.optional && (
+                          <span className="px-tertiary"> · Optional</span>
+                        )}
+                      </>,
+                      displayValue(f),
+                    ])
+              }
+            />
+          );
+        },
+      )}
+    </div>
+  );
+
+  const step = STEPS[wizard.current];
 
   return (
     <Page
       title={title}
-      width="reading"
+      width="wide"
+      description={
+        !locked && !submitted
+          ? "Your KYC verifies your identity and sets up salary payments. It takes about five minutes; have your Aadhaar, PAN and bank details ready."
+          : undefined
+      }
       back={
         mode === "edit" && username
           ? { to: `/view-kyc/${encodeURIComponent(username)}`, label: "KYC" }
           : undefined
-      }
-      actions={
-        !locked && (
-          <Button
-            variant="primary"
-            icon="check"
-            type="submit"
-            form="kyc-form"
-            busy={saving}
-          >
-            {mode === "edit" ? "Save Changes" : "Submit KYC"}
-          </Button>
-        )
       }
     >
       {person.loading && !record ? (
@@ -296,6 +597,7 @@ function KycFormPage({
       ) : locked ? (
         <EmptyState
           icon="lock"
+          tone="neutral"
           title={
             status === "Edit Requested"
               ? "Edit request pending"
@@ -313,40 +615,85 @@ function KycFormPage({
             ? "HR needs to approve the edit request before changes can be made."
             : "It can’t be edited directly. Request an update from the KYC page."}
         </EmptyState>
+      ) : submitted ? (
+        <Card>
+          <EmptyState
+            icon="checkCircle"
+            tone="success"
+            title={mode === "edit" ? "KYC updated" : "KYC submitted for review"}
+            action={
+              <div className="px-row" style={{ justifyContent: "center" }}>
+                <Button
+                  onClick={() => {
+                    setSubmitted(false);
+                    wizard.go(REVIEW);
+                  }}
+                >
+                  Review Answers
+                </Button>
+                <TransitionLink
+                  to={`/view-kyc/${encodeURIComponent(username ?? "")}`}
+                >
+                  <Button variant="primary">View KYC</Button>
+                </TransitionLink>
+              </div>
+            }
+          >
+            {mode === "edit"
+              ? "The changes are saved."
+              : "HR will verify your details. You’ll get a notification when it’s approved or if anything needs changing."}
+          </EmptyState>
+        </Card>
       ) : (
-        <form
-          id="kyc-form"
-          onSubmit={submit}
-          noValidate
-          style={{ display: "grid", gap: 36 }}
-        >
-          {status === "Revision Requested" && flagged.length > 0 && (
-            <Banner tone="danger">
-              HR asked for changes to {flagged.length} field(s). They’re marked
-              below — update them and resubmit.
-            </Banner>
-          )}
-          {KYC_GROUPS.map((g) => (
-            <section key={g.title} style={{ display: "grid", gap: 14 }}>
-              <h2 className="px-section">{g.title}</h2>
-              {g.title === "Communication Address" && (
-                <label className={inlineCheckClass}>
-                  <Switch
-                    checked={sameAddress}
-                    onChange={setSameAddress}
-                    label="Same as permanent address"
-                  />
-                  Same as permanent address
-                </label>
+        <form id="kyc-form" onSubmit={submit} noValidate>
+          <WizardLayout
+            stepper={
+              <Stepper
+                label="KYC steps"
+                steps={STEPS}
+                current={wizard.current}
+                reached={wizard.reached}
+                onSelect={wizard.go}
+                flagged={flagged}
+                complete={complete}
+              />
+            }
+          >
+            {status === "Revision Requested" &&
+              Object.keys(notes).length > 0 && (
+                <Banner
+                  tone="danger"
+                  title={`HR asked for changes to ${Object.keys(notes).length} field(s)`}
+                >
+                  Steps with requested changes are marked in the list. Each
+                  field shows what HR asked for.
+                </Banner>
               )}
-              <FormGrid columns={2}>{g.fields.map(renderField)}</FormGrid>
-            </section>
-          ))}
-          <div className="px-row" style={{ justifyContent: "flex-end" }}>
-            <Button variant="primary" type="submit" busy={saving}>
-              {mode === "edit" ? "Save Changes" : "Submit KYC"}
-            </Button>
-          </div>
+            <StepHeader
+              index={wizard.current}
+              count={STEPS.length}
+              title={step.title}
+              description={step.description}
+            />
+            {wizard.current === REVIEW ? review : step.groups.map(renderGroup)}
+            <WizardFooter
+              isFirst={wizard.isFirst}
+              isLast={wizard.isLast}
+              onBack={wizard.back}
+              onContinue={onContinue}
+              continueLabel={
+                wizard.current === REVIEW - 1 ? "Review" : "Continue"
+              }
+              finishLabel={finishLabel}
+              formId="kyc-form"
+              busy={saving}
+              leading={
+                <span className="px-meta">
+                  Fields are required unless marked Optional.
+                </span>
+              }
+            />
+          </WizardLayout>
         </form>
       )}
     </Page>

@@ -148,9 +148,9 @@ const F = {
   reports: () => import("@next/features/reports/Reports"),
   permissions: () => import("@next/features/permissions/Permissions"),
   settings: () => import("@next/features/settings/Settings"),
-  webhooks: () => import("@next/features/webhooks/Webhooks"),
   subscription: () => import("@next/features/subscription/Subscription"),
   help: () => import("@next/features/help/Help"),
+  tours: () => import("@next/features/help/Tours"),
   support: () => import("@next/features/support/Support"),
   supportNew: () => import("@next/features/support/NewTicket"),
   supportTicket: () => import("@next/features/support/SupportTicket"),
@@ -365,20 +365,12 @@ const appRoutes: RouteObject[] = [
     path: "settings/join-requests",
     ...page(F.settings, "JoinRequestsPage", canApproveJoinRequests),
   },
-  { path: "webhooks", ...to("/webhooks/endpoints") },
-  {
-    path: "webhooks/endpoints",
-    ...page(F.webhooks, "EndpointsPage", isOwnerOrAdmin),
-  },
-  {
-    path: "webhooks/delivery-log",
-    ...page(F.webhooks, "DeliveryLogPage", isOwnerOrAdmin),
-  },
   {
     path: "subscription",
     ...page(F.subscription, "default", hasSubscriptionAccess),
   },
   { path: "help", ...page(F.help) },
+  { path: "help/tours", ...page(F.tours) },
   // Tickets to the Praesto team; the console is Praesto staff only.
   { path: "support", ...page(F.support, "default", canUseSupport) },
   { path: "support/new", ...page(F.supportNew, "default", canRaiseSupport) },

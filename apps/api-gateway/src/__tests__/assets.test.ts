@@ -1,5 +1,4 @@
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import { notify } from "@hrms/notifications";
 import {
   createAsset,
@@ -84,10 +83,6 @@ jest.mock("@hrms/common", () => ({
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
-}));
-
-jest.mock("../utils/webhookEmitter", () => ({
-  emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("@hrms/notifications", () => ({
@@ -379,7 +374,7 @@ describe("assets handlers", () => {
       expect(db.assetAssignment.create).not.toHaveBeenCalled();
     });
 
-    it("assigns the asset and emits a webhook on success", async () => {
+    it("assigns the asset on success", async () => {
       db.user.findUnique.mockResolvedValue({
         id: "u2",
         username: "jdoe",
@@ -407,10 +402,6 @@ describe("assets handlers", () => {
           acknowledgedAt: null,
         }),
       });
-      expect(emitWebhookEvent).toHaveBeenCalledWith(
-        "asset.assigned",
-        expect.objectContaining({ assetId: "a1", assignedTo: "jdoe" }),
-      );
       expect(mockNotify).toHaveBeenCalledWith(
         expect.objectContaining({
           event: "assetAssigned",
@@ -503,10 +494,6 @@ describe("assets handlers", () => {
         where: { id: "a1" },
         data: { status: "maintenance", condition: "damaged" },
       });
-      expect(emitWebhookEvent).toHaveBeenCalledWith(
-        "asset.returned",
-        expect.objectContaining({ assetId: "a1", conditionIn: "damaged" }),
-      );
     });
 
     it("frees a good-condition return back to available", async () => {
@@ -684,7 +671,7 @@ describe("assets handlers", () => {
       expect(db.assetIssue.create).not.toHaveBeenCalled();
     });
 
-    it("creates the issue and emits a webhook on success", async () => {
+    it("creates the issue on success", async () => {
       db.asset.findUnique.mockResolvedValue({ id: "a1", assetCode: "LAP-01" });
       db.assetAssignment.findFirst.mockResolvedValue({ id: "as1" });
       db.assetIssue.findFirst.mockResolvedValue(null);
@@ -707,10 +694,6 @@ describe("assets handlers", () => {
           type: "damage",
         }),
       });
-      expect(emitWebhookEvent).toHaveBeenCalledWith(
-        "asset.issue_reported",
-        expect.objectContaining({ issueId: "issue1" }),
-      );
     });
 
     it("allows an HR user to report an issue without holding the asset", async () => {
@@ -901,10 +884,6 @@ describe("assets handlers", () => {
         where: { id: "as1" },
         data: expect.objectContaining({ conditionIn: "damaged" }),
       });
-      expect(emitWebhookEvent).toHaveBeenCalledWith(
-        "asset.retired",
-        expect.objectContaining({ assetId: "a1", reason: "lost" }),
-      );
     });
 
     it("sends the asset to maintenance when a damage issue is resolved", async () => {
@@ -958,10 +937,6 @@ describe("assets handlers", () => {
         where: { id: "a1" },
         data: { status: "available" },
       });
-      expect(emitWebhookEvent).toHaveBeenCalledWith(
-        "asset.returned",
-        expect.objectContaining({ via: "return_request" }),
-      );
     });
 
     it("skips auto-effects when the asset has since been returned/reassigned to a different assignment", async () => {

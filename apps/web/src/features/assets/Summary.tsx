@@ -27,11 +27,36 @@ export default function AssetSummary() {
       onRetry={refetch}
     >
       <Metrics label="Inventory">
-        <Metric label="Total" value={data?.total ?? "—"} />
-        <Metric label="Available" value={by.available ?? 0} />
-        <Metric label="Assigned" value={by.assigned ?? 0} />
-        <Metric label="In Maintenance" value={by.maintenance ?? 0} />
-        <Metric label="Retired" value={by.retired ?? 0} />
+        <Metric
+          label="Total"
+          tone="accent"
+          icon="laptop"
+          value={data?.total ?? "—"}
+        />
+        <Metric
+          label="Available"
+          tone="success"
+          icon="checkCircle"
+          value={by.available ?? 0}
+        />
+        <Metric
+          label="Assigned"
+          tone="accent"
+          icon="person"
+          value={by.assigned ?? 0}
+        />
+        <Metric
+          label="In Maintenance"
+          tone="warning"
+          icon="gear"
+          value={by.maintenance ?? 0}
+        />
+        <Metric
+          label="Retired"
+          tone="neutral"
+          icon="inbox"
+          value={by.retired ?? 0}
+        />
       </Metrics>
       <ChartGrid>
         <ChartBlock title="Status">

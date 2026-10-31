@@ -355,7 +355,7 @@ export default function OrgSetup() {
           email: user?.email ?? "",
         },
         method: { card: false },
-        theme: { color: "#166E96" },
+        theme: { color: "#2A78D6" },
         handler: (r: {
           razorpay_payment_id: string;
           razorpay_subscription_id: string;
@@ -619,13 +619,12 @@ export default function OrgSetup() {
           {view === "loading" || view === "approved" ? (
             <div className={s.center}>
               <Spinner
+                size="large"
                 label={
-                  resuming ? "Completing your organisation setup" : "Loading"
+                  resuming ? "Completing your organisation setup…" : "Loading"
                 }
+                showLabel={resuming}
               />
-              {resuming && (
-                <p className="px-meta">Completing your organisation setup…</p>
-              )}
             </div>
           ) : view === "pending" ? (
             <div className={s.stack}>

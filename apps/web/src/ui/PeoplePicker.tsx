@@ -5,6 +5,7 @@ import { personName } from "@next/lib/format";
 import { Checkbox } from "./controls";
 import { Avatar } from "./display";
 import { SearchField } from "./fields";
+import { Spinner } from "./Spinner";
 
 export interface Person {
   id: string;
@@ -101,7 +102,7 @@ export function PeoplePicker({
       >
         {loading && (
           <li className="px-meta" style={{ padding: 12 }}>
-            Loading people…
+            <Spinner label="Loading people…" size="small" showLabel />
           </li>
         )}
         {shown.map((p) => (

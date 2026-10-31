@@ -218,17 +218,6 @@
 .row:last-child {
   border-bottom: 0;
 }
-.avatar {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--px-radius-sm);
-  background: var(--px-accent-soft);
-  color: var(--px-accent);
-  font: 600 17px/1 var(--px-font-rounded, var(--px-font));
-}
 .rowMain {
   flex: 1;
   min-width: 0;
@@ -236,6 +225,10 @@
   gap: 5px;
 }
 .rowTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
   color: var(--px-text-1);
 }

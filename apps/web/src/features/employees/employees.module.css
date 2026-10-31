@@ -22,18 +22,9 @@
   font: 400 16px/22px var(--px-font);
   color: var(--px-text-2);
 }
-.peek {
-  display: grid;
-  gap: 20px;
-}
-.peekHead {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 .columns {
   display: grid;
-  gap: var(--px-space-10);
+  gap: var(--px-space-4);
 }
 @media (min-width: 1100px) {
   .columns {
@@ -49,4 +40,49 @@
 }
 .assetList li:last-child {
   border-bottom: 0;
+}
+
+/* ── Person detail ── */
+.hero {
+  display: grid;
+  gap: var(--px-space-4);
+  padding: var(--px-space-5);
+  border-radius: var(--px-radius-xl);
+  background: linear-gradient(
+    180deg,
+    var(--px-accent-soft),
+    color-mix(in srgb, var(--px-accent-soft) 30%, var(--px-bg-content))
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--px-accent) 12%, transparent);
+}
+.hero .identity {
+  padding: 0;
+}
+.stack {
+  display: grid;
+  gap: var(--px-space-4);
+  align-content: start;
+  min-width: 0;
+}
+.none {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--px-type-callout);
+  color: var(--px-text-3);
+}
+.assetName {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.assetIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
 }

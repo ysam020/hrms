@@ -32,7 +32,6 @@ let _notificationQueue: Queue | null = null;
 let _schedulerQueue: Queue | null = null;
 let _resumeParsingQueue: Queue | null = null;
 let _deadLetterQueue: Queue | null = null;
-let _webhookQueue: Queue | null = null;
 let _payrollDisbursementQueue: Queue | null = null;
 
 export function getEmailQueue(): Queue {
@@ -98,36 +97,6 @@ export function getDeadLetterQueue(): Queue {
     });
   }
   return _deadLetterQueue;
-}
-
-/**
- * Webhook delivery queue — used by webhookEmitter.ts (api-gateway)
- * and processed by deliverWebhook.ts (scheduler-service).
- *
- * Separate from schedulerQueue so webhook deliveries don't share
- * concurrency with cron jobs and don't affect cron job scheduling.
- *
- * Config:
- *   – 3 attempts, exponential backoff starting at 5 s.
- *   – removeOnFail: false → dead deliveries remain visible for manual retry.
- */
-export function getWebhookQueue(): Queue {
-  if (!_webhookQueue) {
-    _webhookQueue = new Queue("webhookQueue", {
-      connection: getBullMQConnection(),
-      defaultJobOptions: {
-        removeOnComplete: 200,
-        removeOnFail: false,
-        attempts: 3,
-        backoff: {
-          type: "exponential" as const,
-          delay: 5000,
-        },
-      },
-    });
-    wrapAddWithRequestId(_webhookQueue);
-  }
-  return _webhookQueue;
 }
 
 /**

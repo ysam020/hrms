@@ -49,6 +49,23 @@
 .primary:hover {
   --_bg: var(--px-accent-hover);
 }
+.primary:active:not([disabled]) {
+  --_bg: var(--px-accent-pressed);
+}
+/* Unavailable primary actions go neutral instead of a faded accent, which
+   read as a broken button. Text stays ≥4.5:1 (--px-text-3 on neutral). */
+.primary[disabled],
+.primary[aria-disabled="true"] {
+  --_bg: var(--px-neutral-soft);
+  --_fg: var(--px-text-3);
+  opacity: 1;
+}
+/* …except while it's busy: keep the accent behind the spinner. */
+.primary[aria-busy="true"] {
+  --_bg: var(--px-accent);
+  --_fg: var(--px-text-on-accent);
+  opacity: 0.85;
+}
 .danger {
   --_bg: var(--px-danger);
   --_fg: #fff;
@@ -76,6 +93,17 @@
 .tinted:hover {
   --_bg: color-mix(in srgb, var(--px-accent-soft) 80%, var(--px-accent));
 }
+/* Text-style destructive action, for "Edit · Delete" pairs. */
+.plainDanger {
+  --_bg: transparent;
+  --_ring: transparent;
+  box-shadow: none;
+  color: var(--px-danger);
+  padding: 0 8px;
+}
+.plainDanger:hover {
+  --_bg: var(--px-danger-soft);
+}
 .tintedDanger {
   --_bg: var(--px-danger-soft);
   --_fg: var(--px-danger);
@@ -99,19 +127,6 @@
   width: 100%;
 }
 
-.spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  animation: spin 0.7s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 /* opacity, not visibility: the label stays the button's accessible name
    while the spinner shows. */
 .busyLabel {

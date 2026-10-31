@@ -29,6 +29,7 @@ import {
   SearchField,
   Select,
   Skeleton,
+  Spinner,
   Switch,
   TextInput,
   inlineCheckClass,
@@ -218,10 +219,17 @@ export function RolesPage() {
       key: "members",
       header: "People",
       priority: "trailing",
+      align: "right",
+      width: 200,
       render: (r) => {
         const people: any[] = r.assignedTo ?? [];
+        if (!people.length)
+          return <span className="px-meta px-tertiary">No one yet</span>;
         return (
-          <span className="px-row" style={{ flexWrap: "nowrap", gap: 6 }}>
+          <span
+            className="px-row"
+            style={{ flexWrap: "nowrap", gap: 6, justifyContent: "flex-end" }}
+          >
             <span className={s.stack}>
               {people.slice(0, 4).map((u) => (
                 <Avatar
@@ -241,8 +249,14 @@ export function RolesPage() {
   return (
     <Page
       title="Roles"
+      description="A role is a named set of permissions. Assign roles to people from User Permissions."
       actions={
-        <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+        <Button
+          data-tour="roles-new"
+          variant="primary"
+          icon="plus"
+          onClick={() => setCreating(true)}
+        >
           New Role
         </Button>
       }
@@ -309,6 +323,7 @@ export function RolesPage() {
       ) : (
         <DataTable
           label="Roles"
+          tour="roles-table"
           columns={columns}
           rows={list}
           rowId={(r) => String(r._id)}
@@ -587,9 +602,17 @@ export function UserPermissionsPage() {
   };
 
   return (
-    <Page title="User Permissions" width="wide">
+    <Page
+      title="User Permissions"
+      width="wide"
+      description="Choose a person to see their roles and individual permissions, and change what they can do."
+    >
       <div className={s.users}>
-        <aside className={s.userList} aria-label="People">
+        <aside
+          className={s.userList}
+          aria-label="People"
+          data-tour="userperm-people"
+        >
           <SearchField
             label="Find a person"
             value={q}
@@ -598,7 +621,7 @@ export function UserPermissionsPage() {
           <ul>
             {loadingPeople && (
               <li className="px-meta" style={{ padding: 8 }}>
-                Loading…
+                <Spinner label="Loading people…" size="small" showLabel />
               </li>
             )}
             {shown.map((p) => (
@@ -780,16 +803,40 @@ export function TeamsPage() {
       header: "Members",
       align: "right",
       priority: "trailing",
-      render: (t) => (
-        <span className="px-num">{(t.membersInfo ?? []).length}</span>
-      ),
+      width: 200,
+      // Faces of the first few members, then the count, so team size is
+      // visible at a glance (same pattern as Roles).
+      render: (t) => {
+        const members: any[] = t.membersInfo ?? [];
+        if (!members.length)
+          return <span className="px-meta px-tertiary">No members</span>;
+        return (
+          <span
+            className="px-row"
+            style={{ flexWrap: "nowrap", gap: 6, justifyContent: "flex-end" }}
+          >
+            <span className={s.stack}>
+              {members.slice(0, 4).map((m, i) => (
+                <Avatar key={m?.id ?? i} name={nameOf(m)} size={22} />
+              ))}
+            </span>
+            <span className="px-meta px-num">{members.length}</span>
+          </span>
+        );
+      },
     },
   ];
   return (
     <Page
       title="Teams"
+      description="Groups of people with a team leader. Leaders see their team’s attendance and requests on Today."
       actions={
-        <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+        <Button
+          data-tour="teams-new"
+          variant="primary"
+          icon="plus"
+          onClick={() => setCreating(true)}
+        >
           New Team
         </Button>
       }
@@ -848,6 +895,7 @@ export function TeamsPage() {
     >
       <DataTable
         label="Teams"
+        tour="teams-table"
         columns={columns}
         rows={list}
         rowId={(t) => String(t._id)}

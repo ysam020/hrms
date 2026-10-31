@@ -12,26 +12,33 @@
   position: sticky;
   top: var(--_sticky, 0px);
   z-index: 1;
-  height: 32px;
+  height: 34px;
   padding: 0 12px;
   text-align: left;
   font: var(--px-type-meta);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--px-text-2);
-  background: var(--px-bg-content);
-  border-bottom: 1px solid var(--px-separator);
+  /* A quiet band, so the header reads as a header without a heavy rule.
+     Sticky, so it stays opaque over the rows scrolling beneath it. */
+  background: var(--px-bg-grouped);
   white-space: nowrap;
 }
+.table th:first-child {
+  border-radius: var(--px-radius-sm) 0 0 var(--px-radius-sm);
+  padding-left: 12px;
+}
+.table th:last-child {
+  border-radius: 0 var(--px-radius-sm) var(--px-radius-sm) 0;
+}
 .table td {
-  height: 44px;
+  height: 48px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--px-separator);
   vertical-align: middle;
   min-width: 0;
 }
-.table th:first-child,
 .table td:first-child {
-  padding-left: 4px;
+  padding-left: 12px;
 }
 .table tr:last-child td {
   border-bottom: 0;
@@ -117,6 +124,11 @@
     padding: 0;
     border: 0;
     background: transparent !important;
+  }
+  /* The stacked layout keeps its own 4px text inset (the regular layout's
+     12px matches the header band, which is hidden here). */
+  .table td:first-child {
+    padding-left: 4px;
   }
   .table td[data-priority="primary"] {
     grid-column: 1 / 3;

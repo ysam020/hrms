@@ -56,3 +56,109 @@
     grid-column: 2 / 3;
   }
 }
+
+/* ── Recruitment pipeline editor: one card per round ── */
+.roundsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.rounds {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+.round {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
+}
+.roundHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.roundNumber {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+  font: 600 12px/1 var(--px-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.roundTitle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--px-type-headline);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Rows with an icon: a small tinted tile before the label. */
+.row[data-icon] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.rowIcon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--px-bg-grouped);
+  color: var(--px-accent);
+}
+
+/* ── Company info ── */
+.companyHero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: var(--px-space-5);
+  border-radius: var(--px-radius-xl);
+  background: linear-gradient(
+    180deg,
+    var(--px-accent-soft),
+    color-mix(in srgb, var(--px-accent-soft) 30%, var(--px-bg-content))
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--px-accent) 12%, transparent);
+}
+.heroChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.heroChips > * {
+  gap: 4px;
+}
+.companyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--px-space-4);
+  align-items: start;
+}
+.kvLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.kvLabel svg {
+  color: var(--px-accent);
+}

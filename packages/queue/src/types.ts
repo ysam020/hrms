@@ -71,8 +71,7 @@ export type SchedulerJobName =
   | "checkSubscriptionExpiry"
   | "sendTrialReminders"
   // New scheduler jobs
-  | "checkTicketSla" // lazily mark helpdesk SLA as breached
-  | "retryFailedWebhooks"; // sweep for pending/failed webhook deliveries
+  | "checkTicketSla"; // lazily mark helpdesk SLA as breached
 
 export interface SchedulerJobData {
   jobName: SchedulerJobName;
@@ -85,12 +84,6 @@ export interface SchedulerJobData {
 
 export interface ResumeParsingJobData {
   applicationId: string;
-  requestId?: string;
-}
-
-// Webhook delivery – dispatched by webhookEmitter.ts, processed by deliverWebhook.ts
-export interface WebhookDeliveryJobData {
-  deliveryId: string;
   requestId?: string;
 }
 

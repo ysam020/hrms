@@ -44,7 +44,9 @@ export default function Analytics() {
   if (!s) return <NotFound />;
   return (
     <Page title={s.title}>
-      <div style={{ display: "grid", gap: 40 }}>{s.body()}</div>
+      <div style={{ display: "grid", gap: 40 }} data-tour="analytics-body">
+        {s.body()}
+      </div>
     </Page>
   );
 }

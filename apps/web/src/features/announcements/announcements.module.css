@@ -1,34 +1,75 @@
 .feed {
   display: grid;
+  gap: var(--px-space-3);
 }
 .post {
   position: relative;
   display: grid;
-  gap: 4px;
-  padding: 20px 44px 20px 0;
-  border-bottom: 1px solid var(--px-separator);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--px-space-4);
+  padding: 16px 52px 16px 16px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
+  transition:
+    box-shadow var(--px-dur-fast) var(--px-ease-standard),
+    background-color var(--px-dur-fast) var(--px-ease-standard);
 }
-.post:last-child {
-  border-bottom: 0;
+.post:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--px-accent) 30%, transparent),
+    0 4px 14px -6px rgb(0 0 0 / 0.12);
+}
+/* Past posts recede: grouped surface, secondary title. */
+.post[data-past] {
+  background: var(--px-bg-grouped);
+}
+.post[data-past] .title {
+  color: var(--px-text-2);
+}
+.content {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 72ch;
 }
 .when {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  font: var(--px-type-meta);
-  color: var(--px-text-3);
+  gap: 4px 14px;
+  font: var(--px-type-label);
+  color: var(--px-accent);
+}
+.post[data-past] .when {
+  color: var(--px-text-2);
+}
+.whenPart {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .title {
   font: var(--px-type-section);
   letter-spacing: var(--px-type-section-track);
+  overflow-wrap: anywhere;
 }
 .body {
   font: var(--px-type-body);
   color: var(--px-text-2);
   max-width: 65ch;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 .menu {
   position: absolute;
-  top: 16px;
-  right: 0;
+  top: 12px;
+  right: 10px;
+}
+@media (max-width: 479px) {
+  .post {
+    gap: var(--px-space-3);
+    padding: 14px 44px 14px 12px;
+  }
 }

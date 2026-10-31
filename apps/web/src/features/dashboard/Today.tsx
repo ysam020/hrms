@@ -19,6 +19,7 @@ import { useDecision } from "../approvals/decision";
 import { useDashboardConfig, useWidgetData, type LayoutEntry } from "./data";
 import { Agenda, Announcements, YourDay, usePersonalData } from "./personal";
 import { HEADER_LINK, REGISTRY } from "./registry";
+import { OnboardingCard } from "@next/walkthrough/Launcher";
 import { Customize } from "./Customize";
 import s from "./Today.module.css";
 import d from "./dashboard.module.css";
@@ -82,6 +83,7 @@ export default function Today() {
             icon="edit"
             onClick={() => setCustomizing(true)}
             aria-haspopup="dialog"
+            data-tour="today-customize"
           >
             Customize
           </Button>
@@ -89,6 +91,7 @@ export default function Today() {
       }
     >
       <Hero personal={personal} showDay={ids.has("my-day")} />
+      <OnboardingCard />
 
       {cfg.stale && (
         <Banner tone="warning" icon="info">
@@ -126,7 +129,7 @@ export default function Today() {
           Pick what you’d like to see here.
         </EmptyState>
       ) : (
-        <div className={d.wrap}>
+        <div className={d.wrap} data-tour="today-widgets">
           <div className={d.grid}>
             {shown.map((entry) => (
               <WidgetCell
@@ -213,7 +216,7 @@ function Hero({
 
   const waiting = (showDay && personal.loading) || loadingPendingApprovals;
   return (
-    <header className={s.hero}>
+    <header className={s.hero} data-tour="today-hero">
       <p className={s.eyebrow}>{dayjs().format("dddd, D MMMM")}</p>
       <p className={s.greeting}>
         {greeting()}, {firstName}.

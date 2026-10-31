@@ -19,7 +19,6 @@ const JOB_SCHEDULES: JobSchedule[] = [
   { name: "sendTrialReminders", pattern: "30 9 * * *" }, // 9:30 AM daily
   // ── New feature jobs ────────────────────────────────────────────────────────
   { name: "checkTicketSla", pattern: "0 4 * * *" }, // 4:00 AM — bulk SLA sweep
-  { name: "retryFailedWebhooks", pattern: "0 6 * * *" }, // 6:00 AM — stale delivery sweep
 ];
 
 export async function registerScheduledJobs(): Promise<void> {

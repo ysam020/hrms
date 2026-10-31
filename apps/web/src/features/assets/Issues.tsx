@@ -21,6 +21,7 @@ import {
   type Column,
   type Tone,
 } from "@next/ui";
+import { priorityTone } from "@next/features/helpdesk/shared";
 import { apiClient, asList, errorMessage } from "@next/lib/api";
 import { usePagedList } from "@next/lib/usePagedList";
 import { fmtDate, fromNow, personName } from "@next/lib/format";
@@ -35,7 +36,7 @@ const STATUS: Record<string, { label: string; tone: Tone }> = {
   in_review: { label: "In Review", tone: "warning" },
   approved: { label: "Approved", tone: "success" },
   rejected: { label: "Rejected", tone: "danger" },
-  resolved: { label: "Resolved", tone: "neutral" },
+  resolved: { label: "Resolved", tone: "success" },
 };
 const TYPES = [
   ["malfunction", "Malfunction"],
@@ -135,9 +136,17 @@ export default function Issues() {
       key: "priority",
       header: "Priority",
       priority: "secondary",
-      render: (r) => (
-        <span style={{ textTransform: "capitalize" }}>{r.priority}</span>
-      ),
+      render: (r) =>
+        r.priority ? (
+          <StatusBadge
+            tone={priorityTone(String(r.priority).toLowerCase())}
+            plain
+          >
+            <span style={{ textTransform: "capitalize" }}>{r.priority}</span>
+          </StatusBadge>
+        ) : (
+          <span className="px-tertiary">—</span>
+        ),
     },
     {
       key: "status",
@@ -157,6 +166,7 @@ export default function Issues() {
       title="Asset Issues"
       actions={
         <Button
+          data-tour="issues-report"
           variant="primary"
           icon="plus"
           onClick={() => setReporting(true)}
@@ -241,6 +251,7 @@ export default function Issues() {
     >
       <DataTable
         label="Asset issues"
+        tour="issues-table"
         columns={columns}
         rows={list.data}
         rowId={(r) => String(r.id)}
@@ -355,6 +366,8 @@ function ReportIssue({
       onClose={onClose}
       busy={saving}
       title="Report an Issue"
+      description="Tell the asset team what’s wrong. You can follow its status on this page."
+      icon={{ name: "alert", tone: "warning" }}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -408,7 +421,12 @@ function ReportIssue({
               placeholder="Battery drains overnight"
             />
           </Field>
-          <Field label="Details" optional className={fieldSpan2}>
+          <Field
+            label="Details"
+            optional
+            hint="When it started, how often it happens, anything you’ve tried."
+            className={fieldSpan2}
+          >
             <TextArea
               rows={4}
               value={f.description}

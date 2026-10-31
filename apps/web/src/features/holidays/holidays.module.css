@@ -1,46 +1,152 @@
+/* The whole year: twelve equal months in a steady grid (4 / 3 / 2 / 1). */
 .months {
   display: grid;
-  gap: 28px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--px-space-3);
+}
+@media (max-width: 1279px) {
+  .months {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 899px) {
+  .months {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 559px) {
+  .months {
+    grid-template-columns: 1fr;
+  }
+  .monthCard[data-empty] {
+    display: none;
+  }
+}
+.monthCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 14px;
+  border-radius: var(--px-radius-lg);
+  background: var(--px-bg-content);
+  box-shadow: var(--px-shadow-card);
+}
+.monthCard[data-empty] {
+  background: var(--px-bg-grouped);
+  box-shadow: inset 0 0 0 1px var(--px-separator);
+}
+.monthCard[data-current] {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--px-accent) 55%, transparent),
+    0 1px 2px rgb(0 0 0 / 0.04);
+}
+.monthHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
 }
 .month {
-  font: var(--px-type-caption);
-  font-weight: 600;
+  font: var(--px-type-headline);
+  letter-spacing: 0.01em;
+}
+.monthCard[data-past] .month {
+  color: var(--px-text-2);
+}
+.monthCard[data-current] .month {
+  color: var(--px-accent);
+}
+.count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
+  font: 600 12px/1 var(--px-font-rounded);
+}
+.monthCard[data-past] .count {
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
+}
+.none {
+  margin: auto 0;
+  font: var(--px-type-callout);
   color: var(--px-text-3);
-  margin-bottom: 4px;
 }
 .list {
   display: grid;
+  gap: 6px;
 }
 .item {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 52px;
-  border-bottom: 1px solid var(--px-separator);
+  gap: 10px;
+  min-width: 0;
+  padding: 6px;
+  border-radius: var(--px-radius-md);
 }
-.item:last-child {
-  border-bottom: 0;
+.item:hover {
+  background: var(--px-bg-hover);
 }
-.item[data-past] {
-  color: var(--px-text-3);
+.item[data-next] {
+  background: var(--px-accent-soft);
 }
-.date {
+/* Date badge: day over weekday. Upcoming in the accent, the next one
+   solid, past ones grey. */
+.dateBadge {
   display: grid;
   justify-items: center;
-  width: 36px;
+  align-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 46px;
+  border-radius: 10px;
+  background: var(--px-accent-soft);
+  color: var(--px-accent);
 }
-.day {
-  font: var(--px-type-metric-sm);
+.item[data-next] .dateBadge {
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+}
+.item[data-past] .dateBadge {
+  background: var(--px-neutral-soft);
+  color: var(--px-text-2);
+}
+.dateDay {
+  font: 600 18px/20px var(--px-font-rounded);
   font-variant-numeric: tabular-nums;
 }
-.weekday {
-  font: var(--px-type-caption);
-  color: var(--px-text-3);
+.dateDow {
+  font: 600 10px/12px var(--px-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.itemText {
+  flex: 1;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 .name {
-  flex: 1;
   font: var(--px-type-headline);
+  overflow-wrap: anywhere;
 }
 .item[data-past] .name {
+  color: var(--px-text-2);
   font-weight: 500;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.nextValue {
+  font: inherit;
 }

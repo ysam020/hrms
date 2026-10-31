@@ -3,6 +3,8 @@ import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
+  StatusBadge,
+  Avatar,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -192,11 +194,19 @@ export default function AiAssistants() {
           <Group className={s.surface}>
             {connections.map((c) => (
               <div key={c.id} className={s.row}>
-                <span className={s.avatar} aria-hidden="true">
-                  {c.clientName.trim().charAt(0).toUpperCase() || "?"}
-                </span>
+                {/* Two letters, so "ChatGPT" and "Claude Code" don't both read "C". */}
+                <Avatar name={c.clientName} size={40} />
                 <div className={s.rowMain}>
-                  <span className={s.rowTitle}>{c.clientName}</span>
+                  <span className={s.rowTitle}>
+                    {c.clientName}
+                    {dayjs(c.expiresAt).isBefore(dayjs()) ? (
+                      <StatusBadge tone="danger">Expired</StatusBadge>
+                    ) : dayjs(c.expiresAt).diff(dayjs(), "day") <= 14 ? (
+                      <StatusBadge tone="warning">Expires soon</StatusBadge>
+                    ) : (
+                      <StatusBadge tone="success">Connected</StatusBadge>
+                    )}
+                  </span>
                   <span className={s.tags}>
                     {c.scopes.map((x) => (
                       <Tag key={x.scope}>{SCOPE_LABEL[x.scope] ?? x.scope}</Tag>
@@ -227,6 +237,7 @@ export default function AiAssistants() {
         <SegmentedControl<Client>
           label="Assistant"
           idPrefix="setup"
+          tour="ai-setup"
           value={client}
           onChange={setClient}
           segments={[

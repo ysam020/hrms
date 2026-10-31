@@ -1858,52 +1858,6 @@ model TicketComment {
   @@map("ticket_comments")
 }
 
-// ─── Tenant Webhooks ──────────────────────────────────────────────────────────
-
-model WebhookEndpoint {
-  id        String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId  String    @db.ObjectId
-  url       String
-  // AES-256 encrypted signing secret; never returned in responses
-  secret    String
-  // e.g. ["leave.approved", "employee.created", "payroll.disbursed"]
-  events    String[]
-  isActive  Boolean   @default(true)
-  createdBy String    @db.ObjectId
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  deliveries WebhookDelivery[]
-
-  @@index([tenantId])
-  @@map("webhook_endpoints")
-}
-
-// Immutable delivery log — one row per delivery attempt batch.
-model WebhookDelivery {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId    String?   @db.ObjectId
-  endpointId  String    @db.ObjectId
-  eventType   String
-  payload     Json
-  // pending | success | failed
-  status      String    @default("pending")
-  httpStatus  Int?
-  attempts    Int       @default(0)
-  nextRetryAt DateTime?
-  deliveredAt DateTime?
-  responseBody String?
-  error       String?
-  createdAt   DateTime  @default(now())
-
-  endpoint    WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Restrict)
-
-  @@index([endpointId, status])
-  @@index([tenantId, status])
-  @@index([nextRetryAt])    // for retry sweeper job
-  @@map("webhook_deliveries")
-}
-
 // ─── Custom Report Builder ────────────────────────────────────────────────────
 
 model SavedReport {
@@ -1945,6 +1899,22 @@ model DashboardPreference {
 
   @@unique([tenantId, userId])
   @@map("dashboard_preferences")
+}
+
+// Product walkthrough progress, one row per person (tenant DB). `state` holds
+// only tour statuses, step ids and a route — no HR data — and is validated by
+// sanitizeWalkthroughState in api-gateway/src/handlers/walkthrough.ts.
+model WalkthroughProgress {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  userId    String   @db.ObjectId
+  schema    Int      @default(1)
+  state     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, userId])
+  @@map("walkthrough_progress")
 }
 
 // ─── MCP (external AI assistants) ─────────────────────────────────────────────

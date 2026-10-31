@@ -2,6 +2,9 @@ import { useContext, useEffect, useState } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
+  Tag,
+  RatingScale,
+  Icon,
   Banner,
   Button,
   EmptyState,
@@ -12,6 +15,7 @@ import {
   TextArea,
   FormSkeleton,
 } from "@next/ui";
+import f from "./feedback.module.css";
 import { apiClient, errorMessage } from "@next/lib/api";
 
 // Exit feedback (Classic's ExitFeedbackForm): the tenant's exit-interview
@@ -58,6 +62,9 @@ export default function ExitFeedback() {
       .finally(() => setLoading(false));
   }, []);
 
+  const answeredCount = questions.filter(
+    (q) => answers[q.id] !== undefined && answers[q.id] !== "",
+  ).length;
   const missing = questions.filter(
     (q) => q.required && (answers[q.id] === undefined || answers[q.id] === ""),
   );
@@ -87,7 +94,11 @@ export default function ExitFeedback() {
   };
 
   return (
-    <Page title="Exit Feedback" width="reading">
+    <Page
+      title="Exit Feedback"
+      width="reading"
+      description="A few questions about your time here. It takes about two minutes."
+    >
       {loading ? (
         <FormSkeleton fields={5} columns={1} />
       ) : blocked ? (
@@ -95,7 +106,7 @@ export default function ExitFeedback() {
           {blocked}
         </EmptyState>
       ) : done ? (
-        <EmptyState icon="checkCircle" title="Thank you">
+        <EmptyState icon="checkCircle" tone="success" title="Thank you">
           Your answers help make this a better place to work.
         </EmptyState>
       ) : (
@@ -104,53 +115,81 @@ export default function ExitFeedback() {
             Your answers go to HR. They’re used to improve how the company
             works, not to evaluate you.
           </Banner>
-          {questions.map((q) => (
-            <Field key={q.id} label={q.label} optional={!q.required}>
-              {q.type === "rating" ? (
-                <SegmentedControl
-                  role="radiogroup"
-                  label={q.label}
-                  value={String(answers[q.id] ?? "")}
-                  onChange={(v) =>
-                    setAnswers((a) => ({ ...a, [q.id]: Number(v) }))
-                  }
-                  segments={["1", "2", "3", "4", "5"].map((n) => ({
-                    value: n,
-                    label: n,
-                  }))}
-                />
-              ) : q.type === "boolean" ? (
-                <SegmentedControl
-                  role="radiogroup"
-                  label={q.label}
-                  value={
-                    answers[q.id] === undefined ? "" : String(answers[q.id])
-                  }
-                  onChange={(v) =>
-                    setAnswers((a) => ({ ...a, [q.id]: v === "true" }))
-                  }
-                  segments={[
-                    { value: "true", label: "Yes" },
-                    { value: "false", label: "No" },
-                  ]}
-                />
-              ) : (
-                <TextArea
-                  rows={3}
-                  value={String(answers[q.id] ?? "")}
-                  onChange={(e) =>
-                    setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
-                  }
-                />
-              )}
-            </Field>
-          ))}
-          <div className="px-row" style={{ justifyContent: "flex-end" }}>
-            {missing.length > 0 && (
-              <span className="px-meta">
-                {missing.length} required question(s) left
-              </span>
-            )}
+          {questions.map((q, i) => {
+            const answered =
+              answers[q.id] !== undefined && answers[q.id] !== "";
+            const headingId = `q-${q.id}`;
+            return (
+              <section
+                key={q.id}
+                className={f.question}
+                data-answered={answered || undefined}
+                aria-labelledby={headingId}
+              >
+                <header className={f.qHead}>
+                  <span className={f.qNum} aria-hidden>
+                    {answered ? <Icon name="check" size={14} /> : i + 1}
+                  </span>
+                  <h2 id={headingId} className={f.qLabel}>
+                    {q.label}
+                  </h2>
+                  <Tag tone={q.required ? "accent" : undefined}>
+                    {q.required ? "Required" : "Optional"}
+                  </Tag>
+                </header>
+                {q.type === "rating" ? (
+                  <RatingScale
+                    colored
+                    label={q.label}
+                    value={answers[q.id] as number | undefined}
+                    onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))}
+                  />
+                ) : q.type === "boolean" ? (
+                  <SegmentedControl
+                    role="radiogroup"
+                    label={q.label}
+                    value={
+                      answers[q.id] === undefined ? "" : String(answers[q.id])
+                    }
+                    onChange={(v) =>
+                      setAnswers((a) => ({ ...a, [q.id]: v === "true" }))
+                    }
+                    segments={[
+                      { value: "true", label: "Yes" },
+                      { value: "false", label: "No" },
+                    ]}
+                  />
+                ) : (
+                  <Field
+                    label={<span className="px-sr-only">{q.label}</span>}
+                    hint={`${String(answers[q.id] ?? "").length} characters`}
+                  >
+                    <TextArea
+                      rows={4}
+                      placeholder="Share as much or as little as you like."
+                      value={String(answers[q.id] ?? "")}
+                      onChange={(e) =>
+                        setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
+                      }
+                    />
+                  </Field>
+                )}
+              </section>
+            );
+          })}
+          <div className={f.submitBar}>
+            <span className={f.progress} aria-hidden>
+              <span
+                style={{
+                  width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%`,
+                }}
+              />
+            </span>
+            <span className="px-meta" aria-live="polite">
+              {missing.length > 0
+                ? `${missing.length} required ${missing.length === 1 ? "question" : "questions"} left`
+                : "All required questions answered"}
+            </span>
             <Button
               variant="primary"
               busy={saving}

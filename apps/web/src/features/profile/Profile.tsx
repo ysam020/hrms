@@ -67,6 +67,7 @@ export default function Profile() {
       tabs={
         <SegmentedControl
           label="Profile sections"
+          tour="profile-sections"
           idPrefix="profile"
           value={section}
           onChange={(v) => navigate(`/profile/${v}`, { replace: true })}

@@ -77,7 +77,7 @@ export default function Kyc() {
       title="Employee KYC"
       actions={
         <TransitionLink to="/kyc/complete-kyc">
-          <Button variant="primary" icon="idcard">
+          <Button data-tour="kyc-complete" variant="primary" icon="idcard">
             Complete My KYC
           </Button>
         </TransitionLink>
@@ -103,6 +103,7 @@ export default function Kyc() {
     >
       <DataTable
         label="KYC records"
+        tour="kyc-table"
         columns={columns}
         rows={list.data}
         rowId={(r) => r.username}

@@ -164,3 +164,22 @@ select.control {
   font: var(--px-type-body);
   cursor: pointer;
 }
+
+.amount {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.amountPrefix {
+  position: absolute;
+  left: 10px;
+  font: var(--px-type-body);
+  color: var(--px-text-3);
+  pointer-events: none;
+}
+.amount .control {
+  padding-left: 24px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

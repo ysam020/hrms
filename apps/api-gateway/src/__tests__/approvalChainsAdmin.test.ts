@@ -2,7 +2,6 @@ import { prismaWithTenant as prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { actOnStep } from "@hrms/approval-engine";
 import { grpcCall } from "../grpc/clients";
-import { emitWebhookEvent } from "../utils/webhookEmitter";
 import { getWorkingDays, isHoliday, eachDate } from "../utils/workingDays";
 import {
   listApprovalChains,
@@ -89,10 +88,6 @@ jest.mock("../grpc/clients", () => ({
   salaryClient: {},
   performanceReviewClient: {},
   grpcCall: jest.fn(),
-}));
-
-jest.mock("../utils/webhookEmitter", () => ({
-  emitWebhookEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../utils/workingDays", () => ({
@@ -490,7 +485,7 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
     });
   });
 
-  it("marks attendance WFH for each working day and emits a webhook on final WFH approval", async () => {
+  it("marks attendance WFH for each working day on final WFH approval", async () => {
     db.approvalInstance.findFirst.mockResolvedValue({
       id: "i1",
       module: "wfh",
@@ -523,10 +518,6 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
     await actOnApproval(req, res);
 
     expect(db.attendanceRecord.upsert).toHaveBeenCalledTimes(2);
-    expect(emitWebhookEvent).toHaveBeenCalledWith(
-      "wfh.approved",
-      expect.objectContaining({ requestId: "w1", userId: "u2" }),
-    );
   });
 
   it("skips holidays and non-working days when marking WFH attendance", async () => {
@@ -592,7 +583,6 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
       data: { status: "Rejected", rejectionReason: "Team is short-staffed" },
     });
     expect(db.attendanceRecord.upsert).not.toHaveBeenCalled();
-    expect(emitWebhookEvent).not.toHaveBeenCalled();
   });
 
   it("creates a new salary structure for the target period, scaled from the employee's most recent prior structure, when a performance review with an increment is approved", async () => {

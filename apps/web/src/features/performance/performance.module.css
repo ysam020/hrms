@@ -1,0 +1,133 @@
+.overall {
+  font: 600 15px/1 var(--px-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.overall small {
+  font-weight: 400;
+  color: var(--px-text-3);
+}
+.detail {
+  display: grid;
+  gap: var(--px-space-5);
+  min-width: 0;
+}
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+}
+.who > :nth-child(2) {
+  flex: 1;
+}
+.whoName {
+  font: var(--px-type-section);
+  overflow-wrap: anywhere;
+}
+/* Self → Manager → Approval → Final */
+.track {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--px-type-caption);
+  color: var(--px-text-3);
+}
+.track li {
+  display: grid;
+  gap: 6px;
+}
+.track li > span {
+  height: 4px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-neutral-soft);
+}
+.track li[data-state="done"] {
+  color: var(--px-text-2);
+}
+.track li[data-state="done"] > span {
+  background: var(--px-success);
+}
+.track li[data-state="current"] {
+  color: var(--px-accent);
+  font-weight: 600;
+}
+.track li[data-state="current"] > span {
+  background: var(--px-accent);
+}
+.track li[data-state="returned"] {
+  color: var(--px-danger);
+  font-weight: 600;
+}
+.track li[data-state="returned"] > span {
+  background: var(--px-danger);
+}
+.scores {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.score {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-bg-grouped);
+}
+.score[data-overall] {
+  background: var(--px-accent-soft);
+}
+.scoreValue {
+  font: var(--px-type-metric-sm);
+  font-variant-numeric: tabular-nums;
+}
+.scoreValue small {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.comments {
+  display: grid;
+  gap: 10px;
+}
+.quote {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px 10px 14px;
+  border-left: 3px solid var(--px-separator-strong);
+  border-radius: 0 var(--px-radius-md) var(--px-radius-md) 0;
+  background: var(--px-bg-grouped);
+}
+.quote[data-manager] {
+  border-left-color: var(--px-accent);
+}
+.quote p {
+  font: var(--px-type-body);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.increment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--px-radius-md);
+  background: var(--px-success-soft);
+  color: var(--px-text-1);
+}
+.increment svg {
+  color: var(--px-success);
+}
+.increment span {
+  flex: 1;
+}
+.increment b {
+  font: 600 18px/1 var(--px-font-rounded);
+  color: var(--px-success);
+}
+.formTitle {
+  font: var(--px-type-headline);
+  padding-top: var(--px-space-4);
+  border-top: 1px solid var(--px-separator);
+}

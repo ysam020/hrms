@@ -1,0 +1,93 @@
+/* The mark draws in stroke by stroke, holds complete, then clears in the
+   same direction — the pen keeps travelling, so the loop has no rewind.
+   pathLength=1 makes each stroke one unit long; the 1.2 gap and ±1.1
+   offsets keep the round caps fully out of sight at rest. */
+.mark {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+.track {
+  opacity: 0.18;
+}
+.ink path {
+  stroke-dasharray: 1 1.2;
+  animation: px-mark-draw 2400ms cubic-bezier(0.65, 0, 0.35, 1) infinite both;
+  animation-delay: var(--_sync, 0ms);
+}
+.ink path:nth-child(2) {
+  animation-delay: calc(var(--_sync, 0ms) + 120ms);
+}
+.ink path:nth-child(3) {
+  animation-delay: calc(var(--_sync, 0ms) + 280ms);
+}
+@keyframes px-mark-draw {
+  0%,
+  6% {
+    stroke-dashoffset: 1.1;
+  }
+  40%,
+  66% {
+    stroke-dashoffset: 0;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: -1.1;
+  }
+}
+
+/* Reduce Motion: the whole mark, breathing slowly — still visibly busy,
+   with nothing moving across the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .ink path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .mark {
+    animation: px-mark-breathe 1.8s ease-in-out infinite alternate;
+  }
+}
+@keyframes px-mark-breathe {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.4;
+  }
+}
+
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  vertical-align: middle;
+}
+.stacked {
+  flex-direction: column;
+  gap: 14px;
+}
+/* Beside the mark the caption takes the surrounding text style (a hint row,
+   a list's status line); below it, it's a quiet caption of its own. */
+.stacked .caption {
+  font: var(--px-type-meta);
+  color: var(--px-text-2);
+}
+
+/* Full viewport, transparent like index.html's loader: the page background
+   shows through, and iOS never takes a status-bar colour from it. */
+.screen {
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.lateCaption {
+  animation: px-caption-in var(--px-dur-base) var(--px-ease-enter) 1.2s both;
+}
+@keyframes px-caption-in {
+  from {
+    opacity: 0;
+  }
+}

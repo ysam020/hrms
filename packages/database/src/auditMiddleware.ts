@@ -81,6 +81,22 @@ function hasMeaningfulChange(before: unknown, after: unknown): boolean {
   return false;
 }
 
+// Credential-shaped names the exact list above can't anticipate (new
+// models add fields like tokenHashes or recoveryCodeHash). Matching by
+// shape means a new secret field is redacted by default rather than
+// leaking until someone remembers to list it.
+const SENSITIVE_PATTERN =
+  /(password|passcode|secret|token|hash|otp|credential|apikey|api_key|privatekey|private_key|recoverycode|recovery_code)/i;
+
+export function isSensitiveAuditField(key: string): boolean {
+  return SENSITIVE_FIELDS.has(key) || SENSITIVE_PATTERN.test(key);
+}
+
+/** Replace every sensitive field's value, at any depth, with "[REDACTED]". */
+export function redactAuditValue(value: unknown): unknown {
+  return redact(value);
+}
+
 function redact(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) return value.map(redact);
@@ -88,7 +104,7 @@ function redact(value: unknown): unknown {
   if (typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = SENSITIVE_FIELDS.has(key) ? "[REDACTED]" : redact(v);
+      out[key] = isSensitiveAuditField(key) ? "[REDACTED]" : redact(v);
     }
     return out;
   }

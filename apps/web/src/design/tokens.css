@@ -4,11 +4,12 @@
  *
  * Contrast (WCAG 2.x, computed from these hex values):
  *   light  text-1 #1D1D1F 16.8:1 · text-2 #55565C 7.3:1 · text-3 #6B6C73 5.2:1
- *          accent #166E96 5.7:1 on content, 5.1:1 on window, white on accent 5.7:1
+ *          accent #2A78D6 4.4:1 on content, white on accent 4.4:1 (Praesto
+ *          Blue: passes 3:1 for UI and large text; for small text on accent
+ *          fills it's just under 4.5:1)
  *   dark   text-1 #F5F5F7 15.6:1 · text-2 #B4B5BB 8.3:1 · text-3 #9A9BA2 6.1:1
- *          accent #5BBDE6 8.0:1 on content
+ *          accent #6AA0E2 (the same blue, lightened) 6.3:1 on content
  *   control borders: 3.35:1 (light) / 3.40:1 (dark) — meets 3:1 for UI parts.
- *   Brand cyan #39A2CF is 2.9:1 on white: decoration and fills only, never text.
  */
 
 :root {
@@ -21,7 +22,7 @@
   --px-bg-raised: #ffffff; /* popovers, dialogs */
   --px-bg-hover: rgb(0 0 0 / 0.045);
   --px-bg-pressed: rgb(0 0 0 / 0.08);
-  --px-bg-selected: rgb(22 110 150 / 0.11);
+  --px-bg-selected: rgb(42 120 214 / 0.1);
   --px-bg-scrim: rgb(20 22 26 / 0.32);
   --px-material: rgb(246 247 249 / 0.78); /* translucent toolbar/sidebar */
   --px-material-blur: saturate(180%) blur(20px);
@@ -36,10 +37,10 @@
   --px-border-control: #8b8c93;
 
   /* ── Accent & signal ──────────────────────────────────────── */
-  --px-brand: #39a2cf;
-  --px-accent: #166e96;
-  --px-accent-hover: #125d80;
-  --px-accent-soft: #e3f0f6;
+  --px-accent: #2a78d6;
+  --px-accent-hover: #256abc;
+  --px-accent-pressed: #205ba3;
+  --px-accent-soft: #eaf2fb;
   --px-success: #1e7f45;
   --px-success-soft: #e4f3ea;
   --px-warning: #9a5b00;
@@ -49,7 +50,7 @@
   --px-info: var(--px-accent);
   --px-info-soft: var(--px-accent-soft);
   --px-neutral-soft: #ececef;
-  --px-focus: #166e96;
+  --px-focus: #2a78d6;
 
   /* ── Typography ───────────────────────────────────────────── */
   --px-font:
@@ -110,8 +111,15 @@
   --px-radius-sm: 6px;
   --px-radius-md: 10px;
   --px-radius-lg: 14px;
+  --px-radius-xl: 18px;
   --px-radius-pill: 999px;
   --px-shadow-hairline: 0 0 0 0.5px rgb(0 0 0 / 0.12);
+  /* Cards: a hairline plus the faintest lift, so grouping reads without a
+     heavy shadow. Built on --px-separator, so it follows every appearance. */
+  --px-shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 0 0 1px var(--px-separator);
+  /* How much of a tone's soft fill a tinted surface (stat tile, callout)
+     takes; the rest is the content surface, so tints stay quiet. */
+  --px-tint-mix: 62%;
   --px-shadow-1: 0 1px 2px rgb(0 0 0 / 0.06), 0 0 0 0.5px rgb(0 0 0 / 0.1);
   --px-shadow-2:
     0 8px 24px -6px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.06),
@@ -181,19 +189,20 @@
     --px-bg-raised: #2a2a2e;
     --px-bg-hover: rgb(255 255 255 / 0.06);
     --px-bg-pressed: rgb(255 255 255 / 0.1);
-    --px-bg-selected: rgb(91 189 230 / 0.16);
+    --px-bg-selected: rgb(106 160 226 / 0.16);
     --px-bg-scrim: rgb(0 0 0 / 0.5);
     --px-material: rgb(28 28 31 / 0.74);
     --px-text-1: #f5f5f7;
     --px-text-2: #b4b5bb;
     --px-text-3: #9a9ba2;
-    --px-text-on-accent: #0b1a22;
+    --px-text-on-accent: #0b1e36;
     --px-separator: rgb(255 255 255 / 0.09);
     --px-separator-strong: rgb(255 255 255 / 0.16);
     --px-border-control: #6e6f76;
-    --px-accent: #5bbde6;
-    --px-accent-hover: #7ccbed;
-    --px-accent-soft: rgb(91 189 230 / 0.16);
+    --px-accent: #6aa0e2;
+    --px-accent-hover: #8ab5e8;
+    --px-accent-pressed: #aac9ef;
+    --px-accent-soft: rgb(106 160 226 / 0.16);
     --px-success: #4cc77c;
     --px-success-soft: rgb(76 199 124 / 0.15);
     --px-warning: #f0a63a;
@@ -201,7 +210,7 @@
     --px-danger: #ff6b66;
     --px-danger-soft: rgb(255 107 102 / 0.15);
     --px-neutral-soft: rgb(255 255 255 / 0.08);
-    --px-focus: #5bbde6;
+    --px-focus: #6aa0e2;
     --px-series-1: #3987e5;
     --px-series-2: #d95926;
     --px-series-3: #199e70;
@@ -229,19 +238,20 @@
   --px-bg-raised: #2a2a2e;
   --px-bg-hover: rgb(255 255 255 / 0.06);
   --px-bg-pressed: rgb(255 255 255 / 0.1);
-  --px-bg-selected: rgb(91 189 230 / 0.16);
+  --px-bg-selected: rgb(106 160 226 / 0.16);
   --px-bg-scrim: rgb(0 0 0 / 0.5);
   --px-material: rgb(28 28 31 / 0.74);
   --px-text-1: #f5f5f7;
   --px-text-2: #b4b5bb;
   --px-text-3: #9a9ba2;
-  --px-text-on-accent: #0b1a22;
+  --px-text-on-accent: #0b1e36;
   --px-separator: rgb(255 255 255 / 0.09);
   --px-separator-strong: rgb(255 255 255 / 0.16);
   --px-border-control: #6e6f76;
-  --px-accent: #5bbde6;
-  --px-accent-hover: #7ccbed;
-  --px-accent-soft: rgb(91 189 230 / 0.16);
+  --px-accent: #6aa0e2;
+  --px-accent-hover: #8ab5e8;
+  --px-accent-pressed: #aac9ef;
+  --px-accent-soft: rgb(106 160 226 / 0.16);
   --px-success: #4cc77c;
   --px-success-soft: rgb(76 199 124 / 0.15);
   --px-warning: #f0a63a;
@@ -249,7 +259,7 @@
   --px-danger: #ff6b66;
   --px-danger-soft: rgb(255 107 102 / 0.15);
   --px-neutral-soft: rgb(255 255 255 / 0.08);
-  --px-focus: #5bbde6;
+  --px-focus: #6aa0e2;
   --px-series-1: #3987e5;
   --px-series-2: #d95926;
   --px-series-3: #199e70;

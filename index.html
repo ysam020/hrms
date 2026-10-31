@@ -1018,7 +1018,6 @@
               <li><a href="#m-chat">Chat</a></li>
               <li><a href="#m-calendar">Calendar</a></li>
               <li><a href="#m-reports">Reports</a></li>
-              <li><a href="#m-webhooks">Webhooks</a></li>
               <li><a href="#m-chatbot">AI assistant</a></li>
             </ol>
           </li>
@@ -2140,7 +2139,7 @@
               jump to any page, tab, or feature without navigating through
               menus. It searches across all routes, including deep sub-tabs like
               "Attendance Correction," "Salary Management," "Exit Feedback,"
-              "Webhook Endpoints," "Report Builder," and more. Results are
+              "Report Builder," and more. Results are
               grouped by category (Profile, Permissions, Analytics, Attendance
               &amp; Leaves, KYC, Payroll Management, etc.) and clicking one
               navigates there instantly. This is the "I know what I want — take
@@ -3081,35 +3080,6 @@
               </div>
             </details>
 
-            <details class="module" id="m-webhooks">
-              <summary>Webhooks (integrations)</summary>
-              <div class="module-body">
-                <p>
-                  For companies that want their own systems notified in real
-                  time, organised into two tabs:
-                </p>
-                <ul>
-                  <li>
-                    <strong>Webhook Endpoints</strong> — register endpoints
-                    subscribed to specific events — new employee, leave
-                    approved, payroll disbursed, asset assigned, and more — each
-                    with a signing secret for verifying authenticity and a
-                    test-ping button to confirm connectivity.
-                  </li>
-                  <li>
-                    <strong>Delivery Log</strong> — a full delivery log with
-                    request/response details and retry support. See which
-                    deliveries succeeded, which failed, and retry any that
-                    didn't go through.
-                  </li>
-                </ul>
-                <p>
-                  This is the "connect Praesto to your own tools" story for
-                  technically-inclined buyers.
-                </p>
-              </div>
-            </details>
-
             <details class="module" id="m-chatbot">
               <summary>AI assistant</summary>
               <div class="module-body">
@@ -3697,7 +3667,7 @@ flowchart TD
     FAILED["payoutStatus → failed<br/>retried next pass"]
     PERMFAIL["payoutStatus → permanently_failed<br/>needs manual fix"]
     PAYSLIP["Generate payslip PDF — jsPDF<br/>password = PAN + DOB, blocked if either missing"]
-    DONE3(["Run → disbursed<br/>webhook: payroll.disbursed"])
+    DONE3(["Run → disbursed"])
 
     INIT --> ROLE
     ROLE -- no --> DENY

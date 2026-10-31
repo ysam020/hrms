@@ -18,6 +18,7 @@ import { Sidebar } from "./Sidebar";
 import { CommandPalette } from "./CommandPalette";
 import { NotificationsButton } from "./Notifications";
 import { OfflineStatusButton } from "@next/offline";
+import { WalkthroughProvider } from "@next/walkthrough/WalkthroughProvider";
 import { applyAppearance } from "./appearance";
 import s from "./shell.module.css";
 
@@ -127,6 +128,7 @@ function ShellLayout() {
               icon="search"
               label="Search"
               onClick={() => setSearchOpen(true)}
+              data-tour="toolbar-search"
             />
           )}
           <OfflineStatusButton />
@@ -139,53 +141,58 @@ function ShellLayout() {
 
   return (
     <ShellContext.Provider value={shellValue}>
-      <a href="#px-main" className="px-skip">
-        Skip to Content
-      </a>
-      <div className={s.shell}>
-        {docked && (
-          <motion.aside
-            className={s.sidebarDock}
-            initial={false}
-            animate={{
-              width: sidebarHidden ? 0 : 256,
-              opacity: sidebarHidden ? 0 : 1,
-            }}
-            transition={{ duration: duration.base, ease: ease.standard }}
-            aria-label="Sidebar"
-            {...(sidebarHidden ? ({ inert: "" } as object) : {})}
+      <WalkthroughProvider>
+        <a href="#px-main" className="px-skip">
+          Skip to Content
+        </a>
+        <div className={s.shell}>
+          {docked && (
+            <motion.aside
+              className={s.sidebarDock}
+              initial={false}
+              animate={{
+                width: sidebarHidden ? 0 : 256,
+                opacity: sidebarHidden ? 0 : 1,
+              }}
+              transition={{ duration: duration.base, ease: ease.standard }}
+              aria-label="Sidebar"
+              {...(sidebarHidden ? ({ inert: "" } as object) : {})}
+            >
+              <Sidebar
+                onSearch={() => setSearchOpen(true)}
+                onHide={toggleSidebar}
+              />
+            </motion.aside>
+          )}
+          <main
+            id="px-main"
+            className={s.content}
+            data-sidebar-hidden={sidebarHidden || undefined}
+          >
+            <Outlet />
+          </main>
+        </div>
+
+        {!docked && (
+          <Sheet
+            open={navOpen}
+            onClose={() => setNavOpen(false)}
+            edge="left"
+            width={300}
+            label="Navigation"
           >
             <Sidebar
+              onNavigate={() => setNavOpen(false)}
               onSearch={() => setSearchOpen(true)}
-              onHide={toggleSidebar}
             />
-          </motion.aside>
+          </Sheet>
         )}
-        <main
-          id="px-main"
-          className={s.content}
-          data-sidebar-hidden={sidebarHidden || undefined}
-        >
-          <Outlet />
-        </main>
-      </div>
-
-      {!docked && (
-        <Sheet
-          open={navOpen}
-          onClose={() => setNavOpen(false)}
-          edge="left"
-          width={300}
-          label="Navigation"
-        >
-          <Sidebar
-            onNavigate={() => setNavOpen(false)}
-            onSearch={() => setSearchOpen(true)}
-          />
-        </Sheet>
-      )}
-      {compact && <TabBar onMore={() => setNavOpen(true)} />}
-      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+        {compact && <TabBar onMore={() => setNavOpen(true)} />}
+        <CommandPalette
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+        />
+      </WalkthroughProvider>
     </ShellContext.Provider>
   );
 }

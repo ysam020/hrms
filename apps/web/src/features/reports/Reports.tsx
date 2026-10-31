@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
+  EmptyState,
+  Card,
   Button,
   Checkbox,
   ConfirmDialog,
@@ -224,6 +226,7 @@ export function ReportBuilderPage() {
           </Button>
           <Button
             variant="primary"
+            data-tour="reports-run"
             icon="play"
             busy={running}
             disabled={empty}
@@ -238,6 +241,7 @@ export function ReportBuilderPage() {
         <aside
           className={`${layout.rail} ${s.options}`}
           aria-label="Report options"
+          data-tour="reports-options"
         >
           <Field label="Data">
             <Select value={entity} onChange={(e) => setEntity(e.target.value)}>
@@ -397,11 +401,18 @@ export function ReportBuilderPage() {
             </>
           )}
         </aside>
-        <div className={`${layout.stack} ${s.results}`}>
+        <div
+          className={`${layout.stack} ${s.results}`}
+          data-tour="reports-results"
+        >
           {rows === null ? (
-            <p className="px-tertiary px-callout">
-              Choose what to include on the left, then Run. Results appear here.
-            </p>
+            <Card>
+              <EmptyState icon="table" title="No results yet">
+                Pick the data and columns on the left, add filters if you need
+                them, then press Run. Results appear here and can be saved or
+                downloaded as CSV.
+              </EmptyState>
+            </Card>
           ) : (
             <Section title="Results" detail={plural(rows.length, "row")}>
               <ResultTable rows={rows} label={`${title(entity)} report`} />
@@ -558,11 +569,15 @@ export function SavedReportsPage() {
           className="px-row"
           style={{ justifyContent: "flex-end", flexWrap: "nowrap", gap: 2 }}
         >
-          <IconButton
+          <Button
+            size="small"
+            variant="tinted"
             icon="play"
-            label={`Run ${r.name}`}
+            aria-label={`Run ${r.name}`}
             onClick={() => run(r)}
-          />
+          >
+            Run
+          </Button>
           <IconButton
             icon="download"
             label={`Download ${r.name} as CSV`}
@@ -581,6 +596,7 @@ export function SavedReportsPage() {
   return (
     <Page
       title="Saved Reports"
+      description="Reports you saved from the Report Builder. Run one to see fresh data, or download it as CSV."
       actions={
         <Button
           variant="primary"
@@ -595,6 +611,7 @@ export function SavedReportsPage() {
     >
       <DataTable
         label="Saved reports"
+        tour="saved-table"
         columns={columns}
         rows={list.data as SavedReport[]}
         rowId={(r) => r.id}

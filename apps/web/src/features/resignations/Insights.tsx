@@ -55,12 +55,34 @@ export default function ResignationInsights() {
       onRetry={refetch}
     >
       <Metrics label="Resignations">
-        <Metric label="Total" value={o.total ?? "—"} />
-        <Metric label="Pending" value={o.submitted ?? "—"} />
-        <Metric label="Approved" value={o.approved ?? "—"} />
-        <Metric label="Approval Rate" value={pct(o.approvalRate)} />
+        <Metric
+          label="Total"
+          tone="accent"
+          icon="door"
+          value={o.total ?? "—"}
+        />
+        <Metric
+          label="Pending"
+          tone="warning"
+          icon="clock"
+          value={o.submitted ?? "—"}
+        />
+        <Metric
+          label="Approved"
+          tone="success"
+          icon="checkCircle"
+          value={o.approved ?? "—"}
+        />
+        <Metric
+          label="Approval Rate"
+          tone="accent"
+          icon="percent"
+          value={pct(o.approvalRate)}
+        />
         <Metric
           label="Avg Processing"
+          tone="neutral"
+          icon="calendar"
           value={
             p.averageProcessingTime != null
               ? `${p.averageProcessingTime} days`

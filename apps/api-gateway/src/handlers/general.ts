@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  getTenantId,
+  redactAuditValue,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
   apiResponse,
@@ -321,8 +325,10 @@ export async function getAuditLogs(req: Request, res: Response) {
       ipAddress: l.ipAddress,
       userAgent: l.userAgent,
       timestamp: l.timestamp,
-      oldValue: l.oldValue,
-      newValue: l.newValue,
+      // Rows written before a field was recognised as sensitive may still
+      // hold it in the clear; redact again on the way out.
+      oldValue: redactAuditValue(l.oldValue),
+      newValue: redactAuditValue(l.newValue),
     }));
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {

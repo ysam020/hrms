@@ -2,6 +2,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -39,6 +40,7 @@ import {
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
 import { useIsCompact } from "@next/lib/hooks";
+import { readableCase } from "@next/lib/format";
 import s from "./chat.module.css";
 
 // Chat (Classic's features/chat). All socket and REST behaviour is Classic's
@@ -72,7 +74,18 @@ function personOf(room: Room, myId?: string) {
 function flash(id?: string) {
   const el = id && document.getElementById(`chat-msg-${id}`);
   if (!el) return false;
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Scroll the message list only; scrollIntoView would also scroll the page.
+  const box = el.closest<HTMLElement>('[role="log"]');
+  if (box)
+    box.scrollTo({
+      top:
+        box.scrollTop +
+        el.getBoundingClientRect().top -
+        box.getBoundingClientRect().top -
+        box.clientHeight / 2 +
+        el.clientHeight / 2,
+      behavior: "smooth",
+    });
   el.setAttribute("data-flash", "");
   setTimeout(() => el.removeAttribute("data-flash"), 1500);
   return true;
@@ -120,9 +133,13 @@ function Bubble({
   onPin,
   onDelete,
   onJump,
+  groupStart = true,
+  groupEnd = true,
 }: {
   msg: Msg;
   mine: boolean;
+  groupStart?: boolean;
+  groupEnd?: boolean;
   read: boolean;
   replyName: string;
   onReply: () => void;
@@ -163,6 +180,8 @@ function Bubble({
       id={`chat-msg-${msg._id}`}
       className={s.msgRow}
       data-mine={mine || undefined}
+      data-start={groupStart || undefined}
+      data-end={groupEnd || undefined}
     >
       <div className={s.bubble} data-deleted={msg.isDeleted || undefined}>
         {msg.isPinned && !msg.isDeleted && (
@@ -195,14 +214,18 @@ function Bubble({
             )}
           </>
         )}
-        <span className={s.time}>
-          {formatTime(msg.createdAt)}
-          {mine && !msg.isDeleted && (
-            <span aria-label={read ? "Read" : "Sent"}>
-              {read ? " · Read" : ""}
-            </span>
-          )}
-        </span>
+        {groupEnd ? (
+          <span className={s.time}>
+            {formatTime(msg.createdAt)}
+            {mine && !msg.isDeleted && (
+              <span aria-label={read ? "Read" : "Sent"}>
+                {read ? " · Read" : ""}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="px-sr-only">{formatTime(msg.createdAt)}</span>
+        )}
       </div>
       {items.length > 0 && (
         <>
@@ -233,6 +256,14 @@ export default function Chat() {
   const { clearRoomUnread } = useContext(ChatUnreadContext);
   const compact = useIsCompact();
   const chat = useChat();
+  // Chat is a fixed-height surface; with the page locked, nothing (a focus,
+  // a late image) can scroll the window and push the header out of view.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-px-chat", "");
+    window.scrollTo(0, 0);
+    return () => root.removeAttribute("data-px-chat");
+  }, []);
   const {
     conversations,
     messages,
@@ -304,9 +335,39 @@ export default function Chat() {
   const other = room ? getOtherParticipant(room, user?.id) : "";
   const otherPerson = room ? personOf(room, user?.id) : null;
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [thread.length, typing.length, activeRoomId]);
+  // Scroll rules: a newly opened conversation starts at its latest message;
+  // loading older history keeps the reader's place; a new message (or the
+  // typing indicator) follows only when the reader is already at the bottom
+  // or sent it themselves — reading back through history is never yanked.
+  const scrollBox = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const shape = useRef({ room: "", first: "", last: "", height: 0 });
+  useLayoutEffect(() => {
+    const el = scrollBox.current;
+    const prev = shape.current;
+    const first = thread[0]?._id ?? "";
+    const lastMsg = thread[thread.length - 1];
+    const last = lastMsg?._id ?? "";
+    if (!el) return;
+    if (prev.room !== activeRoomId) {
+      el.scrollTop = el.scrollHeight;
+      nearBottom.current = true;
+    } else if (first !== prev.first && last === prev.last && prev.height) {
+      // Older messages were prepended: hold the visible message in place.
+      el.scrollTop += el.scrollHeight - prev.height;
+    } else if (
+      nearBottom.current ||
+      (last !== prev.last && lastMsg?.senderId === user?.id)
+    ) {
+      el.scrollTop = el.scrollHeight;
+    }
+    shape.current = {
+      room: activeRoomId ?? "",
+      first,
+      last,
+      height: el.scrollHeight,
+    };
+  }, [thread, typing.length, activeRoomId, user?.id]);
 
   // People search for a new conversation (Classic's /get-all-users query).
   useEffect(() => {
@@ -341,7 +402,10 @@ export default function Chat() {
       markRoomAsRead(id);
       emitRead(id);
       clearRoomUnread(id);
-      if (!compact) requestAnimationFrame(() => inputRef.current?.focus());
+      if (!compact)
+        requestAnimationFrame(() =>
+          inputRef.current?.focus({ preventScroll: true }),
+        );
     },
     [
       setActiveRoomId,
@@ -456,6 +520,8 @@ export default function Chat() {
   );
 
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (
       e.currentTarget.scrollTop === 0 &&
       thread.length >= 50 &&
@@ -478,19 +544,20 @@ export default function Chat() {
   const pin = pins[Math.min(pinIndex, pins.length - 1)];
 
   const list = (
-    <aside className={s.list} aria-label="Conversations">
+    <aside className={s.list} aria-label="Conversations" data-tour="chat-list">
       <div className={s.listSearch}>
         <SearchField
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           label="New message to…"
+          data-tour="chat-search"
         />
       </div>
       {query.trim() ? (
         <ul className={s.rooms} aria-label="People">
           {searching && people.length === 0 && (
             <li className={s.hint}>
-              <Spinner label="Searching" /> Searching…
+              <Spinner label="Searching…" size="small" showLabel />
             </li>
           )}
           {!searching && people.length === 0 && (
@@ -512,7 +579,9 @@ export default function Chat() {
                     size={36}
                   />
                   <span className={s.roomText}>
-                    <span className="px-headline px-truncate">{name}</span>
+                    <span className="px-headline px-truncate">
+                      {readableCase(name)}
+                    </span>
                     <span className="px-meta px-truncate">
                       {p.designation || p.email || p.username}
                     </span>
@@ -553,7 +622,9 @@ export default function Chat() {
                   />
                   <span className={s.roomText}>
                     <span className={s.roomTop}>
-                      <span className="px-headline px-truncate">{name}</span>
+                      <span className="px-headline px-truncate">
+                        {readableCase(name)}
+                      </span>
                       <span className="px-meta">
                         {formatConvTime(
                           c.lastActivity || c.lastMessage?.createdAt,
@@ -608,7 +679,9 @@ export default function Chat() {
               size={32}
             />
             <span style={{ display: "grid", minWidth: 0, flex: 1 }}>
-              <span className="px-headline px-truncate">{other}</span>
+              <span className="px-headline px-truncate">
+                {readableCase(other)}
+              </span>
               <span className="px-meta" aria-live="polite">
                 {typing.length > 0
                   ? "typing…"
@@ -667,6 +740,7 @@ export default function Chat() {
             )}
           </AnimatePresence>
           <div
+            ref={scrollBox}
             className={s.messages}
             onScroll={onScroll}
             role="log"
@@ -677,20 +751,39 @@ export default function Chat() {
               <div
                 style={{ display: "grid", placeItems: "center", padding: 32 }}
               >
-                <Spinner />
+                <Spinner label="Loading messages" size="large" />
               </div>
             ) : (
-              thread.map((m) => {
+              thread.map((m, i) => {
                 const day = formatDateSeparator(m.createdAt);
                 const sep = day !== lastDay;
                 lastDay = day;
                 const mine = m.senderId === user?.id;
+                // Consecutive messages from one sender within 5 minutes form
+                // a group: joined corners, one timestamp at the end.
+                const near = (a?: any, b?: any) =>
+                  Boolean(
+                    a &&
+                    b &&
+                    a.senderId === b.senderId &&
+                    formatDateSeparator(a.createdAt) ===
+                      formatDateSeparator(b.createdAt) &&
+                    Math.abs(
+                      new Date(b.createdAt).getTime() -
+                        new Date(a.createdAt).getTime(),
+                    ) <
+                      5 * 60_000,
+                  );
+                const groupStart = !near(thread[i - 1], m);
+                const groupEnd = !near(m, thread[i + 1]);
                 return (
                   <div key={m._id}>
                     {sep && <div className={s.day}>{day}</div>}
                     <Bubble
                       msg={m}
                       mine={mine}
+                      groupStart={groupStart}
+                      groupEnd={groupEnd}
                       read={(room.participants || []).some(
                         (p: string) =>
                           p !== m.senderId && m.readBy?.includes(p),
@@ -698,7 +791,7 @@ export default function Chat() {
                       replyName={m.replyTo ? nameOf(m.replyTo.senderId) : ""}
                       onReply={() => {
                         setReplyTo(m);
-                        inputRef.current?.focus();
+                        inputRef.current?.focus({ preventScroll: true });
                       }}
                       onPin={() =>
                         act(() =>
@@ -781,10 +874,11 @@ export default function Chat() {
               />
               <Button
                 variant="primary"
-                size="small"
+                icon="arrowRight"
                 disabled={!text.trim() && !replyTo}
                 onClick={send}
                 aria-label="Send"
+                className={s.send}
               >
                 Send
               </Button>

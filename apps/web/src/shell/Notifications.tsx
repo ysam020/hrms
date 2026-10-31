@@ -48,6 +48,7 @@ export function NotificationsButton() {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
+        data-tour="notifications"
       />
       <Popover
         open={open}

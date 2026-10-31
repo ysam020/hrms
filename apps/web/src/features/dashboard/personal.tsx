@@ -148,7 +148,7 @@ export function YourDay({
 
   return (
     <div className={s.day}>
-      <div className={s.punchRow}>
+      <div className={s.punchRow} data-tour="today-punch">
         <div className={s.clock}>
           <span className={s.clockState}>
             {state === "in" && <span className={s.liveDot} aria-hidden />}

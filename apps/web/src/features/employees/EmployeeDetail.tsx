@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
@@ -11,6 +12,8 @@ import {
 } from "@web/shared/utils/permissions/navAccess";
 import { Collapse, sharedName, vtName } from "@next/motion";
 import {
+  Icon,
+  FormSection,
   Button,
   Dialog,
   EmptyState,
@@ -28,7 +31,7 @@ import {
 } from "@next/ui";
 import { apiClient, asList, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
-import { fmtDate, fmtMoney, personName } from "@next/lib/format";
+import { fmtDate, fmtMoney, personName, readableCase } from "@next/lib/format";
 import { EmployeeIdentity } from "./EmployeeIdentity";
 import s from "./employees.module.css";
 
@@ -101,20 +104,29 @@ export default function EmployeeDetail() {
         </EmptyState>
       ) : (
         <>
-          <EmployeeIdentity
-            person={person}
-            style={sharedName(vtName("employee", username))}
-          />
+          <div className={s.hero}>
+            <EmployeeIdentity
+              person={person}
+              style={sharedName(vtName("employee", username))}
+            />
+          </div>
           <div className={s.columns}>
-            <div style={{ display: "grid", gap: 40 }}>
-              <Section title="Work">
+            <div className={s.stack}>
+              <FormSection
+                icon="briefcase"
+                title="Work"
+                description="Role and reporting details"
+              >
                 <KeyValues
                   items={[
                     ["Username", person.username],
                     ["Work Email", person.official_email],
-                    ["Department", person.department],
-                    ["Designation", person.designation],
-                    ["Joined", fmtDate(person.joining_date)],
+                    ["Department", readableCase(person.department) || null],
+                    ["Designation", readableCase(person.designation) || null],
+                    [
+                      "Joined",
+                      fmtDate(person.joiningDate ?? person.joining_date),
+                    ],
                     ...(person.employeeStatus === "Terminated"
                       ? ([
                           ["Terminated On", fmtDate(person.dateOfTermination)],
@@ -129,8 +141,13 @@ export default function EmployeeDetail() {
                       : []),
                   ]}
                 />
-              </Section>
-              <Section title="Statutory">
+              </FormSection>
+              <FormSection
+                icon="shield"
+                tone="warning"
+                title="Statutory & Pay"
+                description="Used for payroll and compliance filings"
+              >
                 <KeyValues
                   items={[
                     ["PF Number", person.pf_no],
@@ -140,16 +157,23 @@ export default function EmployeeDetail() {
                       ? ([
                           [
                             "Salary",
-                            fmtMoney(person.salary?.gross ?? person.salary),
+                            <b className="px-num">
+                              {fmtMoney(person.salary?.gross ?? person.salary)}
+                            </b>,
                           ],
-                        ] as [string, string][])
+                        ] as [string, ReactNode][])
                       : []),
                   ]}
                 />
-              </Section>
+              </FormSection>
             </div>
-            <div style={{ display: "grid", gap: 40, alignContent: "start" }}>
-              <Section title="Personal">
+            <div className={s.stack}>
+              <FormSection
+                icon="person"
+                tone="success"
+                title="Personal"
+                description="Contact details from their KYC"
+              >
                 <KeyValues
                   items={[
                     ["Personal Email", person.email],
@@ -168,23 +192,31 @@ export default function EmployeeDetail() {
                     ],
                   ]}
                 />
-              </Section>
-              <Section title="Assigned Assets">
+              </FormSection>
+              <FormSection icon="laptop" tone="neutral" title="Assigned Assets">
                 {assets.loading ? (
                   <Skeleton height={40} />
                 ) : asList(assets.data, "assets").length === 0 ? (
-                  <p className="px-tertiary px-callout">No assets assigned.</p>
+                  <p className={s.none}>
+                    <Icon name="laptop" size={16} />
+                    No assets assigned.
+                  </p>
                 ) : (
                   <ul className={s.assetList}>
                     {asList(assets.data, "assets").map((a: any) => (
                       <li key={a._id || a.id || a.assetCode}>
-                        <span>{a.name}</span>
+                        <span className={s.assetName}>
+                          <span className={s.assetIcon} aria-hidden>
+                            <Icon name="laptop" size={16} />
+                          </span>
+                          {a.name}
+                        </span>
                         <span className="px-meta px-num">{a.assetCode}</span>
                       </li>
                     ))}
                   </ul>
                 )}
-              </Section>
+              </FormSection>
             </div>
           </div>
           {canEdit && (

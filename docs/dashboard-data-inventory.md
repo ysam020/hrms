@@ -111,7 +111,6 @@ mutation on the dashboard (punch, decision) plus focus.
 | Payroll deadlines               | No pay date or cut-off setting.                                                                                                                                                                       |
 | Workforce cost for executives   | Exists only as payroll run totals; shown to owner/admin/HR in the payroll widget, not as a separate executive metric.                                                                                 |
 | Organisation setup checklist    | Its steps are defined only in the web app (`OnboardingChecklistState` stores statuses by step key); left on the setup screen.                                                                         |
-| Integration health              | Webhook deliveries exist but have no health summary endpoint; left out.                                                                                                                               |
 
 ## What shipped
 
