@@ -18,6 +18,7 @@ import { Presence } from "@next/motion";
 import { Avatar } from "./display";
 import { Icon } from "./Icon";
 import { Portal } from "./layers";
+import { Spinner } from "./Spinner";
 import type { Person } from "./PeoplePicker";
 import f from "./fields.module.css";
 import s from "./UserCombobox.module.css";
@@ -340,7 +341,7 @@ export function UserCombobox({
             ))}
             {loading && suggestions.length === 0 && (
               <li className={s.status} role="presentation">
-                Searching…
+                <Spinner label="Searching…" size="small" showLabel />
               </li>
             )}
             {!loading && suggestions.length === 0 && (

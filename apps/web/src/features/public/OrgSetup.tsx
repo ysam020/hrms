@@ -619,13 +619,12 @@ export default function OrgSetup() {
           {view === "loading" || view === "approved" ? (
             <div className={s.center}>
               <Spinner
+                size="large"
                 label={
-                  resuming ? "Completing your organisation setup" : "Loading"
+                  resuming ? "Completing your organisation setup…" : "Loading"
                 }
+                showLabel={resuming}
               />
-              {resuming && (
-                <p className="px-meta">Completing your organisation setup…</p>
-              )}
             </div>
           ) : view === "pending" ? (
             <div className={s.stack}>

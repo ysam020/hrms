@@ -168,7 +168,7 @@ export function usePunch(refresh: () => void) {
                 }}
               />
             ) : (
-              <Spinner label="Starting camera" />
+              <Spinner label="Starting camera" size="large" />
             )}
           </div>
           <p

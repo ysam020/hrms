@@ -99,19 +99,6 @@
   width: 100%;
 }
 
-.spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  animation: spin 0.7s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 /* opacity, not visibility: the label stays the button's accessible name
    while the spinner shows. */
 .busyLabel {

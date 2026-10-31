@@ -490,7 +490,7 @@ export default function Chat() {
         <ul className={s.rooms} aria-label="People">
           {searching && people.length === 0 && (
             <li className={s.hint}>
-              <Spinner label="Searching" /> Searching…
+              <Spinner label="Searching…" size="small" showLabel />
             </li>
           )}
           {!searching && people.length === 0 && (
@@ -677,7 +677,7 @@ export default function Chat() {
               <div
                 style={{ display: "grid", placeItems: "center", padding: 32 }}
               >
-                <Spinner />
+                <Spinner label="Loading messages" size="large" />
               </div>
             ) : (
               thread.map((m) => {
