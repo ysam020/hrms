@@ -218,20 +218,6 @@
   }
 }
 
-.spinner {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid var(--px-separator-strong);
-  border-top-color: var(--px-accent);
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* Banner (inline feedback inside content) */
 .banner {
   display: flex;

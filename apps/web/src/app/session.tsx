@@ -30,7 +30,13 @@ import {
   rememberSession,
 } from "@next/offline/session";
 import { scopeFromToken } from "@next/offline/state";
-import { Button, ConfirmDialog, Dialog, Spinner, ToastHost } from "@next/ui";
+import {
+  Button,
+  ConfirmDialog,
+  Dialog,
+  LoadingScreen,
+  ToastHost,
+} from "@next/ui";
 import { PUBLIC_PAGES, applyPageMeta, normalizePath } from "./seo";
 import { takeReturnPath } from "./returnPath";
 
@@ -322,11 +328,7 @@ function LogoutNote() {
 }
 
 function BootScreen() {
-  return (
-    <div style={{ height: "100vh", display: "grid", placeItems: "center" }}>
-      <Spinner label="Starting Praesto" />
-    </div>
-  );
+  return <LoadingScreen label="Starting Praesto" />;
 }
 
 /** Pages reachable while organisation setup is still pending. */

@@ -2,6 +2,7 @@ export * from "./Icon";
 export * from "./controls";
 export * from "./fields";
 export * from "./display";
+export { Spinner, LoadingScreen, type SpinnerSize } from "./Spinner";
 export * from "./overlays";
 export * from "./Table";
 export * from "./Page";

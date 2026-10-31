@@ -101,7 +101,7 @@ export function AttachmentPicker({
           ))}
           {uploading.map((name, i) => (
             <li key={`${name}-${i}`} className={s.file} aria-busy>
-              <Spinner label={`Uploading ${name}`} />
+              <Spinner label={`Uploading ${name}`} size="small" />
               <span className={s.fileName}>{name}</span>
             </li>
           ))}

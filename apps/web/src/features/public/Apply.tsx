@@ -729,7 +729,7 @@ export function JobApplicationPage() {
                             className="px-sr-only"
                           />
                           {uploading ? (
-                            <Spinner label="Uploading" />
+                            <Spinner label="Uploading" size={20} />
                           ) : (
                             <Icon
                               name={answers.resumeName ? "doc" : "upload"}

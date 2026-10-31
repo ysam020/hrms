@@ -19,6 +19,7 @@ import { duration, ease } from "@next/motion";
 import { useIsCompact } from "@next/lib/hooks";
 import { Select } from "./fields";
 import { Icon, type IconName } from "./Icon";
+import { SpinnerMark } from "./Spinner";
 import s from "./controls.module.css";
 
 const cx = (...c: (string | false | null | undefined)[]) =>
@@ -183,7 +184,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         </span>
         {busy && (
           <span className={s.busyOverlay}>
-            <span className={s.spinner} />
+            <SpinnerMark size="1.6em" tone="mono" />
           </span>
         )}
       </button>

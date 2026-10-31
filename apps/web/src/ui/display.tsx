@@ -337,18 +337,6 @@ export function Skeleton({
   );
 }
 
-export function Spinner({ label = "Loading" }: { label?: string }) {
-  return (
-    <span
-      role="status"
-      aria-label={label}
-      style={{ display: "inline-grid", placeItems: "center" }}
-    >
-      <span className={s.spinner} />
-    </span>
-  );
-}
-
 /** One stacked bar with a legend — for part-of-whole with ≤6 parts. */
 export function Meter({
   parts,

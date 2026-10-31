@@ -80,7 +80,7 @@ export default function ConnectAuthorize() {
       <main className={`${s.card} px-enter`} aria-labelledby="connect-title">
         <BrandLockup size={26} />
         {!details && !error ? (
-          <Spinner label="Loading" />
+          <Spinner label="Loading" size="large" />
         ) : !details ? (
           <>
             <h1 id="connect-title" className={s.title}>

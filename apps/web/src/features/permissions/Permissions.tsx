@@ -29,6 +29,7 @@ import {
   SearchField,
   Select,
   Skeleton,
+  Spinner,
   Switch,
   TextInput,
   inlineCheckClass,
@@ -598,7 +599,7 @@ export function UserPermissionsPage() {
           <ul>
             {loadingPeople && (
               <li className="px-meta" style={{ padding: 8 }}>
-                Loading…
+                <Spinner label="Loading people…" size="small" showLabel />
               </li>
             )}
             {shown.map((p) => (

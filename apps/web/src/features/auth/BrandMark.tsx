@@ -1,10 +1,12 @@
 import type { CSSProperties } from "react";
+import { MARK_STROKES } from "@next/ui/Spinner";
 
 /**
  * The Praesto mark — the same three strokes as Classic's logo
  * (apps/web/src/assets/data/LogoDark.tsx), drawn static: Classic's version
  * animates in over ~2s and ignores Reduce Motion, which a sign-in page
- * shouldn't make people wait through.
+ * shouldn't make people wait through. The animated mark is the app's
+ * loader (ui/Spinner).
  */
 export function BrandMark({
   size = 32,
@@ -26,12 +28,9 @@ export function BrandMark({
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M 63.5,81.4 L 64.5,34.7 L 72.1,44.3" stroke="#fd7624" />
-      <path
-        d="M 75.5,57.0 L 102.7,27.5 L 102.7,72.0 L 95.7,65.0"
-        stroke="#25b37b"
-      />
-      <path d="M 63.3,82.2 L 91.3,57.2" stroke="#f03933" />
+      {MARK_STROKES.map((p) => (
+        <path key={p.d} d={p.d} stroke={p.color} />
+      ))}
     </svg>
   );
 }
