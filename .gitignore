@@ -87,3 +87,7 @@ apps/ios/DerivedData/
 apps/ios/.build/
 xcuserdata/
 *.xcuserstate
+
+# Local tooling output and per-user editor settings
+.playwright-mcp/
+.claude/settings.local.json
