@@ -5,7 +5,9 @@ import {
   Avatar,
   BarList,
   Columns,
+  DateTile,
   EmptyState,
+  Icon,
   Meter,
   Metric,
   Metrics,
@@ -13,6 +15,8 @@ import {
   OTHER,
   StatusBadge,
   toneForStatus,
+  type IconName,
+  type Tone,
 } from "@next/ui";
 import {
   fmtDate,
@@ -40,6 +44,22 @@ const range = (from: string, to: string) => {
     : `${a.format("D MMM")} – ${b.format(a.isSame(b, "month") ? "D" : "D MMM")}`;
 };
 
+/** A small tinted square with an icon, leading a list row. */
+function RowIcon({ icon, tone = "accent" }: { icon: IconName; tone?: Tone }) {
+  return (
+    <span
+      className={d.rowIcon}
+      style={{
+        background: `var(--px-${tone}-soft)`,
+        color: `var(--px-${tone})`,
+      }}
+      aria-hidden
+    >
+      <Icon name={icon} size={15} />
+    </span>
+  );
+}
+
 function More({ to, children }: { to: string; children: ReactNode }) {
   return (
     <TransitionLink to={to} className={d.more}>
@@ -56,19 +76,43 @@ function DayNote({ type }: { type?: string }) {
 }
 
 /** In / WFH / on leave / not punched in yet — a meter plus the figures. */
-function PresenceSplit({ counts }: { counts: any }) {
+function PresenceSplit({
+  counts,
+  working = true,
+}: {
+  counts: any;
+  working?: boolean;
+}) {
   const office = Math.max(0, counts.in - counts.wfh);
   return (
     <>
       <Metrics label="Today">
         <Metric
           label="In"
+          icon="checkCircle"
+          tone="success"
           value={fmtNumber(counts.in)}
           note={counts.wfh ? `${counts.wfh} remote` : undefined}
         />
-        <Metric label="On Leave" value={fmtNumber(counts.leave)} />
-        <Metric label="Not Punched In Yet" value={fmtNumber(counts.notIn)} />
-        <Metric label="Headcount" value={fmtNumber(counts.total)} />
+        <Metric
+          label="On Leave"
+          icon="leave"
+          tone="warning"
+          value={fmtNumber(counts.leave)}
+        />
+        <Metric
+          label="Not Punched In Yet"
+          icon="clock"
+          // Only a concern on a working day; on a week-off it's expected.
+          tone={working && counts.notIn > 0 ? "danger" : "neutral"}
+          value={fmtNumber(counts.notIn)}
+        />
+        <Metric
+          label="Headcount"
+          icon="people"
+          tone="accent"
+          value={fmtNumber(counts.total)}
+        />
       </Metrics>
       {counts.total > 0 && (
         <Meter
@@ -120,7 +164,10 @@ export function TeamToday({ data, wide }: { data: any; wide: boolean }) {
   return (
     <div className={d.stack}>
       <DayNote type={data.dayType} />
-      <PresenceSplit counts={data.counts} />
+      <PresenceSplit
+        counts={data.counts}
+        working={!data.dayType || data.dayType === "working"}
+      />
       <ul className={d.people} data-columns={wide ? 2 : 1}>
         {sorted.slice(0, wide ? 12 : 6).map((m) => (
           <li key={m.id} className={d.person}>
@@ -166,11 +213,11 @@ export function TeamLeave({ data }: { data: any }) {
       <ul className={d.rows}>
         {items.slice(0, 6).map((l) => (
           <li key={l.id} className={d.row}>
-            <span className={d.when}>{range(l.from, l.to)}</span>
+            <DateTile date={l.from} tone="warning" size="small" />
             <span className={d.rowText}>
               <span className={d.rowTitle}>{l.name}</span>
               <span className={d.rowMeta}>
-                {l.leaveType}
+                {range(l.from, l.to)} · {l.leaveType}
                 {l.unit === "half_day" ? " · Half day" : ""}
               </span>
             </span>
@@ -195,7 +242,10 @@ export function OrgToday({ data }: { data: any }) {
   return (
     <div className={d.stack}>
       <DayNote type={data.dayType} />
-      <PresenceSplit counts={data.counts} />
+      <PresenceSplit
+        counts={data.counts}
+        working={!data.dayType || data.dayType === "working"}
+      />
       <More to="/attendance/view-all-attendances">Attendance</More>
     </div>
   );
@@ -208,13 +258,22 @@ export function Workforce({ data }: { data: any }) {
   return (
     <div className={d.stack}>
       <Metrics label="Workforce">
-        <Metric label="Active Employees" value={fmtNumber(data.active)} />
+        <Metric
+          label="Active Employees"
+          icon="people"
+          tone="accent"
+          value={fmtNumber(data.active)}
+        />
         <Metric
           label="Joined This Month"
+          icon="trendUp"
+          tone="success"
           value={fmtNumber(data.joinersThisMonth)}
         />
         <Metric
           label="Leaving This Month"
+          icon="door"
+          tone="warning"
           value={fmtNumber(data.leavingThisMonth)}
         />
       </Metrics>
@@ -236,13 +295,21 @@ export function Workforce({ data }: { data: any }) {
   );
 }
 
-function PeopleList({ items, empty }: { items: any[]; empty: string }) {
+function PeopleList({
+  items,
+  empty,
+  tone,
+}: {
+  items: any[];
+  empty: string;
+  tone: Tone;
+}) {
   if (items.length === 0) return <p className={d.note}>{empty}</p>;
   return (
     <ul className={d.rows}>
       {items.map((p) => (
         <li key={p.id} className={d.row}>
-          <span className={d.when}>{fmtDateShort(p.date)}</span>
+          <DateTile date={p.date} tone={tone} size="small" />
           <span className={d.rowText}>
             <span className={d.rowTitle}>{p.name}</span>
             <span className={d.rowMeta}>
@@ -263,6 +330,7 @@ export function JoinersLeavers({ data }: { data: any }) {
           <h3 className={d.subhead}>Joining</h3>
           <PeopleList
             items={data.joining}
+            tone="success"
             empty="No one joins in the next 30 days."
           />
         </div>
@@ -271,6 +339,7 @@ export function JoinersLeavers({ data }: { data: any }) {
         <h3 className={d.subhead}>Leaving</h3>
         <PeopleList
           items={data.leaving ?? []}
+          tone="warning"
           empty="No one leaves in the next 30 days."
         />
         <More to="/resignation-process/view-resignations">Resignations</More>
@@ -279,21 +348,55 @@ export function JoinersLeavers({ data }: { data: any }) {
   );
 }
 
-const QUEUE: { key: string; label: string; to: string }[] = [
-  { key: "kyc", label: "KYC to review", to: "/kyc/view-employee-kycs" },
+const QUEUE: {
+  key: string;
+  label: string;
+  to: string;
+  icon: IconName;
+  tone: Tone;
+}[] = [
+  {
+    key: "kyc",
+    label: "KYC to review",
+    to: "/kyc/view-employee-kycs",
+    icon: "idcard",
+    tone: "accent",
+  },
   {
     key: "exits",
     label: "Resignations to decide",
     to: "/resignation-process/view-resignations",
+    icon: "door",
+    tone: "warning",
   },
-  { key: "tickets", label: "Open helpdesk tickets", to: "/helpdesk" },
-  { key: "assetIssues", label: "Open asset issues", to: "/assets/issues" },
+  {
+    key: "tickets",
+    label: "Open helpdesk tickets",
+    to: "/helpdesk",
+    icon: "ticket",
+    tone: "danger",
+  },
+  {
+    key: "assetIssues",
+    label: "Open asset issues",
+    to: "/assets/issues",
+    icon: "laptop",
+    tone: "warning",
+  },
   {
     key: "advances",
     label: "Salary advances to approve",
     to: "/payroll/salary-advances",
+    icon: "banknote",
+    tone: "success",
   },
-  { key: "joins", label: "Requests to join", to: "/settings/join-requests" },
+  {
+    key: "joins",
+    label: "Requests to join",
+    to: "/settings/join-requests",
+    icon: "person",
+    tone: "accent",
+  },
 ];
 
 export function HrQueue({ data }: { data: any }) {
@@ -310,7 +413,13 @@ export function HrQueue({ data }: { data: any }) {
               className={d.queueRow}
               data-zero={!data[q.key] || undefined}
             >
-              <span>{q.label}</span>
+              <span className={d.queueLabel}>
+                <RowIcon
+                  icon={q.icon}
+                  tone={data[q.key] ? q.tone : "neutral"}
+                />
+                {q.label}
+              </span>
               {q.key === "tickets" && data.breached > 0 && (
                 <StatusBadge tone="danger">
                   {data.breached} past SLA
@@ -336,6 +445,8 @@ export function HeadcountTrend({ data }: { data: any }) {
       <Metrics label="Headcount">
         <Metric
           label="Now"
+          icon="people"
+          tone="accent"
           value={fmtNumber(last)}
           note={
             first
@@ -345,11 +456,15 @@ export function HeadcountTrend({ data }: { data: any }) {
         />
         <Metric
           label="Joined"
+          icon="trendUp"
+          tone="success"
           value={fmtNumber(joined)}
           note={`Last ${data.months} months`}
         />
         <Metric
           label="Left"
+          icon="door"
+          tone="warning"
           value={fmtNumber(exits)}
           note={`Last ${data.months} months`}
         />
@@ -383,11 +498,15 @@ export function AttendanceTrend({ data }: { data: any }) {
       <Metrics label="Attendance">
         <Metric
           label="Average"
+          icon="percent"
+          tone="accent"
           value={`${Math.round(avg * 100)}%`}
           note={`${plural(series.length, "working day")}`}
         />
         <Metric
           label="Today"
+          icon="checkCircle"
+          tone="success"
           value={
             series.at(-1)?.today
               ? `${Math.round(series.at(-1).rate * 100)}%`
@@ -418,10 +537,22 @@ export function Hiring({ data }: { data: any }) {
   return (
     <div className={d.stack}>
       <Metrics label="Hiring">
-        <Metric label="Open Roles" value={fmtNumber(data.openRoles)} />
-        <Metric label="Offers Out" value={fmtNumber(data.offersOut)} />
+        <Metric
+          label="Open Roles"
+          icon="briefcase"
+          tone="accent"
+          value={fmtNumber(data.openRoles)}
+        />
+        <Metric
+          label="Offers Out"
+          icon="doc"
+          tone="success"
+          value={fmtNumber(data.offersOut)}
+        />
         <Metric
           label="Interviews This Week"
+          icon="calendar"
+          tone="warning"
           value={fmtNumber(data.interviews?.length ?? 0)}
         />
       </Metrics>
@@ -436,11 +567,13 @@ export function Hiring({ data }: { data: any }) {
         <ul className={d.rows}>
           {data.interviews.map((i: any) => (
             <li key={i.id} className={d.row}>
-              <span className={d.when}>{dayjs(i.at).format("ddd h:mm A")}</span>
+              <RowIcon icon="calendar" tone="warning" />
               <span className={d.rowText}>
                 <span className={d.rowTitle}>{i.candidate}</span>
                 <span className={d.rowMeta}>
-                  {[i.stage, i.role].filter(Boolean).join(" · ")}
+                  {[dayjs(i.at).format("ddd h:mm A"), i.stage, i.role]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               </span>
             </li>
@@ -490,13 +623,27 @@ export function Payroll({ data }: { data: any }) {
       <Metrics label="Payroll">
         <Metric
           label="Employees"
+          icon="people"
+          tone="accent"
           value={fmtNumber(run.employeeCount)}
           size="sm"
         />
-        <Metric label="Gross" value={fmtMoney(run.totalGross)} size="sm" />
-        <Metric label="Net" value={fmtMoney(run.totalNet)} size="sm" />
+        <Metric
+          label="Gross"
+          icon="banknote"
+          tone="warning"
+          value={fmtMoney(run.totalGross)}
+          size="sm"
+        />
+        <Metric
+          label="Net"
+          icon="bank"
+          tone="success"
+          value={fmtMoney(run.totalNet)}
+          size="sm"
+        />
       </Metrics>
-      {(data.openRuns > 1 || data.pendingAdvances) && (
+      {(data.openRuns > 1 || data.pendingAdvances > 0) && (
         <p className={d.note}>
           {[
             data.openRuns > 1
@@ -573,7 +720,13 @@ export function OrgAdmin({ data }: { data: any }) {
               className={d.queueRow}
               data-zero={!data.joinRequests || undefined}
             >
-              <span>Requests to join</span>
+              <span className={d.queueLabel}>
+                <RowIcon
+                  icon="person"
+                  tone={data.joinRequests ? "accent" : "neutral"}
+                />
+                Requests to join
+              </span>
               <b>{fmtNumber(data.joinRequests)}</b>
             </TransitionLink>
           </li>
@@ -582,7 +735,8 @@ export function OrgAdmin({ data }: { data: any }) {
           <>
             <li>
               <TransitionLink to="/subscription" className={d.queueRow}>
-                <span>
+                <span className={d.queueLabel}>
+                  <RowIcon icon="star" tone="accent" />
                   {sub.planTier
                     ? sub.planTier[0].toUpperCase() + sub.planTier.slice(1)
                     : "Plan"}{" "}
@@ -599,7 +753,8 @@ export function OrgAdmin({ data }: { data: any }) {
             </li>
             {sub.planExpiresAt && (
               <li className={d.queueRow} data-static>
-                <span>
+                <span className={d.queueLabel}>
+                  <RowIcon icon="calendar" tone="success" />
                   {sub.subscriptionStatus === "trialing"
                     ? "Trial ends"
                     : "Renews"}
@@ -609,7 +764,10 @@ export function OrgAdmin({ data }: { data: any }) {
             )}
             {sub.seatsUsed != null && (
               <li className={d.queueRow} data-static>
-                <span>Seats used</span>
+                <span className={d.queueLabel}>
+                  <RowIcon icon="people" tone="warning" />
+                  Seats used
+                </span>
                 <b>
                   {fmtNumber(sub.seatsUsed)}
                   {sub.seatLimit ? ` of ${fmtNumber(sub.seatLimit)}` : ""}
@@ -625,6 +783,23 @@ export function OrgAdmin({ data }: { data: any }) {
 
 // ── Personal ────────────────────────────────────────────────────────────────
 
+// Built-in types get a fixed look; anything tenant-defined cycles through
+// the remaining tones so neighbouring tiles never match.
+const LEAVE_LOOK: Record<string, { icon: IconName; tone: Tone }> = {
+  PL: { icon: "leave", tone: "accent" },
+  SL: { icon: "heart", tone: "danger" },
+  CL: { icon: "sun", tone: "warning" },
+  COMP_OFF: { icon: "refresh", tone: "success" },
+};
+const LEAVE_CYCLE: { icon: IconName; tone: Tone }[] = [
+  { icon: "calendar", tone: "success" },
+  { icon: "halfDay", tone: "accent" },
+  { icon: "star", tone: "warning" },
+];
+const leaveLook = (key: string, i: number) =>
+  LEAVE_LOOK[key?.toUpperCase()] ?? LEAVE_CYCLE[i % LEAVE_CYCLE.length];
+const days = (n: number) => (Number.isInteger(n) ? n : n.toFixed(1));
+
 export function LeaveBalance({ data }: { data: any }) {
   const types: any[] = data.types ?? [];
   const upcoming: any[] = data.upcoming ?? [];
@@ -633,54 +808,71 @@ export function LeaveBalance({ data }: { data: any }) {
       {types.length === 0 ? (
         <p className={d.note}>No leave types are set up yet.</p>
       ) : (
-        <dl className={d.balances}>
-          {types.map((t) => (
-            <div key={t.key}>
-              <dt>{t.name}</dt>
-              <dd>
-                {Number.isInteger(t.remaining)
-                  ? t.remaining
-                  : t.remaining.toFixed(1)}
-                <span> days</span>
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <Metrics label="Leave balance">
+          {types.map((t, i) => {
+            const look = leaveLook(t.key, i);
+            return (
+              <Metric
+                key={t.key}
+                label={t.name}
+                icon={look.icon}
+                tone={t.remaining > 0 ? look.tone : "neutral"}
+                value={days(t.remaining)}
+                note={t.remaining === 1 ? "day left" : "days left"}
+                size="sm"
+              />
+            );
+          })}
+        </Metrics>
       )}
       {upcoming.length > 0 && (
-        <ul className={d.rows}>
-          {upcoming.map((l) => (
-            <li key={l.id} className={d.row}>
-              <span className={d.when}>{range(l.from, l.to)}</span>
-              <span className={d.rowText}>
-                <span className={d.rowTitle}>{l.leaveType}</span>
-              </span>
-              <StatusBadge tone={toneForStatus(l.status)}>
-                {l.status}
-              </StatusBadge>
-            </li>
-          ))}
-        </ul>
+        <>
+          <h3 className={d.subhead}>Upcoming leave</h3>
+          <ul className={d.rows}>
+            {upcoming.map((l) => (
+              <li key={l.id} className={d.row}>
+                <DateTile
+                  date={l.from}
+                  tone={toneForStatus(l.status)}
+                  size="small"
+                />
+                <span className={d.rowText}>
+                  <span className={d.rowTitle}>{l.leaveType}</span>
+                  <span className={d.rowMeta}>{range(l.from, l.to)}</span>
+                </span>
+                <StatusBadge tone={toneForStatus(l.status)}>
+                  {l.status}
+                </StatusBadge>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       <More to="/attendance/apply-leave">Apply for Leave</More>
     </div>
   );
 }
 
+type RequestRow = {
+  id: string;
+  title: string;
+  meta: string;
+  status: string;
+  to: string;
+  icon: IconName;
+  tone: Tone;
+};
+
 export function MyRequests({ data }: { data: any }) {
-  const rows: {
-    id: string;
-    title: string;
-    meta: string;
-    status: string;
-    to: string;
-  }[] = [
+  const rows: RequestRow[] = [
     ...(data.leaves ?? []).map((l: any) => ({
       id: l.id,
-      title: `Leave · ${l.leaveType}`,
+      title: `${l.leaveType} leave`,
       meta: range(l.from, l.to),
       status: l.status,
       to: "/attendance/view-leave-applications",
+      icon: "leave",
+      tone: "accent",
     })),
     ...(data.wfh ?? []).map((w: any) => ({
       id: w.id,
@@ -688,13 +880,17 @@ export function MyRequests({ data }: { data: any }) {
       meta: range(w.date, w.toDate),
       status: w.status,
       to: "/wfh/requests",
+      icon: "wfh",
+      tone: "success",
     })),
     ...(data.tickets ?? []).map((t: any) => ({
       id: t.id,
       title: t.title,
-      meta: `Ticket #${t.ticketNo}`,
+      meta: `Helpdesk · #${t.ticketNo}`,
       status: label(t.status),
       to: "/helpdesk",
+      icon: "lifebuoy",
+      tone: "warning",
     })),
     ...(data.advances ?? []).map((a: any) => ({
       id: a.id,
@@ -702,24 +898,54 @@ export function MyRequests({ data }: { data: any }) {
       meta: fmtMoney(a.amount),
       status: a.status,
       to: "/payroll/salary-advances",
+      icon: "banknote",
+      tone: "danger",
     })),
   ];
   if (rows.length === 0)
-    return <p className={d.note}>Nothing waiting on anyone else.</p>;
+    return (
+      <EmptyState icon="checkCircle" title="All caught up">
+        Nothing waiting on anyone else.
+      </EmptyState>
+    );
+  // How many requests sit in each status, most common first.
+  const byStatus = Object.entries(
+    rows.reduce<Record<string, number>>((acc, r) => {
+      acc[r.status] = (acc[r.status] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((x, y) => y[1] - x[1]);
   return (
-    <ul className={d.rows}>
-      {rows.slice(0, 6).map((r) => (
-        <li key={r.id}>
-          <TransitionLink to={r.to} className={d.row}>
-            <span className={d.rowText}>
-              <span className={d.rowTitle}>{r.title}</span>
-              <span className={d.rowMeta}>{r.meta}</span>
-            </span>
-            <StatusBadge tone={toneForStatus(r.status)}>{r.status}</StatusBadge>
-          </TransitionLink>
-        </li>
-      ))}
-    </ul>
+    <div className={d.stack}>
+      <div className={d.chips} aria-label="Requests by status">
+        {byStatus.map(([st, n]) => (
+          <StatusBadge key={st} tone={toneForStatus(st)}>
+            {n} {st.toLowerCase()}
+          </StatusBadge>
+        ))}
+      </div>
+      <ul className={d.rows}>
+        {rows.slice(0, 6).map((r) => (
+          <li key={r.id}>
+            <TransitionLink to={r.to} className={d.row}>
+              <RowIcon icon={r.icon} tone={r.tone} />
+              <span className={d.rowText}>
+                <span className={d.rowTitle}>{r.title}</span>
+                <span className={d.rowMeta}>{r.meta}</span>
+              </span>
+              <StatusBadge tone={toneForStatus(r.status)}>
+                {r.status}
+              </StatusBadge>
+            </TransitionLink>
+          </li>
+        ))}
+      </ul>
+      {rows.length > 6 && (
+        <More to="/attendance/view-leave-applications">
+          {plural(rows.length - 6, "more request")}
+        </More>
+      )}
+    </div>
   );
 }
 
@@ -727,20 +953,29 @@ export function MyReviews({ data }: { data: any }) {
   const mine: any[] = data.mine ?? [];
   const toReview: any[] = data.toReview ?? [];
   if (mine.length === 0 && toReview.length === 0)
-    return <p className={d.note}>No reviews in progress.</p>;
+    return (
+      <EmptyState icon="star" title="No reviews in progress">
+        Reviews appear here when a cycle starts.
+      </EmptyState>
+    );
   return (
     <div className={d.stack}>
       <ul className={d.rows}>
         {mine.map((r) => (
           <li key={r.id}>
             <TransitionLink to="/performance-reviews/reviews" className={d.row}>
+              <RowIcon icon="star" tone="warning" />
               <span className={d.rowText}>
                 <span className={d.rowTitle}>Your review · {r.cycle}</span>
                 <span className={d.rowMeta}>
-                  {REVIEW_LABEL[r.status] ?? r.status}
-                  {r.due ? ` · cycle ends ${fmtDateShort(r.due)}` : ""}
+                  {r.due ? `Cycle ends ${fmtDateShort(r.due)}` : r.cycle}
                 </span>
               </span>
+              <StatusBadge
+                tone={r.status === "finalized" ? "success" : "accent"}
+              >
+                {REVIEW_LABEL[r.status] ?? label(r.status)}
+              </StatusBadge>
             </TransitionLink>
           </li>
         ))}
@@ -777,6 +1012,8 @@ export function Payslip({ data }: { data: any }) {
           label={dayjs(
             `${p.year}-${String(p.month).padStart(2, "0")}-01`,
           ).format("MMMM YYYY")}
+          icon="banknote"
+          tone="success"
           value={fmtMoney(p.net)}
           note={`Net pay${p.paidOn ? ` · paid ${fmtDateShort(p.paidOn)}` : ""}`}
         />

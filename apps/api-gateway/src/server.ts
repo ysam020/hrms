@@ -24,7 +24,12 @@ import { handleWebhook } from "./handlers/payment";
 import { handleRazorpayXWebhook } from "./handlers/razorpayxWebhook";
 import { startSubscriptionReconciler } from "./services/subscriptionReconciler";
 import { startPayrollDisbursementWorker } from "./workers/payrollDisbursementWorker";
-import { ensureMasterIndexes } from "@hrms/db";
+import {
+  ensureMasterIndexes,
+  withQueryStats,
+  currentQueryStats,
+  summarizeQueryStats,
+} from "@hrms/db";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -89,7 +94,37 @@ app.post(
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.use(doubleCsrfProtection);
+const QUERY_COUNT_WARN = Number(process.env.REQUEST_QUERY_COUNT_WARN) || 25;
+const QUERY_TIME_WARN_MS = Number(process.env.REQUEST_DB_MS_WARN) || 1000;
+// Per-request timing line for every request (route, status, bytes, phase
+// and DB/downstream counts — never headers, tokens or query values).
+const REQUEST_TIMING_LOG = process.env.REQUEST_TIMING_LOG === "true";
 app.use(apiRequestLogger);
+// Per-request database round trips (counts and timings only — no query
+// arguments). Logged only for requests that look expensive.
+app.use((req, res, next) =>
+  withQueryStats(() => {
+    const started = performance.now();
+    res.on("finish", () => {
+      const stats = currentQueryStats();
+      if (!stats) return;
+      const timing = summarizeQueryStats(stats, started);
+      const heavy =
+        stats.count >= QUERY_COUNT_WARN || stats.totalMs >= QUERY_TIME_WARN_MS;
+      if (!heavy && !REQUEST_TIMING_LOG) return;
+      const line = {
+        method: req.method,
+        route: req.baseUrl + (req.route?.path ?? ""),
+        status: res.statusCode,
+        bytes: Number(res.getHeader("content-length")) || null,
+        ...timing,
+      };
+      if (heavy) logger.warn("db-heavy request", line);
+      else logger.info("request timing", line);
+    });
+    next();
+  }),
+);
 
 // Body parsers
 app.use(express.json({ limit: "10mb" }));

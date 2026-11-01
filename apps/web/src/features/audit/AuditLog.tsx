@@ -250,6 +250,11 @@ export default function AuditLog() {
   const { data, loading, error, refetch } = useGet<Entry[]>(
     `/audit-logs?${params}`,
   );
+  // The list has no before/after snapshots; load them for the open row only.
+  const { data: detail } = useGet<Entry>(
+    selected ? `/audit-logs/${selected._id}` : null,
+  );
+  const changes = detail && detail._id === selected?._id ? detail : null;
 
   const q = query.trim().toLowerCase();
   const rows = asList(data).filter(
@@ -417,28 +422,29 @@ export default function AuditLog() {
                   </p>
                 </div>
               </header>
-              {(selected.oldValue != null || selected.newValue != null) && (
-                <Section
-                  title={
-                    selected.oldValue != null && selected.newValue != null
-                      ? "Changes"
-                      : selected.newValue != null
-                        ? "Values"
-                        : "Removed Values"
-                  }
-                  detail={
-                    selected.oldValue != null && selected.newValue != null
-                      ? "Changed fields first"
-                      : undefined
-                  }
-                  headingLevel={3}
-                >
-                  <Changes
-                    before={selected.oldValue}
-                    after={selected.newValue}
-                  />
-                </Section>
-              )}
+              {changes &&
+                (changes.oldValue != null || changes.newValue != null) && (
+                  <Section
+                    title={
+                      changes.oldValue != null && changes.newValue != null
+                        ? "Changes"
+                        : changes.newValue != null
+                          ? "Values"
+                          : "Removed Values"
+                    }
+                    detail={
+                      changes.oldValue != null && changes.newValue != null
+                        ? "Changed fields first"
+                        : undefined
+                    }
+                    headingLevel={3}
+                  >
+                    <Changes
+                      before={changes.oldValue}
+                      after={changes.newValue}
+                    />
+                  </Section>
+                )}
               <Section title="Details" headingLevel={3}>
                 <KeyValues
                   items={[

@@ -21,6 +21,7 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { assertConfirmedWriteTarget } from "./scriptGuard";
 const CLEANUP = process.argv.includes("--cleanup");
 
 const masterPrisma = new PrismaClient({
@@ -112,6 +113,7 @@ const BUSINESS_COLLECTIONS = [
 ];
 
 async function main() {
+  assertConfirmedWriteTarget("migrate-to-silo");
   // ── 1. Fetch all tenants ──────────────────────────────────────────────────
   const tenants = await findMany(masterPrisma, "tenants", {});
   if (tenants.length === 0) {

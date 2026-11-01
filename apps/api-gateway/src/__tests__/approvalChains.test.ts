@@ -380,24 +380,19 @@ describe("listPendingApprovals", () => {
     // leave is resolved before resignation by getPendingApprovalsFor, but
     // the resignation instance is newer and must sort to the top.
     mockGetPendingApprovalsFor.mockResolvedValue([
-      { instanceId: "i-leave", module: "leave", entityId: "l1", stepOrder: 1 },
+      {
+        instanceId: "i-leave",
+        module: "leave",
+        entityId: "l1",
+        stepOrder: 1,
+        requestedBy: "u2",
+        createdAt: new Date("2026-01-01"),
+      },
       {
         instanceId: "i-res",
         module: "resignation",
         entityId: "r1",
         stepOrder: 1,
-      },
-    ]);
-    mockApprovalInstanceFindMany.mockResolvedValue([
-      {
-        id: "i-leave",
-        module: "leave",
-        requestedBy: "u2",
-        createdAt: new Date("2026-01-01"),
-      },
-      {
-        id: "i-res",
-        module: "resignation",
         requestedBy: "u3",
         createdAt: new Date("2026-01-10"),
       },

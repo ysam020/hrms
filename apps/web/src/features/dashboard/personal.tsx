@@ -9,7 +9,14 @@ import {
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { useAttendanceData } from "@web/shared/hooks/useAttendanceData";
 import { TransitionLink } from "@next/motion";
-import { Button, EmptyState, Icon, Skeleton, type IconName } from "@next/ui";
+import {
+  Button,
+  DateTile,
+  EmptyState,
+  Icon,
+  Skeleton,
+  type IconName,
+} from "@next/ui";
 import { apiClient, isCanceled } from "@next/lib/api";
 import { fmtDateShort, fmtTime, plural } from "@next/lib/format";
 import { usePunch } from "./usePunch";
@@ -336,19 +343,39 @@ export function Announcements({ items }: { items: any[] }) {
   const list = (items || []).slice(0, 3);
   if (list.length === 0)
     return (
-      <p className="px-tertiary px-callout">No announcements right now.</p>
+      <EmptyState icon="megaphone" title="No announcements right now">
+        New ones from HR show up here.
+      </EmptyState>
     );
+  // Same look as the HR Activities feed: a date tile, then the post.
   return (
     <div className={s.news}>
-      {list.map((a: any) => (
-        <article key={a._id || a.id || a.title} className={s.newsItem}>
-          <span className="px-meta">{fmtDateShort(a.date || a.createdAt)}</span>
-          <h3 className={s.newsTitle}>{a.title}</h3>
-          {a.description && (
-            <p className={s.newsBody}>{stripHtml(a.description)}</p>
-          )}
-        </article>
-      ))}
+      {list.map((a: any) => {
+        const when = a.date || a.createdAt;
+        return (
+          <article key={a._id || a.id || a.title} className={s.newsItem}>
+            {when ? <DateTile date={when} /> : <span aria-hidden />}
+            <div className={s.newsContent}>
+              <h3 className={s.newsTitle}>{a.title}</h3>
+              <p className={s.newsWhen}>
+                <span>
+                  <Icon name="calendar" size={14} />
+                  {fmtDateShort(when)}
+                </span>
+                {a.time && (
+                  <span>
+                    <Icon name="clock" size={14} />
+                    {a.time}
+                  </span>
+                )}
+              </p>
+              {a.description && (
+                <p className={s.newsBody}>{stripHtml(a.description)}</p>
+              )}
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -422,34 +449,36 @@ export function Agenda({ data }: { data: PersonalData }) {
       </EmptyState>
     );
   return (
-    <div>
-      {groups.map(([k, items]) => (
-        <div key={k} className={s.agendaDay}>
-          <p
-            className={s.agendaDate}
-            data-today={dayLabel(k) === "Today" || undefined}
-          >
-            {dayLabel(k)}
-          </p>
-          {items.map((e, i) => (
-            <div key={i} className={s.agendaItem}>
-              <span
-                className={s.agendaIcon}
-                style={{
-                  background: `var(--px-${e.tone}-soft)`,
-                  color: `var(--px-${e.tone})`,
-                }}
-              >
-                <Icon name={e.icon} />
-              </span>
-              <span className={s.agendaText}>
-                <span className={s.agendaTitle}>{e.title}</span>
-                {e.meta && <span className={s.agendaMeta}>{e.meta}</span>}
-              </span>
-            </div>
-          ))}
-        </div>
-      ))}
+    <div className={s.agendaFrame}>
+      <div className={s.agendaList} tabIndex={0} aria-label="Coming up">
+        {groups.map(([k, items]) => (
+          <div key={k} className={s.agendaDay}>
+            <p
+              className={s.agendaDate}
+              data-today={dayLabel(k) === "Today" || undefined}
+            >
+              {dayLabel(k)}
+            </p>
+            {items.map((e, i) => (
+              <div key={i} className={s.agendaItem}>
+                <span
+                  className={s.agendaIcon}
+                  style={{
+                    background: `var(--px-${e.tone}-soft)`,
+                    color: `var(--px-${e.tone})`,
+                  }}
+                >
+                  <Icon name={e.icon} />
+                </span>
+                <span className={s.agendaText}>
+                  <span className={s.agendaTitle}>{e.title}</span>
+                  {e.meta && <span className={s.agendaMeta}>{e.meta}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

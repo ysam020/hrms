@@ -11,6 +11,7 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { assertConfirmedWriteTarget } from "./scriptGuard";
 const BONAMI_TENANT_ID = "6a0bd765f9ff1bdc7c809931";
 const BONAMI_DB = "hrms-bonami-software";
 
@@ -94,6 +95,7 @@ async function fixFields(
 }
 
 async function main() {
+  assertConfirmedWriteTarget("fix-bonami-dates");
   console.log("=== Fix String Dates ===\n");
 
   // ── Master DB: users (joining_date, kyc_date, createdAt, updatedAt) ────────

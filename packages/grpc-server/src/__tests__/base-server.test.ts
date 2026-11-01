@@ -30,6 +30,9 @@ jest.mock("fs", () => ({
 jest.mock("@hrms/db", () => ({
   runWithTenant: jest.fn((_tid, _client, fn) => fn()),
   getClientForDb: jest.fn(() => ({ __tenantClient: true })),
+  withQueryStats: (fn: () => unknown) => fn(),
+  currentQueryStats: jest.fn(() => undefined),
+  summarizeQueryStats: jest.fn(),
 }));
 
 jest.mock("@hrms/logger", () => ({

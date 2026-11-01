@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { markHandlerStart } from "@hrms/db";
 import { notificationClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { logger } from "@hrms/logger";
@@ -8,6 +9,7 @@ import { parsePagination } from "../utils/pagination";
 
 export async function getNotifications(req: Request, res: Response) {
   const { user } = req as AuthRequest;
+  markHandlerStart();
   try {
     const response = await grpcCall(notificationClient, "getNotifications", {
       userId: user!.userId,

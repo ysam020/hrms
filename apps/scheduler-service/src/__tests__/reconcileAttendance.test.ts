@@ -2,7 +2,10 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { prisma, getClientForDb, runWithTenant } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
-import { reconcileAttendance } from "../jobs/reconcileAttendance";
+import {
+  reconcileAttendance,
+  ledgerEntries,
+} from "../jobs/reconcileAttendance";
 
 dayjs.extend(utc);
 
@@ -334,5 +337,32 @@ describe("reconcileAttendance", () => {
       (r: any) => dayjs.utc(r.date).format("YYYY-MM-DD") === "2024-03-02",
     );
     expect(saturday?.status).not.toBe("Week Off");
+  });
+});
+
+describe("ledgerEntries", () => {
+  const e = (month: number) => ({
+    month,
+    year: 2026,
+    earnedPL: 1,
+    usedPL: 0,
+    usedLWP: 0,
+    remainingPL: 1,
+  });
+
+  it("returns an array ledger as-is", () => {
+    expect(ledgerEntries([e(1), e(2)])).toEqual([e(1), e(2)]);
+  });
+
+  it("recovers numbered entries from a hybrid, in order, dropping flat keys", () => {
+    expect(ledgerEntries({ "10": e(11), "2": e(3), "0": e(1), PL: 9 })).toEqual(
+      [e(1), e(3), e(11)],
+    );
+  });
+
+  it("treats a flat map or nothing as an empty ledger", () => {
+    expect(ledgerEntries({ PL: 9 })).toEqual([]);
+    expect(ledgerEntries(null)).toEqual([]);
+    expect(ledgerEntries(undefined)).toEqual([]);
   });
 });

@@ -5,6 +5,8 @@ import {
   prisma as masterPrisma,
   prismaWithTenant as prisma,
   getTenantId,
+  markHandlerStart,
+  limitReads,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
@@ -117,18 +119,49 @@ async function activeDepartments(): Promise<string[]> {
     .sort((a, b) => a.localeCompare(b));
 }
 
-async function loadLayout(caller: Caller): Promise<{
+function findPreference(tenantId: string, userId: string) {
+  return prisma.dashboardPreference.findUnique({
+    where: { tenantId_userId: { tenantId, userId } },
+  });
+}
+
+/**
+ * The caller and the saved layout row, read concurrently — the row only
+ * needs ids from the token, so it needn't wait for resolveCaller. When the
+ * token's role already grants HR, the department list (needed to validate a
+ * saved layout) starts at the same time too; a superuser without an HR role
+ * still gets it, just one step later, from loadLayout.
+ */
+async function resolveCallerAndPreference(req: AuthRequest) {
+  const tenantId = (getTenantId() ?? req.user!.tenantId)!;
+  const departments = hasPrivilegedRole(req.user!.tenantRole ?? "", HR_ROLES)
+    ? activeDepartments()
+    : undefined;
+  // Settle the speculative read now so a failure surfaces where it's used.
+  departments?.catch(() => undefined);
+  const [caller, preference] = await Promise.all([
+    resolveCaller(req),
+    findPreference(tenantId, req.user!.userId),
+  ]);
+  return [caller, preference, departments] as const;
+}
+
+async function loadLayout(
+  caller: Caller,
+  preference?: Awaited<ReturnType<typeof findPreference>>,
+  prefetchedDepartments?: Promise<string[]>,
+): Promise<{
   layout: LayoutEntry[];
   customized: boolean;
   departments: string[];
 }> {
   const [row, departments] = await Promise.all([
-    prisma.dashboardPreference.findUnique({
-      where: {
-        tenantId_userId: { tenantId: caller.tenantId, userId: caller.userId },
-      },
-    }),
-    caller.capabilities.hr ? activeDepartments() : Promise.resolve([]),
+    preference !== undefined
+      ? preference
+      : findPreference(caller.tenantId, caller.userId),
+    caller.capabilities.hr
+      ? (prefetchedDepartments ?? activeDepartments())
+      : Promise.resolve([]),
   ]);
   const dynamic = { teams: caller.teams.map((t) => t.id), departments };
   if (!row || row.version !== PREFERENCES_VERSION)
@@ -186,8 +219,13 @@ function describe(caller: Caller, departments: string[]) {
 /** GET /dashboard */
 export async function getDashboard(req: AuthRequest, res: Response) {
   try {
-    const caller = await resolveCaller(req);
-    const { layout, customized, departments } = await loadLayout(caller);
+    const [caller, preference, prefetched] =
+      await resolveCallerAndPreference(req);
+    const { layout, customized, departments } = await loadLayout(
+      caller,
+      preference,
+      prefetched,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: {
         version: PREFERENCES_VERSION,
@@ -281,13 +319,34 @@ const personSelect = {
   designation: true,
 } as const;
 
+// One dashboard request runs many widgets at once and several read the same
+// tenant-wide figure (active headcount, pending advances, settings). Each
+// such read is shared within the request; nothing outlives it.
+const requestMemo = new WeakMap<Caller, Map<string, Promise<unknown>>>();
+function once<T>(caller: Caller, key: string, load: () => Promise<T>) {
+  let memo = requestMemo.get(caller);
+  if (!memo) requestMemo.set(caller, (memo = new Map()));
+  if (!memo.has(key)) memo.set(key, load());
+  return memo.get(key) as Promise<T>;
+}
+const activeHeadcount = (caller: Caller) =>
+  once(caller, "activeHeadcount", () =>
+    prisma.user.count({ where: { employeeStatus: "Active" } }),
+  );
+const pendingAdvances = (caller: Caller) =>
+  once(caller, "pendingAdvances", () =>
+    prisma.salaryAdvance.count({ where: { status: "Pending" } }),
+  );
+const tenantSettings = (caller: Caller) =>
+  once(caller, "settings", () => getActiveSettings(caller.tenantId));
+
 /** Whether today is a working day for the tenant (work week and holidays). */
 async function dayType(
-  tenantId: string,
+  caller: Caller,
 ): Promise<"working" | "weekoff" | "holiday"> {
   const today = todayStart();
   const [settings, holidayDoc] = await Promise.all([
-    getActiveSettings(tenantId).catch(() => null),
+    tenantSettings(caller).catch(() => null),
     prisma.holiday.findFirst({
       where: { year: today.year(), month: today.month() + 1 },
     }),
@@ -306,16 +365,26 @@ async function dayType(
  * "absent": the day isn't over and no shift times exist to judge lateness.
  */
 async function statusToday(userIds: string[]) {
+  return summarizeToday(userIds, await todayActivity(userIds));
+}
+
+/**
+ * Today's attendance, approved leave and approved WFH rows — for the given
+ * people, or for everyone (null) so the read needn't wait for the id list.
+ * Each tenant has its own database, so "everyone" is this tenant only.
+ */
+async function todayActivity(userIds: string[] | null) {
   const start = todayStart().toDate();
   const end = todayStart().endOf("day").toDate();
+  const who = userIds ? { userId: { in: userIds } } : {};
   const [records, leaves, wfh] = await Promise.all([
     prisma.attendanceRecord.findMany({
-      where: { userId: { in: userIds }, date: start },
+      where: { ...who, date: start },
       select: { userId: true, timeIn: true, timeOut: true },
     }),
     prisma.leaveApplication.findMany({
       where: {
-        userId: { in: userIds },
+        ...who,
         status: "Approved",
         from: { lte: end },
         to: { gte: start },
@@ -324,7 +393,7 @@ async function statusToday(userIds: string[]) {
     }),
     prisma.wfhRequest.findMany({
       where: {
-        userId: { in: userIds },
+        ...who,
         status: "Approved",
         date: { lte: start },
         toDate: { gte: start },
@@ -332,6 +401,13 @@ async function statusToday(userIds: string[]) {
       select: { userId: true },
     }),
   ]);
+  return { records, leaves, wfh };
+}
+
+function summarizeToday(
+  userIds: string[],
+  { records, leaves, wfh }: Awaited<ReturnType<typeof todayActivity>>,
+) {
   const rec = new Map(records.map((r) => [r.userId, r]));
   const leave = new Map(leaves.map((l) => [l.userId, l]));
   const remote = new Set(wfh.map((w) => w.userId));
@@ -375,7 +451,7 @@ const loaders: Record<string, Loader> = {
         select: personSelect,
       }),
       statusToday(ids),
-      dayType(caller.tenantId),
+      dayType(caller),
     ]);
     const byId = new Map(statuses.map((x) => [x.id, x]));
     const members = people
@@ -443,12 +519,14 @@ const loaders: Record<string, Loader> = {
   "org-today": async (caller, s) => {
     const where: any = { employeeStatus: "Active" };
     if (s.department && s.department !== "all") where.department = s.department;
-    const people = await prisma.user.findMany({ where, select: { id: true } });
-    const ids = people.map((p) => p.id);
-    const [statuses, today] = await Promise.all([
-      statusToday(ids),
-      dayType(caller.tenantId),
+    // People, today's activity and the day type are independent reads.
+    const [people, activity, today] = await Promise.all([
+      prisma.user.findMany({ where, select: { id: true } }),
+      todayActivity(null),
+      dayType(caller),
     ]);
+    const ids = people.map((p) => p.id);
+    const statuses = summarizeToday(ids, activity);
     const n = (k: string) => statuses.filter((x) => x.status === k).length;
     return {
       dayType: today,
@@ -463,11 +541,11 @@ const loaders: Record<string, Loader> = {
     };
   },
 
-  workforce: async () => {
+  workforce: async (caller) => {
     const monthStart = dayjs.utc().startOf("month").toDate();
     const monthEnd = dayjs.utc().endOf("month").toDate();
     const [active, depts, joiners, leaving] = await Promise.all([
-      prisma.user.count({ where: { employeeStatus: "Active" } }),
+      activeHeadcount(caller),
       prisma.user.groupBy({
         by: ["department"],
         where: { employeeStatus: "Active" },
@@ -575,9 +653,7 @@ const loaders: Record<string, Loader> = {
         q(c.assets, () =>
           prisma.assetIssue.count({ where: { status: "open" } }),
         ),
-        q(c.advances, () =>
-          prisma.salaryAdvance.count({ where: { status: "Pending" } }),
-        ),
+        q(c.advances, () => pendingAdvances(caller)),
         q(c.joinRequests, () =>
           masterPrisma.tenantJoinRequest.count({
             where: { tenantId: caller.tenantId, status: "pending" },
@@ -658,7 +734,7 @@ const loaders: Record<string, Loader> = {
     const days = Number(s.days) || 14;
     const start = todayStart().subtract(days - 1, "day");
     const [settings, records, active, holidayDocs] = await Promise.all([
-      getActiveSettings(caller.tenantId).catch(() => null),
+      tenantSettings(caller).catch(() => null),
       prisma.attendanceRecord.findMany({
         where: {
           date: { gte: start.toDate(), lte: todayStart().toDate() },
@@ -666,7 +742,7 @@ const loaders: Record<string, Loader> = {
         },
         select: { date: true, userId: true },
       }),
-      prisma.user.count({ where: { employeeStatus: "Active" } }),
+      activeHeadcount(caller),
       prisma.holiday.findMany({
         where: {
           year: { in: [...new Set([start.year(), dayjs.utc().year()])] },
@@ -770,7 +846,7 @@ const loaders: Record<string, Loader> = {
         where: { status: { in: ["draft", "approved"] } },
       }),
       caller.capabilities.advances
-        ? prisma.salaryAdvance.count({ where: { status: "Pending" } })
+        ? pendingAdvances(caller)
         : Promise.resolve(null),
     ]);
     return { latest, openRuns: open, pendingAdvances: advances };
@@ -1006,13 +1082,18 @@ const loaders: Record<string, Loader> = {
 /** GET /dashboard/data?ids=a,b,c */
 export async function getDashboardData(req: AuthRequest, res: Response) {
   try {
+    markHandlerStart();
+    // Optional cap on this request's concurrent reads (unset = unbounded);
+    // see docs/performance/targeted-api-latency-investigation.md.
+    limitReads(Number(process.env.DASHBOARD_MAX_INFLIGHT_READS) || null);
     const requested = String(req.query.ids ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
       .slice(0, WIDGETS.length);
-    const caller = await resolveCaller(req);
-    const { layout } = await loadLayout(caller);
+    const [caller, preference, prefetched] =
+      await resolveCallerAndPreference(req);
+    const { layout } = await loadLayout(caller, preference, prefetched);
     const settingsFor = new Map(layout.map((e) => [e.id, e.settings]));
 
     const results = await Promise.all(

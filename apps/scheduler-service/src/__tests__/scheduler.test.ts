@@ -15,7 +15,11 @@ jest.mock("@hrms/logger", () => ({
 }));
 
 import { logger } from "@hrms/logger";
-import { registerScheduledJobs } from "../scheduler";
+import {
+  registerScheduledJobs,
+  unregisterScheduledJobs,
+  isSchedulerEnabled,
+} from "../scheduler";
 
 describe("registerScheduledJobs", () => {
   beforeEach(() => {
@@ -68,5 +72,31 @@ describe("registerScheduledJobs", () => {
     await registerScheduledJobs();
     expect(mockRemoveRepeatableByKey).not.toHaveBeenCalled();
     expect(mockAdd).toHaveBeenCalledTimes(10);
+  });
+});
+
+describe("scheduler opt-in (shared-database safety)", () => {
+  const original = process.env.SCHEDULER_ENABLED;
+  afterEach(() => {
+    if (original === undefined) delete process.env.SCHEDULER_ENABLED;
+    else process.env.SCHEDULER_ENABLED = original;
+  });
+
+  it('is disabled unless SCHEDULER_ENABLED is exactly "true"', () => {
+    for (const v of [undefined, "", "false", "1", "TRUE", "yes"]) {
+      if (v === undefined) delete process.env.SCHEDULER_ENABLED;
+      else process.env.SCHEDULER_ENABLED = v;
+      expect(isSchedulerEnabled()).toBe(false);
+    }
+    process.env.SCHEDULER_ENABLED = "true";
+    expect(isSchedulerEnabled()).toBe(true);
+  });
+
+  it("removes stale repeatable jobs without registering new ones", async () => {
+    jest.clearAllMocks();
+    mockGetRepeatableJobs.mockResolvedValue([{ key: "a" }, { key: "b" }]);
+    await expect(unregisterScheduledJobs()).resolves.toBe(2);
+    expect(mockRemoveRepeatableByKey).toHaveBeenCalledTimes(2);
+    expect(mockAdd).not.toHaveBeenCalled();
   });
 });

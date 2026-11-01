@@ -35,6 +35,8 @@ jest.mock("@hrms/db", () => {
     tenant: model(),
   };
   return {
+    markHandlerStart: jest.fn(),
+    limitReads: jest.fn(),
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("tenant-a"),

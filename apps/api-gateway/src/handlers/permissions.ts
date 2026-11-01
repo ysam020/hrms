@@ -404,7 +404,12 @@ export async function deleteUserRole(req: Request, res: Response) {
 // stored on Team.teamLeaderId/members into display-ready
 // {username, name, designation, employeePhoto} so neither the Teams admin
 // page nor the org chart has to show bare IDs.
-async function resolveUserNames(ids: string[]): Promise<
+async function resolveUserNames(
+  ids: string[],
+  // Users already loaded with the same fields; only ids not among them are
+  // queried, so a caller holding the active roster usually needs no query.
+  known: any[] = [],
+): Promise<
   Map<
     string,
     {
@@ -415,20 +420,23 @@ async function resolveUserNames(ids: string[]): Promise<
     }
   >
 > {
-  const uniqueIds = [...new Set(ids)];
-  const users = await prisma.user.findMany({
-    where: { id: { in: uniqueIds } },
-    select: {
-      id: true,
-      username: true,
-      first_name: true,
-      last_name: true,
-      designation: true,
-      employee_photo: true,
-    },
-  });
+  const knownIds = new Set(known.map((u: any) => u.id));
+  const missing = [...new Set(ids)].filter((id) => !knownIds.has(id));
+  const fetched = missing.length
+    ? await prisma.user.findMany({
+        where: { id: { in: missing } },
+        select: {
+          id: true,
+          username: true,
+          first_name: true,
+          last_name: true,
+          designation: true,
+          employee_photo: true,
+        },
+      })
+    : [];
   return new Map(
-    users.map((u: any) => [
+    [...known, ...fetched].map((u: any) => [
       u.id,
       {
         username: u.username,
@@ -542,6 +550,7 @@ export async function getOrgChart(_req: Request, res: Response) {
 
     const nameById = await resolveUserNames(
       teams.flatMap((t: any) => [t.teamLeaderId, ...t.members]),
+      activeUsers,
     );
     const describe = (id: string) =>
       nameById.get(id) ?? {

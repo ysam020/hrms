@@ -5,6 +5,7 @@ import {
   consumeCompOffCredits,
   restoreCompOffCredits,
   adjustBalance,
+  ensureTrackedBalance,
 } from "../handlers/leaveBalanceHelpers";
 
 jest.mock("@hrms/db", () => {
@@ -16,6 +17,7 @@ jest.mock("@hrms/db", () => {
     leaveBalance: {
       findFirst: jest.fn(),
       updateMany: jest.fn(),
+      create: jest.fn(),
     },
   };
   return {
@@ -184,6 +186,63 @@ describe("adjustBalance", () => {
     expect(mockBalanceUpdateMany).toHaveBeenNthCalledWith(2, {
       where: { id: "b1", updatedAt: freshUpdatedAt },
       data: { balances: { PL: 8 } },
+    });
+  });
+});
+
+describe("ensureTrackedBalance on a monthly-ledger row", () => {
+  beforeEach(() => jest.clearAllMocks());
+  const settings = {
+    leavePolicies: [],
+    paidLeavesPerYear: 12,
+    sickLeavesPerYear: 6,
+    casualLeavesPerYear: 6,
+  };
+
+  it("leaves an array ledger untouched instead of spreading it into a hybrid", async () => {
+    mockBalanceFindFirst.mockResolvedValue({
+      id: "b1",
+      balances: [
+        {
+          month: 10,
+          year: 2026,
+          earnedPL: 1,
+          usedPL: 0,
+          usedLWP: 0,
+          remainingPL: 1,
+        },
+      ],
+      updatedAt: new Date("2026-01-01"),
+    });
+    await expect(
+      ensureTrackedBalance("t1", "u1", "PL", settings),
+    ).resolves.toBeNull();
+    expect(mockBalanceUpdateMany).not.toHaveBeenCalled();
+    expect((prisma as any).leaveBalance.create).not.toHaveBeenCalled();
+  });
+
+  it("still seeds a flat-map row", async () => {
+    mockBalanceFindFirst.mockResolvedValue({
+      id: "b1",
+      balances: { SL: 5 },
+      updatedAt: new Date("2026-01-01"),
+    });
+    mockBalanceUpdateMany.mockResolvedValue({ count: 1 });
+    await expect(
+      ensureTrackedBalance("t1", "u1", "PL", settings),
+    ).resolves.toBe(12);
+    expect(mockBalanceUpdateMany.mock.calls[0][0].data.balances).toEqual({
+      SL: 5,
+      PL: 12,
+    });
+  });
+
+  it("reads the oldest row when duplicates exist", async () => {
+    mockBalanceFindFirst.mockResolvedValue(null);
+    (prisma as any).leaveBalance.create.mockResolvedValue({});
+    await ensureTrackedBalance("t1", "u1", "PL", settings);
+    expect(mockBalanceFindFirst.mock.calls[0][0].orderBy).toEqual({
+      id: "asc",
     });
   });
 });

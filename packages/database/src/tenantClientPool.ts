@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { logger } from "@hrms/logger";
 import { attachAuditLogging } from "./auditMiddleware";
+import { attachQueryTiming } from "./queryTiming";
 
 // Every service process (api-gateway, each microservice, notification worker,
 // scheduler jobs) holds its own copy of this pool
@@ -80,6 +81,7 @@ export function getClientForDb(dbName: string): PrismaClient {
       { emit: "stdout", level: "warn" },
     ],
   });
+  attachQueryTiming(client, "tenant");
   attachAuditLogging(client);
   pool.set(dbName, { client, lastUsed: Date.now() });
   logger.info(`Tenant DB client created for "${dbName}"`);

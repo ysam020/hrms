@@ -14,6 +14,7 @@
 import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 
+import { assertConfirmedWriteTarget } from "./scriptGuard";
 const masterPrisma = new PrismaClient({
   datasourceUrl: process.env.DEV_MONGODB_URI,
 });
@@ -24,6 +25,7 @@ function buildUrl(dbName: string): string {
 }
 
 async function main() {
+  assertConfirmedWriteTarget("push-to-all-tenants");
   const tenants = await masterPrisma.tenant.findMany({
     where: { dbName: { not: null } },
     select: { name: true, dbName: true },

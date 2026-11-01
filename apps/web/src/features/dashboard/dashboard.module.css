@@ -28,6 +28,19 @@
 .cell > section {
   margin: 0;
 }
+/* A "fill" cell stretches to its row (set by the neighbouring widget) and
+   hands that height to its section, whose body scrolls inside it. */
+.cell[data-fill] {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.cell[data-fill] > section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
 /* ── Shared bits ─────────────────────────────────────────────────────── */
 .stack {
@@ -87,6 +100,21 @@
 }
 a.row:hover .rowTitle {
   color: var(--px-accent);
+}
+/* Tinted icon square leading a row (colour set inline from the tone). */
+.rowIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+/* Status summary above a list. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .when {
   flex: none;
@@ -172,6 +200,11 @@ a.row:hover .rowTitle {
 .queueRow > span:first-child {
   flex: 1;
   min-width: 0;
+}
+.queueLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
 }
 .queueRow b {
   font: 600 17px/1 var(--px-font-rounded);

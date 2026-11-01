@@ -432,11 +432,6 @@ export async function getPendingApprovalItems(
   const pending = await getPendingApprovalsFor(tenantId, userId);
   if (pending.length === 0) return [];
 
-  const instances = await (prisma as any).approvalInstance.findMany({
-    where: { id: { in: pending.map((p) => p.instanceId) } },
-  });
-  const instanceById = new Map(instances.map((i: any) => [i.id, i]));
-
   const idsByModule = (module: string) =>
     pending.filter((p) => p.module === module).map((p) => p.entityId);
 
@@ -458,7 +453,7 @@ export async function getPendingApprovalItems(
         where: {
           id: {
             in: [
-              ...new Set(instances.map((i: any) => i.requestedBy as string)),
+              ...new Set(pending.map((p) => p.requestedBy).filter(Boolean)),
             ] as string[],
           },
         },
@@ -477,11 +472,8 @@ export async function getPendingApprovalItems(
   );
 
   const data = pending.map((p) => {
-    const instance = instanceById.get(p.instanceId) as any;
     const requestedByName =
-      requesterNameById.get(instance?.requestedBy) ??
-      instance?.requestedBy ??
-      "Someone";
+      requesterNameById.get(p.requestedBy) ?? p.requestedBy ?? "Someone";
     const entity = entityByModule[p.module]?.get(p.entityId);
     const { summary, detail } = summarizePending(
       p.module,
@@ -493,9 +485,9 @@ export async function getPendingApprovalItems(
       module: p.module,
       entityId: p.entityId,
       stepOrder: p.stepOrder,
-      requestedBy: instance?.requestedBy,
+      requestedBy: p.requestedBy,
       requestedByName,
-      createdAt: instance?.createdAt,
+      createdAt: p.createdAt,
       summary,
       detail,
     };

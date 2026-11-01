@@ -44,6 +44,14 @@ jest.mock("bullmq", () => ({
 const mockUpdateExpiredHrActivities = jest.fn().mockResolvedValue(undefined);
 const mockCheckTicketSla = jest.fn().mockResolvedValue(undefined);
 
+const mockAcquireJobLease = jest.fn().mockResolvedValue(true);
+const mockReleaseJobLease = jest.fn().mockResolvedValue(undefined);
+jest.mock("../utils/jobLease", () => ({
+  acquireJobLease: (...a: any[]) => mockAcquireJobLease(...a),
+  releaseJobLease: (...a: any[]) => mockReleaseJobLease(...a),
+  leaseIdFor: (job: string) => `${job}:period`,
+}));
+
 jest.mock("../jobs/updateExpiredHrActivities", () => ({
   updateExpiredHrActivities: mockUpdateExpiredHrActivities,
 }));
@@ -56,8 +64,9 @@ jest.mock("../jobs/updateEmployeeStatus", () => ({
 jest.mock("../jobs/reconcileAttendance", () => ({
   reconcileAttendance: jest.fn(),
 }));
+const mockUpdateLeaveBalance = jest.fn().mockResolvedValue(undefined);
 jest.mock("../jobs/updateLeaveBalance", () => ({
-  updateLeaveBalance: jest.fn(),
+  updateLeaveBalance: (...a: any[]) => mockUpdateLeaveBalance(...a),
 }));
 jest.mock("../jobs/sendKycReminders", () => ({ sendKycReminders: jest.fn() }));
 jest.mock("../jobs/cleanupFcmTokens", () => ({ cleanupFcmTokens: jest.fn() }));
@@ -179,5 +188,61 @@ describe("startSchedulerWorker", () => {
 
       expect(requestIdStorage.run).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("startSchedulerWorker — run lease", () => {
+  beforeEach(() => {
+    capturedWorkers = [];
+    jest.clearAllMocks();
+    mockAcquireJobLease.mockResolvedValue(true);
+  });
+
+  it("skips the job when another scheduler already holds the period's lease", async () => {
+    mockAcquireJobLease.mockResolvedValueOnce(false);
+    startSchedulerWorker();
+    await capturedWorkers[0].processor({
+      data: { jobName: "updateLeaveBalance" },
+      timestamp: 0,
+    });
+    expect(mockUpdateLeaveBalance).not.toHaveBeenCalled();
+    expect(mockReleaseJobLease).not.toHaveBeenCalled();
+  });
+
+  it("marks the lease done after a successful run", async () => {
+    startSchedulerWorker();
+    await capturedWorkers[0].processor({
+      data: { jobName: "updateLeaveBalance" },
+      timestamp: 0,
+    });
+    expect(mockUpdateLeaveBalance).toHaveBeenCalled();
+    expect(mockReleaseJobLease).toHaveBeenCalledWith(
+      "updateLeaveBalance:period",
+      "done",
+    );
+  });
+
+  it("marks the lease failed and rethrows when the job fails, so a retry can claim it", async () => {
+    mockUpdateLeaveBalance.mockRejectedValueOnce(new Error("partial failure"));
+    startSchedulerWorker();
+    await expect(
+      capturedWorkers[0].processor({
+        data: { jobName: "updateLeaveBalance" },
+        timestamp: 0,
+      }),
+    ).rejects.toThrow("partial failure");
+    expect(mockReleaseJobLease).toHaveBeenCalledWith(
+      "updateLeaveBalance:period",
+      "failed",
+      "partial failure",
+    );
+  });
+
+  it("does not lease ad-hoc per-ticket SLA checks", async () => {
+    startSchedulerWorker();
+    await capturedWorkers[0].processor({
+      data: { jobName: "checkTicketSla", ticketId: "t-1" },
+    });
+    expect(mockAcquireJobLease).not.toHaveBeenCalled();
   });
 });

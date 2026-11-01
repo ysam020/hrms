@@ -1,0 +1,67 @@
+run,phase,endpoint,n,median_ms,p95_ms,p99_ms,max_ms,statuses,bytes_median,server_total_median_ms,middleware_median_ms,queries_median,db_sum_median_ms,db_busy_median_ms,max_inflight_median,downstream_median_ms,label
+"before (baseline, no fixes)",cold page load,POST /refresh-token,8,221,266,268,268,{200: 8},,,,,,,,,Measured
+"before (baseline, no fixes)",burst,attendance-summary,20,59,670,673,673,{200: 20},264,46,6,4,145,38,4,0,Measured
+"before (baseline, no fixes)",burst,dashboard,20,105,713,758,769,{200: 20},5209,98,,4,160,92,3,0,Measured
+"before (baseline, no fixes)",burst,dashboard-combined,20,700,1066,1269,1319,{200: 20},4169,692,4,48,4995,684,38,53,Measured
+"before (baseline, no fixes)",burst,notifications,20,159,781,976,1025,{200: 20},8603,152,5,0,0,0,0,144,Measured
+"before (baseline, no fixes)",burst,org-today,20,635,890,906,910,{200: 20},242,625,4,10,964,618,5,0,Measured
+"before (baseline, no fixes)",conditional,notifications,20,104,440,467,474,{304: 20},0,98,3,0,0,0,0,94,Measured
+"before (baseline, no fixes)",isolated,attendance-summary,30,46,99,235,289,{200: 30},264,40,2,4,136,37,4,0,Measured
+"before (baseline, no fixes)",isolated,dashboard-combined,30,477,809,858,874,{200: 30},4169,468,3,48,4854,460,38,55,Measured
+"before (baseline, no fixes)",isolated,notifications,30,92,468,988,1164,{200: 30},8603,84,3,0,0,0,0,80,Measured
+"before (baseline, no fixes)",isolated,org-today,30,227,275,277,277,{200: 30},242,220,3,10,452,215,5,0,Measured
+"after (fixes, uncapped)",cold page load,POST /refresh-token,8,226,650,666,670,{200: 8},,,,,,,,,Measured
+"after (fixes, uncapped)",burst,attendance-summary,20,88,546,546,546,{200: 20},264,76,10,4,184,63,4,0,Measured
+"after (fixes, uncapped)",burst,dashboard,20,59,545,547,548,{200: 20},5209,52,,4,163,44,4,0,Measured
+"after (fixes, uncapped)",burst,dashboard-combined,20,637,963,1037,1056,{200: 20},4169,628,4,46,7321,618,36,46,Measured
+"after (fixes, uncapped)",burst,notifications,20,67,570,574,575,{200: 20},8603,60,7,0,0,0,0,52,Measured
+"after (fixes, uncapped)",burst,org-today,20,393,795,803,804,{200: 20},242,384,4,10,965,376,6,0,Measured
+"after (fixes, uncapped)",conditional,notifications,20,50,126,259,293,{304: 20},0,45,2,0,0,0,0,42,Measured
+"after (fixes, uncapped)",isolated,attendance-summary,30,44,109,112,112,{200: 30},264,39,2,4,138,36,4,0,Measured
+"after (fixes, uncapped)",isolated,dashboard-combined,30,431,817,873,895,{200: 30},4169,424,3,46,3890,418,36,49,Measured
+"after (fixes, uncapped)",isolated,notifications,30,60,106,126,133,{200: 30},8603,52,2,0,0,0,0,48,Measured
+"after (fixes, uncapped)",isolated,org-today,30,124,184,294,338,{200: 30},242,118,3,10,402,114,6,0,Measured
+"uncapped2 (fixes, uncapped (repeat))",cold page load,POST /refresh-token,8,215,977,1201,1257,{200: 8},,,,,,,,,Measured
+"uncapped2 (fixes, uncapped (repeat))",burst,attendance-summary,20,66,756,759,760,{200: 20},264,58,9,4,156,46,4,0,Measured
+"uncapped2 (fixes, uncapped (repeat))",burst,dashboard,20,56,746,754,756,{200: 20},5209,50,,4,164,43,4,0,Measured
+"uncapped2 (fixes, uncapped (repeat))",burst,dashboard-combined,20,728,951,1020,1038,{200: 20},4169,720,5,46,5884,709,36,47,Measured
+"uncapped2 (fixes, uncapped (repeat))",burst,notifications,20,67,412,511,536,{200: 20},8603,59,5,0,0,0,0,50,Measured
+"uncapped2 (fixes, uncapped (repeat))",burst,org-today,20,694,968,1054,1076,{200: 20},242,684,4,10,1110,674,6,0,Measured
+"uncapped2 (fixes, uncapped (repeat))",conditional,notifications,20,65,137,261,292,{304: 20},0,60,3,0,0,0,0,56,Measured
+"uncapped2 (fixes, uncapped (repeat))",isolated,attendance-summary,30,47,97,112,114,{200: 30},264,41,2,4,142,37,4,0,Measured
+"uncapped2 (fixes, uncapped (repeat))",isolated,dashboard-combined,30,441,983,1096,1104,{200: 30},4169,434,3,46,4053,426,36,49,Measured
+"uncapped2 (fixes, uncapped (repeat))",isolated,notifications,30,55,144,322,394,{200: 30},8603,48,2,0,0,0,0,46,Measured
+"uncapped2 (fixes, uncapped (repeat))",isolated,org-today,30,131,331,377,393,{200: 30},242,123,3,10,415,118,6,0,Measured
+"cap8 (fixes, read cap 8)",cold page load,POST /refresh-token,8,225,266,270,271,{200: 8},,,,,,,,,Measured
+"cap8 (fixes, read cap 8)",burst,attendance-summary,20,67,137,424,496,{200: 20},264,55,10,4,158,42,4,0,Measured
+"cap8 (fixes, read cap 8)",burst,dashboard,20,60,137,419,489,{200: 20},5209,54,,4,164,45,4,0,Measured
+"cap8 (fixes, read cap 8)",burst,dashboard-combined,20,802,925,935,938,{200: 20},4169,796,4,46,3710,788,8,38,Measured
+"cap8 (fixes, read cap 8)",burst,notifications,20,66,142,421,491,{200: 20},8603,56,10,0,0,0,0,44,Measured
+"cap8 (fixes, read cap 8)",burst,org-today,20,192,776,788,791,{200: 20},242,185,5,10,650,178,6,0,Measured
+"cap8 (fixes, read cap 8)",conditional,notifications,20,52,164,308,344,{304: 20},0,46,3,0,0,0,0,43,Measured
+"cap8 (fixes, read cap 8)",isolated,attendance-summary,30,46,112,114,115,{200: 30},264,41,2,4,138,37,4,0,Measured
+"cap8 (fixes, read cap 8)",isolated,dashboard-combined,30,404,813,922,947,{200: 30},4169,396,3,46,2196,390,8,40,Measured
+"cap8 (fixes, read cap 8)",isolated,notifications,30,72,263,761,941,{200: 30},8603,67,3,0,0,0,0,56,Measured
+"cap8 (fixes, read cap 8)",isolated,org-today,30,125,195,199,201,{200: 30},242,118,3,10,400,112,6,0,Measured
+"cap8b (fixes, read cap 8 (repeat))",cold page load,POST /refresh-token,8,215,254,256,256,{200: 8},,,,,,,,,Measured
+"cap8b (fixes, read cap 8 (repeat))",burst,attendance-summary,20,68,574,575,575,{200: 20},264,54,9,4,156,41,4,0,Measured
+"cap8b (fixes, read cap 8 (repeat))",burst,dashboard,20,59,578,630,642,{200: 20},5209,50,,4,157,42,4,0,Measured
+"cap8b (fixes, read cap 8 (repeat))",burst,dashboard-combined,20,764,909,940,948,{200: 20},4169,756,6,46,4444,746,8,40,Measured
+"cap8b (fixes, read cap 8 (repeat))",burst,notifications,20,124,625,662,671,{200: 20},8603,116,8,0,0,0,0,108,Measured
+"cap8b (fixes, read cap 8 (repeat))",burst,org-today,20,178,721,856,889,{200: 20},242,169,6,10,590,160,6,0,Measured
+"cap8b (fixes, read cap 8 (repeat))",conditional,notifications,20,59,323,533,585,{304: 20},0,52,3,0,0,0,0,48,Measured
+"cap8b (fixes, read cap 8 (repeat))",isolated,attendance-summary,30,45,107,242,296,{200: 30},264,40,2,4,136,36,4,0,Measured
+"cap8b (fixes, read cap 8 (repeat))",isolated,dashboard-combined,30,486,742,796,812,{200: 30},4169,478,3,46,2190,468,8,40,Measured
+"cap8b (fixes, read cap 8 (repeat))",isolated,notifications,30,56,237,313,325,{200: 30},8603,49,3,0,0,0,0,45,Measured
+"cap8b (fixes, read cap 8 (repeat))",isolated,org-today,30,128,195,290,329,{200: 30},242,121,3,10,406,116,6,0,Measured
+"cap16 (fixes, read cap 16)",cold page load,POST /refresh-token,8,226,278,286,288,{200: 8},,,,,,,,,Measured
+"cap16 (fixes, read cap 16)",burst,attendance-summary,20,67,633,693,708,{200: 20},264,60,8,4,170,52,4,0,Measured
+"cap16 (fixes, read cap 16)",burst,dashboard,20,57,632,693,708,{200: 20},5209,52,,4,160,42,4,0,Measured
+"cap16 (fixes, read cap 16)",burst,dashboard-combined,20,762,926,928,929,{200: 20},4169,758,4,46,4552,752,16,40,Measured
+"cap16 (fixes, read cap 16)",burst,notifications,20,66,598,746,783,{200: 20},8603,56,4,0,0,0,0,48,Measured
+"cap16 (fixes, read cap 16)",burst,org-today,20,539,868,887,892,{200: 20},242,529,5,10,970,524,6,0,Measured
+"cap16 (fixes, read cap 16)",conditional,notifications,20,55,366,560,609,{304: 20},0,48,3,0,0,0,0,46,Measured
+"cap16 (fixes, read cap 16)",isolated,attendance-summary,30,47,99,107,109,{200: 30},264,41,2,4,141,38,4,0,Measured
+"cap16 (fixes, read cap 16)",isolated,dashboard-combined,30,355,979,1511,1712,{200: 30},4169,346,2,46,2698,338,16,42,Measured
+"cap16 (fixes, read cap 16)",isolated,notifications,30,54,127,305,376,{200: 30},8603,48,2,0,0,0,0,44,Measured
+"cap16 (fixes, read cap 16)",isolated,org-today,30,123,290,3092,4204,{200: 30},242,116,3,10,404,111,6,0,Measured

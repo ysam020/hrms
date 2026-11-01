@@ -145,6 +145,7 @@ import { Metadata } from "@grpc/grpc-js";
 import { getRequestId } from "@hrms/logger";
 import { isRetryableGrpcCode, grpcRetryDelayMs } from "@hrms/grpc-client";
 import { gatewayTenantStorage } from "../middleware/tenantContext";
+import { recordDownstream } from "@hrms/db";
 
 // Default per-call deadline. Without one, a hung downstream service hangs
 // the gateway request indefinitely — bounded only by OS/keepalive timers
@@ -221,6 +222,14 @@ export const grpcCall = <Req, Res>(
   if (actor?.userAgent) meta.add("x-actor-user-agent", actor.userAgent);
 
   const attempt = async (): Promise<Res> => {
+    const started = performance.now();
+    try {
+      return await attemptWithRetries();
+    } finally {
+      recordDownstream(performance.now() - started);
+    }
+  };
+  const attemptWithRetries = async (): Promise<Res> => {
     for (let n = 0; n <= retries; n++) {
       try {
         return await callOnce<Req, Res>(

@@ -124,30 +124,48 @@ const evalRotate = (
     String(PREV_TOKEN_GRACE_SECONDS),
   ) as Promise<[number, string, string]>;
 
+/** Optional out-parameter: where a rotation spent its time (ms). */
+export interface RotationTimings {
+  redisMs: number;
+  mongoMs: number;
+}
+
 export const rotateRefreshToken = async (
   userId: string,
   presentedToken: string,
   newToken: string,
+  timings?: RotationTimings,
 ): Promise<TokenValidation> => {
+  const timed = async <T>(
+    kind: keyof RotationTimings,
+    work: Promise<T>,
+  ): Promise<T> => {
+    const t0 = performance.now();
+    try {
+      return await work;
+    } finally {
+      if (timings) timings[kind] += performance.now() - t0;
+    }
+  };
   const client = getRedisClient();
   const presentedHash = hashToken(presentedToken);
   const newHash = hashToken(newToken);
 
-  let [flag, tokenOut, metaJson] = await evalRotate(
-    client,
-    userId,
-    presentedHash,
-    newHash,
-    newToken,
+  let [flag, tokenOut, metaJson] = await timed(
+    "redisMs",
+    evalRotate(client, userId, presentedHash, newHash, newToken),
   );
 
   if (flag === -1) {
     // No usable cache entry — fall back to MongoDB once (cold cache, or a
     // pre-hash-migration miss), warm the cache, then retry the atomic rotate.
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { refreshToken: true, tenantId: true },
-    });
+    const user = await timed(
+      "mongoMs",
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { refreshToken: true, tenantId: true },
+      }),
+    );
     if (user?.refreshToken) {
       const seedMeta: RefreshTokenMeta = {
         tokenHash: user.refreshToken,
@@ -158,12 +176,9 @@ export const rotateRefreshToken = async (
       await client
         .setex(`refresh:${userId}`, REFRESH_TTL, JSON.stringify(seedMeta))
         .catch(() => {});
-      [flag, tokenOut, metaJson] = await evalRotate(
-        client,
-        userId,
-        presentedHash,
-        newHash,
-        newToken,
+      [flag, tokenOut, metaJson] = await timed(
+        "redisMs",
+        evalRotate(client, userId, presentedHash, newHash, newToken),
       );
     }
   }
@@ -176,9 +191,12 @@ export const rotateRefreshToken = async (
 
   if (flag === 1) {
     // We won the rotation — mirror the new hash onto the Mongo fallback column.
-    await prisma.user
-      .update({ where: { id: userId }, data: { refreshToken: newHash } })
-      .catch(() => {});
+    await timed(
+      "mongoMs",
+      prisma.user
+        .update({ where: { id: userId }, data: { refreshToken: newHash } })
+        .catch(() => {}),
+    );
   }
 
   return {

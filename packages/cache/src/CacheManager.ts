@@ -209,7 +209,17 @@ export class CacheManager {
     entityType?: string,
     customTTL?: number,
   ): Promise<void> {
-    const ttl = customTTL ?? this.getTTL(entityType);
+    // Entity TTLs get ±10% jitter so keys filled together (a cold start, a
+    // tenant-wide invalidation) don't all expire and refill in the same
+    // second. An explicit customTTL is honoured exactly.
+    const baseTTL = customTTL ?? this.getTTL(entityType);
+    const ttl =
+      customTTL === undefined
+        ? Math.max(1, Math.round(baseTTL * (0.9 + Math.random() * 0.2)))
+        : baseTTL;
+    // Index sets must outlive every member written with this base TTL.
+    const indexTTL =
+      customTTL === undefined ? Math.ceil(baseTTL * 1.1) : baseTTL;
     try {
       const redis = getRedisClient();
       const multi = redis.multi();
@@ -222,7 +232,7 @@ export class CacheManager {
       for (const prefix of CacheManager.prefixesOf(key)) {
         const idxKey = `idx:${prefix}`;
         multi.sadd(idxKey, key);
-        multi.expire(idxKey, ttl);
+        multi.expire(idxKey, indexTTL);
       }
       await multi.exec();
       this.setMemoryCache(key, value, ttl);

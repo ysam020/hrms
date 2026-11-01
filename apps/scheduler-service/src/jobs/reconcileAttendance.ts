@@ -13,13 +13,28 @@ import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
 
-interface BalanceEntry {
+export interface BalanceEntry {
   month: number;
   year: number;
   earnedPL: number;
   usedPL: number;
   usedLWP: number;
   remainingPL: number;
+}
+
+/**
+ * The monthly ledger as an array. Older leave-service code could spread the
+ * array into an object ({"0": {...}, "1": {...}, PL: n}); recover the
+ * numbered entries from such a hybrid instead of crashing on it. Anything
+ * else (a flat {PL: n} map, null) has no ledger yet.
+ */
+export function ledgerEntries(raw: unknown): BalanceEntry[] {
+  if (Array.isArray(raw)) return raw as BalanceEntry[];
+  if (!raw || typeof raw !== "object") return [];
+  return Object.keys(raw)
+    .filter((k) => /^\d+$/.test(k))
+    .sort((a, b) => Number(a) - Number(b))
+    .map((k) => (raw as Record<string, BalanceEntry>)[k]);
 }
 
 async function getHolidaysInRange(
@@ -129,9 +144,9 @@ async function processEmployee(
 
   let lb = await (prismaWithTenant as any).leaveBalance.findFirst({
     where: { tenantId: getTenantId(), userId },
+    orderBy: { id: "asc" },
   });
-  const balances: BalanceEntry[] =
-    (lb?.balances as unknown as BalanceEntry[]) ?? [];
+  const balances: BalanceEntry[] = ledgerEntries(lb?.balances);
   const accumulated = lb?.accumulatedPLBeforeCurrentMonth ?? 0;
 
   let targetBalance = balances.find(

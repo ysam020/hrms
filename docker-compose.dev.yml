@@ -31,6 +31,8 @@ services:
         - PORT=9002
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - REQUEST_TIMING_LOG=true # per-request timing lines (no tokens/values); docs/performance/targeted-api-latency-investigation.md
+      - DASHBOARD_MAX_INFLIGHT_READS=${DASHBOARD_MAX_INFLIGHT_READS:-}
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - AUTH_SERVICE_HOST=auth-service
       - USER_SERVICE_HOST=user-service
@@ -79,6 +81,7 @@ services:
         - PORT=50051
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - REQUEST_TIMING_LOG=true # per-request timing lines (no tokens/values); docs/performance/targeted-api-latency-investigation.md
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=auth-service
       - WEB_CONCURRENCY=2
@@ -187,6 +190,7 @@ services:
         - PORT=50055
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - REQUEST_TIMING_LOG=true # per-request timing lines (no tokens/values); docs/performance/targeted-api-latency-investigation.md
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=leave-service
       - WEB_CONCURRENCY=2
@@ -323,6 +327,7 @@ services:
         - PORT=50060
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
+      - REQUEST_TIMING_LOG=true # per-request timing lines (no tokens/values); docs/performance/targeted-api-latency-investigation.md
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=notification-service
       - WEB_CONCURRENCY=2
@@ -378,6 +383,8 @@ services:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
       - SERVICE_NAME=scheduler-service
+      # Never run crons locally: dev shares production's database (see scheduler.ts)
+      - SCHEDULER_ENABLED=false
       - METRICS_PORT=9111
       - LOKI_URL=http://loki:3100
     ports:
