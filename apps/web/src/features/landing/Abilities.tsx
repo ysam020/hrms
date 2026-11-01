@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { motion, useInView, useReducedMotion } from "framer-motion";
-import { arrivedPrerendered } from "@next/app/seo";
+import {
+  AnimatePresence,
+  motion,
+  useInView,
+  useReducedMotion,
+} from "framer-motion";
+import { revealVariants, useEntrance } from "./motion";
 import s from "./abilities.module.css";
 
 /**
@@ -8,32 +13,43 @@ import s from "./abilities.module.css";
  * working offline and the MCP server — drawn as small live vignettes instead
  * of screenshots. The wording inside each one is the app's own (the punch
  * dialog's step messages, the Pending Changes states, a real MCP tool name),
- * so the drawing never promises more than the product does. Each plays once when it scrolls into view; with reduced motion it
- * shows its finished state.
+ * so the drawing never promises more than the product does. Each plays
+ * while it's on screen and replays after a pause, so the row stays alive
+ * without anyone scrolling; off screen it stops. With reduced motion it shows
+ * its finished state.
  */
 
 const EASE = [0.2, 0, 0, 1] as const;
 
-/** Steps through `count` stages once the element is in view. */
+/** How long a finished vignette rests before it plays again. */
+const HOLD = 3600;
+
+/**
+ * Steps through `count` stages while the element is in view, then holds the
+ * last one and starts over. Leaving the viewport stops the clock.
+ */
 function useStages(count: number, delays: number[]) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "0px 0px -20% 0px" });
+  const inView = useInView(ref, { margin: "0px 0px -20% 0px" });
   const reduce = useReducedMotion();
   const [stage, setStage] = useState(0);
+  const [cycle, setCycle] = useState(0);
   useEffect(() => {
     if (!inView) return;
     if (reduce) {
       setStage(count - 1);
       return;
     }
+    setStage(0);
     let total = 0;
     const timers = delays.map((d, i) => {
       total += d;
       return setTimeout(() => setStage(i + 1), total);
     });
+    timers.push(setTimeout(() => setCycle((c) => c + 1), total + HOLD));
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inView, reduce]);
+  }, [inView, reduce, cycle]);
   return { ref, stage };
 }
 
@@ -76,15 +92,17 @@ function Tile({
   body: string;
   children: ReactNode;
 }) {
-  // Prerendered: already on screen, so don't fade in (see Landing's Reveal).
-  const [still] = useState(() => arrivedPrerendered("/"));
+  // Same rule as every landing reveal (motion.tsx): only hidden if it
+  // starts below the fold, never with Reduce Motion.
+  const ref = useRef<HTMLElement>(null);
+  const state = useEntrance(ref);
   return (
     <motion.article
+      ref={ref}
       className={s.tile}
-      initial={still ? false : { opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -10% 0px" }}
-      transition={{ duration: 0.7, ease: EASE }}
+      initial={false}
+      animate={state}
+      variants={revealVariants("media")}
     >
       <div className={s.visual} aria-hidden>
         {children}
@@ -102,13 +120,23 @@ function Tile({
 
 const RING = 2 * Math.PI * 92;
 
+/** The punch dialog's own step messages (useStepMessage), in order. */
+const FACE_STEPS = [
+  null, // not punched in: the Punch In button
+  "Detecting face...",
+  "Slowly turn your head left and right",
+  "Matching with stored face data...",
+  null, // done: Working · Since 9:12 AM
+];
+
 function FaceVignette() {
-  // 0 waiting · 1 turning the head · 2 matched
-  const { ref, stage } = useStages(3, [500, 2200]);
-  const turning = stage === 1;
+  // 0 not punched in · 1 detecting · 2 turning · 3 matching · 4 working
+  const { ref, stage } = useStages(5, [1100, 1000, 2200, 1200]);
+  const turning = stage === 2;
+  const done = stage === 4;
   return (
     <div ref={ref} className={s.face}>
-      <div className={s.viewfinder}>
+      <div className={s.viewfinder} data-off={stage === 0 || undefined}>
         <svg viewBox="0 0 200 200" className={s.faceSvg}>
           <circle cx="100" cy="100" r="92" className={s.ringTrack} />
           <motion.circle
@@ -116,14 +144,15 @@ function FaceVignette() {
             cy="100"
             r="92"
             className={s.ring}
-            data-done={stage === 2 || undefined}
+            data-done={done || undefined}
+            data-matching={stage === 3 || undefined}
             strokeDasharray={RING}
             initial={false}
-            animate={{ strokeDashoffset: stage === 0 ? RING : 0 }}
-            transition={{ duration: stage === 1 ? 2 : 0, ease: "easeInOut" }}
+            animate={{ strokeDashoffset: stage < 2 ? RING : 0 }}
+            transition={{ duration: turning ? 2 : 0, ease: "easeInOut" }}
           />
           <motion.g
-            animate={turning ? { x: [0, -9, 9, 0] } : { x: 0 }}
+            animate={turning ? { x: [0, -9, 9, -6, 0] } : { x: 0 }}
             transition={{ duration: 2, ease: "easeInOut" }}
           >
             <ellipse cx="100" cy="88" rx="30" ry="37" className={s.head} />
@@ -133,23 +162,64 @@ function FaceVignette() {
             />
           </motion.g>
           <path d="M48 172c8-22 28-34 52-34s44 12 52 34" className={s.head} />
+          {/* Detecting: a scan line sweeps the frame. */}
+          {stage === 1 && (
+            <motion.rect
+              x="30"
+              width="140"
+              height="2"
+              rx="1"
+              className={s.scan}
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: [40, 150, 40], opacity: [0, 1, 0] }}
+              transition={{ duration: 1, ease: "easeInOut" }}
+            />
+          )}
         </svg>
         <motion.span
           className={s.check}
           initial={false}
-          animate={{ scale: stage === 2 ? 1 : 0, opacity: stage === 2 ? 1 : 0 }}
-          transition={{ type: "spring", stiffness: 420, damping: 22 }}
+          animate={{ scale: done ? 1 : 0, opacity: done ? 1 : 0 }}
+          transition={{ type: "spring", stiffness: 420, damping: 18 }}
         >
           <svg viewBox="0 0 20 20" width="20" height="20">
             <path d="M5 10.5 8.5 14 15 6.5" />
           </svg>
         </motion.span>
       </div>
-      <span className={s.caption} data-done={stage === 2 || undefined}>
-        {stage === 2
-          ? "Punched in · 9:12 AM"
-          : "Slowly turn your head left and right"}
-      </span>
+      <div className={s.faceStatus}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={stage}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: EASE }}
+            className={s.faceLine}
+          >
+            {stage === 0 ? (
+              <>
+                <span className={s.dot} data-tone="off" />
+                Not Punched In
+                <motion.span
+                  className={s.punch}
+                  animate={{ scale: [1, 1, 0.9, 1] }}
+                  transition={{ duration: 1, times: [0, 0.7, 0.85, 1] }}
+                >
+                  Punch In
+                </motion.span>
+              </>
+            ) : done ? (
+              <span className={s.caption} data-done>
+                <span className={s.dot} data-tone="on" />
+                Working · Since 9:12 AM
+              </span>
+            ) : (
+              <span className={s.caption}>{FACE_STEPS[stage]}</span>
+            )}
+          </motion.span>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,21 @@
-import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+  type MotionValue,
+  type Variants,
+} from "framer-motion";
 import {
   PLAN_PRICING,
   PLAN_TIER_LABELS,
@@ -16,6 +31,19 @@ import { arrivedPrerendered } from "@next/app/seo";
 import { BrandLockup } from "../auth/BrandMark";
 import { MacBookShowcase, type ShowcaseScene } from "./MacBookShowcase";
 import { Abilities } from "./Abilities";
+import { LeaveFlow } from "./LeaveFlow";
+import {
+  MaskedLines,
+  Reveal,
+  RevealItem,
+  dur,
+  ease,
+  stagger,
+  useAmbient,
+  useEntrance,
+  usePointerDepth,
+  useSpotlight,
+} from "./motion";
 import s from "./landing.module.css";
 
 /**
@@ -169,9 +197,14 @@ const STACK: {
   src: string;
   alt: string;
   crop: { x: number; y: number; w: number; h: number };
+  /** How the screen arrives as the card scrolls in (CSS, scroll-driven):
+   *  tilt — rises out of a backward lean; wipe — draws in left to right,
+   *  like the charts on it; swing — turns in from the side. */
+  fx: "tilt" | "wipe" | "swing";
 }[] = [
   {
     id: "approvals",
+    fx: "tilt",
     label: "Approvals",
     title: "Every request. One inbox.",
     body: "Leave, work from home, salary advances and KYC reviews arrive in one place. Decide in a tap, and each request moves through the approval chain you set up.",
@@ -181,6 +214,7 @@ const STACK: {
   },
   {
     id: "organisation",
+    fx: "tilt",
     label: "Organisation",
     title: "Your organisation, mapped.",
     body: "See who leads each team and who belongs where. Permissions follow the structure, scoped to a person’s own records, their team or everyone.",
@@ -190,6 +224,7 @@ const STACK: {
   },
   {
     id: "hiring",
+    fx: "wipe",
     label: "Recruitment",
     title: "Hiring you can follow.",
     body: "Track every applicant from application to offer, with the funnel, roles and hiring managers at a glance.",
@@ -199,6 +234,7 @@ const STACK: {
   },
   {
     id: "insight",
+    fx: "wipe",
     label: "Analytics",
     title: "Answers, not spreadsheets.",
     body: "Workforce, attendance, recruitment and salary analytics are built in. When you need something specific, the report builder exports to CSV.",
@@ -208,6 +244,7 @@ const STACK: {
   },
   {
     id: "chat",
+    fx: "swing",
     label: "Chat",
     title: "Conversations where the work is.",
     body: "One-to-one chat with replies, pinned messages, files and read receipts, right next to the rest of your HR.",
@@ -266,11 +303,6 @@ const SECURITY: { icon: IconName; title: string; body: string }[] = [
     title: "AI assistants on your terms",
     body: "Assistants connect over MCP and sign in as the person: they see only what that person can see and allowed, can’t change anything, and every call is in the audit log.",
   },
-  {
-    icon: "alert",
-    title: "Unusual sign-ins flagged",
-    body: "Sign-ins from a new device, country or hour are scored for risk, and risky ones are emailed to the account owner.",
-  },
 ];
 
 const TIERS: PlanTier[] = ["starter", "growth", "enterprise"];
@@ -295,25 +327,31 @@ export default function Landing() {
   const { user } = useContext(UserContext);
   const signedIn = Boolean(user);
   const [overDark, setOverDark] = useState(true);
+  const [current, setCurrent] = useState<string | null>(null);
   const [still] = useState(settled);
 
   // The bar takes the tone of whatever section is under it: dark over the
-  // hero, security and closing sections, light everywhere else.
+  // hero, security and closing sections, light everywhere else. The same
+  // line under the bar decides which nav link is current.
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
     const dark = new Set<Element>();
+    const under = new Set<HTMLElement>();
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.isIntersecting) dark.add(e.target);
-          else dark.delete(e.target);
+          const el = e.target as HTMLElement;
+          const set = el.dataset.nav ? under : dark;
+          if (e.isIntersecting) set.add(el);
+          else set.delete(el);
         }
         setOverDark(dark.size > 0);
+        setCurrent([...under][0]?.dataset.nav ?? null);
       },
       { rootMargin: `0px 0px ${32 - window.innerHeight}px 0px` },
     );
     document
-      .querySelectorAll("[data-nav-dark]")
+      .querySelectorAll("[data-nav-dark], [data-nav]")
       .forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, []);
@@ -323,77 +361,22 @@ export default function Landing() {
       <a className={s.skip} href="#main">
         Skip to content
       </a>
-      <NavBar tone={overDark ? "dark" : "light"} user={user} />
+      <NavBar
+        tone={overDark ? "dark" : "light"}
+        user={user}
+        current={current}
+      />
 
       <main id="main">
-        <section className={s.hero} data-nav-dark aria-labelledby="hero-title">
-          <div className={s.heroCopy}>
-            {/* The page's subject is the heading; the brand line below is
-                the headline people see. */}
-            <motion.h1
-              id="hero-title"
-              className={s.eyebrow}
-              initial={still ? false : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: [0.2, 0, 0, 1] }}
-            >
-              HRMS software for attendance, leave and payroll
-            </motion.h1>
-            <motion.p
-              className={s.heroTitle}
-              initial={still ? false : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.05, ease: [0.2, 0, 0, 1] }}
-            >
-              People operations,
-              <br /> beautifully connected.
-            </motion.p>
-            <motion.p
-              className={s.heroLead}
-              initial={still ? false : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.1, ease: [0.2, 0, 0, 1] }}
-            >
-              Praesto is HR software that brings attendance, leave, hiring,
-              payroll and approvals for your whole organisation together in one
-              workspace.
-            </motion.p>
-            <motion.div
-              className={s.actions}
-              initial={still ? false : { opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.18, ease: [0.2, 0, 0, 1] }}
-            >
-              <Link
-                to={signedIn ? "/dashboard" : "/login"}
-                className={`${s.cta} ${s.ctaPrimary}`}
-              >
-                {signedIn ? "Open Dashboard" : "Get Started"}
-              </Link>
-              <a href="#features" className={`${s.cta} ${s.ctaGhost}`}>
-                Explore the Platform
-                <Icon name="chevronDown" size={14} />
-              </a>
-            </motion.div>
-          </div>
-
-          <motion.div
-            className={s.heroDevice}
-            initial={still ? false : { opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.25, ease: [0.2, 0, 0, 1] }}
-          >
-            <MacBookShowcase
-              scenes={SCENES}
-              label="Praesto product tour"
-              priority
-            />
-          </motion.div>
-        </section>
+        <Hero still={still} signedIn={signedIn} />
 
         <div id="features" className={s.anchor} />
 
-        <section className={s.stackSection} aria-labelledby="features-title">
+        <section
+          className={s.stackSection}
+          data-nav="features"
+          aria-labelledby="features-title"
+        >
           <Reveal className={s.galleryHead}>
             <h2 id="features-title" className={s.h2}>
               Built for the way people work.
@@ -403,30 +386,36 @@ export default function Landing() {
               the last payroll run of the month.
             </p>
           </Reveal>
-          <ol className={s.stack}>
-            {STACK.map((c, i) => (
-              <li
-                key={c.id}
-                className={s.stackCard}
-                style={{ ["--i" as string]: i }}
-                aria-labelledby={`${c.id}-title`}
-              >
-                <div className={s.stackCopy}>
-                  <span className={s.stackLabel}>{c.label}</span>
-                  <h3 id={`${c.id}-title`} className={s.stackTitle}>
-                    {c.title}
-                  </h3>
-                  <p className={s.stackBody}>{c.body}</p>
-                </div>
-                <div className={s.stackShot}>
-                  <Shot src={c.src} alt={c.alt} crop={c.crop} />
-                </div>
-              </li>
-            ))}
-          </ol>
+          <Stack />
         </section>
 
-        <section className={s.anywhere} aria-labelledby="anywhere-title">
+        <section
+          id="how-it-works"
+          className={s.section}
+          data-nav="features"
+          aria-labelledby="flow-title"
+        >
+          <Reveal className={s.galleryHead}>
+            <h2 id="flow-title" className={s.h2}>
+              One request, start to finish.
+            </h2>
+            <p className={s.lead}>
+              Follow a day of leave through Praesto, from the employee who asks
+              to the record that keeps it.
+            </p>
+            <p className={s.note}>
+              An illustration using the app’s own labels. The people and dates
+              are fictional.
+            </p>
+          </Reveal>
+          <LeaveFlow />
+        </section>
+
+        <section
+          className={s.anywhere}
+          data-nav="features"
+          aria-labelledby="anywhere-title"
+        >
           <Reveal className={s.galleryHead}>
             <h2 id="anywhere-title" className={s.h2}>
               Wherever the work happens.
@@ -437,26 +426,13 @@ export default function Landing() {
               phone, a tablet or a laptop, with nothing to install.
             </p>
           </Reveal>
-          <Reveal className={s.phones} delay={0.06}>
-            <Phone
-              src={`${SHOT}/mobile-approvals.webp`}
-              alt="Praesto on a phone: the Approvals inbox with leave, work-from-home, salary advance and KYC requests."
-            />
-            <Phone
-              src={`${SHOT}/mobile-today.webp`}
-              alt="Praesto on a phone: the Today screen with hours worked, a month of attendance and requests to decide."
-              front
-            />
-            <Phone
-              src={`${SHOT}/mobile-chat.webp`}
-              alt="Praesto on a phone: a chat conversation with a pinned message and a reply."
-            />
-          </Reveal>
+          <Phones />
         </section>
 
         <section
           id="abilities"
           className={`${s.section} ${s.abilities}`}
+          data-nav="features"
           aria-labelledby="abilities-title"
         >
           <Reveal className={s.galleryHead}>
@@ -485,18 +461,15 @@ export default function Landing() {
               workspace as everything else.
             </p>
           </Reveal>
-          <Reveal delay={0.06}>
-            <MacBookShowcase
-              scenes={MORE_SCENES}
-              label="More of Praesto"
-              interval={6000}
-            />
+          <Reveal kind="media" delay={0.06}>
+            <TiltShowcase scenes={MORE_SCENES} label="More of Praesto" />
           </Reveal>
         </section>
 
         <section
           id="modules"
           className={`${s.section} ${s.tintSection}`}
+          data-nav="modules"
           aria-labelledby="modules-title"
         >
           <Reveal className={s.sectionHead}>
@@ -509,25 +482,32 @@ export default function Landing() {
               people, the same permissions and the same approvals.
             </p>
           </Reveal>
-          <Reveal className={s.modules} delay={0.06}>
+          {/* The index fills in column by column, like a contents page. */}
+          <Reveal
+            className={s.modules}
+            kind="group"
+            delay={0.06}
+            stagger={stagger.columns}
+          >
             {MODULES.map((g) => (
-              <div key={g.group} className={s.moduleGroup}>
+              <RevealItem key={g.group} className={s.moduleGroup}>
                 <h3 className={s.moduleHead}>{g.group}</h3>
                 <ul className={s.moduleList}>
                   {g.items.map((m) => (
                     <li key={m}>{m}</li>
                   ))}
                 </ul>
-              </div>
+              </RevealItem>
             ))}
           </Reveal>
         </section>
 
-        <section
+        <LitSection
           id="security"
-          className={`${s.section} ${s.dark}`}
+          className={`${s.section} ${s.dark} ${s.lit}`}
           data-nav-dark
           aria-labelledby="security-title"
+          spotlight
         >
           <Reveal className={s.sectionHead}>
             <h2 id="security-title" className={s.h2}>
@@ -538,58 +518,75 @@ export default function Landing() {
               built so it stays with the people who should see it.
             </p>
           </Reveal>
-          <Reveal className={s.securityShot} delay={0.04}>
+          <Reveal className={s.securityShot} kind="media" delay={0.04}>
             <Shot
               src={`${SHOT}/audit-log.webp`}
               alt="Praesto’s audit log with a settings change open, listing each field’s value before and after."
               crop={{ x: 268, y: 0, w: 1172, h: 700 }}
             />
           </Reveal>
-          <Reveal className={s.security} delay={0.06}>
+          <Reveal className={s.security} kind="group" stagger={stagger.items}>
             {SECURITY.map((f) => (
-              <div key={f.title} className={s.securityItem}>
+              <RevealItem key={f.title} className={s.securityItem}>
                 <Icon name={f.icon} size={20} className={s.securityIcon} />
                 <h3 className={s.h3}>{f.title}</h3>
                 <p>{f.body}</p>
-              </div>
+              </RevealItem>
             ))}
           </Reveal>
-        </section>
+        </LitSection>
 
         <Pricing user={user} />
 
-        <section
+        <LitSection
           className={s.closing}
           data-nav-dark
           aria-labelledby="closing-title"
         >
-          <Reveal className={s.closingInner}>
-            <h2 id="closing-title" className={s.closingTitle}>
-              Bring your people operations together.
-            </h2>
-            <p className={s.lead}>
-              {signedIn
-                ? "Your workspace is ready when you are."
-                : "Sign in with Google and set up your organisation in three short steps."}
-            </p>
-            <div className={s.actions}>
-              {signedIn ? (
-                <Link to="/dashboard" className={`${s.cta} ${s.ctaPrimary}`}>
-                  Open Dashboard
-                </Link>
-              ) : (
-                <>
-                  <Link to="/login" className={`${s.cta} ${s.ctaPrimary}`}>
-                    Get Started
+          <div className={s.aurora} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
+          <div className={s.closingInner}>
+            <ClosingTitle />
+            <Reveal className={s.closingInner} delay={0.36}>
+              <p className={s.lead}>
+                {signedIn
+                  ? "Your workspace is ready when you are."
+                  : "Sign in with Google and set up your organisation in three short steps."}
+              </p>
+              <div className={s.actions}>
+                {signedIn ? (
+                  <Link
+                    to="/dashboard"
+                    className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+                  >
+                    <Roll>Open Dashboard</Roll>
+                    <span className={s.chip} aria-hidden="true">
+                      <Arrow />
+                    </span>
                   </Link>
-                  <Link to="/login" className={`${s.cta} ${s.ctaGhost}`}>
-                    Sign In
-                  </Link>
-                </>
-              )}
-            </div>
-          </Reveal>
-        </section>
+                ) : (
+                  <>
+                    <Link
+                      to="/login"
+                      className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+                    >
+                      <Roll>Get Started</Roll>
+                      <span className={s.chip} aria-hidden="true">
+                        <Arrow />
+                      </span>
+                    </Link>
+                    <Link to="/login" className={`${s.cta} ${s.ctaGhost}`}>
+                      <Roll>Sign In</Roll>
+                    </Link>
+                  </>
+                )}
+              </div>
+            </Reveal>
+          </div>
+        </LitSection>
       </main>
 
       <Footer signedIn={signedIn} />
@@ -597,17 +594,211 @@ export default function Landing() {
   );
 }
 
+// ── Hero ───────────────────────────────────────────────────────────────────
+
+/**
+ * Two real cards from the Today screen, lifted off the laptop as floating
+ * layers. They sit in front of the screen in 3D, so the pointer tilt gives
+ * them their own parallax, and they drift slowly while the hero is in view.
+ */
+const FLOATS = [
+  {
+    id: "day",
+    crop: { x: 276, y: 272, w: 345, h: 132 },
+    side: "left",
+  },
+  {
+    id: "workforce",
+    crop: { x: 1062, y: 700, w: 340, h: 182 },
+    side: "right",
+  },
+] as const;
+
+function Hero({ still, signedIn }: { still: boolean; signedIn: boolean }) {
+  const ref = useRef<HTMLElement>(null);
+  const pointer = usePointerDepth(ref);
+  useAmbient(ref);
+  return (
+    <section
+      ref={ref}
+      className={s.hero}
+      data-nav-dark
+      aria-labelledby="hero-title"
+    >
+      {/* Ambient light: three soft fields drifting on 16–26 s loops. */}
+      <div className={s.aurora} aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </div>
+      <div className={s.heroCopy}>
+        {/* The page's subject is the heading; the brand line below is
+            the headline people see. Its lines rise out of a slot, then
+            the lead, the actions and the product follow. */}
+        <motion.h1
+          id="hero-title"
+          className={s.eyebrow}
+          initial={still ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: dur.text, delay: 0.1, ease: ease.out }}
+        >
+          HRMS software for attendance, leave and payroll
+        </motion.h1>
+        <p className={s.heroTitle}>
+          <MaskedLines
+            lines={["People operations,", "beautifully connected."]}
+            play={!still}
+            delay={0.18}
+            lineClassName={s.line}
+            innerClassName={s.lineInner}
+          />
+        </p>
+        <motion.p
+          className={s.heroLead}
+          initial={still ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: dur.text, delay: 0.5, ease: ease.out }}
+        >
+          Praesto is HR software that brings attendance, leave, hiring, payroll
+          and approvals for your whole organisation together in one workspace.
+        </motion.p>
+        <motion.div
+          className={s.actions}
+          initial={still ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: dur.text, delay: 0.62, ease: ease.out }}
+        >
+          <Link
+            to={signedIn ? "/dashboard" : "/login"}
+            className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+          >
+            <Roll>{signedIn ? "Open Dashboard" : "Get Started"}</Roll>
+            <span className={s.chip} aria-hidden="true">
+              <Arrow />
+            </span>
+          </Link>
+          <a href="#features" className={`${s.cta} ${s.ctaGhost}`}>
+            <Roll>Explore the Platform</Roll>
+            <Icon name="chevronDown" size={14} className={s.nudge} />
+          </a>
+        </motion.div>
+      </div>
+
+      <motion.div
+        className={s.heroDevice}
+        initial={still ? false : { opacity: 0, y: 56 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: dur.media, delay: 0.75, ease: ease.out }}
+      >
+        <MacBookShowcase
+          scenes={SCENES}
+          label="Praesto product tour"
+          priority
+          settle
+          pointer={pointer}
+          overlay={FLOATS.map((f, i) => (
+            <motion.div
+              key={f.id}
+              className={s.float}
+              data-side={f.side}
+              aria-hidden="true"
+              initial={
+                still
+                  ? false
+                  : { opacity: 0, x: f.side === "left" ? -48 : 48, y: 24 }
+              }
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              transition={{
+                duration: dur.media,
+                delay: 1.2 + i * 0.15,
+                ease: ease.out,
+              }}
+            >
+              <div className={s.floatBob}>
+                <Shot src={`${SHOT}/today.webp`} alt="" crop={f.crop} />
+              </div>
+            </motion.div>
+          ))}
+        />
+      </motion.div>
+    </section>
+  );
+}
+
+/**
+ * A label that rolls: hovering slides a second copy up from below (the copy
+ * is aria-hidden, so it's read once).
+ */
+function Roll({ children }: { children: ReactNode }) {
+  return (
+    <span className={s.roll}>
+      <span className={s.rollInner}>
+        <span>{children}</span>
+        <span aria-hidden="true">{children}</span>
+      </span>
+    </span>
+  );
+}
+
+function Arrow() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
 // ── Navigation ─────────────────────────────────────────────────────────────
 
 const NAV_LINKS = [
-  { href: "#features", label: "Features" },
-  { href: "#modules", label: "Modules" },
-  { href: "#pricing", label: "Pricing" },
+  { href: "#features", label: "Features", key: "features" },
+  { href: "#modules", label: "Modules", key: "modules" },
+  { href: "#pricing", label: "Pricing", key: "pricing" },
 ];
 
-function NavBar({ tone, user }: { tone: "dark" | "light"; user: any }) {
+function NavBar({
+  tone,
+  user,
+  current,
+}: {
+  tone: "dark" | "light";
+  user: any;
+  /** The section under the bar, if it has a link. */
+  current: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+
+  // Past the first few pixels the bar tightens and lifts. An attribute, not
+  // state, so scrolling never re-renders the nav.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      el.toggleAttribute("data-scrolled", window.scrollY > 24);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -625,15 +816,27 @@ function NavBar({ tone, user }: { tone: "dark" | "light"; user: any }) {
   }, [open]);
 
   return (
-    <header className={s.nav} data-tone={tone}>
+    <header ref={headerRef} className={s.nav} data-tone={tone}>
       <div className={s.navInner} ref={menuRef}>
         <Link to="/" className={s.brand} aria-label="Praesto home">
           <BrandLockup size={24} inverse={tone === "dark"} />
         </Link>
         <nav aria-label="Primary" className={s.navLinks}>
           {NAV_LINKS.map((l) => (
-            <a key={l.href} href={l.href}>
+            <a
+              key={l.href}
+              href={l.href}
+              aria-current={current === l.key ? "location" : undefined}
+            >
               {l.label}
+              {/* One mark that slides between links as the page scrolls. */}
+              {current === l.key && (
+                <motion.span
+                  layoutId="landing-nav-current"
+                  className={s.navMark}
+                  transition={{ duration: dur.state, ease: ease.state }}
+                />
+              )}
             </a>
           ))}
         </nav>
@@ -664,20 +867,37 @@ function NavBar({ tone, user }: { tone: "dark" | "light"; user: any }) {
             <Icon name={open ? "x" : "more"} size={18} />
           </button>
         </div>
-        {open && (
-          <nav id="landing-menu" aria-label="Sections" className={s.menu}>
-            {NAV_LINKS.map((l) => (
-              <a key={l.href} href={l.href} onClick={() => setOpen(false)}>
-                {l.label}
-              </a>
-            ))}
-            {user ? (
-              <Link to="/dashboard">Open Dashboard</Link>
-            ) : (
-              <Link to="/login">Sign In</Link>
-            )}
-          </nav>
-        )}
+        <AnimatePresence>
+          {open && (
+            <motion.nav
+              id="landing-menu"
+              aria-label="Sections"
+              className={s.menu}
+              initial="closed"
+              animate="open"
+              exit="closed"
+              variants={menuVariants}
+            >
+              {NAV_LINKS.map((l) => (
+                <motion.a
+                  key={l.href}
+                  href={l.href}
+                  variants={menuItem}
+                  onClick={() => setOpen(false)}
+                >
+                  {l.label}
+                </motion.a>
+              ))}
+              <motion.span variants={menuItem} className={s.menuLast}>
+                {user ? (
+                  <Link to="/dashboard">Open Dashboard</Link>
+                ) : (
+                  <Link to="/login">Sign In</Link>
+                )}
+              </motion.span>
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </div>
     </header>
   );
@@ -732,26 +952,162 @@ function AccountMenu({ user }: { user: any }) {
 
 // ── Building blocks ────────────────────────────────────────────────────────
 
-function Reveal({
-  children,
-  className,
-  delay = 0,
-}: {
-  children: ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const [still] = useState(settled);
+/**
+ * The feature deck. Each card pins a little lower than the last (CSS); as the
+ * next one slides over it, the cards underneath shrink a step, so the deck
+ * reads as a stack being dealt rather than cards sliding over each other.
+ */
+function Stack() {
+  const ref = useRef<HTMLOListElement>(null);
+  const reduce = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start start", "end end"],
+  });
   return (
-    <motion.div
-      className={className}
-      initial={still ? false : { opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -12% 0px" }}
-      transition={{ duration: 0.7, delay, ease: [0.2, 0, 0, 1] }}
+    <ol ref={ref} className={s.stack}>
+      {STACK.map((c, i) => (
+        <StackCard
+          key={c.id}
+          card={c}
+          i={i}
+          progress={scrollYProgress}
+          still={Boolean(reduce)}
+        />
+      ))}
+    </ol>
+  );
+}
+
+function StackCard({
+  card: c,
+  i,
+  progress,
+  still,
+}: {
+  card: (typeof STACK)[number];
+  i: number;
+  progress: MotionValue<number>;
+  /** Reduce Motion: the cards don't shrink (or pin; see the CSS). */
+  still: boolean;
+}) {
+  const n = STACK.length;
+  const range = [i / n, 1];
+  const scale = useTransform(progress, range, [1, 1 - (n - 1 - i) * 0.03]);
+  // Covered cards also fall into shade, so the top card always reads first.
+  const dim = useTransform(progress, range, [
+    0,
+    Math.min(0.32, (n - 1 - i) * 0.09),
+  ]);
+  return (
+    <motion.li
+      className={s.stackCard}
+      data-fx={c.fx}
+      style={{
+        ["--i" as string]: i,
+        ...(still ? {} : { scale, ["--dim" as string]: dim }),
+      }}
+      aria-labelledby={`${c.id}-title`}
     >
-      {children}
+      <Reveal className={s.stackCopy} kind="left">
+        <span className={s.stackLabel}>{c.label}</span>
+        <h3 id={`${c.id}-title`} className={s.stackTitle}>
+          {c.title}
+        </h3>
+        <p className={s.stackBody}>{c.body}</p>
+      </Reveal>
+      <div className={s.stackShot}>
+        <Shot src={c.src} alt={c.alt} crop={c.crop} />
+      </div>
+    </motion.li>
+  );
+}
+
+/**
+ * The phones arrive together: the front one rises, and the two beside it
+ * fan out from behind it.
+ */
+function Phones() {
+  const ref = useRef<HTMLDivElement>(null);
+  const state = useEntrance(ref);
+  const reduce = useReducedMotion();
+  // Scroll parallax: the side phones travel further than the front one, so
+  // the row separates into depth as it passes.
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "end start"],
+  });
+  const sideY = useTransform(scrollYProgress, [0, 1], [90, -90]);
+  const farY = useTransform(scrollYProgress, [0, 1], [140, -60]);
+  const frontY = useTransform(scrollYProgress, [0, 1], [30, -30]);
+  const fan = (from: string): Variants => ({
+    hidden: { opacity: 0, x: from, transition: { duration: 0 } },
+    shown: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: dur.media, ease: ease.out, delay: 0.2 },
+    },
+  });
+  // Scale, not travel: y belongs to the scroll parallax.
+  const front: Variants = {
+    hidden: { opacity: 0, scale: 0.92, transition: { duration: 0 } },
+    shown: {
+      opacity: 1,
+      scale: 1,
+      transition: { duration: dur.media, ease: ease.out },
+    },
+  };
+  return (
+    <motion.div ref={ref} className={s.phones} initial={false} animate={state}>
+      <motion.div
+        className={s.phoneSlot}
+        variants={fan("55%")}
+        style={reduce ? undefined : { y: sideY }}
+      >
+        <Phone
+          src={`${SHOT}/mobile-approvals.webp`}
+          alt="Praesto on a phone: the Approvals inbox with leave, work-from-home, salary advance and KYC requests."
+        />
+      </motion.div>
+      <motion.div
+        className={s.phoneSlot}
+        data-front
+        variants={front}
+        style={reduce ? undefined : { y: frontY }}
+      >
+        <Phone
+          src={`${SHOT}/mobile-today.webp`}
+          alt="Praesto on a phone: the Today screen with hours worked, a month of attendance and requests to decide."
+          front
+        />
+      </motion.div>
+      <motion.div
+        className={s.phoneSlot}
+        variants={fan("-55%")}
+        style={reduce ? undefined : { y: farY }}
+      >
+        <Phone
+          src={`${SHOT}/mobile-chat.webp`}
+          alt="Praesto on a phone: a chat conversation with a pinned message and a reply."
+        />
+      </motion.div>
     </motion.div>
+  );
+}
+
+/** The closing line rises the way the hero's did, bookending the page. */
+function ClosingTitle() {
+  const ref = useRef<HTMLHeadingElement>(null);
+  const state = useEntrance(ref);
+  return (
+    <h2 ref={ref} id="closing-title" className={s.closingTitle}>
+      <MaskedLines
+        lines={["Bring your people", "operations together."]}
+        play={state}
+        lineClassName={s.line}
+        innerClassName={s.lineInner}
+      />
+    </h2>
   );
 }
 
@@ -850,6 +1206,69 @@ function Phone({
   );
 }
 
+/** A section that can carry a pointer spotlight; its ambient loops pause off screen. */
+function LitSection({
+  spotlight = false,
+  children,
+  ...props
+}: { spotlight?: boolean; children: ReactNode } & ComponentProps<"section">) {
+  const ref = useRef<HTMLElement>(null);
+  useAmbient(ref);
+  useSpotlight(spotlight ? ref : NO_REF);
+  return (
+    <section ref={ref} {...props}>
+      {children}
+    </section>
+  );
+}
+const NO_REF = { current: null };
+
+/** The second showcase, tilting toward the pointer like the hero's. */
+function TiltShowcase({
+  scenes,
+  label,
+}: {
+  scenes: ShowcaseScene[];
+  label: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const pointer = usePointerDepth(ref);
+  return (
+    <div ref={ref}>
+      <MacBookShowcase
+        scenes={scenes}
+        label={label}
+        interval={6000}
+        pointer={pointer}
+      />
+    </div>
+  );
+}
+
+const menuVariants: Variants = {
+  closed: {
+    opacity: 0,
+    y: -8,
+    scale: 0.97,
+    transition: { duration: 0.15, ease: ease.state },
+  },
+  open: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: dur.state,
+      ease: ease.out,
+      staggerChildren: 0.04,
+      delayChildren: 0.05,
+    },
+  },
+};
+const menuItem: Variants = {
+  closed: { opacity: 0, x: -8 },
+  open: { opacity: 1, x: 0, transition: { duration: 0.3, ease: ease.out } },
+};
+
 // ── Pricing ────────────────────────────────────────────────────────────────
 
 /** Rupees from paise, with paise shown only when there are any. */
@@ -887,7 +1306,12 @@ function Pricing({ user }: { user: any }) {
   ];
 
   return (
-    <section id="pricing" className={s.section} aria-labelledby="pricing-title">
+    <section
+      id="pricing"
+      className={s.section}
+      data-nav="pricing"
+      aria-labelledby="pricing-title"
+    >
       <Reveal className={s.sectionHead}>
         <h2 id="pricing-title" className={s.h2}>
           One price for your whole organisation.
@@ -913,6 +1337,14 @@ function Pricing({ user }: { user: any }) {
               className={s.billingOption}
               onClick={() => setBilling(o.value)}
             >
+              {/* The selected background slides between the options. */}
+              {billing === o.value && (
+                <motion.span
+                  layoutId="landing-billing"
+                  className={s.billingThumb}
+                  transition={{ duration: dur.state, ease: ease.state }}
+                />
+              )}
               {o.label}
               {o.value === "annual" && ANNUAL_SAVING > 0 && (
                 <span className={s.save}>Save {ANNUAL_SAVING}%</span>
@@ -935,7 +1367,21 @@ function Pricing({ user }: { user: any }) {
                 </h3>
                 <p className={s.planSeats}>{seats(tier)}</p>
                 <p className={s.price} aria-live="polite">
-                  <span className={s.amount}>{rupees(price)}</span>
+                  {/* The new price rolls up as the old one leaves. */}
+                  <span className={s.amount}>
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.span
+                        key={price}
+                        className={s.amountValue}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -14 }}
+                        transition={{ duration: dur.state, ease: ease.state }}
+                      >
+                        {rupees(price)}
+                      </motion.span>
+                    </AnimatePresence>
+                  </span>
                   <span className={s.per}>
                     {billing === "annual" ? "per year" : "per month"}
                   </span>
@@ -946,8 +1392,14 @@ function Pricing({ user }: { user: any }) {
                     : `or ${rupees(PLAN_PRICING[tier].annual)} billed yearly`}
                 </p>
                 {!user ? (
-                  <Link to="/login" className={`${s.cta} ${s.planCta}`}>
-                    Choose {PLAN_TIER_LABELS[tier]}
+                  <Link
+                    to="/login"
+                    className={`${s.cta} ${s.planCta} ${s.ctaRoll}`}
+                  >
+                    <Roll>Choose {PLAN_TIER_LABELS[tier]}</Roll>
+                    <span className={s.chip} aria-hidden="true">
+                      <Arrow />
+                    </span>
                   </Link>
                 ) : manage ? (
                   <Link
@@ -1002,6 +1454,7 @@ function Footer({ signedIn }: { signedIn: boolean }) {
         <nav aria-label="Product" className={s.footerCol}>
           <p className={s.footerHead}>Product</p>
           <a href="#features">Features</a>
+          <a href="#how-it-works">How It Works</a>
           <a href="#modules">Modules</a>
           <a href="#security">Security</a>
           <a href="#pricing">Pricing</a>

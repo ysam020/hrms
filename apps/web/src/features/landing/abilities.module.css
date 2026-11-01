@@ -126,7 +126,65 @@
   color: var(--l-ink-2);
 }
 .caption[data-done] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: #1d7a35;
+}
+.viewfinder {
+  transition:
+    opacity 400ms ease,
+    transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.viewfinder[data-off] {
+  opacity: 0.45;
+  transform: scale(0.94);
+}
+.ring[data-matching] {
+  animation: matching 0.8s ease-in-out infinite alternate;
+}
+@keyframes matching {
+  to {
+    stroke-opacity: 0.35;
+  }
+}
+.scan {
+  fill: #5bbde6;
+}
+.faceStatus {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+}
+.faceLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 14px/1.3 var(--px-font);
+  color: var(--l-ink-2);
+  white-space: nowrap;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--l-ink-3);
+}
+.dot[data-tone="on"] {
+  background: #34c759;
+}
+.punch {
+  margin-left: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: var(--l-accent);
+  color: #fff;
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring[data-matching] {
+    animation: none;
+  }
 }
 
 /* ── Offline ──────────────────────────────────────────────────────── */

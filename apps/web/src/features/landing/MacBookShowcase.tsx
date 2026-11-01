@@ -5,8 +5,17 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useTransform,
+  type MotionValue,
+  type Variants,
+} from "framer-motion";
+import { depth } from "./motion";
 import { useMediaQuery } from "@next/lib/hooks";
 import s from "./macbook.module.css";
 
@@ -39,13 +48,29 @@ export function MacBookShowcase({
   interval = 7000,
   label = "Product tour",
   priority = false,
+  settle = false,
+  pointer,
+  overlay,
 }: {
   scenes: ShowcaseScene[];
   interval?: number;
   label?: string;
   /** Load the first screen eagerly (above the fold). */
   priority?: boolean;
+  /** Lean back and come upright as it scrolls into view (hero). */
+  settle?: boolean;
+  /** Pointer over the surrounding section (-0.5…0.5); tilts the laptop. */
+  pointer?: { x: MotionValue<number>; y: MotionValue<number> };
+  /** Layers that float in front of the laptop and tilt with it. */
+  overlay?: ReactNode;
 }) {
+  const rest = useMotionValue(0);
+  const px = pointer?.x ?? rest;
+  const py = pointer?.y ?? rest;
+  const rotateX = useTransform(py, [-0.5, 0.5], [depth.tiltX, -depth.tiltX]);
+  const rotateY = useTransform(px, [-0.5, 0.5], [-depth.tiltY, depth.tiltY]);
+  // The glass reflection slides opposite the pointer, like real glass.
+  const glare = useTransform(px, [-0.5, 0.5], ["14%", "-14%"]);
   const uid = useId();
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [index, setIndex] = useState(0);
@@ -159,6 +184,7 @@ export function MacBookShowcase({
       role="region"
       aria-roledescription="carousel"
       aria-label={label}
+      data-settle={settle || undefined}
       onPointerEnter={() => setHeld(true)}
       onPointerLeave={() => setHeld(false)}
       onFocus={() => setHeld(true)}
@@ -166,40 +192,56 @@ export function MacBookShowcase({
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeld(false);
       }}
     >
-      <div className={s.device}>
-        <div className={s.lid}>
-          <span className={s.camera} aria-hidden="true" />
-          <div
-            id={panelId}
-            className={s.screen}
-            role="tabpanel"
-            aria-labelledby={tabId(index)}
-          >
-            {scenes.map((sc, i) =>
-              !warm && i !== index ? null : (
-                <img
-                  key={sc.id}
-                  className={s.shot}
-                  src={sc.src}
-                  alt={i === index ? sc.alt : ""}
-                  aria-hidden={i === index ? undefined : true}
-                  data-active={i === index || undefined}
-                  width={1440}
-                  height={900}
-                  decoding="async"
-                  loading={priority && i === 0 ? "eager" : "lazy"}
-                  {...(priority && i === 0
-                    ? { fetchPriority: "high" as const }
-                    : {})}
-                  draggable={false}
-                  onLoad={warm ? undefined : () => setWarm(true)}
-                />
-              ),
-            )}
+      <motion.div
+        className={s.tilt}
+        style={{
+          rotateX,
+          rotateY,
+          transformPerspective: 1800,
+          ["--glare" as string]: glare,
+        }}
+      >
+        <div className={s.device}>
+          <div className={s.lid}>
+            <span className={s.camera} aria-hidden="true" />
+            <div
+              id={panelId}
+              className={s.screen}
+              role="tabpanel"
+              aria-labelledby={tabId(index)}
+            >
+              {/* A band of light crosses the glass as each screen arrives. */}
+              <span
+                key={`sweep-${index}`}
+                className={s.sweep}
+                aria-hidden="true"
+              />
+              {scenes.map((sc, i) =>
+                !warm && i !== index ? null : (
+                  <img
+                    key={sc.id}
+                    className={s.shot}
+                    src={sc.src}
+                    alt={i === index ? sc.alt : ""}
+                    aria-hidden={i === index ? undefined : true}
+                    data-active={i === index || undefined}
+                    width={1440}
+                    height={900}
+                    decoding="async"
+                    loading={priority && i === 0 ? "eager" : "lazy"}
+                    // React 18 only passes the lowercase attribute through.
+                    {...(priority && i === 0 ? { fetchpriority: "high" } : {})}
+                    draggable={false}
+                    onLoad={warm ? undefined : () => setWarm(true)}
+                  />
+                ),
+              )}
+            </div>
           </div>
+          <div className={s.base} aria-hidden="true" />
         </div>
-        <div className={s.base} aria-hidden="true" />
-      </div>
+        {overlay}
+      </motion.div>
 
       <div className={s.controls}>
         <div
