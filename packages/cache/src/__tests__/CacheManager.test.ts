@@ -347,26 +347,29 @@ describe("CacheManager", () => {
       nowSpy.mockRestore();
     });
 
-    it("resolves TTL by entity type, falling back to the default for an unknown type", async () => {
+    it("resolves TTL by entity type (±10% jitter), falling back to the default for an unknown type", async () => {
       const { base } = makeFakeRedis();
       mockGetRedisClient.mockReturnValue(base);
       const manager = new CacheManager();
+      const ttlOf = (key: string) =>
+        (base.set as jest.Mock).mock.calls.find((c: any[]) => c[0] === key)[3];
 
       await manager.set("k1", { a: 1 }, "salary");
-      expect(base.set).toHaveBeenCalledWith(
-        "k1",
-        JSON.stringify({ a: 1 }),
-        "EX",
-        14400,
-      );
+      expect(ttlOf("k1")).toBeGreaterThanOrEqual(14400 * 0.9);
+      expect(ttlOf("k1")).toBeLessThanOrEqual(14400 * 1.1);
 
       await manager.set("k2", { a: 2 }, "totally-unknown-entity");
-      expect(base.set).toHaveBeenCalledWith(
-        "k2",
-        JSON.stringify({ a: 2 }),
-        "EX",
-        3600,
-      );
+      expect(ttlOf("k2")).toBeGreaterThanOrEqual(3600 * 0.9);
+      expect(ttlOf("k2")).toBeLessThanOrEqual(3600 * 1.1);
+    });
+
+    it("keeps prefix index sets alive at least as long as any jittered member", async () => {
+      const { base } = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(base);
+      const manager = new CacheManager();
+      await manager.set("t:x:leaves:1", { a: 1 }, "salary");
+      for (const call of (base.expire as jest.Mock).mock.calls)
+        expect(call[1]).toBe(Math.ceil(14400 * 1.1));
     });
 
     it("prefers an explicit custom TTL over the entity-type default", async () => {

@@ -219,6 +219,8 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/scheduler-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=scheduler-service
+      # Crons run only where this is "true" — see apps/scheduler-service/src/scheduler.ts
+      - SCHEDULER_ENABLED=true
       - METRICS_PORT=9111
     ports:
       - "9111:9111"

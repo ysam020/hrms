@@ -61,8 +61,17 @@ export const rootRouter: Router = Router();
 // Redis becoming CPU-saturated (single-threaded) and a shared source of
 // latency across unrelated routes. Removed as pure duplication.
 rootRouter.use(authRouter);
-rootRouter.use(defaultLimiter, tenantRouter);
-rootRouter.use(defaultLimiter, paymentRouter);
+
+// defaultLimiter is mounted ONCE, path-less, so every request that gets past
+// authRouter is counted exactly once. It used to be attached to each mount
+// below (tenant, payment, support, walkthrough and every business router),
+// and because path-less middleware runs for every request passing through,
+// one request to a late-mounted business router was charged up to 29 times
+// (docs/performance/api-performance-audit.md, finding B1). The set of
+// requests it applies to is unchanged: everything not handled by authRouter.
+rootRouter.use(defaultLimiter);
+rootRouter.use(tenantRouter);
+rootRouter.use(paymentRouter);
 
 // Anonymous careers-page routes — deliberately mounted with NO
 // authenticate/requireTenant/subscription guard. Tenant is resolved from the
@@ -77,7 +86,6 @@ rootRouter.use(publicRecruitmentRouter);
 // all; requireSupportAgent is its only gate besides authentication.
 rootRouter.use(
   "/support",
-  defaultLimiter,
   authenticate,
   requireTenant,
   idempotency,
@@ -85,70 +93,74 @@ rootRouter.use(
 );
 rootRouter.use(
   "/platform/support",
-  defaultLimiter,
   authenticate,
   requireSupportAgent,
   idempotency,
   platformSupportRouter,
 );
-
-// All business routes require an active subscription.
-// authenticate + requireTenant run again here (idempotent) so this guard
-// has the tenant context it needs, then the router's own middleware runs.
-// idempotency runs last: it needs the authenticated user to scope keys, and
-// only acts on mutations that carry an Idempotency-Key header.
-const subscriptionGuard = [
-  defaultLimiter,
-  authenticate,
-  requireTenant,
-  requireActiveSubscription,
-  idempotency,
-];
-
-rootRouter.use(...subscriptionGuard, userRouter);
-rootRouter.use(...subscriptionGuard, employeeRouter);
-rootRouter.use(...subscriptionGuard, attendanceRouter);
-rootRouter.use(...subscriptionGuard, leaveRouter);
-rootRouter.use(...subscriptionGuard, recruitmentRouter);
-rootRouter.use(...subscriptionGuard, hrmRouter);
-rootRouter.use(...subscriptionGuard, salaryRouter);
-rootRouter.use(...subscriptionGuard, notificationRouter);
-rootRouter.use(...subscriptionGuard, generalRouter);
-rootRouter.use(...subscriptionGuard, analyticsRoutesRouter);
-rootRouter.use("/analytics", ...subscriptionGuard, analyticsRouter);
-rootRouter.use(...subscriptionGuard, permissionsRouter);
-rootRouter.use(...subscriptionGuard, chatRouter);
-rootRouter.use(...subscriptionGuard, aiConnectionsRouter);
-rootRouter.use(...subscriptionGuard, dashboardRouter);
+// Walkthrough progress: authenticate + requireTenant but no subscription
+// check (see routes/walkthrough.ts). It used to be mounted between the
+// business routers, after 14 path-less subscription guards, which made it
+// return 402 for lapsed organisations despite this intent.
 rootRouter.use(
   "/walkthrough",
-  defaultLimiter,
   authenticate,
   requireTenant,
   idempotency,
   walkthroughRouter,
 );
-rootRouter.use(...subscriptionGuard, aiInsightsRouter);
-rootRouter.use(...subscriptionGuard, tenantSettingsRouter);
-rootRouter.use(...subscriptionGuard, approvalChainsRouter);
-rootRouter.use(...subscriptionGuard, leavePolicyRouter);
-rootRouter.use(...subscriptionGuard, overtimeRouter);
-rootRouter.use(...subscriptionGuard, noticePeriodPoliciesRouter);
-rootRouter.use(...subscriptionGuard, exitPolicyRouter);
-rootRouter.use(...subscriptionGuard, interviewPipelinesRouter);
-rootRouter.use(...subscriptionGuard, payrollComponentsRouter);
-rootRouter.use(...subscriptionGuard, orgStructureRouter);
-rootRouter.use(...subscriptionGuard, onboardingRouter);
-rootRouter.use(...subscriptionGuard, bulkOnboardingRouter);
-// ── New feature routers ───────────────────────────────────────────────────────
-rootRouter.use("/payroll", ...subscriptionGuard, payrollRouter);
-rootRouter.use(
-  "/performance-reviews",
-  ...subscriptionGuard,
-  performanceReviewRouter,
+
+// All business routes require an active subscription. The guard is applied
+// once, to this one router, and every business router is mounted inside it
+// in the original order. Mounting the guard path-less in front of each
+// router (as before) made Express run it once per router until one matched:
+// up to 27 authenticate + tenant subscription lookups per request, ~36 ms
+// each (audit finding B1). An unknown /api/v1 path still has to pass the
+// guard (401/402/403) before falling through to the 404, as it did before.
+// idempotency runs last: it needs the authenticated user to scope keys, and
+// only acts on mutations that carry an Idempotency-Key header.
+const businessRouter: Router = Router();
+businessRouter.use(
+  authenticate,
+  requireTenant,
+  requireActiveSubscription,
+  idempotency,
 );
-rootRouter.use("/assets", ...subscriptionGuard, assetsRouter);
-rootRouter.use("/wfh", ...subscriptionGuard, wfhRouter);
-rootRouter.use("/helpdesk", ...subscriptionGuard, helpdeskRouter);
-rootRouter.use("/reports", ...subscriptionGuard, reportsRouter);
-rootRouter.use("/tax-declarations", ...subscriptionGuard, taxDeclarationRouter);
+
+businessRouter.use(userRouter);
+businessRouter.use(employeeRouter);
+businessRouter.use(attendanceRouter);
+businessRouter.use(leaveRouter);
+businessRouter.use(recruitmentRouter);
+businessRouter.use(hrmRouter);
+businessRouter.use(salaryRouter);
+businessRouter.use(notificationRouter);
+businessRouter.use(generalRouter);
+businessRouter.use(analyticsRoutesRouter);
+businessRouter.use("/analytics", analyticsRouter);
+businessRouter.use(permissionsRouter);
+businessRouter.use(chatRouter);
+businessRouter.use(aiConnectionsRouter);
+businessRouter.use(dashboardRouter);
+businessRouter.use(aiInsightsRouter);
+businessRouter.use(tenantSettingsRouter);
+businessRouter.use(approvalChainsRouter);
+businessRouter.use(leavePolicyRouter);
+businessRouter.use(overtimeRouter);
+businessRouter.use(noticePeriodPoliciesRouter);
+businessRouter.use(exitPolicyRouter);
+businessRouter.use(interviewPipelinesRouter);
+businessRouter.use(payrollComponentsRouter);
+businessRouter.use(orgStructureRouter);
+businessRouter.use(onboardingRouter);
+businessRouter.use(bulkOnboardingRouter);
+// ── New feature routers ───────────────────────────────────────────────────────
+businessRouter.use("/payroll", payrollRouter);
+businessRouter.use("/performance-reviews", performanceReviewRouter);
+businessRouter.use("/assets", assetsRouter);
+businessRouter.use("/wfh", wfhRouter);
+businessRouter.use("/helpdesk", helpdeskRouter);
+businessRouter.use("/reports", reportsRouter);
+businessRouter.use("/tax-declarations", taxDeclarationRouter);
+
+rootRouter.use(businessRouter);

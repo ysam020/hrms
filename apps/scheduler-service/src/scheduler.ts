@@ -21,6 +21,28 @@ const JOB_SCHEDULES: JobSchedule[] = [
   { name: "checkTicketSla", pattern: "0 4 * * *" }, // 4:00 AM — bulk SLA sweep
 ];
 
+/**
+ * Cron jobs only run where SCHEDULER_ENABLED=true is set explicitly
+ * (docker-compose.prod.yml). Development and production share one database
+ * connection string, so a local stack that ran crons would apply them to
+ * production data — on 2026-10-31 a local scheduler ran the month-end leave
+ * accrual (docs/performance/attendance-backfill-root-cause.md). Opt-in, not
+ * opt-out, so a new environment is safe by default.
+ */
+export function isSchedulerEnabled(): boolean {
+  return process.env.SCHEDULER_ENABLED === "true";
+}
+
+/** Removes repeatable cron jobs left in this Redis by an earlier run. */
+export async function unregisterScheduledJobs(): Promise<number> {
+  const queue = getSchedulerQueue();
+  const existing = await queue.getRepeatableJobs();
+  for (const job of existing) {
+    await queue.removeRepeatableByKey(job.key);
+  }
+  return existing.length;
+}
+
 export async function registerScheduledJobs(): Promise<void> {
   const queue = getSchedulerQueue();
 

@@ -6,7 +6,7 @@ import { MESSAGES } from "../constants/messages";
 jest.mock("@hrms/db", () => {
   const _db = {
     notificationRecipient: {
-      findMany: jest.fn(),
+      aggregateRaw: jest.fn(),
       count: jest.fn(),
     },
   };
@@ -24,22 +24,26 @@ jest.mock("@hrms/logger", () => ({
 const makeCall = (request: Record<string, any>) => ({ request }) as any;
 const makeCallback = () => jest.fn();
 
-const mockFindMany = (prisma as any).notificationRecipient
-  .findMany as jest.Mock;
+const USER = "64b000000000000000000001";
+const mockAggregate = (prisma as any).notificationRecipient
+  .aggregateRaw as jest.Mock;
 const mockCount = (prisma as any).notificationRecipient.count as jest.Mock;
 
-const makeRecipient = (overrides: Record<string, any> = {}) => ({
-  id: "rec-1",
-  userId: "user-1",
+// aggregateRaw returns MongoDB extended JSON.
+const makeRow = (overrides: Record<string, any> = {}) => ({
+  _id: { $oid: "64b0000000000000000000aa" },
   isCleared: false,
-  notification: {
+  n: {
+    _id: { $oid: "64b0000000000000000000bb" },
     title: "Test",
     message: "Test body",
     eventType: "general",
-    timeStamp: new Date("2024-03-04T10:00:00.000Z"),
+    timeStamp: { $date: "2024-03-04T10:00:00.000Z" },
   },
   ...overrides,
 });
+
+const pipelineOf = () => mockAggregate.mock.calls[0][0].pipeline as any[];
 
 describe("getNotifications", () => {
   beforeEach(() => {
@@ -55,15 +59,21 @@ describe("getNotifications", () => {
     });
   });
 
+  it("returns INVALID_ARGUMENT for a userId that is not an ObjectId, without querying", async () => {
+    const cb = makeCallback();
+    await getNotifications(makeCall({ userId: "user-1" }), cb);
+    expect(cb.mock.calls[0][1].status).toBe(status.INVALID_ARGUMENT);
+    expect(mockAggregate).not.toHaveBeenCalled();
+  });
+
   it("returns paginated notifications with total and unreadCount", async () => {
-    const recipients = [makeRecipient()];
-    mockFindMany.mockResolvedValue(recipients);
+    mockAggregate.mockResolvedValue([makeRow()]);
     mockCount
       .mockResolvedValueOnce(5) // total
       .mockResolvedValueOnce(3); // unreadCount
 
     const cb = makeCallback();
-    await getNotifications(makeCall({ userId: "user-1" }), cb);
+    await getNotifications(makeCall({ userId: USER }), cb);
 
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.NOTIFICATIONS_FETCHED,
@@ -74,17 +84,15 @@ describe("getNotifications", () => {
     });
   });
 
-  it("maps recipient records to correct response shape", async () => {
-    const recipient = makeRecipient({ isCleared: true });
-    mockFindMany.mockResolvedValue([recipient]);
-    mockCount.mockResolvedValue(1).mockResolvedValueOnce(1);
+  it("maps recipient records to the same response shape as before", async () => {
+    mockAggregate.mockResolvedValue([makeRow({ isCleared: true })]);
+    mockCount.mockResolvedValue(1);
 
     const cb = makeCallback();
-    await getNotifications(makeCall({ userId: "user-1" }), cb);
+    await getNotifications(makeCall({ userId: USER }), cb);
 
-    const item = cb.mock.calls[0][1].data[0];
-    expect(item).toEqual({
-      id: "rec-1",
+    expect(cb.mock.calls[0][1].data[0]).toEqual({
+      id: "64b0000000000000000000aa",
       title: "Test",
       body: "Test body",
       type: "general",
@@ -93,83 +101,105 @@ describe("getNotifications", () => {
     });
   });
 
-  it("returns empty string for createdAt when timeStamp is null", async () => {
-    const recipient = makeRecipient({
-      notification: {
-        title: "T",
-        message: "M",
-        eventType: "e",
-        timeStamp: null,
-      },
-    });
-    mockFindMany.mockResolvedValue([recipient]);
-    mockCount.mockResolvedValue(1).mockResolvedValueOnce(0);
+  it("accepts a $numberLong date and a null timeStamp", async () => {
+    mockAggregate.mockResolvedValue([
+      makeRow({
+        n: {
+          title: "T",
+          message: "M",
+          eventType: "e",
+          timeStamp: { $date: { $numberLong: "1709546400000" } },
+        },
+      }),
+      makeRow({
+        n: { title: "T", message: "M", eventType: "e", timeStamp: null },
+      }),
+    ]);
+    mockCount.mockResolvedValue(2);
 
     const cb = makeCallback();
-    await getNotifications(makeCall({ userId: "user-1" }), cb);
+    await getNotifications(makeCall({ userId: USER }), cb);
 
-    expect(cb.mock.calls[0][1].data[0].createdAt).toBe("");
+    const [a, b] = cb.mock.calls[0][1].data;
+    expect(a.createdAt).toBe("2024-03-04T10:00:00.000Z");
+    expect(b.createdAt).toBe("");
   });
 
-  it("applies unreadOnly filter when set to true", async () => {
-    mockFindMany.mockResolvedValue([]);
+  it("keeps a recipient whose notification is missing, with blank text, instead of failing", async () => {
+    mockAggregate.mockResolvedValue([makeRow({ n: undefined })]);
+    mockCount.mockResolvedValue(1);
+
+    const cb = makeCallback();
+    await getNotifications(makeCall({ userId: USER }), cb);
+
+    expect(cb.mock.calls[0][1].status).toBe(status.OK);
+    expect(cb.mock.calls[0][1].data[0]).toMatchObject({
+      title: "",
+      body: "",
+      createdAt: "",
+    });
+  });
+
+  it("filters to the caller's recipients and applies unreadOnly", async () => {
+    mockAggregate.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);
 
     await getNotifications(
-      makeCall({ userId: "user-1", unreadOnly: true }),
+      makeCall({ userId: USER, unreadOnly: true }),
       makeCallback(),
     );
 
-    expect(mockFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ isCleared: false }),
-      }),
-    );
+    expect(pipelineOf()[0]).toEqual({
+      $match: { userId: { $oid: USER }, isCleared: false },
+    });
   });
 
-  it("paginates correctly with page and limit", async () => {
-    mockFindMany.mockResolvedValue([]);
+  it("does not filter on isCleared when unreadOnly is false", async () => {
+    mockAggregate.mockResolvedValue([]);
+    mockCount.mockResolvedValue(0);
+
+    await getNotifications(makeCall({ userId: USER }), makeCallback());
+
+    expect(pipelineOf()[0]).toEqual({ $match: { userId: { $oid: USER } } });
+  });
+
+  it("orders newest first, then paginates with page and limit", async () => {
+    mockAggregate.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);
 
     await getNotifications(
-      makeCall({ userId: "user-1", page: 3, limit: 5 }),
+      makeCall({ userId: USER, page: 3, limit: 5 }),
       makeCallback(),
     );
 
-    expect(mockFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 10, take: 5 }),
-    );
-  });
-
-  it("orders notifications by id descending (newest first)", async () => {
-    mockFindMany.mockResolvedValue([]);
-    mockCount.mockResolvedValue(0);
-
-    await getNotifications(makeCall({ userId: "user-1" }), makeCallback());
-
-    expect(mockFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { id: "desc" } }),
-    );
+    const p = pipelineOf();
+    expect(p[1]).toEqual({ $sort: { _id: -1 } });
+    expect(p[2]).toEqual({ $skip: 10 });
+    expect(p[3]).toEqual({ $limit: 5 });
+    // Sorting and paging happen before the join, so only the page is joined.
+    expect(p[4].$lookup.from).toBe("notifications");
   });
 
   it("always counts unread regardless of unreadOnly filter", async () => {
-    mockFindMany.mockResolvedValue([]);
+    mockAggregate.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);
 
     await getNotifications(
-      makeCall({ userId: "user-1", unreadOnly: true }),
+      makeCall({ userId: USER, unreadOnly: true }),
       makeCallback(),
     );
 
-    // Second count call should always use { userId, isCleared: false }
-    const secondCount = mockCount.mock.calls[1][0];
-    expect(secondCount.where).toEqual({ userId: "user-1", isCleared: false });
+    expect(mockCount.mock.calls[1][0].where).toEqual({
+      userId: USER,
+      isCleared: false,
+    });
   });
 
   it("returns INTERNAL on database error", async () => {
-    mockFindMany.mockRejectedValue(new Error("DB error"));
+    mockAggregate.mockRejectedValue(new Error("DB error"));
+    mockCount.mockResolvedValue(0);
     const cb = makeCallback();
-    await getNotifications(makeCall({ userId: "user-1" }), cb);
+    await getNotifications(makeCall({ userId: USER }), cb);
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.INTERNAL_SERVER_ERROR,
       status: status.INTERNAL,

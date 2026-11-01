@@ -11,6 +11,23 @@ import {
 import { requestIdStorage, getRequestId } from "./requestContext";
 
 export { requestIdStorage, getRequestId } from "./requestContext";
+import {
+  classifyField,
+  omittedMarker,
+  redactForLog,
+  REDACTED,
+} from "./redaction";
+export {
+  classifyField,
+  normalizeKey,
+  redactSensitive,
+  redactForLog,
+  scrubText,
+  omittedMarker,
+  REDACTED,
+  MAX_SNAPSHOT_STRING_BYTES,
+} from "./redaction";
+export type { FieldClass } from "./redaction";
 
 const env = process.env.NODE_ENV === "production" ? "production" : "dev";
 const serviceName =
@@ -168,6 +185,26 @@ const attachRequestId = winston.format((info) => {
   return info;
 })();
 
+// Keeps Aadhaar numbers, credentials, resumes and similar out of every log
+// line, whichever transport it goes to — including values echoed inside
+// error messages (a Prisma validation error prints the full query
+// arguments). Runs after serializeErrors so error messages and stacks are
+// plain strings by then. See redaction.ts for the rules.
+export const redactSensitiveFormat = winston.format((info) => {
+  for (const key of Object.keys(info)) {
+    if (key === "level" || key === "timestamp") continue;
+    const cls = classifyField(key);
+    const value = (info as Record<string, unknown>)[key];
+    (info as Record<string, unknown>)[key] =
+      cls === "secret" && value != null
+        ? REDACTED
+        : cls === "omit" && value != null
+          ? omittedMarker(value)
+          : redactForLog(value);
+  }
+  return info;
+})();
+
 // ── Logger ───────────────────────────────────────────────────────────────────
 export const logger = winston.createLogger({
   level:
@@ -178,6 +215,7 @@ export const logger = winston.createLogger({
     winston.format.timestamp(),
     attachRequestId,
     serializeErrors,
+    redactSensitiveFormat,
     winston.format.errors({ stack: true }),
     winston.format.json(),
   ),

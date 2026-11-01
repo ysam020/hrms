@@ -10,6 +10,7 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { assertConfirmedWriteTarget } from "./scriptGuard";
 const prisma = new PrismaClient();
 const run = (cmd: Record<string, unknown>): Promise<any> =>
   (prisma.$runCommandRaw as any)(cmd);
@@ -32,6 +33,7 @@ async function findMany(
 }
 
 async function main() {
+  assertConfirmedWriteTarget("assign-users-to-tenants");
   // ── 1. Fetch all tenants ──────────────────────────────────────────────────
   const tenants = await findMany("tenants", {});
   if (tenants.length === 0) {

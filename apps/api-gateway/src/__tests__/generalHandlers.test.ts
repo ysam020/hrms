@@ -7,6 +7,7 @@ import {
   getCalendarEvents,
   getBirthdaysAnniversaries,
   getAuditLogs,
+  getAuditLogDetail,
   addEvent,
   editCalendarEvent,
   deleteCalendarEvent,
@@ -28,13 +29,13 @@ jest.mock("@hrms/db", () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
-    auditLog: { findMany: jest.fn() },
+    auditLog: { findMany: jest.fn(), findUnique: jest.fn() },
   };
   return {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
-    redactAuditValue: (v: unknown) => v,
+    redactAuditValue: jest.fn((v: unknown) => v),
   };
 });
 
@@ -565,6 +566,60 @@ describe("generalHandlers", () => {
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
       );
+    });
+  });
+
+  describe("audit-log list/detail split", () => {
+    const mockFindUnique = (prisma as any).auditLog.findUnique as jest.Mock;
+
+    it("selects no before/after snapshots for the list", async () => {
+      mockAuditLogFindMany.mockResolvedValue([]);
+      await getAuditLogs(makeReq({ query: {} }), makeRes());
+      const select = mockAuditLogFindMany.mock.calls[0][0].select;
+      expect(select).toBeDefined();
+      expect(select.oldValue).toBeUndefined();
+      expect(select.newValue).toBeUndefined();
+    });
+
+    it("returns one row's redacted snapshots", async () => {
+      mockFindUnique.mockResolvedValue({
+        id: "a".repeat(24),
+        action: "UPDATE",
+        entityType: "JobApplication",
+        oldValue: { aadharNo: "123412341234", status: "new" },
+        newValue: { aadharNo: "123412341234", status: "shortlisted" },
+        timestamp: new Date(),
+      });
+      const res = makeRes();
+      await getAuditLogDetail(makeReq({ params: { id: "a".repeat(24) } }), res);
+      const [, status, body] = mockApiResponse.mock.calls[0];
+      expect(status).toBe(RESPONSE_STATUS.SUCCESS);
+      const redact = (require("@hrms/db") as any).redactAuditValue as jest.Mock;
+      expect(redact).toHaveBeenCalledWith(
+        { aadharNo: "123412341234", status: "new" },
+        "JobApplication",
+      );
+      expect(redact).toHaveBeenCalledWith(
+        { aadharNo: "123412341234", status: "shortlisted" },
+        "JobApplication",
+      );
+      expect(body.data.newValue.status).toBe("shortlisted");
+    });
+
+    it("rejects a malformed id without querying", async () => {
+      const res = makeRes();
+      await getAuditLogDetail(makeReq({ params: { id: "nope" } }), res);
+      expect(mockApiResponse.mock.calls[0][1]).toBe(
+        RESPONSE_STATUS.BAD_REQUEST,
+      );
+      expect(mockFindUnique).not.toHaveBeenCalled();
+    });
+
+    it("returns NOT_FOUND for an unknown id", async () => {
+      mockFindUnique.mockResolvedValue(null);
+      const res = makeRes();
+      await getAuditLogDetail(makeReq({ params: { id: "b".repeat(24) } }), res);
+      expect(mockApiResponse.mock.calls[0][1]).toBe(RESPONSE_STATUS.NOT_FOUND);
     });
   });
 

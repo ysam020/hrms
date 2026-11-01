@@ -14,6 +14,8 @@ export const refreshToken = async (
 ) => {
   try {
     const { refreshToken: token } = call.request;
+    const t0 = performance.now();
+    const rotationTimings = { redisMs: 0, mongoMs: 0 };
 
     const payload = verifyRefreshToken(token);
     if (!payload) {
@@ -33,10 +35,12 @@ export const refreshToken = async (
     // one left orphaned. If this call loses that race, the candidate below
     // is simply discarded and the winner's token is returned instead.
     const candidateRefreshToken = signRefreshToken(payload.userId);
+    const tSigned = performance.now();
     const rotation = await rotateRefreshToken(
       payload.userId,
       token,
       candidateRefreshToken,
+      rotationTimings,
     );
     if (!rotation.ok) {
       return callback(null, {
@@ -55,6 +59,16 @@ export const refreshToken = async (
       orgSetupComplete: rotation.orgSetupComplete ?? true,
       dbName: rotation.dbName,
     });
+
+    if (process.env.REQUEST_TIMING_LOG === "true") {
+      // Phase durations only — never the tokens or their hashes.
+      logger.info("refresh timing", {
+        verifyAndSignMs: Math.round(tSigned - t0),
+        redisMs: Math.round(rotationTimings.redisMs),
+        mongoMs: Math.round(rotationTimings.mongoMs),
+        totalMs: Math.round(performance.now() - t0),
+      });
+    }
 
     return callback(null, {
       message: MESSAGES.TOKEN_REFRESHED,

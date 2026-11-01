@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { attendanceClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, markHandlerStart } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
   apiResponse,
@@ -267,6 +267,7 @@ export async function attendanceCorrection(req: Request, res: Response) {
 }
 
 export async function getAttendanceSummary(req: Request, res: Response) {
+  markHandlerStart();
   try {
     const authReq = req as AuthRequest;
     const { user } = authReq;

@@ -69,6 +69,55 @@ function Data<T = any>({
   return <>{children(data as T)}</>;
 }
 
+// Both monthly charts read the same endpoint; fetching it once avoids the
+// second mount superseding (cancelling and retrying) the first request.
+function AttendanceTrendCharts() {
+  const { data, loading, error, refetch } = useFetchData<any>(
+    "/get-attendance-trends",
+    "get",
+    [],
+  );
+  const body = (render: (d: any) => ReactNode) =>
+    loading && (!data || (Array.isArray(data) && data.length === 0)) ? (
+      <ChartBodySkeleton />
+    ) : error ? (
+      <ErrorState message={error.message} onRetry={refetch} />
+    ) : (
+      render(data)
+    );
+  return (
+    <>
+      <ChartBlock title="Attendance Rate" note="By month" span={2}>
+        {body((d) => (
+          <Columns
+            label="Attendance rate by month"
+            unit="%"
+            format={(v) => `${Math.round(v)}%`}
+            data={list(d).map((i) => ({
+              label: monthLabel(i._id),
+              value: Number(i.attendanceRate ?? 0),
+            }))}
+          />
+        ))}
+      </ChartBlock>
+      <ChartBlock title="Average Working Hours" note="By month">
+        {body((d) => (
+          <Columns
+            label="Average working hours by month"
+            color={SERIES[6]}
+            unit="hours"
+            format={(v) => v.toFixed(1)}
+            data={list(d).map((i) => ({
+              label: monthLabel(i._id),
+              value: Number(i.avgWorkingHours ?? 0),
+            }))}
+          />
+        ))}
+      </ChartBlock>
+    </>
+  );
+}
+
 const list = (d: any): any[] =>
   Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : [];
 const nameOf = (i: any, ...keys: string[]) =>
@@ -230,37 +279,7 @@ function LeaveAttendance() {
         )}
       </Data>
       <ChartGrid>
-        <ChartBlock title="Attendance Rate" note="By month" span={2}>
-          <Data url="/get-attendance-trends">
-            {(d) => (
-              <Columns
-                label="Attendance rate by month"
-                unit="%"
-                format={(v) => `${Math.round(v)}%`}
-                data={list(d).map((i) => ({
-                  label: monthLabel(i._id),
-                  value: Number(i.attendanceRate ?? 0),
-                }))}
-              />
-            )}
-          </Data>
-        </ChartBlock>
-        <ChartBlock title="Average Working Hours" note="By month">
-          <Data url="/get-attendance-trends">
-            {(d) => (
-              <Columns
-                label="Average working hours by month"
-                color={SERIES[6]}
-                unit="hours"
-                format={(v) => v.toFixed(1)}
-                data={list(d).map((i) => ({
-                  label: monthLabel(i._id),
-                  value: Number(i.avgWorkingHours ?? 0),
-                }))}
-              />
-            )}
-          </Data>
-        </ChartBlock>
+        <AttendanceTrendCharts />
         <ChartBlock
           title="Daily Hours Worked"
           note="How long people work each day"

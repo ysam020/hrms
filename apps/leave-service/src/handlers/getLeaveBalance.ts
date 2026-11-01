@@ -29,9 +29,8 @@ async function buildLeaveTypeSummary(
   tenantId: string | null | undefined,
   userId: string,
   rawBalances: unknown,
+  leaveSettings: any,
 ): Promise<Record<string, { name: string; remaining: number }>> {
-  const leaveSettings = tenantId ? await getLeaveSettings(tenantId) : null;
-
   const types = new Map<string, { key: string; name: string }>();
   const addType = (key?: string, name?: string) => {
     if (!key) return;
@@ -55,14 +54,15 @@ async function buildLeaveTypeSummary(
     casualLeavesPerYear: leaveSettings?.casualLeavesPerYear ?? 6,
   };
 
+  // Comp-off availability is the same figure for every comp-off type, so
+  // it's fetched at most once.
+  let compOff: Promise<number> | null = null;
   const summary: Record<string, { name: string; remaining: number }> = {};
   for (const { key, name } of types.values()) {
     if (isCompOffLeaveType(key, quotaSettings.leavePolicies)) {
       if (!tenantId) continue;
-      summary[key] = {
-        name,
-        remaining: await getAvailableCompOffDays(tenantId, userId),
-      };
+      compOff ??= getAvailableCompOffDays(tenantId, userId);
+      summary[key] = { name, remaining: await compOff };
       continue;
     }
     const tracked = getTrackedRemaining(rawBalances, key);
@@ -88,14 +88,20 @@ export const getLeaveBalance = async (
     }
 
     const tenantId = getTenantId();
-    const balance = await prisma.leaveBalance.findFirst({
-      where: { tenantId, userId },
-    });
+    // Independent reads — one round trip instead of two in sequence.
+    const [balance, leaveSettings] = await Promise.all([
+      prisma.leaveBalance.findFirst({
+        where: { tenantId, userId },
+        orderBy: { id: "asc" },
+      }),
+      tenantId ? getLeaveSettings(tenantId) : null,
+    ]);
 
     const summary = await buildLeaveTypeSummary(
       tenantId,
       userId,
       balance?.balances,
+      leaveSettings,
     );
 
     const data = {

@@ -12,6 +12,7 @@ import { cleanupFcmTokens } from "./jobs/cleanupFcmTokens";
 import { checkSubscriptionExpiry } from "./jobs/checkSubscriptionExpiry";
 import { sendTrialReminders } from "./jobs/sendTrialReminders";
 import { checkTicketSla } from "./jobs/checkTicketSla";
+import { acquireJobLease, leaseIdFor, releaseJobLease } from "./utils/jobLease";
 
 // Typed handler map — TypeScript enforces every SchedulerJobName is handled.
 const jobHandlers: Record<SchedulerJobName, (data?: any) => Promise<void>> = {
@@ -36,10 +37,37 @@ async function processSchedulerJob(job: Job<SchedulerJobData>) {
     return;
   }
 
+  // Cron runs are leased per period in the shared database so a second
+  // scheduler (or a retry) can't repeat a job's effect — see jobLease.ts.
+  // Per-ticket SLA checks are ad-hoc delayed jobs, not cron fires.
+  const leaseId = ticketId
+    ? null
+    : leaseIdFor(
+        jobName,
+        new Date((job.timestamp ?? Date.now()) + (job.opts?.delay ?? 0)),
+      );
+  if (leaseId && !(await acquireJobLease(leaseId))) {
+    logger.info(
+      `Skipping scheduled job: ${jobName} — already run (${leaseId})`,
+    );
+    return;
+  }
+
   logger.info(`Running scheduled job: ${jobName}`);
   const start = Date.now();
-  // Pass extra job data (e.g. ticketId for checkTicketSla).
-  await handler({ ticketId });
+  try {
+    // Pass extra job data (e.g. ticketId for checkTicketSla).
+    await handler({ ticketId });
+  } catch (err) {
+    if (leaseId)
+      await releaseJobLease(
+        leaseId,
+        "failed",
+        String((err as Error)?.message ?? err),
+      );
+    throw err;
+  }
+  if (leaseId) await releaseJobLease(leaseId, "done");
   logger.info(`Completed scheduled job: ${jobName} in ${Date.now() - start}ms`);
 }
 

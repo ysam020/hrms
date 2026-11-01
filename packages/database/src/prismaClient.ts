@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { attachMasterAuditLogging } from "./auditMiddleware";
+import { attachQueryTiming } from "./queryTiming";
 
 declare global {
   var prisma: PrismaClient | undefined;
@@ -13,6 +14,7 @@ function createClient(): PrismaClient {
       { emit: "stdout", level: "warn" },
     ],
   });
+  attachQueryTiming(client, "master");
   attachMasterAuditLogging(client);
   return client;
 }

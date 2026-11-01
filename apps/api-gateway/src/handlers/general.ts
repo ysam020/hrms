@@ -310,10 +310,23 @@ export async function getAuditLogs(req: Request, res: Response) {
     // still finds a user's history even if they're later renamed or removed.
     if (userName) where.username = userName;
 
+    // The list carries no before/after snapshots — they made up most of the
+    // payload (up to ~750 KB for 200 rows) and are only shown for the one row
+    // a user opens, which getAuditLogDetail serves.
     const logs = await prisma.auditLog.findMany({
       where,
       orderBy: { timestamp: "desc" },
       take: NOTIFICATION_PRUNE_LIMIT,
+      select: {
+        id: true,
+        action: true,
+        entityType: true,
+        username: true,
+        description: true,
+        ipAddress: true,
+        userAgent: true,
+        timestamp: true,
+      },
     });
 
     const data = logs.map((l: any) => ({
@@ -325,10 +338,6 @@ export async function getAuditLogs(req: Request, res: Response) {
       ipAddress: l.ipAddress,
       userAgent: l.userAgent,
       timestamp: l.timestamp,
-      // Rows written before a field was recognised as sensitive may still
-      // hold it in the clear; redact again on the way out.
-      oldValue: redactAuditValue(l.oldValue),
-      newValue: redactAuditValue(l.newValue),
     }));
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -337,6 +346,43 @@ export async function getAuditLogs(req: Request, res: Response) {
     });
   } catch (error: unknown) {
     logger.error("audit-logs error:", { error });
+    return handleError(res, error);
+  }
+}
+
+export async function getAuditLogDetail(req: Request, res: Response) {
+  try {
+    const id = String(req.params.id ?? "");
+    if (!/^[a-f\d]{24}$/i.test(id ?? ""))
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Invalid audit log id",
+      });
+
+    const l: any = await prisma.auditLog.findUnique({ where: { id } });
+    if (!l)
+      return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
+        message: "Audit log not found",
+      });
+
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Audit log retrieved successfully",
+      data: {
+        _id: l.id,
+        action: l.action,
+        entityType: l.entityType,
+        username: l.username,
+        description: l.description,
+        ipAddress: l.ipAddress,
+        userAgent: l.userAgent,
+        timestamp: l.timestamp,
+        // Rows written before a field was recognised as sensitive may still
+        // hold it in the clear; redact again on the way out.
+        oldValue: redactAuditValue(l.oldValue, l.entityType),
+        newValue: redactAuditValue(l.newValue, l.entityType),
+      },
+    });
+  } catch (error: unknown) {
+    logger.error("audit-log detail error:", { error });
     return handleError(res, error);
   }
 }

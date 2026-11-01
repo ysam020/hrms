@@ -18,7 +18,39 @@ export type SubscriptionAccess =
 export async function getSubscriptionAccess(
   tenantId: string,
 ): Promise<SubscriptionAccess> {
-  const tenant = await prisma.tenant.findUnique({
+  const cached = await loadTenantSubscription(tenantId, false);
+  const access = decideAccess(cached);
+  if (access.allowed) return access;
+  // Never deny from a cached row: a tenant that has just paid must get in
+  // straight away, so a denial is always re-checked against the database.
+  return decideAccess(await loadTenantSubscription(tenantId, true));
+}
+
+type TenantSubscription = {
+  subscriptionStatus: string | null;
+  planExpiresAt: Date | null;
+  planActivatedAt: Date | null;
+  trialEndsAt: Date | null;
+} | null;
+
+// This check runs on every business request, so the tenant row is kept per
+// process for ~30 s (jittered so cluster workers don't refresh in step) with
+// one in-flight load per tenant. Date-based expiry is still evaluated live
+// against the clock in decideAccess; only a status change written elsewhere
+// (webhook, reconciler, scheduler) can take up to the TTL to revoke access.
+const SUBSCRIPTION_TTL_MS = 30_000;
+const subscriptionCache = new Map<
+  string,
+  { expiresAt: number; row: Promise<TenantSubscription> }
+>();
+
+function loadTenantSubscription(
+  tenantId: string,
+  fresh: boolean,
+): Promise<TenantSubscription> {
+  const hit = subscriptionCache.get(tenantId);
+  if (!fresh && hit && hit.expiresAt > Date.now()) return hit.row;
+  const row = prisma.tenant.findUnique({
     where: { id: tenantId },
     select: {
       subscriptionStatus: true,
@@ -27,7 +59,23 @@ export async function getSubscriptionAccess(
       trialEndsAt: true,
     },
   });
+  const expiresAt =
+    Date.now() + SUBSCRIPTION_TTL_MS * (0.8 + Math.random() * 0.4);
+  subscriptionCache.set(tenantId, { expiresAt, row });
+  // A failed load must not be served from the cache.
+  row.catch(() => {
+    if (subscriptionCache.get(tenantId)?.row === row)
+      subscriptionCache.delete(tenantId);
+  });
+  return row;
+}
 
+/** Test hook; also usable after a local write that must apply at once. */
+export function clearSubscriptionCache(): void {
+  subscriptionCache.clear();
+}
+
+function decideAccess(tenant: TenantSubscription): SubscriptionAccess {
   if (!tenant)
     return { allowed: true, subscriptionStatus: null, planExpiresAt: null };
 

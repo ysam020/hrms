@@ -87,6 +87,7 @@ describe("refreshToken", () => {
       "user-1",
       "valid-token",
       "new-refresh-token",
+      expect.objectContaining({ redisMs: expect.any(Number) }),
     );
     expect(mockSignAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "user-1" }),
@@ -147,6 +148,7 @@ describe("refreshToken", () => {
       "user-42",
       "valid-token",
       "new-refresh-token",
+      expect.objectContaining({ redisMs: expect.any(Number) }),
     );
   });
 

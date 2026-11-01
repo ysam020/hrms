@@ -20,6 +20,12 @@ generalRouter.get(
   requirePrivileged,
   h.getAuditLogs,
 );
+generalRouter.get(
+  "/audit-logs/:id",
+  authenticate,
+  requirePrivileged,
+  h.getAuditLogDetail,
+);
 generalRouter.post("/add-holiday", authenticate, h.addHoliday);
 generalRouter.put("/delete-holiday", authenticate, h.deleteHoliday);
 generalRouter.put(

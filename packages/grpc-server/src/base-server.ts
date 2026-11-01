@@ -4,7 +4,36 @@ import path from "path";
 import { logger, grpcApiRequestLogger } from "@hrms/logger";
 import { errorHandler } from "./error-handling";
 import { validationMiddleware } from "./middleware/validation";
-import { runWithTenant, getClientForDb } from "@hrms/db";
+import {
+  runWithTenant,
+  getClientForDb,
+  withQueryStats,
+  currentQueryStats,
+  summarizeQueryStats,
+} from "@hrms/db";
+
+// Per-call DB counts for this service's share of a request; joined to the
+// gateway's "request timing" line by the forwarded request id. Off unless
+// REQUEST_TIMING_LOG=true, except for calls that look DB-heavy.
+const grpcTimingMiddleware = (call: any, next: () => Promise<any>) =>
+  withQueryStats(async () => {
+    const started = performance.now();
+    try {
+      return await next();
+    } finally {
+      const stats = currentQueryStats();
+      if (stats) {
+        const timing = summarizeQueryStats(stats, started);
+        const heavy = stats.count >= 25 || stats.totalMs >= 1000;
+        if (heavy || process.env.REQUEST_TIMING_LOG === "true") {
+          const method = call.getPath ? call.getPath() : "unknown";
+          const line = { method, ...timing, middlewareMs: undefined };
+          if (heavy) logger.warn("db-heavy grpc call", line);
+          else logger.info("grpc timing", line);
+        }
+      }
+    }
+  });
 
 // Middleware that reads x-tenant-id and x-tenant-db-name gRPC metadata headers
 // (set by the API gateway) and stores them in AsyncLocalStorage so that
@@ -51,6 +80,7 @@ export class BaseGrpcServer {
     });
     this.middlewares = [];
     this.addMiddleware(grpcApiRequestLogger);
+    this.addMiddleware(grpcTimingMiddleware);
     this.addMiddleware(tenantContextMiddleware);
   }
 

@@ -348,6 +348,10 @@ model AttendanceRecord {
 
   @@unique([tenantId, userId, date])
   @@index([tenantId, date])
+  // Each tenant has its own database and tenant-routed queries carry no
+  // tenantId filter, so the indexes those queries can use must not lead with it.
+  @@unique([userId, date])
+  @@index([date])
   @@map("attendance_records")
 }
 
@@ -424,6 +428,10 @@ model LeaveApplication {
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
+  // Each tenant has its own database and tenant-routed queries carry no
+  // tenantId filter, so the indexes those queries can use must not lead with it.
+  @@index([userId, from])
+  @@index([status, from, to])
   @@map("leaves")
 }
 
@@ -1090,6 +1098,9 @@ model NotificationRecipient {
   user           User         @relation(fields: [userId], references: [id])
 
   @@index([tenantId, userId, isCleared])
+  // Each tenant has its own database and tenant-routed queries carry no
+  // tenantId filter, so the indexes those queries can use must not lead with it.
+  @@index([userId, isCleared, id])
   @@map("notification_recipients")
 }
 
@@ -1194,6 +1205,11 @@ model AuditLog {
   @@index([tenantId, timestamp])
   @@index([tenantId, userId, timestamp])
   @@index([tenantId, entityType, timestamp])
+  // Each tenant has its own database and tenant-routed queries carry no
+  // tenantId filter, so the indexes those queries can use must not lead with it.
+  @@index([timestamp, id])
+  @@index([entityType, timestamp])
+  @@index([username, timestamp])
   @@map("auditlogs")
 }
 
@@ -1309,6 +1325,9 @@ model ApprovalStepInstance {
 
   @@index([instanceId, order])
   @@index([tenantId, resolvedApproverId, status])
+  // Each tenant has its own database and tenant-routed queries carry no
+  // tenantId filter, so the indexes those queries can use must not lead with it.
+  @@index([resolvedApproverId, status])
   @@map("approval_step_instances")
 }
 
@@ -1373,6 +1392,9 @@ model Team {
   workWeekPatternOverride Json?
 
   @@index([tenantId])
+  // Each tenant has its own database and tenant-routed queries carry no
+  // tenantId filter, so the indexes those queries can use must not lead with it.
+  @@index([teamLeaderId])
   @@map("teams")
 }
 
@@ -1670,6 +1692,10 @@ model PerformanceReview {
   @@unique([cycleId, userId])
   @@index([tenantId, userId])
   @@index([tenantId, status])
+  // Each tenant has its own database and tenant-routed queries carry no
+  // tenantId filter, so the indexes those queries can use must not lead with it.
+  @@index([userId, createdAt])
+  @@index([reviewerId, status])
   @@map("performance_reviews")
 }
 

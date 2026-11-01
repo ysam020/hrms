@@ -11,6 +11,7 @@ import {
   updateSuperuser,
   deleteUserRole,
   getTeams,
+  getOrgChart,
   createTeam,
   deleteTeam,
   addTeamMembers,
@@ -29,6 +30,7 @@ jest.mock("@hrms/db", () => {
     },
     user: {
       count: jest.fn(),
+      groupBy: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
@@ -1116,5 +1118,49 @@ describe("platform-only permissions", () => {
       r,
     );
     expect((prisma as any).role.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("getOrgChart name resolution", () => {
+  beforeEach(() => jest.clearAllMocks());
+  const u = (id: string, first: string) => ({
+    id,
+    username: id,
+    first_name: first,
+    last_name: "",
+    designation: null,
+    department: null,
+    employee_photo: null,
+  });
+
+  it("names team members from the active roster without another user query", async () => {
+    const p = prisma as any;
+    p.user.findFirst.mockResolvedValue(null);
+    p.team.findMany.mockResolvedValue([
+      { id: "t1", teamName: "A", teamLeaderId: "u1", members: ["u2"] },
+    ]);
+    p.user.findMany.mockResolvedValueOnce([u("u1", "Lead"), u("u2", "Mem")]);
+    p.user.count.mockResolvedValue(2);
+    p.user.groupBy.mockResolvedValue([]);
+    const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    await getOrgChart({} as any, res);
+    expect(p.user.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("still looks up leaders who are no longer active", async () => {
+    const p = prisma as any;
+    p.user.findFirst.mockResolvedValue(null);
+    p.team.findMany.mockResolvedValue([
+      { id: "t1", teamName: "A", teamLeaderId: "gone", members: ["u2"] },
+    ]);
+    p.user.findMany
+      .mockResolvedValueOnce([u("u2", "Mem")])
+      .mockResolvedValueOnce([u("gone", "Old")]);
+    p.user.count.mockResolvedValue(2);
+    p.user.groupBy.mockResolvedValue([]);
+    const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    await getOrgChart({} as any, res);
+    expect(p.user.findMany).toHaveBeenCalledTimes(2);
+    expect(p.user.findMany.mock.calls[1][0].where.id.in).toEqual(["gone"]);
   });
 });

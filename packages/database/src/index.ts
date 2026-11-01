@@ -28,6 +28,16 @@ export { canonicalizeEmail, getEmailDomain } from "./email";
 export { redactAuditValue, isSensitiveAuditField } from "./auditMiddleware";
 export { generateUniqueUsername } from "./username";
 export {
+  withQueryStats,
+  currentQueryStats,
+  summarizeQueryStats,
+  markHandlerStart,
+  recordDownstream,
+  limitReads,
+  attachQueryTiming,
+  type QueryStats,
+} from "./queryTiming";
+export {
   isPublicEmailDomain,
   PUBLIC_EMAIL_DOMAINS,
 } from "./publicEmailDomains";

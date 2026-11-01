@@ -1,0 +1,499 @@
+timestamp,module,page,pass,endpoint,query_shape,method,status_code,sample_number,duration_ms,ttfb_ms,download_ms,queue_ms,cache_status,notes
+2026-10-31T12:29:23.345Z,Dashboard,/dashboard (cold),postcold1,/csrf-token,,GET,200,1,16.0,13.1,1.9,1.1,network,cold full page load
+2026-10-31T12:29:23.364Z,Dashboard,/dashboard (cold),postcold1,/refresh-token,,POST,200,1,524.7,523.8,0.8,0.1,network,cold full page load
+2026-10-31T12:29:23.892Z,Dashboard,/dashboard (cold),postcold1,/profile,,GET,200,1,127.6,125.5,1.1,1.0,network,cold full page load
+2026-10-31T12:29:24.036Z,Dashboard,/dashboard (cold),postcold1,/walkthrough/progress,,GET,200,1,62.1,55.1,0.7,6.3,network,cold full page load
+2026-10-31T12:29:24.036Z,Dashboard,/dashboard (cold),postcold1,/dashboard,,GET,200,1,114.9,112.8,0.8,1.3,network,cold full page load
+2026-10-31T12:29:24.036Z,Dashboard,/dashboard (cold),postcold1,/approvals/pending-all,,GET,200,1,390.4,387.7,1.4,1.3,network,cold full page load
+2026-10-31T12:29:24.038Z,Dashboard,/dashboard (cold),postcold1,/get-notifications,,GET,200,1,643.2,634.9,0.7,7.6,network,cold full page load
+2026-10-31T12:29:24.066Z,Dashboard,/dashboard (cold),postcold1,/chat/unread-counts,,GET,200,1,631.4,628.1,0.9,2.4,network,cold full page load
+2026-10-31T12:29:24.154Z,Dashboard,/dashboard (cold),postcold1,/get-attendances/:year/:month,,GET,200,1,89.6,86.5,1.3,1.7,network,cold full page load
+2026-10-31T12:29:24.154Z,Dashboard,/dashboard (cold),postcold1,/dashboard/data,?ids=org-today,GET,200,1,295.8,293.8,1.2,0.8,network,cold full page load
+2026-10-31T12:29:24.154Z,Dashboard,/dashboard (cold),postcold1,/dashboard/data,?ids=attendance-trend%2Cheadcount-trend%2Chiring%2Chr-queue%2Cjoiners-leavers%2Cleave-balance%2Cmy-requests%2Cmy-reviews%2Corg-admin%2Cpayroll%2Cpayslip%2Creview-cycle%2Cworkforce,GET,200,1,1228.4,1224.2,3.7,0.5,network,cold full page load
+2026-10-31T12:29:24.155Z,Dashboard,/dashboard (cold),postcold1,/get-holidays/:year,,GET,200,1,307.5,36.1,1.6,269.8,network,cold full page load
+2026-10-31T12:29:24.155Z,Dashboard,/dashboard (cold),postcold1,/get-calendar-events,,GET,200,1,393.1,97.2,1.7,294.2,network,cold full page load
+2026-10-31T12:29:24.155Z,Dashboard,/dashboard (cold),postcold1,/get-hr-activities,?page=1&limit=10&status=Active,GET,200,1,413.1,106.1,1.3,305.8,network,cold full page load
+2026-10-31T12:29:24.155Z,Dashboard,/dashboard (cold),postcold1,/birthdays-anniversaries,?month=10&year=2026,GET,200,1,433.3,39.8,1.8,391.6,network,cold full page load
+2026-10-31T12:29:24.155Z,Dashboard,/dashboard (cold),postcold1,/get-attendance-summary/:id/:year/:month,,GET,200,1,515.5,425.5,1.7,88.3,network,cold full page load
+2026-10-31T12:29:28.010Z,Dashboard,/dashboard (cold),postcold2,/csrf-token,,GET,200,2,9.9,8.5,0.9,0.4,network,cold full page load
+2026-10-31T12:29:28.020Z,Dashboard,/dashboard (cold),postcold2,/refresh-token,,POST,200,2,574.2,573.3,0.7,0.2,network,cold full page load
+2026-10-31T12:29:28.594Z,Dashboard,/dashboard (cold),postcold2,/profile,,GET,200,2,141.8,140.9,0.6,0.3,network,cold full page load
+2026-10-31T12:29:28.742Z,Dashboard,/dashboard (cold),postcold2,/walkthrough/progress,,GET,200,2,57.6,56.5,0.8,0.3,network,cold full page load
+2026-10-31T12:29:28.742Z,Dashboard,/dashboard (cold),postcold2,/dashboard,,GET,200,2,142.0,140.8,0.7,0.5,network,cold full page load
+2026-10-31T12:29:28.742Z,Dashboard,/dashboard (cold),postcold2,/approvals/pending-all,,GET,200,2,236.3,235.1,0.7,0.4,network,cold full page load
+2026-10-31T12:29:28.747Z,Dashboard,/dashboard (cold),postcold2,/get-notifications,,GET,200,2,131.9,130.8,0.6,0.5,network,cold full page load
+2026-10-31T12:29:28.766Z,Dashboard,/dashboard (cold),postcold2,/chat/unread-counts,,GET,200,2,117.5,116.6,0.6,0.3,network,cold full page load
+2026-10-31T12:29:28.891Z,Dashboard,/dashboard (cold),postcold2,/get-attendances/:year/:month,,GET,200,2,66.6,65.3,1.0,0.2,network,cold full page load
+2026-10-31T12:29:28.891Z,Dashboard,/dashboard (cold),postcold2,/get-attendance-summary/:id/:year/:month,,GET,200,2,113.6,112.5,1.0,0.2,network,cold full page load
+2026-10-31T12:29:28.891Z,Dashboard,/dashboard (cold),postcold2,/dashboard/data,?ids=org-today,GET,200,2,519.3,517.3,1.6,0.4,network,cold full page load
+2026-10-31T12:29:28.891Z,Dashboard,/dashboard (cold),postcold2,/dashboard/data,?ids=attendance-trend%2Cheadcount-trend%2Chiring%2Chr-queue%2Cjoiners-leavers%2Cleave-balance%2Cmy-requests%2Cmy-reviews%2Corg-admin%2Cpayroll%2Cpayslip%2Creview-cycle%2Cworkforce,GET,200,2,624.1,622.0,1.7,0.4,network,cold full page load
+2026-10-31T12:29:28.892Z,Dashboard,/dashboard (cold),postcold2,/get-holidays/:year,,GET,200,2,58.6,57.4,1.0,0.2,network,cold full page load
+2026-10-31T12:29:28.892Z,Dashboard,/dashboard (cold),postcold2,/get-calendar-events,,GET,200,2,106.9,48.2,1.2,57.5,network,cold full page load
+2026-10-31T12:29:28.892Z,Dashboard,/dashboard (cold),postcold2,/birthdays-anniversaries,?month=10&year=2026,GET,200,2,109.3,42.8,1.1,65.3,network,cold full page load
+2026-10-31T12:29:28.892Z,Dashboard,/dashboard (cold),postcold2,/get-hr-activities,?page=1&limit=10&status=Active,GET,200,2,126.2,39.0,1.1,86.1,network,cold full page load
+2026-10-31T12:29:32.073Z,Dashboard,/dashboard (cold),postcold3,/csrf-token,,GET,200,3,6.5,5.3,0.6,0.5,network,cold full page load
+2026-10-31T12:29:32.080Z,Dashboard,/dashboard (cold),postcold3,/refresh-token,,POST,200,3,219.3,218.0,1.2,0.1,network,cold full page load
+2026-10-31T12:29:32.302Z,Dashboard,/dashboard (cold),postcold3,/profile,,GET,200,3,146.1,144.5,1.2,0.4,network,cold full page load
+2026-10-31T12:29:32.466Z,Dashboard,/dashboard (cold),postcold3,/walkthrough/progress,,GET,200,3,59.0,57.4,1.0,0.6,network,cold full page load
+2026-10-31T12:29:32.466Z,Dashboard,/dashboard (cold),postcold3,/dashboard,,GET,200,3,134.2,132.4,1.1,0.7,network,cold full page load
+2026-10-31T12:29:32.466Z,Dashboard,/dashboard (cold),postcold3,/approvals/pending-all,,GET,200,3,191.7,190.0,1.0,0.7,network,cold full page load
+2026-10-31T12:29:32.468Z,Dashboard,/dashboard (cold),postcold3,/get-notifications,,GET,200,3,135.1,133.5,1.1,0.4,network,cold full page load
+2026-10-31T12:29:32.483Z,Dashboard,/dashboard (cold),postcold3,/chat/unread-counts,,GET,200,3,119.0,117.8,0.9,0.3,network,cold full page load
+2026-10-31T12:29:32.604Z,Dashboard,/dashboard (cold),postcold3,/dashboard/data,?ids=org-today,GET,200,3,853.5,851.3,1.8,0.4,network,cold full page load
+2026-10-31T12:29:32.604Z,Dashboard,/dashboard (cold),postcold3,/dashboard/data,?ids=attendance-trend%2Cheadcount-trend%2Chiring%2Chr-queue%2Cjoiners-leavers%2Cleave-balance%2Cmy-requests%2Cmy-reviews%2Corg-admin%2Cpayroll%2Cpayslip%2Creview-cycle%2Cworkforce,GET,200,3,932.3,929.9,2,0.4,network,cold full page load
+2026-10-31T12:29:32.605Z,Dashboard,/dashboard (cold),postcold3,/get-attendances/:year/:month,,GET,200,3,45.5,43.9,1.3,0.2,network,cold full page load
+2026-10-31T12:29:32.605Z,Dashboard,/dashboard (cold),postcold3,/get-holidays/:year,,GET,200,3,58.6,57.0,1.3,0.2,network,cold full page load
+2026-10-31T12:29:32.605Z,Dashboard,/dashboard (cold),postcold3,/get-attendance-summary/:id/:year/:month,,GET,200,3,81.3,79.8,1.3,0.2,network,cold full page load
+2026-10-31T12:29:32.605Z,Dashboard,/dashboard (cold),postcold3,/get-calendar-events,,GET,200,3,82.0,36.7,1.4,43.9,network,cold full page load
+2026-10-31T12:29:32.605Z,Dashboard,/dashboard (cold),postcold3,/birthdays-anniversaries,?month=10&year=2026,GET,200,3,96.2,44.1,1.4,50.6,network,cold full page load
+2026-10-31T12:29:32.605Z,Dashboard,/dashboard (cold),postcold3,/get-hr-activities,?page=1&limit=10&status=Active,GET,200,3,98.4,40.0,1.3,57.1,network,cold full page load
+2026-10-31T12:29:48.052Z,Calendar,/calendar,post1,/get-calendar-events,,GET,200,4,112.5,111.1,0.9,0.5,network,
+2026-10-31T12:29:48.052Z,Calendar,/calendar,post1,/get-holidays/:year,,GET,200,4,114.2,112.9,0.9,0.5,network,
+2026-10-31T12:29:49.263Z,Chat,/chat,post1,/chat/unread-counts,,GET,200,4,120.6,119.2,0.9,0.4,network,
+2026-10-31T12:29:49.265Z,Chat,/chat,post1,/chat/conversations,,GET,200,1,156.9,152.9,1.0,3.1,network,
+2026-10-31T12:29:50.640Z,Profile,/profile,post1,/get-employee-details/:username,,GET,200,1,121.2,115.4,1.2,4.5,network,
+2026-10-31T12:29:51.863Z,Employees,/employee-management/employee-list,post1,/view-all-kycs,?page=1&limit=25,GET,200,1,140.9,137.1,0.9,2.9,network,
+2026-10-31T12:29:53.237Z,Employees,/employee-management/insights,post1,/employee-insights,,GET,200,1,50.7,46.9,0.9,2.8,network,
+2026-10-31T12:29:54.459Z,Organization,/organization-tree,post1,/get-org-chart,,GET,200,1,191.6,185.5,1.3,4.7,network,
+2026-10-31T12:29:55.840Z,Attendance,/attendance,post1,/get-attendances/:year/:month,,GET,200,4,46.5,44.9,0.9,0.8,network,
+2026-10-31T12:29:55.840Z,Attendance,/attendance,post1,/get-attendance-summary/:id/:year/:month,,GET,200,4,81.3,80.0,0.8,0.4,network,
+2026-10-31T12:29:57.059Z,Attendance,/attendance/view-all-attendances,post1,/get-all-attendances/:year/:month,?page=1&limit=25,GET,200,1,163.6,157.7,1.3,4.5,network,
+2026-10-31T12:29:59.658Z,Attendance,/attendance/insights,post1,/attendance-insights,?period=month,GET,200,1,111.5,107.4,1.1,3.0,network,
+2026-10-31T12:30:00.878Z,Leave,/attendance/view-leave-applications,post1,/get-leave-applications,?page=1&limit=25&status=Pending&futureOnly=false,GET,200,1,118.1,113.2,0.5,4.4,network,
+2026-10-31T12:30:02.110Z,Leave,/attendance/apply-leave,post1,/tenant-settings,,GET,200,1,183.9,180.3,0.9,2.7,network,
+2026-10-31T12:30:02.110Z,Leave,/attendance/apply-leave,post1,/dashboard/data,?ids=leave-balance,GET,200,1,232.4,228.4,1.4,2.7,network,
+2026-10-31T12:30:03.482Z,WFH,/wfh/requests,post1,/wfh/requests,?page=1&limit=25&status=Pending,GET,200,1,198.8,196.3,0.9,1.6,network,
+2026-10-31T12:30:04.849Z,Holidays,/holidays,post1,/get-holidays/:year,,GET,200,5,92.0,90.7,0.8,0.5,network,
+2026-10-31T12:30:06.072Z,KYC,/kyc/view-employee-kycs,post1,/view-all-kycs,?page=1&limit=25,GET,200,2,106.9,105.4,0.9,0.7,network,
+2026-10-31T12:30:07.296Z,KYC,/kyc/complete-kyc,post1,/get-user-data/:username,,GET,200,1,790.9,787.4,2.8,0.7,network,
+2026-10-31T12:30:08.101Z,KYC,/kyc/complete-kyc,post1,/csrf-token,,GET,200,4,8.3,6.2,1.1,1.1,network,
+2026-10-31T12:30:08.110Z,KYC,/kyc/complete-kyc,post1,/upload/view-url,,POST,400,1,39.8,39.0,0.6,0.1,network,
+2026-10-31T12:30:09.269Z,KYC,/kyc/insights,post1,/get-kyc-insights,,GET,200,1,80.4,78.7,0.9,0.8,network,
+2026-10-31T12:30:10.502Z,Recruitment,/job-openings/view-job-openings,post1,/view-job-openings,?page=1&limit=25&status=Active,GET,200,1,72.6,67.0,1.1,4.6,network,
+2026-10-31T12:30:11.717Z,Recruitment,/job-openings/insights,post1,/job-openings-insights,,GET,200,1,103.1,98.0,1.8,3.3,network,
+2026-10-31T12:30:12.939Z,Performance,/performance-reviews/reviews,post1,/get-all-users,?limit=500,GET,200,1,80.4,74.8,1.3,4.3,network,
+2026-10-31T12:30:12.939Z,Performance,/performance-reviews/reviews,post1,/performance-reviews/cycles,?page=1&limit=200,GET,200,1,366.4,360.4,1.2,4.8,network,
+2026-10-31T12:30:12.939Z,Performance,/performance-reviews/reviews,post1,/performance-reviews,?userId=:id,GET,200,1,367.7,361.1,2.2,4.3,network,
+2026-10-31T12:30:12.940Z,Performance,/performance-reviews/reviews,post1,/performance-reviews,?reviewerId=:id,GET,200,1,538.8,532.9,1.6,4.3,network,
+2026-10-31T12:30:14.617Z,Performance,/performance-reviews/review-cycles,post1,/performance-reviews/cycles,?page=1&limit=25,GET,200,1,102.0,95.8,1.2,5.1,network,
+2026-10-31T12:30:15.833Z,Payroll,/payroll/my-payslips,post1,/payroll/my-payslips,?page=1&limit=12,GET,200,1,222.1,216.1,1.4,4.6,network,
+2026-10-31T12:30:17.206Z,Payroll,/payroll/salary-advances,post1,/payroll/advances,?page=1&limit=25,GET,200,1,104.1,100.7,0.8,2.6,network,
+2026-10-31T12:30:18.431Z,Payroll,/payroll/my-tax-declaration,post1,/tax-declarations/mine,?financialYear=2026-27,GET,200,1,153.0,150.8,1.3,0.9,network,
+2026-10-31T12:30:19.802Z,Payroll,/payroll/payroll-runs,post1,/payroll/runs,?page=1&limit=12,GET,200,1,83.3,78.6,1.1,3.5,network,
+2026-10-31T12:30:21.024Z,Payroll,/payroll/salary-management,post1,/view-all-kycs,?page=1&limit=25,GET,200,3,176.3,172.4,1.2,2.7,network,
+2026-10-31T12:30:22.406Z,Payroll,/payroll/tax-declarations,post1,/tax-declarations,?financialYear=2026-27&page=1&limit=25&status=Submitted,GET,200,1,116.8,114.0,1.4,1.3,network,
+2026-10-31T12:30:23.623Z,Assets,/assets/inventory,post1,/assets/categories,,GET,200,1,85.8,79.8,1.0,4.9,network,
+2026-10-31T12:30:23.623Z,Assets,/assets/inventory,post1,/assets,?page=1&limit=25,GET,200,1,197.6,192.2,0.9,4.5,network,
+2026-10-31T12:30:25.002Z,Assets,/assets/issues,post1,/assets/issues,?page=1&limit=25,GET,200,1,123.9,118.4,1.7,3.8,network,
+2026-10-31T12:30:26.219Z,Assets,/assets/summary,post1,/assets/summary,,GET,200,1,85.0,80.8,1.3,2.9,network,
+2026-10-31T12:30:32.224Z,Resignations,/resignation-process/view-resignations,post1,/view-resignations,?page=1&limit=25,GET,200,1,116.4,114.9,0.8,0.6,network,
+2026-10-31T12:30:32.224Z,Resignations,/resignation-process/view-resignations,post1,/my-resignation,,GET,200,1,258.5,257.0,0.9,0.6,network,
+2026-10-31T12:30:33.601Z,Resignations,/resignation-process/exit-feedback,post1,/exit-interview-templates,,GET,200,1,149.9,148.1,1.2,0.6,network,
+2026-10-31T12:30:33.601Z,Resignations,/resignation-process/exit-feedback,post1,/my-resignation,,GET,200,2,307.8,306.6,0.9,0.3,network,
+2026-10-31T12:30:35.128Z,Resignations,/resignation-process/insights,post1,/resignation-insights,,GET,200,1,196.6,194.4,1.3,0.9,network,
+2026-10-31T12:30:36.503Z,Announcements,/hr-activities,post1,/get-hr-activities,?page=1&limit=20&status=Active,GET,200,1,119.3,117.0,1.2,1.1,network,
+2026-10-31T12:30:37.722Z,Policies,/policy,post1,/policies,?page=1&limit=50,GET,200,1,44.1,39.1,0.6,4.3,network,
+2026-10-31T12:30:38.954Z,Helpdesk,/helpdesk,post1,/helpdesk/tickets,?page=1&limit=25,GET,200,1,162.5,160.7,0.9,1.0,network,
+2026-10-31T12:30:40.327Z,Analytics,/analytics/workforce,post1,/get-employment-type-breakdown,,GET,200,1,62.4,58.6,0.9,2.8,network,
+2026-10-31T12:30:40.328Z,Analytics,/analytics/workforce,post1,/get-employee-status-distribution,,GET,200,1,52.7,48.8,1.1,2.8,network,
+2026-10-31T12:30:40.328Z,Analytics,/analytics/workforce,post1,/get-joining-data,,GET,200,1,54.0,49.9,1.0,3.1,network,
+2026-10-31T12:30:40.328Z,Analytics,/analytics/workforce,post1,/get-employee-designations,,GET,200,1,57.1,50.3,0.9,5.9,network,
+2026-10-31T12:30:40.328Z,Analytics,/analytics/workforce,post1,/get-employee-departments,,GET,200,1,60.1,53.3,1.0,5.8,network,
+2026-10-31T12:30:40.328Z,Analytics,/analytics/workforce,post1,/get-headcount-growth,,GET,200,1,64.9,60.9,0.9,3.2,network,
+2026-10-31T12:30:40.328Z,Analytics,/analytics/workforce,post1,/get-tenure-distribution,,GET,200,1,96.4,43.3,0.9,52.3,network,
+2026-10-31T12:30:40.328Z,Analytics,/analytics/workforce,post1,/get-age-distribution,,GET,200,1,99.6,47.3,0.9,51.4,network,
+2026-10-31T12:30:41.542Z,Analytics,/analytics/leave-attendance,post1,/get-leave-approval-rate,,GET,200,1,105.0,101.0,1.1,2.9,network,
+2026-10-31T12:30:41.543Z,Analytics,/analytics/leave-attendance,post1,/get-attendance-trends,,GET,failed,1,,,,-1,network,request aborted/failed in browser
+2026-10-31T12:30:41.543Z,Analytics,/analytics/leave-attendance,post1,/get-attendance-trends,,GET,200,2,96.4,92.4,1.0,3.0,network,
+2026-10-31T12:30:41.543Z,Analytics,/analytics/leave-attendance,post1,/get-attendance-trends,,GET,200,3,143.9,47.3,0.8,95.9,network,
+2026-10-31T12:30:41.544Z,Analytics,/analytics/leave-attendance,post1,/get-working-hours-distribution,,GET,200,1,98.6,95.6,0.7,2.3,network,
+2026-10-31T12:30:41.544Z,Analytics,/analytics/leave-attendance,post1,/get-monthly-leave-patterns,,GET,200,1,100.0,97.4,0.6,2.0,network,
+2026-10-31T12:30:41.544Z,Analytics,/analytics/leave-attendance,post1,/get-leave-type-breakdown,,GET,200,1,104.0,101.2,0.5,2.3,network,
+2026-10-31T12:30:42.913Z,Analytics,/analytics/recruitment,post1,/get-hiring-funnel,,GET,200,1,46.6,44.6,1.1,0.8,network,
+2026-10-31T12:30:42.914Z,Analytics,/analytics/recruitment,post1,/get-job-openings-by-status,,GET,200,1,49.1,47.5,0.8,0.8,network,
+2026-10-31T12:30:42.914Z,Analytics,/analytics/recruitment,post1,/get-applications-by-job-role,,GET,200,1,50.0,48.0,1.0,1.0,network,
+2026-10-31T12:30:42.914Z,Analytics,/analytics/recruitment,post1,/get-hiring-manager-performance,,GET,200,1,51.8,50.2,0.8,0.8,network,
+2026-10-31T12:30:44.134Z,Analytics,/analytics/salary,post1,/get-compensation-breakdown,,GET,200,1,105.2,101.0,1.1,3.2,network,
+2026-10-31T12:30:44.136Z,Analytics,/analytics/salary,post1,/get-salary-distribution-by-department,,GET,200,1,100.6,99.1,0.9,0.5,network,
+2026-10-31T12:30:44.136Z,Analytics,/analytics/salary,post1,/get-average-salary-by-designation,,GET,200,1,101.9,100.0,1.0,0.8,network,
+2026-10-31T12:30:44.136Z,Analytics,/analytics/salary,post1,/get-salary-bands,,GET,200,1,103.9,100.6,0.9,2.3,network,
+2026-10-31T12:30:45.361Z,Reports,/reports/report-builder,post1,/reports/schema/employee,,GET,200,1,84.5,80.7,0.9,2.9,network,
+2026-10-31T12:30:46.588Z,Reports,/reports/saved-reports,post1,/reports/saved,?page=1&limit=10,GET,200,1,119.4,114.9,1.6,2.9,network,
+2026-10-31T12:30:47.808Z,Permissions,/permissions/manage-roles,post1,/get-roles,,GET,200,1,128.1,124.5,0.8,2.7,network,
+2026-10-31T12:30:49.031Z,Permissions,/permissions/user-permissions,post1,/get-all-users,?limit=1000,GET,200,1,58.9,53.2,1.2,4.5,network,
+2026-10-31T12:30:49.031Z,Permissions,/permissions/user-permissions,post1,/get-role-and-permissions,,GET,200,1,84.0,78.4,1.2,4.4,network,
+2026-10-31T12:30:50.246Z,Permissions,/permissions/teams,post1,/get-teams,,GET,200,1,116.0,110.7,0.9,4.5,network,
+2026-10-31T12:30:51.474Z,Settings,/settings/company,post1,/tenants/org-profile,,GET,200,1,135.1,131.2,1.2,2.6,network,
+2026-10-31T12:30:52.689Z,Settings,/settings/leave,post1,/tenant-settings,,GET,200,2,115.0,109.0,1.4,4.5,network,
+2026-10-31T12:30:53.913Z,Settings,/settings/attendance,post1,/tenant-settings,,GET,200,3,118.1,116.7,1.0,0.4,network,
+2026-10-31T12:30:55.135Z,Settings,/settings/hr-policy,post1,/tenant-settings,,GET,200,4,185.4,183.7,1.3,0.4,network,
+2026-10-31T12:30:56.509Z,Settings,/settings/work-week,post1,/tenant-settings,,GET,200,5,114.6,112.9,1.3,0.4,network,
+2026-10-31T12:30:57.728Z,Settings,/settings/exit-policy,post1,/exit-checklist-item-defs,,GET,200,1,138.1,136.4,1.1,0.6,network,
+2026-10-31T12:30:57.728Z,Settings,/settings/exit-policy,post1,/exit-interview-templates,,GET,200,2,138.3,136.6,1.0,0.7,network,
+2026-10-31T12:30:57.728Z,Settings,/settings/exit-policy,post1,/notice-period-policies,,GET,200,1,141.5,139.6,0.9,1.0,network,
+2026-10-31T12:30:58.949Z,Settings,/settings/payroll,post1,/salary-component-definitions,,GET,200,1,115.0,113.0,1.2,0.8,network,
+2026-10-31T12:30:58.950Z,Settings,/settings/payroll,post1,/pt-slabs,,GET,200,1,71.9,70.0,1.1,0.7,network,
+2026-10-31T12:30:58.950Z,Settings,/settings/payroll,post1,/tds-slabs,,GET,200,1,74.4,72.6,1.0,0.8,network,
+2026-10-31T12:30:58.950Z,Settings,/settings/payroll,post1,/pay-cycles,,GET,200,1,80.0,78.2,1.0,0.8,network,
+2026-10-31T12:31:00.171Z,Settings,/settings/recruitment-pipeline,post1,/interview-pipeline-templates,,GET,200,1,77.4,71.7,1.1,4.7,network,
+2026-10-31T12:31:01.392Z,Settings,/settings/join-requests,post1,/tenants/join-requests,,GET,200,1,178.7,174.3,1.2,3.2,network,
+2026-10-31T12:31:02.767Z,Subscription,/subscription,post1,/tenants/me,,GET,200,1,74.7,72.9,0.9,1.0,network,
+2026-10-31T12:31:06.437Z,Support,/support,post1,/support/stats,?scope=mine,GET,200,1,89.8,83.9,1.2,4.6,network,
+2026-10-31T12:31:06.437Z,Support,/support,post1,/support/tickets,?page=1&limit=25&scope=mine&sort=updated_desc,GET,200,1,129.3,123.4,1.2,4.6,network,
+2026-10-31T12:31:08.873Z,AI Assistants,/ai-assistants,post1,/ai-connections,,GET,200,1,79.0,77.4,0.8,0.9,network,
+2026-10-31T12:31:10.095Z,Audit Logs,/audit-logs,post1,/audit-logs,?days=7,GET,200,1,515.6,508.9,3.5,3.3,network,
+2026-10-31T12:31:20.504Z,Dashboard,/dashboard,post2,/dashboard,,GET,200,4,246.1,244.3,0.8,1.0,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/get-holidays/:year,,GET,200,6,70.1,68.2,1.5,0.5,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/get-calendar-events,,GET,200,5,70.3,68.3,1.6,0.4,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/get-attendances/:year/:month,,GET,200,5,96.9,95.1,1.3,0.5,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/get-hr-activities,?page=1&limit=10&status=Active,GET,200,4,179.0,108.8,1.9,68.3,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/get-attendance-summary/:id/:year/:month,,GET,200,5,182.8,180.9,1.4,0.5,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/birthdays-anniversaries,?month=10&year=2026,GET,200,4,335.4,264.8,2.2,68.3,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/dashboard/data,?ids=org-today,GET,200,4,507.8,506.1,1.0,0.8,network,
+2026-10-31T12:31:20.761Z,Dashboard,/dashboard,post2,/dashboard/data,?ids=attendance-trend%2Cheadcount-trend%2Chiring%2Chr-queue%2Cjoiners-leavers%2Cleave-balance%2Cmy-requests%2Cmy-reviews%2Corg-admin%2Cpayroll%2Cpayslip%2Creview-cycle%2Cworkforce,GET,200,4,703.4,701.6,1.3,0.5,network,
+2026-10-31T12:31:23.852Z,Calendar,/calendar,post2,/get-calendar-events,,GET,200,6,46.1,44.7,0.9,0.5,network,
+2026-10-31T12:31:23.852Z,Calendar,/calendar,post2,/get-holidays/:year,,GET,200,7,47.7,46.4,0.8,0.5,network,
+2026-10-31T12:31:25.071Z,Chat,/chat,post2,/chat/unread-counts,,GET,200,5,158.7,153.0,1.1,4.6,network,
+2026-10-31T12:31:25.074Z,Chat,/chat,post2,/chat/conversations,,GET,200,2,184.2,181.0,1.3,2.0,network,
+2026-10-31T12:31:26.450Z,Profile,/profile,post2,/get-employee-details/:username,,GET,200,2,53.0,47.9,0.8,4.4,network,
+2026-10-31T12:31:27.663Z,Employees,/employee-management/employee-list,post2,/view-all-kycs,?page=1&limit=25,GET,200,4,156.8,155.0,1.0,0.8,network,
+2026-10-31T12:31:29.035Z,Employees,/employee-management/insights,post2,/employee-insights,,GET,200,2,81.8,77.6,1.4,2.8,network,
+2026-10-31T12:31:30.249Z,Organization,/organization-tree,post2,/get-org-chart,,GET,200,2,470.3,466.6,1.0,2.7,network,
+2026-10-31T12:31:31.925Z,Attendance,/attendance,post2,/get-attendances/:year/:month,,GET,200,6,52.2,50.7,1.0,0.5,network,
+2026-10-31T12:31:31.925Z,Attendance,/attendance,post2,/get-attendance-summary/:id/:year/:month,,GET,200,6,348.2,346.2,1.4,0.6,network,
+2026-10-31T12:31:33.446Z,Attendance,/attendance/view-all-attendances,post2,/get-all-attendances/:year/:month,?page=1&limit=25,GET,200,2,439.9,437.8,1.5,0.7,network,
+2026-10-31T12:31:36.193Z,Attendance,/attendance/insights,post2,/attendance-insights,?period=month,GET,200,2,132.8,128.2,1.5,3.0,network,
+2026-10-31T12:31:37.417Z,Leave,/attendance/view-leave-applications,post2,/get-leave-applications,?page=1&limit=25&status=Pending&futureOnly=false,GET,200,2,117.6,114.1,0.8,2.7,network,
+2026-10-31T12:31:38.641Z,Leave,/attendance/apply-leave,post2,/tenant-settings,,GET,200,6,190.6,183.6,4.2,2.8,network,
+2026-10-31T12:31:38.641Z,Leave,/attendance/apply-leave,post2,/dashboard/data,?ids=leave-balance,GET,200,2,234.9,230.7,1.5,2.7,network,
+2026-10-31T12:31:40.017Z,WFH,/wfh/requests,post2,/wfh/requests,?page=1&limit=25&status=Pending,GET,200,2,155.6,149.2,1.5,4.8,network,
+2026-10-31T12:31:41.387Z,Holidays,/holidays,post2,/get-holidays/:year,,GET,200,8,48.7,46.8,1.1,0.8,network,
+2026-10-31T12:31:42.610Z,KYC,/kyc/view-employee-kycs,post2,/view-all-kycs,?page=1&limit=25,GET,200,5,117.7,116.4,0.9,0.4,network,
+2026-10-31T12:31:43.833Z,KYC,/kyc/complete-kyc,post2,/get-user-data/:username,,GET,200,2,198.9,195.6,2.3,1.0,network,
+2026-10-31T12:31:44.044Z,KYC,/kyc/complete-kyc,post2,/upload/view-url,,POST,400,2,51.1,50.1,0.9,0.2,network,
+2026-10-31T12:31:45.200Z,KYC,/kyc/insights,post2,/get-kyc-insights,,GET,200,2,210.9,204.1,1.6,5.2,network,
+2026-10-31T12:31:46.580Z,Recruitment,/job-openings/view-job-openings,post2,/view-job-openings,?page=1&limit=25&status=Active,GET,200,2,141.9,138.0,1.1,2.8,network,
+2026-10-31T12:31:47.950Z,Recruitment,/job-openings/insights,post2,/job-openings-insights,,GET,200,2,97.6,93.0,1.8,2.8,network,
+2026-10-31T12:31:49.167Z,Performance,/performance-reviews/reviews,post2,/get-all-users,?limit=500,GET,200,2,141.6,137.5,1.1,3.0,network,
+2026-10-31T12:31:49.167Z,Performance,/performance-reviews/reviews,post2,/performance-reviews,?userId=:id,GET,200,2,152.3,148.5,1.1,2.8,network,
+2026-10-31T12:31:49.167Z,Performance,/performance-reviews/reviews,post2,/performance-reviews/cycles,?page=1&limit=200,GET,200,2,156.9,153.0,1.0,2.8,network,
+2026-10-31T12:31:49.167Z,Performance,/performance-reviews/reviews,post2,/performance-reviews,?reviewerId=:id,GET,200,2,909.7,905.5,1.3,2.8,network,
+2026-10-31T12:31:51.297Z,Performance,/performance-reviews/review-cycles,post2,/performance-reviews/cycles,?page=1&limit=25,GET,200,2,117.3,114.4,0.9,2.0,network,
+2026-10-31T12:31:52.520Z,Payroll,/payroll/my-payslips,post2,/payroll/my-payslips,?page=1&limit=12,GET,200,2,112.1,109.8,0.7,1.6,network,
+2026-10-31T12:31:53.743Z,Payroll,/payroll/salary-advances,post2,/payroll/advances,?page=1&limit=25,GET,200,2,122.2,117.3,1.1,3.7,network,
+2026-10-31T12:31:54.959Z,Payroll,/payroll/my-tax-declaration,post2,/tax-declarations/mine,?financialYear=2026-27,GET,200,2,116.2,112.3,1.0,2.8,network,
+2026-10-31T12:31:56.185Z,Payroll,/payroll/payroll-runs,post2,/payroll/runs,?page=1&limit=12,GET,200,2,86.0,81.4,1.2,3.4,network,
+2026-10-31T12:31:57.400Z,Payroll,/payroll/salary-management,post2,/view-all-kycs,?page=1&limit=25,GET,200,6,115.3,114.0,0.8,0.5,network,
+2026-10-31T12:31:58.615Z,Payroll,/payroll/tax-declarations,post2,/tax-declarations,?financialYear=2026-27&page=1&limit=25&status=Submitted,GET,200,2,197.6,196.3,0.8,0.5,network,
+2026-10-31T12:31:59.978Z,Assets,/assets/inventory,post2,/assets/categories,,GET,200,2,433.0,431.5,1.0,0.5,network,
+2026-10-31T12:31:59.978Z,Assets,/assets/inventory,post2,/assets,?page=1&limit=25,GET,200,2,552.3,550.8,1.0,0.5,network,
+2026-10-31T12:32:01.646Z,Assets,/assets/issues,post2,/assets/issues,?page=1&limit=25,GET,200,2,238.4,234.5,1.2,2.7,network,
+2026-10-31T12:32:03.018Z,Assets,/assets/summary,post2,/assets/summary,,GET,200,2,85.6,83.6,1.1,0.9,network,
+2026-10-31T12:32:05.277Z,Resignations,/resignation-process/view-resignations,post2,/my-resignation,,GET,200,3,87.5,85.9,0.9,0.7,network,
+2026-10-31T12:32:05.277Z,Resignations,/resignation-process/view-resignations,post2,/view-resignations,?page=1&limit=25,GET,200,2,121.5,120.0,0.9,0.7,network,
+2026-10-31T12:32:06.494Z,Resignations,/resignation-process/exit-feedback,post2,/exit-interview-templates,,GET,200,3,112.6,111.3,0.7,0.5,network,
+2026-10-31T12:32:06.494Z,Resignations,/resignation-process/exit-feedback,post2,/my-resignation,,GET,200,4,117.8,116.7,0.8,0.3,network,
+2026-10-31T12:32:07.711Z,Resignations,/resignation-process/insights,post2,/resignation-insights,,GET,200,2,123.4,119.2,0.9,3.3,network,
+2026-10-31T12:32:08.933Z,Announcements,/hr-activities,post2,/get-hr-activities,?page=1&limit=20&status=Active,GET,200,2,45.8,43.2,1.0,1.6,network,
+2026-10-31T12:32:10.152Z,Policies,/policy,post2,/policies,?page=1&limit=50,GET,200,2,93.4,88.2,0.8,4.3,network,
+2026-10-31T12:32:11.381Z,Helpdesk,/helpdesk,post2,/helpdesk/tickets,?page=1&limit=25,GET,200,2,114.3,110.7,0.9,2.8,network,
+2026-10-31T12:32:12.595Z,Analytics,/analytics/workforce,post2,/get-headcount-growth,,GET,200,2,53.2,49.0,0.9,3.3,network,
+2026-10-31T12:32:12.595Z,Analytics,/analytics/workforce,post2,/get-joining-data,,GET,200,2,56.0,52.0,0.6,3.4,network,
+2026-10-31T12:32:12.595Z,Analytics,/analytics/workforce,post2,/get-employee-status-distribution,,GET,200,2,56.4,52.4,0.9,3.1,network,
+2026-10-31T12:32:12.595Z,Analytics,/analytics/workforce,post2,/get-employment-type-breakdown,,GET,200,2,57.3,53.2,1.0,3.0,network,
+2026-10-31T12:32:12.595Z,Analytics,/analytics/workforce,post2,/get-employee-departments,,GET,200,2,57.4,53.5,0.8,3.1,network,
+2026-10-31T12:32:12.596Z,Analytics,/analytics/workforce,post2,/get-employee-designations,,GET,200,2,51.5,47.7,0.7,3.0,network,
+2026-10-31T12:32:12.596Z,Analytics,/analytics/workforce,post2,/get-tenure-distribution,,GET,200,2,95.6,43.5,0.6,51.6,network,
+2026-10-31T12:32:12.596Z,Analytics,/analytics/workforce,post2,/get-age-distribution,,GET,200,2,99.6,48.2,0.7,50.7,network,
+2026-10-31T12:32:13.811Z,Analytics,/analytics/leave-attendance,post2,/get-leave-approval-rate,,GET,200,2,134.7,130.5,1.1,3.2,network,
+2026-10-31T12:32:13.812Z,Analytics,/analytics/leave-attendance,post2,/get-attendance-trends,,GET,failed,4,,,,-1,network,request aborted/failed in browser
+2026-10-31T12:32:13.812Z,Analytics,/analytics/leave-attendance,post2,/get-attendance-trends,,GET,200,5,131.6,127.9,0.9,2.8,network,
+2026-10-31T12:32:13.812Z,Analytics,/analytics/leave-attendance,post2,/get-working-hours-distribution,,GET,200,2,137.7,134.6,0.6,2.4,network,
+2026-10-31T12:32:13.812Z,Analytics,/analytics/leave-attendance,post2,/get-leave-type-breakdown,,GET,200,2,139.3,136.4,0.7,2.2,network,
+2026-10-31T12:32:13.812Z,Analytics,/analytics/leave-attendance,post2,/get-attendance-trends,,GET,200,6,174.1,42.2,0.7,131.2,network,
+2026-10-31T12:32:13.813Z,Analytics,/analytics/leave-attendance,post2,/get-monthly-leave-patterns,,GET,200,2,135.9,133.5,0.6,1.7,network,
+2026-10-31T12:32:15.184Z,Analytics,/analytics/recruitment,post2,/get-job-openings-by-status,,GET,200,2,50.6,47.2,0.8,2.6,network,
+2026-10-31T12:32:15.184Z,Analytics,/analytics/recruitment,post2,/get-applications-by-job-role,,GET,200,2,53.3,49.7,0.6,3.0,network,
+2026-10-31T12:32:15.184Z,Analytics,/analytics/recruitment,post2,/get-hiring-manager-performance,,GET,200,2,54.3,51.1,0.7,2.5,network,
+2026-10-31T12:32:15.184Z,Analytics,/analytics/recruitment,post2,/get-hiring-funnel,,GET,200,2,55.7,51.9,0.7,3.1,network,
+2026-10-31T12:32:16.411Z,Analytics,/analytics/salary,post2,/get-average-salary-by-designation,,GET,200,2,99.6,96.0,1.2,2.4,network,
+2026-10-31T12:32:16.411Z,Analytics,/analytics/salary,post2,/get-compensation-breakdown,,GET,200,2,104.6,100.1,1.2,3.3,network,
+2026-10-31T12:32:16.411Z,Analytics,/analytics/salary,post2,/get-salary-bands,,GET,200,2,104.8,101.2,1.1,2.5,network,
+2026-10-31T12:32:16.411Z,Analytics,/analytics/salary,post2,/get-salary-distribution-by-department,,GET,200,2,105.8,102.7,1.0,2.1,network,
+2026-10-31T12:32:17.628Z,Reports,/reports/report-builder,post2,/reports/schema/employee,,GET,200,2,81.2,77.6,0.8,2.8,network,
+2026-10-31T12:32:18.847Z,Reports,/reports/saved-reports,post2,/reports/saved,?page=1&limit=10,GET,200,2,118.2,116.2,1.1,0.9,network,
+2026-10-31T12:32:20.063Z,Permissions,/permissions/manage-roles,post2,/get-roles,,GET,200,2,141.0,137.8,0.8,2.5,network,
+2026-10-31T12:32:21.290Z,Permissions,/permissions/user-permissions,post2,/get-role-and-permissions,,GET,200,2,83.3,78.9,1.4,3.0,network,
+2026-10-31T12:32:22.505Z,Permissions,/permissions/teams,post2,/get-teams,,GET,200,2,177.8,173.9,1.2,2.7,network,
+2026-10-31T12:32:23.884Z,Settings,/settings/company,post2,/tenants/org-profile,,GET,200,2,78.9,75.3,0.9,2.8,network,
+2026-10-31T12:32:25.103Z,Settings,/settings/leave,post2,/tenant-settings,,GET,200,7,121.4,117.0,1.2,3.1,network,
+2026-10-31T12:32:26.326Z,Settings,/settings/attendance,post2,/tenant-settings,,GET,200,8,219.8,217.7,1.5,0.6,network,
+2026-10-31T12:32:27.687Z,Settings,/settings/hr-policy,post2,/tenant-settings,,GET,200,9,429.0,427.0,1.1,0.9,network,
+2026-10-31T12:32:29.206Z,Settings,/settings/work-week,post2,/tenant-settings,,GET,200,10,149.4,148.5,0.6,0.3,network,
+2026-10-31T12:32:30.575Z,Settings,/settings/exit-policy,post2,/exit-interview-templates,,GET,200,4,120.7,119.7,0.8,0.3,network,
+2026-10-31T12:32:30.575Z,Settings,/settings/exit-policy,post2,/exit-checklist-item-defs,,GET,200,2,123.6,120.6,0.8,2.3,network,
+2026-10-31T12:32:30.575Z,Settings,/settings/exit-policy,post2,/notice-period-policies,,GET,200,2,129.0,125.7,0.8,2.5,network,
+2026-10-31T12:32:31.793Z,Settings,/settings/payroll,post2,/pt-slabs,,GET,200,2,82.7,78.9,1.1,2.7,network,
+2026-10-31T12:32:31.793Z,Settings,/settings/payroll,post2,/tds-slabs,,GET,200,2,83.7,80.2,0.9,2.6,network,
+2026-10-31T12:32:31.793Z,Settings,/settings/payroll,post2,/pay-cycles,,GET,200,2,86.7,82.9,1.0,2.7,network,
+2026-10-31T12:32:31.793Z,Settings,/settings/payroll,post2,/salary-component-definitions,,GET,200,2,116.8,113.0,1.1,2.8,network,
+2026-10-31T12:32:33.016Z,Settings,/settings/recruitment-pipeline,post2,/interview-pipeline-templates,,GET,200,2,79.1,75.3,1.3,2.5,network,
+2026-10-31T12:32:34.240Z,Settings,/settings/join-requests,post2,/tenants/join-requests,,GET,200,2,168.9,164.6,1.5,2.8,network,
+2026-10-31T12:32:35.614Z,Subscription,/subscription,post2,/tenants/me,,GET,200,2,80.6,76.8,1.1,2.8,network,
+2026-10-31T12:32:39.281Z,Support,/support,post2,/support/stats,?scope=mine,GET,200,2,82.9,77.4,1.1,4.4,network,
+2026-10-31T12:32:39.281Z,Support,/support,post2,/support/tickets,?page=1&limit=25&scope=mine&sort=updated_desc,GET,200,2,109.6,104.1,1.1,4.4,network,
+2026-10-31T12:32:41.717Z,AI Assistants,/ai-assistants,post2,/ai-connections,,GET,200,2,104.1,100.2,1.1,2.9,network,
+2026-10-31T12:32:42.941Z,Audit Logs,/audit-logs,post2,/audit-logs,?days=7,GET,200,2,429.5,422.5,3.7,3.3,network,
+2026-10-31T12:32:50.603Z,Dashboard,/dashboard,post3,/dashboard,,GET,200,5,113.4,109.8,0.8,2.7,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/get-calendar-events,,GET,200,7,44.8,43.3,1.1,0.3,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/get-holidays/:year,,GET,200,9,45.9,44.6,1.0,0.3,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/get-attendances/:year/:month,,GET,200,7,50.5,49.4,0.6,0.4,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/get-attendance-summary/:id/:year/:month,,GET,200,7,83.2,82.2,0.7,0.4,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/get-hr-activities,?page=1&limit=10&status=Active,GET,200,5,84.0,38.1,1.0,44.8,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/birthdays-anniversaries,?month=10&year=2026,GET,200,5,86.1,41.3,1.0,43.8,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/dashboard/data,?ids=org-today,GET,200,5,245.5,244.0,0.9,0.5,network,
+2026-10-31T12:32:50.723Z,Dashboard,/dashboard,post3,/dashboard/data,?ids=attendance-trend%2Cheadcount-trend%2Chiring%2Chr-queue%2Cjoiners-leavers%2Cleave-balance%2Cmy-requests%2Cmy-reviews%2Corg-admin%2Cpayroll%2Cpayslip%2Creview-cycle%2Cworkforce,GET,200,5,419.1,417.0,1.6,0.5,network,
+2026-10-31T12:32:53.499Z,Calendar,/calendar,post3,/get-calendar-events,,GET,200,8,45.0,43.6,1.0,0.5,network,
+2026-10-31T12:32:53.499Z,Calendar,/calendar,post3,/get-holidays/:year,,GET,200,10,46.7,45.1,1.1,0.5,network,
+2026-10-31T12:32:54.721Z,Chat,/chat,post3,/chat/unread-counts,,GET,200,6,213.9,209.7,1.3,2.9,network,
+2026-10-31T12:32:54.721Z,Chat,/chat,post3,/chat/conversations,,GET,200,3,268.3,264.6,1.1,2.7,network,
+2026-10-31T12:32:56.093Z,Profile,/profile,post3,/get-employee-details/:username,,GET,200,3,43.9,40.7,0.7,2.6,network,
+2026-10-31T12:32:57.310Z,Employees,/employee-management/employee-list,post3,/view-all-kycs,?page=1&limit=25,GET,200,7,189.0,186.9,1.4,0.7,network,
+2026-10-31T12:32:58.688Z,Employees,/employee-management/insights,post3,/employee-insights,,GET,200,3,45.1,41.3,1.0,2.8,network,
+2026-10-31T12:32:59.909Z,Organization,/organization-tree,post3,/get-org-chart,,GET,200,3,270.0,265.2,1.3,3.4,network,
+2026-10-31T12:33:01.281Z,Attendance,/attendance,post3,/get-attendances/:year/:month,,GET,200,8,58.8,57.2,1.0,0.6,network,
+2026-10-31T12:33:01.281Z,Attendance,/attendance,post3,/get-attendance-summary/:id/:year/:month,,GET,200,8,92.2,90.7,0.9,0.6,network,
+2026-10-31T12:33:02.498Z,Attendance,/attendance/view-all-attendances,post3,/get-all-attendances/:year/:month,?page=1&limit=25,GET,200,3,223.0,221.4,0.9,0.7,network,
+2026-10-31T12:33:05.099Z,Attendance,/attendance/insights,post3,/attendance-insights,?period=month,GET,200,3,172.1,167.7,1.5,2.9,network,
+2026-10-31T12:33:06.475Z,Leave,/attendance/view-leave-applications,post3,/get-leave-applications,?page=1&limit=25&status=Pending&futureOnly=false,GET,200,3,126.7,121.5,4.5,0.8,network,
+2026-10-31T12:33:07.696Z,Leave,/attendance/apply-leave,post3,/dashboard/data,?ids=leave-balance,GET,200,3,200.5,195.6,1.8,3.1,network,
+2026-10-31T12:33:07.697Z,Leave,/attendance/apply-leave,post3,/tenant-settings,,GET,200,11,110.8,109.3,1.0,0.6,network,
+2026-10-31T12:33:09.066Z,WFH,/wfh/requests,post3,/wfh/requests,?page=1&limit=25&status=Pending,GET,200,3,157.3,153.4,1.1,2.8,network,
+2026-10-31T12:33:10.437Z,Holidays,/holidays,post3,/get-holidays/:year,,GET,200,11,100.3,98.4,1.2,0.7,network,
+2026-10-31T12:33:11.665Z,KYC,/kyc/view-employee-kycs,post3,/view-all-kycs,?page=1&limit=25,GET,200,8,115.6,113.8,1.1,0.7,network,
+2026-10-31T12:33:12.884Z,KYC,/kyc/complete-kyc,post3,/get-user-data/:username,,GET,200,3,118.0,113.7,1.5,2.9,network,
+2026-10-31T12:33:13.013Z,KYC,/kyc/complete-kyc,post3,/upload/view-url,,POST,400,3,47.3,45.8,1.2,0.3,network,
+2026-10-31T12:33:14.249Z,KYC,/kyc/insights,post3,/get-kyc-insights,,GET,200,3,64.3,63.1,0.7,0.6,network,
+2026-10-31T12:33:15.476Z,Recruitment,/job-openings/view-job-openings,post3,/view-job-openings,?page=1&limit=25&status=Active,GET,200,3,49.9,46.1,1.0,2.7,network,
+2026-10-31T12:33:16.689Z,Recruitment,/job-openings/insights,post3,/job-openings-insights,,GET,200,3,157.9,152.5,2.4,3.1,network,
+2026-10-31T12:33:18.061Z,Performance,/performance-reviews/reviews,post3,/get-all-users,?limit=500,GET,200,3,64.8,60.6,1.0,3.2,network,
+2026-10-31T12:33:18.061Z,Performance,/performance-reviews/reviews,post3,/performance-reviews,?userId=:id,GET,200,3,91.0,87.2,0.9,2.9,network,
+2026-10-31T12:33:18.061Z,Performance,/performance-reviews/reviews,post3,/performance-reviews,?reviewerId=:id,GET,200,3,112.5,109.0,0.9,2.6,network,
+2026-10-31T12:33:18.061Z,Performance,/performance-reviews/reviews,post3,/performance-reviews/cycles,?page=1&limit=200,GET,200,3,116.3,112.5,0.9,2.9,network,
+2026-10-31T12:33:19.284Z,Performance,/performance-reviews/review-cycles,post3,/performance-reviews/cycles,?page=1&limit=25,GET,200,3,142.5,138.8,1.1,2.7,network,
+2026-10-31T12:33:20.660Z,Payroll,/payroll/my-payslips,post3,/payroll/my-payslips,?page=1&limit=12,GET,200,3,143.8,138.9,1.5,3.4,network,
+2026-10-31T12:33:22.026Z,Payroll,/payroll/salary-advances,post3,/payroll/advances,?page=1&limit=25,GET,200,3,113,111.5,1.1,0.4,network,
+2026-10-31T12:33:23.250Z,Payroll,/payroll/my-tax-declaration,post3,/tax-declarations/mine,?financialYear=2026-27,GET,200,3,75.1,73.3,1.2,0.6,network,
+2026-10-31T12:33:24.471Z,Payroll,/payroll/payroll-runs,post3,/payroll/runs,?page=1&limit=12,GET,200,3,81.4,79.9,1.0,0.5,network,
+2026-10-31T12:33:25.693Z,Payroll,/payroll/salary-management,post3,/view-all-kycs,?page=1&limit=25,GET,200,9,112.4,110.3,1.4,0.7,network,
+2026-10-31T12:33:26.917Z,Payroll,/payroll/tax-declarations,post3,/tax-declarations,?financialYear=2026-27&page=1&limit=25&status=Submitted,GET,200,3,115.1,113.0,1.5,0.5,network,
+2026-10-31T12:33:28.138Z,Assets,/assets/inventory,post3,/assets/categories,,GET,200,3,71.8,70.4,1.0,0.5,network,
+2026-10-31T12:33:28.138Z,Assets,/assets/inventory,post3,/assets,?page=1&limit=25,GET,200,3,200.6,199.0,1.1,0.5,network,
+2026-10-31T12:33:29.505Z,Assets,/assets/issues,post3,/assets/issues,?page=1&limit=25,GET,200,3,119.3,117.5,1.3,0.6,network,
+2026-10-31T12:33:30.722Z,Assets,/assets/summary,post3,/assets/summary,,GET,200,3,91.7,90.2,1.0,0.5,network,
+2026-10-31T12:33:32.972Z,Resignations,/resignation-process/view-resignations,post3,/my-resignation,,GET,200,5,149.0,147.5,1.0,0.5,network,
+2026-10-31T12:33:32.972Z,Resignations,/resignation-process/view-resignations,post3,/view-resignations,?page=1&limit=25,GET,200,3,188.8,187.4,1.0,0.5,network,
+2026-10-31T12:33:34.347Z,Resignations,/resignation-process/exit-feedback,post3,/exit-interview-templates,,GET,200,5,71.2,69.3,1.1,0.8,network,
+2026-10-31T12:33:34.347Z,Resignations,/resignation-process/exit-feedback,post3,/my-resignation,,GET,200,6,77.1,75.2,1.2,0.7,network,
+2026-10-31T12:33:35.561Z,Resignations,/resignation-process/insights,post3,/resignation-insights,,GET,200,3,177.0,173.2,0.8,2.9,network,
+2026-10-31T12:33:36.940Z,Announcements,/hr-activities,post3,/get-hr-activities,?page=1&limit=20&status=Active,GET,200,3,47.2,45.6,0.9,0.7,network,
+2026-10-31T12:33:38.160Z,Policies,/policy,post3,/policies,?page=1&limit=50,GET,200,3,44.3,40.5,1.2,2.7,network,
+2026-10-31T12:33:39.394Z,Helpdesk,/helpdesk,post3,/helpdesk/tickets,?page=1&limit=25,GET,200,3,111.8,108.3,0.9,2.6,network,
+2026-10-31T12:33:40.605Z,Analytics,/analytics/workforce,post3,/get-employment-type-breakdown,,GET,200,3,52.7,48.3,1.3,3.1,network,
+2026-10-31T12:33:40.605Z,Analytics,/analytics/workforce,post3,/get-headcount-growth,,GET,200,3,52.7,48.5,1.1,3.1,network,
+2026-10-31T12:33:40.605Z,Analytics,/analytics/workforce,post3,/get-employee-status-distribution,,GET,200,3,52.5,48.3,1.2,3.0,network,
+2026-10-31T12:33:40.605Z,Analytics,/analytics/workforce,post3,/get-joining-data,,GET,200,3,56.0,52.3,0.7,3.1,network,
+2026-10-31T12:33:40.606Z,Analytics,/analytics/workforce,post3,/get-employee-designations,,GET,200,3,57.7,54.3,0.7,2.7,network,
+2026-10-31T12:33:40.606Z,Analytics,/analytics/workforce,post3,/get-employee-departments,,GET,200,3,58.8,55.3,0.6,2.9,network,
+2026-10-31T12:33:40.606Z,Analytics,/analytics/workforce,post3,/get-age-distribution,,GET,200,3,90.8,39.2,0.6,51.0,network,
+2026-10-31T12:33:40.606Z,Analytics,/analytics/workforce,post3,/get-tenure-distribution,,GET,200,3,95.9,44.4,0.5,51.0,network,
+2026-10-31T12:33:41.823Z,Analytics,/analytics/leave-attendance,post3,/get-leave-approval-rate,,GET,200,3,44.5,42.8,0.9,0.8,network,
+2026-10-31T12:33:41.824Z,Analytics,/analytics/leave-attendance,post3,/get-attendance-trends,,GET,failed,7,,,,-1,network,request aborted/failed in browser
+2026-10-31T12:33:41.825Z,Analytics,/analytics/leave-attendance,post3,/get-working-hours-distribution,,GET,200,3,41.4,40.0,0.8,0.6,network,
+2026-10-31T12:33:41.825Z,Analytics,/analytics/leave-attendance,post3,/get-attendance-trends,,GET,200,8,43.3,41.0,0.7,1.6,network,
+2026-10-31T12:33:41.825Z,Analytics,/analytics/leave-attendance,post3,/get-leave-type-breakdown,,GET,200,3,45.3,43.9,0.8,0.6,network,
+2026-10-31T12:33:41.825Z,Analytics,/analytics/leave-attendance,post3,/get-monthly-leave-patterns,,GET,200,3,45.2,43.9,0.7,0.5,network,
+2026-10-31T12:33:41.825Z,Analytics,/analytics/leave-attendance,post3,/get-attendance-trends,,GET,200,9,143.2,99.1,1.3,42.8,network,
+2026-10-31T12:33:43.198Z,Analytics,/analytics/recruitment,post3,/get-hiring-funnel,,GET,200,3,53.4,49.1,1.2,3.0,network,
+2026-10-31T12:33:43.199Z,Analytics,/analytics/recruitment,post3,/get-job-openings-by-status,,GET,200,3,48.9,45.4,1.1,2.4,network,
+2026-10-31T12:33:43.199Z,Analytics,/analytics/recruitment,post3,/get-applications-by-job-role,,GET,200,3,49.2,45.5,1.0,2.7,network,
+2026-10-31T12:33:43.199Z,Analytics,/analytics/recruitment,post3,/get-hiring-manager-performance,,GET,200,3,49.5,46.1,0.8,2.6,network,
+2026-10-31T12:33:44.416Z,Analytics,/analytics/salary,post3,/get-compensation-breakdown,,GET,200,3,52.2,48.5,0.8,2.9,network,
+2026-10-31T12:33:44.417Z,Analytics,/analytics/salary,post3,/get-salary-distribution-by-department,,GET,200,3,48.0,44.9,0.9,2.2,network,
+2026-10-31T12:33:44.417Z,Analytics,/analytics/salary,post3,/get-salary-bands,,GET,200,3,48.5,45.3,0.9,2.4,network,
+2026-10-31T12:33:44.417Z,Analytics,/analytics/salary,post3,/get-average-salary-by-designation,,GET,200,3,53.5,50.5,0.7,2.3,network,
+2026-10-31T12:33:45.642Z,Reports,/reports/report-builder,post3,/reports/schema/employee,,GET,200,3,84.7,80.5,1.1,3.0,network,
+2026-10-31T12:33:46.857Z,Reports,/reports/saved-reports,post3,/reports/saved,?page=1&limit=10,GET,200,3,108.0,106.1,1.1,0.9,network,
+2026-10-31T12:33:48.082Z,Permissions,/permissions/manage-roles,post3,/get-roles,,GET,200,3,86.2,81.4,1.6,3.2,network,
+2026-10-31T12:33:49.301Z,Permissions,/permissions/user-permissions,post3,/get-role-and-permissions,,GET,200,3,75.6,71.9,1.0,2.7,network,
+2026-10-31T12:33:50.523Z,Permissions,/permissions/teams,post3,/get-teams,,GET,200,3,127.0,122.4,1.4,3.2,network,
+2026-10-31T12:33:51.737Z,Settings,/settings/company,post3,/tenants/org-profile,,GET,200,3,66.6,63.0,0.8,2.8,network,
+2026-10-31T12:33:52.957Z,Settings,/settings/leave,post3,/tenant-settings,,GET,200,12,123.0,121.0,1.1,0.9,network,
+2026-10-31T12:33:54.181Z,Settings,/settings/attendance,post3,/tenant-settings,,GET,200,13,107.0,104.5,1.5,1.0,network,
+2026-10-31T12:33:55.406Z,Settings,/settings/hr-policy,post3,/tenant-settings,,GET,200,14,212.4,210.1,1.5,0.7,network,
+2026-10-31T12:33:56.774Z,Settings,/settings/work-week,post3,/tenant-settings,,GET,200,15,103.5,102.0,0.9,0.6,network,
+2026-10-31T12:33:57.987Z,Settings,/settings/exit-policy,post3,/exit-checklist-item-defs,,GET,200,3,235.1,231.7,1.0,2.5,network,
+2026-10-31T12:33:57.987Z,Settings,/settings/exit-policy,post3,/notice-period-policies,,GET,200,3,236.2,232.8,0.9,2.5,network,
+2026-10-31T12:33:57.987Z,Settings,/settings/exit-policy,post3,/exit-interview-templates,,GET,200,6,399.7,398.5,1,0.2,network,
+2026-10-31T12:33:59.516Z,Settings,/settings/payroll,post3,/pay-cycles,,GET,200,3,83.4,79.3,1.3,2.8,network,
+2026-10-31T12:33:59.516Z,Settings,/settings/payroll,post3,/pt-slabs,,GET,200,3,85.8,81.6,1.4,2.8,network,
+2026-10-31T12:33:59.516Z,Settings,/settings/payroll,post3,/tds-slabs,,GET,200,3,89.1,85.2,1.3,2.6,network,
+2026-10-31T12:33:59.516Z,Settings,/settings/payroll,post3,/salary-component-definitions,,GET,200,3,113.1,108.9,1.3,2.9,network,
+2026-10-31T12:34:00.731Z,Settings,/settings/recruitment-pipeline,post3,/interview-pipeline-templates,,GET,200,3,145.1,140.9,1.2,3.0,network,
+2026-10-31T12:34:02.102Z,Settings,/settings/join-requests,post3,/tenants/join-requests,,GET,200,3,102.7,98.2,1.4,3.1,network,
+2026-10-31T12:34:03.325Z,Subscription,/subscription,post3,/tenants/me,,GET,200,3,140.6,136.8,1.0,2.8,network,
+2026-10-31T12:34:06.985Z,Support,/support,post3,/support/stats,?scope=mine,GET,200,3,153.9,149.5,1.3,3.1,network,
+2026-10-31T12:34:06.985Z,Support,/support,post3,/support/tickets,?page=1&limit=25&scope=mine&sort=updated_desc,GET,200,3,153.9,149.8,1.0,3.0,network,
+2026-10-31T12:34:09.577Z,AI Assistants,/ai-assistants,post3,/ai-connections,,GET,200,3,71.2,67.5,0.8,2.8,network,
+2026-10-31T12:34:10.805Z,Audit Logs,/audit-logs,post3,/audit-logs,?days=7,GET,200,3,399.5,392.9,3.8,2.8,network,
+2026-10-31T12:34:27.658Z,Employees,"directory search (typed ""kum"")",postinteract,/view-all-kycs,?page=1&limit=25,GET,200,10,100.9,99.5,0.8,0.6,network,
+2026-10-31T12:34:29.909Z,Employees,"directory search (typed ""kum"")",postinteract,/view-all-kycs,?page=1&limit=25&search=:q,GET,200,1,115.5,112.6,1.3,1.6,network,
+2026-10-31T12:34:31.862Z,Employees,"directory search (typed ""kum"")",postinteract,/view-all-kycs,?page=1&limit=25,GET,200,11,107.6,104.4,1.7,1.5,network,
+2026-10-31T12:34:33.404Z,Employees,directory next page,postinteract,/view-all-kycs,?page=2&limit=25,GET,200,1,126.0,119.8,0.8,5.4,network,
+2026-10-31T12:34:35.088Z,Leave,leave applications filter Approved,postinteract,/get-leave-applications,?page=1&limit=25&status=Pending&futureOnly=false,GET,200,4,105.3,101.5,1.1,2.7,network,
+2026-10-31T12:34:36.777Z,Leave,leave applications filter Approved,postinteract,/get-leave-applications,?page=1&limit=25&status=Approved&futureOnly=false,GET,200,1,135.5,130.7,1.2,3.6,network,
+2026-10-31T12:34:38.466Z,Helpdesk,ticket detail,postinteract,/helpdesk/tickets,?page=1&limit=25,GET,200,4,158.1,156.3,1.0,0.8,network,
+2026-10-31T12:34:40.164Z,Helpdesk,ticket detail,postinteract,/helpdesk/tickets/:id,,GET,200,1,151.8,148.0,1.0,2.8,network,
+2026-10-31T12:34:41.841Z,Recruitment,job opening detail,postinteract,/view-job-openings,?page=1&limit=25&status=Active,GET,200,4,44.8,41.4,0.8,2.7,network,
+2026-10-31T12:34:43.527Z,Recruitment,job opening detail,postinteract,/view-job-opening/:id,,GET,200,1,76.1,72.7,0.7,2.7,network,
+2026-10-31T12:34:43.527Z,Recruitment,job opening detail,postinteract,/view-applications/:id,,GET,200,1,751.6,747.9,1.0,2.7,network,
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,1,169.2,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,1,145.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,1,453.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,1,710.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,1,1384.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,1,1648.1,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,1,1804.7,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,2,130,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,2,105.2,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,2,526.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,2,1091.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,2,920.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,2,1385,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,2,1097.4,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,3,148.5,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,3,81.2,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,3,442.3,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,3,697,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,3,1280,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,3,1162.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,3,2549,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,4,87.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,4,104.4,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,4,452.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,4,857.2,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,4,1114,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,4,1548.1,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,4,1099.5,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,5,91.5,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,5,87.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,5,395.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,5,2038.7,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,5,1581.1,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,5,1575.1,,,,network,controlled probe; pre-fix control
+2026-10-31T12:11:35.345Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,5,1466.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.687Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,6,77.5,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,6,143.5,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,6,495.3,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,6,1030,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,6,1174.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,6,1404,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,6,1096.2,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,7,88.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,7,125.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,7,514.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,7,837.7,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,7,1350.5,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,7,1151.1,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,7,1136.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,8,131.7,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,8,164,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,8,494.4,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,8,961,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,8,2403.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,8,2427.4,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,8,1047.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,9,97.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,9,77.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,9,430.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,9,713.2,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,9,1374,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,9,1434.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,9,2080.7,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenants/me,old_guard_passes=0,GET,200,10,241.5,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/employee-insights,old_guard_passes=2,GET,200,10,97.6,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/get-employee-departments,old_guard_passes=10,GET,200,10,598.1,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/tenant-settings,old_guard_passes=16,GET,200,10,1097.7,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/pt-slabs,old_guard_passes=23,GET,200,10,978.8,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/payroll/advances,old_guard_passes=27,GET,200,10,1313.3,,,,network,controlled probe; pre-fix control
+2026-10-31T12:12:31.688Z,Controlled probe,"in-page fetch, sequential",pre-fix control,/unmatched-404,old_guard_passes=26,GET,404,10,1164.9,,,,network,controlled probe; pre-fix control
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,1,1060.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,1,952.3,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,1,80.8,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,1,118.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,1,966.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,1,120.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,1,49.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,2,372.5,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,2,89.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,2,53.5,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,2,406.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,2,248.4,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,2,227.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,2,71.8,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,3,149.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,3,38.9,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,3,42.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,3,104.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,3,96.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,3,103.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,3,40.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,4,142.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,4,54,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,4,117.9,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,4,115.4,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,4,133.5,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,4,116.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,4,97.8,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,5,87.8,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,5,109.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,5,47.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,5,179.3,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,5,83.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,5,166.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,5,50.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,6,138.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,6,40.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,6,38,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,6,117,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,6,77.5,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,6,120.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,6,44.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,7,141.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,7,40.4,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,7,118.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,7,108.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,7,144.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,7,102.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,7,88.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,8,68.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,8,51.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,8,37.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,8,116.9,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,8,79.4,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,8,117.3,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,8,65,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,9,92.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,9,111.8,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,9,54.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,9,164.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,9,255.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,9,166.3,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,9,98.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenants/me,old_guard_passes=0,GET,200,10,83.9,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/employee-insights,old_guard_passes=2,GET,200,10,40.6,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/get-employee-departments,old_guard_passes=10,GET,200,10,59,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/tenant-settings,old_guard_passes=16,GET,200,10,109.2,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/pt-slabs,old_guard_passes=23,GET,200,10,164.7,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/payroll/advances,old_guard_passes=27,GET,200,10,121.1,,,,network,controlled probe; post-fix
+2026-10-31T12:29:03.776Z,Controlled probe,"in-page fetch, sequential",post-fix,/unmatched-404,old_guard_passes=26,GET,404,10,53.6,,,,network,controlled probe; post-fix

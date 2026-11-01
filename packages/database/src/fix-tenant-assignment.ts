@@ -12,6 +12,7 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { assertConfirmedWriteTarget } from "./scriptGuard";
 const p = new PrismaClient({ datasourceUrl: process.env.DEV_MONGODB_URI });
 const run = (cmd: Record<string, unknown>): Promise<any> =>
   (p.$runCommandRaw as any)(cmd);
@@ -54,6 +55,7 @@ const ACME_ONLY_COLS = [
 ];
 
 async function main() {
+  assertConfirmedWriteTarget("fix-tenant-assignment");
   // ── Step 1: Merge orphaned tenant → Acme Corp ─────────────────────────────
   console.log(`\n── Step 1: Merging orphaned tenant → Acme Corp ──`);
   for (const col of ["users", ...USER_ID_COLS, ...ACME_ONLY_COLS]) {

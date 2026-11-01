@@ -3,7 +3,10 @@ jest.mock("@hrms/db", () => ({
 }));
 
 import { prisma } from "@hrms/db";
-import { requireActiveSubscription } from "../../middleware/requireActiveSubscription";
+import {
+  requireActiveSubscription,
+  clearSubscriptionCache,
+} from "../../middleware/requireActiveSubscription";
 
 function makeRes() {
   const res: any = {};
@@ -15,6 +18,7 @@ function makeRes() {
 
 describe("requireActiveSubscription", () => {
   beforeEach(() => {
+    clearSubscriptionCache();
     jest.clearAllMocks();
   });
 
@@ -223,6 +227,7 @@ describe("requireActiveSubscription — free trials", () => {
   };
 
   beforeEach(() => {
+    clearSubscriptionCache();
     jest.clearAllMocks();
   });
 
@@ -293,6 +298,8 @@ describe("requireActiveSubscription — free trials", () => {
     });
     expect(running.next).toHaveBeenCalled();
 
+    // A later request, after the per-process cache has expired.
+    clearSubscriptionCache();
     const ended = await run({
       subscriptionStatus: "cancelled",
       planExpiresAt: new Date(Date.now() - DAY_MS),
@@ -315,5 +322,44 @@ describe("requireActiveSubscription — free trials", () => {
       "X-Subscription-Trial",
       "true",
     );
+  });
+});
+
+describe("requireActiveSubscription — per-process cache", () => {
+  const findUnique = (prisma as any).tenant.findUnique as jest.Mock;
+  beforeEach(() => {
+    clearSubscriptionCache();
+    findUnique.mockReset();
+  });
+  const active = {
+    subscriptionStatus: "active",
+    planExpiresAt: new Date(Date.now() + 86_400_000),
+    planActivatedAt: new Date(),
+    trialEndsAt: null,
+  };
+
+  it("serves repeat checks for a tenant from one load", async () => {
+    findUnique.mockResolvedValue(active);
+    const { getSubscriptionAccess } = jest.requireActual(
+      "../../middleware/requireActiveSubscription",
+    );
+    await Promise.all([
+      getSubscriptionAccess("t1"),
+      getSubscriptionAccess("t1"),
+    ]);
+    await getSubscriptionAccess("t1");
+    expect(findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it("never denies from the cache: a stale expired row is re-read", async () => {
+    findUnique
+      .mockResolvedValueOnce({ ...active, subscriptionStatus: "expired" })
+      .mockResolvedValueOnce(active);
+    const { getSubscriptionAccess } = jest.requireActual(
+      "../../middleware/requireActiveSubscription",
+    );
+    const r = await getSubscriptionAccess("t1");
+    expect(r.allowed).toBe(true);
+    expect(findUnique).toHaveBeenCalledTimes(2);
   });
 });

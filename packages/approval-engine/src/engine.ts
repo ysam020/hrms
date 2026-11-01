@@ -347,6 +347,8 @@ export async function getPendingApprovalsFor(
         module: instance.module,
         entityId: instance.entityId,
         stepOrder: s.order,
+        requestedBy: instance.requestedBy,
+        createdAt: instance.createdAt,
       };
     });
 }

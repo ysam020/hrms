@@ -10,6 +10,7 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { assertConfirmedWriteTarget } from "./scriptGuard";
 const prisma = new PrismaClient();
 const run = (cmd: Record<string, unknown>): Promise<any> =>
   (prisma.$runCommandRaw as any)(cmd);
@@ -50,6 +51,7 @@ function extractRef(val: any): string | null {
 }
 
 async function main() {
+  assertConfirmedWriteTarget("seed-tenants");
   // ── 1. Create tenants (find-or-insert) ───────────────────────────────────
   const tenantRecords: any[] = [];
   for (const t of TENANTS) {

@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { classifyField, redactSensitive } from "@hrms/logger";
 import { getAuditActor, getTenantClient, getTenantId } from "./tenantContext";
 
 // Models with no business meaning to audit, or that would recurse /
@@ -25,11 +26,11 @@ const ACTION_MAP: Record<string, "CREATE" | "UPDATE" | "DELETE"> = {
 // an unbounded number of records, so we log the action but skip the diff.
 const SINGLE_RECORD_ACTIONS = new Set(["update", "upsert", "delete"]);
 
-// Field names that must never be written to the audit trail in the clear —
-// credentials, tokens, biometric data, and government ID numbers/documents.
-// Business data (salary figures, leave balances, designation, etc.) is
-// deliberately left untouched — that's the whole point of an accountability
-// trail, and none of it is a credential.
+// Fields whose churn alone never warrants an audit entry (see
+// hasMeaningfulChange). Redaction itself is decided by the shared
+// classifier in @hrms/logger (redaction.ts), which also covers aliases such
+// as aadharNo / aadhaarNumber and drops bulky applicant content (resumes,
+// cover letters, ApplicationDraft.data) from snapshots.
 const SENSITIVE_FIELDS = new Set([
   "password",
   "refreshToken",
@@ -81,34 +82,60 @@ function hasMeaningfulChange(before: unknown, after: unknown): boolean {
   return false;
 }
 
-// Credential-shaped names the exact list above can't anticipate (new
-// models add fields like tokenHashes or recoveryCodeHash). Matching by
-// shape means a new secret field is redacted by default rather than
-// leaking until someone remembers to list it.
-const SENSITIVE_PATTERN =
-  /(password|passcode|secret|token|hash|otp|credential|apikey|api_key|privatekey|private_key|recoverycode|recovery_code)/i;
+function writesOnlyUnauditedFields(params: Prisma.MiddlewareParams): boolean {
+  const data = params.args?.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  const keys = Object.keys(data);
+  return (
+    keys.length > 0 &&
+    keys.every((k) => SENSITIVE_FIELDS.has(k) || BOOKKEEPING_FIELDS.has(k))
+  );
+}
 
 export function isSensitiveAuditField(key: string): boolean {
-  return SENSITIVE_FIELDS.has(key) || SENSITIVE_PATTERN.test(key);
+  return classifyField(key) !== null;
 }
 
-/** Replace every sensitive field's value, at any depth, with "[REDACTED]". */
-export function redactAuditValue(value: unknown): unknown {
-  return redact(value);
+/**
+ * Replace every sensitive field's value, at any depth: secrets become
+ * "[REDACTED]", resumes / cover letters / oversized strings become a size
+ * marker. Also applied on read (handlers/general.ts getAuditLogs), so rows
+ * written before a rule existed are hidden from the API too.
+ */
+export function redactAuditValue(value: unknown, model?: string): unknown {
+  return redactSensitive(value, model);
 }
 
-function redact(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
-  if (Array.isArray(value)) return value.map(redact);
-  if (value instanceof Date) return value;
-  if (typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = isSensitiveAuditField(key) ? "[REDACTED]" : redact(v);
-    }
-    return out;
+// For an UPDATE, a hidden field that actually changed is marked as such in
+// newValue, so the trail still records *that* it changed without storing
+// the value.
+function markChangedHiddenFields(
+  model: string,
+  before: unknown,
+  after: unknown,
+  redactedAfter: unknown,
+): unknown {
+  if (
+    !before ||
+    !after ||
+    !redactedAfter ||
+    typeof before !== "object" ||
+    typeof after !== "object" ||
+    typeof redactedAfter !== "object" ||
+    Array.isArray(redactedAfter)
+  ) {
+    return redactedAfter;
   }
-  return value;
+  const out = { ...(redactedAfter as Record<string, unknown>) };
+  for (const key of Object.keys(out)) {
+    if (!classifyField(key, model)) continue;
+    const b = (before as Record<string, unknown>)[key];
+    const a = (after as Record<string, unknown>)[key];
+    if (a != null && JSON.stringify(a) !== JSON.stringify(b)) {
+      out[key] = `${out[key]} (changed)`;
+    }
+  }
+  return out;
 }
 
 function lowerFirst(model: string): string {
@@ -154,8 +181,18 @@ export function recordAuditEntry(
         username: actor?.username ?? null,
         action,
         entityType: model,
-        oldValue: before == null ? undefined : redact(before),
-        newValue: after == null ? undefined : redact(after),
+        oldValue: before == null ? undefined : redactSensitive(before, model),
+        newValue:
+          after == null
+            ? undefined
+            : action === "UPDATE"
+              ? markChangedHiddenFields(
+                  model,
+                  before,
+                  after,
+                  redactSensitive(after, model),
+                )
+              : redactSensitive(after, model),
         description: `${action} ${model}`,
         ipAddress: actor?.ipAddress ?? "",
         userAgent: actor?.userAgent ?? "",
@@ -222,6 +259,13 @@ export function attachMasterAuditLogging(client: PrismaClient): void {
     ) => {
       const action = ACTION_MAP[params.action];
       if (params.model !== "User" || !action) {
+        return next(params);
+      }
+      // An update that only writes redacted/bookkeeping fields can never
+      // produce an audit entry (recordAuditEntry drops it as a no-op), so
+      // don't pay a full-document read for it. This is every refresh-token
+      // rotation, which mirrors the new token hash onto the user.
+      if (params.action === "update" && writesOnlyUnauditedFields(params)) {
         return next(params);
       }
 

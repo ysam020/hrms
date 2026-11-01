@@ -36,4 +36,7 @@ export interface PendingApproval {
   module: string;
   entityId: string;
   stepOrder: number;
+  // From the instance the engine already loaded, so callers needn't refetch it.
+  requestedBy?: string;
+  createdAt?: Date;
 }

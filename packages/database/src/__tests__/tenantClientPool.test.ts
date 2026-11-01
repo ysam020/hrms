@@ -16,6 +16,7 @@ jest.mock("@hrms/logger", () => ({
 }));
 
 const mockAttachAuditLogging = jest.fn();
+jest.mock("../queryTiming", () => ({ attachQueryTiming: jest.fn() }));
 jest.mock("../auditMiddleware", () => ({
   attachAuditLogging: (...args: unknown[]) => mockAttachAuditLogging(...args),
 }));

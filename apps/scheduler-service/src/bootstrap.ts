@@ -17,8 +17,17 @@ async function bootstrap() {
   // @hrms/cache (via ./worker -> jobs/reconcileAttendance) before
   // loadSecrets runs, permanently locking the client onto the
   // redis://localhost:6379 fallback.
-  const { registerScheduledJobs } = await import("./scheduler");
+  const { registerScheduledJobs, unregisterScheduledJobs, isSchedulerEnabled } =
+    await import("./scheduler");
   const { startSchedulerWorker } = await import("./worker");
+
+  if (!isSchedulerEnabled()) {
+    const removed = await unregisterScheduledJobs();
+    logger.warn(
+      `Scheduler disabled (SCHEDULER_ENABLED is not "true"): no cron jobs registered or run; removed ${removed} stale repeatable job(s)`,
+    );
+    return;
+  }
 
   await registerScheduledJobs();
 

@@ -16,8 +16,11 @@ export async function getBalanceRow(
   userId: string,
   client: any = prisma,
 ) {
+  // Oldest row first: a user should have one row, but if a duplicate ever
+  // appears every reader must agree on which one is authoritative.
   return client.leaveBalance.findFirst({
     where: { tenantId, userId },
+    orderBy: { id: "asc" },
   });
 }
 
@@ -300,6 +303,11 @@ export async function ensureTrackedBalance(
   joiningDate?: Date | null,
 ): Promise<number | null> {
   const row = await getBalanceRow(tenantId, userId);
+  // An array is the scheduler's monthly PL ledger (reconcileAttendance /
+  // updateLeaveBalance own it). Spreading it into a flat map would corrupt
+  // it into a hybrid ({"0": {...}, PL: n}) that the ledger code can't read,
+  // so a ledger row stays untracked here (fail-open, as before seeding).
+  if (row && Array.isArray(row.balances)) return null;
   const existing = row ? getTrackedRemaining(row.balances, leaveType) : null;
   if (existing !== null) return existing;
 

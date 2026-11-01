@@ -229,7 +229,8 @@ describe("attachAuditLogging", () => {
     expect(client.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         oldValue: { id: "u1", password: "[REDACTED]", name: "Bob" },
-        newValue: { id: "u1", password: "[REDACTED]", name: "Bobby" },
+        // The value stays hidden; the entry records that it changed.
+        newValue: { id: "u1", password: "[REDACTED] (changed)", name: "Bobby" },
       }),
     });
   });
@@ -364,5 +365,59 @@ describe("attachMasterAuditLogging", () => {
       ),
     ).resolves.toEqual({ id: "u1" });
     await flush();
+  });
+
+  it("skips the pre-read (and the never-written entry) for a refresh-token-only update", async () => {
+    const masterUserDelegate = { findUnique: jest.fn() };
+    const { client: masterClient, middlewares } = makeClient({
+      user: masterUserDelegate,
+    });
+    const tenantAuditLog = { create: jest.fn().mockResolvedValue({}) };
+    mockGetTenantClient.mockReturnValue({ auditLog: tenantAuditLog });
+    attachMasterAuditLogging(masterClient);
+    const next = jest.fn().mockResolvedValue({ id: "u1" });
+
+    await middlewares[0](
+      {
+        model: "User",
+        action: "update",
+        args: { where: { id: "u1" }, data: { refreshToken: "hash" } },
+      },
+      next,
+    );
+    await flush();
+
+    expect(next).toHaveBeenCalled();
+    expect(masterUserDelegate.findUnique).not.toHaveBeenCalled();
+    expect(tenantAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("still reads and audits an update that mixes in an ordinary field", async () => {
+    const masterUserDelegate = {
+      findUnique: jest.fn().mockResolvedValue({ id: "u1", first_name: "A" }),
+    };
+    const { client: masterClient, middlewares } = makeClient({
+      user: masterUserDelegate,
+    });
+    const tenantAuditLog = { create: jest.fn().mockResolvedValue({}) };
+    mockGetTenantClient.mockReturnValue({ auditLog: tenantAuditLog });
+    attachMasterAuditLogging(masterClient);
+    const next = jest.fn().mockResolvedValue({ id: "u1", first_name: "B" });
+
+    await middlewares[0](
+      {
+        model: "User",
+        action: "update",
+        args: {
+          where: { id: "u1" },
+          data: { refreshToken: "hash", first_name: "B" },
+        },
+      },
+      next,
+    );
+    await flush();
+
+    expect(masterUserDelegate.findUnique).toHaveBeenCalled();
+    expect(tenantAuditLog.create).toHaveBeenCalled();
   });
 });

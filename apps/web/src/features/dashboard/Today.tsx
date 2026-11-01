@@ -311,7 +311,12 @@ function WidgetCell({
   }
 
   return (
-    <div className={d.cell} data-size={entry.size}>
+    <div
+      className={d.cell}
+      data-size={entry.size}
+      // Coming Up takes its height from its row instead of setting it.
+      data-fill={entry.id === "agenda" || undefined}
+    >
       <Section
         id={`w-${entry.id}`}
         title={meta.name}

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { authClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma } from "@hrms/db";
+import { prisma, markHandlerStart } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
@@ -190,6 +190,7 @@ export async function getProfile(req: Request, res: Response) {
 }
 
 export async function refreshToken(req: Request, res: Response) {
+  markHandlerStart();
   try {
     // Mobile clients have no cookie jar shared with the OAuth browser session,
     // so they carry their SecureStore-persisted refresh token in the body

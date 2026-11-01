@@ -13,6 +13,7 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { assertConfirmedWriteTarget } from "./scriptGuard";
 const BONAMI_TENANT_ID = "6a0bd765f9ff1bdc7c809931";
 const BONAMI_DB = "hrms-bonami-software";
 const OWNER_USER_ID = "6a0bd761fb9690a2894c1cb6"; // sameer_yadav1
@@ -180,6 +181,7 @@ const DUMMY_USERS = [
 ];
 
 async function main() {
+  assertConfirmedWriteTarget("seed-bonami");
   console.log("=== Bonami Software Seed Script ===\n");
 
   // ── 1. Insert dummy users in master DB ────────────────────────────────────
