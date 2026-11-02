@@ -11,6 +11,7 @@ import cluster from "node:cluster";
 import { apiRequestLogger, logger } from "@hrms/logger";
 import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
+import { setupPresenceSocket } from "./config/presenceSocket";
 import { configureSwagger } from "./config/swaggerSetup";
 import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
 import { applyRateLimiters, authLimiter } from "./config/rateLimiters";
@@ -24,6 +25,7 @@ import { handleWebhook } from "./handlers/payment";
 import { handleRazorpayXWebhook } from "./handlers/razorpayxWebhook";
 import { startSubscriptionReconciler } from "./services/subscriptionReconciler";
 import { startPayrollDisbursementWorker } from "./workers/payrollDisbursementWorker";
+import { startPresenceExpiryWorker } from "./workers/presenceExpiryWorker";
 import {
   ensureMasterIndexes,
   withQueryStats,
@@ -180,6 +182,7 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     resolveSocketUserId,
   );
   setupChatSocket(io, redisAdapter);
+  setupPresenceSocket(io);
 
   // Under cluster mode (see bootstrap.ts) every forked worker would otherwise
   // run these on its own schedule — harmless for the reconciler, but
@@ -193,6 +196,7 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     );
     startSubscriptionReconciler();
     startPayrollDisbursementWorker();
+    startPresenceExpiryWorker();
   }
 
   server.listen(PORT, () => {

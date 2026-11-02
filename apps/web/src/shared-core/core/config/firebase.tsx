@@ -9,6 +9,14 @@ const firebaseConfig = {
   measurementId: "G-VX01JD5DCY",
 };
 
+// The project's public Web Push (VAPID) key. Builds normally get it from
+// VITE_VAPID_KEY; the local Docker build has no env file, so fall back to it
+// (it is public, like the config above) and keep tokens tied to this project's
+// key everywhere.
+const VAPID_KEY =
+  import.meta.env.VITE_VAPID_KEY ||
+  "BLGKEfuaans2E5HO9H6OQOfLDoyrbx0Dl_XtcVLrUz-0LZvoNEvrO3tchAH8kZl_BleEDosVd-L684xbBCGn4GU";
+
 // Module-level singletons — ensures onMessage is registered exactly once per session
 let messagingInstance: any = null;
 let foregroundListenerSet = false;
@@ -50,13 +58,16 @@ export const getFirebaseMessaging = async () => {
     return { getToken, messaging: messagingInstance, token: null };
   }
 
-  const serviceWorkerRegistration = await navigator.serviceWorker.register(
-    "/firebase-messaging-sw.js",
-    { scope: "/" },
-  );
+  await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
+    scope: "/",
+  });
+  // A worker that is still installing can't subscribe to push ("no active
+  // Service Worker"): wait for the active one, as on a first visit or right
+  // after an update.
+  const serviceWorkerRegistration = await navigator.serviceWorker.ready;
 
   const token = await getToken(messagingInstance, {
-    vapidKey: import.meta.env.VITE_VAPID_KEY,
+    vapidKey: VAPID_KEY,
     serviceWorkerRegistration,
   });
 

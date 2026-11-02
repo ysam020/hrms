@@ -18,10 +18,19 @@ import {
   type IconName,
   type MenuEntry,
 } from "@next/ui";
-import { activeEntry, visibleNav, type NavModule } from "@next/app/navigation";
+import {
+  activeEntry,
+  isPlatformPath,
+  visibleNav,
+  type NavModule,
+} from "@next/app/navigation";
 import { personName } from "@next/lib/format";
 import { useAppearance } from "./appearance";
 import { useWalkthrough } from "@next/walkthrough/WalkthroughProvider";
+import { usePresence } from "@next/features/presence/PresenceProvider";
+import { PresenceDot } from "@next/features/presence/PresenceIndicator";
+import { StatusPicker } from "@next/features/presence/StatusPicker";
+import { STATUS } from "@next/features/presence/model";
 import s from "./shell.module.css";
 
 export function Sidebar({
@@ -39,7 +48,9 @@ export function Sidebar({
   const { totalUnread } = useContext(ChatUnreadContext);
   const { pathname } = useLocation();
   const active = activeEntry(pathname);
-  const clusters = visibleNav(user);
+  // The Platform Console has its own sidebar (PLATFORM_NAV).
+  const inConsole = isPlatformPath(pathname);
+  const clusters = visibleNav(user, pathname);
   // One group open at a time (an accordion): it follows the current module,
   // so moving to another module collapses the one you left.
   const activeModuleId = active.module?.id ?? null;
@@ -49,6 +60,8 @@ export function Sidebar({
   const navigate = useTransitionNavigate();
   const accountRef = useRef<HTMLButtonElement>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const me = usePresence()?.me;
   const walkthrough = useWalkthrough();
   const pausedTour =
     walkthrough?.ready && walkthrough.state.active
@@ -61,6 +74,12 @@ export function Sidebar({
 
   const accountItems: MenuEntry[] = [
     { heading: user?.email || personName(user) },
+    {
+      label: "Set Status…",
+      icon: "checkCircle",
+      meta: me ? STATUS[me.status].label : undefined,
+      onSelect: () => setStatusOpen(true),
+    },
     {
       label: "My Profile",
       icon: "person",
@@ -119,7 +138,16 @@ export function Sidebar({
           </span>
           <span className={s.orgText}>
             <span className={s.orgName}>{user?.tenantName || "Praesto"}</span>
-            <span className={s.orgUser}>{personName(user)}</span>
+            <span className={s.orgUser}>
+              {me && (
+                <PresenceDot
+                  status={me.status}
+                  size={8}
+                  label={`Status: ${STATUS[me.status].label}`}
+                />
+              )}{" "}
+              {personName(user)}
+            </span>
           </span>
         </button>
         {onHide && (
@@ -134,6 +162,11 @@ export function Sidebar({
         label="Account"
         placement="bottom-start"
       />
+      <StatusPicker
+        open={statusOpen}
+        onClose={() => setStatusOpen(false)}
+        anchorRef={accountRef}
+      />
 
       <button
         type="button"
@@ -146,7 +179,27 @@ export function Sidebar({
         <kbd aria-hidden>⌘K</kbd>
       </button>
 
-      <nav className={s.nav} aria-label="Primary" data-tour="sidebar-nav">
+      {inConsole && (
+        <div className={s.consoleHead}>
+          <span className={s.consoleLabel}>
+            <Icon name="shield" size={14} />
+            Praesto Platform Console
+          </span>
+          <TransitionNavLink
+            to="/dashboard"
+            className={s.consoleBack}
+            onClick={onNavigate}
+          >
+            ‹ Back to {user?.tenantName || "Praesto"}
+          </TransitionNavLink>
+        </div>
+      )}
+
+      <nav
+        className={s.nav}
+        aria-label={inConsole ? "Platform Console" : "Primary"}
+        data-tour="sidebar-nav"
+      >
         <LayoutGroup id="sidebar">
           {clusters.map((cluster, ci) => (
             <ul key={ci} className={s.cluster}>

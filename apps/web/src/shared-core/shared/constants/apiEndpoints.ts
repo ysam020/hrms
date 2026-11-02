@@ -455,6 +455,21 @@ const SUPPORT = {
     `/platform/support/attachments/${id}/complete`,
   PLATFORM_SUPPORT_ATTACHMENT_URL: (id: string) =>
     `/platform/support/attachments/${id}/url`,
+  // Praesto Platform Console (platform-only; see features/platform-admin)
+  PLATFORM_ADMIN_OVERVIEW: (params = "") => `/platform/admin/overview${params}`,
+  PLATFORM_ADMIN_TENANTS: (page: number, limit: number, params = "") =>
+    `/platform/admin/tenants?page=${page}&limit=${limit}${params}`,
+  PLATFORM_ADMIN_TENANT: (id: string) => `/platform/admin/tenants/${id}`,
+  PLATFORM_ADMIN_TENANT_SYNC: (id: string) =>
+    `/platform/admin/tenants/${id}/sync`,
+  PLATFORM_ADMIN_SUBSCRIPTIONS: (params = "") =>
+    `/platform/admin/subscriptions${params}`,
+  PLATFORM_ADMIN_PAYMENTS: (page: number, limit: number, params = "") =>
+    `/platform/admin/payments?page=${page}&limit=${limit}${params}`,
+  PLATFORM_ADMIN_BILLING_SYNC: "/platform/admin/billing/sync",
+  PLATFORM_ADMIN_REVENUE: (params = "") => `/platform/admin/revenue${params}`,
+  PLATFORM_ADMIN_AUDIT: (page: number, limit: number) =>
+    `/platform/admin/audit-logs?page=${page}&limit=${limit}`,
 };
 
 const APPROVALS = {

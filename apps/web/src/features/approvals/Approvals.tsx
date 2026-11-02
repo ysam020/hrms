@@ -19,7 +19,7 @@ export default function Approvals() {
     loadingPendingApprovals,
     refetchPendingApprovals,
   } = useContext(ApprovalsBadgeContext);
-  const { approve, reject, decided, dialog } = useDecision();
+  const { approve, reject, decided, sending, dialog } = useDecision();
   const [filter, setFilter] = useState("all");
 
   const items = pendingApprovalItems.filter((i) => !decided.has(i.instanceId));
@@ -93,6 +93,7 @@ export default function Approvals() {
                 pairWith="/dashboard"
                 onApprove={() => approve(item)}
                 onReject={() => reject(item)}
+                sending={sending.get(item.instanceId)}
               />
             ))}
           </StaggerList>

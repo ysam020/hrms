@@ -10,7 +10,6 @@ import {
   useTransitionWith,
 } from "@next/motion";
 import {
-  Avatar,
   DataTable,
   Page,
   Pagination,
@@ -22,6 +21,14 @@ import {
 import { apiClient, errorMessage, isCanceled } from "@next/lib/api";
 import { useDebouncedCallback } from "@next/lib/hooks";
 import { fmtDate, personName, readableCase } from "@next/lib/format";
+import {
+  usePresenceOf,
+  useWatchPresence,
+} from "@next/features/presence/PresenceProvider";
+import {
+  PresenceAvatar,
+  PresenceSummary,
+} from "@next/features/presence/PresenceIndicator";
 import s from "./employees.module.css";
 
 // Employees: Classic's data source (GET /view-all-kycs, server-paginated via
@@ -38,7 +45,8 @@ function NameCell({ row }: { row: any }) {
   return (
     <PrimaryCell
       leading={
-        <Avatar
+        <PresenceAvatar
+          userId={row.id}
           name={personName(row)}
           src={row.employee_photo}
           size={32}
@@ -50,6 +58,11 @@ function NameCell({ row }: { row: any }) {
       subtitle={row.official_email || row.email || row.username}
     />
   );
+}
+
+/** Live availability: status, message and end time (docs/presence.md). */
+function AvailabilityCell({ row }: { row: any }) {
+  return <PresenceSummary view={usePresenceOf(row.id)} />;
 }
 
 /** What the profile can show before its own request returns. */
@@ -93,6 +106,7 @@ export default function Employees() {
     [setAlert],
   );
   const list = useServerPagination(fetchPage, { initialPageSize: 25 });
+  useWatchPresence(list.data.map((r: any) => r.id));
 
   const applySearch = useDebouncedCallback((v: string) => {
     searchRef.current = v.trim();
@@ -109,6 +123,12 @@ export default function Employees() {
       header: "Name",
       priority: "primary",
       render: (r) => <NameCell row={r} />,
+    },
+    {
+      key: "availability",
+      header: "Availability",
+      priority: "secondary",
+      render: (r) => <AvailabilityCell row={r} />,
     },
     {
       key: "designation",

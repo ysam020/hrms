@@ -28,7 +28,7 @@ const HOLD = 3600;
  * Steps through `count` stages while the element is in view, then holds the
  * last one and starts over. Leaving the viewport stops the clock.
  */
-function useStages(count: number, delays: number[]) {
+export function useStages(count: number, delays: number[]) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { margin: "0px 0px -20% 0px" });
   const reduce = useReducedMotion();

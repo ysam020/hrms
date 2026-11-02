@@ -9,6 +9,8 @@
 // at signup, before real employees exist in the system, to seed the initial
 // charge — flat slabs sidestep that entirely).
 
+import { preconnect, preload } from "react-dom";
+
 export type PlanTier = "starter" | "growth" | "enterprise";
 export type Billing = "monthly" | "annual";
 
@@ -60,6 +62,22 @@ export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
   enterprise: "Enterprise",
 };
 
+const RAZORPAY_CHECKOUT = "https://checkout.razorpay.com/v1/checkout.js";
+
+/**
+ * Get ready for Razorpay Checkout before the person presses pay, so the
+ * payment window doesn't first wait on a new connection (~150–200 ms of DNS
+ * and TLS) and a 50 KB download. Call while rendering a screen that leads to
+ * payment: `fetch` also downloads the script (without running it), for a
+ * screen whose next step is always paying; otherwise only the connection is
+ * opened. loadRazorpayScript then runs it from the preload. React drops
+ * repeat calls, so calling on every render is fine.
+ */
+export function prepareRazorpay({ fetch = false } = {}) {
+  if (fetch) preload(RAZORPAY_CHECKOUT, { as: "script" });
+  else preconnect("https://checkout.razorpay.com");
+}
+
 export function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
     if (document.getElementById("razorpay-script")) {
@@ -68,7 +86,7 @@ export function loadRazorpayScript(): Promise<boolean> {
     }
     const script = document.createElement("script");
     script.id = "razorpay-script";
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.src = RAZORPAY_CHECKOUT;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
     document.body.appendChild(script);

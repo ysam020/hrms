@@ -15,6 +15,13 @@ import {
   canViewOrgSupport,
   isSupportAgent,
 } from "@next/features/support/config";
+import {
+  canOpenConsole,
+  canViewAudit,
+  canViewBilling,
+  canViewOverview,
+  canViewTenants,
+} from "@next/features/platform-admin/shared";
 
 // The navigation model: one table drives the sidebar, the compact tab bar,
 // ⌘K search, and active-state matching. Each business module is its own
@@ -538,6 +545,13 @@ export const NAV: NavModule[][] = [
           keywords: "praesto team tickets organizations",
         },
         {
+          id: "platform-console",
+          label: "Platform Console",
+          path: "/platform-admin",
+          visible: canOpenConsole,
+          keywords: "praesto admin tenants revenue mrr subscriptions",
+        },
+        {
           id: "help-shortcuts",
           label: "Keyboard Shortcuts",
           path: "/help",
@@ -554,20 +568,101 @@ export const NAV: NavModule[][] = [
   ],
 ];
 
+/**
+ * The Praesto Platform Console's own sidebar (shown under /platform-admin).
+ * Praesto's team only; each page mirrors the PraestoAdmin action its API
+ * requires, and the gateway checks it again on every request.
+ */
+export const PLATFORM_NAV: NavModule[][] = [
+  [
+    {
+      id: "pa-overview",
+      label: "Platform Overview",
+      icon: "chart",
+      path: "/platform-admin",
+      exact: true,
+      visible: canViewOverview,
+      keywords: "praesto kpi growth mrr",
+    },
+  ],
+  [
+    {
+      id: "pa-tenants",
+      label: "Tenants",
+      icon: "org",
+      path: "/platform-admin/tenants",
+      visible: canViewTenants,
+      keywords: "organisations customers",
+    },
+  ],
+  [
+    {
+      id: "pa-subscriptions",
+      label: "Subscriptions",
+      icon: "card",
+      path: "/platform-admin/subscriptions",
+      visible: canViewBilling,
+      keywords: "trials renewals past due",
+    },
+    {
+      id: "pa-payments",
+      label: "Payments",
+      icon: "banknote",
+      path: "/platform-admin/payments",
+      visible: canViewBilling,
+      keywords: "razorpay transactions refunds failed",
+    },
+    {
+      id: "pa-revenue",
+      label: "Revenue",
+      icon: "trendUp",
+      path: "/platform-admin/revenue",
+      visible: canViewBilling,
+      keywords: "mrr arr collections",
+    },
+  ],
+  [
+    {
+      id: "pa-audit",
+      label: "Audit Log",
+      icon: "shield",
+      path: "/platform-admin/audit-logs",
+      visible: canViewAudit,
+      keywords: "platform administration history",
+    },
+    {
+      id: "pa-access",
+      label: "Platform Access",
+      icon: "key",
+      path: "/permissions/user-permissions",
+      visible: canManagePermissions,
+      keywords: "praestoadmin permissions grant",
+    },
+  ],
+];
+
+export const isPlatformPath = (pathname: string) =>
+  pathname === "/platform-admin" || pathname.startsWith("/platform-admin/");
+
+const navFor = (pathname?: string) =>
+  pathname && isPlatformPath(pathname) ? PLATFORM_NAV : NAV;
+
 const allows = (check: Check | undefined, u: User) => !check || check(u);
 
 /** Modules (with their visible pages) the user can see, per cluster. */
-export function visibleNav(user: User): NavModule[][] {
-  return NAV.map((cluster) =>
-    cluster
-      .filter((m) => !m.searchOnly && allows(m.visible, user))
-      .map((m) =>
-        m.pages
-          ? { ...m, pages: m.pages.filter((p) => allows(p.visible, user)) }
-          : m,
-      )
-      .filter((m) => !m.pages || m.pages.length > 0),
-  ).filter((c) => c.length > 0);
+export function visibleNav(user: User, pathname?: string): NavModule[][] {
+  return navFor(pathname)
+    .map((cluster) =>
+      cluster
+        .filter((m) => !m.searchOnly && allows(m.visible, user))
+        .map((m) =>
+          m.pages
+            ? { ...m, pages: m.pages.filter((p) => allows(p.visible, user)) }
+            : m,
+        )
+        .filter((m) => !m.pages || m.pages.length > 0),
+    )
+    .filter((c) => c.length > 0);
 }
 
 export interface SearchEntry {
@@ -581,7 +676,7 @@ export interface SearchEntry {
 
 /** Every destination the user can reach, flattened for ⌘K. */
 export function searchableNav(user: User): SearchEntry[] {
-  return NAV.flat()
+  return [...NAV.flat(), ...PLATFORM_NAV.flat()]
     .filter((m) => allows(m.visible, user))
     .flatMap<SearchEntry>((m) =>
       m.pages
@@ -625,7 +720,7 @@ export function activeEntry(pathname: string): {
   page?: NavPage;
 } {
   let best: { module?: NavModule; page?: NavPage; s: number } = { s: 0 };
-  for (const m of NAV.flat()) {
+  for (const m of navFor(pathname).flat()) {
     if (m.pages) {
       for (const p of m.pages) {
         const s = score(pathname, p);

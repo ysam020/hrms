@@ -1037,3 +1037,155 @@ export const supportUploadSchema = z
     size: z.number().int().positive(),
   })
   .strict();
+
+// ── Presence ──────────────────────────────────────────────────────────────────
+// Identity always comes from the access token: `.strict()` refuses a body
+// that tries to name a user or a tenant.
+
+export const presenceUpdateSchema = z
+  .object({
+    availability: z
+      .enum([
+        "available",
+        "busy",
+        "dnd",
+        "meeting",
+        "break",
+        "lunch",
+        "focusing",
+        "away",
+      ])
+      .optional(),
+    message: z.string().max(500).nullable().optional(),
+    duration: z
+      .enum(["30m", "1h", "2h", "end_of_day", "until_changed"])
+      .optional(),
+    timeZone: z.string().max(64).optional(),
+  })
+  .strict()
+  .refine((d) => d.availability !== undefined || d.message !== undefined, {
+    message: "availability or message is required",
+  })
+  .refine((d) => d.availability !== undefined || d.duration === undefined, {
+    message: "duration needs an availability",
+  });
+
+const presenceIds = z
+  .string()
+  .max(13_000)
+  .transform((v) => v.split(",").filter(Boolean))
+  .pipe(z.array(z.string().regex(/^[a-f0-9]{24}$/i)).max(500));
+
+export const presenceBatchQuerySchema = z.object({ ids: presenceIds });
+
+export const presencePeopleQuerySchema = z.object({
+  scope: z.enum(["team", "organisation"]).default("team"),
+  status: z
+    .enum([
+      "available",
+      "busy",
+      "dnd",
+      "meeting",
+      "break",
+      "lunch",
+      "focusing",
+      "away",
+      "offline",
+    ])
+    .optional(),
+  search: z.string().max(80).optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+});
+
+// ── Praesto Platform Console (/platform/admin) ──────────────────────────────
+
+const ymd = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must be YYYY-MM-DD")
+  .refine((v) => !Number.isNaN(Date.parse(v)), "Invalid date");
+
+/** A preset range, or an explicit from/to pair (IST calendar dates). */
+export const platformRangeQuerySchema = z
+  .object({
+    range: z.enum(["30d", "90d", "12m", "ytd", "all"]).optional(),
+    from: ymd.optional(),
+    to: ymd.optional(),
+  })
+  .refine((q) => !q.from === !q.to, "Give both from and to, or neither")
+  .refine(
+    (q) => !q.from || !q.to || q.from <= q.to,
+    "The start date must be on or before the end date",
+  );
+
+const pageFields = {
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  search: z.string().trim().max(100).optional(),
+};
+
+export const platformTenantsQuerySchema = z
+  .object({
+    ...pageFields,
+    status: z
+      .enum([
+        "trialing",
+        "active",
+        "grace_period",
+        "cancelled",
+        "cancelling",
+        "expired",
+      ])
+      .optional(),
+    plan: z.enum(["starter", "growth", "enterprise"]).optional(),
+    kind: z.enum(["trial", "paid", "never_paid"]).optional(),
+    account: z.enum(["active", "inactive"]).optional(),
+    access: z.enum(["yes", "no"]).optional(),
+    payment: z.enum(["captured", "failed", "refunded", "none"]).optional(),
+    registeredFrom: ymd.optional(),
+    registeredTo: ymd.optional(),
+    minEmployees: z.coerce.number().int().min(0).optional(),
+    maxEmployees: z.coerce.number().int().min(0).optional(),
+    sort: z
+      .enum([
+        "created_desc",
+        "created_asc",
+        "name_asc",
+        "employees_desc",
+        "renewal_asc",
+      ])
+      .default("created_desc"),
+  })
+  .refine(
+    (q) =>
+      q.minEmployees == null ||
+      q.maxEmployees == null ||
+      q.minEmployees <= q.maxEmployees,
+    "Minimum employees can't exceed the maximum",
+  );
+
+export const platformPaymentsQuerySchema = z
+  .object({
+    ...pageFields,
+    status: z.enum(["captured", "failed", "refunded", "pending"]).optional(),
+    tenantId: z
+      .string()
+      .regex(/^[a-f0-9]{24}$/i, "Invalid tenant id")
+      .optional(),
+    from: ymd.optional(),
+    to: ymd.optional(),
+  })
+  .refine((q) => !q.from === !q.to, "Give both from and to, or neither");
+
+export const platformAuditQuerySchema = z.object({
+  page: pageFields.page,
+  limit: pageFields.limit,
+});
+
+export const platformSyncSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, "Give a short reason (at least 5 characters)")
+    .max(500),
+});

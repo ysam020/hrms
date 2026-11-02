@@ -26,7 +26,7 @@ export async function getSubscriptionAccess(
   return decideAccess(await loadTenantSubscription(tenantId, true));
 }
 
-type TenantSubscription = {
+export type TenantSubscription = {
   subscriptionStatus: string | null;
   planExpiresAt: Date | null;
   planActivatedAt: Date | null;
@@ -75,7 +75,9 @@ export function clearSubscriptionCache(): void {
   subscriptionCache.clear();
 }
 
-function decideAccess(tenant: TenantSubscription): SubscriptionAccess {
+// Exported for the Platform Console, which reports "has access" with the
+// exact rule this guard enforces.
+export function decideAccess(tenant: TenantSubscription): SubscriptionAccess {
   if (!tenant)
     return { allowed: true, subscriptionStatus: null, planExpiresAt: null };
 

@@ -25,6 +25,14 @@ import {
   canUseSupport,
 } from "./navigation";
 import { canRaiseSupport, isSupportAgent } from "@next/features/support/config";
+import {
+  canOpenConsole,
+  canViewAudit,
+  canViewBilling,
+  canViewOverview,
+  canViewTenants,
+  consoleHome,
+} from "@next/features/platform-admin/shared";
 import { NoAccess, NotFound, RouteError } from "@next/features/system/System";
 
 // Route table. Paths match Classic's (apps/web/src/app/router/routesConfig.tsx)
@@ -90,6 +98,18 @@ function LegacySettings() {
     (tab && map[tab]) ||
     (tab === "org-settings" ? "/settings/leave" : "/settings/company");
   return <Navigate to={target} replace />;
+}
+
+/**
+ * /platform-admin: the overview for those who may see it, else the first
+ * console page they can open; NoAccess for everyone outside Praesto's team.
+ */
+function ConsoleIndex({ children }: { children: ReactNode }) {
+  const { user } = useContext(UserContext);
+  if (!canOpenConsole(user)) return <NoAccess />;
+  if (!canViewOverview(user))
+    return <Navigate to={consoleHome(user)} replace />;
+  return <>{children}</>;
 }
 
 function LoginRoute({ children }: { children: ReactNode }) {
@@ -159,6 +179,10 @@ const F = {
   platformTicket: () =>
     import("@next/features/support/platform/PlatformTicket"),
   audit: () => import("@next/features/audit/AuditLog"),
+  paOverview: () => import("@next/features/platform-admin/Overview"),
+  paTenants: () => import("@next/features/platform-admin/Tenants"),
+  paBilling: () => import("@next/features/platform-admin/Billing"),
+  paAudit: () => import("@next/features/platform-admin/AuditLog"),
   publicPages: () => import("@next/features/public/Public"),
   aiAssistants: () => import("@next/features/assistant/AiAssistants"),
   connectAuthorize: () => import("@next/features/assistant/ConnectAuthorize"),
@@ -385,6 +409,45 @@ const appRoutes: RouteObject[] = [
   {
     path: "platform/support/tickets/:ticketId",
     ...page(F.platformTicket, "default", isSupportAgent),
+  },
+  // Praesto Platform Console — Praesto's own team, per PraestoAdmin action.
+  // The gates mirror the gateway's requirePlatformAdmin on each API.
+  {
+    path: "platform-admin",
+    lazy: async () => {
+      const { default: Overview } = await F.paOverview();
+      return {
+        Component: () => (
+          <ConsoleIndex>
+            <Overview />
+          </ConsoleIndex>
+        ),
+      };
+    },
+  },
+  {
+    path: "platform-admin/tenants",
+    ...page(F.paTenants, "default", canViewTenants),
+  },
+  {
+    path: "platform-admin/tenants/:tenantId",
+    ...page(F.paTenants, "PlatformTenantDetail", canViewTenants),
+  },
+  {
+    path: "platform-admin/subscriptions",
+    ...page(F.paBilling, "PlatformSubscriptions", canViewBilling),
+  },
+  {
+    path: "platform-admin/payments",
+    ...page(F.paBilling, "PlatformPayments", canViewBilling),
+  },
+  {
+    path: "platform-admin/revenue",
+    ...page(F.paBilling, "PlatformRevenue", canViewBilling),
+  },
+  {
+    path: "platform-admin/audit-logs",
+    ...page(F.paAudit, "default", canViewAudit),
   },
   { path: "ai-assistants", ...page(F.aiAssistants) },
   { path: "audit-logs", ...page(F.audit, "default", isOwnerOrAdmin) },

@@ -7,6 +7,7 @@ import {
 import { logger } from "@hrms/logger";
 import { sendPushNotifications } from "@hrms/firebase";
 import type { RedisWebSocketAdapter } from "@hrms/websocket";
+import { withoutDoNotDisturb } from "../services/presenceConnectivity";
 
 type AuthenticatedSocket = Socket & {
   userId: string;
@@ -181,11 +182,22 @@ export function setupChatSocket(
                   : type === "file"
                     ? `${fileName || "Sent a file"}`
                     : (content ?? "");
-            sendPushNotifications(others, userId, pushBody, {
-              latestOnly: true,
-            }).catch((err) =>
-              logger.error("[chat:send] FCM push error:", { err }),
-            );
+            // Chat is a non-essential notification: Do Not Disturb holds
+            // back the push (the message itself still arrives in-app).
+            (tenantId
+              ? withoutDoNotDisturb(tenantId, others)
+              : Promise.resolve(others)
+            )
+              .then((recipients) =>
+                recipients.length > 0
+                  ? sendPushNotifications(recipients, userId, pushBody, {
+                      latestOnly: true,
+                    })
+                  : undefined,
+              )
+              .catch((err) =>
+                logger.error("[chat:send] FCM push error:", { err }),
+              );
           }
         } catch (err) {
           logger.error(`chat:send error for ${userId}:`, { err });

@@ -5,12 +5,7 @@ import {
   type HTMLMotionProps,
 } from "framer-motion";
 import { useLocation } from "react-router-dom";
-import {
-  forwardRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { duration, ease, stagger } from "./tokens";
 import { useArrivingAt } from "./viewTransition";
 import { preset, type Edge, type PresetName } from "./presets";
@@ -39,27 +34,28 @@ export function inertProps(isInert: boolean) {
   return isInert ? ({ inert: true, "aria-hidden": true } as const) : {};
 }
 
-type ExitGuardProps = HTMLMotionProps<"div"> & { children: ReactNode };
+type ExitGuardProps = HTMLMotionProps<"div"> & {
+  children: ReactNode;
+  ref?: Ref<HTMLDivElement>;
+};
 
 /**
  * A motion.div that turns inert while AnimatePresence is removing it.
- * Forwards its ref: overlays rely on it for focus trapping and positioning.
+ * Passes its ref on: overlays rely on it for focus trapping and positioning.
  */
-export const ExitGuard = forwardRef<HTMLDivElement, ExitGuardProps>(
-  function ExitGuard({ children, style, ...rest }, ref) {
-    const isPresent = useIsPresent();
-    return (
-      <motion.div
-        ref={ref}
-        {...rest}
-        {...inertProps(!isPresent)}
-        style={{ ...style, pointerEvents: isPresent ? undefined : "none" }}
-      >
-        {children}
-      </motion.div>
-    );
-  },
-);
+export function ExitGuard({ children, style, ref, ...rest }: ExitGuardProps) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div
+      ref={ref}
+      {...rest}
+      {...inertProps(!isPresent)}
+      style={{ ...style, pointerEvents: isPresent ? undefined : "none" }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 export interface PresenceProps {
   show: boolean;

@@ -53,7 +53,7 @@ const modules = Object.keys(permissionStructure).sort((a, b) =>
 );
 // Granted only inside Praesto's own organisation; the server rejects them
 // everywhere else (PLATFORM_ONLY_MODULES in @hrms/common).
-const PLATFORM_ONLY_MODULES = ["PraestoSupport"];
+const PLATFORM_ONLY_MODULES = ["PraestoSupport", "PraestoAdmin"];
 function human(v: string) {
   return v
     .replace(/([A-Z])/g, " $1")

@@ -2,7 +2,6 @@ import { LayoutGroup, motion } from "framer-motion";
 import {
   Children,
   createContext,
-  forwardRef,
   isValidElement,
   useContext,
   useEffect,
@@ -14,7 +13,9 @@ import {
   type InputHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
+  type Ref,
 } from "react";
+import { useFormStatus } from "react-dom";
 import { duration, ease } from "@next/motion";
 import { useIsCompact } from "@next/lib/hooks";
 import { Select } from "./fields";
@@ -39,7 +40,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: "small" | "regular" | "large";
   icon?: IconName;
   busy?: boolean;
+  /** The button's accessible name while busy, e.g. "Saving…". */
+  busyLabel?: string;
   block?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -108,95 +112,111 @@ function useLongPressTip() {
   };
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  function Button(
-    {
-      variant = "secondary",
-      size = "regular",
-      icon,
-      busy,
-      block,
-      className,
-      children,
-      disabled,
-      type = "button",
-      onClick,
-      ...rest
-    },
-    ref,
-  ) {
-    const inToolbar = useContext(ToolbarActionsContext);
-    const labelText = icon && inToolbar ? textOf(children) : "";
-    const iconOnly = Boolean(labelText);
-    const tip = useLongPressTip();
-    // An onClick that returns a promise (any async handler) puts the button in
-    // its busy state until it settles, so every async action shows progress
-    // and can't be triggered twice without each caller wiring `busy`.
-    const [pending, setPending] = useState(false);
-    const mounted = useRef(true);
-    // Set on every mount: StrictMode's mount → unmount → mount would
-    // otherwise leave it false and the button stuck busy.
-    useEffect(() => {
-      mounted.current = true;
-      return () => {
-        mounted.current = false;
-      };
-    }, []);
-    const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
-      if (iconOnly && tip.consumeLongPress()) {
-        // A long press showed the label; it isn't a tap.
-        e.preventDefault();
-        return;
-      }
-      const result = onClick?.(e) as unknown;
-      if (result && typeof (result as Promise<unknown>).then === "function") {
-        setPending(true);
-        (result as Promise<unknown>).then(
-          () => mounted.current && setPending(false),
-          () => mounted.current && setPending(false),
-        );
-      }
+export function Button({
+  variant = "secondary",
+  size = "regular",
+  icon,
+  busy,
+  busyLabel,
+  block,
+  className,
+  children,
+  disabled,
+  type = "button",
+  onClick,
+  ref,
+  ...rest
+}: ButtonProps) {
+  const inToolbar = useContext(ToolbarActionsContext);
+  const labelText = icon && inToolbar ? textOf(children) : "";
+  const iconOnly = Boolean(labelText);
+  const tip = useLongPressTip();
+  // An onClick that returns a promise (any async handler) puts the button in
+  // its busy state until it settles, so every async action shows progress
+  // and can't be triggered twice without each caller wiring `busy`.
+  const [pending, setPending] = useState(false);
+  const mounted = useRef(true);
+  // Set on every mount: StrictMode's mount → unmount → mount would
+  // otherwise leave it false and the button stuck busy.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
     };
-    busy = busy || pending;
-    return (
-      <button
-        ref={ref}
-        type={type}
-        onClick={handleClick}
-        className={cx(
-          s.button,
-          variant !== "secondary" && s[variant],
-          size !== "regular" && s[size],
-          block && s.block,
-          iconOnly && s.iconOnly,
-          className,
-        )}
-        disabled={disabled || busy}
-        aria-busy={busy || undefined}
-        {...(iconOnly && {
-          "aria-label": labelText,
-          "data-tip": labelText,
-          "data-tip-open": tip.open || undefined,
-          ...tip.handlers,
-        })}
-        {...rest}
+  }, []);
+  const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
+    if (iconOnly && tip.consumeLongPress()) {
+      // A long press showed the label; it isn't a tap.
+      e.preventDefault();
+      return;
+    }
+    const result = onClick?.(e) as unknown;
+    if (result && typeof (result as Promise<unknown>).then === "function") {
+      setPending(true);
+      (result as Promise<unknown>).then(
+        () => mounted.current && setPending(false),
+        () => mounted.current && setPending(false),
+      );
+    }
+  };
+  busy = busy || pending;
+  return (
+    <button
+      ref={ref}
+      type={type}
+      onClick={handleClick}
+      className={cx(
+        s.button,
+        variant !== "secondary" && s[variant],
+        size !== "regular" && s[size],
+        block && s.block,
+        iconOnly && s.iconOnly,
+        className,
+      )}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      aria-label={(busy && busyLabel) || undefined}
+      {...(iconOnly && {
+        "aria-label": labelText,
+        "data-tip": labelText,
+        "data-tip-open": tip.open || undefined,
+        ...tip.handlers,
+      })}
+      {...rest}
+    >
+      <span
+        className={cx(busy && s.busyLabel)}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
       >
-        <span
-          className={cx(busy && s.busyLabel)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-        >
-          {icon && <Icon name={icon} size={iconOnly ? undefined : "1.15em"} />}
-          {!iconOnly && children}
+        {icon && <Icon name={icon} size={iconOnly ? undefined : "1.15em"} />}
+        {!iconOnly && children}
+      </span>
+      {busy && (
+        <span className={s.busyOverlay}>
+          <SpinnerMark size="1.6em" tone="mono" />
         </span>
-        {busy && (
-          <span className={s.busyOverlay}>
-            <SpinnerMark size="1.6em" tone="mono" />
-          </span>
-        )}
-      </button>
-    );
-  },
-);
+      )}
+    </button>
+  );
+}
+
+/**
+ * A form's submit button that follows the form's own submission: inside a
+ * `<form action={…}>` it is busy, and can't be pressed again, until the
+ * action settles. useFormStatus reads the nearest enclosing form, so this
+ * must render inside the form it submits. Buttons outside their form
+ * (dialog footers using form="id") keep Button with `busy`.
+ */
+export function SubmitButton({
+  busy,
+  variant = "primary",
+  ...rest
+}: Omit<ButtonProps, "type" | "onClick">) {
+  const { pending } = useFormStatus();
+  return (
+    <Button {...rest} variant={variant} type="submit" busy={busy || pending} />
+  );
+}
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon: IconName;
@@ -205,34 +225,39 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   badge?: number;
   /** Destructive actions are red; trash icons default to it. */
   tone?: "danger" | "default";
+  ref?: Ref<HTMLButtonElement>;
 }
 
-export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  function IconButton(
-    { icon, label, badge, tone, className, type = "button", ...rest },
-    ref,
-  ) {
-    const danger = tone ? tone === "danger" : icon === "trash";
-    return (
-      <button
-        ref={ref}
-        type={type}
-        data-tone={danger ? "danger" : undefined}
-        className={cx(s.iconButton, className)}
-        aria-label={badge ? `${label}, ${badge} new` : label}
-        title={label}
-        {...rest}
-      >
-        <Icon name={icon} />
-        {!!badge && (
-          <span className={s.iconBadge} aria-hidden>
-            {badge > 99 ? "99+" : badge}
-          </span>
-        )}
-      </button>
-    );
-  },
-);
+export function IconButton({
+  icon,
+  label,
+  badge,
+  tone,
+  className,
+  type = "button",
+  ref,
+  ...rest
+}: IconButtonProps) {
+  const danger = tone ? tone === "danger" : icon === "trash";
+  return (
+    <button
+      ref={ref}
+      type={type}
+      data-tone={danger ? "danger" : undefined}
+      className={cx(s.iconButton, className)}
+      aria-label={badge ? `${label}, ${badge} new` : label}
+      title={label}
+      {...rest}
+    >
+      <Icon name={icon} />
+      {!!badge && (
+        <span className={s.iconBadge} aria-hidden>
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
+    </button>
+  );
+}
 
 // ── Segmented control ───────────────────────────────────────────────────────
 // Used for sibling sub-views of a page (tabs) and for small filters. The
@@ -385,10 +410,15 @@ export function Switch({
   );
 }
 
-export const Checkbox = forwardRef<
-  HTMLInputElement,
-  InputHTMLAttributes<HTMLInputElement> & { indeterminate?: boolean }
->(function Checkbox({ indeterminate, className, ...rest }, ref) {
+export function Checkbox({
+  indeterminate,
+  className,
+  ref,
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & {
+  indeterminate?: boolean;
+  ref?: Ref<HTMLInputElement>;
+}) {
   return (
     <input
       ref={(el) => {
@@ -401,4 +431,4 @@ export const Checkbox = forwardRef<
       {...rest}
     />
   );
-});
+}

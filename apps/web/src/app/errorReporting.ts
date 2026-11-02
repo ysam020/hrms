@@ -39,25 +39,61 @@ const consoleSink: ReportSink = (r, original) => {
   console.error(`[${r.kind}] ${r.name}: ${r.message}`, r.componentStack ?? "");
 };
 
-export function createErrorHandlers(sink: ReportSink = consoleSink) {
+/** Name and message of anything thrown, without trusting its shape. */
+function describe(error: unknown): { name: string; message: string } {
+  try {
+    if (error instanceof Error)
+      return { name: String(error.name), message: String(error.message) };
+    return { name: "Error", message: String(error) };
+  } catch {
+    // e.g. an object without a prototype, which String() can't convert.
+    return { name: "Error", message: "[value that can't be printed]" };
+  }
+}
+
+/** The same error again within this window is reported once (production). */
+const REPEAT_WINDOW_MS = 10_000;
+
+export function createErrorHandlers(
+  sink: ReportSink = consoleSink,
+  { dedupe = !import.meta.env.DEV } = {},
+) {
+  const lastSeen = new Map<string, number>();
+  let reporting = false;
   const report =
     (kind: ErrorReport["kind"]) =>
     (error: unknown, info: Pick<ErrorInfo, "componentStack">) => {
-      const err = error instanceof Error ? error : new Error(String(error));
-      sink(
-        {
+      // Reporting must never break the app or feed itself: an error raised
+      // while a report is being made is dropped, not reported.
+      if (reporting) return;
+      reporting = true;
+      try {
+        const { name, message } = describe(error);
+        const r: ErrorReport = {
           kind,
-          name: err.name,
-          message: redact(err.message),
-          componentStack: info.componentStack
+          name,
+          message: redact(message),
+          componentStack: info?.componentStack
             ? redact(info.componentStack)
             : null,
           // Path only: query strings can carry tokens and record IDs.
           path:
             typeof location === "undefined" ? "" : redact(location.pathname),
-        },
-        error,
-      );
+        };
+        if (dedupe) {
+          const key = `${kind}|${name}|${r.message}|${r.componentStack ?? ""}`;
+          const now = Date.now();
+          if (now - (lastSeen.get(key) ?? -Infinity) < REPEAT_WINDOW_MS) return;
+          lastSeen.set(key, now);
+          if (lastSeen.size > 50)
+            lastSeen.delete(lastSeen.keys().next().value as string);
+        }
+        sink(r, error);
+      } catch {
+        // A failing sink is not worth more than the error it was reporting.
+      } finally {
+        reporting = false;
+      }
     };
   return {
     onCaughtError: report("caught"),

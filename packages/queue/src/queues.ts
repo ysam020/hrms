@@ -33,6 +33,7 @@ let _schedulerQueue: Queue | null = null;
 let _resumeParsingQueue: Queue | null = null;
 let _deadLetterQueue: Queue | null = null;
 let _payrollDisbursementQueue: Queue | null = null;
+let _presenceQueue: Queue | null = null;
 
 export function getEmailQueue(): Queue {
   if (!_emailQueue) {
@@ -129,4 +130,25 @@ export function getPayrollDisbursementQueue(): Queue {
     wrapAddWithRequestId(_payrollDisbursementQueue);
   }
   return _payrollDisbursementQueue;
+}
+
+/**
+ * Presence queue — one delayed job per timed availability status (not one
+ * per person), removed once done. Jobs are idempotent: the worker only acts
+ * when the stored revision still matches, so retries are harmless.
+ */
+export function getPresenceQueue(): Queue {
+  if (!_presenceQueue) {
+    _presenceQueue = new Queue("presenceQueue", {
+      connection: getBullMQConnection(),
+      defaultJobOptions: {
+        removeOnComplete: true,
+        removeOnFail: 100,
+        attempts: 3,
+        backoff: { type: "exponential" as const, delay: 5000 },
+      },
+    });
+    wrapAddWithRequestId(_presenceQueue);
+  }
+  return _presenceQueue;
 }

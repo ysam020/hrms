@@ -81,7 +81,7 @@
   stroke-width: 4;
 }
 .ring {
-  stroke: #5bbde6;
+  stroke: #6aa0e2;
   stroke-width: 4;
   transform: rotate(-90deg);
   transform-origin: 100px 100px;
@@ -149,7 +149,7 @@
   }
 }
 .scan {
-  fill: #5bbde6;
+  fill: #6aa0e2;
 }
 .faceStatus {
   display: grid;

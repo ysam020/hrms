@@ -36,6 +36,7 @@ import {
 } from "./MacBookShowcase";
 import { Abilities } from "./Abilities";
 import { LeaveFlow } from "./LeaveFlow";
+import { Platform } from "./Platform";
 import {
   MaskedLines,
   Reveal,
@@ -119,22 +120,6 @@ const MORE_SCENES: ShowcaseScene[] = [
     alt: "Praesto’s calendar for October with company events, a holiday and today’s schedule.",
   },
   {
-    id: "reports",
-    label: "Reports",
-    title: "Build the report you need.",
-    body: "Pick a data source and columns, add filters and sorting, then export to CSV or save it.",
-    src: `${SHOT}/reports.webp`,
-    alt: "Praesto’s report builder with chosen columns on the left and eleven employee rows of results.",
-  },
-  {
-    id: "roles",
-    label: "Roles",
-    title: "Roles that match how you work.",
-    body: "Bundle permissions into roles, scoped to a person’s own records, their team or everyone.",
-    src: `${SHOT}/permissions.webp`,
-    alt: "Praesto’s roles screen: the Team Lead role with its members and leave permissions scoped to the team.",
-  },
-  {
     id: "settings",
     label: "Settings",
     title: "Set up the way you hire.",
@@ -157,14 +142,6 @@ const MORE_SCENES: ShowcaseScene[] = [
     body: "Each ticket carries a priority, an SLA due date and a conversation, with internal notes for your team.",
     src: `${SHOT}/helpdesk.webp`,
     alt: "A Praesto helpdesk ticket with its status, priority, SLA due date and a conversation including an internal note.",
-  },
-  {
-    id: "policies",
-    label: "Policies",
-    title: "Policies people can find.",
-    body: "Publish policies by category; everyone can read them and download a PDF.",
-    src: `${SHOT}/policies.webp`,
-    alt: "Praesto’s policies screen showing the leave policy alongside the list of company policies.",
   },
   {
     id: "announcements",
@@ -211,7 +188,7 @@ const STACK: {
     fx: "tilt",
     label: "Approvals",
     title: "Every request. One inbox.",
-    body: "Leave, work from home, salary advances and KYC reviews arrive in one place. Decide in a tap, and each request moves through the approval chain you set up.",
+    body: "Leave, work from home, salary advances and KYC reviews arrive in one place. Decide in a tap: each request goes to the requester’s team lead, or to an owner or admin when there isn’t one.",
     src: `${SHOT}/today.webp`,
     alt: "Praesto’s list of requests needing a decision: casual leave, work from home and a salary advance with Approve and Reject, and a KYC review.",
     crop: { x: 272, y: 524, w: 760, h: 336 },
@@ -414,6 +391,9 @@ export default function Landing() {
           </Reveal>
           <LeaveFlow />
         </section>
+
+        <div id="platform" className={s.anchor} />
+        <Platform />
 
         <section
           className={s.anywhere}
@@ -664,7 +644,8 @@ function Hero({ still, signedIn }: { still: boolean; signedIn: boolean }) {
           transition={{ duration: dur.text, delay: 0.5, ease: ease.out }}
         >
           Praesto is HR software that brings attendance, leave, hiring, payroll
-          and approvals for your whole organisation together in one workspace.
+          and approvals together in one workspace — set up to your
+          organisation’s rules, with access that fits each person’s role.
         </motion.p>
         <motion.div
           className={s.actions}
@@ -765,6 +746,7 @@ function Arrow() {
 
 const NAV_LINKS = [
   { href: "#features", label: "Features", key: "features" },
+  { href: "#platform", label: "Platform", key: "platform" },
   { href: "#modules", label: "Modules", key: "modules" },
   { href: "#pricing", label: "Pricing", key: "pricing" },
 ];
@@ -1463,6 +1445,9 @@ function Footer({ signedIn }: { signedIn: boolean }) {
           <p className={s.footerHead}>Product</p>
           <a href="#features">Features</a>
           <a href="#how-it-works">How It Works</a>
+          <a href="#attendance-rules">Attendance</a>
+          <a href="#permissions">Permissions</a>
+          <a href="#reports">Reports</a>
           <a href="#modules">Modules</a>
           <a href="#security">Security</a>
           <a href="#pricing">Pricing</a>
@@ -1491,8 +1476,7 @@ function Footer({ signedIn }: { signedIn: boolean }) {
         </div>
       </div>
       <p className={s.copyright}>
-        © {new Date().getFullYear()} Praesto. Product screens show a fictional
-        organisation.
+        © {new Date().getFullYear()} 2026 Praesto. All rights reserved.
       </p>
     </footer>
   );

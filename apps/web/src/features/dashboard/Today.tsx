@@ -406,6 +406,7 @@ function ApprovalsBody() {
               pairWith="/approvals"
               onApprove={() => decision.approve(item)}
               onReject={() => decision.reject(item)}
+              sending={decision.sending.get(item.instanceId)}
             />
           ))}
         </StaggerList>

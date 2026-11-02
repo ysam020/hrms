@@ -1,17 +1,20 @@
 import {
+  startTransition,
   useCallback,
   useContext,
   useEffect,
+  useOptimistic,
   useState,
+  useTransition,
   type FormEvent,
 } from "react";
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
+import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { StaggerItem, StaggerList, sharedPart, useHandoff } from "@next/motion";
 import {
   Avatar,
-  Button,
   EmptyState,
   Field,
   KeyValues,
@@ -19,6 +22,7 @@ import {
   Section,
   Select,
   Skeleton,
+  Button,
   StatusBadge,
   Switch,
   TextArea,
@@ -64,6 +68,7 @@ function TicketHeader({ id, ticket }: { id: string; ticket: TicketSummary }) {
 export default function Ticket() {
   const { ticketId = "" } = useParams();
   const { setAlert } = useContext(AlertContext);
+  const { user } = useContext(UserContext);
   const isHr = useCanManageHelpdesk();
   const [ticket, setTicket] = useState<any | null>(null);
   // Opened from the list: its title and status, shown while the ticket loads.
@@ -71,8 +76,6 @@ export default function Ticket() {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [internal, setInternal] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [statusBusy, setStatusBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,40 +90,86 @@ export default function Ticket() {
     load();
   }, [load]);
 
-  const send = async (e: FormEvent) => {
+  // A reply shows in the thread as soon as it's sent, marked "Sending…",
+  // and is replaced by the saved copy when the ticket reloads. The box
+  // clears at once for the next message; a reply that fails leaves the
+  // thread and its text returns to the box.
+  const [thread, addPending] = useOptimistic(
+    (ticket?.comments ?? []) as any[],
+    (list, pending: any) => [...list, pending],
+  );
+  const send = (e: FormEvent) => {
     e.preventDefault();
-    if (!comment.trim()) return;
-    setSending(true);
-    try {
-      await apiClient.post(API_ENDPOINTS.ADD_TICKET_COMMENT(ticketId), {
-        comment: comment.trim(),
-        isInternal: internal,
-      });
-      setComment("");
-      setInternal(false);
-      load();
-    } catch (err) {
-      setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    }
-    setSending(false);
-  };
-  const changeStatus = async (status: string) => {
-    setStatusBusy(true);
-    try {
-      await apiClient.patch(API_ENDPOINTS.UPDATE_TICKET(ticketId), { status });
-      setAlert({
-        open: true,
-        message: `Marked ${label(status)}.`,
-        severity: "success",
-      });
-      load();
-    } catch (err) {
-      setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    }
-    setStatusBusy(false);
+    const text = comment.trim();
+    if (!text) return;
+    const isInternal = internal;
+    setComment("");
+    setInternal(false);
+    const reply = {
+      id: `pending:${Date.now()}`,
+      comment: text,
+      isInternal,
+      author: user,
+    };
+    startTransition(async () => {
+      addPending({ ...reply, pending: true });
+      try {
+        await apiClient.post(API_ENDPOINTS.ADD_TICKET_COMMENT(ticketId), {
+          comment: text,
+          isInternal,
+        });
+        // Saved: keep it even if the reload below fails.
+        startTransition(() =>
+          setTicket((t: any) =>
+            t
+              ? {
+                  ...t,
+                  comments: [
+                    ...(t.comments ?? []),
+                    { ...reply, createdAt: new Date().toISOString() },
+                  ],
+                }
+              : t,
+          ),
+        );
+        await load();
+      } catch (err) {
+        setAlert({ open: true, message: errorMessage(err), severity: "error" });
+        setComment((c) => c || text);
+        setInternal(isInternal);
+      }
+    });
   };
 
-  const comments: any[] = ticket?.comments ?? [];
+  // The new status shows at once; the select stays disabled until the
+  // reloaded ticket confirms it, so two changes can't race each other.
+  const [status, showStatus] = useOptimistic<string | undefined>(
+    ticket?.status,
+  );
+  const [statusPending, startStatus] = useTransition();
+  const changeStatus = (next: string) =>
+    startStatus(async () => {
+      showStatus(next);
+      try {
+        await apiClient.patch(API_ENDPOINTS.UPDATE_TICKET(ticketId), {
+          status: next,
+        });
+        setAlert({
+          open: true,
+          message: `Marked ${label(next)}.`,
+          severity: "success",
+        });
+        // Confirmed: keep it even if the reload below fails.
+        startTransition(() =>
+          setTicket((t: any) => (t ? { ...t, status: next } : t)),
+        );
+        await load();
+      } catch (err) {
+        setAlert({ open: true, message: errorMessage(err), severity: "error" });
+      }
+    });
+
+  const comments = thread;
   return (
     <Page
       title={
@@ -149,7 +198,7 @@ export default function Ticket() {
       ) : (
         <div className={s.layout}>
           <div style={{ display: "grid", gap: 28, minWidth: 0 }}>
-            <TicketHeader id={ticketId} ticket={ticket} />
+            <TicketHeader id={ticketId} ticket={{ ...ticket, status }} />
             <p className={s.description}>{ticket.description}</p>
             <Section
               title="Conversation"
@@ -165,11 +214,13 @@ export default function Ticket() {
                       index={i}
                       className={s.message}
                       data-internal={c.isInternal || undefined}
+                      data-pending={c.pending || undefined}
                     >
                       <Avatar name={personName(c.author)} size={28} />
                       <div style={{ minWidth: 0 }}>
                         <p className={s.msgMeta}>
-                          <b>{personName(c.author)}</b> · {fromNow(c.createdAt)}
+                          <b>{personName(c.author)}</b> ·{" "}
+                          {c.pending ? "Sending…" : fromNow(c.createdAt)}
                           {c.isInternal && (
                             <span className={s.internalTag}>Internal note</span>
                           )}
@@ -209,7 +260,6 @@ export default function Ticket() {
                     <Button
                       type="submit"
                       variant="primary"
-                      busy={sending}
                       disabled={!comment.trim()}
                     >
                       {internal ? "Add Note" : "Send Reply"}
@@ -236,10 +286,13 @@ export default function Ticket() {
               ]}
             />
             {isHr && (
-              <Field label="Status">
+              <Field
+                label="Status"
+                hint={statusPending ? "Saving…" : undefined}
+              >
                 <Select
-                  value={ticket.status}
-                  disabled={statusBusy}
+                  value={status}
+                  disabled={statusPending}
                   onChange={(e) => changeStatus(e.target.value)}
                 >
                   {STATUSES.map((st) => (

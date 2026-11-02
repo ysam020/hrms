@@ -6,6 +6,7 @@ export {
   getSchedulerQueue,
   getDeadLetterQueue,
   getPayrollDisbursementQueue,
+  getPresenceQueue,
 } from "./queues";
 export type {
   EmailJobData,
@@ -14,4 +15,5 @@ export type {
   SchedulerJobData,
   SchedulerJobName,
   PayrollDisbursementJobData,
+  PresenceExpiryJobData,
 } from "./types";

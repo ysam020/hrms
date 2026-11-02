@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Icon, Tag, type Tone } from "@next/ui";
 import {
@@ -72,11 +71,9 @@ export function JobLocationLine({ job }: { job: any }) {
 }
 
 export function PublicBar({ slug, title }: { slug?: string; title: string }) {
-  useEffect(() => {
-    document.title = `${title} · Praesto`;
-  }, [title]);
   return (
     <header className={s.publicBar}>
+      <title>{`${title} · Praesto`}</title>
       {slug ? (
         <Link to={`/careers/${slug}`} viewTransition className={s.brand}>
           <span className={s.glyph}>P</span> Careers

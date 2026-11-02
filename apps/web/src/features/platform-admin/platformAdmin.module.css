@@ -1,0 +1,77 @@
+/* Praesto Platform Console. Tokens only (design/tokens.css). Dense by
+   design: an operations console, not a marketing surface. */
+
+.stack {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+}
+
+.range {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.customRange {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.customRange > * {
+  flex: 1 1 160px;
+}
+
+.note {
+  max-width: 72ch;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.lists {
+  display: grid;
+  gap: 24px;
+}
+@media (min-width: 900px) {
+  .lists {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.unavailable {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.unavailable li {
+  display: grid;
+  gap: 2px;
+}
+.unavailable b {
+  font: var(--px-type-callout);
+  font-weight: 600;
+  color: var(--px-text-1);
+}
+
+.mono {
+  font-family: var(--px-font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.detailGrid {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+}
+@media (min-width: 1100px) {
+  .detailGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

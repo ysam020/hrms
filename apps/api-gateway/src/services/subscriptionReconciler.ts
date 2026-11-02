@@ -17,12 +17,15 @@ import { getRazorpay, getOrCreatePlanId } from "../handlers/payment";
 import { TIER_EMPLOYEE_LIMITS, type PlanTier } from "../config/billingPlans";
 import { getActiveEmployeeCount } from "../utils/planLimits";
 import { logger } from "@hrms/logger";
+import { syncTenantLedger } from "./billingLedger";
 
 function isPlanTier(v: unknown): v is PlanTier {
   return v === "starter" || v === "growth" || v === "enterprise";
 }
 
 const RECONCILE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// Invoices newer than this are re-read into the billing ledger on each run.
+const LEDGER_SYNC_DAYS = 45;
 
 // This is a setInterval running in every gateway process — with N replicas,
 // N reconcilers would otherwise poll Razorpay for every tenant on the same
@@ -95,18 +98,7 @@ async function reconcile(): Promise<void> {
           in: ["trialing", "active", "grace_period", "cancelling"],
         },
       },
-      select: {
-        id: true,
-        razorpaySubscriptionId: true,
-        previousRazorpaySubscriptionId: true,
-        planActivatedAt: true,
-        planExpiresAt: true,
-        planTier: true,
-        billing: true,
-        subscriptionStatus: true,
-        pendingPlanTier: true,
-        pendingBilling: true,
-      },
+      select: RECONCILE_SELECT,
     });
 
     logger.info(
@@ -119,201 +111,7 @@ async function reconcile(): Promise<void> {
 
     for (const tenant of tenants) {
       try {
-        // A payment-method swap (confirmPaymentMethodChange in payment.ts)
-        // cancels the tenant's old subscription best-effort, after the new
-        // one is already live — if that cancel call failed, this field is
-        // left set as a retry queue of one, independent of whatever the
-        // *current* subscription's status is below.
-        if (tenant.previousRazorpaySubscriptionId) {
-          try {
-            await (rzp.subscriptions.cancel as any)(
-              tenant.previousRazorpaySubscriptionId,
-              { cancel_at_cycle_end: 0 },
-            );
-            await prisma.tenant.update({
-              where: { id: tenant.id },
-              data: { previousRazorpaySubscriptionId: null },
-            });
-            logger.info(
-              `Reconciler: cancelled orphaned old subscription for tenant ${tenant.id}`,
-            );
-          } catch (err) {
-            logger.warn(
-              `Reconciler: retry-cancel of old subscription failed for tenant ${tenant.id}, will retry next cycle`,
-              { err },
-            );
-          }
-        }
-
-        const sub = await (rzp.subscriptions.fetch as any)(
-          tenant.razorpaySubscriptionId!,
-        );
-
-        // Razorpay's `current_end` is a Unix timestamp (seconds).
-        const rzpExpiry: Date | null = sub.current_end
-          ? new Date(sub.current_end * 1000)
-          : null;
-
-        if (
-          sub.status === "active" &&
-          tenant.subscriptionStatus !== "cancelling"
-        ) {
-          // Razorpay considers the subscription active. Heal any stale DB state.
-          // (Excludes "cancelling" tenants — see the dedicated branch below:
-          // healing them here would silently undo a user's in-flight cancel
-          // request while Razorpay's cancellation webhook is still catching up.)
-          const updates: Record<string, unknown> = {};
-
-          if (tenant.subscriptionStatus !== "active") {
-            updates.subscriptionStatus = "active";
-          }
-          // A trial's first charge, as handleWebhook records it.
-          if (!tenant.planActivatedAt) {
-            updates.planActivatedAt = now;
-          }
-          // A new cycle has started if Razorpay's expiry moved past ours —
-          // that's also the signal that a scheduled ("cycle_end") plan change
-          // has now taken effect on Razorpay's side. Finalize it here as a
-          // fallback for a subscription.charged webhook we may have missed
-          // (the primary path is handleWebhook in payment.ts).
-          const newCycleStarted =
-            rzpExpiry &&
-            (!tenant.planExpiresAt || rzpExpiry > tenant.planExpiresAt);
-          if (newCycleStarted) {
-            updates.planExpiresAt = rzpExpiry;
-            if (tenant.pendingPlanTier) {
-              // Same headcount-vs-limit guard as handleWebhook's
-              // subscription.charged case: changePlan only checks this at
-              // request time, and this pending change may have been sitting
-              // for up to a full annual cycle. If headcount has since grown
-              // past the pending tier's limit, block the downgrade and
-              // revert Razorpay's plan_id back to the current tier so
-              // future cycles don't keep charging the blocked (lower) price.
-              const pendingTier = tenant.pendingPlanTier;
-              const limit = isPlanTier(pendingTier)
-                ? TIER_EMPLOYEE_LIMITS[pendingTier]
-                : null;
-              const employeeCount =
-                limit !== null ? await getActiveEmployeeCount(tenant.id) : 0;
-              const downgradeBlocked = limit !== null && employeeCount > limit;
-
-              if (downgradeBlocked) {
-                logger.warn(
-                  `Reconciler: downgrade to ${pendingTier} blocked for tenant ${tenant.id}: ${employeeCount} active employees exceed the ${limit} limit`,
-                );
-                if (isPlanTier(tenant.planTier)) {
-                  try {
-                    const currentBilling =
-                      tenant.billing === "annual" ? "annual" : "monthly";
-                    const currentPlanId = await getOrCreatePlanId(
-                      tenant.planTier,
-                      currentBilling,
-                    );
-                    await (rzp.subscriptions.update as any)(
-                      tenant.razorpaySubscriptionId!,
-                      {
-                        plan_id: currentPlanId,
-                        quantity: 1,
-                        schedule_change_at: "now",
-                      },
-                    );
-                  } catch (err) {
-                    logger.error(
-                      `Reconciler: failed to revert Razorpay plan after blocking downgrade for tenant ${tenant.id}`,
-                      { err },
-                    );
-                  }
-                }
-                updates.pendingPlanTier = null;
-                updates.pendingBilling = null;
-                updates.pendingPlanChangeAt = null;
-              } else {
-                updates.planTier = tenant.pendingPlanTier;
-                updates.billing = tenant.pendingBilling ?? tenant.billing;
-                updates.pendingPlanTier = null;
-                updates.pendingBilling = null;
-                updates.pendingPlanChangeAt = null;
-              }
-            }
-          }
-
-          if (Object.keys(updates).length > 0) {
-            await prisma.tenant.update({
-              where: { id: tenant.id },
-              data: updates,
-            });
-            logger.info(
-              `Reconciler healed tenant ${tenant.id}: ${JSON.stringify(updates)}`,
-            );
-          }
-        } else if (
-          sub.status === "halted" &&
-          tenant.subscriptionStatus === "active"
-        ) {
-          // All Razorpay retries failed — missed the halted webhook.
-          await prisma.tenant.update({
-            where: { id: tenant.id },
-            data: { subscriptionStatus: "grace_period" },
-          });
-          logger.warn(
-            `Reconciler: tenant ${tenant.id} moved to grace_period (Razorpay halted — missed webhook)`,
-          );
-        } else if (
-          ["cancelled", "completed"].includes(sub.status) &&
-          tenant.subscriptionStatus !== "cancelled"
-        ) {
-          // Missed the cancelled/completed webhook — heal to "cancelled",
-          // not "expired": the user (or dashboard ops) explicitly cancelled
-          // this, distinct from an involuntary lapse. requireActiveSubscription
-          // still checks planExpiresAt to decide if access has actually ended.
-          await prisma.tenant.update({
-            where: { id: tenant.id },
-            data: { subscriptionStatus: "cancelled" },
-          });
-          logger.warn(
-            `Reconciler: tenant ${tenant.id} marked cancelled (Razorpay status: ${sub.status})`,
-          );
-        } else if (
-          sub.status === "expired" &&
-          tenant.subscriptionStatus !== "expired"
-        ) {
-          // Razorpay's own "expired" status — an involuntary lapse (missed
-          // renewal), not an explicit cancellation.
-          await prisma.tenant.update({
-            where: { id: tenant.id },
-            data: { subscriptionStatus: "expired" },
-          });
-          logger.warn(
-            `Reconciler: tenant ${tenant.id} marked expired (Razorpay status: expired)`,
-          );
-        } else if (
-          sub.status === "active" &&
-          tenant.subscriptionStatus === "cancelling"
-        ) {
-          // Cancel was requested but Razorpay still shows active — webhook
-          // may still be in flight. Log so we can monitor; reconciler will
-          // catch up on the next run if it persists.
-          logger.warn(
-            `Reconciler: tenant ${tenant.id} is "cancelling" but Razorpay shows active — webhook may be delayed`,
-          );
-        }
-
-        // Soft expiry guard: if our planExpiresAt is in the past and the
-        // subscription is somehow still "active" in DB, flip to grace_period.
-        if (
-          tenant.subscriptionStatus === "active" &&
-          tenant.planExpiresAt &&
-          tenant.planExpiresAt < now &&
-          sub.status !== "active"
-        ) {
-          await prisma.tenant.update({
-            where: { id: tenant.id },
-            data: { subscriptionStatus: "grace_period" },
-          });
-          logger.warn(
-            `Reconciler: tenant ${tenant.id} plan expired locally — moved to grace_period`,
-          );
-        }
+        await reconcileTenant(rzp, tenant, now);
       } catch (err) {
         // Don't let a single tenant failure abort the whole run.
         logger.warn(
@@ -321,10 +119,252 @@ async function reconcile(): Promise<void> {
           { err },
         );
       }
+      // Platform billing ledger: recent invoices only (late refunds and
+      // charges whose webhook was missed). Read model — failures just wait
+      // for the next run.
+      await syncTenantLedger(tenant, { sinceDays: LEDGER_SYNC_DAYS }).catch(
+        (err) =>
+          logger.warn(
+            `Reconciler: ledger sync failed for tenant ${tenant.id}`,
+            {
+              err,
+            },
+          ),
+      );
     }
 
     logger.info("Subscription reconciler: run complete");
   } catch (err) {
     logger.error("Subscription reconciler: fatal error during run", { err });
+  }
+}
+
+export type ReconcileTenant = {
+  id: string;
+  razorpaySubscriptionId: string | null;
+  previousRazorpaySubscriptionId: string | null;
+  planActivatedAt: Date | null;
+  planExpiresAt: Date | null;
+  planTier: string | null;
+  billing: string | null;
+  subscriptionStatus: string;
+  pendingPlanTier: string | null;
+  pendingBilling: string | null;
+};
+
+/** Fields reconcileTenant reads. */
+export const RECONCILE_SELECT = {
+  id: true,
+  razorpaySubscriptionId: true,
+  previousRazorpaySubscriptionId: true,
+  planActivatedAt: true,
+  planExpiresAt: true,
+  planTier: true,
+  billing: true,
+  subscriptionStatus: true,
+  pendingPlanTier: true,
+  pendingBilling: true,
+} as const;
+
+/**
+ * Heal one tenant's subscription state against Razorpay. The scheduled run
+ * calls it for every live subscription; the Platform Console's "Sync from
+ * Razorpay" action calls it for one tenant. Throws on a Razorpay/DB error.
+ */
+export async function reconcileTenant(
+  rzp: any,
+  tenant: ReconcileTenant,
+  now: Date,
+): Promise<void> {
+  // A payment-method swap (confirmPaymentMethodChange in payment.ts)
+  // cancels the tenant's old subscription best-effort, after the new
+  // one is already live — if that cancel call failed, this field is
+  // left set as a retry queue of one, independent of whatever the
+  // *current* subscription's status is below.
+  if (tenant.previousRazorpaySubscriptionId) {
+    try {
+      await (rzp.subscriptions.cancel as any)(
+        tenant.previousRazorpaySubscriptionId,
+        { cancel_at_cycle_end: 0 },
+      );
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { previousRazorpaySubscriptionId: null },
+      });
+      logger.info(
+        `Reconciler: cancelled orphaned old subscription for tenant ${tenant.id}`,
+      );
+    } catch (err) {
+      logger.warn(
+        `Reconciler: retry-cancel of old subscription failed for tenant ${tenant.id}, will retry next cycle`,
+        { err },
+      );
+    }
+  }
+
+  const sub = await (rzp.subscriptions.fetch as any)(
+    tenant.razorpaySubscriptionId!,
+  );
+
+  // Razorpay's `current_end` is a Unix timestamp (seconds).
+  const rzpExpiry: Date | null = sub.current_end
+    ? new Date(sub.current_end * 1000)
+    : null;
+
+  if (sub.status === "active" && tenant.subscriptionStatus !== "cancelling") {
+    // Razorpay considers the subscription active. Heal any stale DB state.
+    // (Excludes "cancelling" tenants — see the dedicated branch below:
+    // healing them here would silently undo a user's in-flight cancel
+    // request while Razorpay's cancellation webhook is still catching up.)
+    const updates: Record<string, unknown> = {};
+
+    if (tenant.subscriptionStatus !== "active") {
+      updates.subscriptionStatus = "active";
+    }
+    // A trial's first charge, as handleWebhook records it.
+    if (!tenant.planActivatedAt) {
+      updates.planActivatedAt = now;
+    }
+    // A new cycle has started if Razorpay's expiry moved past ours —
+    // that's also the signal that a scheduled ("cycle_end") plan change
+    // has now taken effect on Razorpay's side. Finalize it here as a
+    // fallback for a subscription.charged webhook we may have missed
+    // (the primary path is handleWebhook in payment.ts).
+    const newCycleStarted =
+      rzpExpiry && (!tenant.planExpiresAt || rzpExpiry > tenant.planExpiresAt);
+    if (newCycleStarted) {
+      updates.planExpiresAt = rzpExpiry;
+      if (tenant.pendingPlanTier) {
+        // Same headcount-vs-limit guard as handleWebhook's
+        // subscription.charged case: changePlan only checks this at
+        // request time, and this pending change may have been sitting
+        // for up to a full annual cycle. If headcount has since grown
+        // past the pending tier's limit, block the downgrade and
+        // revert Razorpay's plan_id back to the current tier so
+        // future cycles don't keep charging the blocked (lower) price.
+        const pendingTier = tenant.pendingPlanTier;
+        const limit = isPlanTier(pendingTier)
+          ? TIER_EMPLOYEE_LIMITS[pendingTier]
+          : null;
+        const employeeCount =
+          limit !== null ? await getActiveEmployeeCount(tenant.id) : 0;
+        const downgradeBlocked = limit !== null && employeeCount > limit;
+
+        if (downgradeBlocked) {
+          logger.warn(
+            `Reconciler: downgrade to ${pendingTier} blocked for tenant ${tenant.id}: ${employeeCount} active employees exceed the ${limit} limit`,
+          );
+          if (isPlanTier(tenant.planTier)) {
+            try {
+              const currentBilling =
+                tenant.billing === "annual" ? "annual" : "monthly";
+              const currentPlanId = await getOrCreatePlanId(
+                tenant.planTier,
+                currentBilling,
+              );
+              await (rzp.subscriptions.update as any)(
+                tenant.razorpaySubscriptionId!,
+                {
+                  plan_id: currentPlanId,
+                  quantity: 1,
+                  schedule_change_at: "now",
+                },
+              );
+            } catch (err) {
+              logger.error(
+                `Reconciler: failed to revert Razorpay plan after blocking downgrade for tenant ${tenant.id}`,
+                { err },
+              );
+            }
+          }
+          updates.pendingPlanTier = null;
+          updates.pendingBilling = null;
+          updates.pendingPlanChangeAt = null;
+        } else {
+          updates.planTier = tenant.pendingPlanTier;
+          updates.billing = tenant.pendingBilling ?? tenant.billing;
+          updates.pendingPlanTier = null;
+          updates.pendingBilling = null;
+          updates.pendingPlanChangeAt = null;
+        }
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: updates,
+      });
+      logger.info(
+        `Reconciler healed tenant ${tenant.id}: ${JSON.stringify(updates)}`,
+      );
+    }
+  } else if (
+    sub.status === "halted" &&
+    tenant.subscriptionStatus === "active"
+  ) {
+    // All Razorpay retries failed — missed the halted webhook.
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { subscriptionStatus: "grace_period" },
+    });
+    logger.warn(
+      `Reconciler: tenant ${tenant.id} moved to grace_period (Razorpay halted — missed webhook)`,
+    );
+  } else if (
+    ["cancelled", "completed"].includes(sub.status) &&
+    tenant.subscriptionStatus !== "cancelled"
+  ) {
+    // Missed the cancelled/completed webhook — heal to "cancelled",
+    // not "expired": the user (or dashboard ops) explicitly cancelled
+    // this, distinct from an involuntary lapse. requireActiveSubscription
+    // still checks planExpiresAt to decide if access has actually ended.
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { subscriptionStatus: "cancelled" },
+    });
+    logger.warn(
+      `Reconciler: tenant ${tenant.id} marked cancelled (Razorpay status: ${sub.status})`,
+    );
+  } else if (
+    sub.status === "expired" &&
+    tenant.subscriptionStatus !== "expired"
+  ) {
+    // Razorpay's own "expired" status — an involuntary lapse (missed
+    // renewal), not an explicit cancellation.
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { subscriptionStatus: "expired" },
+    });
+    logger.warn(
+      `Reconciler: tenant ${tenant.id} marked expired (Razorpay status: expired)`,
+    );
+  } else if (
+    sub.status === "active" &&
+    tenant.subscriptionStatus === "cancelling"
+  ) {
+    // Cancel was requested but Razorpay still shows active — webhook
+    // may still be in flight. Log so we can monitor; reconciler will
+    // catch up on the next run if it persists.
+    logger.warn(
+      `Reconciler: tenant ${tenant.id} is "cancelling" but Razorpay shows active — webhook may be delayed`,
+    );
+  }
+
+  // Soft expiry guard: if our planExpiresAt is in the past and the
+  // subscription is somehow still "active" in DB, flip to grace_period.
+  if (
+    tenant.subscriptionStatus === "active" &&
+    tenant.planExpiresAt &&
+    tenant.planExpiresAt < now &&
+    sub.status !== "active"
+  ) {
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { subscriptionStatus: "grace_period" },
+    });
+    logger.warn(
+      `Reconciler: tenant ${tenant.id} plan expired locally — moved to grace_period`,
+    );
   }
 }

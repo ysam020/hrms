@@ -208,7 +208,7 @@
 }
 .tab:focus-visible,
 .toggle:focus-visible {
-  outline: 2px solid var(--landing-focus, #5bbde6);
+  outline: 2px solid var(--landing-focus, #6aa0e2);
   outline-offset: 2px;
 }
 .fill {

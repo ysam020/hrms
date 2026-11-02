@@ -9,6 +9,8 @@ const SKIP_MODELS = new Set([
   "LoginEvent",
   "Notification",
   "NotificationRecipient",
+  // Routine availability changes (busy, lunch…) — not an HR record.
+  "PresenceStatus",
 ]);
 
 const ACTION_MAP: Record<string, "CREATE" | "UPDATE" | "DELETE"> = {

@@ -10,6 +10,7 @@ import {
   amountPaise,
   formatINR,
   loadRazorpayScript,
+  prepareRazorpay,
   type Billing,
   type PlanTier,
 } from "@web/shared/constants/billing";
@@ -220,6 +221,8 @@ function PlanCard({
 }
 
 export default function Subscription() {
+  // Paying is one of this page's actions, though not on most visits.
+  prepareRazorpay();
   const { user } = useContext(UserContext);
   const { setAlert } = useContext(AlertContext);
   const [tenant, setTenant] = useState<Tenant | null | undefined>(undefined);

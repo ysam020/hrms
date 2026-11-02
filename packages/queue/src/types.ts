@@ -99,3 +99,15 @@ export interface PayrollDisbursementJobData {
   disbursedBy: string;
   requestId?: string;
 }
+
+// Ends a timed availability status ("busy for 1 hour") — scheduled by the
+// gateway's services/presence.ts with a delay, processed by
+// presenceExpiryWorker.ts. `revision` is the status revision the job was
+// scheduled for: a newer choice bumps it, so a late or duplicate job finds
+// a different revision and does nothing.
+export interface PresenceExpiryJobData {
+  tenantId: string;
+  userId: string;
+  revision: number;
+  requestId?: string;
+}

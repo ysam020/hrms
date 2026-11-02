@@ -4,11 +4,11 @@ import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
   Banner,
-  Button,
   Card,
   Field,
   FormSection,
   Icon,
+  SubmitButton,
   SummaryRow,
   TextInput,
   UserCombobox,
@@ -27,7 +27,6 @@ export function Correction() {
   const [values, setValues] = useState({ userId: "", timeIn: "", timeOut: "" });
   const [person, setPerson] = useState<Person | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
   // The allowance for the chosen employee in the month being corrected.
@@ -53,8 +52,10 @@ export function Correction() {
     setDone(null);
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  // Checked as the form submits, so errors (and focus on the first one)
+  // show at once; preventing the submit means the action doesn't run.
+  // Errors are local state because each clears as its field is edited.
+  const validate = (e: FormEvent) => {
     const next: Record<string, string> = {};
     if (!values.userId) next.userId = "Choose an employee.";
     if (!values.timeIn) next.timeIn = "Enter the time in.";
@@ -65,8 +66,15 @@ export function Correction() {
     )
       next.timeOut = "Time out must be after time in.";
     setErrors(next);
-    if (Object.keys(next).length) return focusFirstInvalid();
-    setSaving(true);
+    if (Object.keys(next).length) {
+      e.preventDefault();
+      focusFirstInvalid();
+    }
+  };
+
+  // The form's action: SubmitButton shows it running and blocks a second
+  // press until the gateway answers.
+  const save = async () => {
     try {
       const res = await apiClient.put(
         API_ENDPOINTS.ATTENDANCE_CORRECTION,
@@ -85,7 +93,6 @@ export function Correction() {
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
     }
-    setSaving(false);
   };
 
   const mins =
@@ -96,7 +103,8 @@ export function Correction() {
   return (
     <div className={a.correctionGrid}>
       <form
-        onSubmit={submit}
+        onSubmit={validate}
+        action={save}
         noValidate
         style={{ display: "grid", gap: 16 }}
         data-tour="corrections-form"
@@ -172,9 +180,9 @@ export function Correction() {
           </div>
         </FormSection>
         <div className="px-row" style={{ justifyContent: "flex-end" }}>
-          <Button type="submit" variant="primary" icon="check" busy={saving}>
+          <SubmitButton icon="check" busyLabel="Saving…">
             Save Correction
-          </Button>
+          </SubmitButton>
         </div>
       </form>
       <aside style={{ display: "grid", gap: 16 }}>

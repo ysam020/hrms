@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -86,12 +87,34 @@ export type Snapshot = typeof SETTINGS_DEFAULTS & {
  * saving asks when they take effect, as in Classic; pending versions can be
  * cancelled.
  */
+/** Deep equality for settings values; empty text and null count as equal. */
+function sameValue(a: unknown, b: unknown): boolean {
+  const blank = (v: unknown) => v == null || v === "";
+  if (blank(a) || blank(b)) return blank(a) && blank(b);
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
+      return false;
+    return a.every((v, i) => sameValue(v, b[i]));
+  }
+  if (typeof a === "object" && typeof b === "object") {
+    const ka = Object.keys(a as object);
+    const kb = Object.keys(b as object);
+    return [...new Set([...ka, ...kb])].every((k) =>
+      sameValue((a as any)[k], (b as any)[k]),
+    );
+  }
+  return a === b;
+}
+
 export function useOrgSettings() {
   const { setUser } = useContext(UserContext);
   const { setAlert } = useContext(AlertContext);
   const [draft, setDraft] = useState<Snapshot | null>(null);
+  // The loaded version: dirty means the draft differs from it, so undoing a
+  // change by hand clears "Unsaved changes".
+  const [saved, setSaved] = useState<Snapshot | null>(null);
   const [pending, setPending] = useState<Snapshot[]>([]);
-  const [dirty, setDirty] = useState(false);
+  const dirty = useMemo(() => !sameValue(draft, saved), [draft, saved]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -99,11 +122,12 @@ export function useOrgSettings() {
     try {
       const res = await apiClient.get(API_ENDPOINTS.GET_ORG_SETTINGS);
       const d = res.data?.data ?? {};
-      setDraft({ ...SETTINGS_DEFAULTS, ...(d.active ?? {}) });
+      const active = { ...SETTINGS_DEFAULTS, ...(d.active ?? {}) };
+      setDraft(active);
+      setSaved(active);
       setPending(
         (d.pending ?? []).map((p: any) => ({ ...SETTINGS_DEFAULTS, ...p })),
       );
-      setDirty(false);
     } catch (err) {
       setAlert({
         open: true,
@@ -120,7 +144,6 @@ export function useOrgSettings() {
 
   const change = (patch: Partial<Snapshot>) => {
     setDraft((d) => (d ? { ...d, ...patch } : d));
-    setDirty(true);
   };
 
   const save = async (effectiveFrom: Date, note: string) => {
