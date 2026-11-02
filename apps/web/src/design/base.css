@@ -218,6 +218,86 @@ svg {
   animation-timing-function: var(--px-ease-standard);
 }
 
+/* Per-part shared elements (motion/viewTransition.tsx `sharedPart`). Each
+   part names itself with a class, so these rules never touch the page region
+   or unrelated transitions. Browsers without view-transition-class keep the
+   default morph above. */
+
+/* Avatars grow from row size to header size as one circle: the image pair is
+   clipped round, and old/new fill the box instead of stretching. */
+::view-transition-group(*.px-vt-avatar) {
+  animation-timing-function: var(--px-ease-enter);
+}
+::view-transition-image-pair(*.px-vt-avatar) {
+  border-radius: 50%;
+  overflow: hidden;
+}
+::view-transition-old(*.px-vt-avatar),
+::view-transition-new(*.px-vt-avatar) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Text (a name into a page title, a row into a wider row): scale the
+   snapshot with the box's height and keep its aspect ratio, anchored at the
+   start, so 14px text grows into 22px text instead of being squashed into a
+   wider box. The two crossfade quickly so only one is legible at a time. */
+::view-transition-old(*.px-vt-title),
+::view-transition-new(*.px-vt-title),
+::view-transition-old(*.px-vt-heading),
+::view-transition-new(*.px-vt-heading),
+::view-transition-old(*.px-vt-row),
+::view-transition-new(*.px-vt-row) {
+  width: auto;
+  height: 100%;
+  object-fit: none;
+  object-position: left center;
+}
+/* Old and new are different renderings (a 14px name and a 32px title; a
+   narrow row and a wide one), so they hand over rather than overlap: the old
+   one fades almost at once and the new one appears as it goes, so the text is
+   never seen twice. */
+::view-transition-old(*.px-vt-title),
+::view-transition-old(*.px-vt-heading),
+::view-transition-old(*.px-vt-row) {
+  animation: px-vt-text-out var(--px-dur-instant) var(--px-ease-exit) both;
+}
+::view-transition-new(*.px-vt-title),
+::view-transition-new(*.px-vt-heading) {
+  animation: px-vt-text-in var(--px-dur-slow) var(--px-ease-enter) both;
+}
+::view-transition-new(*.px-vt-row) {
+  animation: px-vt-text-in var(--px-dur-base) var(--px-ease-enter) both;
+}
+
+/* Rows (dashboard → Approvals) move as a unit, a touch faster than titles so
+   the list settles before the heading does. */
+::view-transition-group(*.px-vt-row) {
+  animation-duration: var(--px-dur-base);
+}
+
+/* Status badges keep their pill shape while they travel. */
+::view-transition-group(*.px-vt-badge) {
+  animation-duration: var(--px-dur-base);
+}
+::view-transition-image-pair(*.px-vt-badge) {
+  border-radius: var(--px-radius-pill);
+  overflow: hidden;
+}
+
+@keyframes px-vt-text-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes px-vt-text-in {
+  0%,
+  25% {
+    opacity: 0;
+  }
+}
+
 @keyframes px-vt-out {
   to {
     opacity: 0;

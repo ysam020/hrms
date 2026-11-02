@@ -10,9 +10,10 @@
 //   /privacy-policy  -> dist/privacy-policy.html  (and so on)
 //
 // The app still mounts as before and replaces the markup. dist/index.html is
-// also the SPA fallback and the service worker's shell for every in-app route,
-// so a guard in <head> hides the prerendered page whenever the URL is a
-// different route, showing the usual loader instead. Also writes
+// also the hosting's SPA fallback for every in-app route, so a guard in
+// <head> hides the prerendered page whenever the URL is a different route,
+// showing the usual loader instead. The service worker serves in-app routes
+// dist/app.html (the unprerendered page) instead. Also writes
 // dist/sitemap.xml.
 import fs from "fs";
 import path from "path";
@@ -135,6 +136,11 @@ function page(pagePath, meta) {
   );
   return out;
 }
+
+// The service worker's shell for in-app routes: index.html as Vite built
+// it, without the landing page's markup, preloads and stylesheet.
+fs.writeFileSync(path.join(dist, "app.html"), template);
+console.log("[prerender] app shell -> dist/app.html");
 
 const pages = Object.entries(PUBLIC_PAGES).filter(([, m]) => m.prerender);
 for (const [pagePath, meta] of pages) {

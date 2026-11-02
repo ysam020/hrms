@@ -7,6 +7,7 @@ import {
   type FormEvent,
 } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { sharedPart, useHandoff } from "@next/motion";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import {
@@ -42,6 +43,53 @@ import {
 } from "./config";
 import s from "./support.module.css";
 
+/** Reference, subject and chips; subject and status are shared with the list. */
+/** The ticket fields the header card shows (also a list row's hand-off). */
+interface SupportTicketSummary {
+  ticketNo: string;
+  subject: string;
+  status: string;
+  priority: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function SupportHeadCard({ id, t }: { id: string; t: SupportTicketSummary }) {
+  return (
+    <header className={s.headCard}>
+      <span className={s.refSmall}>{t.ticketNo}</span>
+      <h2
+        className={`px-title ${s.subject}`}
+        style={sharedPart("support-ticket", id, "title")}
+      >
+        {t.subject}
+      </h2>
+      <div className={s.chips}>
+        <StatusBadge
+          tone={statusTone(t.status)}
+          style={sharedPart("support-ticket", id, "badge")}
+        >
+          {statusLabel(t.status, true)}
+        </StatusBadge>
+        <span className={s.priority} data-tone={priorityTone(t.priority)}>
+          <Icon name="flag" size={12} />
+          {priorityLabel(t.priority)} priority
+        </span>
+        <Tag>
+          {categoryOf(t.category) && (
+            <Icon name={categoryOf(t.category)!.icon} size={12} />
+          )}
+          {categoryLabel(t.category)}
+        </Tag>
+        <span className="px-meta">
+          Opened {fromNow(t.createdAt)} · updated {fromNow(t.updatedAt)}
+        </span>
+      </div>
+    </header>
+  );
+}
+
 export default function SupportTicket() {
   const { ticketId = "" } = useParams();
   const [params] = useSearchParams();
@@ -59,23 +107,30 @@ export default function SupportTicket() {
       setError(null);
     } catch (err: any) {
       setError(err?.response?.status === 404 ? "not-found" : errorMessage(err));
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, [ticketId]);
   useEffect(() => {
     load();
   }, [load]);
 
   const t = data?.ticket;
+  // Opened from the list: its subject and status, shown while the ticket loads.
+  const preview = useHandoff<SupportTicketSummary>("support-ticket", ticketId);
   return (
     <Page
-      title={t ? t.ticketNo : "Support Ticket"}
+      title={t ? t.ticketNo : (preview?.ticketNo ?? "Support Ticket")}
       documentTitle={t ? `${t.ticketNo} · Support` : "Support"}
       back={{ to: "/support", label: "Support Tickets" }}
       width="wide"
     >
-      {loading && !data ? (
+      {loading && !data && preview ? (
+        <div className={s.layout}>
+          <div className={s.stack}>
+            <SupportHeadCard id={ticketId} t={preview} />
+          </div>
+        </div>
+      ) : loading && !data ? (
         <HeaderSkeleton />
       ) : error === "not-found" ? (
         <EmptyState icon="ticket" title="This ticket couldn’t be found">
@@ -100,32 +155,7 @@ export default function SupportTicket() {
                   The Praesto team is waiting for your reply.
                 </Banner>
               )}
-              <header className={s.headCard}>
-                <span className={s.refSmall}>{t.ticketNo}</span>
-                <h2 className={`px-title ${s.subject}`}>{t.subject}</h2>
-                <div className={s.chips}>
-                  <StatusBadge tone={statusTone(t.status)}>
-                    {statusLabel(t.status, true)}
-                  </StatusBadge>
-                  <span
-                    className={s.priority}
-                    data-tone={priorityTone(t.priority)}
-                  >
-                    <Icon name="flag" size={12} />
-                    {priorityLabel(t.priority)} priority
-                  </span>
-                  <Tag>
-                    {categoryOf(t.category) && (
-                      <Icon name={categoryOf(t.category)!.icon} size={12} />
-                    )}
-                    {categoryLabel(t.category)}
-                  </Tag>
-                  <span className="px-meta">
-                    Opened {fromNow(t.createdAt)} · updated{" "}
-                    {fromNow(t.updatedAt)}
-                  </span>
-                </div>
-              </header>
+              <SupportHeadCard id={ticketId} t={t} />
               <Section
                 title="Conversation"
                 detail={`${data.messages.length + 1} ${data.messages.length === 0 ? "message" : "messages"}`}
@@ -267,10 +297,9 @@ function ReplyForm({
       onSent();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      inFlight.current = false;
-      setSending(false);
     }
+    inFlight.current = false;
+    setSending(false);
   };
   return (
     <form onSubmit={send} className={s.composer} aria-label="Reply">
@@ -356,9 +385,8 @@ function TicketActions({
       setReason("");
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
   return (
     <div style={{ display: "grid", gap: 8 }}>

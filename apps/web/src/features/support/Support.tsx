@@ -1,7 +1,12 @@
 import { useContext, useEffect, useState } from "react";
 import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
-import { useTransitionNavigate } from "@next/motion";
+import {
+  handOff,
+  sharedPart,
+  useTransitionNavigate,
+  useTransitionWith,
+} from "@next/motion";
 import {
   StatTiles,
   StatTile,
@@ -41,6 +46,38 @@ export function filterParams(f: Record<string, string>) {
     .filter(([, v]) => v && v !== "all")
     .map(([k, v]) => `&${k}=${encodeURIComponent(v)}`)
     .join("");
+}
+
+// The opened ticket's subject and status carry over into its header card.
+type SupportRow = {
+  id: string;
+  subject: string;
+  ticketNo: string;
+  category: string;
+  status: string;
+};
+
+function TicketSubject({ t }: { t: SupportRow }) {
+  const on = useTransitionWith(`/support/tickets/${t.id}`);
+  return (
+    <PrimaryCell
+      title={t.subject}
+      titleStyle={sharedPart("support-ticket", t.id, "title", on)}
+      subtitle={`${t.ticketNo} · ${categoryLabel(t.category)}`}
+    />
+  );
+}
+
+function TicketStatus({ t }: { t: SupportRow }) {
+  const on = useTransitionWith(`/support/tickets/${t.id}`);
+  return (
+    <StatusBadge
+      tone={statusTone(t.status)}
+      style={sharedPart("support-ticket", t.id, "badge", on)}
+    >
+      {statusLabel(t.status, true)}
+    </StatusBadge>
+  );
 }
 
 export default function Support() {
@@ -86,12 +123,7 @@ export default function Support() {
       key: "subject",
       header: "Ticket",
       priority: "primary",
-      render: (t) => (
-        <PrimaryCell
-          title={t.subject}
-          subtitle={`${t.ticketNo} · ${categoryLabel(t.category)}`}
-        />
-      ),
+      render: (t) => <TicketSubject t={t} />,
     },
     {
       key: "reporter",
@@ -127,11 +159,7 @@ export default function Support() {
       key: "status",
       header: "Status",
       priority: "trailing",
-      render: (t) => (
-        <StatusBadge tone={statusTone(t.status)}>
-          {statusLabel(t.status, true)}
-        </StatusBadge>
-      ),
+      render: (t) => <TicketStatus t={t} />,
     },
   ];
 
@@ -266,7 +294,18 @@ export default function Support() {
           rows={list.data}
           rowId={(t) => String(t.id)}
           loading={list.loading}
-          onRowClick={(t) => navigate(`/support/tickets/${t.id}`)}
+          onRowClick={(t) => {
+            handOff("support-ticket", t.id, {
+              ticketNo: t.ticketNo,
+              subject: t.subject,
+              status: t.status,
+              priority: t.priority,
+              category: t.category,
+              createdAt: t.createdAt,
+              updatedAt: t.updatedAt,
+            });
+            navigate(`/support/tickets/${t.id}`);
+          }}
           empty={
             filtered
               ? {

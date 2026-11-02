@@ -4,6 +4,7 @@ import {
   useIsPresent,
   type HTMLMotionProps,
 } from "framer-motion";
+import { useLocation } from "react-router-dom";
 import {
   forwardRef,
   useState,
@@ -11,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { duration, ease, stagger } from "./tokens";
+import { useArrivingAt } from "./viewTransition";
 import { preset, type Edge, type PresetName } from "./presets";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,11 +30,13 @@ import { preset, type Edge, type PresetName } from "./presets";
 // a half-faded panel can't take focus or swallow a click.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Spread onto a DOM element to make it inert (React 18 passes it through). */
+/**
+ * Spread onto a DOM element to make it inert. React 19 treats `inert` as a
+ * boolean: `true` renders `inert=""`, while the empty string React 18 needed
+ * is now falsy and would drop the attribute.
+ */
 export function inertProps(isInert: boolean) {
-  return isInert
-    ? ({ inert: "", "aria-hidden": true } as unknown as Record<string, never>)
-    : {};
+  return isInert ? ({ inert: true, "aria-hidden": true } as const) : {};
 }
 
 type ExitGuardProps = HTMLMotionProps<"div"> & { children: ReactNode };
@@ -220,9 +224,13 @@ export function StaggerList({
   className?: string;
 } & Record<string, unknown>) {
   const Tag = as;
+  // Arriving through a view transition, rows are already where they belong
+  // (some morph in from the previous screen): skip the staggered entrance, or
+  // the browser would capture them mid-fade at opacity 0.
+  const arriving = useArrivingAt(useLocation().pathname);
   return (
     <Tag className={className} {...rest}>
-      <AnimatePresence initial>{children}</AnimatePresence>
+      <AnimatePresence initial={!arriving}>{children}</AnimatePresence>
     </Tag>
   );
 }

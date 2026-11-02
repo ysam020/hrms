@@ -23,7 +23,6 @@ import {
   supportAgentIds,
   type PersonSummary,
 } from "./supportStore";
-import { platformTenantId } from "../config/platform";
 
 export interface NotifyTicket {
   id: string;

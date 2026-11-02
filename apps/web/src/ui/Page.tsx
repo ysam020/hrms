@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -8,9 +7,13 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Presence,
   TransitionLink,
+  sharedPart,
+  transitionSource,
+  useArrivingFrom,
   usePrefersReducedMotion,
 } from "@next/motion";
 import { useShell } from "@next/shell/context";
@@ -37,6 +40,7 @@ export function Page({
   documentTitle,
   largeTitle,
   description,
+  titleStyle,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
@@ -51,7 +55,15 @@ export function Page({
   documentTitle?: string;
   /** The page shows its own large title; the toolbar title appears on scroll. */
   largeTitle?: boolean;
+  /** Style for the title element — a shared-element name (motion/sharedPart). */
+  titleStyle?: CSSProperties;
 }) {
+  // Opened from a dashboard widget's link: that widget's heading becomes
+  // this page's title (features/dashboard/Today WidgetHeading).
+  const { pathname } = useLocation();
+  const fromWidget =
+    useArrivingFrom("/dashboard", pathname) &&
+    Boolean(transitionSource()?.startsWith("widget:"));
   const {
     docked,
     sidebarHidden,
@@ -111,6 +123,11 @@ export function Page({
             <h1
               className={s.title}
               data-collapsed={largeTitle && !scrolled ? "" : undefined}
+              style={
+                fromWidget
+                  ? sharedPart("widget", "page", "heading")
+                  : titleStyle
+              }
             >
               {title}
             </h1>
@@ -243,30 +260,36 @@ const maxInspector = () =>
 const clampWidth = (w: number) =>
   Math.round(Math.min(maxInspector(), Math.max(INSPECTOR_MIN, w)));
 
+// Storage access stays outside the hook: React Compiler can't yet compile a
+// try/catch around a conditional.
+function readInspectorWidth(storageKey: string | null) {
+  if (!storageKey) return null;
+  try {
+    const n = Number(localStorage.getItem(storageKey));
+    return n ? clampWidth(n) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveInspectorWidth(storageKey: string, width: number) {
+  try {
+    localStorage.setItem(storageKey, String(width));
+  } catch {
+    /* private mode: keep it for this session only */
+  }
+}
+
 function useInspectorWidth(key?: string) {
   const storageKey = key ? `px-inspector-w:${key}` : null;
-  const [width, setWidthState] = useState<number | null>(() => {
-    if (!storageKey) return null;
-    try {
-      const n = Number(localStorage.getItem(storageKey));
-      return n ? clampWidth(n) : null;
-    } catch {
-      return null;
-    }
-  });
-  const setWidth = useCallback(
-    (w: number) => {
-      const next = clampWidth(w);
-      setWidthState(next);
-      if (storageKey)
-        try {
-          localStorage.setItem(storageKey, String(next));
-        } catch {
-          /* private mode: keep it for this session only */
-        }
-    },
-    [storageKey],
+  const [width, setWidthState] = useState<number | null>(() =>
+    readInspectorWidth(storageKey),
   );
+  const setWidth = (w: number) => {
+    const next = clampWidth(w);
+    setWidthState(next);
+    if (storageKey) saveInspectorWidth(storageKey, next);
+  };
   return [width, setWidth] as const;
 }
 

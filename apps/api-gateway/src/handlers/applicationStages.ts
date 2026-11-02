@@ -45,8 +45,7 @@ export async function advanceApplicationStage(req: AuthRequest, res: Response) {
   try {
     const { userId } = req.user!;
     const { id: applicationId } = req.params as { id: string };
-    let {
-      stageName,
+    const {
       stageOrder,
       outcome,
       interviewerId,
@@ -56,6 +55,7 @@ export async function advanceApplicationStage(req: AuthRequest, res: Response) {
       scheduledAt,
       notes,
     } = req.body;
+    let { stageName } = req.body;
 
     const application = await (prisma as any).jobApplication.findFirst({
       where: { id: applicationId, tenantId },

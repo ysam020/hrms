@@ -31,7 +31,6 @@ import {
   Page,
   SegmentedControl,
   Select,
-  Skeleton,
   StatusBadge,
   Switch,
   TextInput,
@@ -113,9 +112,8 @@ export function ExitPolicyPage() {
       setQDirty(false);
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setSavingQ(false);
     }
+    setSavingQ(false);
   };
   const editQ = (i: number, patch: Partial<ExitQuestion>) => {
     setQuestions((qs) => qs.map((q, j) => (j === i ? { ...q, ...patch } : q)));

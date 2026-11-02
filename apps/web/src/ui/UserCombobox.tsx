@@ -17,7 +17,7 @@ import { personName } from "@next/lib/format";
 import { Presence } from "@next/motion";
 import { Avatar } from "./display";
 import { Icon } from "./Icon";
-import { Portal } from "./layers";
+import { Portal, sameStyle } from "./layers";
 import { Spinner } from "./Spinner";
 import type { Person } from "./PeoplePicker";
 import f from "./fields.module.css";
@@ -243,7 +243,7 @@ export function UserCombobox({
     const up = below < 220 && r.top > below;
     // At least wide enough for a name and its detail, kept on screen.
     const width = Math.min(Math.max(r.width, 260), window.innerWidth - 16);
-    setPos({
+    const next: CSSProperties = {
       left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
       width,
       minWidth: 0,
@@ -251,7 +251,9 @@ export function UserCombobox({
       ...(up
         ? { bottom: window.innerHeight - r.top + 4 }
         : { top: r.bottom + 4 }),
-    });
+    };
+    // Scrolling anywhere re-measures; only a move re-renders the list.
+    setPos((prev) => (sameStyle(prev, next) ? prev : next));
   }, []);
   useLayoutEffect(() => {
     if (!open) return;

@@ -49,7 +49,7 @@ export function getFinancialYear(month: number, year: number): string {
 /** Months left in the financial year, including the given (calendar) month itself. */
 export function remainingMonthsInFinancialYear(
   month: number,
-  year: number,
+  _year: number,
 ): number {
   return month >= 4 ? 12 - month + 1 + 3 : 3 - month + 1;
 }

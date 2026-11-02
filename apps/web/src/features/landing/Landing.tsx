@@ -29,7 +29,11 @@ import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscription
 import { Avatar, Icon, Menu, type IconName } from "@next/ui";
 import { arrivedPrerendered } from "@next/app/seo";
 import { BrandLockup } from "../auth/BrandMark";
-import { MacBookShowcase, type ShowcaseScene } from "./MacBookShowcase";
+import {
+  MacBookShowcase,
+  showcaseSrcSet,
+  type ShowcaseScene,
+} from "./MacBookShowcase";
 import { Abilities } from "./Abilities";
 import { LeaveFlow } from "./LeaveFlow";
 import {
@@ -1129,6 +1133,10 @@ function Shot({
     <figure className={s.shot} style={{ aspectRatio: `${crop.w} / ${crop.h}` }}>
       <img
         src={src}
+        // Zoomed into a crop, the screenshot is drawn `1440 / crop.w` times
+        // the frame's width, and no frame is wider than ~1180 px.
+        srcSet={showcaseSrcSet(src)}
+        sizes={`calc(${(1440 / crop.w).toFixed(2)} * min(100vw, 1180px))`}
         alt={alt}
         loading="lazy"
         decoding="async"

@@ -37,9 +37,6 @@ function oid(id: string) {
 function bsonDate(isoStr: string) {
   return { $date: { $numberLong: new Date(isoStr).getTime().toString() } };
 }
-function extractId(doc: any): any {
-  return doc._id;
-}
 
 async function fixFields(
   run: (cmd: Record<string, unknown>) => Promise<any>,

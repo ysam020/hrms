@@ -41,3 +41,12 @@ export function useCanManageHelpdesk() {
     )
   );
 }
+
+/** What a helpdesk list row hands over to the ticket page (motion/handOff). */
+export interface TicketSummary {
+  title: string;
+  status: string;
+  priority: string;
+  ticketNo?: string | number;
+  slaBreached?: boolean;
+}

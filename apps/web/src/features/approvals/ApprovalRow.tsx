@@ -1,6 +1,11 @@
 import type { PendingApprovalItem } from "@web/app/providers/ApprovalsBadgeContext";
-import { StaggerItem } from "@next/motion";
-import { TransitionLink } from "@next/motion";
+import {
+  StaggerItem,
+  TransitionLink,
+  handOff,
+  sharedPart,
+  useTransitionWith,
+} from "@next/motion";
 import { Avatar, Button, Icon, Tag } from "@next/ui";
 import { fromNow } from "@next/lib/format";
 import { MODULE_LABELS, clickThroughPath, isClickThrough } from "./decision";
@@ -9,14 +14,27 @@ import s from "./ApprovalRow.module.css";
 export function ApprovalRow({
   item,
   index,
+  pairWith,
   onApprove,
   onReject,
 }: {
   item: PendingApprovalItem;
   index: number;
+  /** The other screen listing the same requests (Today ⇄ Approvals): the
+   *  row morphs into its counterpart when navigating between them. */
+  pairWith: string;
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const betweenLists = useTransitionWith(pairWith);
+  const clickThrough = isClickThrough(item) ? clickThroughPath(item) : null;
+  // KYC requests open the person's KYC review: their avatar travels there.
+  const toReview = useTransitionWith(clickThrough ?? "/__none__");
+  const reviewKey =
+    item.module === "kyc" && "username" in item ? item.username : null;
+  const openReview = () => {
+    if (reviewKey) handOff("person", reviewKey, { name: item.requestedByName });
+  };
   const meta = (
     <span className={s.meta}>
       <Tag>{MODULE_LABELS[item.module] ?? item.module}</Tag>
@@ -28,21 +46,35 @@ export function ApprovalRow({
     </span>
   );
   return (
-    <StaggerItem index={index} className={s.row}>
-      <Avatar name={item.requestedByName || "?"} size={32} />
-      {isClickThrough(item) ? (
+    <StaggerItem
+      index={index}
+      className={s.row}
+      style={sharedPart("approval", item.instanceId, "row", betweenLists)}
+    >
+      <Avatar
+        name={item.requestedByName || "?"}
+        size={32}
+        style={
+          reviewKey
+            ? sharedPart("person", reviewKey, "avatar", toReview)
+            : undefined
+        }
+      />
+      {clickThrough ? (
         <>
           <TransitionLink
-            to={clickThroughPath(item)}
+            to={clickThrough}
             className={`${s.text} ${s.link}`}
+            onClick={openReview}
           >
             <span className={s.summary}>{item.summary}</span>
             {meta}
           </TransitionLink>
           <div className={s.actions}>
             <TransitionLink
-              to={clickThroughPath(item)}
+              to={clickThrough}
               aria-label={`Review ${item.summary}`}
+              onClick={openReview}
             >
               <Button size="small">
                 Review <Icon name="chevronRight" size={12} />

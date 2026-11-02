@@ -33,7 +33,7 @@ Always online only, by design: signing in (Google, passkeys), passkey registrati
 Browser tab                                          Service worker (sw/sw.ts)
 ┌──────────────────────────────────────────┐        ┌──────────────────────────────┐
 │ Forms ── useOfflineDraft ──► IndexedDB   │        │ precache: app shell          │
-│   │            (drafts)                  │        │ navigations → index.html     │
+│   │            (drafts)                  │        │ navigations → app.html       │
 │   └─ sendOrQueue ─┬─ online → API        │        │ fonts, images: cache-first   │
 │                   └─ offline → queue ──► │        │ /api/*: not handled          │
 │                       (mutations)        │        │ sync event → wake the tab    │
@@ -55,15 +55,15 @@ The queue is replayed **by the app**, through the same axios client as every oth
 
 ## Caching
 
-| What                                                                                             | How                                                          | Cache                   |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ----------------------- |
-| App shell: `index.html`, `offline.html`, hashed JS/CSS chunks, icons, `face_math.wasm`, manifest | Precache (revisioned; hashed files by name)                  | `workbox-precache-v2-…` |
-| In-app navigations                                                                               | Shell (`index.html`); `offline.html` if the shell is missing | —                       |
-| Fonts                                                                                            | Cache-first, 30 entries, 1 year                              | `praesto-fonts-v1`      |
-| Same-origin images (not `/api`)                                                                  | Cache-first, 80 entries, 30 days, purged on quota errors     | `praesto-images-v1`     |
-| `/api/*`, `/socket.io/*`                                                                         | **Not cached**                                               | —                       |
+| What                                                                                                                                            | How                                                                                               | Cache                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------- |
+| App shell: `index.html`, `app.html`, `offline.html`, hashed JS/CSS chunks (except the face-matching library), icons, `face_math.wasm`, manifest | Precache (revisioned; hashed files by name)                                                       | `workbox-precache-v2-…` |
+| In-app navigations                                                                                                                              | Shell (`app.html`; `/` gets the prerendered `index.html`); `offline.html` if the shell is missing | —                       |
+| Fonts                                                                                                                                           | Cache-first, 30 entries, 1 year                                                                   | `praesto-fonts-v1`      |
+| Same-origin images (not `/api`)                                                                                                                 | Cache-first, 80 entries, 30 days, purged on quota errors                                          | `praesto-images-v1`     |
+| `/api/*`, `/socket.io/*`                                                                                                                        | **Not cached**                                                                                    | —                       |
 
-The landing page's product screenshots are not precached (large); they're cached on first view.
+The landing page's product screenshots are not precached (large); they're cached on first view. Nor is the face-matching library (`vendor-faceapi-*.js`, 650 KB): face check-in loads its models from a CDN, so it needs the network anyway. `app.html` is `index.html` without the prerendered landing page, so in-app routes don't load the landing page's code and styles.
 
 On activation the worker deletes caches it doesn't own, including the previous worker's `api-general-v1`, `api-dashboard-v1` and `api-notifications-v1`, which held API responses (profiles, payroll, KYC) readable by anyone using the same browser profile. Bump `CACHE_VERSION` in `sw.ts` to retire runtime caches; precache entries are versioned automatically. Refreshing caches never touches IndexedDB.
 

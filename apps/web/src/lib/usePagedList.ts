@@ -1,7 +1,8 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useRef, useState } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
 import { apiClient, asList, errorMessage, isCanceled, totalOf } from "./api";
+import { useDebouncedCallback } from "./hooks";
 
 /**
  * Server-paginated list over Classic's useServerPagination, with a debounced
@@ -15,7 +16,6 @@ export function usePagedList(
   const { setAlert } = useContext(AlertContext);
   const [query, setQuery] = useState("");
   const searchRef = useRef("");
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchPage = useCallback(
     async ({ page, limit }: { page: number; limit: number }) => {
@@ -48,20 +48,14 @@ export function usePagedList(
     deps,
   });
 
-  useEffect(
-    () => () => {
-      if (debounce.current) clearTimeout(debounce.current);
-    },
-    [],
-  );
+  const applySearch = useDebouncedCallback((v: string) => {
+    searchRef.current = v.trim();
+    list.resetPagination();
+  }, 300);
 
   const search = (v: string) => {
     setQuery(v);
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => {
-      searchRef.current = v.trim();
-      list.resetPagination();
-    }, 300);
+    applySearch(v);
   };
 
   return {

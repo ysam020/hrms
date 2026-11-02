@@ -1,4 +1,4 @@
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import { prismaWithTenant as prisma } from "@hrms/db";
 import {
   listPayrollRuns,
   getPayrollRun,

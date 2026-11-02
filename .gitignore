@@ -91,3 +91,7 @@ xcuserdata/
 # Local tooling output and per-user editor settings
 .playwright-mcp/
 .claude/settings.local.json
+
+# Lighthouse runs (docs/lighthouse-audit.md); scripts and comparison.txt are kept
+artifacts/lighthouse/*/
+artifacts/lighthouse/*.log

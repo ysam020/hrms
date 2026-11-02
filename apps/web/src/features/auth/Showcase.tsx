@@ -1,3 +1,4 @@
+import type React from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   useCallback,
@@ -23,7 +24,7 @@ interface Scene {
   label: string;
   title: string;
   body: string;
-  Visual: () => JSX.Element;
+  Visual: () => React.JSX.Element;
 }
 
 const SCENES: Scene[] = [

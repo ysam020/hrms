@@ -48,6 +48,8 @@ export interface RunnerControls {
 }
 
 const ControlsCtx = createContext<RunnerControls | null>(null);
+
+type TourState = NonNullable<ReturnType<typeof useWalkthrough>>["state"];
 export const useRunnerControls = () => useContext(ControlsCtx)!;
 
 /**
@@ -201,7 +203,7 @@ export default function Runner({ tour }: { tour: string }) {
   // until the next step is on screen.
   const acted = useRef<string | null>(null);
   const announceEnd = useCallback(
-    (next: typeof wt.state) => {
+    (next: TourState) => {
       if (engine.progressOf(next, tour).status !== "completed") return;
       setAlert?.({
         open: true,
@@ -215,12 +217,12 @@ export default function Runner({ tour }: { tour: string }) {
     [tour, setAlert],
   );
   const move = useCallback(
-    (fn: (st: typeof wt.state, steps: ResolvedStep[]) => typeof wt.state) =>
+    (fn: (st: TourState, steps: ResolvedStep[]) => TourState) =>
       announceEnd(wt.update((st) => fn(st, stepsRef.current))),
     [wt, announceEnd],
   );
   const act = useCallback(
-    (fn: (st: typeof wt.state, steps: ResolvedStep[]) => typeof wt.state) => {
+    (fn: (st: TourState, steps: ResolvedStep[]) => TourState) => {
       if (!step || acted.current === step.id) return;
       acted.current = step.id;
       move(fn);

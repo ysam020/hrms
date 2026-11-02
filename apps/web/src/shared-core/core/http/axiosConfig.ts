@@ -180,12 +180,15 @@ export const performRefresh = () => {
       throw new Error(res.data?.message || "Refresh failed");
     })
     .catch((err) => {
+      // 401 is the normal answer for a visitor with no session (every
+      // signed-out page load asks), not an error worth reporting.
       if (err?.response) {
-        console.error(
-          "[performRefresh] HTTP",
-          err.response.status,
-          err.response.data,
-        );
+        if (err.response.status !== 401)
+          console.error(
+            "[performRefresh] HTTP",
+            err.response.status,
+            err.response.data,
+          );
       } else if (err?.message !== "Refresh failed") {
         console.error("[performRefresh] Error:", err?.message);
       }

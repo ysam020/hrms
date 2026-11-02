@@ -3,10 +3,11 @@
  * surfaces, and motion. Components read only these custom properties.
  *
  * Contrast (WCAG 2.x, computed from these hex values):
- *   light  text-1 #1D1D1F 16.8:1 · text-2 #55565C 7.3:1 · text-3 #6B6C73 5.2:1
- *          accent #2A78D6 4.4:1 on content, white on accent 4.4:1 (Praesto
- *          Blue: passes 3:1 for UI and large text; for small text on accent
- *          fills it's just under 4.5:1)
+ *   light  text-1 #1D1D1F 16.8:1 · text-2 #55565C 7.3:1 · text-3 #696A71 5.4:1 (4.6:1 on neutral-soft)
+ *          accent #266EC6 5.1:1 on content, 4.5:1 on accent-soft and the
+ *          window, white on accent 5.1:1 (Praesto Blue, #2A78D6, darkened
+ *          8% so small text clears AA 4.5:1 everywhere it appears)
+ *          success #1D7C44 4.6:1 on success-soft
  *   dark   text-1 #F5F5F7 15.6:1 · text-2 #B4B5BB 8.3:1 · text-3 #9A9BA2 6.1:1
  *          accent #6AA0E2 (the same blue, lightened) 6.3:1 on content
  *   control borders: 3.35:1 (light) / 3.40:1 (dark) — meets 3:1 for UI parts.
@@ -30,18 +31,18 @@
   /* ── Content ──────────────────────────────────────────────── */
   --px-text-1: #1d1d1f;
   --px-text-2: #55565c;
-  --px-text-3: #6b6c73;
+  --px-text-3: #696a71;
   --px-text-on-accent: #ffffff;
   --px-separator: rgb(0 0 0 / 0.085);
   --px-separator-strong: rgb(0 0 0 / 0.14);
   --px-border-control: #8b8c93;
 
   /* ── Accent & signal ──────────────────────────────────────── */
-  --px-accent: #2a78d6;
-  --px-accent-hover: #256abc;
-  --px-accent-pressed: #205ba3;
+  --px-accent: #266ec6;
+  --px-accent-hover: #2262ad;
+  --px-accent-pressed: #1e5496;
   --px-accent-soft: #eaf2fb;
-  --px-success: #1e7f45;
+  --px-success: #1d7c44;
   --px-success-soft: #e4f3ea;
   --px-warning: #9a5b00;
   --px-warning-soft: #fbf0dc;

@@ -43,8 +43,6 @@ const mockLeaveFindUnique = (prisma as any).leaveApplication
   .findUnique as jest.Mock;
 const mockActOnStep = actOnStep as jest.Mock;
 const mockGrpcCall = grpcCall as jest.Mock;
-const mockApprovalInstanceFindMany = (prisma as any).approvalInstance
-  .findMany as jest.Mock;
 const mockLeaveFindMany = (prisma as any).leaveApplication
   .findMany as jest.Mock;
 const mockResignationFindMany = (prisma as any).resignation

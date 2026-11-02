@@ -2,6 +2,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -127,13 +128,24 @@ function onGlobalKey(e: KeyboardEvent) {
   top.onDismiss();
 }
 
+/** Whether two computed positions are the same (so no re-render is needed). */
+export const sameStyle = (a: CSSProperties, b: CSSProperties) => {
+  const keys = Object.keys(a) as (keyof CSSProperties)[];
+  return (
+    keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k])
+  );
+};
+
 /** Register a layer; Escape dismisses only the most recently opened one. */
 export function useDismissStack(active: boolean, onDismiss: () => void) {
   const cb = useRef(onDismiss);
-  cb.current = onDismiss;
+  useLayoutEffect(() => {
+    cb.current = onDismiss;
+  });
   useEffect(() => {
     if (!active) return;
-    const entry: Dismiss = { id: nextId++, onDismiss: () => cb.current() };
+    const entry: Dismiss = { id: nextId, onDismiss: () => cb.current() };
+    nextId += 1;
     if (stack.length === 0)
       document.addEventListener("keydown", onGlobalKey, true);
     stack.push(entry);

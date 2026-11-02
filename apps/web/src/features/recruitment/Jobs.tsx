@@ -4,9 +4,10 @@ import { UserContext } from "@web/app/providers/UserContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { isHrOrAbove } from "@web/shared/utils/permissions/navAccess";
 import {
-  useSharedElement,
+  handOff,
+  sharedPart,
   useTransitionNavigate,
-  vtName,
+  useTransitionWith,
   TransitionLink,
 } from "@next/motion";
 import {
@@ -27,14 +28,17 @@ import { employmentTypeLabel, locationSummary } from "./jobConfig";
 // Recruitment: job openings (GET /view-job-openings, same filters as
 // Classic). Opening a job morphs its title into the detail header.
 
-const jobPath = (j: any) => `/view-job-opening/${j.id || j._id}`;
+type JobRef = { id?: string; _id?: string };
+const jobId = (j: JobRef) => String(j.id || j._id);
+const jobPath = (j: JobRef) => `/view-job-opening/${jobId(j)}`;
 
+// The opened job's title and status badge carry over into its header.
 function JobTitle({ j }: { j: any }) {
-  const style = useSharedElement(vtName("job", j.id || j._id), jobPath(j));
+  const on = useTransitionWith(jobPath(j));
   return (
     <PrimaryCell
-      style={style}
       title={j.jobTitle}
+      titleStyle={sharedPart("job", jobId(j), "title", on)}
       subtitle={
         [
           j.department,
@@ -45,6 +49,15 @@ function JobTitle({ j }: { j: any }) {
           .join(" · ") || undefined
       }
     />
+  );
+}
+
+function JobStatus({ j }: { j: JobRef & { status?: string } }) {
+  const on = useTransitionWith(jobPath(j));
+  return (
+    <span style={sharedPart("job", jobId(j), "badge", on)}>
+      <Status value={j.status} />
+    </span>
   );
 }
 
@@ -152,7 +165,7 @@ export default function Jobs() {
       key: "status",
       header: "Status",
       priority: "trailing",
-      render: (j) => <Status value={j.status} />,
+      render: (j) => <JobStatus j={j} />,
     },
   ];
   return (
@@ -210,7 +223,10 @@ export default function Jobs() {
         rows={list.data}
         rowId={(j) => String(j.id || j._id)}
         loading={list.loading}
-        onRowClick={(j) => navigate(jobPath(j))}
+        onRowClick={(j) => {
+          handOff("job", jobId(j), { jobTitle: j.jobTitle, status: j.status });
+          navigate(jobPath(j));
+        }}
         stickyOffset={52}
         empty={{
           icon: "briefcase",

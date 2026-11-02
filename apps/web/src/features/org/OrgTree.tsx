@@ -1,11 +1,19 @@
 import { readableCase } from "@next/lib/format";
-import { useContext, useMemo, useState } from "react";
+import { useContext, useId, useMemo, useState } from "react";
 import { UserContext } from "@web/app/providers/UserContext";
 import {
   canManagePermissions,
   isHrOrAbove,
 } from "@web/shared/utils/permissions/navAccess";
-import { Collapse, TransitionLink } from "@next/motion";
+import {
+  Collapse,
+  TransitionLink,
+  handOff,
+  markTransitionSource,
+  sharedPart,
+  transitionSource,
+  useTransitionWith,
+} from "@next/motion";
 import {
   Avatar,
   Button,
@@ -69,11 +77,27 @@ export default function OrgTree() {
   const b = data?.employeeStatusBreakdown ?? {};
 
   const PersonRow = ({ p, role }: { p: Person; role?: string }) => {
+    // A person can appear more than once on the chart (leader and member);
+    // only the card that was clicked takes the shared names.
+    const instance = useId();
+    const to = `/employee-management/${encodeURIComponent(p.username)}`;
+    const on =
+      useTransitionWith(to) && transitionSource() === `org:${instance}`;
     const body = (
       <>
-        <Avatar name={p.name} src={p.employeePhoto} size={32} />
+        <Avatar
+          name={p.name}
+          src={p.employeePhoto}
+          size={32}
+          style={sharedPart("person", p.username, "avatar", on)}
+        />
         <span className={s.text}>
-          <span className={s.name}>{readableCase(p.name)}</span>
+          <span
+            className={s.name}
+            style={sharedPart("person", p.username, "title", on)}
+          >
+            {readableCase(p.name)}
+          </span>
           <span className={s.meta}>
             {[readableCase(p.designation), role].filter(Boolean).join(" · ") ||
               p.username}
@@ -83,8 +107,17 @@ export default function OrgTree() {
     );
     return canOpen ? (
       <TransitionLink
-        to={`/employee-management/${encodeURIComponent(p.username)}`}
+        to={to}
         className={s.person}
+        onClick={() => {
+          markTransitionSource(`org:${instance}`);
+          handOff("person", p.username, {
+            username: p.username,
+            name: p.name,
+            employee_photo: p.employeePhoto,
+            designation: p.designation,
+          });
+        }}
       >
         {body}
         <Icon name="chevronRight" className={s.chev} />

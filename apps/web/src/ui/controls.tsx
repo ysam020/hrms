@@ -66,8 +66,8 @@ function textOf(node: ReactNode): string {
  */
 function useLongPressTip() {
   const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  const hide = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const hide = useRef<ReturnType<typeof setTimeout>>(undefined);
   const swallowClick = useRef(false);
   useEffect(
     () => () => {
@@ -79,7 +79,13 @@ function useLongPressTip() {
   const cancel = () => clearTimeout(timer.current);
   return {
     open,
-    swallowClick,
+    // True once after a long press showed the label: that press's click
+    // isn't a tap. Reading it resets it.
+    consumeLongPress: () => {
+      const pressed = swallowClick.current;
+      swallowClick.current = false;
+      return pressed;
+    },
     handlers: {
       onPointerDown: (e: React.PointerEvent) => {
         if (e.pointerType === "mouse") return;
@@ -137,9 +143,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       };
     }, []);
     const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
-      if (iconOnly && tip.swallowClick.current) {
+      if (iconOnly && tip.consumeLongPress()) {
         // A long press showed the label; it isn't a tap.
-        tip.swallowClick.current = false;
         e.preventDefault();
         return;
       }

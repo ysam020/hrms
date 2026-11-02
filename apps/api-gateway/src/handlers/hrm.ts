@@ -8,7 +8,7 @@ import { jsPDF } from "jspdf";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
-import { parsePagination, PAGINATION } from "../utils/pagination";
+import { parsePagination } from "../utils/pagination";
 
 export async function getHrActivities(req: Request, res: Response) {
   try {

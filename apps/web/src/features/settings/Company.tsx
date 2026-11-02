@@ -24,7 +24,6 @@ import {
   Page,
   Section,
   Select,
-  Skeleton,
   StatusBadge,
   Switch,
   Tag,

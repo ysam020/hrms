@@ -152,9 +152,8 @@ export default function AiAssistants() {
       refetch();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
 
   return (
@@ -407,7 +406,7 @@ function CopyField({
 }) {
   const { setAlert } = useContext(AlertContext);
   const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const copy = async () => {

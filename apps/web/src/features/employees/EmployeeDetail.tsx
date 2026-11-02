@@ -10,7 +10,7 @@ import {
   isHrOrAbove,
   isOwnerOrAdmin,
 } from "@web/shared/utils/permissions/navAccess";
-import { Collapse, sharedName, vtName } from "@next/motion";
+import { Collapse, useHandoff } from "@next/motion";
 import {
   Icon,
   FormSection,
@@ -22,7 +22,6 @@ import {
   FormGrid,
   KeyValues,
   Page,
-  Section,
   Select,
   Skeleton,
   TextArea,
@@ -32,7 +31,7 @@ import {
 import { apiClient, asList, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
 import { fmtDate, fmtMoney, personName, readableCase } from "@next/lib/format";
-import { EmployeeIdentity } from "./EmployeeIdentity";
+import { EmployeeIdentity, type PersonSummary } from "./EmployeeIdentity";
 import s from "./employees.module.css";
 
 // Full employee record: GET /get-employee-details/:username (server scopes
@@ -62,6 +61,9 @@ export default function EmployeeDetail() {
       user?.permissions || [],
     );
   const person = data && !data.message ? data : null;
+  // Opened from a list: what the row showed, so the shared avatar and name
+  // are on screen in the commit the view transition captures.
+  const preview = useHandoff<PersonSummary>("person", username);
 
   return (
     <Page
@@ -81,7 +83,11 @@ export default function EmployeeDetail() {
         ) : undefined
       }
     >
-      {loading && !person ? (
+      {loading && !person && preview ? (
+        <div className={s.hero}>
+          <EmployeeIdentity person={preview} sharedKey={username} />
+        </div>
+      ) : loading && !person ? (
         <div
           style={{
             display: "flex",
@@ -105,10 +111,7 @@ export default function EmployeeDetail() {
       ) : (
         <>
           <div className={s.hero}>
-            <EmployeeIdentity
-              person={person}
-              style={sharedName(vtName("employee", username))}
-            />
+            <EmployeeIdentity person={person} sharedKey={username} />
           </div>
           <div className={s.columns}>
             <div className={s.stack}>

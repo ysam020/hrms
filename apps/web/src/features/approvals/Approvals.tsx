@@ -90,6 +90,7 @@ export default function Approvals() {
                 key={item.instanceId}
                 item={item}
                 index={i}
+                pairWith="/dashboard"
                 onApprove={() => approve(item)}
                 onReject={() => reject(item)}
               />

@@ -1,5 +1,4 @@
 import { prisma } from "@hrms/db";
-import { getRedisClient } from "@hrms/cache";
 import { getRazorpay, getOrCreatePlanId } from "../handlers/payment";
 import { getActiveEmployeeCount } from "../utils/planLimits";
 import { startSubscriptionReconciler } from "../services/subscriptionReconciler";

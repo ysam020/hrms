@@ -8,7 +8,7 @@ import {
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
-import { StaggerItem, StaggerList, sharedName, vtName } from "@next/motion";
+import { StaggerItem, StaggerList, sharedPart, useHandoff } from "@next/motion";
 import {
   Avatar,
   Button,
@@ -32,14 +32,42 @@ import {
   priorityTone,
   statusTone,
   useCanManageHelpdesk,
+  type TicketSummary,
 } from "./shared";
 import s from "./ticket.module.css";
+
+/** Title and badges; the title and status are shared with the list row. */
+function TicketHeader({ id, ticket }: { id: string; ticket: TicketSummary }) {
+  return (
+    <header className={s.head}>
+      <h2 className="px-title" style={sharedPart("ticket", id, "title")}>
+        {ticket.title}
+      </h2>
+      <div className="px-row">
+        <StatusBadge
+          tone={statusTone(ticket.status)}
+          style={sharedPart("ticket", id, "badge")}
+        >
+          {label(ticket.status)}
+        </StatusBadge>
+        <StatusBadge tone={priorityTone(ticket.priority)} plain>
+          {label(ticket.priority)} priority
+        </StatusBadge>
+        {ticket.slaBreached && (
+          <StatusBadge tone="danger">SLA Breached</StatusBadge>
+        )}
+      </div>
+    </header>
+  );
+}
 
 export default function Ticket() {
   const { ticketId = "" } = useParams();
   const { setAlert } = useContext(AlertContext);
   const isHr = useCanManageHelpdesk();
   const [ticket, setTicket] = useState<any | null>(null);
+  // Opened from the list: its title and status, shown while the ticket loads.
+  const preview = useHandoff<TicketSummary>("ticket", ticketId);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [internal, setInternal] = useState(false);
@@ -52,9 +80,8 @@ export default function Ticket() {
       setTicket(unwrap(await apiClient.get(API_ENDPOINTS.TICKET(ticketId))));
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, [ticketId, setAlert]);
   useEffect(() => {
     load();
@@ -74,9 +101,8 @@ export default function Ticket() {
       load();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setSending(false);
     }
+    setSending(false);
   };
   const changeStatus = async (status: string) => {
     setStatusBusy(true);
@@ -90,19 +116,30 @@ export default function Ticket() {
       load();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setStatusBusy(false);
     }
+    setStatusBusy(false);
   };
 
   const comments: any[] = ticket?.comments ?? [];
   return (
     <Page
-      title={ticket ? `#${ticket.ticketNo ?? ticketId}` : "Ticket"}
+      title={
+        ticket
+          ? `#${ticket.ticketNo ?? ticketId}`
+          : preview?.ticketNo
+            ? `#${preview.ticketNo}`
+            : "Ticket"
+      }
       back={{ to: "/helpdesk", label: "Helpdesk" }}
       width="wide"
     >
-      {loading && !ticket ? (
+      {loading && !ticket && preview ? (
+        <div className={s.layout}>
+          <div style={{ display: "grid", gap: 28, minWidth: 0 }}>
+            <TicketHeader id={ticketId} ticket={preview} />
+          </div>
+        </div>
+      ) : loading && !ticket ? (
         <div style={{ display: "grid", gap: 10 }}>
           <Skeleton width="50%" height={28} />
           <Skeleton width="80%" />
@@ -112,23 +149,7 @@ export default function Ticket() {
       ) : (
         <div className={s.layout}>
           <div style={{ display: "grid", gap: 28, minWidth: 0 }}>
-            <header
-              style={sharedName(vtName("ticket", ticketId))}
-              className={s.head}
-            >
-              <h2 className="px-title">{ticket.title}</h2>
-              <div className="px-row">
-                <StatusBadge tone={statusTone(ticket.status)}>
-                  {label(ticket.status)}
-                </StatusBadge>
-                <StatusBadge tone={priorityTone(ticket.priority)} plain>
-                  {label(ticket.priority)} priority
-                </StatusBadge>
-                {ticket.slaBreached && (
-                  <StatusBadge tone="danger">SLA Breached</StatusBadge>
-                )}
-              </div>
-            </header>
+            <TicketHeader id={ticketId} ticket={ticket} />
             <p className={s.description}>{ticket.description}</p>
             <Section
               title="Conversation"

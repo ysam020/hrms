@@ -987,9 +987,8 @@ function ResignForm({
       onDone();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
   return (
     <form onSubmit={submit} noValidate style={{ display: "grid", gap: 16 }}>

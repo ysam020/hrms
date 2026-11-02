@@ -1,9 +1,12 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
+import { reactCompiler } from "./vite.config";
 import path from "path";
 
 export default defineConfig({
-  plugins: [react()],
+  // Same compiler as the app build, so tests run the code that ships.
+  plugins: [react(), babel({ presets: [reactCompiler()] })],
   test: {
     environment: "jsdom",
     globals: true,

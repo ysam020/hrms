@@ -1032,9 +1032,6 @@ export async function updateAssetIssueStatus(req: Request, res: Response) {
     // was already closed through the normal return flow.
     let effectsSkipped = false;
     if (isResolution) {
-      const asset = await prisma.asset.findUnique({
-        where: { id: (issue as any).assetId },
-      });
       const currentAssignment = await prisma.assetAssignment.findFirst({
         where: { assetId: (issue as any).assetId, ...NOT_RETURNED },
         orderBy: { assignedOn: "desc" },

@@ -1,5 +1,5 @@
 import { Worker, Job } from "bullmq";
-import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
+import { getBullMQConnection } from "@hrms/queue";
 import { logger, requestIdStorage } from "@hrms/logger";
 import type { SchedulerJobData, SchedulerJobName } from "@hrms/queue";
 import { updateExpiredHrActivities } from "./jobs/updateExpiredHrActivities";

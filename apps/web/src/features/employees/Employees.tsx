@@ -1,8 +1,14 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useRef, useState } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import useServerPagination from "@web/shared/hooks/useServerPagination";
-import { useSharedElement, useTransitionNavigate, vtName } from "@next/motion";
+import type { PersonSummary } from "./EmployeeIdentity";
+import {
+  handOff,
+  sharedPart,
+  useTransitionNavigate,
+  useTransitionWith,
+} from "@next/motion";
 import {
   Avatar,
   DataTable,
@@ -14,6 +20,7 @@ import {
   type Column,
 } from "@next/ui";
 import { apiClient, errorMessage, isCanceled } from "@next/lib/api";
+import { useDebouncedCallback } from "@next/lib/hooks";
 import { fmtDate, personName, readableCase } from "@next/lib/format";
 import s from "./employees.module.css";
 
@@ -25,28 +32,42 @@ const detailPath = (row: any) =>
   `/employee-management/${encodeURIComponent(row.username)}`;
 
 function NameCell({ row }: { row: any }) {
-  // Only the row being opened carries the transition name.
-  const style = useSharedElement(
-    vtName("employee", row.username),
-    detailPath(row),
-  );
+  // Only the row being opened (or returned to) names its avatar and name;
+  // they grow into the profile's header (EmployeeIdentity).
+  const on = useTransitionWith(detailPath(row));
   return (
     <PrimaryCell
-      style={style}
       leading={
-        <Avatar name={personName(row)} src={row.employee_photo} size={32} />
+        <Avatar
+          name={personName(row)}
+          src={row.employee_photo}
+          size={32}
+          style={sharedPart("person", row.username, "avatar", on)}
+        />
       }
       title={readableCase(personName(row))}
+      titleStyle={sharedPart("person", row.username, "title", on)}
       subtitle={row.official_email || row.email || row.username}
     />
   );
 }
 
+/** What the profile can show before its own request returns. */
+const personPreview = (row: PersonSummary): PersonSummary => ({
+  username: row.username,
+  first_name: row.first_name,
+  last_name: row.last_name,
+  fullName: row.fullName,
+  name: row.name,
+  employee_photo: row.employee_photo,
+  designation: row.designation,
+  department: row.department,
+});
+
 export default function Employees() {
   const { setAlert } = useContext(AlertContext);
   const [query, setQuery] = useState("");
   const searchRef = useRef("");
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useTransitionNavigate();
 
   const fetchPage = useCallback(
@@ -55,13 +76,7 @@ export default function Employees() {
       const url = searchRef.current
         ? `${base}&search=${encodeURIComponent(searchRef.current)}`
         : base;
-      try {
-        const res = await apiClient.get(url);
-        return {
-          data: res.data?.data?.kycs ?? [],
-          totalCount: res.data?.data?.pagination?.totalCount ?? 0,
-        };
-      } catch (err) {
+      const res = await apiClient.get(url).catch((err: unknown) => {
         if (!isCanceled(err))
           setAlert({
             open: true,
@@ -69,26 +84,23 @@ export default function Employees() {
             severity: "error",
           });
         throw err;
-      }
+      });
+      return {
+        data: res.data?.data?.kycs ?? [],
+        totalCount: res.data?.data?.pagination?.totalCount ?? 0,
+      };
     },
     [setAlert],
   );
   const list = useServerPagination(fetchPage, { initialPageSize: 25 });
 
-  useEffect(
-    () => () => {
-      if (debounce.current) clearTimeout(debounce.current);
-    },
-    [],
-  );
-
+  const applySearch = useDebouncedCallback((v: string) => {
+    searchRef.current = v.trim();
+    list.resetPagination();
+  }, 300);
   const onSearch = (v: string) => {
     setQuery(v);
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => {
-      searchRef.current = v.trim();
-      list.resetPagination();
-    }, 300);
+    applySearch(v);
   };
 
   const columns: Column<any>[] = [
@@ -151,7 +163,10 @@ export default function Employees() {
         loading={list.loading}
         error={list.error ? errorMessage(list.error) : null}
         onRetry={list.refresh}
-        onRowClick={(r) => navigate(detailPath(r))}
+        onRowClick={(r) => {
+          handOff("person", r.username, personPreview(r));
+          navigate(detailPath(r));
+        }}
         stickyOffset={52}
         empty={{
           icon: "people",

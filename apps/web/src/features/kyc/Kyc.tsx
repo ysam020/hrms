@@ -13,8 +13,14 @@ import {
   type Column,
 } from "@next/ui";
 import { searchParam, usePagedList } from "@next/lib/usePagedList";
-import { personName } from "@next/lib/format";
-import { TransitionLink, useTransitionNavigate } from "@next/motion";
+import { personName, type PersonNameFields } from "@next/lib/format";
+import {
+  TransitionLink,
+  handOff,
+  sharedPart,
+  useTransitionNavigate,
+  useTransitionWith,
+} from "@next/motion";
 
 // KYC overview over GET /view-all-kycs (the server scopes non-HR callers to
 // their own record). Rows open the review page (/view-kyc/:username).
@@ -27,6 +33,29 @@ const STATUSES = [
   "Revision Requested",
   "Edit Requested",
 ];
+
+type KycRow = PersonNameFields & { username: string; kyc_approval?: string };
+
+const reviewPath = (r: KycRow) => `/view-kyc/${encodeURIComponent(r.username)}`;
+
+// The opened person's avatar and name carry over into the review header.
+function KycPerson({ r }: { r: KycRow }) {
+  const on = useTransitionWith(reviewPath(r));
+  return (
+    <PrimaryCell
+      leading={
+        <Avatar
+          name={personName(r)}
+          size={28}
+          style={sharedPart("person", r.username, "avatar", on)}
+        />
+      }
+      title={personName(r)}
+      titleStyle={sharedPart("person", r.username, "title", on)}
+      subtitle={r.username}
+    />
+  );
+}
 
 export default function Kyc() {
   const navigate = useTransitionNavigate();
@@ -45,13 +74,7 @@ export default function Kyc() {
       key: "name",
       header: "Employee",
       priority: "primary",
-      render: (r) => (
-        <PrimaryCell
-          leading={<Avatar name={personName(r)} size={28} />}
-          title={personName(r)}
-          subtitle={r.username}
-        />
-      ),
+      render: (r) => <KycPerson r={r} />,
     },
     {
       key: "dept",
@@ -108,9 +131,17 @@ export default function Kyc() {
         rows={list.data}
         rowId={(r) => r.username}
         loading={list.loading}
-        onRowClick={(r) =>
-          navigate(`/view-kyc/${encodeURIComponent(r.username)}`)
-        }
+        onRowClick={(r) => {
+          handOff("person", r.username, {
+            username: r.username,
+            first_name: r.first_name,
+            last_name: r.last_name,
+            fullName: r.fullName,
+            name: r.name,
+            kyc_approval: r.kyc_approval,
+          });
+          navigate(reviewPath(r));
+        }}
         stickyOffset={52}
         empty={{ icon: "idcard", title: "No KYC records match" }}
         footer={<Pagination {...list.pageProps} />}

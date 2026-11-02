@@ -91,7 +91,7 @@ function useChat() {
     } finally {
       setLoadingConversations(false);
     }
-  }, [api]);
+  }, [api, user?.id]);
 
   const fetchMessages = useCallback(
     async (roomId, before = null) => {
