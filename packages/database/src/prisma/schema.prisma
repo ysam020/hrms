@@ -1943,6 +1943,40 @@ model WalkthroughProgress {
   @@map("walkthrough_progress")
 }
 
+// Availability a person chose for colleagues to see (apps/api-gateway
+// services/presence.ts, docs/presence.md). One row per person in the tenant
+// DB, written only when the person changes it or a timed status expires —
+// never per heartbeat. Whether they're connected right now (online / idle /
+// offline) is ephemeral and lives in Redis, not here. `revision` increases
+// on every write, so a delayed expiry job can tell it has been overtaken.
+model PresenceStatus {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId     String    @db.ObjectId
+  userId       String    @db.ObjectId
+  // available | busy | dnd | meeting | break | lunch | focusing | away
+  availability String    @default("available")
+  // manual (picked by the person) | default (restored automatically)
+  source       String    @default("manual")
+  message      String?
+  // null = until changed
+  expiresAt    DateTime?
+  // The status (and its message) restored when a timed status ends; only
+  // ever one without an end time. null = back to Available.
+  previousAvailability String?
+  previousMessage      String?
+  // IANA zone the person last set a status from (for "end of workday").
+  timeZone     String?
+  revision     Int       @default(0)
+  // Set when the person's last connection closes — not on every heartbeat.
+  lastActiveAt DateTime?
+  changedAt    DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, userId])
+  @@map("presence_statuses")
+}
+
 // ─── MCP (external AI assistants) ─────────────────────────────────────────────
 // Both live in the master DB (see MASTER_MODELS in prismaWithTenant.ts): a
 // client is registered before anyone signs in, and a grant has to be found
@@ -2123,4 +2157,49 @@ model SupportCounter {
   seq Int    @default(0)
 
   @@map("support_counters")
+}
+
+// ─── Platform billing ledger ──────────────────────────────────────────────────
+// A read model of Razorpay subscription payments, for the Praesto Platform
+// Console's payment and revenue views (Razorpay stays the source of truth;
+// nothing here drives billing or access). One row per Razorpay payment id —
+// unique, so webhook retries and repeated syncs update the same row instead
+// of adding another. Every write sets absolute values fetched from Razorpay
+// (status, amount_refunded), never increments, so replays can't inflate
+// totals. Written by the subscription webhook, the 6-hourly reconciler, and
+// the console's "Sync from Razorpay" action (services/billingLedger.ts).
+// Master DB; indexes are created in ensureMasterIndexes (never db push master).
+model BillingPayment {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  razorpayPaymentId String    @unique
+  tenantId          String    @db.ObjectId
+  subscriptionId    String
+  invoiceId         String?
+  // Paise (or the currency's minor unit). As charged — the plans have no
+  // separate tax lines, so this is the gross amount the customer paid.
+  amount            Int
+  currency          String    @default("INR")
+  // Razorpay payment status: created | authorized | captured | refunded | failed
+  status            String
+  method            String?
+  amountRefunded    Int       @default(0)
+  // null | partial | full
+  refundStatus      String?
+  errorCode         String?
+  errorDescription  String?
+  // Inferred from the invoice amount against billingPlans' price list; null
+  // when the amount matches no list price (e.g. a prorated upgrade).
+  planTier          String?
+  // From the invoice's billing period length: monthly | annual
+  billing           String?
+  periodStart       DateTime?
+  periodEnd         DateTime?
+  // Razorpay's created_at for the payment.
+  paidAt            DateTime
+  syncedAt          DateTime  @default(now())
+
+  @@index([tenantId, paidAt])
+  @@index([paidAt])
+  @@index([status, paidAt])
+  @@map("billing_payments")
 }

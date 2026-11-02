@@ -65,7 +65,6 @@ export default function Login() {
   );
 
   useEffect(() => {
-    document.title = "Sign In · Praesto";
     // The gateway's OAuth callback returns failures as ?error=…; show them in
     // the form (Classic used a toast) and drop the param from the URL.
     const err = params.get("error");
@@ -153,6 +152,7 @@ export default function Login() {
 
   return (
     <div className={s.screen}>
+      <title>Sign In · Praesto</title>
       <Showcase />
 
       <main className={s.auth}>

@@ -98,12 +98,28 @@ const meta = (key: "name" | "property", name: string, content: string | null) =>
 const canonical = (href: string | null) =>
   setTag("link", "rel", "canonical", "href", href);
 
+/**
+ * The document's own <title> (index.html's, or the prerendered page's),
+ * taken before React mounts. Screens in the app render a <title> of their
+ * own, which React places ahead of this one and owns; this module only ever
+ * writes to the document's.
+ */
+const documentTitle =
+  typeof document === "undefined"
+    ? null
+    : document.head.querySelector<HTMLTitleElement>("title");
+
+function setDocumentTitle(text: string) {
+  if (documentTitle?.isConnected) documentTitle.textContent = text;
+  else document.title = text;
+}
+
 /** Bring <head> in line with the page at `pathname`. */
 export function applyPageMeta(pathname: string) {
   const path = normalizePath(pathname);
   const page = PUBLIC_PAGES[path];
   if (page) {
-    document.title = page.title;
+    setDocumentTitle(page.title);
     const url = `${SITE_URL}${path === "/" ? "/" : path}`;
     meta("name", "description", page.description);
     meta("property", "og:title", page.title);
@@ -111,7 +127,8 @@ export function applyPageMeta(pathname: string) {
     meta("property", "og:url", url);
     canonical(url);
   } else {
-    // Careers pages set their own title; nothing else here describes them.
+    // Each screen renders its own <title>; this is what shows without one.
+    setDocumentTitle(SITE_NAME);
     meta("name", "description", null);
     meta("property", "og:url", null);
     canonical(isIndexable(path) ? `${SITE_URL}${path}` : null);

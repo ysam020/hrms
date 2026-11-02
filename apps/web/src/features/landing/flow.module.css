@@ -33,7 +33,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, #5bbde6, var(--l-accent));
+  background: linear-gradient(180deg, #6aa0e2, var(--l-accent));
   transform-origin: 50% 0;
 }
 .stepLabel::before {
@@ -52,7 +52,7 @@
 .step[data-active] .stepLabel::before,
 .step[data-done] .stepLabel::before {
   background: var(--l-accent);
-  box-shadow: 0 0 0 4px rgb(22 110 150 / 0.15);
+  box-shadow: 0 0 0 4px rgb(38 110 198 / 0.15);
 }
 .step {
   display: flex;
@@ -114,7 +114,7 @@
   padding: clamp(20px, 2.4vw, 32px);
   border-radius: clamp(24px, 2.6vw, 36px);
   background:
-    radial-gradient(60% 50% at 70% 0%, rgb(58 167 214 / 0.12), transparent 70%),
+    radial-gradient(60% 50% at 70% 0%, rgb(74 140 220 / 0.12), transparent 70%),
     var(--l-tint);
 }
 .progress {
@@ -134,7 +134,7 @@
 }
 .progressStep[data-on] {
   color: var(--l-accent-hover);
-  background: #e3f0f6;
+  background: #e1ecf9;
 }
 
 @media (max-width: 959px) {
@@ -229,7 +229,7 @@
   color: #b4233c;
 }
 .avatar[data-tone="KS"] {
-  background: #e3f0f6;
+  background: #e1ecf9;
   color: var(--l-accent-hover);
 }
 
@@ -266,8 +266,8 @@
 }
 .card[data-inbox] {
   box-shadow:
-    0 0 0 1.5px rgb(22 110 150 / 0.45),
-    0 12px 28px -14px rgb(22 110 150 / 0.4);
+    0 0 0 1.5px rgb(38 110 198 / 0.45),
+    0 12px 28px -14px rgb(38 110 198 / 0.4);
 }
 .cardText {
   display: grid;
@@ -319,7 +319,7 @@
   color: #b4233c;
 }
 .approve {
-  background: #e3f0f6;
+  background: #e1ecf9;
   color: var(--l-accent-hover);
   transition:
     background-color 250ms ease,

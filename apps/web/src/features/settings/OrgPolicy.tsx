@@ -12,6 +12,7 @@ import {
   TextInput,
   fieldSpan2,
   inlineCheckClass,
+  LocationPicker,
   type Column,
 } from "@next/ui";
 import {
@@ -527,22 +528,6 @@ function LeaveTypeDialog({
 
 export function AttendanceRulesPage() {
   const org = useOrgSettings();
-  const { setAlert } = useContext(AlertContext);
-  const locate = () =>
-    navigator.geolocation.getCurrentPosition(
-      (p) =>
-        org.change({
-          officeLatitude: +p.coords.latitude.toFixed(6),
-          officeLongitude: +p.coords.longitude.toFixed(6),
-        }),
-      () =>
-        setAlert({
-          open: true,
-          message: "Location access was denied.",
-          severity: "error",
-        }),
-      { timeout: 10000 },
-    );
   return (
     <OrgSettingsPage title="Attendance Rules" org={org}>
       {(d: Snapshot, ro) => {
@@ -709,21 +694,24 @@ export function AttendanceRulesPage() {
                       unit="metres"
                     />
                   </Field>
-                  <div className="px-row" style={{ alignSelf: "end" }}>
-                    {!ro && (
-                      <Button icon="pin" onClick={locate}>
-                        Use My Location
-                      </Button>
-                    )}
-                    {d.officeLatitude != null && d.officeLongitude != null && (
-                      <a
-                        href={`https://maps.apple.com/?ll=${d.officeLatitude},${d.officeLongitude}&q=${encodeURIComponent(d.officeName ?? "Office")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Open in Maps
-                      </a>
-                    )}
+                  <div className={fieldSpan2}>
+                    <LocationPicker
+                      lat={d.officeLatitude}
+                      lng={d.officeLongitude}
+                      name={d.officeName}
+                      radius={d.geofenceRadiusMeters}
+                      disabled={ro}
+                      onChange={(v) =>
+                        org.change({
+                          officeLatitude: +v.lat.toFixed(6),
+                          officeLongitude: +v.lng.toFixed(6),
+                          // Name it from the map only if the admin hasn't.
+                          ...(d.officeName?.trim()
+                            ? {}
+                            : { officeName: v.name.split(",")[0] }),
+                        })
+                      }
+                    />
                   </div>
                 </FormGrid>
               </Collapse>
@@ -818,15 +806,25 @@ export function WorkWeekPage() {
                     : ww.workingDays,
             },
           });
-        const toggle = (i: number) =>
+        const toggle = (i: number) => {
+          const workingDays = ww.workingDays.includes(i)
+            ? ww.workingDays.filter((x: number) => x !== i)
+            : [...ww.workingDays, i].sort();
+          // Days that match a preset get its type back, so toggling a day
+          // off and on again isn't left as an unsaved "custom" change.
+          const days = workingDays.join();
           org.change({
             workWeekPattern: {
-              type: "custom",
-              workingDays: ww.workingDays.includes(i)
-                ? ww.workingDays.filter((x: number) => x !== i)
-                : [...ww.workingDays, i].sort(),
+              type:
+                days === "1,2,3,4,5,6"
+                  ? "mon_sat"
+                  : days === "1,2,3,4,5"
+                    ? "mon_fri"
+                    : "custom",
+              workingDays,
             },
           });
+        };
         return (
           <SettingsGroup
             title="Working Days"

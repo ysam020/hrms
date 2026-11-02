@@ -14,6 +14,7 @@ import {
   TIER_EMPLOYEE_LIMITS,
   formatINR,
   loadRazorpayScript,
+  prepareRazorpay,
   type PlanTier,
 } from "@web/shared/constants/billing";
 import {
@@ -128,6 +129,8 @@ export default function OrgSetup() {
   const [step, setStep] = useState<number>(
     (location.state as any)?.startAtStep ?? 0,
   );
+  // The plan step only ends in Razorpay Checkout (a trial takes a mandate).
+  if (step === 1) prepareRazorpay({ fetch: true });
   const [orgName, setOrgName] = useState("");
   const [industry, setIndustry] = useState("");
   const [companySize, setCompanySize] = useState("");
@@ -200,7 +203,6 @@ export default function OrgSetup() {
     });
 
   useEffect(() => {
-    document.title = "Set Up · Praesto";
     apiClient
       .get("/tenants/available")
       .then(async (res) => {
@@ -585,6 +587,7 @@ export default function OrgSetup() {
 
   return (
     <div className={s.setup}>
+      <title>Set Up · Praesto</title>
       <main className={s.card}>
         <div className={s.brand}>
           <BrandLockup size={26} />

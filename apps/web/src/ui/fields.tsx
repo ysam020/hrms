@@ -1,6 +1,5 @@
 import {
   cloneElement,
-  forwardRef,
   isValidElement,
   useId,
   useState,
@@ -8,6 +7,7 @@ import {
   type InputHTMLAttributes,
   type ReactElement,
   type ReactNode,
+  type Ref,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
@@ -85,10 +85,13 @@ export function Field({
   );
 }
 
-export const TextInput = forwardRef<
-  HTMLInputElement,
-  InputHTMLAttributes<HTMLInputElement>
->(function TextInput({ className, ...rest }, ref) {
+// The kit's controls take `ref` as a plain prop (React 19) and put it on
+// their native element.
+export function TextInput({
+  className,
+  ref,
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
   const fine = useFinePointer();
   if (fine && rest.type && PICKER_TYPES.has(rest.type) && !rest.readOnly) {
     const props = {
@@ -116,19 +119,26 @@ export const TextInput = forwardRef<
     );
   }
   return <input ref={ref} className={cx(s.control, className)} {...rest} />;
-});
+}
 
-export const TextArea = forwardRef<
-  HTMLTextAreaElement,
-  TextareaHTMLAttributes<HTMLTextAreaElement>
->(function TextArea({ className, ...rest }, ref) {
+export function TextArea({
+  className,
+  ref,
+  ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  ref?: Ref<HTMLTextAreaElement>;
+}) {
   return <textarea ref={ref} className={cx(s.control, className)} {...rest} />;
-});
+}
 
-export const Select = forwardRef<
-  HTMLSelectElement,
-  SelectHTMLAttributes<HTMLSelectElement>
->(function Select({ className, children, ...rest }, ref) {
+export function Select({
+  className,
+  children,
+  ref,
+  ...rest
+}: SelectHTMLAttributes<HTMLSelectElement> & {
+  ref?: Ref<HTMLSelectElement>;
+}) {
   const fine = useFinePointer();
   if (fine && !rest.multiple)
     return (
@@ -141,25 +151,28 @@ export const Select = forwardRef<
       {children}
     </select>
   );
-});
+}
 
-export const SearchField = forwardRef<
-  HTMLInputElement,
-  InputHTMLAttributes<HTMLInputElement> & {
-    label: string;
-    shortcut?: string;
-    /**
-     * For a search in a page's filter row: this width beside the filters on
-     * wider screens, the full row on compact ones.
-     */
-    toolbarWidth?: number;
-    /** With toolbarWidth: push to the trailing end of the row. */
-    trailing?: boolean;
-  }
->(function SearchField(
-  { label, shortcut, className, toolbarWidth, trailing, ...rest },
+export function SearchField({
+  label,
+  shortcut,
+  className,
+  toolbarWidth,
+  trailing,
   ref,
-) {
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  shortcut?: string;
+  /**
+   * For a search in a page's filter row: this width beside the filters on
+   * wider screens, the full row on compact ones.
+   */
+  toolbarWidth?: number;
+  /** With toolbarWidth: push to the trailing end of the row. */
+  trailing?: boolean;
+  ref?: Ref<HTMLInputElement>;
+}) {
   return (
     <div
       className={cx(s.search, className)}
@@ -183,7 +196,7 @@ export const SearchField = forwardRef<
       {shortcut && !rest.value && <kbd className={s.shortcut}>{shortcut}</kbd>}
     </div>
   );
-});
+}
 
 export function FormGrid({
   columns = 1,
@@ -208,16 +221,22 @@ const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
  * (1,50,000) while not being edited and plain digits while focused, so the
  * caret never jumps as commas move.
  */
-export const AmountInput = forwardRef<
-  HTMLInputElement,
-  Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & {
-    value: number;
-    onValue: (n: number) => void;
-  }
->(function AmountInput(
-  { value, onValue, className, onFocus, onBlur, ...rest },
+export function AmountInput({
+  value,
+  onValue,
+  className,
+  onFocus,
+  onBlur,
   ref,
-) {
+  ...rest
+}: Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange" | "type"
+> & {
+  value: number;
+  onValue: (n: number) => void;
+  ref?: Ref<HTMLInputElement>;
+}) {
   const [focused, setFocused] = useState(false);
   return (
     <div className={cx(s.amount, className)}>
@@ -247,4 +266,4 @@ export const AmountInput = forwardRef<
       />
     </div>
   );
-});
+}

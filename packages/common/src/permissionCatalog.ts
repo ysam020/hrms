@@ -123,6 +123,11 @@ const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
   PerformanceReview: {
     manage_cycles: ["-"],
   },
+  // Availability of everyone in the organisation (people page, org chart).
+  // Without it a person sees themselves and the people they share a team with.
+  Presence: {
+    view: ["all"],
+  },
   // Platform-only: grantable solely inside Praesto's own organisation
   // (PLATFORM_TENANT_ID), where it lets a member work the cross-tenant
   // support queue. Any other organisation is told it doesn't exist — see
@@ -130,11 +135,25 @@ const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
   PraestoSupport: {
     handle_tickets: ["-"],
   },
+  // Platform-only: the Praesto Platform Console (/platform-admin). Each
+  // action is granted separately — e.g. finance can read billing without
+  // seeing the audit trail or running billing actions. The platform org's
+  // owner and superusers hold all of them implicitly.
+  PraestoAdmin: {
+    view_overview: ["-"],
+    view_tenants: ["-"],
+    view_billing: ["-"],
+    manage_billing: ["-"],
+    view_audit_logs: ["-"],
+  },
 };
 
 // Modules only Praesto's own organisation may grant (the gateway rejects
 // them for every other tenant, and the web editor doesn't offer them).
-export const PLATFORM_ONLY_MODULES: readonly string[] = ["PraestoSupport"];
+export const PLATFORM_ONLY_MODULES: readonly string[] = [
+  "PraestoSupport",
+  "PraestoAdmin",
+];
 
 export function isPlatformOnlyPermission(permission: string): boolean {
   return PLATFORM_ONLY_MODULES.includes(permission.split(":")[0]);

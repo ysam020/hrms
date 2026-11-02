@@ -18,6 +18,7 @@ import {
 import { notify } from "@hrms/notifications";
 import { handleError } from "../utils/handleError";
 import { isPlatformTenant } from "../config/platform";
+import { writePlatformAudit } from "./platformAdmin";
 
 /**
  * Platform-only permissions (e.g. PraestoSupport:*) as seen from this
@@ -27,6 +28,29 @@ import { isPlatformTenant } from "../config/platform";
 function platformOnlyRejected(req: Request, permissions: string[]): string[] {
   if (isPlatformTenant((req as AuthRequest).user?.tenantId)) return [];
   return permissions.filter(isPlatformOnlyPermission);
+}
+
+/**
+ * Record PraestoAdmin permission grants/revocations made in Praesto's own
+ * organisation in the Platform Console's audit log (fire-and-forget).
+ */
+function auditPlatformGrantChange(
+  req: Request,
+  user: { username: string },
+  before: string[],
+  after: string[],
+) {
+  if (!isPlatformTenant((req as AuthRequest).user?.tenantId)) return;
+  const platform = (p: string) => p.startsWith("PraestoAdmin:");
+  const granted = after.filter((p) => platform(p) && !before.includes(p));
+  const revoked = before.filter((p) => platform(p) && !after.includes(p));
+  if (!granted.length && !revoked.length) return;
+  void writePlatformAudit(req, {
+    action: "access.permissions",
+    description: `Changed Platform Console permissions for ${user.username}`,
+    result: "success",
+    details: { username: user.username, granted, revoked },
+  });
 }
 
 export async function getRoles(_req: Request, res: Response) {
@@ -238,6 +262,7 @@ export async function saveUserPermissions(req: Request, res: Response) {
     }
 
     const oldPerms = user.permissions || [];
+    auditPlatformGrantChange(req, user, oldPerms, validPermissions);
     const oldPermsSet = new Set(oldPerms);
     const newPermsSet = new Set(validPermissions);
     const addedPerms = validPermissions.filter(
@@ -329,6 +354,18 @@ export async function updateSuperuser(req: Request, res: Response) {
       where: { id: user.id },
       data: { isSuperUser: !!isSuperUser },
     });
+    // In Praesto's own organisation a superuser holds every Platform
+    // Console action, so the toggle is a platform access change too.
+    if (
+      isPlatformTenant((req as AuthRequest).user?.tenantId) &&
+      !!user.isSuperUser !== !!isSuperUser
+    )
+      void writePlatformAudit(req, {
+        action: "access.superuser",
+        description: `${isSuperUser ? "Granted" : "Revoked"} superuser (full platform access) for ${user.username}`,
+        result: "success",
+        details: { username: user.username, isSuperUser: !!isSuperUser },
+      });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: `Superuser status ${isSuperUser ? "granted" : "revoked"} successfully`,
     });

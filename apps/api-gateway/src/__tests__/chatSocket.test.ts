@@ -23,6 +23,11 @@ jest.mock("@hrms/firebase", () => ({
   sendPushNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Nobody is on Do Not Disturb unless a test says so.
+jest.mock("../services/presenceConnectivity", () => ({
+  withoutDoNotDisturb: jest.fn(async (_t: string, ids: string[]) => ids),
+}));
+
 import {
   prismaWithTenant as prisma,
   runWithTenant,
@@ -30,6 +35,7 @@ import {
 } from "@hrms/db";
 import { sendPushNotifications } from "@hrms/firebase";
 import { setupChatSocket } from "../config/chatSocket";
+import { withoutDoNotDisturb } from "../services/presenceConnectivity";
 
 function makeSocket(overrides: Partial<any> = {}) {
   const handlers: Record<string, (...args: any[]) => any> = {};
@@ -204,6 +210,36 @@ describe("setupChatSocket", () => {
         "u1",
         "📷 Sent an image",
         { latestOnly: true },
+      );
+    });
+
+    it("holds back the push for participants on Do Not Disturb", async () => {
+      (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
+        participants: ["u1", "u2", "u3"],
+      });
+      (prisma.message.create as jest.Mock).mockResolvedValue({
+        id: "m1",
+        chatRoomId: "r1",
+        createdAt: "now",
+      });
+      (withoutDoNotDisturb as jest.Mock).mockResolvedValueOnce(["u3"]);
+      const { handlers, redisAdapter } = setup();
+
+      await handlers["chat:send"]({ roomId: "r1", content: "hello" });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(withoutDoNotDisturb).toHaveBeenCalledWith("t1", ["u2", "u3"]);
+      expect(sendPushNotifications).toHaveBeenCalledWith(
+        ["u3"],
+        "u1",
+        "hello",
+        { latestOnly: true },
+      );
+      // The message itself still reaches everyone in the app.
+      expect(redisAdapter.sendToUser).toHaveBeenCalledWith(
+        "u2",
+        "chat:message",
+        expect.anything(),
       );
     });
 

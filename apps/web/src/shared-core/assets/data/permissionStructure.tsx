@@ -152,9 +152,24 @@ export const permissionStructure = {
       handle_tickets: ["-"],
     },
   },
+  // Praesto's own organisation only: the Platform Console (/platform-admin).
+  PraestoAdmin: {
+    actions: {
+      view_overview: ["-"],
+      view_tenants: ["-"],
+      view_billing: ["-"],
+      manage_billing: ["-"],
+      view_audit_logs: ["-"],
+    },
+  },
   PerformanceReview: {
     actions: {
       manage_cycles: ["-"],
+    },
+  },
+  Presence: {
+    actions: {
+      view: ["all"],
     },
   },
 };

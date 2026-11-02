@@ -22,6 +22,11 @@ export { PeoplePicker, usePeople, type Person } from "./PeoplePicker";
 export { UserCombobox } from "./UserCombobox";
 export { RichTextEditor, sanitizeRich, plainText } from "./RichText";
 export {
+  LocationPicker,
+  type LocationPickerProps,
+  type LocationValue,
+} from "./location";
+export {
   TextSkeleton,
   FormSkeleton,
   SectionsSkeleton,

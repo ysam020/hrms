@@ -6,7 +6,7 @@ import {
   sharedPart,
   useTransitionWith,
 } from "@next/motion";
-import { Avatar, Button, Icon, Tag } from "@next/ui";
+import { Avatar, Button, Icon, Spinner, Tag } from "@next/ui";
 import { fromNow } from "@next/lib/format";
 import { MODULE_LABELS, clickThroughPath, isClickThrough } from "./decision";
 import s from "./ApprovalRow.module.css";
@@ -17,6 +17,7 @@ export function ApprovalRow({
   pairWith,
   onApprove,
   onReject,
+  sending,
 }: {
   item: PendingApprovalItem;
   index: number;
@@ -25,6 +26,8 @@ export function ApprovalRow({
   pairWith: string;
   onApprove: () => void;
   onReject: () => void;
+  /** A decision on this row is on its way to the gateway. */
+  sending?: "approved" | "rejected";
 }) {
   const betweenLists = useTransitionWith(pairWith);
   const clickThrough = isClickThrough(item) ? clickThroughPath(item) : null;
@@ -49,6 +52,7 @@ export function ApprovalRow({
     <StaggerItem
       index={index}
       className={s.row}
+      data-sending={sending ? "" : undefined}
       style={sharedPart("approval", item.instanceId, "row", betweenLists)}
     >
       <Avatar
@@ -89,22 +93,32 @@ export function ApprovalRow({
             {meta}
           </div>
           <div className={s.actions}>
-            <Button
-              size="small"
-              variant="tintedDanger"
-              onClick={onReject}
-              aria-label={`Reject ${item.summary}`}
-            >
-              Reject
-            </Button>
-            <Button
-              size="small"
-              variant="tinted"
-              onClick={onApprove}
-              aria-label={`Approve ${item.summary}`}
-            >
-              Approve
-            </Button>
+            {sending ? (
+              <Spinner
+                size="small"
+                showLabel
+                label={sending === "approved" ? "Approving…" : "Rejecting…"}
+              />
+            ) : (
+              <>
+                <Button
+                  size="small"
+                  variant="tintedDanger"
+                  onClick={onReject}
+                  aria-label={`Reject ${item.summary}`}
+                >
+                  Reject
+                </Button>
+                <Button
+                  size="small"
+                  variant="tinted"
+                  onClick={onApprove}
+                  aria-label={`Approve ${item.summary}`}
+                >
+                  Approve
+                </Button>
+              </>
+            )}
           </div>
         </>
       )}

@@ -72,6 +72,7 @@ const MASTER_MODELS = new Set([
   "supportAttachment",
   "supportActivity",
   "supportCounter",
+  "billingPayment",
 ]);
 
 // Federated proxy:

@@ -22,6 +22,7 @@ import {
   type Billing,
 } from "../config/billingPlans";
 import { getActiveEmployeeCount } from "../utils/planLimits";
+import { recordWebhookPayment } from "../services/billingLedger";
 import {
   TRIAL_DAYS,
   TRIAL_SIGNUP_PURPOSE,
@@ -1184,6 +1185,11 @@ export async function handleWebhook(req: Request, res: Response) {
         payment?: { entity?: any };
       };
     };
+
+    // Platform billing ledger (read model only, never affects access).
+    // Before the subscription check: refund and payment.failed events carry
+    // no subscription entity. Fire-and-forget; the reconciler heals misses.
+    void recordWebhookPayment(event, payload);
 
     const subscriptionId = payload?.subscription?.entity?.id;
     if (!subscriptionId) return res.json({ ok: true });

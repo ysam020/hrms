@@ -41,3 +41,116 @@ li:last-child .row {
   color: var(--px-text-3);
   font-size: 14px;
 }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.hero {
+  display: grid;
+  gap: 20px;
+  background:
+    radial-gradient(
+      120% 140% at 0% 0%,
+      var(--px-accent-soft) 0%,
+      transparent 55%
+    ),
+    var(--px-bg-content);
+}
+/* The identity block brings page-level padding; the card has its own. */
+.hero > :first-child {
+  padding: 0;
+}
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+.heroStatus {
+  grid-column: 1 / -1;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 28px;
+  margin: 0;
+}
+@media (min-width: 900px) {
+  .facts {
+    grid-template-columns: repeat(4, auto);
+  }
+}
+.fact {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.fact dt {
+  font: var(--px-type-meta);
+  color: var(--px-text-3);
+}
+.fact dd {
+  margin: 0;
+  font: var(--px-type-headline);
+  overflow-wrap: anywhere;
+}
+.factNote {
+  display: block;
+  font: var(--px-type-meta);
+  color: var(--px-text-2);
+}
+
+/* ── Details ────────────────────────────────────────────────────────────── */
+.cards {
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 900px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.infoCard {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.infoTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font: var(--px-type-headline);
+}
+.cardNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+
+/* ── Notifications ─────────────────────────────────────────────────────── */
+.deviceCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.deviceIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--px-bg-hover);
+  color: var(--px-text-2);
+  font-size: 20px;
+}
+.deviceCard[data-tone="success"] .deviceIcon {
+  background: var(--px-success-soft);
+  color: var(--px-success);
+}
+.deviceCard[data-tone="warning"] .deviceIcon {
+  background: var(--px-warning-soft);
+  color: var(--px-warning);
+}

@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { startTransition, useContext, useOptimistic, useState } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import {
   ApprovalsBadgeContext,
@@ -37,49 +37,63 @@ export const clickThroughPath = (
     ? `/view-kyc/${item.username}`
     : "/settings?tab=join-requests";
 
-type Decision = { item: PendingApprovalItem; mode: "approved" | "rejected" };
+type Mode = "approved" | "rejected";
+type Decision = { item: PendingApprovalItem; mode: Mode; comment: string };
+
+const NONE: ReadonlyMap<string, Mode> = new Map();
 
 export function useDecision() {
   const { setAlert } = useContext(AlertContext);
   const { refetchPendingApprovals } = useContext(ApprovalsBadgeContext);
   const [decision, setDecision] = useState<Decision | null>(null);
-  const [comment, setComment] = useState("");
-  const [saving, setSaving] = useState(false);
-  /** Rows decided in this session, hidden immediately (optimistic). */
+  /** Rows the gateway confirmed as decided, hidden until the list refetches. */
   const [decided, setDecided] = useState<Set<string>>(new Set());
+  // Decisions sent and not yet answered. The row stays, marked "Approving…"
+  // with its actions disabled, so the next request can be decided meanwhile.
+  // React drops these when each request settles: a confirmed one is then in
+  // `decided`; a failed one shows its actions again.
+  const [sending, markSending] = useOptimistic(
+    NONE,
+    (map, [id, mode]: [string, Mode]) => new Map(map).set(id, mode),
+  );
 
-  const close = () => {
-    setDecision(null);
-    setComment("");
-  };
+  const close = () => setDecision(null);
 
-  const submit = async () => {
+  const submit = () => {
     if (!decision) return;
-    setSaving(true);
-    try {
-      await apiClient.put(
-        API_ENDPOINTS.ACT_ON_APPROVAL(decision.item.instanceId),
-        {
-          decision: decision.mode,
+    const { item, mode, comment } = decision;
+    close();
+    startTransition(async () => {
+      markSending([item.instanceId, mode]);
+      try {
+        await apiClient.put(API_ENDPOINTS.ACT_ON_APPROVAL(item.instanceId), {
+          decision: mode,
           comment: comment || undefined,
-        },
-      );
-      setDecided((s) => new Set(s).add(decision.item.instanceId));
-      setAlert({
-        open: true,
-        message:
-          decision.mode === "approved"
-            ? "Request approved."
-            : "Request rejected.",
-        severity: "success",
-      });
-      close();
-      refetchPendingApprovals();
-    } catch (err) {
-      setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setSaving(false);
-    }
+        });
+        startTransition(() =>
+          setDecided((s) => new Set(s).add(item.instanceId)),
+        );
+        setAlert({
+          open: true,
+          message:
+            mode === "approved" ? "Request approved." : "Request rejected.",
+          severity: "success",
+        });
+        refetchPendingApprovals();
+      } catch (err: any) {
+        setAlert({ open: true, message: errorMessage(err), severity: "error" });
+        const status = err?.response?.status ?? 0;
+        if (status >= 400 && status < 500) {
+          // Refused (already decided elsewhere, no longer the approver):
+          // show the list as the gateway now has it.
+          refetchPendingApprovals();
+        } else {
+          // Worth retrying: back to the dialog with the comment intact,
+          // unless another one is open by now.
+          setDecision((open) => open ?? decision);
+        }
+      }
+    });
   };
 
   const approving = decision?.mode === "approved";
@@ -87,20 +101,13 @@ export function useDecision() {
     <Dialog
       open={Boolean(decision)}
       onClose={close}
-      busy={saving}
       title={approving ? "Approve Request" : "Reject Request"}
       description={decision?.item.summary}
       size="sm"
       footer={
         <>
-          <Button onClick={close} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            variant={approving ? "primary" : "danger"}
-            onClick={submit}
-            busy={saving}
-          >
+          <Button onClick={close}>Cancel</Button>
+          <Button variant={approving ? "primary" : "danger"} onClick={submit}>
             {approving ? "Approve" : "Reject"}
           </Button>
         </>
@@ -113,8 +120,10 @@ export function useDecision() {
       >
         <TextArea
           data-autofocus
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          value={decision?.comment ?? ""}
+          onChange={(e) =>
+            setDecision((d) => d && { ...d, comment: e.target.value })
+          }
           rows={3}
         />
       </Field>
@@ -123,10 +132,11 @@ export function useDecision() {
 
   return {
     approve: (item: PendingApprovalItem) =>
-      setDecision({ item, mode: "approved" }),
+      setDecision({ item, mode: "approved", comment: "" }),
     reject: (item: PendingApprovalItem) =>
-      setDecision({ item, mode: "rejected" }),
+      setDecision({ item, mode: "rejected", comment: "" }),
     decided,
+    sending,
     dialog,
   };
 }

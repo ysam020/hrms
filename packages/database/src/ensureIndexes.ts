@@ -81,6 +81,34 @@ export async function ensureMasterIndexes(): Promise<void> {
     });
   }
 
+  // Platform billing ledger: the unique payment id is what keeps webhook
+  // retries and re-syncs from double counting a payment.
+  try {
+    await prisma.$runCommandRaw({
+      createIndexes: "billing_payments",
+      indexes: [
+        {
+          key: { razorpayPaymentId: 1 },
+          name: "BillingPayment_razorpayPaymentId_key",
+          unique: true,
+        },
+        {
+          key: { tenantId: 1, paidAt: 1 },
+          name: "BillingPayment_tenantId_paidAt_idx",
+        },
+        { key: { paidAt: 1 }, name: "BillingPayment_paidAt_idx" },
+        {
+          key: { status: 1, paidAt: 1 },
+          name: "BillingPayment_status_paidAt_idx",
+        },
+      ],
+    });
+  } catch (error: unknown) {
+    logger.error("ensureMasterIndexes: failed to create billing indexes", {
+      error,
+    });
+  }
+
   // Tenant support: ticketNo / counter key uniqueness is what makes
   // numbering race-safe; the rest back the tenant-scoped
   // and support-queue list queries.

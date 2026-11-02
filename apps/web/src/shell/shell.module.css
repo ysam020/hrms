@@ -137,6 +137,32 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Platform Console: names the area so it's never mistaken for an org's. */
+.consoleHead {
+  display: grid;
+  gap: 4px;
+  margin: 4px 12px 8px;
+  padding: 8px 10px;
+  border-radius: var(--px-radius-sm);
+  background: var(--px-accent-soft);
+}
+.consoleLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--px-accent);
+  font: var(--px-type-caption);
+  font-weight: 600;
+}
+.consoleBack {
+  color: var(--px-text-2);
+  font: var(--px-type-caption);
+  text-decoration: none;
+}
+.consoleBack:hover {
+  color: var(--px-text-1);
+}
+
 .searchButton {
   display: flex;
   align-items: center;

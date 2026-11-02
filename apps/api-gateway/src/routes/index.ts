@@ -17,6 +17,7 @@ import { chatRouter } from "./chat";
 import { aiConnectionsRouter } from "./aiConnections";
 import { dashboardRouter } from "./dashboard";
 import { walkthroughRouter } from "./walkthrough";
+import { presenceRouter } from "./presence";
 import { aiInsightsRouter } from "./ai-insights";
 import { paymentRouter } from "./payment";
 import { tenantSettingsRouter } from "./tenantSettings";
@@ -39,6 +40,7 @@ import { wfhRouter } from "./wfh";
 import { helpdeskRouter } from "./helpdesk";
 import { reportsRouter } from "./reports";
 import { supportRouter, platformSupportRouter } from "./support";
+import { platformAdminRouter } from "./platformAdmin";
 import { defaultLimiter } from "../middleware/rateLimiter";
 import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
 import { idempotency } from "../middleware/idempotency";
@@ -98,6 +100,15 @@ rootRouter.use(
   idempotency,
   platformSupportRouter,
 );
+// The Praesto Platform Console: like the support console, no tenant
+// subscription check — each route requires its own PraestoAdmin action
+// (requirePlatformAdmin), which only Praesto's own organisation can hold.
+rootRouter.use(
+  "/platform/admin",
+  authenticate,
+  idempotency,
+  platformAdminRouter,
+);
 // Walkthrough progress: authenticate + requireTenant but no subscription
 // check (see routes/walkthrough.ts). It used to be mounted between the
 // business routers, after 14 path-less subscription guards, which made it
@@ -108,6 +119,15 @@ rootRouter.use(
   requireTenant,
   idempotency,
   walkthroughRouter,
+);
+// Availability (busy, in a meeting…): same reasoning as the walkthrough —
+// no business data, read on every page, so no subscription check.
+rootRouter.use(
+  "/presence",
+  authenticate,
+  requireTenant,
+  idempotency,
+  presenceRouter,
 );
 
 // All business routes require an active subscription. The guard is applied

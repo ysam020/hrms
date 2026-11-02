@@ -11,6 +11,7 @@ import { recordLoginEvent } from "../services/loginEventService";
 import { getActiveSettings } from "./tenantSettings";
 import { hasSupportAccess } from "../services/supportStore";
 import { isPlatformTenant } from "../config/platform";
+import { platformAdminGrants } from "../services/platformAccess";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -24,6 +25,29 @@ const jsRedirect = (res: Response, url: string) => {
   // Use a standard HTTP redirect — inline <script> is blocked by CSP script-src 'self'
   return res.redirect(302, url);
 };
+
+/**
+ * aggregateRaw returns MongoDB Extended JSON, so a date arrives as
+ * `{ $date: "…" }` (or `{ $date: { $numberLong: "…" } }`) instead of a value
+ * clients can parse. Turn every such date, at any depth, into an ISO string.
+ */
+function isoDates(value: unknown): any {
+  if (Array.isArray(value)) return value.map(isoDates);
+  if (value && typeof value === "object") {
+    const v = value as Record<string, any>;
+    if ("$date" in v && Object.keys(v).length === 1) {
+      const raw = v.$date?.$numberLong ?? v.$date;
+      const d = new Date(
+        typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : raw,
+      );
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    return Object.fromEntries(
+      Object.entries(v).map(([k, x]) => [k, isoDates(x)]),
+    );
+  }
+  return value;
+}
 
 export async function fetchFullProfile(userId: string) {
   const rows = (await prisma.user.aggregateRaw({
@@ -82,7 +106,7 @@ export async function fetchFullProfile(userId: string) {
 
   if (!rows || rows.length === 0) return null;
 
-  const u = rows[0];
+  const u = isoDates(rows[0]);
   const firstName = u.first_name || "";
   const lastName = u.last_name || "";
   const fullName =
@@ -166,7 +190,12 @@ export async function getProfile(req: Request, res: Response) {
 
     // UI hint only (shows the Praesto support console link); every
     // /platform/support request is checked again by requireSupportAgent.
-    const isSupportAgent = await hasSupportAccess(user!).catch(() => false);
+    const [isSupportAgent, platformAdmin] = await Promise.all([
+      hasSupportAccess(user!).catch(() => false),
+      // UI hint only: which Platform Console sections to show. Every
+      // /platform/admin request is checked again by requirePlatformAdmin.
+      platformAdminGrants(user!).catch(() => []),
+    ]);
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: {
@@ -177,6 +206,7 @@ export async function getProfile(req: Request, res: Response) {
           tenantRole: user?.tenantRole ?? null,
           wfhEnabled,
           isSupportAgent,
+          platformAdmin,
           // Lets the permission editor offer platform-only modules.
           isPlatformTenant: isPlatformTenant(user?.tenantId),
         },

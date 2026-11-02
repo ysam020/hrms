@@ -1,10 +1,10 @@
 import {
-  forwardRef,
   useCallback,
   useContext,
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type Ref,
 } from "react";
 import {
   Link,
@@ -72,19 +72,19 @@ export function useTransitionNavigate() {
 }
 
 /** Link that opts into a view transition (unless Reduce Motion is on). */
-export const TransitionLink = forwardRef<HTMLAnchorElement, LinkProps>(
-  function TransitionLink(props, ref) {
-    const reduced = usePrefersReducedMotion();
-    return <Link ref={ref} viewTransition={!reduced} {...props} />;
-  },
-);
+export function TransitionLink(
+  props: LinkProps & { ref?: Ref<HTMLAnchorElement> },
+) {
+  const reduced = usePrefersReducedMotion();
+  return <Link viewTransition={!reduced} {...props} />;
+}
 
-export const TransitionNavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
-  function TransitionNavLink(props, ref) {
-    const reduced = usePrefersReducedMotion();
-    return <NavLink ref={ref} viewTransition={!reduced} {...props} />;
-  },
-);
+export function TransitionNavLink(
+  props: NavLinkProps & { ref?: Ref<HTMLAnchorElement> },
+) {
+  const reduced = usePrefersReducedMotion();
+  return <NavLink viewTransition={!reduced} {...props} />;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared elements.

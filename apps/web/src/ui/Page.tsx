@@ -86,15 +86,17 @@ export function Page({
     return () => io.disconnect();
   }, []);
 
-  useEffect(() => {
-    const t = documentTitle ?? (typeof title === "string" ? title : undefined);
-    if (t) document.title = `${t} · Praesto`;
-  }, [documentTitle, title]);
+  // React 19 hoists this into <head> (ahead of index.html's own title) and
+  // removes it with the page, so a screen without one never keeps the last
+  // page's title.
+  const tabTitle =
+    documentTitle ?? (typeof title === "string" ? title : undefined);
 
   const showNavButton = !docked || sidebarHidden;
 
   return (
     <div className={s.page}>
+      {tabTitle && <title>{`${tabTitle} · Praesto`}</title>}
       <div className={s.main}>
         <header className={s.toolbar} data-scrolled={scrolled || undefined}>
           {(showNavButton || back) && (

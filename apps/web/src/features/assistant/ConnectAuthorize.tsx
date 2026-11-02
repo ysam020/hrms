@@ -31,7 +31,6 @@ export default function ConnectAuthorize() {
   const [busy, setBusy] = useState<"allow" | "deny" | null>(null);
 
   useEffect(() => {
-    document.title = "Connect an Assistant · Praesto";
     apiClient
       .get(API_ENDPOINTS.AI_CONNECTION_REQUEST(requestId))
       .then((res) => {
@@ -77,6 +76,7 @@ export default function ConnectAuthorize() {
 
   return (
     <div className={s.screen}>
+      <title>Connect an Assistant · Praesto</title>
       <main className={`${s.card} px-enter`} aria-labelledby="connect-title">
         <BrandLockup size={26} />
         {!details && !error ? (

@@ -43,3 +43,11 @@
     grid-column: 2 / -1;
   }
 }
+.row[data-sending] .text {
+  opacity: 0.55;
+}
+.actions [role="status"] {
+  font: var(--px-type-meta);
+  color: var(--px-text-2);
+  min-height: 28px;
+}

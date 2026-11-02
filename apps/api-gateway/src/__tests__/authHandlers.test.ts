@@ -167,6 +167,30 @@ describe("authHandlers", () => {
       );
     });
 
+    it("turns aggregateRaw's Extended JSON dates into ISO strings", async () => {
+      // aggregateRaw returns { $date } objects, which clients render as
+      // "Invalid Date".
+      mockAggregateRaw.mockResolvedValue([
+        {
+          ...profileRow,
+          dob: { $date: "1993-10-10T00:00:00.000Z" },
+          joining_date: { $date: { $numberLong: "1577836800000" } },
+          fcmTokens: [
+            {
+              deviceFingerprint: "d1",
+              lastUsed: { $date: "2026-11-01T09:00:00Z" },
+            },
+          ],
+        },
+      ]);
+      const res = makeRes();
+      await getProfile(makeReq(), res);
+      const user = mockApiResponse.mock.calls.at(-1)[2].data.user;
+      expect(user.dob).toBe("1993-10-10T00:00:00.000Z");
+      expect(user.joining_date).toBe("2020-01-01T00:00:00.000Z");
+      expect(user.fcmTokens[0].lastUsed).toBe("2026-11-01T09:00:00.000Z");
+    });
+
     it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
       mockAggregateRaw.mockRejectedValue(new Error("DB error"));
       const res = makeRes();

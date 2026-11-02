@@ -1,4 +1,5 @@
 import { useCallback, useContext, useRef, useState } from "react";
+import { preconnect } from "react-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { useFaceRecognition } from "@web/shared/hooks/useFaceRecognition";
 import { useAttendanceProcess } from "@web/shared/hooks/useAttendanceProcess";
@@ -56,6 +57,11 @@ export function usePunch(refresh: () => void) {
   const start = useCallback(
     async (field: Field) => {
       pending.current = field;
+      // The face models come from jsDelivr (fetch, so CORS mode). Open that
+      // connection now, while the permission check and the face-api chunk
+      // load, instead of after them. Nothing is downloaded until needed.
+      if (!modelsReady.current)
+        preconnect("https://cdn.jsdelivr.net", { crossOrigin: "anonymous" });
       try {
         const status = await navigator.permissions.query({
           name: "camera" as PermissionName,

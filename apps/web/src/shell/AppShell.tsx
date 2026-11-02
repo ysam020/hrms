@@ -19,6 +19,7 @@ import { CommandPalette } from "./CommandPalette";
 import { NotificationsButton } from "./Notifications";
 import { OfflineStatusButton } from "@next/offline";
 import { WalkthroughProvider } from "@next/walkthrough/WalkthroughProvider";
+import { PresenceProvider } from "@next/features/presence/PresenceProvider";
 import { applyAppearance } from "./appearance";
 import s from "./shell.module.css";
 
@@ -28,13 +29,15 @@ const HIDDEN_KEY = "px-sidebar-hidden";
 export function AppShell() {
   return (
     <SocketProvider>
-      <ChatUnreadProvider>
-        <ApprovalsBadgeProvider>
-          <NotificationsBridge>
-            <ShellLayout />
-          </NotificationsBridge>
-        </ApprovalsBadgeProvider>
-      </ChatUnreadProvider>
+      <PresenceProvider>
+        <ChatUnreadProvider>
+          <ApprovalsBadgeProvider>
+            <NotificationsBridge>
+              <ShellLayout />
+            </NotificationsBridge>
+          </ApprovalsBadgeProvider>
+        </ChatUnreadProvider>
+      </PresenceProvider>
     </SocketProvider>
   );
 }

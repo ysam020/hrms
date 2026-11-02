@@ -13,10 +13,10 @@
   --l-surface: #ffffff;
   --l-tint: #f5f5f7;
   --l-line: rgb(0 0 0 / 0.08);
-  --l-accent: #166e96;
-  --l-accent-hover: #125d80;
+  --l-accent: #266ec6;
+  --l-accent-hover: #2262ad;
   --l-night: #0a1219;
-  --landing-focus: #5bbde6;
+  --landing-focus: #6aa0e2;
   --l-gutter: clamp(16px, 5vw, 64px);
   --l-max: 1180px;
 
@@ -205,11 +205,11 @@
   transform: translateY(3px);
 }
 .ctaPrimary {
-  box-shadow: 0 0 0 0 rgb(91 189 230 / 0);
+  box-shadow: 0 0 0 0 rgb(106 160 226 / 0);
 }
 .hero .ctaPrimary:hover,
 .closing .ctaPrimary:hover {
-  box-shadow: 0 0 0 6px rgb(91 189 230 / 0.18);
+  box-shadow: 0 0 0 6px rgb(106 160 226 / 0.18);
 }
 @media (prefers-reduced-motion: reduce) {
   .rollInner,
@@ -434,7 +434,7 @@
   background:
     radial-gradient(
       55% 40% at 50% 62%,
-      rgb(58 167 214 / 0.22),
+      rgb(74 140 220 / 0.22),
       transparent 70%
     ),
     radial-gradient(35% 25% at 8% 100%, rgb(253 118 36 / 0.1), transparent 70%),
@@ -490,7 +490,7 @@
   color: var(--l-night);
 }
 .hero .ctaPrimary:hover {
-  background: #e8f4fa;
+  background: #eaf2fb;
 }
 .heroDevice {
   width: 100%;
@@ -520,8 +520,8 @@
   left: -18vmax;
   background: radial-gradient(
     closest-side,
-    rgb(58 167 214 / 0.5),
-    rgb(58 167 214 / 0.14) 55%,
+    rgb(74 140 220 / 0.5),
+    rgb(74 140 220 / 0.14) 55%,
     transparent
   );
 }
@@ -590,8 +590,8 @@
   border-radius: 50%;
   background: radial-gradient(
     closest-side,
-    rgb(91 189 230 / 0.45),
-    rgb(58 167 214 / 0.12) 60%,
+    rgb(106 160 226 / 0.45),
+    rgb(74 140 220 / 0.12) 60%,
     transparent
   );
   animation: breathe 6s ease-in-out infinite alternate;
@@ -799,7 +799,7 @@
   pointer-events: none;
   background: radial-gradient(
     520px circle at var(--sx, 50%) var(--sy, 30%),
-    rgb(91 189 230 / 0.16),
+    rgb(106 160 226 / 0.16),
     transparent 70%
   );
   opacity: 0;
@@ -846,7 +846,7 @@
 .securityIcon {
   display: block;
   margin-bottom: 14px;
-  color: #5bbde6;
+  color: #6aa0e2;
 }
 
 /* ── Pricing ─────────────────────────────────────────────────────────── */
@@ -899,7 +899,7 @@
 .save {
   padding: 4px 8px;
   border-radius: 999px;
-  background: #e3f0f6;
+  background: #e1ecf9;
   color: var(--l-accent-hover);
   font-size: 12px;
 }
@@ -1071,7 +1071,7 @@
   background:
     radial-gradient(
       50% 60% at 50% 100%,
-      rgb(58 167 214 / 0.22),
+      rgb(74 140 220 / 0.22),
       transparent 70%
     ),
     linear-gradient(170deg, #0d1b26 0%, #0a1219 60%, #070c11 100%);
@@ -1095,7 +1095,7 @@
   color: var(--l-night);
 }
 .closing .ctaPrimary:hover {
-  background: #e8f4fa;
+  background: #eaf2fb;
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────── */
@@ -1373,7 +1373,7 @@
   font: 600 14px/1.2 var(--px-font);
 }
 .stackCard:nth-child(even) .stackLabel {
-  color: #5bbde6;
+  color: #6aa0e2;
 }
 .stackTitle {
   margin: 0;

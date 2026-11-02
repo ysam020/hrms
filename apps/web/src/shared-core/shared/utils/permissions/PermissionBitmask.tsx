@@ -148,6 +148,14 @@ const PERM_DEFS = [
 
   // PraestoSupport (scopeless, Praesto's own organisation only)
   ["PraestoSupport", "handle_tickets"],
+
+  // PraestoAdmin (scopeless, Praesto's own organisation only). Appended last
+  // so every earlier permission keeps its bit.
+  ["PraestoAdmin", "view_overview"],
+  ["PraestoAdmin", "view_tenants"],
+  ["PraestoAdmin", "view_billing"],
+  ["PraestoAdmin", "manage_billing"],
+  ["PraestoAdmin", "view_audit_logs"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }

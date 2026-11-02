@@ -33,6 +33,7 @@ const { count, size, warnings } = await injectManifest({
     "**/*.map",
     "images/product-showcase/**",
     "assets/vendor-faceapi-*.js", // see vite.config.ts
+    "assets/LocationPicker-*.{js,css}", // MapLibre: ~1 MB, admin settings only
     "og-image.png", // for link previews, never shown in the app
   ],
   // Hashed filenames are their own version; don't add a revision query.

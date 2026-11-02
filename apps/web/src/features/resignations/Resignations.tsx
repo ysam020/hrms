@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import {
+  useActionState,
   useContext,
   useEffect,
   useMemo,
@@ -16,6 +17,7 @@ import {
   Avatar,
   Banner,
   Button,
+  SubmitButton,
   Checkbox,
   ConfirmDialog,
   DataTable,
@@ -973,13 +975,10 @@ function ResignForm({
 }) {
   const { setAlert } = useContext(AlertContext);
   const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  // The action's result is the field's error; SubmitButton shows it running.
+  const [error, submit] = useActionState(async () => {
     if (reason.trim().length < 5)
-      return setError("Tell us a little about why (at least 5 characters).");
-    setSaving(true);
+      return "Tell us a little about why (at least 5 characters).";
     try {
       await apiClient.post(API_ENDPOINTS.ADD_RESIGNATION, {
         reason: reason.trim(),
@@ -988,10 +987,10 @@ function ResignForm({
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
     }
-    setSaving(false);
-  };
+    return null;
+  }, null);
   return (
-    <form onSubmit={submit} noValidate style={{ display: "grid", gap: 16 }}>
+    <form action={submit} noValidate style={{ display: "grid", gap: 16 }}>
       <Field label="Reason" error={error}>
         <TextArea
           data-autofocus
@@ -1002,9 +1001,9 @@ function ResignForm({
       </Field>
       <div className="px-row" style={{ justifyContent: "flex-end" }}>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="submit" variant="danger" busy={saving}>
+        <SubmitButton variant="danger" busyLabel="Submitting…">
           Submit Resignation
-        </Button>
+        </SubmitButton>
       </div>
     </form>
   );
