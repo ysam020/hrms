@@ -23,7 +23,6 @@ jest.mock("@hrms/proto", () => {
   class FakeClient {
     constructor(..._args: any[]) {}
   }
-  const svc = () => ({ [Object.keys({}).length]: FakeClient });
   return {
     auth: { AuthServiceClient: FakeClient },
     user: { UserServiceClient: FakeClient },

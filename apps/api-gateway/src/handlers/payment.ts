@@ -21,7 +21,7 @@ import {
   type PlanTier,
   type Billing,
 } from "../config/billingPlans";
-import { getActiveEmployeeCount, getSeatStatus } from "../utils/planLimits";
+import { getActiveEmployeeCount } from "../utils/planLimits";
 import {
   TRIAL_DAYS,
   TRIAL_SIGNUP_PURPOSE,
@@ -1269,9 +1269,8 @@ export async function handleWebhook(req: Request, res: Response) {
           }
 
           const next = new Date(base);
-          billing === "annual"
-            ? next.setFullYear(next.getFullYear() + 1)
-            : next.setMonth(next.getMonth() + 1);
+          if (billing === "annual") next.setFullYear(next.getFullYear() + 1);
+          else next.setMonth(next.getMonth() + 1);
 
           // A trial's first charge is its activation. Keyed off
           // planActivatedAt rather than the status, which may already have

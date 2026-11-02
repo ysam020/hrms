@@ -160,7 +160,10 @@ export class BaseGrpcServer {
     this.server.addService(service, wrappedImpl);
   }
 
-  protected wrapWithValidation(handler: Function, schema: any) {
+  protected wrapWithValidation(
+    handler: (call: any, callback: any) => unknown,
+    schema: any,
+  ) {
     return async (call: any, callback: any) => {
       try {
         await validationMiddleware(schema)(call, async () => {

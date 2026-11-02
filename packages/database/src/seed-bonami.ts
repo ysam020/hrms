@@ -715,7 +715,6 @@ async function main() {
   // ─ Leaves ─────────────────────────────────────────────────────────────────
   if ((await countDocs("leaves")) === 0) {
     const leaveDocs: any[] = [];
-    const leaveTypes = ["Casual Leave", "Sick Leave", "Earned Leave"];
     for (const user of allUsers) {
       // 2 approved leaves in the past
       leaveDocs.push({
@@ -993,7 +992,6 @@ async function main() {
 
   // ─ Chatrooms + Messages ───────────────────────────────────────────────────
   if ((await countDocs("chatrooms")) === 0) {
-    const now = new Date();
     // General channel
     await rb({
       insert: "chatrooms",

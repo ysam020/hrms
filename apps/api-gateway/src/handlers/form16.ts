@@ -403,7 +403,6 @@ export async function generateForm16(req: Request, res: Response) {
     const c1x = c0x + c0w,
       c1w = contentW - c0w;
 
-    const tableStartY = curY;
     beginTableBox();
 
     tableHeader([

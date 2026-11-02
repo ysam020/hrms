@@ -30,8 +30,6 @@ function buildUrl(dbName: string): string {
 
 // Direct Prisma ORM client to the tenant DB — uses bson library, handles DateTime correctly
 const bp = new PrismaClient({ datasourceUrl: buildUrl(BONAMI_DB) });
-const rb = (cmd: Record<string, unknown>): Promise<any> =>
-  (bp.$runCommandRaw as any)(cmd);
 
 function daysAgo(n: number): Date {
   const d = new Date();

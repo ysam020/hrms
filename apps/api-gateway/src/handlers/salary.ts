@@ -56,17 +56,9 @@ export async function updateSalary(req: Request, res: Response) {
     }
 
     const { userId, year, month, salaryStructure } = req.body;
-    let {
-      basicPay,
-      hra,
-      conveyance,
-      incentive,
-      pf,
-      esi,
-      pt,
-      deductions,
-      components,
-    } = salaryStructure;
+    const { basicPay, hra, conveyance, incentive, pf, esi, pt, deductions } =
+      salaryStructure;
+    let { components } = salaryStructure;
 
     // Auto-derive any tenant-configured percent-of-basic component (Settings
     // → Payroll Components, calcType "percent_of_basic") that the caller
@@ -442,7 +434,7 @@ export async function buildSalarySlipPdf(
     };
   }
 
-  const { employee, salaryStructure, attendanceSummary } = response.data;
+  const { employee, salaryStructure } = response.data;
   const employeeName =
     [employee?.firstName, employee?.lastName].filter(Boolean).join(" ") ||
     employee?.username ||

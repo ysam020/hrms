@@ -141,7 +141,7 @@ export const markAttendance = async (
 
         let fenceLat: number | null = null;
         let fenceLng: number | null = null;
-        let fenceRadius = cfg.geofenceRadiusMeters;
+        const fenceRadius = cfg.geofenceRadiusMeters;
         let fenceLabel = "office";
 
         if (isWfhToday) {

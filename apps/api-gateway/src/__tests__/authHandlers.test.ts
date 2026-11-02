@@ -93,13 +93,11 @@ jest.mock("../services/googleCalendar", () => ({
 
 import { grpcCall } from "../grpc/clients";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
-import { aesDecrypt } from "@hrms/crypto";
 import jwt from "jsonwebtoken";
 import { status as GrpcStatus } from "@grpc/grpc-js";
 
 const mockGrpcCall = grpcCall as jest.Mock;
 const mockApiResponse = apiResponse as jest.Mock;
-const mockAesDecrypt = aesDecrypt as jest.Mock;
 const mockJwtVerify = (jwt as any).verify as jest.Mock;
 const mockAggregateRaw = (prisma as any).user.aggregateRaw as jest.Mock;
 const mockUserUpdate = (prisma as any).user.update as jest.Mock;

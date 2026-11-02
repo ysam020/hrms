@@ -1,5 +1,4 @@
 import { prisma } from "@hrms/db";
-import { getMessaging } from "../admin";
 import { sendPushNotifications } from "../sendPushNotifications";
 
 jest.mock("@hrms/db", () => ({

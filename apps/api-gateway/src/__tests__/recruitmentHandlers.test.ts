@@ -140,8 +140,6 @@ const mockAppFindUnique = (prisma as any).jobApplication
   .findUnique as jest.Mock;
 const mockAppUpdate = (prisma as any).jobApplication.update as jest.Mock;
 const mockAppGroupBy = (prisma as any).jobApplication.groupBy as jest.Mock;
-const mockResignFindUnique = (prisma as any).resignation
-  .findUnique as jest.Mock;
 const mockResignUpdate = (prisma as any).resignation.update as jest.Mock;
 const mockResignCount = (prisma as any).resignation.count as jest.Mock;
 const mockResignFindMany = (prisma as any).resignation.findMany as jest.Mock;

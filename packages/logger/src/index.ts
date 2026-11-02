@@ -118,6 +118,8 @@ const transports: winston.transport[] = [
 ];
 
 if (process.env.LOKI_URL) {
+  // Loaded only when Loki is configured, so services without it never load it.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const LokiTransport = require("winston-loki");
   transports.push(
     new LokiTransport({
