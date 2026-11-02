@@ -2,7 +2,6 @@ import {
   Children,
   Fragment,
   isValidElement,
-  useEffect,
   useId,
   useLayoutEffect,
   useMemo,
@@ -167,7 +166,6 @@ export function PopUpSelect({
     }
   };
 
-  let lastGroup: string | undefined;
   return (
     <>
       <button
@@ -218,8 +216,8 @@ export function PopUpSelect({
           onKeyDown={onListKey}
         >
           {options.map((o, i) => {
-            const heading = o.group && o.group !== lastGroup ? o.group : null;
-            lastGroup = o.group;
+            const heading =
+              o.group && o.group !== options[i - 1]?.group ? o.group : null;
             return (
               <Fragment key={`${o.value}-${i}`}>
                 {heading && (
@@ -342,11 +340,6 @@ export function DatePicker({
         !(maxD && isoMonth(d) > isoMonth(maxD))
       : !(minD && iso(d) < iso(minD)) && !(maxD && iso(d) > iso(maxD));
 
-  useEffect(() => {
-    if (open) setFocus(clamp(selected ?? new Date()));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
   // Roving focus follows the keyboard cursor.
   useLayoutEffect(() => {
     if (!open) return;
@@ -420,7 +413,11 @@ export function DatePicker({
         aria-label={label ? `${label}${shown ? `, ${shown}` : ""}` : undefined}
         aria-describedby={describedBy}
         aria-invalid={invalid}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          // Opening starts the cursor on the selected day (or today).
+          if (!open) setFocus(clamp(selected ?? new Date()));
+          setOpen(!open);
+        }}
       >
         <span className={s.popupValue}>
           {shown ?? (

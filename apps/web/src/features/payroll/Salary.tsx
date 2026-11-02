@@ -12,7 +12,14 @@ import {
   type PtSlab,
   type SalaryComponentDef,
 } from "@web/shared/utils/salaryCalc";
-import { TransitionLink, useTransitionNavigate } from "@next/motion";
+import {
+  TransitionLink,
+  handOff,
+  sharedPart,
+  useHandoff,
+  useTransitionNavigate,
+  useTransitionWith,
+} from "@next/motion";
 import {
   Tag,
   StatusBadge,
@@ -30,7 +37,6 @@ import {
   Pagination,
   PrimaryCell,
   SearchField,
-  Skeleton,
   TextInput,
   type Column,
   SectionsSkeleton,
@@ -38,7 +44,7 @@ import {
 import { apiClient, errorMessage, unwrap } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
 import { searchParam, usePagedList } from "@next/lib/usePagedList";
-import { fmtMoney, personName } from "@next/lib/format";
+import { fmtMoney, personName, type PersonNameFields } from "@next/lib/format";
 import s from "./salary.module.css";
 
 // Salary management. The list is the employee directory (GET /view-all-kycs,
@@ -46,6 +52,23 @@ import s from "./salary.module.css";
 // (tenant components, derived PF/ESI/PT, gross redistribution, attendance
 // proration) and GET/POST salary endpoints. Only the load/save sequencing
 // below mirrors Classic's EditSalaryStructure component.
+
+type SalaryRow = PersonNameFields & { id: string };
+
+const structurePath = (r: SalaryRow) => `/payroll/salary-management/${r.id}`;
+
+// The opened person's name carries over into the structure page's title.
+function SalaryPerson({ r }: { r: SalaryRow }) {
+  const on = useTransitionWith(structurePath(r));
+  return (
+    <PrimaryCell
+      leading={<Avatar name={personName(r)} size={28} />}
+      title={personName(r)}
+      titleStyle={sharedPart("person", r.id, "title", on)}
+      subtitle={r.username}
+    />
+  );
+}
 
 export function SalaryManagementPage() {
   const navigate = useTransitionNavigate();
@@ -58,13 +81,7 @@ export function SalaryManagementPage() {
       key: "who",
       header: "Employee",
       priority: "primary",
-      render: (r) => (
-        <PrimaryCell
-          leading={<Avatar name={personName(r)} size={28} />}
-          title={personName(r)}
-          subtitle={r.username}
-        />
-      ),
+      render: (r) => <SalaryPerson r={r} />,
     },
     {
       key: "dept",
@@ -98,7 +115,16 @@ export function SalaryManagementPage() {
         rows={list.data}
         rowId={(r) => String(r.id ?? r.username)}
         loading={list.loading}
-        onRowClick={(r) => navigate(`/payroll/salary-management/${r.id}`)}
+        onRowClick={(r) => {
+          handOff("person", r.id, {
+            first_name: r.first_name,
+            last_name: r.last_name,
+            fullName: r.fullName,
+            name: r.name,
+            username: r.username,
+          });
+          navigate(structurePath(r));
+        }}
         stickyOffset={52}
         empty={{ icon: "people", title: "No employees match" }}
         footer={<Pagination {...list.pageProps} />}
@@ -145,6 +171,8 @@ export function SalaryStructurePage() {
   const [loading, setLoading] = useState(true);
 
   const u = person.data && !person.data.message ? person.data : null;
+  // Opened from the list: the name, so it can carry over into the title.
+  const preview = useHandoff<PersonNameFields>("person", userId);
   const baseGross = parseFloat(u?.salary) || 0;
   const workState = u?.workState ?? null;
   const merged = useMemo(() => getMergedComponents(defs), [defs]);
@@ -352,7 +380,10 @@ export function SalaryStructurePage() {
 
   return (
     <Page
-      title={u ? personName(u) : "Salary Structure"}
+      title={
+        u ? personName(u) : preview ? personName(preview) : "Salary Structure"
+      }
+      titleStyle={sharedPart("person", userId, "title", Boolean(u || preview))}
       subtitle="Salary structure"
       back={{ to: "/payroll/salary-management", label: "Salary Management" }}
       width="wide"

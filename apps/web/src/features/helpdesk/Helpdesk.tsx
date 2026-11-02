@@ -1,7 +1,12 @@
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
-import { useTransitionNavigate, useSharedElement, vtName } from "@next/motion";
+import {
+  handOff,
+  sharedPart,
+  useTransitionNavigate,
+  useTransitionWith,
+} from "@next/motion";
 import {
   Button,
   DataTable,
@@ -21,7 +26,7 @@ import {
   type Column,
 } from "@next/ui";
 import { DraftNote, sendOrQueue, useOfflineDraft } from "@next/offline";
-import { apiClient, errorMessage } from "@next/lib/api";
+import { errorMessage } from "@next/lib/api";
 import { searchParam, usePagedList } from "@next/lib/usePagedList";
 import { fromNow, personName } from "@next/lib/format";
 import {
@@ -32,14 +37,27 @@ import {
   statusTone,
 } from "./shared";
 
+// The opened ticket's title and status carry over into its header.
 function TicketTitle({ t }: { t: any }) {
-  const style = useSharedElement(vtName("ticket", t.id), `/helpdesk/${t.id}`);
+  const on = useTransitionWith(`/helpdesk/${t.id}`);
   return (
     <PrimaryCell
-      style={style}
       title={t.title}
+      titleStyle={sharedPart("ticket", t.id, "title", on)}
       subtitle={`#${t.ticketNo ?? t.id} · ${t.raisedByUser ? personName(t.raisedByUser) : "You"} · ${fromNow(t.createdAt)}`}
     />
+  );
+}
+
+function TicketStatus({ t }: { t: { id: string; status: string } }) {
+  const on = useTransitionWith(`/helpdesk/${t.id}`);
+  return (
+    <StatusBadge
+      tone={statusTone(t.status)}
+      style={sharedPart("ticket", t.id, "badge", on)}
+    >
+      {label(t.status)}
+    </StatusBadge>
   );
 }
 
@@ -91,9 +109,7 @@ export default function Helpdesk() {
       // second line under it rather than a badge competing beside it.
       render: (t) => (
         <span style={{ display: "grid", gap: 4, justifyItems: "start" }}>
-          <StatusBadge tone={statusTone(t.status)}>
-            {label(t.status)}
-          </StatusBadge>
+          <TicketStatus t={t} />
           {t.slaBreached && (
             <StatusBadge tone="danger" plain>
               SLA breached
@@ -145,7 +161,15 @@ export default function Helpdesk() {
         rows={list.data}
         rowId={(t) => String(t.id)}
         loading={list.loading}
-        onRowClick={(t) => navigate(`/helpdesk/${t.id}`)}
+        onRowClick={(t) => {
+          handOff("ticket", t.id, {
+            title: t.title,
+            status: t.status,
+            priority: t.priority,
+            ticketNo: t.ticketNo,
+          });
+          navigate(`/helpdesk/${t.id}`);
+        }}
         stickyOffset={52}
         empty={{
           icon: "lifebuoy",

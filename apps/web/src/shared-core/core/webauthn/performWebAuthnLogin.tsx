@@ -148,7 +148,9 @@ export async function performWebAuthnLogin(
             longitude: position.coords.longitude,
           };
         }
-      } catch (geoError) {}
+      } catch {
+        // Location is optional; sign in without it.
+      }
 
       const tempToken = verifyResponse.data.data?.tempToken;
 

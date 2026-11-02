@@ -27,6 +27,7 @@ import {
   plural,
 } from "@next/lib/format";
 import d from "./dashboard.module.css";
+import { useMarkWidgetSource } from "./widgetSource";
 
 // Presenters for the server-computed widgets. Each receives exactly what its
 // loader in api-gateway/src/handlers/dashboard.ts returns. Lists are short by
@@ -61,8 +62,9 @@ function RowIcon({ icon, tone = "accent" }: { icon: IconName; tone?: Tone }) {
 }
 
 function More({ to, children }: { to: string; children: ReactNode }) {
+  const markSource = useMarkWidgetSource();
   return (
-    <TransitionLink to={to} className={d.more}>
+    <TransitionLink to={to} className={d.more} onClick={markSource}>
       {children}
     </TransitionLink>
   );

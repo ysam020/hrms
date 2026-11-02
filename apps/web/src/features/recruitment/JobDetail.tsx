@@ -25,7 +25,7 @@ import {
   type PtSlab,
   type SalaryComponentDef,
 } from "@web/shared/utils/salaryCalc";
-import { Collapse, TransitionLink, sharedName, vtName } from "@next/motion";
+import { Collapse, TransitionLink, sharedPart, useHandoff } from "@next/motion";
 import {
   Tag,
   FormSection,
@@ -82,6 +82,32 @@ const fromStamp = (v?: string) =>
       )
     : dayjs(v);
 
+/** The job's title and status — shared elements with its list row. */
+function JobHeader({
+  id,
+  title,
+  status,
+}: {
+  id: string;
+  title: string;
+  status?: string;
+}) {
+  return (
+    <header style={{ display: "grid", gap: 6, paddingTop: 8 }}>
+      <h2 className="px-display" style={sharedPart("job", id, "title")}>
+        {title}
+      </h2>
+      <span>
+        <span
+          style={{ display: "inline-block", ...sharedPart("job", id, "badge") }}
+        >
+          <Status value={status} />
+        </span>
+      </span>
+    </header>
+  );
+}
+
 export default function JobDetail() {
   const { _id = "" } = useParams();
   const { user } = useContext(UserContext);
@@ -106,6 +132,9 @@ export default function JobDetail() {
   const selected =
     applicants.find((a) => String(a.id ?? a._id) === selectedId) ?? null;
   const j = job.data && !job.data.message ? job.data : null;
+  // Opened from the list: its title and status, shown while the job loads so
+  // they can morph straight into this header.
+  const preview = useHandoff<{ jobTitle: string; status: string }>("job", _id);
 
   const columns: Column<any>[] = [
     {
@@ -179,7 +208,9 @@ export default function JobDetail() {
         </Inspector>
       }
     >
-      {job.loading && !j ? (
+      {job.loading && !j && preview ? (
+        <JobHeader id={_id} title={preview.jobTitle} status={preview.status} />
+      ) : job.loading && !j ? (
         <Skeleton width={320} height={34} />
       ) : job.error ? (
         <ErrorState message={job.error} onRetry={job.refetch} />
@@ -187,14 +218,7 @@ export default function JobDetail() {
         <EmptyState icon="briefcase" title="This opening couldn’t be found" />
       ) : (
         <div style={{ display: "grid", gap: 40 }}>
-          <header style={{ display: "grid", gap: 6, paddingTop: 8 }}>
-            <h2 className="px-display" style={sharedName(vtName("job", _id))}>
-              {j.jobTitle}
-            </h2>
-            <span>
-              <Status value={j.status} />
-            </span>
-          </header>
+          <JobHeader id={_id} title={j.jobTitle} status={j.status} />
           <Metrics label="Hiring progress">
             <Metric
               label="Openings"

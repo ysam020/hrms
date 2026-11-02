@@ -107,7 +107,7 @@ export function JobApplicationPage() {
   const latest = useRef(answers);
   const dirty = useRef(false);
   const inFlight = useRef<Promise<void> | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const steps = useMemo(() => (job ? buildSteps(job) : []), [job]);

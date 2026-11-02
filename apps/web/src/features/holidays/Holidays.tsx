@@ -383,9 +383,8 @@ function AddHoliday({
       onAdded();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
   return (
     <Dialog

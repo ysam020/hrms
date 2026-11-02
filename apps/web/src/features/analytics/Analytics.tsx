@@ -15,7 +15,6 @@ import {
   OTHER,
   Page,
   SERIES,
-  Skeleton,
   type Column,
   ChartBodySkeleton,
   MetricsSkeleton,

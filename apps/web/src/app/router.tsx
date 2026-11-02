@@ -18,7 +18,6 @@ import {
   isOwnerOrAdmin,
 } from "@web/shared/utils/permissions/navAccess";
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
-import { AppShell } from "@next/shell/AppShell";
 import { RequireSession, SessionRoot } from "./session";
 import {
   canAccessWfh,
@@ -107,6 +106,7 @@ function LoginRoute({ children }: { children: ReactNode }) {
 }
 
 const F = {
+  shell: () => import("@next/shell/AppShell"),
   today: () => import("@next/features/dashboard/Today"),
   approvals: () => import("@next/features/approvals/Approvals"),
   calendar: () => import("@next/features/calendar/CalendarPage"),
@@ -402,6 +402,7 @@ export const router = createBrowserRouter(
           lazy: async () => {
             const { default: Login } =
               await import("@next/features/auth/Login");
+            (window.requestIdleCallback ?? setTimeout)(prefetchSignedInApp);
             return {
               Component: () => (
                 <LoginRoute>
@@ -448,17 +449,36 @@ export const router = createBrowserRouter(
             return { Component: Landing };
           },
         },
+        // The signed-in app. The shell is its own chunk, so the landing and
+        // sign-in pages don't download it; it loads alongside the page.
         {
-          element: (
-            <RequireSession>
-              <AppShell />
-            </RequireSession>
-          ),
+          lazy: async () => {
+            const { AppShell } = await F.shell();
+            return {
+              Component: () => (
+                <RequireSession>
+                  <AppShell />
+                </RequireSession>
+              ),
+            };
+          },
           errorElement: <RouteError />,
-          children: appRoutes,
+          // A page that fails (or whose code can't be downloaded) shows its
+          // error inside the shell, so the sidebar stays usable.
+          children: [{ errorElement: <RouteError />, children: appRoutes }],
         },
       ],
     },
   ],
   { future: { v7_relativeSplatPath: true } },
 );
+
+/**
+ * Fetch the code a sign-in leads to (the shell and Today) while the person
+ * is still typing, unless they've asked the browser to save data.
+ */
+function prefetchSignedInApp() {
+  if ((navigator as any).connection?.saveData) return;
+  void F.shell().catch(() => {});
+  void F.today().catch(() => {});
+}

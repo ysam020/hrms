@@ -1,5 +1,5 @@
 import r from "./review.module.css";
-import { useCallback, useContext, useState } from "react";
+import { useCallback, useContext, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
@@ -7,7 +7,7 @@ import { ApprovalsBadgeContext } from "@web/app/providers/ApprovalsBadgeContext"
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import hasPermission from "@web/shared/utils/permissions/hasPermission";
 import useSocketEvent from "@web/shared/hooks/useSocketEvent";
-import { Collapse, TransitionLink } from "@next/motion";
+import { Collapse, TransitionLink, sharedPart, useHandoff } from "@next/motion";
 import {
   FormSection,
   Avatar,
@@ -21,8 +21,6 @@ import {
   FileLink,
   KeyValues,
   Page,
-  Section,
-  Skeleton,
   Status,
   TextArea,
   TextInput,
@@ -34,7 +32,12 @@ import {
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
 import { useGet } from "@next/lib/hooks";
-import { fmtDate, personName, readableCase } from "@next/lib/format";
+import {
+  fmtDate,
+  personName,
+  readableCase,
+  type PersonNameFields,
+} from "@next/lib/format";
 import { ALL_KYC_FIELDS, KYC_GROUPS, KYC_LABEL, UNEDITABLE } from "./fields";
 
 // One person's KYC (Classic's ViewIndividualKyc): GET /get-user-data/:username,
@@ -54,6 +57,41 @@ const GROUP_ICON: Record<string, { icon: IconName; tone: Tone }> = {
 };
 const isEmpty = (v: unknown) =>
   v == null || (Array.isArray(v) ? v.length === 0 : String(v).trim() === "");
+
+/** Avatar, name and status line; avatar and name are shared with the list. */
+function KycHero({
+  username,
+  person,
+  children,
+  meter,
+}: {
+  username: string;
+  person: PersonNameFields;
+  children: ReactNode;
+  meter?: ReactNode;
+}) {
+  return (
+    <div className={r.hero}>
+      <Avatar
+        name={personName(person)}
+        size={56}
+        style={sharedPart("person", username, "avatar")}
+      />
+      <div className={r.heroText}>
+        <span
+          className="px-title"
+          style={sharedPart("person", username, "title")}
+        >
+          {readableCase(personName(person))}
+        </span>
+        <span className="px-row" style={{ gap: 8 }}>
+          {children}
+        </span>
+        {meter}
+      </div>
+    </div>
+  );
+}
 
 export default function KycReview() {
   const { username = "" } = useParams();
@@ -89,6 +127,12 @@ export default function KycReview() {
   useSocketEvent("kyc-edit-resolved", onSocket);
 
   const k = data && !data.message ? data : null;
+  // Opened from a list or an approval: the person's name (and status), shown
+  // while the record loads so the avatar and name can carry over.
+  const preview = useHandoff<PersonNameFields & { kyc_approval?: string }>(
+    "person",
+    username,
+  );
   const required = ALL_KYC_FIELDS.filter((f) => !f.optional);
   const filled = k ? required.filter((f) => !isEmpty(k[f.key])).length : 0;
   const status: string | undefined = k?.kyc_approval;
@@ -143,7 +187,7 @@ export default function KycReview() {
 
   return (
     <Page
-      title={k ? personName(k) : "KYC"}
+      title={k ? personName(k) : preview ? personName(preview) : "KYC"}
       subtitle="KYC details"
       back={{ to: "/kyc/view-employee-kycs", label: "Employee KYC" }}
       width="wide"
@@ -189,7 +233,14 @@ export default function KycReview() {
         )
       }
     >
-      {loading && !k ? (
+      {loading && !k && preview ? (
+        <div style={{ display: "grid", gap: 32 }}>
+          <KycHero username={username} person={preview}>
+            {preview.kyc_approval && <Status value={preview.kyc_approval} />}
+          </KycHero>
+          <KeyValuesSkeleton rows={10} />
+        </div>
+      ) : loading && !k ? (
         <div style={{ display: "grid", gap: 32 }}>
           <HeaderSkeleton />
           <KeyValuesSkeleton rows={10} />
@@ -198,16 +249,10 @@ export default function KycReview() {
         <EmptyState icon="idcard" title="No KYC record found" />
       ) : (
         <div style={{ display: "grid", gap: 32 }}>
-          <div className={r.hero}>
-            <Avatar name={personName(k)} size={56} />
-            <div className={r.heroText}>
-              <span className="px-title">{readableCase(personName(k))}</span>
-              <span className="px-row" style={{ gap: 8 }}>
-                <Status value={status || "Not Submitted"} />
-                <span className="px-meta">
-                  {filled} of {required.length} required details provided
-                </span>
-              </span>
+          <KycHero
+            username={username}
+            person={k}
+            meter={
               <span className={r.meter} aria-hidden>
                 <span
                   style={{
@@ -215,8 +260,13 @@ export default function KycReview() {
                   }}
                 />
               </span>
-            </div>
-          </div>
+            }
+          >
+            <Status value={status || "Not Submitted"} />
+            <span className="px-meta">
+              {filled} of {required.length} required details provided
+            </span>
+          </KycHero>
           {status === "Revision Requested" && Object.keys(notes).length > 0 && (
             <Banner tone="danger">
               Revision requested:{" "}

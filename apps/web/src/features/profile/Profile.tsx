@@ -6,7 +6,7 @@ import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { generateDeviceFingerprint } from "@web/shared/utils/pushNotifications/deviceFingerprint";
 import { generateToken } from "@web/shared/utils/pushNotifications/generateFcmToken";
 import { upsertFcmTokenInUser } from "@web/shared/utils/pushNotifications/upsertFcmTokenInUser";
-import { sharedName, Swap, vtName } from "@next/motion";
+import { Swap } from "@next/motion";
 import {
   Button,
   ConfirmDialog,
@@ -75,10 +75,8 @@ export default function Profile() {
         />
       }
     >
-      <EmployeeIdentity
-        person={user}
-        style={sharedName(vtName("employee", user?.username ?? "me"))}
-      />
+      {/* Named, so it stays still while the sections below cross-fade. */}
+      <EmployeeIdentity person={user} sharedKey={user?.username ?? "me"} />
       <Swap
         id={section}
         elementProps={{

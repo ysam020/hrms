@@ -370,23 +370,30 @@ export default function Chat() {
   }, [thread, typing.length, activeRoomId, user?.id]);
 
   // People search for a new conversation (Classic's /get-all-users query).
+  // A newer query aborts the older request, so its late answer can't
+  // replace the current results.
   useEffect(() => {
     if (!query.trim()) return setPeople([]);
+    const ctrl = new AbortController();
     const t = setTimeout(async () => {
       setSearching(true);
       try {
         const res = await apiClient.get(
           `/get-all-users?search=${encodeURIComponent(query)}&limit=10`,
+          { signal: ctrl.signal },
         );
         const list = res.data.data?.users || res.data.data || [];
         setPeople(list.filter((u: any) => u.id !== user?.id));
       } catch {
-        setPeople([]);
+        if (!ctrl.signal.aborted) setPeople([]);
       } finally {
-        setSearching(false);
+        if (!ctrl.signal.aborted) setSearching(false);
       }
     }, 300);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
   }, [query, user?.id]);
 
   const openRoom = useCallback(

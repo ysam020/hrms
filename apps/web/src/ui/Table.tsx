@@ -1,4 +1,10 @@
-import { type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import {
+  memo,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { Presence } from "@next/motion";
 import { Checkbox, IconButton } from "./controls";
 import { EmptyState, ErrorState, Skeleton } from "./display";
@@ -102,14 +108,6 @@ export function DataTable<T>({
     return tour ? <div data-tour={tour}>{state}</div> : state;
   }
 
-  const onKey = (e: KeyboardEvent<HTMLTableRowElement>, row: T) => {
-    if (e.target !== e.currentTarget) return;
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onRowClick?.(row);
-    }
-  };
-
   return (
     <div
       className={s.wrap}
@@ -164,42 +162,17 @@ export function DataTable<T>({
               ))
             : rows.map((row) => {
                 const id = rowId(row);
-                const interactive = Boolean(onRowClick);
                 return (
-                  <tr
+                  <DataRow
                     key={id}
-                    className={s.row}
-                    data-interactive={interactive || undefined}
-                    aria-selected={selectedId ? selectedId === id : undefined}
-                    tabIndex={interactive ? 0 : undefined}
-                    onClick={interactive ? () => onRowClick!(row) : undefined}
-                    onKeyDown={interactive ? (e) => onKey(e, row) : undefined}
-                  >
-                    {selectable && (
-                      <td
-                        className={s.check}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Checkbox
-                          aria-label="Select row"
-                          checked={selected!.has(id)}
-                          onChange={() => toggle(id)}
-                        />
-                      </td>
-                    )}
-                    {columns.map((c, j) => (
-                      <td
-                        key={c.key}
-                        className={c.align === "right" ? s.right : undefined}
-                        data-priority={
-                          c.priority ?? (j === 0 ? "primary" : "secondary")
-                        }
-                        data-label={c.stackLabel}
-                      >
-                        {c.render(row)}
-                      </td>
-                    ))}
-                  </tr>
+                    row={row}
+                    id={id}
+                    columns={columns}
+                    onRowClick={onRowClick}
+                    current={selectedId ? selectedId === id : undefined}
+                    checked={selectable ? selected!.has(id) : undefined}
+                    onToggle={toggle}
+                  />
                 );
               })}
         </tbody>
@@ -223,17 +196,84 @@ export function DataTable<T>({
   );
 }
 
+interface DataRowProps<T> {
+  row: T;
+  id: string;
+  columns: Column<T>[];
+  onRowClick?: (row: T) => void;
+  /** aria-selected: the row open in the inspector (undefined: none open). */
+  current?: boolean;
+  /** Bulk-selection state (undefined: the table isn't selectable). */
+  checked?: boolean;
+  onToggle: (id: string) => void;
+}
+
+// Memoised: rows whose data, columns and state are unchanged skip rendering
+// when the table re-renders (client-side filtering, a sibling's state), so a
+// keystroke in a 200-row list renders only the rows that changed.
+const DataRow = memo(function DataRow<T>({
+  row,
+  id,
+  columns,
+  onRowClick,
+  current,
+  checked,
+  onToggle,
+}: DataRowProps<T>) {
+  const interactive = Boolean(onRowClick);
+  const onKey = (e: KeyboardEvent<HTMLTableRowElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onRowClick?.(row);
+    }
+  };
+  return (
+    <tr
+      className={s.row}
+      data-interactive={interactive || undefined}
+      aria-selected={current}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={interactive ? () => onRowClick!(row) : undefined}
+      onKeyDown={interactive ? onKey : undefined}
+    >
+      {checked !== undefined && (
+        <td className={s.check} onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            aria-label="Select row"
+            checked={checked}
+            onChange={() => onToggle(id)}
+          />
+        </td>
+      )}
+      {columns.map((c, j) => (
+        <td
+          key={c.key}
+          className={c.align === "right" ? s.right : undefined}
+          data-priority={c.priority ?? (j === 0 ? "primary" : "secondary")}
+          data-label={c.stackLabel}
+        >
+          {c.render(row)}
+        </td>
+      ))}
+    </tr>
+  );
+}) as <T>(props: DataRowProps<T>) => ReactElement;
+
 /** Identity cell: avatar/leading visual + title + subtitle. */
 export function PrimaryCell({
   leading,
   title,
   subtitle,
   style,
+  titleStyle,
 }: {
   leading?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   style?: CSSProperties;
+  /** Style for the title line — a shared-element name (motion/sharedPart). */
+  titleStyle?: CSSProperties;
 }) {
   return (
     <div
@@ -243,7 +283,7 @@ export function PrimaryCell({
     >
       {leading}
       <div className={s.primaryText}>
-        <span>{title}</span>
+        <span style={titleStyle}>{title}</span>
         {subtitle && <span>{subtitle}</span>}
       </div>
     </div>

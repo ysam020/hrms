@@ -1,6 +1,8 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -17,6 +19,33 @@ export function useMediaQuery(query: string) {
     () => window.matchMedia(query).matches,
     () => false,
   );
+}
+
+/**
+ * `fn`, run once `delay` ms after the last call: each call restarts the wait,
+ * and a pending run is dropped on unmount (or with `.cancel()`). The latest
+ * `fn` is the one that runs. For search boxes, autosave and remote checks;
+ * never for actions (approve, punch, pay) that must happen once per press.
+ */
+export function useDebouncedCallback<A extends unknown[]>(
+  fn: (...args: A) => void,
+  delay = 300,
+) {
+  const latest = useRef(fn);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useLayoutEffect(() => {
+    latest.current = fn;
+  });
+  useEffect(() => () => clearTimeout(timer.current), []);
+  // Stable for the component's life, so it can sit in effect dependencies.
+  return useMemo(() => {
+    const run = (...args: A) => {
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => latest.current(...args), delay);
+    };
+    run.cancel = () => clearTimeout(timer.current);
+    return run;
+  }, [delay]);
 }
 
 /** Size classes, decided by available width (not device). */

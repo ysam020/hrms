@@ -545,9 +545,8 @@ function RequestAdvance({
       onDone();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
   const emi =
     Number(v.amount) > 0 && Number(v.emiMonths) > 0
@@ -1052,9 +1051,8 @@ function InitiateRun({
       onDone();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
   return (
     <Dialog

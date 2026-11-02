@@ -76,12 +76,15 @@ self.addEventListener("message", (event) => {
 });
 
 // ── 2. In-app navigations get the shell ─────────────────────────────────────
-const shell = createHandlerBoundToURL("/index.html");
+// index.html carries the prerendered landing page and preloads its code and
+// styles; every other route gets app.html, the same page without them.
+const landing = createHandlerBoundToURL("/index.html");
+const shell = createHandlerBoundToURL("/app.html");
 registerRoute(
   new NavigationRoute(
     async (options) => {
       try {
-        return await shell(options);
+        return await (options.url.pathname === "/" ? landing : shell)(options);
       } catch {
         return (await matchPrecache("/offline.html")) ?? Response.error();
       }

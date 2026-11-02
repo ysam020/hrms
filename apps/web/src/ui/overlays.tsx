@@ -16,6 +16,7 @@ import {
   useDismissStack,
   useFocusTrap,
   useScrollLock,
+  sameStyle,
 } from "./layers";
 import { Button, IconButton, type ButtonVariant } from "./controls";
 import { Icon, type IconName } from "./Icon";
@@ -318,7 +319,8 @@ function usePosition(
       if (placement.endsWith("end")) style.right = Math.max(8, vw - a.right);
       else style.left = Math.min(Math.max(8, a.left), vw - 208);
       style.transformOrigin = `${placement.endsWith("end") ? "right" : "left"} ${wantTop ? "bottom" : "top"}`;
-      setPos(style);
+      // Scrolling anywhere re-measures; only a move re-renders the popover.
+      setPos((prev) => (sameStyle(prev, style) ? prev : style));
     };
     update();
     window.addEventListener("resize", update);
@@ -330,6 +332,9 @@ function usePosition(
   }, [open, anchor, placement]);
   return pos;
 }
+
+const holdsFocus = (el: RefObject<HTMLElement | null>) =>
+  Boolean(el.current?.contains(document.activeElement));
 
 export function Popover({
   open,
@@ -388,7 +393,9 @@ export function Popover({
       if (
         anchor &&
         document.contains(anchor) &&
-        ref.current?.contains(document.activeElement)
+        // Deliberately the node at close time: focus goes back to the anchor
+        // only if it is still inside the popover when it closes.
+        holdsFocus(ref)
       ) {
         anchor.focus({ preventScroll: true });
       }

@@ -19,7 +19,6 @@ import {
   Section,
   Select,
   Sheet,
-  Skeleton,
   Tag,
   TextArea,
   TextInput,

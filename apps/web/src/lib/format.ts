@@ -33,6 +33,17 @@ export const fmtNumber = (n?: number | null) =>
 export const plural = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n === 1 ? one : many}`;
 
+/** The name fields people records carry (any subset). */
+export interface PersonNameFields {
+  fullName?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+}
+
 export const personName = (u: any): string =>
   u?.fullName ||
   u?.name ||

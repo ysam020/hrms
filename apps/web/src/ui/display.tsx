@@ -87,15 +87,18 @@ export function StatusBadge({
   tone,
   children,
   plain,
+  style,
 }: {
   tone: Tone;
   children: ReactNode;
   plain?: boolean;
+  /** Extra style — e.g. a shared-element name (motion/sharedPart). */
+  style?: CSSProperties;
 }) {
   return (
     <span
       className={s.badge}
-      style={toneVars(tone)}
+      style={{ ...toneVars(tone), ...style }}
       data-plain={plain || undefined}
     >
       {children}

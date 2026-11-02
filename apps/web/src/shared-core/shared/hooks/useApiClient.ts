@@ -73,6 +73,6 @@ export function useApiClient() {
           ...config,
         }),
     }),
-    [], // eslint-disable-line react-hooks/exhaustive-deps
+    [],
   );
 }

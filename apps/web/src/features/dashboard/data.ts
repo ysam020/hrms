@@ -116,7 +116,7 @@ export function useDashboardConfig() {
   const [savedVersion, setSavedVersion] = useState(0);
   const connectivity = useConnectivity();
   const pending = useRef<LayoutEntry[] | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const load = useCallback(async () => {
     setError(null);

@@ -3,8 +3,10 @@
 //
 // Precached: the app shell and every hashed JS/CSS chunk, the offline page,
 // and the small static files the shell needs. Not precached: the landing
-// page's product screenshots (large; cached on first view instead), source
-// maps, and the worker itself.
+// page's product screenshots (large; cached on first view instead), the
+// face-matching library (650 KB; only for face check-in, which loads its
+// models from a CDN and so needs the network anyway), source maps, and the
+// worker itself.
 import { injectManifest } from "workbox-build";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -21,6 +23,7 @@ const { count, size, warnings } = await injectManifest({
   globDirectory: dist,
   globPatterns: [
     "index.html",
+    "app.html",
     "offline.html",
     "assets/**/*.{js,css,woff2,woff,svg,png,wasm}",
     "*.{js,ico,png,json,wasm}",
@@ -29,6 +32,7 @@ const { count, size, warnings } = await injectManifest({
     "firebase-messaging-sw.js",
     "**/*.map",
     "images/product-showcase/**",
+    "assets/vendor-faceapi-*.js", // see vite.config.ts
     "og-image.png", // for link previews, never shown in the app
   ],
   // Hashed filenames are their own version; don't add a revision query.

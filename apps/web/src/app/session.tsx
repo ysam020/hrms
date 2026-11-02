@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -22,7 +23,7 @@ import useLogout from "@web/shared/hooks/useLogout";
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 import { clearFaviconDot } from "@web/shared/utils/faviconUtils";
 import { clearStorageOnSignOut } from "@web/shared/utils/signOutStorage";
-import { MotionProvider } from "@next/motion";
+import { MotionProvider, clearHandoffs } from "@next/motion";
 import { OfflineProvider, useOfflineSummary } from "@next/offline";
 import {
   forgetSession,
@@ -65,8 +66,6 @@ export function SessionRoot() {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<any>(null);
-  const userRef = useRef(user);
-  userRef.current = user;
   const [booting, setBooting] = useState(true);
   const [setupPending, setSetupPending] = useState(false);
   // Step 2 (organisation profile) when the organisation exists but isn't finished.
@@ -84,32 +83,47 @@ export function SessionRoot() {
   // Otherwise the guard below would keep sending /login back to /org-setup
   // for someone who signed out mid-setup (no profile is loaded during setup,
   // so `user` was already null and nothing else reset the flag).
+  const [endedByUser, setEndedByUser] = useState(false);
   const setSessionUser = useCallback((next: any) => {
     if (!next) {
       setSetupPending(false);
       setupStart.current = 0;
-    }
+    } else setEndedByUser(false);
     setUser(next);
   }, []);
+  // A deliberate sign-out: the next sign-in must not resume this page.
+  const endSessionByUser = useCallback(
+    (next: any) => {
+      if (!next) setEndedByUser(true);
+      setSessionUser(next);
+    },
+    [setSessionUser],
+  );
 
   const { handleLogout, confirmOpen, cancelLogout, confirmLogout, loggingOut } =
-    useLogout(setSessionUser);
+    useLogout(endSessionByUser);
+
+  // React 19.2 useEffectEvent: the transport's 402 handler is registered
+  // once, yet always sees the current person (who may renew the plan).
+  // Replaces a ref written during render.
+  const onPaymentRequired = useEffectEvent(() => {
+    if (hasSubscriptionAccess(user)) navigate("/subscription");
+    else setSubscriptionBlocked(true);
+  });
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
       clearStorageOnSignOut();
       setSessionUser(null);
     });
-    setPaymentRequiredHandler(() => {
-      if (hasSubscriptionAccess(userRef.current)) navigate("/subscription");
-      else setSubscriptionBlocked(true);
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setPaymentRequiredHandler(() => onPaymentRequired());
+  }, [setSessionUser]);
 
   useEffect(() => {
     if (user) setSetupPending(false);
     if (!user) {
       clearFaviconDot();
+      clearHandoffs();
       setSubscriptionBlocked(false);
     }
   }, [user]);
@@ -194,7 +208,8 @@ export function SessionRoot() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // `navigate` is stable in the data router, so this still runs once.
+  }, [navigate]);
 
   // Revalidate when restored from the back-forward cache.
   useEffect(() => {
@@ -213,7 +228,7 @@ export function SessionRoot() {
     };
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
+  }, [setSessionUser]);
 
   // Offline mode: once the server is reachable, check the real session.
   // Accepted → the full profile replaces the remembered one; refused → out.
@@ -240,7 +255,7 @@ export function SessionRoot() {
       window.removeEventListener("online", verify);
       clearInterval(t);
     };
-  }, [user?.offline]);
+  }, [user?.offline, setSessionUser]);
 
   // A session that ended (sign-out, or refused) takes its remembered
   // offline profile with it.
@@ -266,8 +281,8 @@ export function SessionRoot() {
     !new URLSearchParams(initialSearch.current).has("oauth_success");
 
   const userValue = useMemo(
-    () => ({ user, setUser: setSessionUser, handleLogout }),
-    [user, setSessionUser, handleLogout],
+    () => ({ user, setUser: setSessionUser, handleLogout, endedByUser }),
+    [user, setSessionUser, handleLogout, endedByUser],
   );
   const alertValue = useMemo(() => ({ alert, setAlert }), [alert]);
 
@@ -341,16 +356,23 @@ const isPublicPath = (p: string) =>
 const isMarketingPath = (p: string) =>
   Boolean(PUBLIC_PAGES[normalizePath(p)]?.prerender);
 
-/** Protected area: signed-in users only, otherwise to /login with a return path. */
+/**
+ * Protected area: signed-in users only, otherwise to /login — with a return
+ * path, unless the person just signed out themselves.
+ */
 export function RequireSession({ children }: { children: ReactNode }) {
   const location = useLocation();
   return (
     <UserContext.Consumer>
-      {({ user }) =>
+      {({ user, endedByUser }) =>
         user ? (
           <>{children}</>
         ) : (
-          <Navigate to="/login" replace state={{ from: location }} />
+          <Navigate
+            to="/login"
+            replace
+            state={endedByUser ? undefined : { from: location }}
+          />
         )
       }
     </UserContext.Consumer>

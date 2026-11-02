@@ -57,7 +57,7 @@ const useIsoLayoutEffect =
  * scrolled to — stays put rather than vanishing and fading back in. With
  * Reduce Motion nothing is ever hidden.
  */
-export function useEntrance(ref: RefObject<Element>) {
+export function useEntrance(ref: RefObject<Element | null>) {
   const reduce = useReducedMotion();
   const [armed, setArmed] = useState(false);
   const inView = useInView(ref, { once: true, margin: VIEW_MARGIN });
@@ -65,7 +65,6 @@ export function useEntrance(ref: RefObject<Element>) {
     const el = ref.current;
     if (reduce || !el) return;
     if (el.getBoundingClientRect().top > window.innerHeight) setArmed(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return armed && !inView ? "hidden" : "shown";
 }
@@ -215,7 +214,7 @@ const finePointer = () =>
  * pointer drives it (touch has no hover to follow) and Reduce Motion keeps it
  * at rest. Values are motion values, so moving the pointer never re-renders.
  */
-export function usePointerDepth(ref: RefObject<HTMLElement>): {
+export function usePointerDepth(ref: RefObject<HTMLElement | null>): {
   x: MotionValue<number>;
   y: MotionValue<number>;
 } {
@@ -250,7 +249,7 @@ export function usePointerDepth(ref: RefObject<HTMLElement>): {
  * Marks `ref` with data-idle while it's off screen, so its CSS ambient loops
  * (`[data-idle] … { animation-play-state: paused }`) cost nothing out of view.
  */
-export function useAmbient(ref: RefObject<HTMLElement>) {
+export function useAmbient(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
@@ -267,7 +266,7 @@ export function useAmbient(ref: RefObject<HTMLElement>) {
  * px, lerped at 0.12 per frame). Fine pointers only; the loop stops once it
  * has caught up, so an idle pointer costs nothing.
  */
-export function useSpotlight(ref: RefObject<HTMLElement>) {
+export function useSpotlight(ref: RefObject<HTMLElement | null>) {
   const reduce = useReducedMotion();
   useEffect(() => {
     const el = ref.current;

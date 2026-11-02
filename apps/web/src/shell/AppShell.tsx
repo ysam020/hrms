@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigation } from "react-router-dom";
 import { SocketProvider } from "@web/app/providers/SocketContext";
 import { ChatUnreadProvider } from "@web/app/providers/ChatUnreadContext";
 import {
@@ -53,17 +53,31 @@ function NotificationsBridge({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Storage access lives outside the component: React Compiler can't yet
+// compile a component whose body has a try/catch around a conditional.
+function readSidebarHidden() {
+  try {
+    return localStorage.getItem(HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveSidebarHidden(hidden: boolean) {
+  try {
+    localStorage.setItem(HIDDEN_KEY, hidden ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
 function ShellLayout() {
   const docked = useIsRegular();
   const compact = useIsCompact();
   const { pathname } = useLocation();
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(HIDDEN_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  // The next page's code is still downloading (the current page stays up).
+  const pageLoading = useNavigation().state === "loading";
+  const [hidden, setHidden] = useState(readSidebarHidden);
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -71,11 +85,7 @@ function ShellLayout() {
 
   const toggleSidebar = () =>
     setHidden((h) => {
-      try {
-        localStorage.setItem(HIDDEN_KEY, h ? "0" : "1");
-      } catch {
-        /* ignore */
-      }
+      saveSidebarHidden(!h);
       return !h;
     });
 
@@ -156,7 +166,7 @@ function ShellLayout() {
               }}
               transition={{ duration: duration.base, ease: ease.standard }}
               aria-label="Sidebar"
-              {...(sidebarHidden ? ({ inert: "" } as object) : {})}
+              inert={sidebarHidden || undefined}
             >
               <Sidebar
                 onSearch={() => setSearchOpen(true)}
@@ -168,7 +178,16 @@ function ShellLayout() {
             id="px-main"
             className={s.content}
             data-sidebar-hidden={sidebarHidden || undefined}
+            aria-busy={pageLoading || undefined}
           >
+            {pageLoading && (
+              <div
+                className={s.pending}
+                role="progressbar"
+                aria-label="Loading page"
+                data-route-pending=""
+              />
+            )}
             <Outlet />
           </main>
         </div>

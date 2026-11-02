@@ -1,6 +1,6 @@
 # Praesto web app
 
-The Praesto frontend (React 18, Vite, React Router data router). It talks to the API gateway and works offline for supported workflows; see [docs/offline-first.md](../../docs/offline-first.md).
+The Praesto frontend (React 19.3, Vite, React Router data router). It talks to the API gateway and works offline for supported workflows; see [docs/offline-first.md](../../docs/offline-first.md).
 
 ## Run
 

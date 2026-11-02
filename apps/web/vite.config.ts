@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv } from "vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
 import fs from "fs";
+import { createRequire } from "module";
 import path from "path";
 
 // Shared business modules (HTTP client, session providers, permissions,
@@ -8,6 +10,35 @@ import path from "path";
 // They came from the former Classic app and keep its import paths.
 const sharedCore = path.resolve(__dirname, "src/shared-core");
 const certDir = path.resolve(__dirname, "../../packages/certificates");
+
+// react-router-dom 6.30.3 pins @remix-run/router 1.23.2, but the workspace's
+// security override lifts react-router to 6.30.4, which brings 1.23.3. Left
+// alone the bundle carries both, and createBrowserRouter runs on the older
+// one. Point every import at react-router's copy: one router, the patched one.
+const requireFrom = (file: string) => createRequire(file).resolve;
+const remixRouter = path.dirname(
+  requireFrom(
+    requireFrom(
+      requireFrom(path.join(__dirname, "package.json"))(
+        "react-router-dom/package.json",
+      ),
+    )("react-router/package.json"),
+  )("@remix-run/router/package.json"),
+);
+
+// React Compiler memoizes components and hooks at build time. A component it
+// can't prove safe is left as written (it never fails the build); the
+// react-hooks lint rules report why. The landing page is left out: it's
+// prerendered, animates outside React, and every visitor downloads it first,
+// so compiling it only adds bytes.
+export function reactCompiler() {
+  const preset = reactCompilerPreset();
+  preset.rolldown.filter = {
+    ...preset.rolldown.filter,
+    id: { exclude: [/\/src\/features\/landing\//] },
+  };
+  return preset;
+}
 
 export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -21,7 +52,7 @@ export default defineConfig(({ mode, isSsrBuild }) => {
     fs.existsSync(path.join(certDir, "cert.pem"));
 
   return {
-    plugins: [react()],
+    plugins: [react(), babel({ presets: [reactCompiler()] })],
     define: {
       "import.meta.env.VITE_API_STRING": JSON.stringify(apiString),
     },
@@ -30,6 +61,7 @@ export default defineConfig(({ mode, isSsrBuild }) => {
         "@web": sharedCore,
         "@next": path.resolve(__dirname, "src"),
         moment: "dayjs",
+        "@remix-run/router": remixRouter,
       },
       // One React, router and motion instance across the app and its deps.
       dedupe: [
@@ -72,18 +104,33 @@ export default defineConfig(({ mode, isSsrBuild }) => {
       : {
           outDir: "dist",
           manifest: true,
-          rollupOptions: {
+          rolldownOptions: {
             output: {
-              manualChunks(id) {
-                if (
-                  id.includes("/react-dom/") ||
-                  id.includes("/react-router") ||
-                  id.includes("/react/") ||
-                  id.includes("/scheduler/")
-                )
-                  return "vendor-react";
-                if (id.includes("framer-motion") || id.includes("motion-dom"))
-                  return "vendor-motion";
+              // Long-lived vendor chunks, matched by exact package so that
+              // e.g. @floating-ui/react-dom (react-joyride's, lazy) stays out.
+              // A group also takes its modules' dependencies, so React gets
+              // the higher priority: otherwise framer-motion's group claims
+              // it and vendor-react ends up importing vendor-motion.
+              codeSplitting: {
+                groups: [
+                  {
+                    name: "vendor-react",
+                    test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run[\\/]router)[\\/]/,
+                    priority: 20,
+                  },
+                  {
+                    name: "vendor-motion",
+                    test: /[\\/]node_modules[\\/](framer-motion|motion-dom|motion-utils)[\\/]/,
+                    priority: 10,
+                  },
+                  // Face matching only (loaded on demand); named so the
+                  // service worker can leave it out of the precache.
+                  {
+                    name: "vendor-faceapi",
+                    test: /[\\/]node_modules[\\/](face-api\.js|@tensorflow[\\/]tfjs-core)[\\/]/,
+                    priority: 10,
+                  },
+                ],
               },
             },
           },

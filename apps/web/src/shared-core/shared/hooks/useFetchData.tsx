@@ -142,6 +142,8 @@ function useFetchData<T = any>(
     return () => {
       if (cleanup) cleanup();
     };
+    // `deps` is this hook's API: callers list what should trigger a refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, refetchCount, fetchData]);
 
   const refetch = useCallback(() => {

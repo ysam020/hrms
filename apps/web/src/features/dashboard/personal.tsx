@@ -7,7 +7,6 @@ import {
   type CSSProperties,
 } from "react";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
-import { useAttendanceData } from "@web/shared/hooks/useAttendanceData";
 import { TransitionLink } from "@next/motion";
 import {
   Button,
@@ -52,14 +51,15 @@ export function usePersonalData(user: { id?: string } | null, parts: Part[]) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState<Set<keyof PersonalData>>(new Set());
   const key = [...parts].sort().join(",");
+  const userId = user?.id;
 
   const load = useCallback(() => {
-    if (!user?.id) return;
+    if (!userId) return;
     const ctrl = new AbortController();
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth() + 1;
-    const want = new Set(parts);
+    const want = new Set(key.split(",") as Part[]);
     const jobs: [keyof PersonalData, string, (d: any) => any][] = [];
     if (want.has("day")) {
       jobs.push([
@@ -69,7 +69,7 @@ export function usePersonalData(user: { id?: string } | null, parts: Part[]) {
       ]);
       jobs.push([
         "summary",
-        API_ENDPOINTS.GET_ATTENDANCE_SUMMARY(user.id, y, m),
+        API_ENDPOINTS.GET_ATTENDANCE_SUMMARY(userId, y, m),
         (d) => d.data,
       ]);
     }
@@ -107,7 +107,7 @@ export function usePersonalData(user: { id?: string } | null, parts: Part[]) {
       setLoading(false);
     });
     return () => ctrl.abort();
-  }, [user?.id, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, key]);
 
   useEffect(() => load(), [load]);
 
@@ -218,6 +218,35 @@ type Kind =
   | "absent"
   | "future";
 
+function monthDays(records: any[], holidays: any[], todayKey: string) {
+  const today = dayjs(todayKey);
+  const holidaySet = new Set(
+    (holidays || []).map((h: any) => dayjs(h.date).format("YYYY-MM-DD")),
+  );
+  return Array.from({ length: today.daysInMonth() }, (_, i) => {
+    const d = today.date(i + 1);
+    const key = d.format("YYYY-MM-DD");
+    const r = (records || []).find(
+      (x) => (x.date || "").startsWith(key) || dayjs(x.date).isSame(d, "day"),
+    );
+    const st = (r?.status || "").toLowerCase();
+    let kind: Kind;
+    if (d.isAfter(today, "day"))
+      kind = holidaySet.has(key) ? "holiday" : "future";
+    else if (st === "leave") kind = "leave";
+    else if (st === "holiday" || holidaySet.has(key)) kind = "holiday";
+    else if (st === "week-off") kind = "weekoff";
+    else if (
+      st === "half-day" ||
+      (recIn(r) && !recOut(r) && !d.isSame(today, "day"))
+    )
+      kind = "partial";
+    else if (recIn(r) || st === "present") kind = "present";
+    else kind = "absent";
+    return { d, kind, today: d.isSame(today, "day") };
+  });
+}
+
 function MonthRibbon({
   records,
   holidays,
@@ -227,33 +256,9 @@ function MonthRibbon({
 }) {
   const today = dayjs();
   const n = today.daysInMonth();
-  const days = useMemo(() => {
-    const holidaySet = new Set(
-      (holidays || []).map((h: any) => dayjs(h.date).format("YYYY-MM-DD")),
-    );
-    return Array.from({ length: n }, (_, i) => {
-      const d = today.date(i + 1);
-      const key = d.format("YYYY-MM-DD");
-      const r = (records || []).find(
-        (x) => (x.date || "").startsWith(key) || dayjs(x.date).isSame(d, "day"),
-      );
-      const st = (r?.status || "").toLowerCase();
-      let kind: Kind;
-      if (d.isAfter(today, "day"))
-        kind = holidaySet.has(key) ? "holiday" : "future";
-      else if (st === "leave") kind = "leave";
-      else if (st === "holiday" || holidaySet.has(key)) kind = "holiday";
-      else if (st === "week-off") kind = "weekoff";
-      else if (
-        st === "half-day" ||
-        (recIn(r) && !recOut(r) && !d.isSame(today, "day"))
-      )
-        kind = "partial";
-      else if (recIn(r) || st === "present") kind = "present";
-      else kind = "absent";
-      return { d, kind, today: d.isSame(today, "day") };
-    });
-  }, [records, holidays, n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keyed by the date, not the dayjs instance, so it's only rebuilt when the
+  // records, holidays or day change.
+  const days = monthDays(records, holidays, today.format("YYYY-MM-DD"));
 
   const label = (k: Kind) =>
     ({
@@ -299,15 +304,14 @@ function MonthRibbon({
   );
 }
 
+const leaveDays = (summary: any): number | undefined =>
+  (summary?.paidLeaves ?? 0) + (summary?.unpaidLeaves ?? 0) ||
+  summary?.paidLeaves;
+
 function Legend({ summary }: { summary: any }) {
   const items: [string, string, number | undefined][] = [
     ["Present", "var(--px-accent)", summary?.presents],
-    [
-      "Leave",
-      "var(--px-danger)",
-      (summary?.paidLeaves ?? 0) + (summary?.unpaidLeaves ?? 0) ||
-        summary?.paidLeaves,
-    ],
+    ["Leave", "var(--px-danger)", leaveDays(summary)],
     ["Holidays", "var(--px-warning)", summary?.holidays],
     ["Week Offs", "var(--px-neutral-soft)", summary?.weekOffs],
   ];

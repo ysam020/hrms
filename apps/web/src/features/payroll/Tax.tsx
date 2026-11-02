@@ -3,7 +3,13 @@ import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
-import { useTransitionNavigate } from "@next/motion";
+import {
+  handOff,
+  sharedPart,
+  useHandoff,
+  useTransitionNavigate,
+  useTransitionWith,
+} from "@next/motion";
 import {
   Tag,
   StatTiles,
@@ -38,7 +44,12 @@ import {
 } from "@next/ui";
 import { apiClient, errorMessage, unwrap } from "@next/lib/api";
 import { usePagedList } from "@next/lib/usePagedList";
-import { fmtDate, fmtMoney, personName } from "@next/lib/format";
+import {
+  fmtDate,
+  fmtMoney,
+  personName,
+  type PersonNameFields,
+} from "@next/lib/format";
 import s from "./salary.module.css";
 
 // Old-regime tax declarations (Classic: payroll/tax-declaration/*). Same
@@ -619,13 +630,7 @@ export function TaxDeclarationsPage() {
       key: "who",
       header: "Employee",
       priority: "primary",
-      render: (r) => (
-        <PrimaryCell
-          leading={<Avatar name={personName(r.employee)} size={28} />}
-          title={personName(r.employee)}
-          subtitle={r.employee?.username}
-        />
-      ),
+      render: (r) => <DeclarationPerson r={r} />,
     },
     {
       key: "updated",
@@ -672,16 +677,34 @@ export function TaxDeclarationsPage() {
         rows={list.data}
         rowId={(r) => String(r.userId ?? r.id)}
         loading={list.loading}
-        onRowClick={(r) =>
+        onRowClick={(r) => {
+          handOff("declaration", r.userId, { employee: r.employee });
           navigate(
             `/payroll/tax-declarations/${r.userId}?financialYear=${r.financialYear ?? fy}`,
-          )
-        }
+          );
+        }}
         stickyOffset={52}
         empty={{ icon: "doc", title: "No declarations here" }}
         footer={<Pagination {...list.pageProps} />}
       />
     </Page>
+  );
+}
+
+// The opened person's name carries over into the review page's title.
+function DeclarationPerson({
+  r,
+}: {
+  r: { userId: string; employee?: PersonNameFields };
+}) {
+  const on = useTransitionWith(`/payroll/tax-declarations/${r.userId}`);
+  return (
+    <PrimaryCell
+      leading={<Avatar name={personName(r.employee)} size={28} />}
+      title={personName(r.employee)}
+      titleStyle={sharedPart("declaration", r.userId, "title", on)}
+      subtitle={r.employee?.username}
+    />
   );
 }
 
@@ -694,6 +717,12 @@ export function TaxReviewPage() {
   const { setAlert } = useContext(AlertContext);
   const [d, setD] = useState<Declaration | null>(null);
   const [loading, setLoading] = useState(true);
+  // Opened from the list: the person's name, so it carries into the title.
+  const preview = useHandoff<{ employee?: PersonNameFields }>(
+    "declaration",
+    userId,
+  );
+  const titlePerson = d?.employee ?? preview?.employee;
   const [revise, setRevise] = useState<
     null | "RevisionRequested" | "ProofRevisionRequested"
   >(null);
@@ -777,7 +806,13 @@ export function TaxReviewPage() {
   );
   return (
     <Page
-      title={d?.employee ? personName(d.employee) : "Tax Declaration"}
+      title={titlePerson ? personName(titlePerson) : "Tax Declaration"}
+      titleStyle={sharedPart(
+        "declaration",
+        userId,
+        "title",
+        Boolean(titlePerson),
+      )}
       subtitle={`FY ${fy}`}
       back={{ to: "/payroll/tax-declarations", label: "Tax Declarations" }}
       width="wide"

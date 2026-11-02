@@ -165,6 +165,8 @@ const isEmpty = (v: string | string[] | undefined) =>
 const masked = (v: string) =>
   v.length > 4 ? `•••• ${v.slice(-4)}` : v ? "••••" : "";
 
+const NO_REVISION_NOTES: Record<string, string> = {};
+
 export function CompleteKycPage() {
   const { user } = useContext(UserContext);
   return <KycFormPage username={user?.username} mode="complete" />;
@@ -245,7 +247,8 @@ function KycFormPage({
     values.permanent_address_pincode,
   ]);
 
-  const notes: Record<string, string> = record?.kyc_revision_notes ?? {};
+  const notes: Record<string, string> =
+    record?.kyc_revision_notes ?? NO_REVISION_NOTES;
   const status: string | undefined = record?.kyc_approval;
   const locked = mode === "edit" && UNEDITABLE.includes(status ?? "");
   const isSelf = user?.username === username;

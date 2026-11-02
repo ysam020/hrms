@@ -11,7 +11,6 @@ import {
   Field,
   Page,
   SegmentedControl,
-  Skeleton,
   TextArea,
   FormSkeleton,
 } from "@next/ui";

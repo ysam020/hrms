@@ -24,7 +24,6 @@ import {
   Field,
   Page,
   SegmentedControl,
-  Skeleton,
   TextArea,
   TextInput,
   type Column,
@@ -315,9 +314,8 @@ function SaveDialog({
       onClose();
     } catch (err) {
       setAlert({ open: true, message: errorMessage(err), severity: "error" });
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
   return (
     <Dialog

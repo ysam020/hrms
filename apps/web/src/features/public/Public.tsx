@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom";
 import { API_ENDPOINTS } from "@web/shared/constants/apiEndpoints";
 import { Icon, SearchField, ListSkeleton } from "@next/ui";
 import { apiClient, asList } from "@next/lib/api";
-import { locationSummary } from "@next/features/recruitment/jobConfig";
 import { JobFacts, JobLocationLine, PublicBar, isOpen } from "./jobDisplay";
 import s from "./public.module.css";
 

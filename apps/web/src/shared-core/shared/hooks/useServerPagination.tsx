@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   getPaginationCache,
   setPaginationCache,
@@ -31,6 +31,9 @@ function useServerPagination(
     pageSize: initialPageSize,
   });
   const [error, setError] = useState(null);
+  // Responses can arrive out of order (e.g. a filter changed while the old
+  // request was in flight). Only the latest call may update state.
+  const latestRequest = useRef(0);
 
   // Calculate derived values
   const totalPages = Math.ceil(totalCount / pagination.pageSize);
@@ -48,6 +51,8 @@ function useServerPagination(
   // Fetch data function
   const fetchData = useCallback(
     async (paginationState = pagination) => {
+      const requestId = ++latestRequest.current;
+      const isLatest = () => requestId === latestRequest.current;
       setLoading(true);
       setError(null);
 
@@ -57,7 +62,7 @@ function useServerPagination(
         // Show cached page instantly (stale-while-revalidate)
         if (pageKey) {
           const cached = await getPaginationCache(pageKey);
-          if (cached) {
+          if (cached && isLatest()) {
             setData(cached.data);
             setTotalCount(cached.totalCount);
             setLoading(false); // keep refreshing in background
@@ -69,6 +74,7 @@ function useServerPagination(
           limit: paginationState.pageSize,
           skip: paginationState.pageIndex * paginationState.pageSize,
         });
+        if (!isLatest()) return;
 
         if (result?.data) {
           setData(result.data);
@@ -87,6 +93,7 @@ function useServerPagination(
           setTotalCount(0);
         }
       } catch (err) {
+        if (!isLatest()) return;
         if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") {
           setLoading(false);
           return;
@@ -96,7 +103,7 @@ function useServerPagination(
         setTotalCount(0);
         onError(err);
       } finally {
-        setLoading(false);
+        if (isLatest()) setLoading(false);
       }
     },
     [fetchFunction, pagination, onError, buildCacheKey],
