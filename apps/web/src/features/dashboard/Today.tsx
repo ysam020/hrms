@@ -3,7 +3,14 @@ import { useContext, useMemo, useState, type ReactNode } from "react";
 import { UserContext } from "@web/app/providers/UserContext";
 import { ApprovalsBadgeContext } from "@web/app/providers/ApprovalsBadgeContext";
 import { useAttendanceData } from "@web/shared/hooks/useAttendanceData";
-import { StaggerList, TransitionLink } from "@next/motion";
+import {
+  StaggerList,
+  TransitionLink,
+  markTransitionSource,
+  sharedPart,
+  transitionSource,
+  useLeaving,
+} from "@next/motion";
 import {
   Banner,
   Button,
@@ -20,7 +27,9 @@ import { useDashboardConfig, useWidgetData, type LayoutEntry } from "./data";
 import { Agenda, Announcements, YourDay, usePersonalData } from "./personal";
 import { HEADER_LINK, REGISTRY } from "./registry";
 import { OnboardingCard } from "@next/walkthrough/Launcher";
+import { useWalkthrough } from "@next/walkthrough/WalkthroughProvider";
 import { Customize } from "./Customize";
+import { WidgetIdContext, widgetSourceKey } from "./widgetSource";
 import s from "./Today.module.css";
 import d from "./dashboard.module.css";
 
@@ -38,6 +47,7 @@ import d from "./dashboard.module.css";
 export default function Today() {
   const { user } = useContext(UserContext);
   const cfg = useDashboardConfig();
+  const wt = useWalkthrough();
   const [customizing, setCustomizing] = useState(false);
 
   const available = useMemo(
@@ -71,6 +81,11 @@ export default function Today() {
   ];
   const personal = usePersonalData(user, parts);
 
+  // The tour card sits above the widgets and can only be placed once saved
+  // tour progress has loaded. The skeleton stays until that and the layout
+  // are both known, so the card never pushes rendered widgets down.
+  const settled = Boolean(cfg.config) && (wt?.ready ?? true);
+
   return (
     <Page
       title="Today"
@@ -91,7 +106,7 @@ export default function Today() {
       }
     >
       <Hero personal={personal} showDay={ids.has("my-day")} />
-      <OnboardingCard />
+      {settled && <OnboardingCard />}
 
       {cfg.stale && (
         <Banner tone="warning" icon="info">
@@ -100,11 +115,14 @@ export default function Today() {
         </Banner>
       )}
 
-      {!cfg.config ? (
-        cfg.error ? (
+      {!settled ? (
+        !cfg.config && cfg.error ? (
           <ErrorState message={cfg.error} onRetry={() => void cfg.reload()} />
         ) : (
-          <div className={`${d.wrap} ${d.grid}`} aria-busy>
+          // Keyed apart from the grid below: React would otherwise reuse this
+          // element for it, and its move under the tour card would register
+          // as a layout shift.
+          <div key="skeleton" className={`${d.wrap} ${d.grid}`} aria-busy>
             <div className={d.cell} data-size="wide">
               <Skeleton height={180} />
             </div>
@@ -129,7 +147,7 @@ export default function Today() {
           Pick what you’d like to see here.
         </EmptyState>
       ) : (
-        <div className={d.wrap} data-tour="today-widgets">
+        <div key="widgets" className={d.wrap} data-tour="today-widgets">
           <div className={d.grid}>
             {shown.map((entry) => (
               <WidgetCell
@@ -224,7 +242,9 @@ function Hero({
       <p className={s.brief} aria-live="polite">
         {brief.length === 0 ? (
           waiting ? (
-            <Skeleton width={320} height={18} />
+            // 18 px bar centred in the brief's 24 px line, so the line keeps
+            // its height when the text arrives.
+            <Skeleton width={320} height={18} style={{ margin: "3px 0" }} />
           ) : null
         ) : (
           brief.map((b, i) => (
@@ -317,23 +337,48 @@ function WidgetCell({
       // Coming Up takes its height from its row instead of setting it.
       data-fill={entry.id === "agenda" || undefined}
     >
-      <Section
-        id={`w-${entry.id}`}
-        title={meta.name}
-        detail={detail}
-        action={
-          link && (
-            <TransitionLink to={link.to}>
-              <Button size="small" variant="plain">
-                {link.label}
-              </Button>
-            </TransitionLink>
-          )
-        }
-      >
-        {body}
-      </Section>
+      <WidgetIdContext.Provider value={entry.id}>
+        <Section
+          id={`w-${entry.id}`}
+          title={<WidgetHeading id={entry.id}>{meta.name}</WidgetHeading>}
+          detail={detail}
+          action={
+            link && (
+              <TransitionLink
+                to={link.to}
+                onClick={() => markTransitionSource(widgetSourceKey(entry.id))}
+              >
+                <Button size="small" variant="plain">
+                  {link.label}
+                </Button>
+              </TransitionLink>
+            )
+          }
+        >
+          {body}
+        </Section>
+      </WidgetIdContext.Provider>
     </div>
+  );
+}
+
+/**
+ * A widget's heading. When one of the widget's links starts the navigation,
+ * the heading carries over into the destination page's title (ui/Page).
+ */
+function WidgetHeading({ id, children }: { id: string; children: ReactNode }) {
+  const leaving = useLeaving("/dashboard");
+  const isSource = leaving && transitionSource() === widgetSourceKey(id);
+  return (
+    // inline-block: a view-transition-name needs an unfragmented box.
+    <span
+      style={{
+        display: "inline-block",
+        ...sharedPart("widget", "page", "heading", isSource),
+      }}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -358,6 +403,7 @@ function ApprovalsBody() {
               key={item.instanceId}
               item={item}
               index={i}
+              pairWith="/approvals"
               onApprove={() => decision.approve(item)}
               onReject={() => decision.reject(item)}
             />

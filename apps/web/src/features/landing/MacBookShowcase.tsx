@@ -33,6 +33,20 @@ export type ShowcaseScene = {
 const EASE = [0.2, 0, 0, 1] as const;
 
 /**
+ * The screenshot at the widths scripts/showcase-variants.mjs writes, for an
+ * <img srcSet>. The captures are 2880 px wide (2× of 1440 × 900); a phone
+ * showing one 330 px wide needs the 720 px copy, a quarter of the bytes.
+ */
+export const showcaseSrcSet = (src: string) => {
+  const stem = src.replace(/\.webp$/, "");
+  return `${stem}-720.webp 720w, ${stem}-1440.webp 1440w, ${src} 2880w`;
+};
+
+// The screen is about 80% of a phone's width and at most ~950 px wide on a
+// desktop (measured); `sizes` errs larger, never smaller, so it never blurs.
+const SCREEN_SIZES = "(max-width: 760px) 84vw, 1000px";
+
+/**
  * Real Praesto screens inside a MacBook frame. The frame never moves; only
  * the screen changes. Every screenshot stays mounted and stacked, so a
  * change is a crossfade the browser can retarget mid-flight — rapid
@@ -78,8 +92,9 @@ export function MacBookShowcase({
   const [held, setHeld] = useState(false);
   const [visible, setVisible] = useState(true);
   // The other screens sit stacked in view behind the first, so "lazy" doesn't
-  // defer them; they're added once the first has loaded, leaving it the
-  // bandwidth (it's the page's largest paint).
+  // defer them; they're added once the page has loaded (the first screen,
+  // its largest paint, included) and the browser is idle, so they don't
+  // compete with the page's own code. The first advance is seconds away.
   const [warm, setWarm] = useState(false);
   const [hidden, setHidden] = useState(
     typeof document !== "undefined" && document.hidden,
@@ -92,6 +107,22 @@ export function MacBookShowcase({
   useEffect(() => {
     if (reduced) setAutoplay(false);
   }, [reduced]);
+
+  useEffect(() => {
+    let idle = 0;
+    const later = () => {
+      idle = window.requestIdleCallback
+        ? window.requestIdleCallback(() => setWarm(true), { timeout: 2000 })
+        : window.setTimeout(() => setWarm(true), 200);
+    };
+    if (document.readyState === "complete") later();
+    else window.addEventListener("load", later, { once: true });
+    return () => {
+      window.removeEventListener("load", later);
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idle);
+      else window.clearTimeout(idle);
+    };
+  }, []);
 
   useEffect(() => {
     const onVis = () => setHidden(document.hidden);
@@ -222,6 +253,8 @@ export function MacBookShowcase({
                     key={sc.id}
                     className={s.shot}
                     src={sc.src}
+                    srcSet={showcaseSrcSet(sc.src)}
+                    sizes={SCREEN_SIZES}
                     alt={i === index ? sc.alt : ""}
                     aria-hidden={i === index ? undefined : true}
                     data-active={i === index || undefined}
@@ -229,10 +262,12 @@ export function MacBookShowcase({
                     height={900}
                     decoding="async"
                     loading={priority && i === 0 ? "eager" : "lazy"}
-                    // React 18 only passes the lowercase attribute through.
-                    {...(priority && i === 0 ? { fetchpriority: "high" } : {})}
+                    // The camelCase prop, not a lowercase attribute: React
+                    // copies it onto the image preload it emits when
+                    // prerendering, and that preload is what fetches the
+                    // page's largest paint.
+                    fetchPriority={priority && i === 0 ? "high" : undefined}
                     draggable={false}
-                    onLoad={warm ? undefined : () => setWarm(true)}
                   />
                 ),
               )}
