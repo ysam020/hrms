@@ -367,30 +367,33 @@ describe("attachMasterAuditLogging", () => {
     await flush();
   });
 
-  it("skips the pre-read (and the never-written entry) for a refresh-token-only update", async () => {
-    const masterUserDelegate = { findUnique: jest.fn() };
-    const { client: masterClient, middlewares } = makeClient({
-      user: masterUserDelegate,
-    });
-    const tenantAuditLog = { create: jest.fn().mockResolvedValue({}) };
-    mockGetTenantClient.mockReturnValue({ auditLog: tenantAuditLog });
-    attachMasterAuditLogging(masterClient);
-    const next = jest.fn().mockResolvedValue({ id: "u1" });
+  it.each(["update", "updateMany"])(
+    "skips the pre-read (and the never-written entry) for a refresh-token-only %s",
+    async (action) => {
+      const masterUserDelegate = { findUnique: jest.fn() };
+      const { client: masterClient, middlewares } = makeClient({
+        user: masterUserDelegate,
+      });
+      const tenantAuditLog = { create: jest.fn().mockResolvedValue({}) };
+      mockGetTenantClient.mockReturnValue({ auditLog: tenantAuditLog });
+      attachMasterAuditLogging(masterClient);
+      const next = jest.fn().mockResolvedValue({ id: "u1" });
 
-    await middlewares[0](
-      {
-        model: "User",
-        action: "update",
-        args: { where: { id: "u1" }, data: { refreshToken: "hash" } },
-      },
-      next,
-    );
-    await flush();
+      await middlewares[0](
+        {
+          model: "User",
+          action,
+          args: { where: { id: "u1" }, data: { refreshToken: "hash" } },
+        },
+        next,
+      );
+      await flush();
 
-    expect(next).toHaveBeenCalled();
-    expect(masterUserDelegate.findUnique).not.toHaveBeenCalled();
-    expect(tenantAuditLog.create).not.toHaveBeenCalled();
-  });
+      expect(next).toHaveBeenCalled();
+      expect(masterUserDelegate.findUnique).not.toHaveBeenCalled();
+      expect(tenantAuditLog.create).not.toHaveBeenCalled();
+    },
+  );
 
   it("still reads and audits an update that mixes in an ordinary field", async () => {
     const masterUserDelegate = {

@@ -114,3 +114,35 @@ describe("getRedisClient", () => {
     });
   });
 });
+
+describe("getCacheRedisClient", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    mockRedisInstances.length = 0;
+    delete process.env.CACHE_REDIS_TIMEOUT_MS;
+  });
+
+  it("is a separate connection that fails fast instead of queueing and retrying", () => {
+    const { getRedisClient, getCacheRedisClient } = require("../client");
+    const shared = getRedisClient();
+    const cache = getCacheRedisClient();
+
+    expect(cache).not.toBe(shared);
+    expect(getCacheRedisClient()).toBe(cache);
+    expect(cache.__options).toMatchObject({
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 0,
+      commandTimeout: 100,
+    });
+    // The shared client (refresh tokens, rate limits, invalidations) keeps
+    // its queueing and retries.
+    expect(shared.__options.maxRetriesPerRequest).toBe(3);
+    expect(shared.__options.enableOfflineQueue).toBeUndefined();
+  });
+
+  it("takes its command timeout from CACHE_REDIS_TIMEOUT_MS", () => {
+    process.env.CACHE_REDIS_TIMEOUT_MS = "250";
+    const { getCacheRedisClient } = require("../client");
+    expect(getCacheRedisClient().__options.commandTimeout).toBe(250);
+  });
+});

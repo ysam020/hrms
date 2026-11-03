@@ -279,6 +279,13 @@ paths:
                       correctionsUsed: { type: integer, example: 1 }
                       remainingCorrections: { type: integer, example: 2 }
                       maxCorrectionsPerMonth: { type: integer, example: 3 }
+                      workingDays:
+                        {
+                          type: array,
+                          items: { type: integer },
+                          example: [1, 2, 3, 4, 5],
+                          description: "Tenant working weekdays (0=Sun..6=Sat)",
+                        }
         "401":
           description: Unauthorized
         "403":

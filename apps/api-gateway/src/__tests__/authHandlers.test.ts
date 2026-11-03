@@ -66,6 +66,13 @@ jest.mock("@hrms/crypto", () => ({
   safeDecrypt: jest.fn((v: any) => v || ""),
 }));
 
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    getOrSet: jest.fn((_key: string, load: () => unknown) => load()),
+    delete: jest.fn(),
+  },
+}));
+
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));

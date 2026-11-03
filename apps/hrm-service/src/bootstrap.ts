@@ -24,6 +24,8 @@ async function startWorker() {
 }
 
 if (cluster.isPrimary && WORKERS > 1) {
+  // The primary serves /metrics for all workers (see @hrms/logger).
+  void import("@hrms/logger");
   // eslint-disable-next-line no-console
   console.log(`hrm-service primary ${process.pid}: forking ${WORKERS} workers`);
   for (let i = 0; i < WORKERS; i++) cluster.fork();

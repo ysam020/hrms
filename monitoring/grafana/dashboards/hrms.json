@@ -26,6 +26,8 @@
         "name": "interval",
         "type": "interval",
         "label": "Interval",
+        "query": "1m,5m,10m,30m",
+        "auto": false,
         "options": [
           { "selected": false, "text": "1m", "value": "1m" },
           { "selected": true, "text": "5m", "value": "5m" },

@@ -4,6 +4,7 @@ import { authClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prisma, markHandlerStart } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { cacheManager } from "@hrms/cache";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
@@ -163,39 +164,45 @@ export async function fetchFullProfile(userId: string) {
   };
 }
 
+// An organisation's name and slug are set at creation; no write path changes
+// them afterwards, so an hour's caching is safe.
+function tenantNameAndSlug(tenantId: string) {
+  return cacheManager.getOrSet(
+    `t:${tenantId}:tenant:v1:name-slug`,
+    () =>
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true, slug: true },
+      }),
+    { ttlSeconds: 3600 },
+  );
+}
+
 export async function getProfile(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
-    const profile = await fetchFullProfile(user!.userId);
+    // These reads don't depend on each other: all start at once (they used
+    // to run as three sequential round trips).
+    const tenantId = user?.tenantId ?? null;
+    const [profile, tenant, activeSettings, isSupportAgent, platformAdmin] =
+      await Promise.all([
+        fetchFullProfile(user!.userId),
+        tenantId ? tenantNameAndSlug(tenantId) : Promise.resolve(null),
+        tenantId ? getActiveSettings(tenantId) : Promise.resolve(null),
+        // UI hint only (shows the Praesto support console link); every
+        // /platform/support request is checked again by requireSupportAgent.
+        hasSupportAccess(user!).catch(() => false),
+        // UI hint only: which Platform Console sections to show. Every
+        // /platform/admin request is checked again by requirePlatformAdmin.
+        platformAdminGrants(user!).catch(() => []),
+      ]);
     if (!profile)
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "User not found",
       });
-
-    let tenantName: string | null = null;
-    let tenantSlug: string | null = null;
-    let wfhEnabled = true;
-    if (user?.tenantId) {
-      const [tenant, activeSettings] = await Promise.all([
-        prisma.tenant.findUnique({
-          where: { id: user.tenantId },
-          select: { name: true, slug: true },
-        }),
-        getActiveSettings(user.tenantId),
-      ]);
-      tenantName = tenant?.name ?? null;
-      tenantSlug = tenant?.slug ?? null;
-      wfhEnabled = activeSettings?.wfhEnabled ?? true;
-    }
-
-    // UI hint only (shows the Praesto support console link); every
-    // /platform/support request is checked again by requireSupportAgent.
-    const [isSupportAgent, platformAdmin] = await Promise.all([
-      hasSupportAccess(user!).catch(() => false),
-      // UI hint only: which Platform Console sections to show. Every
-      // /platform/admin request is checked again by requirePlatformAdmin.
-      platformAdminGrants(user!).catch(() => []),
-    ]);
+    const tenantName: string | null = tenant?.name ?? null;
+    const tenantSlug: string | null = tenant?.slug ?? null;
+    const wfhEnabled = activeSettings?.wfhEnabled ?? true;
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: {

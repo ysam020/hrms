@@ -6,6 +6,7 @@ jest.mock("@hrms/db", () => {
   const _db = {
     tenantSettings: {
       findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -18,7 +19,10 @@ jest.mock("@hrms/db", () => {
 });
 
 jest.mock("@hrms/cache", () => ({
-  cacheManager: { delete: jest.fn() },
+  cacheManager: {
+    delete: jest.fn(),
+    getOrSet: jest.fn((_key: string, load: () => unknown) => load()),
+  },
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -58,7 +62,7 @@ describe("writeVersionedSettings", () => {
     expect(mockCacheDelete).toHaveBeenCalledWith("tenantSettings:leave:t1");
   });
 
-  it("does not invalidate the cache for a future-dated (pending) settings change", async () => {
+  it("does not invalidate the leave/attendance caches for a future-dated (pending) settings change", async () => {
     mockCreate.mockResolvedValue({ id: "s1", leavePolicies: [] });
     const effectiveFrom = new Date(Date.now() + 1000 * 60 * 60 * 24); // tomorrow
 
@@ -69,7 +73,9 @@ describe("writeVersionedSettings", () => {
       effectiveFrom,
     );
 
-    expect(mockCacheDelete).not.toHaveBeenCalled();
+    // Only the gateway's active-settings entry, which records the next
+    // scheduled change.
+    expect(mockCacheDelete.mock.calls).toEqual([["t:t1:settings:active"]]);
   });
 
   it("still returns the write result even if cache invalidation fails", async () => {

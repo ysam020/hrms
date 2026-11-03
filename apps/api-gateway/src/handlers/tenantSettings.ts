@@ -86,11 +86,81 @@ export const SETTINGS_DEFAULTS = {
  * Returns the currently *active* settings row:
  *   latest version where effectiveFrom ≤ now
  */
-export async function getActiveSettings(tenantId: string) {
-  return (prisma as any).tenantSettings.findFirst({
-    where: { tenantId, effectiveFrom: { lte: new Date() } },
-    orderBy: { effectiveFrom: "desc" },
+export async function getActiveSettings(
+  tenantId: string,
+  options: { fresh?: boolean } = {},
+) {
+  const key = activeSettingsKey(tenantId);
+  const load = () => loadActiveSettings(tenantId);
+  let entry = await cacheManager.getOrSet(key, load, {
+    ttlSeconds: ACTIVE_SETTINGS_TTL,
+    fresh: options.fresh,
   });
+  // A scheduled version has taken effect since this was cached: nothing is
+  // written when that happens, so the cache can't be told — check instead.
+  if (entry.nextChangeAt !== null && Date.now() >= entry.nextChangeAt) {
+    entry = await cacheManager.getOrSet(key, load, {
+      ttlSeconds: ACTIVE_SETTINGS_TTL,
+      fresh: true,
+    });
+  }
+  return reviveSettings(entry.row);
+}
+
+// The active row is read on nearly every page (profile, presence, dashboard)
+// and changes only when an admin saves settings or a scheduled version takes
+// effect. Every write path below deletes this key; the TTL is a backstop.
+const ACTIVE_SETTINGS_TTL = 600;
+export const activeSettingsKey = (tenantId: string) =>
+  `t:${tenantId}:settings:active`;
+
+interface CachedActiveSettings {
+  row: any;
+  /** When the next scheduled version takes effect (epoch ms), if any. */
+  nextChangeAt: number | null;
+}
+
+async function loadActiveSettings(
+  tenantId: string,
+): Promise<CachedActiveSettings> {
+  const now = new Date();
+  const [row, upcoming] = await Promise.all([
+    (prisma as any).tenantSettings.findFirst({
+      where: { tenantId, effectiveFrom: { lte: now } },
+      orderBy: { effectiveFrom: "desc" },
+    }),
+    (prisma as any).tenantSettings.findMany({
+      where: { tenantId, effectiveFrom: { gt: now } },
+      orderBy: { effectiveFrom: "asc" },
+      select: { effectiveFrom: true },
+      take: 1,
+    }),
+  ]);
+  const nextAt = Array.isArray(upcoming)
+    ? new Date(upcoming[0]?.effectiveFrom ?? NaN).getTime()
+    : NaN;
+  return {
+    row,
+    // Only a genuinely future time: anything else would force a reload on
+    // every read.
+    nextChangeAt: nextAt > now.getTime() ? nextAt : null,
+  };
+}
+
+// A copy per caller (callers may modify what they get), with the DateTime
+// fields restored after a round trip through JSON.
+function reviveSettings(row: any) {
+  if (!row) return row;
+  const copy = structuredClone(row);
+  for (const field of ["effectiveFrom", "createdAt"]) {
+    if (copy[field] != null) copy[field] = new Date(copy[field]);
+  }
+  return copy;
+}
+
+/** Drops the cached active settings — call after any tenantSettings write. */
+export async function invalidateActiveSettings(tenantId: string) {
+  await cacheManager.delete(activeSettingsKey(tenantId));
 }
 
 /**
@@ -117,7 +187,8 @@ export async function writeVersionedSettings(
   effectiveFrom: Date,
   note?: string,
 ): Promise<{ settings: ReturnType<typeof toPublic>; message: string }> {
-  const currentActive = await getActiveSettings(tenantId);
+  // Fresh: the patch is merged onto this and written back.
+  const currentActive = await getActiveSettings(tenantId, { fresh: true });
   const base = currentActive
     ? {
         workWeekPattern:
@@ -198,6 +269,12 @@ export async function writeVersionedSettings(
   // shared across services, so deleting the key here is visible to them
   // immediately; each service's own short-lived (5 min) in-process L1 cache
   // is the only remaining staleness window.
+  //
+  // The gateway's active-settings entry is dropped on every write, scheduled
+  // ones included: it records when the next version takes effect.
+  await invalidateActiveSettings(tenantId).catch((err) =>
+    logger.warn("[writeVersionedSettings] Cache invalidation failed:", { err }),
+  );
   if (effectiveFrom <= new Date()) {
     await Promise.all([
       cacheManager.delete(`tenantSettings:attendance:${tenantId}`),
@@ -233,8 +310,9 @@ export async function getTenantSettings(req: AuthRequest, res: Response) {
     });
   }
   try {
+    // Fresh: this is the settings editor, which must show what is stored.
     const [active, pending] = await Promise.all([
-      getActiveSettings(tenantId),
+      getActiveSettings(tenantId, { fresh: true }),
       getPendingSettings(tenantId),
     ]);
 
@@ -457,6 +535,9 @@ export async function cancelPendingSettings(req: AuthRequest, res: Response) {
       });
     }
     await (prisma as any).tenantSettings.delete({ where: { id } });
+    await invalidateActiveSettings(tenantId).catch((err) =>
+      logger.warn("cancelPendingSettings: cache invalidation failed", { err }),
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Pending settings change cancelled.",
     });

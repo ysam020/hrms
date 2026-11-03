@@ -10,6 +10,7 @@ import {
   withQueryStats,
   currentQueryStats,
   summarizeQueryStats,
+  warmUpDatabase,
 } from "@hrms/db";
 
 // Per-call DB counts for this service's share of a request; joined to the
@@ -116,12 +117,20 @@ export class BaseGrpcServer {
         const executeMiddlewareChain = async (index: number): Promise<any> => {
           if (index === this.middlewares.length) {
             if (call.cancelled) return undefined;
+            // Handlers are mostly async: a throw after their first await, or
+            // an error passed to the callback later on, used to escape this
+            // promise (an unhandled rejection) and leave the call hanging
+            // until the client's deadline — which the gateway then retried.
             return new Promise((resolve, reject) => {
               try {
-                handler(call, (error: any, response: any) => {
-                  if (error) throw error;
-                  resolve(response);
-                });
+                const pending: unknown = handler(
+                  call,
+                  (error: any, response: any) =>
+                    error ? reject(error) : resolve(response),
+                );
+                if (pending && typeof (pending as any).catch === "function") {
+                  (pending as Promise<unknown>).catch(reject);
+                }
               } catch (error) {
                 reject(error);
               }
@@ -213,7 +222,9 @@ export class BaseGrpcServer {
       (error) => {
         if (error) {
           logger.error(`Failed to start gRPC server: ${error}`);
+          return;
         }
+        void warmUpDatabase();
       },
     );
   }

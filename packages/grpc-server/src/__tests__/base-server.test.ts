@@ -33,6 +33,7 @@ jest.mock("@hrms/db", () => ({
   withQueryStats: (fn: () => unknown) => fn(),
   currentQueryStats: jest.fn(() => undefined),
   summarizeQueryStats: jest.fn(),
+  warmUpDatabase: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -90,6 +91,40 @@ describe("BaseGrpcServer", () => {
 
       expect(callback).toHaveBeenCalledWith(
         expect.objectContaining({ message: "boom" }),
+        null,
+      );
+    });
+
+    // Both used to escape the middleware chain's promise and leave the call
+    // hanging until the client's deadline.
+    it("answers with an error when an async handler throws after an await", async () => {
+      const server = new TestServer();
+      const handler = jest.fn(async () => {
+        await Promise.resolve();
+        throw new Error("late boom");
+      });
+      const callback = jest.fn();
+
+      await server.callWrapHandler(handler)(makeCall(), callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "late boom" }),
+        null,
+      );
+    });
+
+    it("answers with an error passed to the callback asynchronously", async () => {
+      const server = new TestServer();
+      const handler = jest.fn(async (_call, cb) => {
+        await Promise.resolve();
+        cb(new Error("async cb error"), null);
+      });
+      const callback = jest.fn();
+
+      await server.callWrapHandler(handler)(makeCall(), callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "async cb error" }),
         null,
       );
     });
@@ -255,6 +290,22 @@ describe("BaseGrpcServer", () => {
         { __serverCreds: true },
         expect.any(Function),
       );
+    });
+
+    it("warms the database connection once the server is bound", () => {
+      const { warmUpDatabase } = jest.requireMock("@hrms/db");
+      new TestServer().start("localhost:50099", {} as any);
+      expect(warmUpDatabase).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not warm up when binding fails", () => {
+      const { warmUpDatabase } = jest.requireMock("@hrms/db");
+      mockServerInstance.bindAsync.mockImplementationOnce(
+        (_a: string, _c: any, cb: (err: Error | null) => void) =>
+          cb(new Error("port in use")),
+      );
+      new TestServer().start("localhost:50099", {} as any);
+      expect(warmUpDatabase).not.toHaveBeenCalled();
     });
 
     it("stop() resolves when tryShutdown succeeds", async () => {

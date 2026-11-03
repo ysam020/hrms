@@ -20,7 +20,10 @@ jest.mock("@hrms/db", () => {
     salaryAdvance: { findMany: jest.fn() },
     salaryStructure: { findMany: jest.fn() },
     payCycle: { findFirst: jest.fn() },
-    tenantSettings: { findFirst: jest.fn() },
+    tenantSettings: {
+      findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     holiday: { findMany: jest.fn() },
     resignation: { findMany: jest.fn() },
   };
@@ -58,6 +61,7 @@ jest.mock("@hrms/cache", () => ({
     set: jest.fn(),
     delete: jest.fn(),
     invalidatePattern: jest.fn(),
+    getOrSet: jest.fn((_key: string, load: () => unknown) => load()),
   },
 }));
 

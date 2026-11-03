@@ -76,3 +76,9 @@ scrape_configs:
       - targets: ["localhost:9111"]
         labels:
           service: scheduler-service
+
+  - job_name: performance-review-service
+    static_configs:
+      - targets: ["localhost:9112"]
+        labels:
+          service: performance-review-service

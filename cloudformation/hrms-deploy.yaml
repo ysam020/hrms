@@ -711,6 +711,51 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
+        # Every service ships its Winston logs straight to CloudWatch Logs
+        # (packages/logger: /hrms/<service>/production with NODE_ENV=production).
+        # winston-cloudwatch creates the group/stream, looks up the stream's
+        # sequence token and sets retention itself, so it needs all five.
+        - PolicyName: HrmsLogShipping
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ShipServiceLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                  - logs:PutRetentionPolicy
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/hrms/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/hrms/*:log-stream:*"
+        # The grafana container (docker-compose.prod.yml, grafana.praesto.in)
+        # reads those logs with this role's credentials. DescribeLogGroups,
+        # GetQueryResults, StopQuery and DescribeRegions don't support
+        # resource-level permissions, hence "*".
+        - PolicyName: HrmsGrafanaLogsRead
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: QueryServiceLogs
+                Effect: Allow
+                Action:
+                  - logs:StartQuery
+                  - logs:GetLogGroupFields
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/hrms/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/hrms/*:log-stream:*"
+              - Sid: ListAndPollQueries
+                Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:GetQueryResults
+                  - logs:StopQuery
+                  - ec2:DescribeRegions
+                Resource: "*"
         - PolicyName: HrmsInstancePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -870,8 +915,8 @@ Resources:
   # reachable directly on 80/443, same public exposure the ALB used to have,
   # just one hop closer. 80 stays open (not just a redirect target) because
   # Caddy needs it for the Let's Encrypt HTTP-01 challenge, in addition to
-  # redirecting plain HTTP to HTTPS itself (see the Caddyfile in
-  # LaunchTemplate UserData).
+  # redirecting plain HTTP to HTTPS itself (see the `caddyfile` config in
+  # docker-compose.prod.yml).
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -948,23 +993,11 @@ Resources:
 
             mkdir -p /opt/hrms
 
-            # Public-facing TLS termination (was the ALB's job) — Caddy gets
-            # a real, trusted cert from Let's Encrypt automatically (HTTP-01,
-            # needs port 80 open, see InstanceSecurityGroup) and keeps it
-            # renewed. Re-encrypts to api-gateway's own self-signed HTTPS
-            # (packages/certificates/cert.pem) same as the ALB's HTTPS target
-            # group used to — tls_insecure_skip_verify because that cert
-            # isn't from a public CA and was never meant to be verified
-            # against one, only to encrypt the hop inside the VPC.
-            cat > /opt/hrms/Caddyfile <<'CADDY_EOF'
-            ${ApiSubdomain}.${DomainName} {
-            	reverse_proxy https://api-gateway:9002 {
-            		transport http {
-            			tls_insecure_skip_verify
-            		}
-            	}
-            }
-            CADDY_EOF
+            # Public-facing TLS termination (was the ALB's job) is Caddy, whose
+            # Caddyfile now ships inside docker-compose.prod.yml (the
+            # `caddyfile` config) so it's synced on every deploy. It gets real
+            # Let's Encrypt certs (HTTP-01, needs port 80 open, see
+            # InstanceSecurityGroup) for api.praesto.in and grafana.praesto.in.
 
             cat > /opt/hrms/deploy.sh <<'DEPLOY_EOF'
             #!/bin/bash
@@ -1061,6 +1094,9 @@ Resources:
   # Plain A record to the EIP (not an ALB alias anymore) — this only ever
   # needs to be set once, since ElasticIp's address doesn't change across
   # instance replacement.
+  # grafana.praesto.in (A → this EIP) was created directly in Route 53 on
+  # 2026-11-02, not by this stack; adding it here would fail on create
+  # because the record already exists.
   ApiDnsRecord:
     Type: AWS::Route53::RecordSet
     Properties:

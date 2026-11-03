@@ -29,7 +29,10 @@ jest.mock("@hrms/db", () => {
     incomeTaxSlab: { findMany: jest.fn().mockResolvedValue([]) },
     taxDeclaration: { findFirst: jest.fn().mockResolvedValue(null) },
     salaryComponentDefinition: { findMany: jest.fn().mockResolvedValue([]) },
-    tenantSettings: { findFirst: jest.fn().mockResolvedValue(null) },
+    tenantSettings: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     holiday: { findMany: jest.fn().mockResolvedValue([]) },
     tenant: { findUnique: jest.fn().mockResolvedValue(null) },
     salaryAdvance: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -75,6 +78,7 @@ jest.mock("@hrms/cache", () => ({
     set: jest.fn(),
     delete: jest.fn(),
     invalidatePattern: jest.fn(),
+    getOrSet: jest.fn((_key: string, load: () => unknown) => load()),
   },
 }));
 

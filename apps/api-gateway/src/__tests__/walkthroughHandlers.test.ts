@@ -21,6 +21,26 @@ jest.mock("@hrms/db", () => {
   };
 });
 
+// A cache that stores what loads produce, so hits, misses and invalidation
+// can be observed.
+jest.mock("@hrms/cache", () => {
+  const store = new Map<string, unknown>();
+  return {
+    __store: store,
+    cacheManager: {
+      getOrSet: jest.fn(async (key: string, load: () => unknown) => {
+        if (store.has(key)) return store.get(key);
+        const value = await load();
+        store.set(key, value);
+        return value;
+      }),
+      delete: jest.fn(async (key: string) => {
+        store.delete(key);
+      }),
+    },
+  };
+});
+
 jest.mock("@hrms/common", () => ({
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
@@ -116,7 +136,15 @@ describe("sanitizeWalkthroughState", () => {
   });
 });
 
+const { __store: cacheStore } = jest.requireMock("@hrms/cache");
+const { cacheManager } = jest.requireMock("@hrms/cache");
+
 describe("walkthrough progress handlers", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    cacheStore.clear();
+  });
+
   it("GET returns null before the first save", async () => {
     db.walkthroughProgress.findUnique.mockResolvedValue(null);
     const r = res();
@@ -175,5 +203,70 @@ describe("walkthrough progress handlers", () => {
     const r = res();
     await getWalkthroughProgress(req(), r);
     expect(r.json).toHaveBeenCalledWith({ status: 500 });
+  });
+});
+
+describe("walkthrough progress cache", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    cacheStore.clear();
+  });
+
+  it("reads the database once, then serves the cached state (null included)", async () => {
+    db.walkthroughProgress.findUnique.mockResolvedValue(null);
+    await getWalkthroughProgress(req(), res());
+    const r = res();
+    await getWalkthroughProgress(req(), r);
+
+    expect(db.walkthroughProgress.findUnique).toHaveBeenCalledTimes(1);
+    expect(r.json).toHaveBeenCalledWith({ status: 200, data: { state: null } });
+    expect([...cacheStore.keys()]).toEqual([
+      "t:tenant-a:walkthrough:v1:user-1",
+    ]);
+  });
+
+  it("a save makes the new state visible on the next read", async () => {
+    db.walkthroughProgress.findUnique.mockResolvedValueOnce(null);
+    await getWalkthroughProgress(req(), res());
+
+    const state = valid();
+    await saveWalkthroughProgress(req({ state }), res());
+    expect(cacheManager.delete).toHaveBeenCalledWith(
+      "t:tenant-a:walkthrough:v1:user-1",
+    );
+    // Called after the write, never before it.
+    expect(cacheManager.delete.mock.invocationCallOrder[0]).toBeGreaterThan(
+      db.walkthroughProgress.upsert.mock.invocationCallOrder[0],
+    );
+
+    db.walkthroughProgress.findUnique.mockResolvedValueOnce({ state });
+    const r = res();
+    await getWalkthroughProgress(req(), r);
+    expect(r.json.mock.calls[0][0].data.state).toEqual(state);
+  });
+
+  it("a reset drops the cached state", async () => {
+    db.walkthroughProgress.findUnique.mockResolvedValueOnce({ state: valid() });
+    await getWalkthroughProgress(req(), res());
+
+    await resetWalkthroughProgress(req(), res());
+
+    expect(cacheStore.has("t:tenant-a:walkthrough:v1:user-1")).toBe(false);
+  });
+
+  it("does not drop the cache when a save is refused", async () => {
+    await saveWalkthroughProgress(req({ state: { schema: 9 } }), res());
+    expect(cacheManager.delete).not.toHaveBeenCalled();
+  });
+
+  it("keeps each person's progress under their own key", async () => {
+    db.walkthroughProgress.findUnique
+      .mockResolvedValueOnce({ state: { mine: 1 } })
+      .mockResolvedValueOnce({ state: { mine: 2 } });
+    await getWalkthroughProgress(req(), res());
+    const r = res();
+    await getWalkthroughProgress(req({}, { userId: "user-2" }), r);
+
+    expect(r.json.mock.calls[0][0].data.state).toEqual({ mine: 2 });
   });
 });

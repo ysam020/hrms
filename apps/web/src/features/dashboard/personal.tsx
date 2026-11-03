@@ -143,6 +143,12 @@ export function YourDay({
   const punch = usePunch(refresh);
   const now = useNow();
   const records = data.attendances;
+  const days = monthDays(
+    records,
+    data.holidays,
+    data.summary?.workingDays,
+    dayjs().format("YYYY-MM-DD"),
+  );
   const today = (records || []).find((r) =>
     dayjs(r.date).isSame(dayjs(), "day"),
   );
@@ -202,8 +208,12 @@ export function YourDay({
           {punch.preparingNotice}
         </div>
       </div>
-      <MonthRibbon records={records} holidays={data.holidays} />
-      <Legend summary={data.summary} />
+      <MonthRibbon days={days} />
+      <Legend
+        summary={data.summary}
+        pendingToday={days.some((x) => x.kind === "pending")}
+        missedPunchOuts={days.filter((x) => x.kind === "partial").length}
+      />
       {punch.dialogs}
     </div>
   );
@@ -211,15 +221,24 @@ export function YourDay({
 
 type Kind =
   | "present"
+  | "halfday"
   | "partial"
   | "leave"
   | "holiday"
   | "weekoff"
   | "absent"
+  | "pending"
   | "future";
 
-function monthDays(records: any[], holidays: any[], todayKey: string) {
+function monthDays(
+  records: any[],
+  holidays: any[],
+  workingDays: number[] | undefined,
+  todayKey: string,
+) {
   const today = dayjs(todayKey);
+  // Same fallback as the gateway when the tenant has no work-week pattern.
+  const working = new Set(workingDays ?? [1, 2, 3, 4, 5]);
   const holidaySet = new Set(
     (holidays || []).map((h: any) => dayjs(h.date).format("YYYY-MM-DD")),
   );
@@ -229,45 +248,48 @@ function monthDays(records: any[], holidays: any[], todayKey: string) {
     const r = (records || []).find(
       (x) => (x.date || "").startsWith(key) || dayjs(x.date).isSame(d, "day"),
     );
-    const st = (r?.status || "").toLowerCase();
+    // "Half Day" / "half_day" / "Week Off" → "half-day" / "week-off"
+    const st = (r?.status || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[\s_]+/g, "-");
+    // A recorded status wins; without a punch, a holiday or week off comes
+    // before "yet to punch in" / "no record".
+    const dayOff: Kind | null = holidaySet.has(key)
+      ? "holiday"
+      : !working.has(d.day())
+        ? "weekoff"
+        : null;
     let kind: Kind;
-    if (d.isAfter(today, "day"))
-      kind = holidaySet.has(key) ? "holiday" : "future";
+    if (d.isAfter(today, "day")) kind = dayOff ?? "future";
     else if (st === "leave") kind = "leave";
-    else if (st === "holiday" || holidaySet.has(key)) kind = "holiday";
+    else if (st === "holiday") kind = "holiday";
     else if (st === "week-off") kind = "weekoff";
-    else if (
-      st === "half-day" ||
-      (recIn(r) && !recOut(r) && !d.isSame(today, "day"))
-    )
+    else if (st === "half-day") kind = "halfday";
+    else if (recIn(r) && !recOut(r) && !d.isSame(today, "day"))
       kind = "partial";
     else if (recIn(r) || st === "present") kind = "present";
+    else if (dayOff) kind = dayOff;
+    else if (d.isSame(today, "day")) kind = "pending";
     else kind = "absent";
     return { d, kind, today: d.isSame(today, "day") };
   });
 }
 
-function MonthRibbon({
-  records,
-  holidays,
-}: {
-  records: any[];
-  holidays: any[];
-}) {
+function MonthRibbon({ days }: { days: ReturnType<typeof monthDays> }) {
   const today = dayjs();
   const n = today.daysInMonth();
-  // Keyed by the date, not the dayjs instance, so it's only rebuilt when the
-  // records, holidays or day change.
-  const days = monthDays(records, holidays, today.format("YYYY-MM-DD"));
 
   const label = (k: Kind) =>
     ({
       present: "Present",
-      partial: "Partial day",
+      halfday: "Half day",
+      partial: "Missed punch-out",
       leave: "On leave",
       holiday: "Holiday",
       weekoff: "Week off",
       absent: "No record",
+      pending: "Yet to punch in",
       future: "Upcoming",
     })[k];
 
@@ -308,18 +330,30 @@ const leaveDays = (summary: any): number | undefined =>
   (summary?.paidLeaves ?? 0) + (summary?.unpaidLeaves ?? 0) ||
   summary?.paidLeaves;
 
-function Legend({ summary }: { summary: any }) {
-  const items: [string, string, number | undefined][] = [
-    ["Present", "var(--px-accent)", summary?.presents],
-    ["Leave", "var(--px-danger)", leaveDays(summary)],
-    ["Holidays", "var(--px-warning)", summary?.holidays],
-    ["Week Offs", "var(--px-neutral-soft)", summary?.weekOffs],
+function Legend({
+  summary,
+  pendingToday,
+  missedPunchOuts,
+}: {
+  summary: any;
+  pendingToday: boolean;
+  missedPunchOuts: number;
+}) {
+  // Swatches share the ribbon marks' styles via data-kind.
+  const items: [string, Kind, number | undefined][] = [
+    ["Present", "present", summary?.presents],
+    ["Half Day", "halfday", summary?.halfDays],
+    ["Missed Punch Out", "partial", missedPunchOuts],
+    ["Leave", "leave", leaveDays(summary)],
+    ["Week Off", "weekoff", summary?.weekOffs],
+    ["Holiday", "holiday", summary?.holidays],
+    ["Yet to Punch In", "pending", pendingToday ? 1 : 0],
   ];
   return (
     <div className={s.legend}>
-      {items.map(([l, c, v]) => (
+      {items.map(([l, k, v]) => (
         <span key={l}>
-          <i style={{ background: c }} />
+          <i data-kind={k} />
           {l}
           {v != null && <b>{v}</b>}
         </span>

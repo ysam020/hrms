@@ -1,13 +1,23 @@
-import { CacheManager } from "../CacheManager";
+import { CacheManager, cacheFamilyOf } from "../CacheManager";
 import { getRedisClient } from "../client";
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+  cacheInvalidationSubscriberReconnectsTotal: { inc: jest.fn() },
+  cacheOperationsTotal: { inc: jest.fn() },
+  cacheLoaderDuration: { observe: jest.fn() },
+  cacheRedisDuration: { observe: jest.fn() },
 }));
 
-jest.mock("../client", () => ({
-  getRedisClient: jest.fn(),
-}));
+// Reads and fills use the fail-fast cache client; in these tests it is the
+// same fake Redis as the shared client.
+jest.mock("../client", () => {
+  const getRedisClient = jest.fn();
+  return {
+    getRedisClient,
+    getCacheRedisClient: jest.fn(() => getRedisClient()),
+  };
+});
 
 const mockGetRedisClient = getRedisClient as jest.Mock;
 
@@ -524,6 +534,202 @@ describe("CacheManager", () => {
       await manager.invalidatePattern("t:*:employee:v3:alice");
 
       expect(await manager.get("t:t1:employee:v3:alice")).toBeNull();
+    });
+  });
+
+  describe("getOrSet()", () => {
+    const setup = () => {
+      const fake = makeFakeRedis();
+      mockGetRedisClient.mockReturnValue(fake.base);
+      return { ...fake, manager: new CacheManager() };
+    };
+
+    it("loads once on a miss, then serves the cached value without loading", async () => {
+      const { manager } = setup();
+      const load = jest.fn().mockResolvedValue({ n: 1 });
+
+      expect(await manager.getOrSet("t:t1:settings:active", load)).toEqual({
+        n: 1,
+      });
+      expect(await manager.getOrSet("t:t1:settings:active", load)).toEqual({
+        n: 1,
+      });
+      expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it("shares one load between concurrent misses on the same key", async () => {
+      const { manager } = setup();
+      let release!: (v: number) => void;
+      const load = jest.fn(() => new Promise<number>((r) => (release = r)));
+
+      const all = Promise.all([
+        manager.getOrSet("k", load),
+        manager.getOrSet("k", load),
+        manager.getOrSet("k", load),
+      ]);
+      await new Promise((r) => setImmediate(r));
+      release(7);
+
+      expect(await all).toEqual([7, 7, 7]);
+      expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it("loads different keys independently", async () => {
+      const { manager } = setup();
+      const load = jest.fn((v: string) => Promise.resolve(v));
+
+      const [a, b] = await Promise.all([
+        manager.getOrSet("a", () => load("A")),
+        manager.getOrSet("b", () => load("B")),
+      ]);
+
+      expect([a, b]).toEqual(["A", "B"]);
+      expect(load).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([0, false, null, "", []])(
+      "caches the falsy value %p and serves it as a hit",
+      async (value) => {
+        const { manager, store } = setup();
+        const load = jest.fn().mockResolvedValue(value);
+
+        expect(await manager.getOrSet("k", load)).toEqual(value);
+        expect(store.has("k")).toBe(true);
+        // A second instance (another process) reads it from Redis.
+        const other = new CacheManager();
+        expect(await other.getOrSet("k", load)).toEqual(value);
+        expect(load).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it("does not cache undefined", async () => {
+      const { manager, store } = setup();
+      await manager.getOrSet("k", async () => undefined);
+      expect(store.has("k")).toBe(false);
+    });
+
+    it("rejects every waiter when the load fails, caches nothing, and retries next time", async () => {
+      const { manager, store } = setup();
+      const load = jest
+        .fn()
+        .mockRejectedValueOnce(new Error("db down"))
+        .mockResolvedValueOnce("ok");
+
+      const results = await Promise.allSettled([
+        manager.getOrSet("k", load),
+        manager.getOrSet("k", load),
+      ]);
+      expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+      expect(store.has("k")).toBe(false);
+
+      expect(await manager.getOrSet("k", load)).toBe("ok");
+      expect(load).toHaveBeenCalledTimes(2);
+    });
+
+    it("falls back to the loader when Redis reads fail, and still returns the value", async () => {
+      const { base, manager } = setup();
+      base.get.mockRejectedValue(new Error("Command timed out"));
+      base.set.mockRejectedValue(new Error("Command timed out"));
+
+      expect(await manager.getOrSet("k", async () => 3)).toBe(3);
+      // Kept in this process's memory, so the next read doesn't load again.
+      const load = jest.fn().mockResolvedValue(4);
+      expect(await manager.getOrSet("k", load)).toBe(3);
+      expect(load).not.toHaveBeenCalled();
+    });
+
+    it("uses an explicit ttlSeconds exactly (no jitter)", async () => {
+      const { base, manager } = setup();
+      await manager.getOrSet("k", async () => 1, { ttlSeconds: 42 });
+      expect(base.set).toHaveBeenCalledWith("k", "1", "EX", 42);
+    });
+
+    it("fresh: true skips the cached value and re-caches the loaded one", async () => {
+      const { manager } = setup();
+      await manager.getOrSet("k", async () => "old");
+
+      expect(
+        await manager.getOrSet("k", async () => "new", { fresh: true }),
+      ).toBe("new");
+      expect(await manager.getOrSet("k", async () => "unused")).toBe("new");
+    });
+
+    it("fresh loads coalesce with each other, not with a normal in-flight load", async () => {
+      const { manager } = setup();
+      let releaseNormal!: (v: string) => void;
+      const normal = manager.getOrSet(
+        "k",
+        () => new Promise<string>((r) => (releaseNormal = r)),
+      );
+      const freshLoad = jest.fn().mockResolvedValue("fresh");
+      const fresh = Promise.all([
+        manager.getOrSet("k", freshLoad, { fresh: true }),
+        manager.getOrSet("k", freshLoad, { fresh: true }),
+      ]);
+
+      expect(await fresh).toEqual(["fresh", "fresh"]);
+      expect(freshLoad).toHaveBeenCalledTimes(1);
+      releaseNormal("normal");
+      expect(await normal).toBe("normal");
+    });
+
+    it("does not cache a load that an invalidation overtook", async () => {
+      const { manager, store } = setup();
+      let release!: (v: string) => void;
+      const pending = manager.getOrSet(
+        "t:t1:users:roster",
+        () => new Promise<string>((r) => (release = r)),
+      );
+      await new Promise((r) => setImmediate(r));
+      // A write elsewhere invalidates while the (pre-write) read is in flight.
+      await manager.invalidatePattern("t:t1:users:*");
+      release("pre-write");
+
+      expect(await pending).toBe("pre-write");
+      expect(store.has("t:t1:users:roster")).toBe(false);
+    });
+
+    it("an invalidation from another process evicts this process's copy", async () => {
+      const { manager } = setup();
+      const other = new CacheManager();
+      await manager.getOrSet("t:t1:settings:active", async () => "v1");
+
+      await other.delete("t:t1:settings:active");
+
+      expect(
+        await manager.getOrSet("t:t1:settings:active", async () => "v2"),
+      ).toBe("v2");
+    });
+
+    it("labels metrics with the key family only, never an id", async () => {
+      const { cacheOperationsTotal } = jest.requireMock("@hrms/logger");
+      const { manager } = setup();
+      await manager.getOrSet("t:tenant-123:settings:active", async () => 1);
+      await manager.getOrSet("t:tenant-123:settings:active", async () => 1);
+
+      const labels = cacheOperationsTotal.inc.mock.calls.map(
+        (c: any[]) => c[0],
+      );
+      expect(labels).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ family: "settings", result: "miss" }),
+          expect.objectContaining({ family: "settings", result: "set" }),
+          expect.objectContaining({ family: "settings", result: "hit_memory" }),
+        ]),
+      );
+      expect(JSON.stringify(labels)).not.toContain("tenant-123");
+    });
+  });
+
+  describe("cacheFamilyOf()", () => {
+    it.each([
+      ["t:abc:dashboard:v1:workforce", "dashboard"],
+      ["tenantSettings:leave:abc", "tenantSettings"],
+      ["t:abc:user:v6:42", "user"],
+      ["t:abc:*", "other"],
+      ["6553f0a1b2c3d4e5f6a7b8c9:x", "other"],
+    ])("%s → %s", (key, family) => {
+      expect(cacheFamilyOf(key)).toBe(family);
     });
   });
 });

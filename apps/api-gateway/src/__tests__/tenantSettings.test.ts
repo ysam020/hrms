@@ -45,7 +45,10 @@ jest.mock("@hrms/logger", () => ({
 }));
 
 jest.mock("@hrms/cache", () => ({
-  cacheManager: { delete: jest.fn().mockResolvedValue(undefined) },
+  cacheManager: {
+    delete: jest.fn().mockResolvedValue(undefined),
+    getOrSet: jest.fn((_key: string, load: () => unknown) => load()),
+  },
 }));
 
 const mockFindFirst = (prisma as any).tenantSettings.findFirst as jest.Mock;
@@ -315,7 +318,7 @@ describe("tenantSettings handlers", () => {
       expect(mockCacheDelete).toHaveBeenCalledWith("tenantSettings:leave:t1");
     });
 
-    it("does not invalidate the cache for a forward-dated (not-yet-active) save", async () => {
+    it("does not invalidate the leave/attendance caches for a forward-dated (not-yet-active) save", async () => {
       mockFindFirst
         .mockResolvedValueOnce({ id: "s1" })
         .mockResolvedValueOnce(null);
@@ -333,7 +336,15 @@ describe("tenantSettings handlers", () => {
 
       await updateTenantSettings(req, res);
 
-      expect(mockCacheDelete).not.toHaveBeenCalled();
+      expect(mockCacheDelete).not.toHaveBeenCalledWith(
+        "tenantSettings:attendance:t1",
+      );
+      expect(mockCacheDelete).not.toHaveBeenCalledWith(
+        "tenantSettings:leave:t1",
+      );
+      // The gateway's entry records when the next version takes effect, so
+      // a scheduled save must drop it.
+      expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:settings:active");
     });
   });
 
