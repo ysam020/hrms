@@ -191,10 +191,14 @@ export const rotateRefreshToken = async (
 
   if (flag === 1) {
     // We won the rotation — mirror the new hash onto the Mongo fallback column.
+    // updateMany, not update: Prisma's update reads the whole document back
+    // afterwards (3 commands to Atlas instead of 2), and nothing here uses it.
+    // Still awaited, so the mirror is written before the new token is handed
+    // out, as before.
     await timed(
       "mongoMs",
       prisma.user
-        .update({ where: { id: userId }, data: { refreshToken: newHash } })
+        .updateMany({ where: { id: userId }, data: { refreshToken: newHash } })
         .catch(() => {}),
     );
   }

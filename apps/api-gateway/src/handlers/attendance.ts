@@ -388,6 +388,7 @@ export async function getAttendanceSummary(req: Request, res: Response) {
         correctionsUsed,
         remainingCorrections,
         maxCorrectionsPerMonth,
+        workingDays,
       },
     });
   } catch (error: unknown) {

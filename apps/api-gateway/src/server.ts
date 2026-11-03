@@ -31,6 +31,7 @@ import {
   withQueryStats,
   currentQueryStats,
   summarizeQueryStats,
+  warmUpDatabase,
 } from "@hrms/db";
 
 const app = http2Express(express);
@@ -202,6 +203,7 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   server.listen(PORT, () => {
     const protocol = server instanceof http.Server ? "http" : "https";
     logger.info(`API Gateway running on ${protocol} port ${PORT}`);
+    void warmUpDatabase();
   });
 
   registerGracefulShutdown(server, redisAdapter);

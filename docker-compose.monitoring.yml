@@ -39,8 +39,12 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - AWS_SHARED_CREDENTIALS_FILE=/usr/share/grafana/.aws/credentials
+      - AWS_CONFIG_FILE=/usr/share/grafana/.aws/config
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Read by the CloudWatch datasource (authType: credentials) for prod logs.
+      - ${USERPROFILE:-${HOME}}/.aws:/usr/share/grafana/.aws:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:

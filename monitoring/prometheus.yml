@@ -74,3 +74,9 @@ scrape_configs:
       - targets: ["scheduler-service:9111"]
         labels:
           service: scheduler-service
+
+  - job_name: performance-review-service
+    static_configs:
+      - targets: ["performance-review-service:9112"]
+        labels:
+          service: performance-review-service

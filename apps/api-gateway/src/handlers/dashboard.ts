@@ -9,6 +9,7 @@ import {
   limitReads,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { cacheManager } from "@hrms/cache";
 import {
   apiResponse,
   RESPONSE_STATUS,
@@ -19,6 +20,7 @@ import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { leaveClient, grpcCall } from "../grpc/clients";
 import { getActiveSettings } from "./tenantSettings";
+import { listHolidays } from "./general";
 import { getWorkingDays } from "../utils/workingDays";
 import { getSeatStatus } from "../utils/planLimits";
 import {
@@ -108,15 +110,17 @@ export async function resolveCaller(req: AuthRequest): Promise<Caller> {
   return { userId, tenantId, capabilities, teams };
 }
 
-async function activeDepartments(): Promise<string[]> {
-  const groups = await prisma.user.groupBy({
-    by: ["department"],
-    where: { employeeStatus: "Active", department: { not: null } },
-  });
-  return groups
-    .map((g: any) => g.department as string)
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+async function activeDepartments(
+  tenantId: string,
+  options: { fresh?: boolean } = {},
+): Promise<string[]> {
+  const people = await rosterFor(tenantId, options);
+  const names = new Set<string>();
+  for (const p of people) {
+    if (p.employeeStatus === "Active" && p.department)
+      names.add(p.department as string);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 function findPreference(tenantId: string, userId: string) {
@@ -135,7 +139,7 @@ function findPreference(tenantId: string, userId: string) {
 async function resolveCallerAndPreference(req: AuthRequest) {
   const tenantId = (getTenantId() ?? req.user!.tenantId)!;
   const departments = hasPrivilegedRole(req.user!.tenantRole ?? "", HR_ROLES)
-    ? activeDepartments()
+    ? activeDepartments(tenantId)
     : undefined;
   // Settle the speculative read now so a failure surfaces where it's used.
   departments?.catch(() => undefined);
@@ -160,7 +164,7 @@ async function loadLayout(
       ? preference
       : findPreference(caller.tenantId, caller.userId),
     caller.capabilities.hr
-      ? (prefetchedDepartments ?? activeDepartments())
+      ? (prefetchedDepartments ?? activeDepartments(caller.tenantId))
       : Promise.resolve([]),
   ]);
   const dynamic = { teams: caller.teams.map((t) => t.id), departments };
@@ -256,7 +260,10 @@ export async function saveDashboardPreferences(
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Too many widgets.",
       });
-    const departments = caller.capabilities.hr ? await activeDepartments() : [];
+    // Fresh: this validates a layout being saved.
+    const departments = caller.capabilities.hr
+      ? await activeDepartments(caller.tenantId, { fresh: true })
+      : [];
     const layout = sanitizeLayout(body.widgets, caller.capabilities, {
       teams: caller.teams.map((t) => t.id),
       departments,
@@ -329,14 +336,136 @@ function once<T>(caller: Caller, key: string, load: () => Promise<T>) {
   if (!memo.has(key)) memo.set(key, load());
   return memo.get(key) as Promise<T>;
 }
+// Tenant-wide rows several widgets derive their figures from, read once per
+// request instead of once per widget: the admin layout used to send ~13
+// separate user, resignation and holiday reads. Each widget applies the
+// filter it used to send to the database to these rows instead. Dates are
+// compared via new Date()/dayjs so the rows may also come from JSON.
+const rosterSelect = {
+  ...personSelect,
+  department: true,
+  employeeStatus: true,
+  joining_date: true,
+  createdAt: true,
+  dateOfTermination: true,
+  dateOfAbscond: true,
+  kyc_approval: true,
+} as const;
+// Tenant-wide reads are also shared across requests, briefly: the browser
+// refreshes these widgets every 15 minutes and on focus at most once a
+// minute, so a TTL of a minute or a few is not visible staleness. Each is
+// keyed by the caller's tenant and read only after the widget's
+// authorization check in getDashboardData; nothing viewer-specific is
+// stored. Keys sit under existing families so the writes that already
+// invalidate those families (employees:*, resignations:*) clear them too;
+// writes that don't (bulk import, scheduler status jobs, joins) wait out
+// the TTL.
+function shared<T>(
+  caller: Caller,
+  key: string,
+  ttlSeconds: number,
+  load: () => Promise<T>,
+): Promise<T> {
+  return once(caller, `shared:${key}`, () =>
+    cacheManager.getOrSet(`t:${caller.tenantId}:${key}`, load, {
+      ttlSeconds,
+    }),
+  );
+}
+const utcDay = () => dayjs.utc().format("YYYY-MM-DD");
+
+// Also read by the layout's department list before a Caller exists, so it is
+// keyed by tenant id directly; both share one cache entry and one load.
+const ROSTER_TTL = 60;
+function rosterFor(tenantId: string, options: { fresh?: boolean } = {}) {
+  return cacheManager.getOrSet(
+    `t:${tenantId}:employees:dashboard:v1:roster`,
+    () => prisma.user.findMany({ select: rosterSelect }),
+    { ttlSeconds: ROSTER_TTL, fresh: options.fresh },
+  );
+}
+const roster = (caller: Caller) =>
+  once(caller, "roster", () => rosterFor(caller.tenantId));
+/** Approved and Submitted resignations — every status a widget counts. */
+const openResignations = (caller: Caller) =>
+  shared(caller, "resignations:dashboard:v1:open", 60, () =>
+    prisma.resignation.findMany({
+      where: { status: { in: ["Approved", "Submitted"] } },
+      select: {
+        userId: true,
+        status: true,
+        lastWorkingDay: true,
+        relievedFromDutyOn: true,
+      },
+    }),
+  );
+/**
+ * Tenant-wide queue counts. Computed for everything and cached once per
+ * tenant; each widget shows only the counts the viewer's capabilities allow.
+ */
+const queueCounts = (caller: Caller) =>
+  shared(caller, "dashboard:v1:queue-counts", 60, async () => {
+    const [tickets, breached, assetIssues, advances, joins] = await Promise.all(
+      [
+        prisma.ticket.count({
+          where: { status: { in: ["open", "in_progress"] } },
+        }),
+        prisma.ticket.count({
+          where: {
+            slaBreached: true,
+            status: { notIn: ["resolved", "closed"] },
+          },
+        }),
+        prisma.assetIssue.count({ where: { status: "open" } }),
+        prisma.salaryAdvance.count({ where: { status: "Pending" } }),
+        masterPrisma.tenantJoinRequest.count({
+          where: { tenantId: caller.tenantId, status: "pending" },
+        }),
+      ],
+    );
+    return { tickets, breached, assetIssues, advances, joins };
+  });
+const reviewCycles = (caller: Caller) =>
+  shared(caller, "dashboard:v1:review-cycles", 300, () =>
+    prisma.performanceReviewCycle.findMany({
+      select: {
+        id: true,
+        name: true,
+        periodStart: true,
+        periodEnd: true,
+        status: true,
+      },
+    }),
+  );
+const disbursedRuns = (caller: Caller) =>
+  shared(caller, "dashboard:v1:disbursed-runs", 300, () =>
+    prisma.payrollRun.findMany({
+      where: { status: "disbursed" },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      select: { id: true, month: true, year: true, disbursedAt: true },
+      take: 24,
+    }),
+  );
+/** A year's holidays from the shared holiday cache (see general.ts). */
+const holidaysIn = (caller: Caller, year: number) =>
+  once(caller, `holidays:${year}`, () => listHolidays(year));
+const pendingJoinRequests = (caller: Caller) =>
+  queueCounts(caller).then((c) => c.joins);
+
+const timeOf = (d: unknown) =>
+  d == null ? NaN : new Date(d as string | Date).getTime();
+/** Inclusive range check, as Prisma's gte/lte (a missing date never matches). */
+const within = (d: unknown, start: Date, end: Date) => {
+  const t = timeOf(d);
+  return t >= start.getTime() && t <= end.getTime();
+};
+
 const activeHeadcount = (caller: Caller) =>
-  once(caller, "activeHeadcount", () =>
-    prisma.user.count({ where: { employeeStatus: "Active" } }),
+  roster(caller).then(
+    (people) => people.filter((p) => p.employeeStatus === "Active").length,
   );
 const pendingAdvances = (caller: Caller) =>
-  once(caller, "pendingAdvances", () =>
-    prisma.salaryAdvance.count({ where: { status: "Pending" } }),
-  );
+  queueCounts(caller).then((c) => c.advances);
 const tenantSettings = (caller: Caller) =>
   once(caller, "settings", () => getActiveSettings(caller.tenantId));
 
@@ -345,15 +474,10 @@ async function dayType(
   caller: Caller,
 ): Promise<"working" | "weekoff" | "holiday"> {
   const today = todayStart();
-  const [settings, holidayDoc] = await Promise.all([
+  const [settings, list] = await Promise.all([
     tenantSettings(caller).catch(() => null),
-    prisma.holiday.findFirst({
-      where: { year: today.year(), month: today.month() + 1 },
-    }),
+    holidaysIn(caller, today.year()),
   ]);
-  const list: any[] = Array.isArray(holidayDoc?.holidays)
-    ? (holidayDoc!.holidays as any[])
-    : [];
   if (list.some((h) => h?.date === today.format("YYYY-MM-DD")))
     return "holiday";
   return getWorkingDays(settings).includes(today.day()) ? "working" : "weekoff";
@@ -544,27 +668,31 @@ const loaders: Record<string, Loader> = {
   workforce: async (caller) => {
     const monthStart = dayjs.utc().startOf("month").toDate();
     const monthEnd = dayjs.utc().endOf("month").toDate();
-    const [active, depts, joiners, leaving] = await Promise.all([
-      activeHeadcount(caller),
-      prisma.user.groupBy({
-        by: ["department"],
-        where: { employeeStatus: "Active" },
-        _count: { id: true },
-      }),
-      prisma.user.count({
-        where: { joining_date: { gte: monthStart, lte: monthEnd } },
-      }),
-      prisma.resignation.count({
-        where: {
-          status: "Approved",
-          lastWorkingDay: { gte: monthStart, lte: monthEnd },
-        },
-      }),
+    const [people, resignations] = await Promise.all([
+      roster(caller),
+      openResignations(caller),
     ]);
-    const departments = depts
-      .map((d: any) => ({
-        department: d.department || "Unassigned",
-        count: d._count.id as number,
+    const activePeople = people.filter((p) => p.employeeStatus === "Active");
+    const active = activePeople.length;
+    // Grouped by the stored value, as the groupBy this replaces did (so a
+    // null and an empty department still come out as two entries).
+    const perDepartment = new Map<string | null, number>();
+    for (const p of activePeople) {
+      const key = (p.department as string | null) ?? null;
+      perDepartment.set(key, (perDepartment.get(key) ?? 0) + 1);
+    }
+    const joiners = people.filter((p) =>
+      within(p.joining_date, monthStart, monthEnd),
+    ).length;
+    const leaving = resignations.filter(
+      (r) =>
+        r.status === "Approved" &&
+        within(r.lastWorkingDay, monthStart, monthEnd),
+    ).length;
+    const departments = [...perDepartment]
+      .map(([department, count]) => ({
+        department: department || "Unassigned",
+        count,
       }))
       .sort((a, b) => b.count - a.count);
     return {
@@ -578,27 +706,23 @@ const loaders: Record<string, Loader> = {
   "joiners-leavers": async (caller) => {
     const start = todayStart().toDate();
     const end = todayStart().add(30, "day").endOf("day").toDate();
-    const [joining, resignations] = await Promise.all([
-      caller.capabilities.hr
-        ? prisma.user.findMany({
-            where: { joining_date: { gte: start, lte: end } },
-            select: { ...personSelect, department: true, joining_date: true },
-            orderBy: { joining_date: "asc" },
-            take: 8,
-          })
-        : Promise.resolve(null),
-      prisma.resignation.findMany({
-        where: { status: "Approved", lastWorkingDay: { gte: start, lte: end } },
-        select: { userId: true, lastWorkingDay: true },
-        orderBy: { lastWorkingDay: "asc" },
-        take: 8,
-      }),
+    const [people, open] = await Promise.all([
+      roster(caller),
+      openResignations(caller),
     ]);
-    const leavers = await prisma.user.findMany({
-      where: { id: { in: resignations.map((r) => r.userId!).filter(Boolean) } },
-      select: { ...personSelect, department: true },
-    });
-    const byId = new Map(leavers.map((p) => [p.id, p]));
+    const joining = caller.capabilities.hr
+      ? people
+          .filter((p) => within(p.joining_date, start, end))
+          .sort((a, b) => timeOf(a.joining_date) - timeOf(b.joining_date))
+          .slice(0, 8)
+      : null;
+    const resignations = open
+      .filter(
+        (r) => r.status === "Approved" && within(r.lastWorkingDay, start, end),
+      )
+      .sort((a, b) => timeOf(a.lastWorkingDay) - timeOf(b.lastWorkingDay))
+      .slice(0, 8);
+    const byId = new Map(people.map((p) => [p.id, p]));
     return {
       joining:
         joining?.map((p) => ({
@@ -632,59 +756,32 @@ const loaders: Record<string, Loader> = {
     const [kyc, exits, tickets, breached, assetIssues, advances, joins] =
       await Promise.all([
         q(c.kyc, () =>
-          prisma.user.count({ where: { kyc_approval: "Pending" } }),
+          roster(caller).then(
+            (people) =>
+              people.filter((p) => p.kyc_approval === "Pending").length,
+          ),
         ),
         q(c.exits, () =>
-          prisma.resignation.count({ where: { status: "Submitted" } }),
+          openResignations(caller).then(
+            (open) => open.filter((r) => r.status === "Submitted").length,
+          ),
         ),
-        q(c.helpdesk, () =>
-          prisma.ticket.count({
-            where: { status: { in: ["open", "in_progress"] } },
-          }),
-        ),
-        q(c.helpdesk, () =>
-          prisma.ticket.count({
-            where: {
-              slaBreached: true,
-              status: { notIn: ["resolved", "closed"] },
-            },
-          }),
-        ),
-        q(c.assets, () =>
-          prisma.assetIssue.count({ where: { status: "open" } }),
-        ),
+        q(c.helpdesk, () => queueCounts(caller).then((n) => n.tickets)),
+        q(c.helpdesk, () => queueCounts(caller).then((n) => n.breached)),
+        q(c.assets, () => queueCounts(caller).then((n) => n.assetIssues)),
         q(c.advances, () => pendingAdvances(caller)),
-        q(c.joinRequests, () =>
-          masterPrisma.tenantJoinRequest.count({
-            where: { tenantId: caller.tenantId, status: "pending" },
-          }),
-        ),
+        q(c.joinRequests, () => pendingJoinRequests(caller)),
       ]);
     return { kyc, exits, tickets, breached, assetIssues, advances, joins };
   },
 
-  "headcount-trend": async (_caller, s) => {
+  "headcount-trend": async (caller, s) => {
     const months = Number(s.months) || 6;
-    const [people, resignations] = await Promise.all([
-      prisma.user.findMany({
-        select: {
-          id: true,
-          employeeStatus: true,
-          joining_date: true,
-          createdAt: true,
-          dateOfTermination: true,
-          dateOfAbscond: true,
-        },
-      }),
-      prisma.resignation.findMany({
-        where: { status: "Approved" },
-        select: {
-          userId: true,
-          lastWorkingDay: true,
-          relievedFromDutyOn: true,
-        },
-      }),
+    const [people, open] = await Promise.all([
+      roster(caller),
+      openResignations(caller),
     ]);
+    const resignations = open.filter((r) => r.status === "Approved");
     const lwd = new Map(
       resignations.map((r) => [
         r.userId,
@@ -730,120 +827,131 @@ const loaders: Record<string, Loader> = {
     return { months, series, undatedExits: undated };
   },
 
-  "attendance-trend": async (caller, s) => {
-    const days = Number(s.days) || 14;
-    const start = todayStart().subtract(days - 1, "day");
-    const [settings, records, active, holidayDocs] = await Promise.all([
-      tenantSettings(caller).catch(() => null),
-      prisma.attendanceRecord.findMany({
-        where: {
-          date: { gte: start.toDate(), lte: todayStart().toDate() },
-          timeIn: { not: null },
-        },
-        select: { date: true, userId: true },
-      }),
-      activeHeadcount(caller),
-      prisma.holiday.findMany({
-        where: {
-          year: { in: [...new Set([start.year(), dayjs.utc().year()])] },
-        },
-      }),
-    ]);
-    const working = getWorkingDays(settings);
-    const holidays = new Set(
-      holidayDocs.flatMap((d: any) =>
-        (Array.isArray(d.holidays) ? d.holidays : []).map((h: any) => h?.date),
-      ),
-    );
-    const perDay = new Map<string, Set<string>>();
-    for (const r of records) {
-      const k = dayjs.utc(r.date).format("YYYY-MM-DD");
-      if (!perDay.has(k)) perDay.set(k, new Set());
-      perDay.get(k)!.add(r.userId);
-    }
-    const series = Array.from({ length: days }, (_, i) => start.add(i, "day"))
-      .filter(
-        (d) =>
-          working.includes(d.day()) && !holidays.has(d.format("YYYY-MM-DD")),
-      )
-      .map((d) => {
-        const k = d.format("YYYY-MM-DD");
-        const attended = perDay.get(k)?.size ?? 0;
-        return {
-          date: k,
-          attended,
-          rate: active ? attended / active : 0,
-          today: d.isSame(todayStart(), "day"),
-        };
-      });
-    return { days, headcount: active, series };
-  },
+  "attendance-trend": (caller, s) =>
+    shared(
+      caller,
+      `dashboard:v1:attendance-trend:${Number(s.days) || 14}:${utcDay()}`,
+      120,
+      async () => {
+        const days = Number(s.days) || 14;
+        const start = todayStart().subtract(days - 1, "day");
+        const years = [...new Set([start.year(), dayjs.utc().year()])];
+        const [settings, records, active, holidayLists] = await Promise.all([
+          tenantSettings(caller).catch(() => null),
+          prisma.attendanceRecord.findMany({
+            where: {
+              date: { gte: start.toDate(), lte: todayStart().toDate() },
+              timeIn: { not: null },
+            },
+            select: { date: true, userId: true },
+          }),
+          activeHeadcount(caller),
+          Promise.all(years.map((y) => holidaysIn(caller, y))),
+        ]);
+        const working = getWorkingDays(settings);
+        const holidays = new Set(holidayLists.flat().map((h: any) => h?.date));
+        const perDay = new Map<string, Set<string>>();
+        for (const r of records) {
+          const k = dayjs.utc(r.date).format("YYYY-MM-DD");
+          if (!perDay.has(k)) perDay.set(k, new Set());
+          perDay.get(k)!.add(r.userId);
+        }
+        const series = Array.from({ length: days }, (_, i) =>
+          start.add(i, "day"),
+        )
+          .filter(
+            (d) =>
+              working.includes(d.day()) &&
+              !holidays.has(d.format("YYYY-MM-DD")),
+          )
+          .map((d) => {
+            const k = d.format("YYYY-MM-DD");
+            const attended = perDay.get(k)?.size ?? 0;
+            return {
+              date: k,
+              attended,
+              rate: active ? attended / active : 0,
+              today: d.isSame(todayStart(), "day"),
+            };
+          });
+        return { days, headcount: active, series };
+      },
+    ),
 
-  hiring: async () => {
-    const now = new Date();
-    const week = dayjs().add(7, "day").toDate();
-    const [openRoles, byStatus, interviews, offers] = await Promise.all([
-      prisma.jobOpening.count({
-        where: { status: { in: ["Active", "Open"] }, deletedOn: null },
-      }),
-      prisma.jobApplication.groupBy({
-        by: ["status"],
-        _count: { id: true },
-      }),
-      prisma.applicationStageEvent.findMany({
-        where: { scheduledAt: { gte: now, lte: week }, completedAt: null },
-        select: {
-          id: true,
-          stageName: true,
-          scheduledAt: true,
-          application: {
-            select: { name: true, jobOpening: { select: { jobTitle: true } } },
+  hiring: (caller) =>
+    shared(caller, "dashboard:v1:hiring", 300, async () => {
+      const now = new Date();
+      const week = dayjs().add(7, "day").toDate();
+      const [openRoles, byStatus, interviews, offers] = await Promise.all([
+        prisma.jobOpening.count({
+          where: { status: { in: ["Active", "Open"] }, deletedOn: null },
+        }),
+        prisma.jobApplication.groupBy({
+          by: ["status"],
+          _count: { id: true },
+        }),
+        prisma.applicationStageEvent.findMany({
+          where: { scheduledAt: { gte: now, lte: week }, completedAt: null },
+          select: {
+            id: true,
+            stageName: true,
+            scheduledAt: true,
+            application: {
+              select: {
+                name: true,
+                jobOpening: { select: { jobTitle: true } },
+              },
+            },
           },
-        },
-        orderBy: { scheduledAt: "asc" },
-        take: 6,
-      }),
-      prisma.offer.count({
-        where: { status: { in: ["Sent", "Negotiating"] } },
-      }),
-    ]);
-    return {
-      openRoles,
-      applications: byStatus
-        .map((g: any) => ({
-          status: g.status as string,
-          count: g._count.id as number,
-        }))
-        .sort((a, b) => b.count - a.count),
-      interviews: interviews.map((e: any) => ({
-        id: e.id,
-        stage: e.stageName,
-        at: e.scheduledAt,
-        candidate: e.application?.name ?? "Candidate",
-        role: e.application?.jobOpening?.jobTitle ?? null,
-      })),
-      offersOut: offers,
-    };
-  },
+          orderBy: { scheduledAt: "asc" },
+          take: 6,
+        }),
+        prisma.offer.count({
+          where: { status: { in: ["Sent", "Negotiating"] } },
+        }),
+      ]);
+      return {
+        openRoles,
+        applications: byStatus
+          .map((g: any) => ({
+            status: g.status as string,
+            count: g._count.id as number,
+          }))
+          .sort((a, b) => b.count - a.count),
+        interviews: interviews.map((e: any) => ({
+          id: e.id,
+          stage: e.stageName,
+          at: e.scheduledAt,
+          candidate: e.application?.name ?? "Candidate",
+          role: e.application?.jobOpening?.jobTitle ?? null,
+        })),
+        offersOut: offers,
+      };
+    }),
 
   payroll: async (caller) => {
-    const [latest, open, advances] = await Promise.all([
-      prisma.payrollRun.findFirst({
-        orderBy: [{ year: "desc" }, { month: "desc" }],
-        select: {
-          id: true,
-          month: true,
-          year: true,
-          status: true,
-          employeeCount: true,
-          totalGross: true,
-          totalNet: true,
-          approvedAt: true,
-          disbursedAt: true,
-        },
-      }),
-      prisma.payrollRun.count({
-        where: { status: { in: ["draft", "approved"] } },
+    const [{ latest, open }, advances] = await Promise.all([
+      shared(caller, "dashboard:v1:payroll", 120, async () => {
+        const [latest, open] = await Promise.all([
+          prisma.payrollRun.findFirst({
+            orderBy: [{ year: "desc" }, { month: "desc" }],
+            select: {
+              id: true,
+              month: true,
+              year: true,
+              status: true,
+              employeeCount: true,
+              totalGross: true,
+              totalNet: true,
+              approvedAt: true,
+              disbursedAt: true,
+            },
+          }),
+          prisma.payrollRun.count({
+            where: { status: { in: ["draft", "approved"] } },
+          }),
+        ]);
+        return { latest, open };
       }),
       caller.capabilities.advances
         ? pendingAdvances(caller)
@@ -852,35 +960,38 @@ const loaders: Record<string, Loader> = {
     return { latest, openRuns: open, pendingAdvances: advances };
   },
 
-  "review-cycle": async () => {
-    const cycle = await prisma.performanceReviewCycle.findFirst({
-      where: { status: "active" },
-      orderBy: { periodEnd: "asc" },
-      select: { id: true, name: true, periodStart: true, periodEnd: true },
-    });
-    if (!cycle) return { cycle: null, statuses: [] };
-    const groups = await prisma.performanceReview.groupBy({
-      by: ["status"],
-      where: { cycleId: cycle.id },
-      _count: { id: true },
-    });
-    return {
-      cycle,
-      statuses: groups.map((g: any) => ({
-        status: g.status,
-        count: g._count.id,
-      })),
-    };
-  },
+  "review-cycle": (caller) =>
+    shared(caller, "dashboard:v1:review-cycle", 300, async () => {
+      const active = (await reviewCycles(caller))
+        .filter((c) => c.status === "active")
+        .sort((a, b) => timeOf(a.periodEnd) - timeOf(b.periodEnd));
+      const cycle = active[0]
+        ? {
+            id: active[0].id,
+            name: active[0].name,
+            periodStart: active[0].periodStart,
+            periodEnd: active[0].periodEnd,
+          }
+        : null;
+      if (!cycle) return { cycle: null, statuses: [] };
+      const groups = await prisma.performanceReview.groupBy({
+        by: ["status"],
+        where: { cycleId: cycle.id },
+        _count: { id: true },
+      });
+      return {
+        cycle,
+        statuses: groups.map((g: any) => ({
+          status: g.status,
+          count: g._count.id,
+        })),
+      };
+    }),
 
   "org-admin": async (caller) => {
     const c = caller.capabilities;
     const [joins, tenant, seats] = await Promise.all([
-      c.joinRequests
-        ? masterPrisma.tenantJoinRequest.count({
-            where: { tenantId: caller.tenantId, status: "pending" },
-          })
-        : Promise.resolve(null),
+      c.joinRequests ? pendingJoinRequests(caller) : Promise.resolve(null),
       c.subscription
         ? masterPrisma.tenant.findUnique({
             where: { id: caller.tenantId },
@@ -1006,15 +1117,11 @@ const loaders: Record<string, Loader> = {
       }),
     ]);
     const cycleIds = [...new Set([...mine, ...toReview].map((r) => r.cycleId))];
+    const reviewees = new Set(toReview.map((r) => r.userId));
+    const wanted = new Set(cycleIds);
     const [cycles, people] = await Promise.all([
-      prisma.performanceReviewCycle.findMany({
-        where: { id: { in: cycleIds } },
-        select: { id: true, name: true, periodEnd: true, status: true },
-      }),
-      prisma.user.findMany({
-        where: { id: { in: toReview.map((r) => r.userId) } },
-        select: personSelect,
-      }),
+      reviewCycles(caller).then((all) => all.filter((c) => wanted.has(c.id))),
+      roster(caller).then((all) => all.filter((p) => reviewees.has(p.id))),
     ]);
     const cycle = new Map(cycles.map((c) => [c.id, c]));
     const person = new Map(people.map((p) => [p.id, p]));
@@ -1039,12 +1146,7 @@ const loaders: Record<string, Loader> = {
   },
 
   payslip: async (caller) => {
-    const runs = await prisma.payrollRun.findMany({
-      where: { status: "disbursed" },
-      orderBy: [{ year: "desc" }, { month: "desc" }],
-      select: { id: true, month: true, year: true, disbursedAt: true },
-      take: 24,
-    });
+    const runs = await disbursedRuns(caller);
     if (runs.length === 0) return { latest: null };
     const lines = await prisma.payrollLineItem.findMany({
       where: {

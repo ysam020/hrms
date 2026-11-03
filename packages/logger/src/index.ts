@@ -1,10 +1,13 @@
 import http from "http";
+import cluster from "node:cluster";
 import { randomUUID } from "crypto";
 import winston from "winston";
 import WinstonCloudWatch from "winston-cloudwatch";
+import { status as grpcStatus } from "@grpc/grpc-js";
 import {
   register,
   collectDefaultMetrics,
+  AggregatorRegistry,
   Counter,
   Histogram,
 } from "prom-client";
@@ -49,17 +52,21 @@ export const httpRequestsTotal = new Counter({
   labelNames: ["method", "route", "status", "service"],
 });
 
+// `outcome` is "ok", "app_error" (handled; the reply says success: false —
+// how most handlers report failures) or the gRPC status name of a thrown
+// error. Calls that threw used to record nothing at all. Buckets go past
+// 1 s because typical calls already sit near it (Atlas round trips).
 export const grpcRequestDuration = new Histogram({
   name: "grpc_request_duration_ms",
   help: "Duration of gRPC requests in milliseconds",
-  labelNames: ["method", "service"],
-  buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
+  labelNames: ["method", "service", "outcome"],
+  buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
 });
 
 export const grpcRequestsTotal = new Counter({
   name: "grpc_requests_total",
   help: "Total number of gRPC requests",
-  labelNames: ["method", "service"],
+  labelNames: ["method", "service", "outcome"],
 });
 
 // A failed publish here means a cross-instance WebSocket event (a direct
@@ -101,6 +108,29 @@ export const mcpToolCallDuration = new Histogram({
   buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
 });
 
+// Cache (packages/cache). `family` is the key's family segment ("settings",
+// "dashboard", …) — never a tenant, user or record id. `result`: hit_memory,
+// hit_redis, miss, coalesced, set, invalidate, loader_error, redis_error.
+export const cacheOperationsTotal = new Counter({
+  name: "cache_operations_total",
+  help: "Cache lookups, fills and invalidations by outcome",
+  labelNames: ["family", "result", "service"],
+});
+
+export const cacheLoaderDuration = new Histogram({
+  name: "cache_loader_duration_ms",
+  help: "Time to compute a value on a cache miss, in milliseconds",
+  labelNames: ["family", "service"],
+  buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
+});
+
+export const cacheRedisDuration = new Histogram({
+  name: "cache_redis_duration_ms",
+  help: "Duration of cache reads and writes against Redis, in milliseconds",
+  labelNames: ["op", "service"],
+  buckets: [0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250],
+});
+
 // ── Transports ───────────────────────────────────────────────────────────────
 const logGroupName =
   process.env.AWS_CLOUDWATCH_LOG_GROUP || `/hrms/${serviceName}/${env}`;
@@ -117,6 +147,32 @@ const transports: winston.transport[] = [
   }),
 ];
 
+// winston-loki sends every metadata field as Loki structured metadata, which
+// must be string-valued: one line carrying an object or a number (an error,
+// a request body, a status code) made Loki reject its whole batch with a
+// 400, so most request and error logs never arrived. This builds the line
+// winston-loki itself would ("<message> <json meta>") and leaves only the
+// level behind as metadata.
+const LOKI_KEPT_KEYS = new Set([
+  "level",
+  "label",
+  "labels",
+  "timestamp",
+  "message",
+]);
+export const lokiLineFormat = winston.format((info) => {
+  const { label, labels, timestamp, message, ...meta } = info;
+  void label;
+  void labels;
+  void timestamp;
+  (info as Record<symbol, unknown>)[Symbol.for("message")] =
+    `${message} ${Object.keys(meta).length > 0 ? JSON.stringify(meta) : ""}`;
+  for (const key of Object.keys(info)) {
+    if (!LOKI_KEPT_KEYS.has(key)) delete (info as Record<string, unknown>)[key];
+  }
+  return info;
+})();
+
 if (process.env.LOKI_URL) {
   // Loaded only when Loki is configured, so services without it never load it.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -125,10 +181,11 @@ if (process.env.LOKI_URL) {
     new LokiTransport({
       host: process.env.LOKI_URL,
       labels: { service: serviceName, env },
-      // json:true sends plain HTTP JSON (no protobuf), avoiding structured metadata rejection
+      // json:true sends plain HTTP JSON (no protobuf).
       json: true,
-      // No extra format here — the global logger format already serialises to JSON.
-      // Adding format:json() again would double-escape the log line string.
+      // Giving the transport a format makes winston-loki use the line built
+      // above instead of building its own; see lokiLineFormat.
+      format: lokiLineFormat,
       replaceTimestamp: true,
       gracefulShutdown: true,
       onConnectionError: (err: Error) =>
@@ -229,11 +286,33 @@ const metricsPort = process.env.METRICS_PORT
   ? parseInt(process.env.METRICS_PORT, 10)
   : null;
 
-if (metricsPort) {
+// Cluster workers share the service's port, so a server in each worker
+// answered every scrape from whichever worker accepted it: Prometheus saw
+// counters jump between processes, and rates and histograms were garbage.
+// Only the primary listens, and it answers for all of its workers (the
+// primary imports this module before forking; see each bootstrap.ts).
+// Constructed in every process: prom-client only installs a worker's IPC
+// reply to the primary's metrics request once an AggregatorRegistry exists
+// in that worker (without it every aggregated scrape timed out).
+const aggregator = new AggregatorRegistry();
+const hasWorkers = () => Object.keys(cluster.workers ?? {}).length > 0;
+
+if (metricsPort && !cluster.isWorker) {
   http
     .createServer(async (req, res) => {
       if (req.url === "/metrics") {
-        const metrics = await register.metrics();
+        let metrics: string;
+        try {
+          metrics =
+            cluster.isPrimary && hasWorkers()
+              ? await aggregator.clusterMetrics()
+              : await register.metrics();
+        } catch (error) {
+          logger.warn("metrics scrape failed", { error });
+          res.writeHead(500);
+          res.end();
+          return;
+        }
         res.setHeader("Content-Type", register.contentType);
         res.end(metrics);
       } else if (req.url === "/health") {
@@ -318,6 +397,15 @@ function redactSensitive(value: unknown, depth = 0): unknown {
   return value;
 }
 
+// Same mapping as grpc-server's errorHandler: a numeric gRPC status keeps
+// its name, anything else (a Prisma error, a plain Error) is INTERNAL.
+export function grpcOutcomeOf(error: any): string {
+  const code = error?.code;
+  return typeof code === "number" && grpcStatus[code]
+    ? grpcStatus[code]
+    : "INTERNAL";
+}
+
 export const grpcApiRequestLogger = async (
   call: any,
   next: () => Promise<any>,
@@ -338,10 +426,21 @@ export const grpcApiRequestLogger = async (
       requestId,
       request: redactSensitive(call.request),
     });
-    const result = await next();
-    const duration = Date.now() - start;
-    grpcRequestDuration.observe({ method, service: serviceName }, duration);
-    grpcRequestsTotal.inc({ method, service: serviceName });
+    const record = (outcome: string) => {
+      const duration = Date.now() - start;
+      const labels = { method, service: serviceName, outcome };
+      grpcRequestDuration.observe(labels, duration);
+      grpcRequestsTotal.inc(labels);
+      return duration;
+    };
+    let result: any;
+    try {
+      result = await next();
+    } catch (error: any) {
+      record(grpcOutcomeOf(error));
+      throw error;
+    }
+    const duration = record(result?.success === false ? "app_error" : "ok");
     logger.info("gRPC Response", { duration: `${duration}ms`, requestId });
     return result;
   });

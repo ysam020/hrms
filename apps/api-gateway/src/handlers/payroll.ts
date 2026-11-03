@@ -285,7 +285,10 @@ export async function initiatePayrollRun(req: Request, res: Response) {
           where: { userId: { in: empIds } },
           select: { userId: true, balances: true },
         }),
-        tenantId ? getActiveSettings(tenantId) : Promise.resolve(null),
+        // Fresh: feeds payroll figures.
+        tenantId
+          ? getActiveSettings(tenantId, { fresh: true })
+          : Promise.resolve(null),
         (prisma as any).holiday.findMany({ where: { year } }),
       ]);
     const workingDays: number[] = (tenantSettings as any)?.workWeekPattern

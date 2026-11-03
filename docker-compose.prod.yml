@@ -45,8 +45,9 @@ x-backend-service: &backend-service
   #
   # Memory budget (this host is m7i-flex.large: 8 GiB total, per
   # cloudformation/hrms-deploy.yaml): api-gateway (768M) + 12 backend
-  # services x 384M = 5,376M + redis (256M) + caddy (128M) = 5,760M, leaving
-  # ~2,432M (~30%) of headroom for the OS, dockerd, and the CloudWatch/SSM
+  # services x 384M = 5,376M + redis (256M) + caddy (128M) + grafana (384M)
+  # + prometheus (384M) = 6,528M, leaving ~1,664M (~20%) of headroom for the
+  # OS, dockerd, and the CloudWatch/SSM
   # agents. Redis runs on this same host again (see the `redis` service
   # below) — this single-instance deployment has no other instance to share
   # a cache with, so the ElastiCache cluster that used to serve that role
@@ -83,6 +84,7 @@ services:
       - PERFORMANCE_REVIEW_SERVICE_HOST=performance-review-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
       - SERVICE_NAME=api-gateway
+      - NODE_ENV=production
       - METRICS_PORT=9003
     ports:
       - "19002:9002"
@@ -109,6 +111,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/auth-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=auth-service
+      - NODE_ENV=production
       - METRICS_PORT=9101
     ports:
       - "9101:9101"
@@ -119,6 +122,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/user-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=user-service
+      - NODE_ENV=production
       - METRICS_PORT=9102
     ports:
       - "9102:9102"
@@ -129,6 +133,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/employee-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=employee-service
+      - NODE_ENV=production
       - METRICS_PORT=9103
     ports:
       - "9103:9103"
@@ -139,6 +144,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/attendance-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=attendance-service
+      - NODE_ENV=production
       - METRICS_PORT=9104
     ports:
       - "9104:9104"
@@ -149,6 +155,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/leave-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=leave-service
+      - NODE_ENV=production
       - METRICS_PORT=9105
     ports:
       - "9105:9105"
@@ -159,6 +166,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/recruitment-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=recruitment-service
+      - NODE_ENV=production
       - METRICS_PORT=9106
     ports:
       - "9106:9106"
@@ -169,6 +177,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/hrm-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=hrm-service
+      - NODE_ENV=production
       - METRICS_PORT=9107
     ports:
       - "9107:9107"
@@ -179,6 +188,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/salary-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=salary-service
+      - NODE_ENV=production
       - METRICS_PORT=9108
     ports:
       - "9108:9108"
@@ -189,6 +199,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/analytics-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=analytics-service
+      - NODE_ENV=production
       - METRICS_PORT=9109
     ports:
       - "9109:9109"
@@ -199,6 +210,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/notification-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=notification-service
+      - NODE_ENV=production
       - METRICS_PORT=9110
     ports:
       - "9110:9110"
@@ -209,6 +221,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/performance-review-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=performance-review-service
+      - NODE_ENV=production
       - METRICS_PORT=9112
     ports:
       - "9112:9112"
@@ -219,6 +232,7 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/scheduler-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=scheduler-service
+      - NODE_ENV=production
       # Crons run only where this is "true" — see apps/scheduler-service/src/scheduler.ts
       - SCHEDULER_ENABLED=true
       - METRICS_PORT=9111
@@ -252,10 +266,38 @@ services:
           cpus: "0.25"
           memory: 256M
 
+  # Writes the grafana.praesto.in basic-auth credential for Caddy from
+  # Secrets Manager (secret `hrms/config-grafana-basic-auth`: the base64 of a
+  # `caddy hash-password` bcrypt hash) into a volume only Caddy reads, so the
+  # hash is never in this file or in git. Reads with the instance role, like
+  # the services' hrms/config; the role's existing hrms/config-* grant covers
+  # the name. Always exits 0: if the secret is missing or malformed it writes
+  # the hash of a random password nobody has, so Grafana stays locked but
+  # Caddy, and api.praesto.in behind it, still start.
+  # After changing the secret: re-run deploy.sh, then restart hrms-prod-caddy.
+  grafana-auth:
+    container_name: hrms-prod-grafana-auth
+    logging: *default-logging
+    image: amazon/aws-cli:2.27.0
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        hash=$$(aws secretsmanager get-secret-value --region ap-south-1 --secret-id hrms/config-grafana-basic-auth --query SecretString --output text 2>/dev/null) || hash=""
+        case "$$hash" in
+          "" | *[!A-Za-z0-9+/=]*)
+            echo "grafana-auth: secret unavailable or malformed; Grafana stays locked" >&2
+            hash="JDJhJDE0JFdBZ3ZPVlQ0TS95V0dNRHRrMHBmcy56b2czZ0JZblJBSHAwN3VYWlJSWG1UVS4vZ2F6Z0Np" ;;
+        esac
+        printf 'admin %s\n' "$$hash" > /run/grafana-auth/credentials
+    volumes:
+      - grafana-auth:/run/grafana-auth
+    restart: "no"
+
   # Public TLS termination (was the ALB's job — see the CloudFormation
-  # template's comment history). Caddyfile is written once at boot by
-  # LaunchTemplate UserData, not synced per-deploy like docker-compose.prod.yml,
-  # since its content (the domain name) doesn't change between deploys.
+  # template's comment history). The Caddyfile comes from the `caddyfile`
+  # config at the bottom of this file, so it's synced on every deploy like
+  # the rest of this file. (/opt/hrms/Caddyfile, written at boot by
+  # LaunchTemplate UserData, is no longer read.)
   # caddy-data persists the Let's Encrypt account/certificate across
   # container restarts so it isn't re-issued every time.
   caddy:
@@ -265,16 +307,89 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      grafana-auth:
+        condition: service_completed_successfully
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      - grafana-auth:/run/grafana-auth:ro
     restart: on-failure
     deploy:
       resources:
         limits:
           cpus: "0.25"
           memory: 128M
+
+  # Logs UI at https://grafana.praesto.in, reading CloudWatch Logs
+  # (/hrms/<service>/production) with this instance's role — no AWS keys.
+  # Not published on a host port: only Caddy reaches it, and Caddy's
+  # basic_auth is the only way in. Grafana's own login form and basic auth
+  # are off; Caddy passes the authenticated user in X-WEBAUTH-USER
+  # (auth.proxy), and "admin" maps to Grafana's built-in admin account.
+  grafana:
+    container_name: hrms-prod-grafana
+    logging: *default-logging
+    image: grafana/grafana:12.1.1
+    environment:
+      - GF_SERVER_ROOT_URL=https://grafana.praesto.in
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-WEBAUTH-USER
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=false
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_DISABLE_SIGNOUT_MENU=true
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+    configs:
+      - source: grafana-datasources
+        target: /etc/grafana/provisioning/datasources/datasources.yml
+      - source: grafana-dashboard-provider
+        target: /etc/grafana/provisioning/dashboards/hrms.yml
+      - source: grafana-dashboard-hrms
+        target: /var/lib/grafana/dashboards/hrms.json
+      - source: grafana-dashboard-hrms-logs
+        target: /var/lib/grafana/dashboards/hrms-logs.json
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+
+  # Metrics for the "HRMS Node.js Application" dashboard. Scrapes every
+  # service's /metrics (METRICS_PORT) over the compose network; not
+  # published on a host port, only grafana reads it.
+  prometheus:
+    container_name: hrms-prod-prometheus
+    logging: *default-logging
+    image: prom/prometheus:v3.11.3
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--storage.tsdb.retention.size=2GB"
+    configs:
+      - source: prometheus-config
+        target: /etc/prometheus/prometheus.yml
+    volumes:
+      - prometheus-data:/prometheus
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
 
   web:
     container_name: hrms-prod-web
@@ -296,3 +411,1902 @@ volumes:
   redis-data:
   caddy-data:
   caddy-config:
+  grafana-data:
+  grafana-auth:
+  prometheus-data:
+
+configs:
+  # header_up overwrites any X-WEBAUTH-USER a client sends, so Grafana only
+  # ever sees the user Caddy authenticated. The basic_auth credential is not
+  # in this file (the repo is public): grafana-auth writes it from Secrets
+  # Manager into /run/grafana-auth/credentials before Caddy starts.
+  caddyfile:
+    content: |
+      api.praesto.in {
+      	reverse_proxy https://api-gateway:9002 {
+      		transport http {
+      			tls_insecure_skip_verify
+      		}
+      	}
+      }
+
+      grafana.praesto.in {
+      	basic_auth {
+      		import /run/grafana-auth/credentials
+      	}
+      	reverse_proxy grafana:3000 {
+      		header_up X-WEBAUTH-USER {http.auth.user.id}
+      		header_up -Authorization
+      	}
+      }
+
+  grafana-datasources:
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          uid: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true
+          editable: false
+        - name: CloudWatch
+          type: cloudwatch
+          uid: cloudwatch
+          access: proxy
+          editable: false
+          jsonData:
+            authType: default
+            defaultRegion: ap-south-1
+
+  grafana-dashboard-provider:
+    content: |
+      apiVersion: 1
+      providers:
+        - name: hrms
+          type: file
+          allowUiUpdates: false
+          options:
+            path: /var/lib/grafana/dashboards
+
+  prometheus-config:
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+      scrape_configs:
+        - job_name: api-gateway
+          static_configs:
+            - targets: ["api-gateway:9003"]
+              labels:
+                service: api-gateway
+        - job_name: auth-service
+          static_configs:
+            - targets: ["auth-service:9101"]
+              labels:
+                service: auth-service
+        - job_name: user-service
+          static_configs:
+            - targets: ["user-service:9102"]
+              labels:
+                service: user-service
+        - job_name: employee-service
+          static_configs:
+            - targets: ["employee-service:9103"]
+              labels:
+                service: employee-service
+        - job_name: attendance-service
+          static_configs:
+            - targets: ["attendance-service:9104"]
+              labels:
+                service: attendance-service
+        - job_name: leave-service
+          static_configs:
+            - targets: ["leave-service:9105"]
+              labels:
+                service: leave-service
+        - job_name: recruitment-service
+          static_configs:
+            - targets: ["recruitment-service:9106"]
+              labels:
+                service: recruitment-service
+        - job_name: hrm-service
+          static_configs:
+            - targets: ["hrm-service:9107"]
+              labels:
+                service: hrm-service
+        - job_name: salary-service
+          static_configs:
+            - targets: ["salary-service:9108"]
+              labels:
+                service: salary-service
+        - job_name: analytics-service
+          static_configs:
+            - targets: ["analytics-service:9109"]
+              labels:
+                service: analytics-service
+        - job_name: notification-service
+          static_configs:
+            - targets: ["notification-service:9110"]
+              labels:
+                service: notification-service
+        - job_name: performance-review-service
+          static_configs:
+            - targets: ["performance-review-service:9112"]
+              labels:
+                service: performance-review-service
+        - job_name: scheduler-service
+          static_configs:
+            - targets: ["scheduler-service:9111"]
+              labels:
+                service: scheduler-service
+
+  # BEGIN generated dashboards — `node scripts/embed-grafana-dashboards.mjs`
+  # copies monitoring/grafana/dashboards-prod/*.json here. Edit those files,
+  # not this block.
+  grafana-dashboard-hrms-logs:
+    content: |
+      {
+        "uid": "hrms-logs",
+        "title": "HRMS Logs (production)",
+        "tags": [
+          "logs",
+          "production"
+        ],
+        "timezone": "browser",
+        "refresh": "",
+        "schemaVersion": 41,
+        "editable": true,
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "templating": {
+          "list": [
+            {
+              "name": "service",
+              "label": "Log groups",
+              "type": "custom",
+              "multi": true,
+              "includeAll": false,
+              "query": "/hrms/api-gateway/production,/hrms/auth-service/production,/hrms/user-service/production,/hrms/employee-service/production,/hrms/attendance-service/production,/hrms/leave-service/production,/hrms/recruitment-service/production,/hrms/hrm-service/production,/hrms/salary-service/production,/hrms/analytics-service/production,/hrms/notification-service/production,/hrms/performance-review-service/production,/hrms/scheduler-service/production",
+              "current": {
+                "text": [
+                  "/hrms/api-gateway/production",
+                  "/hrms/auth-service/production",
+                  "/hrms/user-service/production",
+                  "/hrms/employee-service/production",
+                  "/hrms/attendance-service/production",
+                  "/hrms/leave-service/production",
+                  "/hrms/recruitment-service/production",
+                  "/hrms/hrm-service/production",
+                  "/hrms/salary-service/production",
+                  "/hrms/analytics-service/production",
+                  "/hrms/notification-service/production",
+                  "/hrms/performance-review-service/production",
+                  "/hrms/scheduler-service/production"
+                ],
+                "value": [
+                  "/hrms/api-gateway/production",
+                  "/hrms/auth-service/production",
+                  "/hrms/user-service/production",
+                  "/hrms/employee-service/production",
+                  "/hrms/attendance-service/production",
+                  "/hrms/leave-service/production",
+                  "/hrms/recruitment-service/production",
+                  "/hrms/hrm-service/production",
+                  "/hrms/salary-service/production",
+                  "/hrms/analytics-service/production",
+                  "/hrms/notification-service/production",
+                  "/hrms/performance-review-service/production",
+                  "/hrms/scheduler-service/production"
+                ]
+              },
+              "options": [
+                {
+                  "text": "/hrms/api-gateway/production",
+                  "value": "/hrms/api-gateway/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/auth-service/production",
+                  "value": "/hrms/auth-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/user-service/production",
+                  "value": "/hrms/user-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/employee-service/production",
+                  "value": "/hrms/employee-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/attendance-service/production",
+                  "value": "/hrms/attendance-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/leave-service/production",
+                  "value": "/hrms/leave-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/recruitment-service/production",
+                  "value": "/hrms/recruitment-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/hrm-service/production",
+                  "value": "/hrms/hrm-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/salary-service/production",
+                  "value": "/hrms/salary-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/analytics-service/production",
+                  "value": "/hrms/analytics-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/notification-service/production",
+                  "value": "/hrms/notification-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/performance-review-service/production",
+                  "value": "/hrms/performance-review-service/production",
+                  "selected": true
+                },
+                {
+                  "text": "/hrms/scheduler-service/production",
+                  "value": "/hrms/scheduler-service/production",
+                  "selected": true
+                }
+              ]
+            },
+            {
+              "name": "level",
+              "label": "Level",
+              "type": "custom",
+              "multi": true,
+              "includeAll": true,
+              "query": "error,warn,info,http,debug",
+              "current": {
+                "text": [
+                  "All"
+                ],
+                "value": [
+                  "$$__all"
+                ]
+              },
+              "options": []
+            },
+            {
+              "name": "search",
+              "label": "Search text",
+              "type": "textbox",
+              "query": "",
+              "current": {
+                "text": "",
+                "value": ""
+              }
+            },
+            {
+              "name": "requestId",
+              "label": "Request ID",
+              "type": "textbox",
+              "query": "",
+              "current": {
+                "text": "",
+                "value": ""
+              }
+            }
+          ]
+        },
+        "panels": [
+          {
+            "type": "stat",
+            "title": "Errors",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "filter level = \"error\" and @message like /(?i)$${search:regex}/ | stats count(*) as errors",
+                "logGroupNames": [
+                  "$$service"
+                ]
+              }
+            ],
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "sum"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "colorMode": "background",
+              "graphMode": "none",
+              "textMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "noValue": "0",
+                "color": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            },
+            "id": 1,
+            "gridPos": {
+              "x": 0,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "stat",
+            "title": "Warnings",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "filter level = \"warn\" and @message like /(?i)$${search:regex}/ | stats count(*) as warnings",
+                "logGroupNames": [
+                  "$$service"
+                ]
+              }
+            ],
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "sum"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "colorMode": "background",
+              "graphMode": "none",
+              "textMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "noValue": "0",
+                "color": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            },
+            "id": 2,
+            "gridPos": {
+              "x": 6,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "stat",
+            "title": "5xx responses (gateway)",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "filter message = \"HTTP Request\" and status >= 500 | stats count(*) as errors_5xx",
+                "logGroups": [
+                  {
+                    "arn": "arn:aws:logs:ap-south-1:189923011190:log-group:/hrms/api-gateway/production:*",
+                    "name": "/hrms/api-gateway/production"
+                  }
+                ],
+                "logGroupNames": [
+                  "/hrms/api-gateway/production"
+                ]
+              }
+            ],
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "sum"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "colorMode": "background",
+              "graphMode": "none",
+              "textMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "noValue": "0",
+                "color": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            },
+            "id": 3,
+            "gridPos": {
+              "x": 12,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "stat",
+            "title": "Log lines",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "filter level in [$${level:doublequote}] and @message like /(?i)$${search:regex}/ | stats count(*) as lines",
+                "logGroupNames": [
+                  "$$service"
+                ]
+              }
+            ],
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "sum"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "colorMode": "background",
+              "graphMode": "none",
+              "textMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "noValue": "0",
+                "color": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            },
+            "id": 4,
+            "gridPos": {
+              "x": 18,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "timeseries",
+            "title": "Log volume by level",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "filter level in [$${level:doublequote}] and @message like /(?i)$${search:regex}/ | stats count(*) as lines by bin(5m), level",
+                "logGroupNames": [
+                  "$$service"
+                ],
+                "statsGroups": [
+                  "level"
+                ]
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "drawStyle": "bars",
+                  "fillOpacity": 70,
+                  "stacking": {
+                    "mode": "normal"
+                  }
+                },
+                "unit": "short"
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byRegexp",
+                    "options": ".*error.*"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "mode": "fixed",
+                        "fixedColor": "red"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byRegexp",
+                    "options": ".*warn.*"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "mode": "fixed",
+                        "fixedColor": "orange"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byRegexp",
+                    "options": ".*info.*"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "mode": "fixed",
+                        "fixedColor": "blue"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom"
+              },
+              "tooltip": {
+                "mode": "multi"
+              }
+            },
+            "id": 5,
+            "gridPos": {
+              "x": 0,
+              "y": 4,
+              "w": 24,
+              "h": 8
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "table",
+            "title": "Top errors",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "filter level = \"error\" and @message like /(?i)$${search:regex}/ | stats count(*) as count, latest(@timestamp) as last_seen by @log, message | sort count desc | limit 25",
+                "logGroupNames": [
+                  "$$service"
+                ]
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {},
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "count"
+                  },
+                  "properties": [
+                    {
+                      "id": "custom.width",
+                      "value": 80
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "showHeader": true
+            },
+            "id": 6,
+            "gridPos": {
+              "x": 0,
+              "y": 12,
+              "w": 12,
+              "h": 9
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "table",
+            "title": "Slowest API routes (p95, gateway)",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "filter message = \"HTTP Request\" | parse duration \"*ms\" as ms | parse url /(?<path>[^?]*)/ | stats count(*) as requests, avg(ms) as avg_ms, pct(ms, 95) as p95_ms, max(ms) as max_ms by method, path | sort p95_ms desc | limit 25",
+                "logGroups": [
+                  {
+                    "arn": "arn:aws:logs:ap-south-1:189923011190:log-group:/hrms/api-gateway/production:*",
+                    "name": "/hrms/api-gateway/production"
+                  }
+                ],
+                "logGroupNames": [
+                  "/hrms/api-gateway/production"
+                ]
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "decimals": 0
+              },
+              "overrides": []
+            },
+            "options": {
+              "showHeader": true
+            },
+            "id": 7,
+            "gridPos": {
+              "x": 12,
+              "y": 12,
+              "w": 12,
+              "h": 9
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "logs",
+            "title": "Logs",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "fields @timestamp, @log, level, message, requestId, @message | filter level in [$${level:doublequote}] and @message like /(?i)$${search:regex}/ | sort @timestamp desc | limit 500",
+                "logGroupNames": [
+                  "$$service"
+                ]
+              }
+            ],
+            "options": {
+              "showTime": true,
+              "wrapLogMessage": true,
+              "sortOrder": "Descending",
+              "enableLogDetails": true,
+              "prettifyLogMessage": false,
+              "dedupStrategy": "none"
+            },
+            "id": 8,
+            "gridPos": {
+              "x": 0,
+              "y": 21,
+              "w": 24,
+              "h": 14
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          },
+          {
+            "type": "logs",
+            "title": "Request trace — paste a requestId above",
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "id": "",
+                "expression": "fields @timestamp, @log, level, message, @message | filter requestId = \"$${requestId}\" | sort @timestamp asc | limit 500",
+                "logGroupNames": [
+                  "$$service"
+                ]
+              }
+            ],
+            "options": {
+              "showTime": true,
+              "wrapLogMessage": true,
+              "sortOrder": "Ascending",
+              "enableLogDetails": true
+            },
+            "id": 9,
+            "gridPos": {
+              "x": 0,
+              "y": 35,
+              "w": 24,
+              "h": 10
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            }
+          }
+        ]
+      }
+
+  grafana-dashboard-hrms:
+    content: |
+      {
+        "id": null,
+        "uid": "hrms-nodejs",
+        "title": "HRMS Node.js Application",
+        "tags": [
+          "hrms",
+          "nodejs"
+        ],
+        "timezone": "browser",
+        "schemaVersion": 38,
+        "version": 2,
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "templating": {
+          "list": [
+            {
+              "name": "service",
+              "type": "query",
+              "label": "Service",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "query": "label_values(process_resident_memory_bytes, service)",
+              "refresh": 2,
+              "includeAll": true,
+              "allValue": ".+",
+              "multi": false,
+              "current": {}
+            },
+            {
+              "name": "interval",
+              "type": "interval",
+              "label": "Interval",
+              "options": [
+                {
+                  "selected": false,
+                  "text": "1m",
+                  "value": "1m"
+                },
+                {
+                  "selected": true,
+                  "text": "5m",
+                  "value": "5m"
+                },
+                {
+                  "selected": false,
+                  "text": "10m",
+                  "value": "10m"
+                },
+                {
+                  "selected": false,
+                  "text": "30m",
+                  "value": "30m"
+                }
+              ],
+              "current": {
+                "text": "5m",
+                "value": "5m"
+              },
+              "query": "1m,5m,10m,30m",
+              "auto": false
+            }
+          ]
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "HTTP Request Rate",
+            "type": "stat",
+            "gridPos": {
+              "x": 0,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps",
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    }
+                  ]
+                }
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ]
+              },
+              "orientation": "auto",
+              "textMode": "auto",
+              "colorMode": "background"
+            },
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{service=~\"$$service\"}[$$interval]))",
+                "legendFormat": "req/s",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Error Rate",
+            "type": "stat",
+            "gridPos": {
+              "x": 6,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 1,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 5,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ]
+              },
+              "colorMode": "background"
+            },
+            "targets": [
+              {
+                "expr": "100 * sum(rate(http_requests_total{service=~\"$$service\",status=~\"5..\"}[$$interval])) / sum(rate(http_requests_total{service=~\"$$service\"}[$$interval]))",
+                "legendFormat": "error %",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "p95 HTTP Latency",
+            "type": "stat",
+            "gridPos": {
+              "x": 12,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 200,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 1000,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ]
+              },
+              "colorMode": "background"
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_ms_bucket{service=~\"$$service\"}[$$interval])))",
+                "legendFormat": "p95",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Heap Used (avg across services)",
+            "type": "stat",
+            "gridPos": {
+              "x": 18,
+              "y": 0,
+              "w": 6,
+              "h": 4
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "decmbytes",
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 256,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 512,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ]
+              },
+              "colorMode": "background"
+            },
+            "targets": [
+              {
+                "expr": "avg(nodejs_heap_used_bytes{service=~\"$$service\"}) / 1024 / 1024",
+                "legendFormat": "heap",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 10,
+            "title": "HTTP Metrics",
+            "type": "row",
+            "gridPos": {
+              "x": 0,
+              "y": 4,
+              "w": 24,
+              "h": 1
+            },
+            "collapsed": false
+          },
+          {
+            "id": 5,
+            "title": "HTTP Request Rate by Service",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 0,
+              "y": 5,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 10
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi",
+                "sort": "desc"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "sum by (service) (rate(http_requests_total{service=~\"$$service\"}[$$interval]))",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "title": "HTTP Error Rate by Service",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 12,
+              "y": 5,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 10
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 1,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 5,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "100 * sum by (service) (rate(http_requests_total{service=~\"$$service\",status=~\"5..\"}[$$interval])) / sum by (service) (rate(http_requests_total{service=~\"$$service\"}[$$interval]))",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "title": "HTTP Latency Percentiles",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 0,
+              "y": 13,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "custom": {
+                  "lineWidth": 2
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_ms_bucket{service=~\"$$service\"}[$$interval])))",
+                "legendFormat": "p99 {{service}}",
+                "refId": "A"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_ms_bucket{service=~\"$$service\"}[$$interval])))",
+                "legendFormat": "p95 {{service}}",
+                "refId": "B"
+              },
+              {
+                "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_request_duration_ms_bucket{service=~\"$$service\"}[$$interval])))",
+                "legendFormat": "p50 {{service}}",
+                "refId": "C"
+              }
+            ]
+          },
+          {
+            "id": 8,
+            "title": "HTTP Requests by Status Code",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 12,
+              "y": 13,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 5
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "sum by (status) (rate(http_requests_total{service=~\"$$service\",status=~\"2..\"}[$$interval]))",
+                "legendFormat": "2xx {{status}}",
+                "refId": "A"
+              },
+              {
+                "expr": "sum by (status) (rate(http_requests_total{service=~\"$$service\",status=~\"4..\"}[$$interval]))",
+                "legendFormat": "4xx {{status}}",
+                "refId": "B"
+              },
+              {
+                "expr": "sum by (status) (rate(http_requests_total{service=~\"$$service\",status=~\"5..\"}[$$interval]))",
+                "legendFormat": "5xx {{status}}",
+                "refId": "C"
+              }
+            ]
+          },
+          {
+            "id": 20,
+            "title": "Node.js Process",
+            "type": "row",
+            "gridPos": {
+              "x": 0,
+              "y": 21,
+              "w": 24,
+              "h": 1
+            },
+            "collapsed": false
+          },
+          {
+            "id": 11,
+            "title": "CPU Usage",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 0,
+              "y": 22,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 10
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "rate(process_cpu_seconds_total{service=~\"$$service\"}[$$interval]) * 100",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 12,
+            "title": "Heap Used vs Heap Total",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 12,
+              "y": 22,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "decmbytes",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 10
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "nodejs_heap_used_bytes{service=~\"$$service\"} / 1024 / 1024",
+                "legendFormat": "used · {{service}}",
+                "refId": "A"
+              },
+              {
+                "expr": "nodejs_heap_size_total_bytes{service=~\"$$service\"} / 1024 / 1024",
+                "legendFormat": "total · {{service}}",
+                "refId": "B"
+              }
+            ]
+          },
+          {
+            "id": 13,
+            "title": "RSS Memory",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 0,
+              "y": 30,
+              "w": 8,
+              "h": 7
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "decmbytes",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 8
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom"
+              }
+            },
+            "targets": [
+              {
+                "expr": "process_resident_memory_bytes{service=~\"$$service\"} / 1024 / 1024",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 14,
+            "title": "Event Loop Lag",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 8,
+              "y": 30,
+              "w": 8,
+              "h": 7
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "custom": {
+                  "lineWidth": 2
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 100,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 500,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom"
+              }
+            },
+            "targets": [
+              {
+                "expr": "nodejs_eventloop_lag_seconds{service=~\"$$service\"} * 1000",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 15,
+            "title": "GC Duration Rate",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 16,
+              "y": 30,
+              "w": 8,
+              "h": 7
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 8
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom"
+              }
+            },
+            "targets": [
+              {
+                "expr": "sum by (service, gctype) (rate(nodejs_gc_duration_seconds_sum{service=~\"$$service\"}[$$interval]))",
+                "legendFormat": "{{service}} {{gctype}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 16,
+            "title": "Active Handles",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 0,
+              "y": 37,
+              "w": 8,
+              "h": 7
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "custom": {
+                  "lineWidth": 2
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom"
+              }
+            },
+            "targets": [
+              {
+                "expr": "nodejs_active_handles_total{service=~\"$$service\"}",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 17,
+            "title": "External Memory",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 8,
+              "y": 37,
+              "w": 8,
+              "h": 7
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "decmbytes",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 8
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom"
+              }
+            },
+            "targets": [
+              {
+                "expr": "nodejs_external_memory_bytes{service=~\"$$service\"} / 1024 / 1024",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 18,
+            "title": "Open File Descriptors",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 16,
+              "y": 37,
+              "w": 8,
+              "h": 7
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "custom": {
+                  "lineWidth": 2
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "list",
+                "placement": "bottom"
+              }
+            },
+            "targets": [
+              {
+                "expr": "process_open_fds{service=~\"$$service\"}",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 30,
+            "title": "gRPC Metrics",
+            "type": "row",
+            "gridPos": {
+              "x": 0,
+              "y": 44,
+              "w": 24,
+              "h": 1
+            },
+            "collapsed": false
+          },
+          {
+            "id": 21,
+            "title": "gRPC Request Rate",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 0,
+              "y": 45,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 10
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "sum by (service) (rate(grpc_requests_total{service=~\"$$service\"}[$$interval]))",
+                "legendFormat": "{{service}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 22,
+            "title": "gRPC Latency p95",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 12,
+              "y": 45,
+              "w": 12,
+              "h": 8
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "custom": {
+                  "lineWidth": 2
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              },
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ]
+              }
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum by (service, le) (rate(grpc_request_duration_ms_bucket{service=~\"$$service\"}[$$interval])))",
+                "legendFormat": "p95 {{service}}",
+                "refId": "A"
+              },
+              {
+                "expr": "histogram_quantile(0.50, sum by (service, le) (rate(grpc_request_duration_ms_bucket{service=~\"$$service\"}[$$interval])))",
+                "legendFormat": "p50 {{service}}",
+                "refId": "B"
+              }
+            ]
+          },
+          {
+            "id": 40,
+            "title": "Logs",
+            "type": "row",
+            "gridPos": {
+              "x": 0,
+              "y": 53,
+              "w": 24,
+              "h": 1
+            },
+            "collapsed": false
+          },
+          {
+            "id": 31,
+            "title": "Log Volume by Level",
+            "type": "timeseries",
+            "gridPos": {
+              "x": 0,
+              "y": 54,
+              "w": 8,
+              "h": 7
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "custom": {
+                  "lineWidth": 2,
+                  "fillOpacity": 8
+                }
+              }
+            },
+            "options": {
+              "tooltip": {
+                "mode": "multi"
+              }
+            },
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "default",
+                "queryMode": "Logs",
+                "logGroupNames": [
+                  "/hrms/api-gateway/production",
+                  "/hrms/auth-service/production",
+                  "/hrms/user-service/production",
+                  "/hrms/employee-service/production",
+                  "/hrms/attendance-service/production",
+                  "/hrms/leave-service/production",
+                  "/hrms/recruitment-service/production",
+                  "/hrms/hrm-service/production",
+                  "/hrms/salary-service/production",
+                  "/hrms/analytics-service/production",
+                  "/hrms/notification-service/production",
+                  "/hrms/performance-review-service/production",
+                  "/hrms/scheduler-service/production"
+                ],
+                "statsGroups": [
+                  "level"
+                ],
+                "expression": "fields @timestamp, level\n| stats count(*) as count by bin(1m) as time, level"
+              }
+            ]
+          },
+          {
+            "id": 32,
+            "title": "Error Logs",
+            "type": "logs",
+            "gridPos": {
+              "x": 8,
+              "y": 54,
+              "w": 16,
+              "h": 7
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "cloudwatch"
+            },
+            "options": {
+              "showTime": true,
+              "showLabels": false,
+              "wrapLogMessage": true,
+              "prettifyLogMessage": false,
+              "enableLogDetails": true,
+              "sortOrder": "Descending",
+              "dedupStrategy": "none"
+            },
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "cloudwatch"
+                },
+                "region": "default",
+                "queryMode": "Logs",
+                "logGroupNames": [
+                  "/hrms/api-gateway/production",
+                  "/hrms/auth-service/production",
+                  "/hrms/user-service/production",
+                  "/hrms/employee-service/production",
+                  "/hrms/attendance-service/production",
+                  "/hrms/leave-service/production",
+                  "/hrms/recruitment-service/production",
+                  "/hrms/hrm-service/production",
+                  "/hrms/salary-service/production",
+                  "/hrms/analytics-service/production",
+                  "/hrms/notification-service/production",
+                  "/hrms/performance-review-service/production",
+                  "/hrms/scheduler-service/production"
+                ],
+                "expression": "fields @timestamp, @log, level, message\n| filter level in [\"error\", \"warn\"]\n| sort @timestamp desc\n| limit 200"
+              }
+            ]
+          }
+        ]
+      }
+  # END generated dashboards

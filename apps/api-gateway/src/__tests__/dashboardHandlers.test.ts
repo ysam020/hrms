@@ -33,6 +33,7 @@ jest.mock("@hrms/db", () => {
     dashboardPreference: model(),
     tenantJoinRequest: model(),
     tenant: model(),
+    assetIssue: model(),
   };
   return {
     markHandlerStart: jest.fn(),
@@ -60,6 +61,13 @@ jest.mock("@hrms/common", () => ({
   },
 }));
 
+// No cross-request cache in these tests: every read goes to the mocks.
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    getOrSet: jest.fn((_key: string, load: () => unknown) => load()),
+  },
+}));
+
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
@@ -77,6 +85,10 @@ jest.mock("./../handlers/tenantSettings", () => ({
   getActiveSettings: jest.fn().mockResolvedValue({
     workWeekPattern: { workingDays: [0, 1, 2, 3, 4, 5, 6] },
   }),
+}));
+
+jest.mock("../handlers/general", () => ({
+  listHolidays: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock("../utils/planLimits", () => ({

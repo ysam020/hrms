@@ -9,7 +9,46 @@ import {
   grpcRequestDuration,
   grpcRequestsTotal,
   getRequestId,
+  lokiLineFormat,
 } from "../index";
+
+describe("lokiLineFormat", () => {
+  const MESSAGE = Symbol.for("message");
+
+  it("puts metadata in the line and leaves only string-valued level as Loki metadata", () => {
+    const info: any = {
+      level: "info",
+      message: "HTTP Request",
+      timestamp: "2026-11-02T00:00:00.000Z",
+      status: 200,
+      request: { path: "/x" },
+      requestId: "r1",
+    };
+    const out: any = lokiLineFormat.transform(info);
+
+    // Same shape winston-loki builds itself: "<message> <json of the rest>".
+    expect(out[MESSAGE]).toBe(
+      'HTTP Request {"level":"info","status":200,"request":{"path":"/x"},"requestId":"r1"}',
+    );
+    // What winston-loki sends as structured metadata is everything except
+    // label/labels/timestamp/message; every value must be a string.
+    const { label, labels, timestamp, message, ...metadata } = out;
+    void label;
+    void labels;
+    void timestamp;
+    void message;
+    expect(JSON.parse(JSON.stringify(metadata))).toEqual({ level: "info" });
+    expect(out.timestamp).toBe("2026-11-02T00:00:00.000Z");
+  });
+
+  it("keeps the level in the line, as winston-loki's own line did", () => {
+    const out: any = lokiLineFormat.transform({
+      level: "warn",
+      message: "hi",
+    } as any);
+    expect(out[MESSAGE]).toBe('hi {"level":"warn"}');
+  });
+});
 
 describe("apiRequestLogger", () => {
   it("records duration/count metrics and logs once the response finishes", () => {
@@ -163,7 +202,11 @@ describe("grpcApiRequestLogger", () => {
       expect.objectContaining({ duration: expect.any(String) }),
     );
     expect(observeSpy).toHaveBeenCalledWith(
-      { method: "/leave.LeaveService/GetLeaves", service: expect.any(String) },
+      {
+        method: "/leave.LeaveService/GetLeaves",
+        service: expect.any(String),
+        outcome: "ok",
+      },
       expect.any(Number),
     );
     expect(incSpy).toHaveBeenCalled();
@@ -171,6 +214,53 @@ describe("grpcApiRequestLogger", () => {
     observeSpy.mockRestore();
     incSpy.mockRestore();
     infoSpy.mockRestore();
+  });
+
+  it("labels a handled failure reply app_error", async () => {
+    const incSpy = jest.spyOn(grpcRequestsTotal, "inc").mockImplementation();
+    jest.spyOn(grpcRequestDuration, "observe").mockImplementation();
+    jest.spyOn(logger, "info").mockImplementation();
+
+    await grpcApiRequestLogger(
+      { getPath: () => "/leave.LeaveService/ApplyLeave", request: {} },
+      jest.fn().mockResolvedValue({ success: false, message: "No balance" }),
+    );
+
+    expect(incSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "app_error" }),
+    );
+    jest.restoreAllMocks();
+  });
+
+  it("records a thrown error under its gRPC status name and rethrows it", async () => {
+    const incSpy = jest.spyOn(grpcRequestsTotal, "inc").mockImplementation();
+    const observeSpy = jest
+      .spyOn(grpcRequestDuration, "observe")
+      .mockImplementation();
+    jest.spyOn(logger, "info").mockImplementation();
+    const call = { getPath: () => "/user.UserService/GetUser", request: {} };
+
+    const notFound = Object.assign(new Error("missing"), { code: 5 });
+    await expect(
+      grpcApiRequestLogger(call, jest.fn().mockRejectedValue(notFound)),
+    ).rejects.toBe(notFound);
+    expect(incSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ outcome: "NOT_FOUND" }),
+    );
+    expect(observeSpy).toHaveBeenCalledTimes(1);
+
+    await expect(
+      grpcApiRequestLogger(
+        call,
+        jest
+          .fn()
+          .mockRejectedValue(Object.assign(new Error("db"), { code: "P2002" })),
+      ),
+    ).rejects.toThrow("db");
+    expect(incSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ outcome: "INTERNAL" }),
+    );
+    jest.restoreAllMocks();
   });
 
   it("uses 'unknown' as the method when the call has no getPath()", async () => {

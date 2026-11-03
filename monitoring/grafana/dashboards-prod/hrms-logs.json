@@ -1,0 +1,628 @@
+{
+  "uid": "hrms-logs",
+  "title": "HRMS Logs (production)",
+  "tags": ["logs", "production"],
+  "timezone": "browser",
+  "refresh": "",
+  "schemaVersion": 41,
+  "editable": true,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Log groups",
+        "type": "custom",
+        "multi": true,
+        "includeAll": false,
+        "query": "/hrms/api-gateway/production,/hrms/auth-service/production,/hrms/user-service/production,/hrms/employee-service/production,/hrms/attendance-service/production,/hrms/leave-service/production,/hrms/recruitment-service/production,/hrms/hrm-service/production,/hrms/salary-service/production,/hrms/analytics-service/production,/hrms/notification-service/production,/hrms/performance-review-service/production,/hrms/scheduler-service/production",
+        "current": {
+          "text": [
+            "/hrms/api-gateway/production",
+            "/hrms/auth-service/production",
+            "/hrms/user-service/production",
+            "/hrms/employee-service/production",
+            "/hrms/attendance-service/production",
+            "/hrms/leave-service/production",
+            "/hrms/recruitment-service/production",
+            "/hrms/hrm-service/production",
+            "/hrms/salary-service/production",
+            "/hrms/analytics-service/production",
+            "/hrms/notification-service/production",
+            "/hrms/performance-review-service/production",
+            "/hrms/scheduler-service/production"
+          ],
+          "value": [
+            "/hrms/api-gateway/production",
+            "/hrms/auth-service/production",
+            "/hrms/user-service/production",
+            "/hrms/employee-service/production",
+            "/hrms/attendance-service/production",
+            "/hrms/leave-service/production",
+            "/hrms/recruitment-service/production",
+            "/hrms/hrm-service/production",
+            "/hrms/salary-service/production",
+            "/hrms/analytics-service/production",
+            "/hrms/notification-service/production",
+            "/hrms/performance-review-service/production",
+            "/hrms/scheduler-service/production"
+          ]
+        },
+        "options": [
+          {
+            "text": "/hrms/api-gateway/production",
+            "value": "/hrms/api-gateway/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/auth-service/production",
+            "value": "/hrms/auth-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/user-service/production",
+            "value": "/hrms/user-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/employee-service/production",
+            "value": "/hrms/employee-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/attendance-service/production",
+            "value": "/hrms/attendance-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/leave-service/production",
+            "value": "/hrms/leave-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/recruitment-service/production",
+            "value": "/hrms/recruitment-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/hrm-service/production",
+            "value": "/hrms/hrm-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/salary-service/production",
+            "value": "/hrms/salary-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/analytics-service/production",
+            "value": "/hrms/analytics-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/notification-service/production",
+            "value": "/hrms/notification-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/performance-review-service/production",
+            "value": "/hrms/performance-review-service/production",
+            "selected": true
+          },
+          {
+            "text": "/hrms/scheduler-service/production",
+            "value": "/hrms/scheduler-service/production",
+            "selected": true
+          }
+        ]
+      },
+      {
+        "name": "level",
+        "label": "Level",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "query": "error,warn,info,http,debug",
+        "current": {
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "options": []
+      },
+      {
+        "name": "search",
+        "label": "Search text",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      },
+      {
+        "name": "requestId",
+        "label": "Request ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Errors",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "filter level = \"error\" and @message like /(?i)${search:regex}/ | stats count(*) as errors",
+          "logGroupNames": ["$service"]
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "filter level = \"warn\" and @message like /(?i)${search:regex}/ | stats count(*) as warnings",
+          "logGroupNames": ["$service"]
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 2,
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "5xx responses (gateway)",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "filter message = \"HTTP Request\" and status >= 500 | stats count(*) as errors_5xx",
+          "logGroups": [
+            {
+              "arn": "arn:aws:logs:ap-south-1:189923011190:log-group:/hrms/api-gateway/production:*",
+              "name": "/hrms/api-gateway/production"
+            }
+          ],
+          "logGroupNames": ["/hrms/api-gateway/production"]
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 3,
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Log lines",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "filter level in [${level:doublequote}] and @message like /(?i)${search:regex}/ | stats count(*) as lines",
+          "logGroupNames": ["$service"]
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 4,
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Log volume by level",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "filter level in [${level:doublequote}] and @message like /(?i)${search:regex}/ | stats count(*) as lines by bin(5m), level",
+          "logGroupNames": ["$service"],
+          "statsGroups": ["level"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*error.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*warn.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*info.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 5,
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Top errors",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "filter level = \"error\" and @message like /(?i)${search:regex}/ | stats count(*) as count, latest(@timestamp) as last_seen by @log, message | sort count desc | limit 25",
+          "logGroupNames": ["$service"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "count"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "id": 6,
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Slowest API routes (p95, gateway)",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "filter message = \"HTTP Request\" | parse duration \"*ms\" as ms | parse url /(?<path>[^?]*)/ | stats count(*) as requests, avg(ms) as avg_ms, pct(ms, 95) as p95_ms, max(ms) as max_ms by method, path | sort p95_ms desc | limit 25",
+          "logGroups": [
+            {
+              "arn": "arn:aws:logs:ap-south-1:189923011190:log-group:/hrms/api-gateway/production:*",
+              "name": "/hrms/api-gateway/production"
+            }
+          ],
+          "logGroupNames": ["/hrms/api-gateway/production"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "id": 7,
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Logs",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "fields @timestamp, @log, level, message, requestId, @message | filter level in [${level:doublequote}] and @message like /(?i)${search:regex}/ | sort @timestamp desc | limit 500",
+          "logGroupNames": ["$service"]
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "dedupStrategy": "none"
+      },
+      "id": 8,
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 14
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Request trace \u2014 paste a requestId above",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Logs",
+          "region": "default",
+          "id": "",
+          "expression": "fields @timestamp, @log, level, message, @message | filter requestId = \"${requestId}\" | sort @timestamp asc | limit 500",
+          "logGroupNames": ["$service"]
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Ascending",
+        "enableLogDetails": true
+      },
+      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      }
+    }
+  ]
+}

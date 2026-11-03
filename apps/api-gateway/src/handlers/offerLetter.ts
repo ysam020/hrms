@@ -207,7 +207,8 @@ export async function buildOfferLetterPdf(
     },
   });
 
-  const settings = await getActiveSettings(tenantId);
+  // Fresh: printed into a signed offer letter.
+  const settings = await getActiveSettings(tenantId, { fresh: true });
   const workStartHour =
     settings?.workStartHour ?? SETTINGS_DEFAULTS.workStartHour;
   const workStartMinute =

@@ -1,5 +1,11 @@
-export { getRedisClient } from "./client";
-export { CacheManager, getCacheManager, cacheManager } from "./CacheManager";
+export { getRedisClient, getCacheRedisClient } from "./client";
+export {
+  CacheManager,
+  getCacheManager,
+  cacheManager,
+  cacheFamilyOf,
+  type GetOrSetOptions,
+} from "./CacheManager";
 export {
   storeRefreshToken,
   rotateRefreshToken,

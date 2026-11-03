@@ -57,7 +57,10 @@ jest.mock("@hrms/db", () => {
       count: jest.fn(),
       findFirst: jest.fn(),
     },
-    tenantSettings: { findFirst: jest.fn() },
+    tenantSettings: {
+      findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
   return {
     prisma: _db,
@@ -100,6 +103,16 @@ jest.mock("@hrms/common", () => ({
     jest.requireActual("@hrms/common").deriveOfferCompensationBreakup,
   OFFER_COMPENSATION_DISCLAIMER:
     jest.requireActual("@hrms/common").OFFER_COMPENSATION_DISCLAIMER,
+}));
+
+jest.mock("@hrms/cache", () => ({
+  cacheManager: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn(),
+    delete: jest.fn(),
+    invalidatePattern: jest.fn(),
+    getOrSet: jest.fn((_key: string, load: () => unknown) => load()),
+  },
 }));
 
 jest.mock("@hrms/logger", () => ({

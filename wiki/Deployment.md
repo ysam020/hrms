@@ -253,7 +253,13 @@ precisely when they're needed most. Actually eliminating it means one of:
 | Metrics | Prometheus + Grafana | AWS CloudWatch      |
 | Logs    | Loki + Grafana       | AWS CloudWatch Logs |
 
-Each service exposes a `/metrics` endpoint on `METRICS_PORT` (separate from the gRPC port) scraped by Prometheus. Structured JSON logs are written by `@hrms/logger` (Winston) and shipped to Loki or CloudWatch depending on `NODE_ENV`.
+Each service exposes a `/metrics` endpoint on `METRICS_PORT` (separate from the gRPC port) scraped by Prometheus. Structured JSON logs are written by `@hrms/logger` (Winston) to the console, to Loki when `LOKI_URL` is set (local stack), and to CloudWatch Logs as `/hrms/<service>/production` when `NODE_ENV=production` (set for every service in `docker-compose.prod.yml`), otherwise `/hrms/<service>/dev`.
+
+### Reading logs
+
+- **Local:** Grafana at http://localhost:3000 → Explore → **Loki** (`{service="api-gateway"}`). The **CloudWatch** data source there uses your `~/.aws` credentials and can read production log groups too.
+- **Production:** https://grafana.praesto.in → Explore → **CloudWatch** → Logs, log groups `/hrms/*/production`. It runs in `docker-compose.prod.yml` on the app instance, behind Caddy's `basic_auth` (user `admin`); Grafana's own login form is off and Caddy passes the user through `auth.proxy`. The credential is not in the repo (it is public): the one-shot `grafana-auth` service reads it from the Secrets Manager secret `hrms/config-grafana-basic-auth` with the instance role and writes it to a volume Caddy imports. If the secret is missing, Grafana stays locked (Caddy and the API still start). To change the password: `docker run --rm caddy:2-alpine caddy hash-password`, base64-encode the hash, store it with `aws secretsmanager put-secret-value --secret-id hrms/config-grafana-basic-auth --secret-string <base64>`, re-run deploy, then `docker restart hrms-prod-caddy`. Grafana reads CloudWatch with `HrmsInstanceRole` (`HrmsGrafanaLogsRead`).
+- **Production dashboards** live in `monitoring/grafana/dashboards-prod/` (`hrms.json`: Prometheus metrics + log panels; `hrms-logs.json`: CloudWatch logs). Deploys only sync `docker-compose.prod.yml`, so after editing one run `node scripts/embed-grafana-dashboards.mjs`, which copies them into the compose file (escaping `$` as `$$`, since compose interpolates config content). Prometheus runs in the same compose file and scrapes every service's `METRICS_PORT` (15-day / 2 GB retention).
 
 Key metrics to monitor:
 

@@ -22,7 +22,9 @@ jest.mock("../client", () => ({
 }));
 
 jest.mock("@hrms/db", () => ({
-  prisma: { user: { update: jest.fn(), findUnique: jest.fn() } },
+  prisma: {
+    user: { update: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
+  },
 }));
 
 const db: any = prisma;
@@ -120,7 +122,7 @@ describe("rotateRefreshToken", () => {
       "new-tok",
       JSON.stringify(newMeta),
     ]);
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({});
 
     const result = await rotateRefreshToken("u1", "old-tok", "new-tok");
 
@@ -143,8 +145,10 @@ describe("rotateRefreshToken", () => {
       "new-tok",
       "60",
     );
-    // Only the winning rotation should mirror the new hash onto Mongo.
-    expect(db.user.update).toHaveBeenCalledWith({
+    // Only the winning rotation should mirror the new hash onto Mongo, and
+    // without the document read-back a plain update does.
+    expect(db.user.update).not.toHaveBeenCalled();
+    expect(db.user.updateMany).toHaveBeenCalledWith({
       where: { id: "u1" },
       data: { refreshToken: hash("new-tok") },
     });
@@ -171,7 +175,7 @@ describe("rotateRefreshToken", () => {
     expect(result).toEqual(
       expect.objectContaining({ ok: true, currentToken: "winner-tok" }),
     );
-    expect(db.user.update).not.toHaveBeenCalled();
+    expect(db.user.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects a token that matches neither the current nor the grace-period one, without a Mongo retry", async () => {
@@ -200,7 +204,7 @@ describe("rotateRefreshToken", () => {
       refreshToken: hash("db-token"),
       tenantId: "t1",
     });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({});
 
     const result = await rotateRefreshToken("u1", "db-token", "new-tok");
 

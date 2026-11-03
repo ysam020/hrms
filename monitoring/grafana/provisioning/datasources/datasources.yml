@@ -15,3 +15,15 @@ datasources:
     editable: false
     jsonData:
       maxLines: 1000
+
+  # Production logs (/hrms/<service>/production) live in CloudWatch Logs, not
+  # Loki. Uses the host's ~/.aws credentials, mounted into the grafana
+  # container (docker-compose.dev.yml / docker-compose.monitoring.yml).
+  - name: CloudWatch
+    type: cloudwatch
+    access: proxy
+    editable: false
+    jsonData:
+      authType: credentials
+      profile: default
+      defaultRegion: ap-south-1

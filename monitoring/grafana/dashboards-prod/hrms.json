@@ -18,7 +18,8 @@
         "type": "query",
         "label": "Service",
         "datasource": {
-          "type": "prometheus"
+          "type": "prometheus",
+          "uid": "prometheus"
         },
         "query": "label_values(process_resident_memory_bytes, service)",
         "refresh": 2,
@@ -56,7 +57,9 @@
         "current": {
           "text": "5m",
           "value": "5m"
-        }
+        },
+        "query": "1m,5m,10m,30m",
+        "auto": false
       }
     ]
   },
@@ -72,7 +75,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -118,7 +122,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -170,7 +175,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -222,7 +228,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -286,7 +293,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -327,7 +335,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -385,7 +394,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -434,7 +444,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -496,7 +507,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -537,7 +549,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -561,12 +574,12 @@
       "targets": [
         {
           "expr": "nodejs_heap_used_bytes{service=~\"$service\"} / 1024 / 1024",
-          "legendFormat": "used \u00b7 {{service}}",
+          "legendFormat": "used · {{service}}",
           "refId": "A"
         },
         {
           "expr": "nodejs_heap_size_total_bytes{service=~\"$service\"} / 1024 / 1024",
-          "legendFormat": "total \u00b7 {{service}}",
+          "legendFormat": "total · {{service}}",
           "refId": "B"
         }
       ]
@@ -582,7 +595,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -621,7 +635,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -676,7 +691,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -715,7 +731,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -753,7 +770,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -792,7 +810,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -842,7 +861,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -882,7 +902,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -938,7 +959,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "cloudwatch"
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
       },
       "fieldConfig": {
         "defaults": {
@@ -958,9 +980,10 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "cloudwatch"
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
           },
-          "region": "ap-south-1",
+          "region": "default",
           "queryMode": "Logs",
           "logGroupNames": [
             "/hrms/api-gateway/production",
@@ -974,10 +997,11 @@
             "/hrms/salary-service/production",
             "/hrms/analytics-service/production",
             "/hrms/notification-service/production",
+            "/hrms/performance-review-service/production",
             "/hrms/scheduler-service/production"
           ],
           "statsGroups": ["level"],
-          "queryString": "fields @timestamp, level\n| stats count(*) as count by bin(1m) as time, level"
+          "expression": "fields @timestamp, level\n| stats count(*) as count by bin(1m) as time, level"
         }
       ]
     },
@@ -992,7 +1016,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "cloudwatch"
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
       },
       "options": {
         "showTime": true,
@@ -1007,9 +1032,10 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "cloudwatch"
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
           },
-          "region": "ap-south-1",
+          "region": "default",
           "queryMode": "Logs",
           "logGroupNames": [
             "/hrms/api-gateway/production",
@@ -1023,9 +1049,10 @@
             "/hrms/salary-service/production",
             "/hrms/analytics-service/production",
             "/hrms/notification-service/production",
+            "/hrms/performance-review-service/production",
             "/hrms/scheduler-service/production"
           ],
-          "queryString": "fields @timestamp, @log, level, message\n| filter level in [\"error\", \"warn\"]\n| sort @timestamp desc\n| limit 200"
+          "expression": "fields @timestamp, @log, level, message\n| filter level in [\"error\", \"warn\"]\n| sort @timestamp desc\n| limit 200"
         }
       ]
     }

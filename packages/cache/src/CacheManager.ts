@@ -2,11 +2,53 @@ import type Redis from "ioredis";
 import {
   logger,
   cacheInvalidationSubscriberReconnectsTotal,
+  cacheOperationsTotal,
+  cacheLoaderDuration,
+  cacheRedisDuration,
 } from "@hrms/logger";
-import { getRedisClient } from "./client";
+import { getRedisClient, getCacheRedisClient } from "./client";
 
 const SERVICE_LABEL =
   process.env.SERVICE_NAME || process.env.npm_package_name || "unknown";
+
+/**
+ * Metric label for a key: its family segment, never an id. Keys are either
+ * "t:<tenantId>:<family>:…" or "<family>:…" (e.g. "tenantSettings:leave:<id>").
+ */
+export function cacheFamilyOf(key: string): string {
+  const parts = key.split(":");
+  const family = parts[0] === "t" ? parts[2] : parts[0];
+  return /^[A-Za-z][A-Za-z-]{0,39}$/.test(family ?? "") ? family : "other";
+}
+
+// Instrumentation must never fail a cache read (optional chaining also
+// covers test doubles of @hrms/logger that predate these metrics).
+function count(family: string, result: string): void {
+  cacheOperationsTotal?.inc({ family, result, service: SERVICE_LABEL });
+}
+
+async function timedRedis<T>(op: string, run: () => Promise<T>): Promise<T> {
+  const started = performance.now();
+  try {
+    return await run();
+  } finally {
+    cacheRedisDuration?.observe(
+      { op, service: SERVICE_LABEL },
+      performance.now() - started,
+    );
+  }
+}
+
+export interface GetOrSetOptions {
+  /** TTL entity type (see ENTITY_TTL); ignored when `ttlSeconds` is given. */
+  entityType?: string;
+  /** Exact TTL in seconds (no jitter), e.g. capped at a known change time. */
+  ttlSeconds?: number;
+  /** Skip the cached value and load (and re-cache) the authoritative one. */
+  fresh?: boolean;
+}
+
+type Lookup = { hit: true; value: unknown } | { hit: false };
 
 // Each microservice is a separate Node.js process with its own CacheManager
 // instance and its own in-process memoryCache — delete()/invalidatePattern()
@@ -58,6 +100,15 @@ export class CacheManager {
   // next reads; a false negative would mean silently stale data for up to
   // this cache's full TTL (up to 4h for salary-tagged keys).
   private hasConnectedBefore = false;
+  // In-flight getOrSet loads, so concurrent misses on one key share one
+  // database read. Fresh loads are tracked separately: a fresh caller must
+  // not join a load that may have started before the write it wants to see.
+  private inflight = new Map<string, Promise<unknown>>();
+  // Bumped by every invalidation seen by this process (its own, or one
+  // received from another process). A load that started before an
+  // invalidation may hold pre-write data, so it is returned to its callers
+  // but not cached.
+  private invalidationEpoch = 0;
 
   constructor() {
     this.memoryCache = new Map();
@@ -76,6 +127,7 @@ export class CacheManager {
       this.subscriber.on("ready", () => {
         if (this.hasConnectedBefore) {
           const flushed = this.memoryCache.size;
+          this.invalidationEpoch++;
           this.memoryCache.clear();
           this.memoryTTL.clear();
           cacheInvalidationSubscriberReconnectsTotal.inc({
@@ -111,11 +163,13 @@ export class CacheManager {
   }
 
   private evictMemory(key: string): void {
+    this.invalidationEpoch++;
     this.memoryCache.delete(key);
     this.memoryTTL.delete(key);
   }
 
   private evictMemoryPattern(pattern: string): void {
+    this.invalidationEpoch++;
     const prefix = pattern.endsWith(":*")
       ? pattern.slice(0, -1)
       : pattern.replace(/\*/g, "");
@@ -168,21 +222,105 @@ export class CacheManager {
   }
 
   async get<T = unknown>(key: string): Promise<T | null> {
+    const found = await this.lookup(key);
+    return found.hit ? ((found.value ?? null) as T | null) : null;
+  }
+
+  /**
+   * Memory, then Redis. Tells a miss apart from a cached null/0/false, which
+   * get() cannot. A Redis failure counts as a miss (the caller loads from
+   * the database) — reads use the fail-fast cache client, so an outage
+   * costs at most CACHE_REDIS_TIMEOUT_MS, not a queued retry.
+   */
+  private async lookup(key: string): Promise<Lookup> {
+    const family = cacheFamilyOf(key);
+    const mem = this.readMemory(key);
+    if (mem.hit) {
+      count(family, "hit_memory");
+      return mem;
+    }
+    let raw: string | null;
     try {
-      const memHit = this.getMemoryCache(key);
-      if (memHit !== null) return memHit as T;
-
-      const redis = getRedisClient();
-      const raw = await redis.get(key);
-      if (!raw) return null;
-
-      const value = JSON.parse(raw) as T;
-      // Warm the memory cache with a short TTL (5 min) for hot data
-      this.setMemoryCache(key, value, 300);
-      return value;
+      raw = await timedRedis("get", () => getCacheRedisClient().get(key));
     } catch (err) {
-      logger.error("CacheManager.get error:", { key, err });
-      return null;
+      count(family, "redis_error");
+      logger.warn("CacheManager.get Redis error:", { family, err });
+      return { hit: false };
+    }
+    if (raw === null) {
+      count(family, "miss");
+      return { hit: false };
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      count(family, "miss");
+      return { hit: false };
+    }
+    count(family, "hit_redis");
+    // Warm the memory cache with a short TTL (5 min) for hot data
+    this.setMemoryCache(key, value, 300);
+    return { hit: true, value };
+  }
+
+  private readMemory(key: string): Lookup {
+    if (!this.memoryCache.has(key)) return { hit: false };
+    const value = this.getMemoryCache(key);
+    // getMemoryCache maps an expired entry to null and removes it.
+    return this.memoryCache.has(key) ? { hit: true, value } : { hit: false };
+  }
+
+  /**
+   * Cache-aside read: the cached value if present, otherwise `load()`'s
+   * result, cached under `key`. Concurrent misses in this process share one
+   * load. Any value except `undefined` is cached — null, 0 and false
+   * included. A failed load caches nothing and rejects every waiter.
+   *
+   * Must only be called after the request's authentication, tenant and
+   * permission checks: a hit returns the value without running `load()`.
+   */
+  async getOrSet<T>(
+    key: string,
+    load: () => Promise<T>,
+    options: GetOrSetOptions = {},
+  ): Promise<T> {
+    const family = cacheFamilyOf(key);
+    if (!options.fresh) {
+      const found = await this.lookup(key);
+      if (found.hit) return found.value as T;
+    }
+    const flightKey = options.fresh ? `fresh\u0000${key}` : key;
+    const pending = this.inflight.get(flightKey);
+    if (pending) {
+      count(family, "coalesced");
+      return pending as Promise<T>;
+    }
+    const epoch = this.invalidationEpoch;
+    const run = (async () => {
+      const started = performance.now();
+      let value: T;
+      try {
+        value = await load();
+      } catch (err) {
+        count(family, "loader_error");
+        throw err;
+      } finally {
+        cacheLoaderDuration?.observe(
+          { family, service: SERVICE_LABEL },
+          performance.now() - started,
+        );
+      }
+      if (value !== undefined && epoch === this.invalidationEpoch) {
+        await this.set(key, value, options.entityType, options.ttlSeconds);
+      }
+      return value;
+    })();
+    this.inflight.set(flightKey, run);
+    try {
+      return await run;
+    } finally {
+      if (this.inflight.get(flightKey) === run) this.inflight.delete(flightKey);
     }
   }
 
@@ -220,10 +358,13 @@ export class CacheManager {
     // Index sets must outlive every member written with this base TTL.
     const indexTTL =
       customTTL === undefined ? Math.ceil(baseTTL * 1.1) : baseTTL;
+    const family = cacheFamilyOf(key);
     try {
-      const redis = getRedisClient();
+      // Fills use the fail-fast client: losing one is harmless (the next
+      // read loads again), waiting on a dead Redis is not.
+      const redis = getCacheRedisClient();
       const multi = redis.multi();
-      multi.set(key, JSON.stringify(value), "EX", ttl);
+      multi.set(key, JSON.stringify(value ?? null), "EX", ttl);
       // Index this key under every ancestor prefix so a later
       // invalidatePattern("<prefix>:*") can find it in O(1) instead of
       // scanning the whole keyspace. Each index set's own TTL is refreshed
@@ -234,10 +375,12 @@ export class CacheManager {
         multi.sadd(idxKey, key);
         multi.expire(idxKey, indexTTL);
       }
-      await multi.exec();
+      await timedRedis("set", () => multi.exec());
+      count(family, "set");
       this.setMemoryCache(key, value, ttl);
     } catch (err) {
-      logger.error("CacheManager.set error:", { key, err });
+      count(family, "redis_error");
+      logger.error("CacheManager.set error:", { family, err });
       // Fall back to memory-only on Redis failure
       this.setMemoryCache(key, value, ttl);
     }
@@ -245,6 +388,7 @@ export class CacheManager {
 
   async delete(key: string): Promise<void> {
     this.evictMemory(key);
+    count(cacheFamilyOf(key), "invalidate");
     try {
       const redis = getRedisClient();
       await redis.del(key);
@@ -284,6 +428,7 @@ export class CacheManager {
     // Always evict this process's memory entries first — independent of
     // Redis availability.
     this.evictMemoryPattern(pattern);
+    count(cacheFamilyOf(pattern), "invalidate");
 
     try {
       const redis = getRedisClient();

@@ -476,7 +476,10 @@ export async function buildSalarySlipPdf(
         where: { tenantId, userId: requestedUserId },
         select: { balances: true },
       }),
-      tenantId ? getActiveSettings(tenantId) : Promise.resolve(null),
+      // Fresh: feeds salary figures.
+      tenantId
+        ? getActiveSettings(tenantId, { fresh: true })
+        : Promise.resolve(null),
       (prisma as any).holiday.findMany({ where: { year } }),
     ]);
   const workingDays: number[] = (tenantSettings as any)?.workWeekPattern

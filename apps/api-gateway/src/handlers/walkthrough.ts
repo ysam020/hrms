@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { cacheManager } from "@hrms/cache";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -92,6 +93,11 @@ export function sanitizeWalkthroughState(
   };
 }
 
+// Read on every page load, written only when a tour step changes: cached per
+// person, dropped after each save or reset (both below — the only writers).
+const progressKey = (tenantId: string, userId: string) =>
+  `t:${tenantId}:walkthrough:v1:${userId}`;
+
 function caller(req: AuthRequest) {
   return {
     userId: req.user!.userId,
@@ -103,12 +109,19 @@ function caller(req: AuthRequest) {
 export async function getWalkthroughProgress(req: AuthRequest, res: Response) {
   try {
     const { tenantId, userId } = caller(req);
-    const row = await prisma.walkthroughProgress.findUnique({
-      where: { tenantId_userId: { tenantId, userId } },
-      select: { state: true },
-    });
+    const state = await cacheManager.getOrSet(
+      progressKey(tenantId, userId),
+      async () => {
+        const row = await prisma.walkthroughProgress.findUnique({
+          where: { tenantId_userId: { tenantId, userId } },
+          select: { state: true },
+        });
+        return row?.state ?? null;
+      },
+      { ttlSeconds: 3600 },
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
-      data: { state: row?.state ?? null },
+      data: { state },
     });
   } catch (error: unknown) {
     logger.error("getWalkthroughProgress error:", { error });
@@ -135,6 +148,7 @@ export async function saveWalkthroughProgress(req: AuthRequest, res: Response) {
       },
       update: { schema: WALKTHROUGH_SCHEMA, state: result.state as any },
     });
+    await cacheManager.delete(progressKey(tenantId, userId));
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { state: result.state },
     });
@@ -154,6 +168,7 @@ export async function resetWalkthroughProgress(
     await prisma.walkthroughProgress.deleteMany({
       where: { tenantId, userId },
     });
+    await cacheManager.delete(progressKey(tenantId, userId));
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { state: null },
     });

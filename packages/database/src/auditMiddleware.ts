@@ -266,8 +266,12 @@ export function attachMasterAuditLogging(client: PrismaClient): void {
       // An update that only writes redacted/bookkeeping fields can never
       // produce an audit entry (recordAuditEntry drops it as a no-op), so
       // don't pay a full-document read for it. This is every refresh-token
-      // rotation, which mirrors the new token hash onto the user.
-      if (params.action === "update" && writesOnlyUnauditedFields(params)) {
+      // rotation, which mirrors the new token hash onto the user (with
+      // updateMany — see refreshTokenStore.ts).
+      if (
+        (params.action === "update" || params.action === "updateMany") &&
+        writesOnlyUnauditedFields(params)
+      ) {
         return next(params);
       }
 
