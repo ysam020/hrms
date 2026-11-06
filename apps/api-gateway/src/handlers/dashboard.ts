@@ -35,6 +35,7 @@ import {
   type Capabilities,
   type LayoutEntry,
 } from "../config/dashboardWidgets";
+import { loadUserAccess } from "../services/userAccess";
 
 dayjs.extend(utc);
 
@@ -64,10 +65,7 @@ export async function resolveCaller(req: AuthRequest): Promise<Caller> {
   const { userId, tenantRole } = req.user!;
   const tenantId = (getTenantId() ?? req.user!.tenantId)!;
   const [user, ledTeams] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { isSuperUser: true, permissions: true },
-    }),
+    loadUserAccess(userId, { tenantScoped: true }),
     prisma.team.findMany({
       where: { teamLeaderId: userId },
       select: { id: true, teamName: true, members: true },

@@ -35,6 +35,7 @@ import {
   readConnectivity,
   syncDoNotDisturb,
 } from "./presenceConnectivity";
+import { loadUserAccess } from "./userAccess";
 
 dayjs.extend(utc);
 
@@ -72,10 +73,7 @@ export async function resolveViewer(
   tenantRole: string | null | undefined,
 ): Promise<Viewer> {
   const [user, teams] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { isSuperUser: true, permissions: true },
-    }),
+    loadUserAccess(userId, { tenantScoped: true }),
     prisma.team.findMany({
       where: { OR: [{ teamLeaderId: userId }, { members: { has: userId } }] },
       select: { teamLeaderId: true, members: true },

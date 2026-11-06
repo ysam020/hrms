@@ -39,6 +39,7 @@ import {
   aggregateEarningsByCode,
   buildThisMonthComponents,
 } from "../utils/tdsCalc";
+import { loadUserAccess } from "../services/userAccess";
 
 // Required for listPayrollRuns' month-name search (dayjs(str, [format...], true))
 // below — without this, format-string parsing silently no-ops and every
@@ -62,10 +63,7 @@ async function assertRole(
   allowed: AllowedRole[],
 ): Promise<boolean> {
   if (allowed.includes((tenantRole ?? "") as AllowedRole)) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   return user?.isSuperUser === true;
 }
 
@@ -79,10 +77,7 @@ async function canApproveAdvances(
   if (await assertRole(userId, tenantRole, ["owner", "admin", "hr"])) {
     return true;
   }
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { permissions: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   return (user?.permissions ?? []).includes("SalaryManagement:approve_advance");
 }
 
@@ -1027,10 +1022,7 @@ export async function updatePayrollRunStatus(req: Request, res: Response) {
 
     // Four-eyes: final approval must be by a different user than the one who submitted.
     if (action === "approve" && (run as any).initiatedBy === user!.userId) {
-      const isSU = await prisma.user.findUnique({
-        where: { id: user!.userId },
-        select: { isSuperUser: true },
-      });
+      const isSU = await loadUserAccess(user!.userId, { tenantScoped: true });
       if (!isSU?.isSuperUser) {
         return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
           message:

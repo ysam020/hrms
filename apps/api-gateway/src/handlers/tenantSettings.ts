@@ -6,6 +6,7 @@ import { cacheManager } from "@hrms/cache";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
+import { loadUserAccess } from "../services/userAccess";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -349,10 +350,7 @@ export async function updateTenantSettings(req: AuthRequest, res: Response) {
   let isPrivileged = superUser || hasPrivilegedRole(req.user!.tenantRole ?? "");
 
   if (!isPrivileged) {
-    const actor = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { permissions: true },
-    });
+    const actor = await loadUserAccess(userId, { tenantScoped: true });
     isPrivileged = (actor?.permissions ?? []).includes(
       "Organisation:edit_organisation_settings",
     );

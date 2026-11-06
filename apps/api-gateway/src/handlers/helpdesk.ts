@@ -30,6 +30,7 @@ import { parsePagination } from "../utils/pagination";
 import { getSchedulerQueue } from "@hrms/queue";
 import { notify } from "@hrms/notifications";
 import dayjs from "dayjs";
+import { loadUserAccess } from "../services/userAccess";
 
 // SLA hours keyed by priority.
 const SLA_HOURS: Record<string, number> = {
@@ -50,10 +51,7 @@ export async function assertHrRole(
 ): Promise<boolean> {
   if (!authUser) return false;
   if (hasPrivilegedRole(authUser.tenantRole ?? "", HR_ROLES)) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: authUser.userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(authUser.userId, { tenantScoped: true });
   if (!user) return false;
   if (user.isSuperUser) return true;
   return ((user.permissions as string[]) ?? []).includes("Helpdesk:manage");

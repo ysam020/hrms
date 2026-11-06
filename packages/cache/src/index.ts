@@ -4,6 +4,7 @@ export {
   getCacheManager,
   cacheManager,
   cacheFamilyOf,
+  setRedisTimingHook,
   type GetOrSetOptions,
 } from "./CacheManager";
 export {

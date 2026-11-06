@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { performanceReviewClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma } from "@hrms/db";
 import {
   apiResponse,
   RESPONSE_STATUS,
@@ -12,6 +11,7 @@ import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
 import { parsePagination } from "../utils/pagination";
+import { loadUserAccess } from "../services/userAccess";
 
 // Owner/admin/hr (tenantRole) and superusers manage review cycles by default;
 // PerformanceReview:manage_cycles lets a tenant grant that access to anyone
@@ -22,10 +22,7 @@ async function canManageReviews(
   tenantRole: string | null | undefined,
 ): Promise<boolean> {
   if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   if (user?.isSuperUser) return true;
   return (user?.permissions ?? []).includes("PerformanceReview:manage_cycles");
 }

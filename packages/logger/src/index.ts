@@ -10,6 +10,7 @@ import {
   AggregatorRegistry,
   Counter,
   Histogram,
+  Gauge,
 } from "prom-client";
 import { requestIdStorage, getRequestId } from "./requestContext";
 
@@ -38,6 +39,26 @@ const serviceName =
 
 // ── Prometheus ───────────────────────────────────────────────────────────────
 collectDefaultMetrics({ labels: { service: serviceName, env } });
+
+// Event-loop utilisation (share of wall time the loop was busy) since the
+// previous scrape, per process; the cluster primary reports the busiest
+// worker. Lag says the loop was blocked; ELU says how close to saturation
+// it runs.
+let lastElu = performance.eventLoopUtilization();
+new Gauge({
+  name: "nodejs_eventloop_utilization_ratio",
+  help: "Event-loop utilisation (0–1) since the previous scrape",
+  labelNames: ["service"],
+  aggregator: "max",
+  collect() {
+    const now = performance.eventLoopUtilization();
+    this.set(
+      { service: serviceName },
+      performance.eventLoopUtilization(now, lastElu).utilization,
+    );
+    lastElu = now;
+  },
+});
 
 export const httpRequestDuration = new Histogram({
   name: "http_request_duration_ms",
@@ -199,7 +220,13 @@ if (process.env.LOKI_URL) {
 // service without --experimental-vm-modules — it fails, then retries
 // asynchronously past test teardown ("Cannot log after tests are done").
 // No test relies on log output actually reaching CloudWatch.
-if (process.env.NODE_ENV !== "test") {
+// CLOUDWATCH_LOGS_DISABLED=true also skips it: the isolated load-testing
+// stack logs every request at high volume, which would otherwise become paid
+// CloudWatch ingestion (and an unbounded retry buffer without credentials).
+if (
+  process.env.NODE_ENV !== "test" &&
+  process.env.CLOUDWATCH_LOGS_DISABLED !== "true"
+) {
   transports.push(
     new WinstonCloudWatch({
       logGroupName,

@@ -226,7 +226,7 @@ export const grpcCall = <Req, Res>(
     try {
       return await attemptWithRetries();
     } finally {
-      recordDownstream(performance.now() - started);
+      recordDownstream(performance.now() - started, method, started);
     }
   };
   const attemptWithRetries = async (): Promise<Res> => {

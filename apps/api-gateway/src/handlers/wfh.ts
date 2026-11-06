@@ -53,6 +53,7 @@ import { instantiateApproval, cancelApproval } from "@hrms/approval-engine";
 import { actOnApprovalForEntity } from "./approvalChains";
 import { getActiveSettings } from "./tenantSettings";
 import { getWorkingDays, isHoliday, eachDate } from "../utils/workingDays";
+import { loadUserAccess } from "../services/userAccess";
 
 dayjs.extend(utc);
 
@@ -67,10 +68,7 @@ async function isWfhPrivileged(
 ): Promise<boolean> {
   if (!authUser) return false;
   if (hasPrivilegedRole(authUser.tenantRole ?? "", HR_ROLES)) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: authUser.userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(authUser.userId, { tenantScoped: true });
   if (!user) return false;
   if (user.isSuperUser) return true;
   return ((user.permissions as string[]) ?? []).includes("WFH:approve");

@@ -260,6 +260,7 @@ jest.mock("@hrms/db", () => ({
     const count = async () => 0;
     return new Proxy({}, { get: () => ({ count }) });
   },
+  recordStage: () => {},
 }));
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },

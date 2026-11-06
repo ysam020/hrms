@@ -157,6 +157,9 @@ beforeAll(async () => {
     },
     runWithTenant: (_t: unknown, _c: unknown, fn: () => void) => fn(),
     getClientForDb: () => ({}),
+    recordStage: () => {},
+    recordExternal: () => {},
+    markHandlerStart: () => {},
   }));
   jest.doMock("@hrms/cache", () => ({ getRedisClient: jest.fn() }));
 

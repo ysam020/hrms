@@ -21,6 +21,7 @@ jest.mock("@hrms/db", () => ({
   },
   runWithTenant: jest.fn((_tid, _client, fn) => fn()),
   getClientForDb: jest.fn().mockReturnValue({ __client: true }),
+  recordStage: jest.fn(),
 }));
 
 const mockVerify = jwt.verify as jest.Mock;
@@ -155,7 +156,8 @@ describe("authenticate", () => {
     expect(mockRunWithTenant).toHaveBeenCalledWith(
       "tenant-A",
       { __client: true },
-      next,
+      // authenticate hands runWithTenant a timing wrapper around next.
+      expect.any(Function),
       expect.objectContaining({ userId: "u1", username: "alice" }),
     );
   });
@@ -203,7 +205,8 @@ describe("authenticate", () => {
     expect(mockRunWithTenant).toHaveBeenCalledWith(
       "tenant-C",
       { __client: true },
-      next,
+      // authenticate hands runWithTenant a timing wrapper around next.
+      expect.any(Function),
       expect.objectContaining({ username: null }),
     );
   });

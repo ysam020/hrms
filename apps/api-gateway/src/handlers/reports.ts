@@ -29,6 +29,7 @@ import {
 } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
+import { loadUserAccess } from "../services/userAccess";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-entity field allowlists (prevents accessing encrypted/sensitive columns)
@@ -259,10 +260,7 @@ function toCSV(rows: Record<string, any>[]): string {
 
 // Exported (with executeReport below) for the MCP report tools.
 export async function assertHrRole(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, isSuperUser: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   if (!user) return false;
   if (user.isSuperUser) return true;
   return user.role.some((r) => hasPrivilegedRole(r, HR_ROLES));

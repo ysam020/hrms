@@ -17,15 +17,15 @@ import { safeDecrypt } from "@hrms/crypto";
 import { isPrivileged } from "./approvalChains";
 import { isHrOrAboveCaller } from "../utils/user";
 import { getSeatStatus } from "../utils/planLimits";
+import { invalidateUserAccess, loadUserAccess } from "../services/userAccess";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
   const authReq = req as AuthRequest;
   try {
     let isPrivilegedUser = await isPrivileged(authReq);
     if (!isPrivilegedUser) {
-      const actor = await prisma.user.findUnique({
-        where: { id: authReq.user!.userId },
-        select: { permissions: true },
+      const actor = await loadUserAccess(authReq.user!.userId, {
+        tenantScoped: true,
       });
       isPrivilegedUser = (actor?.permissions ?? []).includes(
         "EmployeeManagement:edit",
@@ -96,6 +96,7 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       where: { id: targetUser.id },
       data: updateData,
     });
+    invalidateUserAccess(targetUser.id);
 
     const cacheTenantId = tenantId ?? "global";
     await Promise.all([
@@ -311,10 +312,7 @@ async function canManageKyc(
 ): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   if (user?.isSuperUser) return true;
   const permissions = (user?.permissions as string[]) ?? [];
   return permissions.includes(`BasicKYCDetails:${action}:all`);
@@ -723,9 +721,8 @@ export async function getKycInsights(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const viewAll = await (async () => {
       if (await canManageKyc(authReq, "approve_kyc")) return true;
-      const user = await prisma.user.findUnique({
-        where: { id: authReq.user!.userId },
-        select: { permissions: true },
+      const user = await loadUserAccess(authReq.user!.userId, {
+        tenantScoped: true,
       });
       return ((user?.permissions as string[]) ?? []).includes(
         "BasicKYCDetails:view_kyc:all",

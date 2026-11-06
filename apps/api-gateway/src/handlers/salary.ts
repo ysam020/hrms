@@ -28,6 +28,7 @@ import {
   buildThisMonthComponents,
 } from "../utils/tdsCalc";
 import { jsPDF } from "jspdf";
+import { loadUserAccess } from "../services/userAccess";
 
 // Owner/admin/hr (tenantRole) and superusers manage salary by default;
 // SalaryManagement:update_salary lets a tenant grant that access to anyone
@@ -37,10 +38,7 @@ async function canManageSalary(
   tenantRole: string | null | undefined,
 ): Promise<boolean> {
   if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   if (user?.isSuperUser) return true;
   return (user?.permissions ?? []).includes("SalaryManagement:update_salary");
 }

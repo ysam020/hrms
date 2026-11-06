@@ -27,6 +27,7 @@ import { isPastDeadline } from "../utils/jobDeadline";
 import { readJobConfig } from "../services/recruitmentForms";
 import { runAsTenant, type McpPrincipal } from "./principal";
 import type { McpScope } from "./config";
+import { loadUserAccess } from "../services/userAccess";
 
 // The tools an assistant can call. Every one is read-only, and none takes a
 // user or organisation argument: "my" tools read the token's own user,
@@ -918,10 +919,7 @@ const getHelpdeskTicket: ToolDef = {
 /** The web Job Openings gate: HR or above, or any JobOpenings permission. */
 async function canViewRecruitment(principal: McpPrincipal): Promise<boolean> {
   if (hasPrivilegedRole(principal.tenantRole, HR_ROLES)) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: self(principal) },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(self(principal), { tenantScoped: true });
   return Boolean(
     user?.isSuperUser ||
     ((user?.permissions as string[]) ?? []).some((p) =>

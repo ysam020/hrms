@@ -11,7 +11,12 @@ import { logger } from "@hrms/logger";
 import {
   attachQueryTiming,
   currentQueryStats,
+  endQueryStats,
   limitReads,
+  recordDownstream,
+  recordExternal,
+  recordStage,
+  summarizeQueryStats,
   withQueryStats,
 } from "../queryTiming";
 
@@ -143,4 +148,93 @@ describe("queryTiming", () => {
       await capped;
     });
   });
+});
+
+describe("request latency breakdown", () => {
+  it("never sums overlapping waits: ioBusyMs is their union", () =>
+    withQueryStats(() => {
+      const stats = currentQueryStats()!;
+      const t0 = stats.startedAt;
+      // db 0–100 and redis 50–150 overlap; grpc 200–250 stands alone.
+      stats.ops.push({
+        kind: "db",
+        name: "tenant:Leave.findMany",
+        start: t0,
+        end: t0 + 100,
+      });
+      recordExternal("redis", "redis:get", t0 + 50, t0 + 150);
+      recordDownstream(50, "getLeaves", t0 + 200);
+      const s = summarizeQueryStats(stats, t0, { ops: true });
+      expect(s.ioBusyMs).toBe(200);
+      expect(s.redisCalls).toBe(1);
+      expect(s.redisMs).toBe(100);
+      expect(s.downstreamCalls).toBe(1);
+      expect(s.ops?.map((o) => o[0])).toEqual([
+        "tenant:Leave.findMany",
+        "redis:get",
+        "grpc:getLeaves",
+      ]);
+      expect(s.nonIoMs).toBe(s.totalMs - 200);
+      endQueryStats(stats);
+    }));
+
+  it("records database queries in the op list with model and scope", async () => {
+    const client = fakeClient();
+    attachQueryTiming(client as any, "master");
+    await withQueryStats(async () => {
+      await client.run(
+        { model: "User", action: "findUnique" },
+        async () => null,
+      );
+      const s = summarizeQueryStats(
+        currentQueryStats()!,
+        currentQueryStats()!.startedAt,
+        { ops: true },
+      );
+      expect(s.ops?.[0][0]).toBe("master:User.findUnique");
+      endQueryStats(currentQueryStats()!);
+    });
+  });
+
+  it("accumulates named stages with call counts", () =>
+    withQueryStats(() => {
+      recordStage("authenticate", 2);
+      recordStage("authenticate", 3);
+      const s = summarizeQueryStats(
+        currentQueryStats()!,
+        currentQueryStats()!.startedAt,
+      );
+      expect(s.stages.authenticate).toEqual({ n: 2, ms: 5 });
+      expect(s.ops).toBeUndefined();
+      endQueryStats(currentQueryStats()!);
+    }));
+
+  it("flags CPU as unattributable when tracked requests overlap", () => {
+    const track = { trackOverlap: true };
+    let outer: any;
+    withQueryStats(() => {
+      outer = currentQueryStats()!;
+    }, track);
+    withQueryStats(() => {
+      const inner = currentQueryStats()!;
+      expect(inner.maxOverlap).toBe(1);
+      expect(outer.maxOverlap).toBe(1);
+      expect(summarizeQueryStats(inner, inner.startedAt).cpuMs).toBeNull();
+      endQueryStats(inner);
+    }, track);
+    endQueryStats(outer);
+    withQueryStats(() => {
+      const alone = currentQueryStats()!;
+      expect(alone.maxOverlap).toBe(0);
+      expect(summarizeQueryStats(alone, alone.startedAt).cpuMs).not.toBeNull();
+      endQueryStats(alone);
+    }, track);
+  });
+
+  it("does not track (or retain) scopes opened without trackOverlap", () =>
+    withQueryStats(() => {
+      // gRPC handler scopes are never ended; they must not pin memory.
+      expect(currentQueryStats()!.maxOverlap).toBe(-1);
+      expect(summarizeQueryStats(currentQueryStats()!, 0).cpuMs).toBeNull();
+    }));
 });

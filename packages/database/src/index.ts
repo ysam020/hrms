@@ -34,9 +34,14 @@ export {
   summarizeQueryStats,
   markHandlerStart,
   recordDownstream,
+  recordExternal,
+  recordStage,
+  recordSerialize,
+  endQueryStats,
   limitReads,
   attachQueryTiming,
   type QueryStats,
+  type TimedOp,
 } from "./queryTiming";
 export {
   isPublicEmailDomain,

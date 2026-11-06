@@ -13,9 +13,9 @@
  * Evaluated against the database on every request, so revoking a permission
  * (Permissions editor in the Praesto org) takes effect immediately.
  */
-import { prisma } from "@hrms/db";
 import { BLOCKED_EMPLOYEE_STATUSES } from "@hrms/common";
 import { isPlatformTenant } from "../config/platform";
+import { loadUserAccess } from "./userAccess";
 
 export const PLATFORM_ADMIN_ACTIONS = [
   "view_overview",
@@ -35,15 +35,7 @@ export async function platformAdminGrants(user: {
   tenantRole?: string | null;
 }): Promise<PlatformAdminAction[]> {
   if (!isPlatformTenant(user.tenantId)) return [];
-  const record = await prisma.user.findUnique({
-    where: { id: user.userId },
-    select: {
-      tenantId: true,
-      isSuperUser: true,
-      permissions: true,
-      employeeStatus: true,
-    },
-  });
+  const record = await loadUserAccess(user.userId, { tenantScoped: false });
   if (!record || record.tenantId !== user.tenantId) return [];
   if (BLOCKED_EMPLOYEE_STATUSES.includes(record.employeeStatus)) return [];
   const permissions: string[] = record.permissions ?? [];
