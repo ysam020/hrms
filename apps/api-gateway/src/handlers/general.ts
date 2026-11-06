@@ -22,6 +22,7 @@ import { s3Client, S3_BUCKET, S3_URL_PREFIX, s3FileUrl } from "../config/s3";
 import { NOTIFICATION_PRUNE_LIMIT } from "../constants";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import { loadUserAccess } from "../services/userAccess";
 
 dayjs.extend(utc);
 
@@ -785,10 +786,7 @@ export async function getFileViewUrl(req: AuthRequest, res: Response) {
     const ownerUsername = segments.length >= 4 ? segments[2] : segments[1];
 
     const { userId, tenantId, tenantRole } = req.user!;
-    const caller = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { username: true, isSuperUser: true },
-    });
+    const caller = await loadUserAccess(userId, { tenantScoped: true });
     const isOwner = !!caller && caller.username === ownerUsername;
     const isPrivilegedRole =
       caller?.isSuperUser || hasPrivilegedRole(tenantRole ?? "", HR_ROLES);

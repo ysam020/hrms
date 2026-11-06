@@ -1,0 +1,250 @@
+# Isolated load-testing stack (load-testing/README.md).
+#
+# A separate compose project with its own network and its own Redis, so the
+# benchmark never shares rate-limit counters, caches, BullMQ queues or
+# sockets with the dev stack. It still uses the shared Atlas cluster
+# (DEV_MONGODB_URI from local-secrets.json), and it only ever reads the
+# synthetic LOADTEST_ tenants the seeder creates.
+#
+# Resource limits copy docker-compose.prod.yml (gateway 1 CPU / 768M, each
+# service 0.5 CPU / 384M, WEB_CONCURRENCY=2 like prod's 2-vCPU host). The Mac
+# hosting this has many more cores than prod, so the containers are not
+# contending for one 2-vCPU host the way prod is: treat results as
+# comparative, not as prod capacity.
+#
+# Differences from prod, all deliberate:
+#   - ACCESS_JWT_TOKEN is a per-run random secret (LOADTEST_JWT_SECRET), so the
+#     tokens minted for the benchmark are useless against any other stack.
+#   - RATE_LIMIT_MAX_* overrides come from load-testing/.state/ratelimit.env,
+#     written by the runner and emptied again when it exits (see README).
+#   - CloudWatch log shipping is off (paid ingestion); logs go to the local
+#     Loki with service="loadtest-<name>".
+#   - The scheduler and web are not part of the stack.
+#
+# Usage: driven by `node load-testing/scripts/stack.js up|down|status`.
+name: hrms-loadtest
+
+x-service: &service
+  volumes:
+    - ./packages/certificates:/app/packages/certificates:ro
+    - ./local-secrets.json:/app/local-secrets.json:ro
+  env_file:
+    - path: ./load-testing/.state/ratelimit.env
+      required: false
+  restart: "no"
+  depends_on:
+    redis:
+      condition: service_healthy
+  deploy:
+    resources:
+      limits:
+        cpus: "0.5"
+        memory: 384M
+
+x-env: &env
+  LOCAL_SECRETS_FILE: /app/local-secrets.json
+  REDIS_URL: redis://redis:6379
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  ACCESS_JWT_TOKEN: ${LOADTEST_JWT_SECRET:?run via load-testing/scripts/stack.js}
+  WEB_CONCURRENCY: "2"
+  CLOUDWATCH_LOGS_DISABLED: "true"
+  LOKI_URL: http://host.docker.internal:3100
+  SCHEDULER_ENABLED: "false"
+  GRPC_SKIP_HOSTNAME_VERIFICATION: "true"
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "26379:6379"
+
+  api-gateway:
+    <<: *service
+    image: hrms-loadtest/api-gateway:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=api-gateway, PROJECT=api-gateway-service, PORT=9002]
+    environment:
+      <<: *env
+      SERVICE_NAME: loadtest-api-gateway
+      METRICS_PORT: "9003"
+      # Per-request latency breakdown lines (docs/performance/latency-root-cause-analysis.md).
+      REQUEST_TIMING_LOG: ${REQUEST_TIMING_LOG:-false}
+      REQUEST_TIMING_OPS: ${REQUEST_TIMING_OPS:-false}
+      AUTH_SERVICE_HOST: auth-service
+      USER_SERVICE_HOST: user-service
+      EMPLOYEE_SERVICE_HOST: employee-service
+      ATTENDANCE_SERVICE_HOST: attendance-service
+      LEAVE_SERVICE_HOST: leave-service
+      RECRUITMENT_SERVICE_HOST: recruitment-service
+      HRM_SERVICE_HOST: hrm-service
+      SALARY_SERVICE_HOST: salary-service
+      ANALYTICS_SERVICE_HOST: analytics-service
+      NOTIFICATION_SERVICE_HOST: notification-service
+      PERFORMANCE_REVIEW_SERVICE_HOST: performance-review-service
+    ports: ["29002:9002", "29003:9003"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  auth-service:
+    <<: *service
+    image: hrms-loadtest/auth-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=auth-service, PROJECT=auth-service, PORT=50051]
+    environment:
+      { <<: *env, SERVICE_NAME: loadtest-auth-service, METRICS_PORT: "9101" }
+    ports: ["29101:9101"]
+
+  user-service:
+    <<: *service
+    image: hrms-loadtest/user-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=user-service, PROJECT=user-service, PORT=50052]
+    environment:
+      { <<: *env, SERVICE_NAME: loadtest-user-service, METRICS_PORT: "9102" }
+    ports: ["29102:9102"]
+
+  employee-service:
+    <<: *service
+    image: hrms-loadtest/employee-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=employee-service, PROJECT=employee-service, PORT=50053]
+    environment:
+      {
+        <<: *env,
+        SERVICE_NAME: loadtest-employee-service,
+        METRICS_PORT: "9103",
+      }
+    ports: ["29103:9103"]
+
+  attendance-service:
+    <<: *service
+    image: hrms-loadtest/attendance-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=attendance-service, PROJECT=attendance-service, PORT=50054]
+    environment:
+      {
+        <<: *env,
+        SERVICE_NAME: loadtest-attendance-service,
+        METRICS_PORT: "9104",
+      }
+    ports: ["29104:9104"]
+
+  leave-service:
+    <<: *service
+    image: hrms-loadtest/leave-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=leave-service, PROJECT=leave-service, PORT=50055]
+    environment:
+      { <<: *env, SERVICE_NAME: loadtest-leave-service, METRICS_PORT: "9105" }
+    ports: ["29105:9105"]
+
+  recruitment-service:
+    <<: *service
+    image: hrms-loadtest/recruitment-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args:
+        [APP_DIR=recruitment-service, PROJECT=recruitment-service, PORT=50056]
+    environment:
+      {
+        <<: *env,
+        SERVICE_NAME: loadtest-recruitment-service,
+        METRICS_PORT: "9106",
+      }
+    ports: ["29106:9106"]
+
+  hrm-service:
+    <<: *service
+    image: hrms-loadtest/hrm-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=hrm-service, PROJECT=hrm-service, PORT=50057]
+    environment:
+      { <<: *env, SERVICE_NAME: loadtest-hrm-service, METRICS_PORT: "9107" }
+    ports: ["29107:9107"]
+
+  salary-service:
+    <<: *service
+    image: hrms-loadtest/salary-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=salary-service, PROJECT=salary-service, PORT=50058]
+    environment:
+      { <<: *env, SERVICE_NAME: loadtest-salary-service, METRICS_PORT: "9108" }
+    ports: ["29108:9108"]
+
+  analytics-service:
+    <<: *service
+    image: hrms-loadtest/analytics-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args: [APP_DIR=analytics-service, PROJECT=analytics-service, PORT=50059]
+    environment:
+      {
+        <<: *env,
+        SERVICE_NAME: loadtest-analytics-service,
+        METRICS_PORT: "9109",
+      }
+    ports: ["29109:9109"]
+
+  notification-service:
+    <<: *service
+    image: hrms-loadtest/notification-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args:
+        [APP_DIR=notification-service, PROJECT=notification-service, PORT=50060]
+    environment:
+      {
+        <<: *env,
+        SERVICE_NAME: loadtest-notification-service,
+        METRICS_PORT: "9110",
+      }
+    ports: ["29110:9110"]
+
+  performance-review-service:
+    <<: *service
+    image: hrms-loadtest/performance-review-service:local
+    build:
+      context: .
+      dockerfile: ./docker/base.Dockerfile
+      args:
+        [
+          APP_DIR=performance-review-service,
+          PROJECT=performance-review-service,
+          PORT=50061,
+        ]
+    environment:
+      {
+        <<: *env,
+        SERVICE_NAME: loadtest-performance-review-service,
+        METRICS_PORT: "9112",
+      }
+    ports: ["29112:9112"]

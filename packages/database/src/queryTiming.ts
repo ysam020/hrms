@@ -39,30 +39,122 @@ export interface QueryStats {
   readWaiters: (() => void)[];
   /** Time reads spent waiting for a slot under readLimit. */
   capWaitMs: number;
+  /** performance.now() when the scope opened (request received). */
+  startedAt: number;
+  /** Every external wait, in start order (capped at MAX_OPS). */
+  ops: TimedOp[];
+  opsDropped: number;
+  /** Named middleware/handler stages: call count and summed wall time. */
+  stages: Record<string, { n: number; ms: number }>;
+  redisCount: number;
+  redisMs: number;
+  /** res.json(): JSON.stringify + ETag + write, wall time. */
+  serializeMs: number;
+  /** Process CPU at scope start, and the most other scopes in flight. */
+  cpuStart: NodeJS.CpuUsage;
+  maxOverlap: number;
 }
+
+/** One external wait: database query, Redis command or gRPC call. */
+export interface TimedOp {
+  kind: "db" | "redis" | "grpc";
+  /** e.g. "master:User.findUnique", "redis:get", "grpc:getLeaves". */
+  name: string;
+  start: number;
+  end: number;
+}
+
+const MAX_OPS = 200;
+// Scopes opened with { trackOverlap: true } and not yet ended: when more
+// than one is open, the process CPU delta can't be attributed to a single
+// request. Opt-in, because only a caller that always ends its scope (the
+// gateway, on the response's "close") may register one; gRPC handler scopes
+// are never ended and would otherwise accumulate here.
+let openScopes = 0;
+const liveScopes = new Set<QueryStats>();
 
 const statsStorage = new AsyncLocalStorage<QueryStats>();
 
-export function withQueryStats<T>(fn: () => T): T {
-  return statsStorage.run(
-    {
-      count: 0,
-      totalMs: 0,
-      slowest: null,
-      busyMs: 0,
-      inFlight: 0,
-      maxInFlight: 0,
-      busySince: 0,
-      downstreamCount: 0,
-      downstreamMs: 0,
-      handlerStart: null,
-      readLimit: null,
-      readsActive: 0,
-      readWaiters: [],
-      capWaitMs: 0,
-    },
-    fn,
-  );
+export function withQueryStats<T>(
+  fn: () => T,
+  opts: { trackOverlap?: boolean } = {},
+): T {
+  const stats: QueryStats = {
+    count: 0,
+    totalMs: 0,
+    slowest: null,
+    busyMs: 0,
+    inFlight: 0,
+    maxInFlight: 0,
+    busySince: 0,
+    downstreamCount: 0,
+    downstreamMs: 0,
+    handlerStart: null,
+    readLimit: null,
+    readsActive: 0,
+    readWaiters: [],
+    capWaitMs: 0,
+    startedAt: performance.now(),
+    ops: [],
+    opsDropped: 0,
+    stages: {},
+    redisCount: 0,
+    redisMs: 0,
+    serializeMs: 0,
+    cpuStart: process.cpuUsage(),
+    maxOverlap: 0,
+  };
+  if (opts.trackOverlap) {
+    openScopes++;
+    for (const other of liveScopes)
+      other.maxOverlap = Math.max(other.maxOverlap, openScopes - 1);
+    stats.maxOverlap = openScopes - 1;
+    liveScopes.add(stats);
+  } else {
+    stats.maxOverlap = -1; // unknown
+  }
+  return statsStorage.run(stats, fn);
+}
+
+/** Closes a scope opened by withQueryStats (call once, when the response ends). */
+export function endQueryStats(stats: QueryStats): void {
+  if (!liveScopes.delete(stats)) return;
+  openScopes--;
+}
+
+function pushOp(stats: QueryStats, op: TimedOp): void {
+  if (stats.ops.length < MAX_OPS) stats.ops.push(op);
+  else stats.opsDropped++;
+}
+
+/** Records a Redis command or other external wait against the current request. */
+export function recordExternal(
+  kind: "redis" | "grpc",
+  name: string,
+  start: number,
+  end: number,
+): void {
+  const stats = statsStorage.getStore();
+  if (!stats) return;
+  pushOp(stats, { kind, name, start, end });
+  if (kind === "redis") {
+    stats.redisCount++;
+    stats.redisMs += end - start;
+  }
+}
+
+/** Adds wall time to a named stage (middleware, handler phase). */
+export function recordStage(name: string, ms: number): void {
+  const stats = statsStorage.getStore();
+  if (!stats) return;
+  const st = (stats.stages[name] ??= { n: 0, ms: 0 });
+  st.n++;
+  st.ms += ms;
+}
+
+export function recordSerialize(ms: number): void {
+  const stats = statsStorage.getStore();
+  if (stats) stats.serializeMs += ms;
 }
 
 export function currentQueryStats(): QueryStats | undefined {
@@ -115,11 +207,17 @@ function releaseReadSlot(stats: QueryStats): void {
   stats.readWaiters.shift()?.();
 }
 
-export function recordDownstream(ms: number): void {
+export function recordDownstream(
+  ms: number,
+  name = "call",
+  start?: number,
+): void {
   const stats = statsStorage.getStore();
   if (!stats) return;
   stats.downstreamCount++;
   stats.downstreamMs += ms;
+  const end = (start ?? performance.now() - ms) + ms;
+  pushOp(stats, { kind: "grpc", name: `grpc:${name}`, start: end - ms, end });
 }
 
 function numberFromEnv(name: string, fallback: number): number {
@@ -178,17 +276,57 @@ export function attachQueryTiming(
     } finally {
       const end = performance.now();
       queryEnded(stats, end);
+      if (stats)
+        pushOp(stats, {
+          kind: "db",
+          name: `${scope}:${params.model ?? "$raw"}.${params.action}`,
+          start,
+          end,
+        });
       if (slot && stats) releaseReadSlot(stats);
       recordQuery(scope, params.model ?? "$raw", params.action, end - start);
     }
   });
 }
 
-/** Safe, value-free summary of a request scope for a timing log line. */
-export function summarizeQueryStats(stats: QueryStats, startedAt: number) {
+/** Wall time covered by at least one of the given intervals. */
+function unionMs(ops: TimedOp[]): number {
+  const sorted = [...ops].sort((a, b) => a.start - b.start);
+  let total = 0;
+  let curStart = -1;
+  let curEnd = -1;
+  for (const op of sorted) {
+    if (op.start > curEnd) {
+      if (curEnd > curStart) total += curEnd - curStart;
+      curStart = op.start;
+      curEnd = op.end;
+    } else if (op.end > curEnd) curEnd = op.end;
+  }
+  if (curEnd > curStart) total += curEnd - curStart;
+  return total;
+}
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Safe, value-free summary of a request scope for a timing log line.
+ * Durations are wall clock (performance.now). Overlapping waits are never
+ * summed into the total: `ioBusyMs` is the union of all recorded waits and
+ * `nonIoMs` is what's left (on-CPU work, event-loop queueing and any wait
+ * that isn't instrumented). `cpuMs` is the process CPU delta and is only
+ * attributable to this request when `overlap` is 0.
+ */
+export function summarizeQueryStats(
+  stats: QueryStats,
+  startedAt: number,
+  opts: { ops?: boolean } = {},
+) {
   const now = performance.now();
+  const total = now - startedAt;
+  const io = unionMs(stats.ops);
+  const cpu = process.cpuUsage(stats.cpuStart);
   return {
-    totalMs: Math.round(now - startedAt),
+    totalMs: Math.round(total),
     middlewareMs:
       stats.handlerStart === null
         ? null
@@ -201,9 +339,33 @@ export function summarizeQueryStats(stats: QueryStats, startedAt: number) {
     capWaitMs: Math.round(stats.capWaitMs),
     downstreamCalls: stats.downstreamCount,
     downstreamMs: Math.round(stats.downstreamMs),
+    redisCalls: stats.redisCount,
+    redisMs: r1(stats.redisMs),
+    ioBusyMs: Math.round(io),
+    nonIoMs: Math.round(total - io),
+    serializeMs: r1(stats.serializeMs),
+    // Only meaningful when overlap is 0; -1 = overlap not tracked.
+    cpuMs: stats.maxOverlap === 0 ? r1((cpu.user + cpu.system) / 1000) : null,
+    overlap: stats.maxOverlap,
+    stages: Object.fromEntries(
+      Object.entries(stats.stages).map(([k, v]) => [
+        k,
+        { n: v.n, ms: r1(v.ms) },
+      ]),
+    ),
     slowest: stats.slowest && {
       ...stats.slowest,
       ms: Math.round(stats.slowest.ms),
     },
+    ...(opts.ops
+      ? {
+          ops: stats.ops.map((o) => [
+            o.name,
+            r1(o.start - startedAt),
+            r1(o.end - o.start),
+          ]),
+          opsDropped: stats.opsDropped,
+        }
+      : {}),
   };
 }

@@ -8,6 +8,7 @@ import { prisma } from "@hrms/db";
 import { BLOCKED_EMPLOYEE_STATUSES, hasPrivilegedRole } from "@hrms/common";
 import { ticketNoPrefix } from "../config/support";
 import { isPlatformTenant, platformTenantId } from "../config/platform";
+import { loadUserAccess } from "./userAccess";
 
 const isDuplicateKey = (err: any) =>
   err?.code === "P2002" ||
@@ -109,15 +110,7 @@ export async function hasSupportAccess(user: {
   tenantRole?: string | null;
 }): Promise<boolean> {
   if (!isPlatformTenant(user.tenantId)) return false;
-  const record = await prisma.user.findUnique({
-    where: { id: user.userId },
-    select: {
-      tenantId: true,
-      isSuperUser: true,
-      permissions: true,
-      employeeStatus: true,
-    },
-  });
+  const record = await loadUserAccess(user.userId, { tenantScoped: false });
   if (!record || record.tenantId !== user.tenantId) return false;
   if (BLOCKED_EMPLOYEE_STATUSES.includes(record.employeeStatus)) return false;
   return (

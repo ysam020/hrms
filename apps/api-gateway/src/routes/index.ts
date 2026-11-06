@@ -46,6 +46,7 @@ import { requireActiveSubscription } from "../middleware/requireActiveSubscripti
 import { idempotency } from "../middleware/idempotency";
 import { authenticate, requireTenant } from "../middleware/authenticate";
 import { requireSupportAgent } from "../middleware/requireSupportAgent";
+import { guardsDone, timed } from "../middleware/timed";
 
 export const rootRouter: Router = Router();
 
@@ -71,7 +72,7 @@ rootRouter.use(authRouter);
 // one request to a late-mounted business router was charged up to 29 times
 // (docs/performance/api-performance-audit.md, finding B1). The set of
 // requests it applies to is unchanged: everything not handled by authRouter.
-rootRouter.use(defaultLimiter);
+rootRouter.use(timed("rateLimit:default", defaultLimiter));
 rootRouter.use(tenantRouter);
 rootRouter.use(paymentRouter);
 
@@ -118,6 +119,7 @@ rootRouter.use(
   authenticate,
   requireTenant,
   idempotency,
+  guardsDone,
   walkthroughRouter,
 );
 // Availability (busy, in a meeting…): same reasoning as the walkthrough —
@@ -127,6 +129,7 @@ rootRouter.use(
   authenticate,
   requireTenant,
   idempotency,
+  guardsDone,
   presenceRouter,
 );
 
@@ -143,8 +146,9 @@ const businessRouter: Router = Router();
 businessRouter.use(
   authenticate,
   requireTenant,
-  requireActiveSubscription,
-  idempotency,
+  timed("requireActiveSubscription", requireActiveSubscription),
+  timed("idempotency", idempotency),
+  guardsDone,
 );
 
 businessRouter.use(userRouter);

@@ -19,6 +19,7 @@ import { notify } from "@hrms/notifications";
 import { handleError } from "../utils/handleError";
 import { isPlatformTenant } from "../config/platform";
 import { writePlatformAudit } from "./platformAdmin";
+import { invalidateUserAccess } from "../services/userAccess";
 
 /**
  * Platform-only permissions (e.g. PraestoSupport:*) as seen from this
@@ -233,6 +234,7 @@ export async function saveUserPermissions(req: Request, res: Response) {
       where: { id: user.id },
       data: { permissions: validPermissions, role: updatedRole },
     });
+    invalidateUserAccess(user.id);
 
     if (newRoleName) {
       const roleDoc = await prisma.role.findFirst({
@@ -354,6 +356,7 @@ export async function updateSuperuser(req: Request, res: Response) {
       where: { id: user.id },
       data: { isSuperUser: !!isSuperUser },
     });
+    invalidateUserAccess(user.id);
     // In Praesto's own organisation a superuser holds every Platform
     // Console action, so the toggle is a platform access change too.
     if (
@@ -407,6 +410,7 @@ export async function deleteUserRole(req: Request, res: Response) {
       where: { id: user.id },
       data: { role: updatedRoles, permissions: updatedPerms },
     });
+    invalidateUserAccess(user.id);
 
     const assignedTo = Array.isArray(role.assignedTo)
       ? (role.assignedTo as any[])

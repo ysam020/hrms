@@ -12,6 +12,7 @@ import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
 import { parsePagination } from "../utils/pagination";
 import { getFinancialYear } from "../utils/tdsCalc";
+import { loadUserAccess } from "../services/userAccess";
 
 function requireTenantId(req: AuthRequest, res: Response): string | null {
   const { tenantId } = req.user!;
@@ -40,10 +41,7 @@ async function canManageTaxDeclaration(
   if (hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) return true;
   const superUser = await isSuperUser(userId);
   if (superUser) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { permissions: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   return (user?.permissions ?? []).includes(`TaxDeclaration:${action}:all`);
 }
 

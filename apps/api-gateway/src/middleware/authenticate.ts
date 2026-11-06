@@ -1,8 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { prisma, runWithTenant, getClientForDb, AuditActor } from "@hrms/db";
+import {
+  prisma,
+  runWithTenant,
+  getClientForDb,
+  AuditActor,
+  recordStage,
+} from "@hrms/db";
 import { BoundedCache, hasPrivilegedRole, HR_ROLES } from "@hrms/common";
 import { gatewayTenantStorage } from "./tenantContext";
+import { loadUserAccess } from "../services/userAccess";
 
 export interface AuthUser {
   userId: string;
@@ -57,8 +64,15 @@ async function resolveUsername(userId: string): Promise<string | null> {
 export const authenticate = (
   req: AuthRequest,
   res: Response,
-  next: NextFunction,
+  nextFn: NextFunction,
 ) => {
+  // Every pass is timed (it runs once in the business guard and again on
+  // most routes): entry until next() is handed control.
+  const started = performance.now();
+  const next = () => {
+    recordStage("authenticate", performance.now() - started);
+    nextFn();
+  };
   const token =
     req.headers.authorization?.split(" ")[1] || req.cookies?.access_token;
   if (!token) return res.status(401).json({ message: "Unauthorized" });
@@ -148,10 +162,7 @@ export const requireSuperUser = async (
     return;
   }
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { isSuperUser: true },
-    });
+    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
     if (!user?.isSuperUser) {
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -181,10 +192,7 @@ export const requirePrivileged = async (
     return;
   }
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { isSuperUser: true },
-    });
+    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
     if (!user?.isSuperUser) {
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -216,15 +224,10 @@ export const requireSubscriptionManager = async (
     return;
   }
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { isSuperUser: true, permissions: true },
-    });
+    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
     const permitted =
       user?.isSuperUser ||
-      ((user?.permissions as string[] | undefined) ?? []).some((p) =>
-        p.startsWith("Subscription:"),
-      );
+      (user?.permissions ?? []).some((p) => p.startsWith("Subscription:"));
     if (!permitted) {
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -254,10 +257,7 @@ export const requireHrPrivileged = async (
     return;
   }
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { isSuperUser: true },
-    });
+    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
     if (!user?.isSuperUser) {
       res.status(403).json({ message: "Forbidden" });
       return;

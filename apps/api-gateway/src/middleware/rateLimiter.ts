@@ -1,5 +1,5 @@
 import rateLimit, { RateLimitRequestHandler } from "express-rate-limit";
-import { redisStore } from "../config/rateLimiters";
+import { limitMax, redisStore } from "../config/rateLimiters";
 
 // Previously used express-rate-limit's default in-process MemoryStore.
 // Guards nearly every authenticated business route (see subscriptionGuard
@@ -22,7 +22,7 @@ import { redisStore } from "../config/rateLimiters";
 // Removed as pure duplication — see routes/index.ts.
 export const defaultLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60 * 1000,
-  max: 5000,
+  max: limitMax("DEFAULT", 5000),
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },

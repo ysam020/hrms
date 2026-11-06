@@ -33,6 +33,7 @@ import { handleError } from "../utils/handleError";
 import { AuthRequest, AuthUser } from "../middleware/authenticate";
 import { parsePagination } from "../utils/pagination";
 import { notify } from "@hrms/notifications";
+import { loadUserAccess } from "../services/userAccess";
 
 // Prisma's MongoDB connector treats an explicit `null` and "field was never
 // set" as different states — `{ returnedOn: null }` alone only matches rows
@@ -58,10 +59,7 @@ async function assertHrRole(authUser: AuthUser | undefined): Promise<boolean> {
   if (hasPrivilegedRole(authUser.tenantRole ?? "", HR_ROLES)) {
     return true;
   }
-  const user = await prisma.user.findUnique({
-    where: { id: authUser.userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(authUser.userId, { tenantScoped: true });
   if (!user) return false;
   if (user.isSuperUser) return true;
   return ((user.permissions as string[]) ?? []).includes("Assets:manage");

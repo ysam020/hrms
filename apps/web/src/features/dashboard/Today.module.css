@@ -132,6 +132,11 @@
   box-shadow: inset 0 0 0 1px
     color-mix(in srgb, var(--px-accent) 45%, transparent);
 }
+/* Today, punched in: outlined until punch-out decides the day. */
+:is(.mark, .legend i)[data-kind="working"] {
+  background: color-mix(in srgb, var(--px-accent) 15%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--px-accent);
+}
 :is(.mark, .legend i)[data-kind="future"] {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--px-separator);

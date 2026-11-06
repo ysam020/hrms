@@ -1,5 +1,5 @@
-import { prismaWithTenant as prisma } from "@hrms/db";
 import { hasPrivilegedRole, HR_ROLES } from "@hrms/common";
+import { loadUserAccess } from "../services/userAccess";
 
 /**
  * Returns true if the given userId belongs to a super-user.
@@ -7,10 +7,7 @@ import { hasPrivilegedRole, HR_ROLES } from "@hrms/common";
  * a single implementation instead of copy-pasting the same three lines.
  */
 export async function isSuperUser(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   return user?.isSuperUser === true;
 }
 

@@ -541,16 +541,12 @@ describe("taxDeclaration handlers", () => {
   describe("getPendingDeclarationActions", () => {
     it("only includes the declaration queue when the caller can review declarations but not proofs", async () => {
       // canReviewDeclaration and canReviewProofs are checked concurrently
-      // (Promise.all), so the two isSuperUser/permissions lookups interleave
-      // rather than resolving in a fixed order — key off the `select` shape
-      // instead of call order.
-      mockUserFindUnique.mockImplementation(({ select }: any) =>
-        select?.isSuperUser
-          ? Promise.resolve({ isSuperUser: false })
-          : Promise.resolve({
-              permissions: ["TaxDeclaration:review_declaration:all"],
-            }),
-      );
+      // (Promise.all). Every access check reads the same full user row
+      // (services/userAccess.ts), so answer every lookup with it.
+      mockUserFindUnique.mockResolvedValue({
+        isSuperUser: false,
+        permissions: ["TaxDeclaration:review_declaration:all"],
+      });
       mockFindMany.mockResolvedValueOnce([
         {
           id: "d1",

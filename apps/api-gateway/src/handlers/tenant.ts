@@ -43,6 +43,7 @@ import {
   trialKeysFor,
   TRIAL_INELIGIBLE_MESSAGE,
 } from "../services/trial";
+import { invalidateUserAccess, loadUserAccess } from "../services/userAccess";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -522,6 +523,8 @@ async function buildTenant(
       ]),
     actor,
   );
+  // The creator just became a superuser of the new tenant.
+  invalidateUserAccess(userId);
 
   const { accessToken, refreshToken } = issueTokenPair(
     userId,
@@ -772,6 +775,7 @@ export async function selectTenant(req: AuthRequest, res: Response) {
     });
     if (!user?.tenantId) {
       await prisma.user.update({ where: { id: userId }, data: { tenantId } });
+      invalidateUserAccess(userId);
     }
 
     const { accessToken, refreshToken } = issueTokenPair(
@@ -956,10 +960,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
       message: "No active tenant.",
     });
   }
-  const actor = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const actor = await loadUserAccess(userId, { tenantScoped: false });
   const canEdit =
     actor?.isSuperUser ||
     (actor?.permissions ?? []).includes("Organisation:edit_company_info");
@@ -1304,10 +1305,7 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
 async function canApproveJoinRequests(req: AuthRequest): Promise<boolean> {
   const { userId, tenantRole } = req.user!;
   if (hasPrivilegedRole(tenantRole ?? "")) return true;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperUser: true, permissions: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: false });
   if (user?.isSuperUser) return true;
   const permissions = (user?.permissions as string[]) ?? [];
   return permissions.includes("Organisation:approve_join_requests");

@@ -228,6 +228,7 @@ type Kind =
   | "weekoff"
   | "absent"
   | "pending"
+  | "working"
   | "future";
 
 function monthDays(
@@ -265,9 +266,10 @@ function monthDays(
     else if (st === "leave") kind = "leave";
     else if (st === "holiday") kind = "holiday";
     else if (st === "week-off") kind = "weekoff";
+    // Today isn't decided until punch-out, whatever status the record holds.
+    else if (recIn(r) && !recOut(r) && d.isSame(today, "day")) kind = "working";
     else if (st === "half-day") kind = "halfday";
-    else if (recIn(r) && !recOut(r) && !d.isSame(today, "day"))
-      kind = "partial";
+    else if (recIn(r) && !recOut(r)) kind = "partial";
     else if (recIn(r) || st === "present") kind = "present";
     else if (dayOff) kind = dayOff;
     else if (d.isSame(today, "day")) kind = "pending";
@@ -290,6 +292,7 @@ function MonthRibbon({ days }: { days: ReturnType<typeof monthDays> }) {
       weekoff: "Week off",
       absent: "No record",
       pending: "Yet to punch in",
+      working: "Punched in, not yet out",
       future: "Upcoming",
     })[k];
 

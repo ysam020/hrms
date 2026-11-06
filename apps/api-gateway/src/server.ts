@@ -30,9 +30,14 @@ import {
   ensureMasterIndexes,
   withQueryStats,
   currentQueryStats,
+  endQueryStats,
   summarizeQueryStats,
+  recordExternal,
+  recordSerialize,
   warmUpDatabase,
 } from "@hrms/db";
+import { setRedisTimingHook } from "@hrms/cache";
+import { withUserAccessScope } from "./services/userAccess";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -102,32 +107,67 @@ const QUERY_TIME_WARN_MS = Number(process.env.REQUEST_DB_MS_WARN) || 1000;
 // Per-request timing line for every request (route, status, bytes, phase
 // and DB/downstream counts — never headers, tokens or query values).
 const REQUEST_TIMING_LOG = process.env.REQUEST_TIMING_LOG === "true";
+// Adds the ordered list of every DB/Redis/gRPC wait (name, start offset,
+// duration; no arguments) to the timing line. For investigations only.
+const REQUEST_TIMING_OPS = process.env.REQUEST_TIMING_OPS === "true";
+
+// CacheManager's Redis commands count against the request that issued them.
+setRedisTimingHook((op, start, end) =>
+  recordExternal("redis", `redis:${op}`, start, end),
+);
+
 app.use(apiRequestLogger);
+
 // Per-request database round trips (counts and timings only — no query
 // arguments). Logged only for requests that look expensive.
 app.use((req, res, next) =>
-  withQueryStats(() => {
-    const started = performance.now();
-    res.on("finish", () => {
+  withQueryStats(
+    () => {
+      const started = performance.now();
       const stats = currentQueryStats();
-      if (!stats) return;
-      const timing = summarizeQueryStats(stats, started);
-      const heavy =
-        stats.count >= QUERY_COUNT_WARN || stats.totalMs >= QUERY_TIME_WARN_MS;
-      if (!heavy && !REQUEST_TIMING_LOG) return;
-      const line = {
-        method: req.method,
-        route: req.baseUrl + (req.route?.path ?? ""),
-        status: res.statusCode,
-        bytes: Number(res.getHeader("content-length")) || null,
-        ...timing,
+      // res.json = JSON.stringify + ETag + write: time it as serialisation.
+      const json = res.json.bind(res);
+      res.json = (body: unknown) => {
+        const s = performance.now();
+        try {
+          return json(body);
+        } finally {
+          recordSerialize(performance.now() - s);
+        }
       };
-      if (heavy) logger.warn("db-heavy request", line);
-      else logger.info("request timing", line);
-    });
-    next();
-  }),
+      res.on("close", () => stats && endQueryStats(stats));
+      res.on("finish", () => {
+        if (!stats) return;
+        const timing = summarizeQueryStats(stats, started, {
+          ops: REQUEST_TIMING_OPS,
+        });
+        endQueryStats(stats);
+        const heavy =
+          stats.count >= QUERY_COUNT_WARN ||
+          stats.totalMs >= QUERY_TIME_WARN_MS;
+        if (!heavy && !REQUEST_TIMING_LOG) return;
+        const line = {
+          // Explicit: the ambient request context isn't reliably active
+          // inside a "finish" listener.
+          requestId: (req as { requestId?: string }).requestId,
+          method: req.method,
+          route: req.baseUrl + (req.route?.path ?? ""),
+          status: res.statusCode,
+          bytes: Number(res.getHeader("content-length")) || null,
+          ...timing,
+        };
+        if (heavy) logger.warn("db-heavy request", line);
+        else logger.info("request timing", line);
+      });
+      next();
+    },
+    { trackOverlap: true },
+  ),
 );
+
+// One user-access scope per HTTP request: authorisation checks share one
+// lookup of the caller's isSuperUser/permissions (services/userAccess.ts).
+app.use((_req, _res, next) => withUserAccessScope(next));
 
 // Body parsers
 app.use(express.json({ limit: "10mb" }));

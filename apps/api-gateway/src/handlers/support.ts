@@ -62,6 +62,7 @@ import {
   notifyTenantActivity,
   notifyTicketCreated,
 } from "../services/supportNotifications";
+import { loadUserAccess } from "../services/userAccess";
 
 const OBJECT_ID = /^[a-f0-9]{24}$/i;
 /** Same reporter, same text, this recently → the earlier ticket is returned. */
@@ -85,10 +86,7 @@ export function supportFail(res: Response, err: unknown, route: string) {
  */
 export async function loadTenantActor(req: Request): Promise<TenantActor> {
   const { user } = req as AuthRequest;
-  const record = await prisma.user.findUnique({
-    where: { id: user!.userId },
-    select: { tenantId: true, isSuperUser: true, permissions: true },
-  });
+  const record = await loadUserAccess(user!.userId, { tenantScoped: false });
   const sameTenant = record?.tenantId === user!.tenantId;
   return {
     userId: user!.userId,

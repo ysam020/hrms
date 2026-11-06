@@ -7,6 +7,8 @@ import { RedisStore } from "rate-limit-redis";
 import { Application } from "express";
 import jwt from "jsonwebtoken";
 import { getRedisClient } from "@hrms/cache";
+import { recordExternal } from "@hrms/db";
+import { timed } from "../middleware/timed";
 
 // Every limiter shares one Redis-backed store (prefixed per limiter so
 // their counters don't collide) instead of express-rate-limit's default
@@ -18,11 +20,39 @@ import { getRedisClient } from "@hrms/cache";
 export function redisStore(prefix: string): Store {
   return new RedisStore({
     prefix,
-    sendCommand: (...args: string[]) => {
+    sendCommand: async (...args: string[]) => {
       const [command, ...rest] = args;
-      return getRedisClient().call(command, ...rest) as any;
+      const started = performance.now();
+      try {
+        return (await getRedisClient().call(command, ...rest)) as any;
+      } finally {
+        recordExternal(
+          "redis",
+          `redis:ratelimit:${command.toLowerCase()}`,
+          started,
+          performance.now(),
+        );
+      }
     },
   });
+}
+
+// Per-limiter `max` override for the isolated load-testing stack
+// (load-testing/README.md): RATE_LIMIT_MAX_<NAME>=<positive integer>, read
+// once at startup. Ignored when NODE_ENV=production so a stray variable can
+// never loosen production limits; anything that isn't a positive integer
+// falls back to the coded default. Every override in effect is logged.
+export function limitMax(name: string, fallback: number): number {
+  const raw = process.env[`RATE_LIMIT_MAX_${name}`];
+  if (raw === undefined || process.env.NODE_ENV === "production") {
+    return fallback;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) return fallback;
+  console.warn(
+    `[rate-limit] RATE_LIMIT_MAX_${name}=${value} overrides the default ${fallback}`,
+  );
+  return value;
 }
 
 // Use the authenticated user's ID when available, fall back to IP.
@@ -55,7 +85,7 @@ const PUBLIC_ROUTES_REGEX =
 
 export const authLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000,
+  max: limitMax("AUTH", 1000),
   keyGenerator: userOrIpKey,
   standardHeaders: true,
   legacyHeaders: false,
@@ -66,7 +96,7 @@ export const authLimiter: RateLimitRequestHandler = rateLimit({
 // Profile returns full PII — apply a dedicated limit instead of exempting it.
 const profileLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 300,
+  max: limitMax("PROFILE", 300),
   keyGenerator: userOrIpKey,
   standardHeaders: true,
   legacyHeaders: false,
@@ -76,7 +106,7 @@ const profileLimiter = rateLimit({
 
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10000,
+  max: limitMax("GENERAL", 10000),
   keyGenerator: userOrIpKey,
   standardHeaders: true,
   legacyHeaders: false,
@@ -86,7 +116,7 @@ const generalLimiter = rateLimit({
 
 const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 2500,
+  max: limitMax("PUBLIC", 2500),
   keyGenerator: userOrIpKey,
   standardHeaders: true,
   legacyHeaders: false,
@@ -100,7 +130,7 @@ const publicLimiter = rateLimit({
 // also dies after 5 wrong guesses — see services/careerApplications.ts.)
 const draftRecoveryLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: limitMax("DRAFT_RECOVERY", 10),
   keyGenerator: (req: any) =>
     req.ip ? `ip:${ipKeyGenerator(req)}` : "ip:unknown",
   standardHeaders: true,
@@ -113,7 +143,7 @@ const draftRecoveryLimiter = rateLimit({
 // they're held well below the general public budget.
 const applicationWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 60,
+  max: limitMax("APPLY_WRITE", 60),
   keyGenerator: (req: any) =>
     req.ip ? `ip:${ipKeyGenerator(req)}` : "ip:unknown",
   standardHeaders: true,
@@ -140,7 +170,7 @@ export function applyRateLimiters(app: Application) {
       ? applicationWriteLimiter(req, res, next)
       : next(),
   );
-  app.use("/api", generalLimiter);
+  app.use("/api", timed("rateLimit:general", generalLimiter));
 }
 
 export const isApplicationWrite = (method: string, url: string) =>

@@ -11,6 +11,7 @@ import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
 import { isSuperUser } from "../utils/user";
+import { loadUserAccess } from "../services/userAccess";
 
 function requireTenantId(req: AuthRequest, res: Response): string | null {
   const { tenantId } = req.user!;
@@ -31,10 +32,7 @@ async function isPrivileged(req: AuthRequest): Promise<boolean> {
   if (superUser || hasPrivilegedRole(tenantRole ?? "", HR_ROLES)) {
     return true;
   }
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { permissions: true },
-  });
+  const user = await loadUserAccess(userId, { tenantScoped: true });
   return (user?.permissions ?? []).includes(
     "Organisation:edit_organisation_settings",
   );

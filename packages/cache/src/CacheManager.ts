@@ -27,15 +27,28 @@ function count(family: string, result: string): void {
   cacheOperationsTotal?.inc({ family, result, service: SERVICE_LABEL });
 }
 
+// Optional per-request timing sink (the gateway attributes Redis waits to
+// the request that made them). Kept as a plain callback so this package
+// doesn't depend on the database package's request scope.
+type RedisTimingHook = (op: string, start: number, end: number) => void;
+let redisTimingHook: RedisTimingHook | null = null;
+export function setRedisTimingHook(hook: RedisTimingHook | null): void {
+  redisTimingHook = hook;
+}
+
 async function timedRedis<T>(op: string, run: () => Promise<T>): Promise<T> {
   const started = performance.now();
   try {
     return await run();
   } finally {
+    const ended = performance.now();
     cacheRedisDuration?.observe(
       { op, service: SERVICE_LABEL },
-      performance.now() - started,
+      ended - started,
     );
+    try {
+      redisTimingHook?.(op, started, ended);
+    } catch {}
   }
 }
 

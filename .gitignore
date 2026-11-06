@@ -95,3 +95,7 @@ xcuserdata/
 # Lighthouse runs (docs/lighthouse-audit.md); scripts and comparison.txt are kept
 artifacts/lighthouse/*/
 artifacts/lighthouse/*.log
+
+# graphify output (regenerated); keep only the report
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md
