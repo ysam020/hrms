@@ -1,6 +1,7 @@
 import http from "http";
 import cluster from "node:cluster";
 import { randomUUID } from "crypto";
+import { performance } from "node:perf_hooks";
 import winston from "winston";
 import WinstonCloudWatch from "winston-cloudwatch";
 import { status as grpcStatus } from "@grpc/grpc-js";
