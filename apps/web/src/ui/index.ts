@@ -1,5 +1,6 @@
 export * from "./Icon";
 export * from "./controls";
+export * from "./segmented";
 export * from "./fields";
 export * from "./display";
 export { Spinner, LoadingScreen, type SpinnerSize } from "./Spinner";

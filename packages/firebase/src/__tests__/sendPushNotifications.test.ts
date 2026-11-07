@@ -1,5 +1,15 @@
 import { prisma } from "@hrms/db";
-import { sendPushNotifications } from "../sendPushNotifications";
+import { logger } from "@hrms/logger";
+import {
+  sendPushNotifications,
+  PlatformBroadcastNotAuthorizedError,
+} from "../sendPushNotifications";
+
+const TENANT_A = "aaaaaaaaaaaaaaaaaaaaaaaa";
+const PLATFORM = "cccccccccccccccccccccccc";
+const USER_1 = "111111111111111111111111";
+const USER_2 = "222222222222222222222222";
+const AUDIENCE = { tenantId: TENANT_A, userIds: [USER_1] };
 
 jest.mock("@hrms/db", () => ({
   prisma: {
@@ -34,7 +44,7 @@ describe("sendPushNotifications", () => {
 
   it("returns the no-tokens result when the user lookup throws", async () => {
     db.user.findMany.mockRejectedValue(new Error("db down"));
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
     expect(result).toEqual({
       success: false,
       message: "No active tokens found",
@@ -46,40 +56,120 @@ describe("sendPushNotifications", () => {
 
   it("returns the no-tokens result when no user has any tokens", async () => {
     db.user.findMany.mockResolvedValue([]);
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
     expect(result.success).toBe(false);
     expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it("queries all users with tokens for the ALL_USERS target", async () => {
+  it("queries only the given user ids inside the audience's tenant", async () => {
     db.user.findMany.mockResolvedValue([]);
-    await sendPushNotifications("ALL_USERS", "Title", "Body");
-    expect(db.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { fcmTokens: { not: null } } }),
+    await sendPushNotifications(
+      { tenantId: TENANT_A, userIds: [USER_1, USER_2, USER_1] },
+      "Title",
+      "Body",
     );
-  });
-
-  it("queries by username for a single-string target", async () => {
-    db.user.findMany.mockResolvedValue([]);
-    await sendPushNotifications("jdoe", "Title", "Body");
-    expect(db.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { username: { in: ["jdoe"] }, fcmTokens: { not: null } },
-      }),
-    );
-  });
-
-  it("queries by username list for an array target", async () => {
-    db.user.findMany.mockResolvedValue([]);
-    await sendPushNotifications(["jdoe", "asmith"], "Title", "Body");
     expect(db.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          username: { in: ["jdoe", "asmith"] },
+          id: { in: [USER_1, USER_2] },
+          tenantId: TENANT_A,
           fcmTokens: { not: null },
         },
       }),
     );
+  });
+
+  it("never queries without a tenant filter for a user-id audience", async () => {
+    db.user.findMany.mockResolvedValue([]);
+    await sendPushNotifications(AUDIENCE, "Title", "Body");
+    for (const [args] of db.user.findMany.mock.calls) {
+      expect(args.where.tenantId).toBe(TENANT_A);
+    }
+  });
+
+  it("sends nothing — and queries nothing — for an empty user-id list (no implicit 'everyone')", async () => {
+    const result = await sendPushNotifications(
+      { tenantId: TENANT_A, userIds: [] },
+      "Title",
+      "Body",
+    );
+    expect(db.user.findMany).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(result.sentCount).toBe(0);
+  });
+
+  it("drops malformed ids (e.g. usernames) instead of querying with them", async () => {
+    const result = await sendPushNotifications(
+      { tenantId: TENANT_A, userIds: ["jdoe"] },
+      "Title",
+      "Body",
+    );
+    expect(db.user.findMany).not.toHaveBeenCalled();
+    expect(result.sentCount).toBe(0);
+  });
+
+  describe("platform-wide broadcast", () => {
+    const ORIGINAL = process.env.PLATFORM_TENANT_ID;
+    const auth = {
+      tenantId: PLATFORM,
+      authorizedBy: USER_1,
+      reason: "Scheduled maintenance notice",
+    };
+    afterEach(() => {
+      if (ORIGINAL === undefined) delete process.env.PLATFORM_TENANT_ID;
+      else process.env.PLATFORM_TENANT_ID = ORIGINAL;
+    });
+
+    it("is refused when PLATFORM_TENANT_ID is not configured (fails closed)", async () => {
+      delete process.env.PLATFORM_TENANT_ID;
+      await expect(
+        sendPushNotifications({ platformBroadcast: auth }, "T", "B"),
+      ).rejects.toBeInstanceOf(PlatformBroadcastNotAuthorizedError);
+      expect(db.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it("is refused for any tenant other than the platform tenant", async () => {
+      process.env.PLATFORM_TENANT_ID = PLATFORM;
+      await expect(
+        sendPushNotifications(
+          { platformBroadcast: { ...auth, tenantId: TENANT_A } },
+          "T",
+          "B",
+        ),
+      ).rejects.toBeInstanceOf(PlatformBroadcastNotAuthorizedError);
+      expect(db.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it("is refused without a named authorizer and reason", async () => {
+      process.env.PLATFORM_TENANT_ID = PLATFORM;
+      await expect(
+        sendPushNotifications(
+          { platformBroadcast: { ...auth, authorizedBy: " " } },
+          "T",
+          "B",
+        ),
+      ).rejects.toBeInstanceOf(PlatformBroadcastNotAuthorizedError);
+      await expect(
+        sendPushNotifications(
+          { platformBroadcast: { ...auth, reason: "" } },
+          "T",
+          "B",
+        ),
+      ).rejects.toBeInstanceOf(PlatformBroadcastNotAuthorizedError);
+    });
+
+    it("reaches every user with a token when authorized, and records who authorized it", async () => {
+      process.env.PLATFORM_TENANT_ID = PLATFORM;
+      db.user.findMany.mockResolvedValue([]);
+      await sendPushNotifications({ platformBroadcast: auth }, "T", "B");
+      expect(db.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { fcmTokens: { not: null } } }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        "[FCM] Platform-wide push broadcast",
+        { authorizedBy: USER_1, reason: auth.reason },
+      );
+    });
   });
 
   it("filters out inactive tokens before sending", async () => {
@@ -97,7 +187,7 @@ describe("sendPushNotifications", () => {
       fcmTokens: [tokenEntry({ token: "active-tok" })],
     });
     db.user.update.mockResolvedValue({});
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
     expect(mockSend).toHaveBeenCalledTimes(1);
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({ token: "active-tok" }),
@@ -122,7 +212,7 @@ describe("sendPushNotifications", () => {
       ],
     });
     db.user.update.mockResolvedValue({});
-    await sendPushNotifications("ALL_USERS", "Title", "Body", {
+    await sendPushNotifications(AUDIENCE, "Title", "Body", {
       latestOnly: true,
     });
     expect(mockSend).toHaveBeenCalledTimes(1);
@@ -144,7 +234,7 @@ describe("sendPushNotifications", () => {
     mockSend.mockResolvedValue({});
     db.user.findUnique.mockResolvedValue({ fcmTokens: [] });
     db.user.update.mockResolvedValue({});
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
     expect(mockSend).toHaveBeenCalledTimes(2);
     expect(result.totalTokens).toBe(2);
   });
@@ -157,7 +247,7 @@ describe("sendPushNotifications", () => {
     db.user.findUnique.mockResolvedValue({ fcmTokens: [tokenEntry()] });
     db.user.update.mockResolvedValue({});
 
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -180,7 +270,7 @@ describe("sendPushNotifications", () => {
       { id: "u1", fcmTokens: [tokenEntry()] },
     ]);
     mockSend.mockRejectedValue(new Error("unknown fcm error"));
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
     expect(result).toEqual(
       expect.objectContaining({ success: false, sentCount: 0, failedCount: 1 }),
     );
@@ -205,7 +295,7 @@ describe("sendPushNotifications", () => {
     });
     db.user.update.mockResolvedValue({});
 
-    await sendPushNotifications("ALL_USERS", "Title", "Body");
+    await sendPushNotifications(AUDIENCE, "Title", "Body");
 
     expect(db.user.update).toHaveBeenCalledWith({
       where: { id: "u1" },
@@ -224,7 +314,7 @@ describe("sendPushNotifications", () => {
     err.code = "messaging/quota-exceeded";
     mockSend.mockRejectedValue(err);
 
-    await sendPushNotifications("ALL_USERS", "Title", "Body");
+    await sendPushNotifications(AUDIENCE, "Title", "Body");
 
     // findUnique is only called on the success path (to update lastUsed) or
     // during cleanup — neither should fire for a non-cleanup-eligible error.
@@ -239,7 +329,7 @@ describe("sendPushNotifications", () => {
     db.user.findUnique.mockResolvedValue({ fcmTokens: ["legacy-tok"] });
     db.user.update.mockResolvedValue({});
 
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
 
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({ token: "legacy-tok" }),
@@ -263,7 +353,7 @@ describe("sendPushNotifications", () => {
     db.user.findUnique.mockResolvedValue({ fcmTokens: ["bad-legacy-tok"] });
     db.user.update.mockResolvedValue({});
 
-    await sendPushNotifications("ALL_USERS", "Title", "Body");
+    await sendPushNotifications(AUDIENCE, "Title", "Body");
 
     expect(db.user.update).toHaveBeenCalledWith({
       where: { id: "u1" },
@@ -290,7 +380,7 @@ describe("sendPushNotifications", () => {
     });
     db.user.update.mockResolvedValue({});
 
-    const result = await sendPushNotifications("ALL_USERS", "Title", "Body");
+    const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
 
     expect(result.sentCount).toBe(2);
     // One combined read and one combined write for both of this user's
@@ -313,7 +403,7 @@ describe("sendPushNotifications", () => {
     db.user.findUnique.mockResolvedValue({ fcmTokens: [tokenEntry()] });
     db.user.update.mockResolvedValue({});
 
-    await sendPushNotifications("ALL_USERS", "Hello", "World");
+    await sendPushNotifications(AUDIENCE, "Hello", "World");
 
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({

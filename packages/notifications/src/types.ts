@@ -1,4 +1,8 @@
-import type { EmailJobData, NotificationJobData } from "@hrms/queue";
+import type {
+  EmailJobData,
+  NotificationBroadcast,
+  NotificationJobData,
+} from "@hrms/queue";
 
 // Catalog of every business event that can trigger a notification — grows
 // as each handler migrates onto notify() (see the phased plan this package
@@ -118,7 +122,10 @@ export interface NotifyOptions {
   recipients?: string[];
   /** Recipient usernames — resolved to user IDs by the worker. */
   pushTargets?: string[];
+  /** Usernames (legacy) — prefer `recipients` with user IDs. */
   targetUser?: string | string[];
+  /** Explicit fan-out instead of named recipients — see NotificationJobData.broadcast. */
+  broadcast?: NotificationBroadcast;
   inApp?: NotifyInAppChannel;
   push?: NotifyPushChannel;
   email?: NotifyEmailChannel;

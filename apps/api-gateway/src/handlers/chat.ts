@@ -466,6 +466,12 @@ export async function deleteConversation(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.NOT_FOUND, {
         message: "Conversation not found",
       });
+    // Like every other conversation endpoint: only a participant may change
+    // the room (here, hide it for themselves).
+    if (!room.participants?.includes(userId))
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
 
     if (!room.deletedFor.includes(userId)) {
       await prisma.chatRoom.update({

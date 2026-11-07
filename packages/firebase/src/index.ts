@@ -1,4 +1,11 @@
 export { getFirebaseApp, getMessaging } from "./admin";
-export { sendPushNotifications } from "./sendPushNotifications";
-export type {} from "./sendPushNotifications";
+export {
+  sendPushNotifications,
+  assertPlatformBroadcastAuthorized,
+  PlatformBroadcastNotAuthorizedError,
+} from "./sendPushNotifications";
+export type {
+  PushAudience,
+  PlatformBroadcastAuthorization,
+} from "./sendPushNotifications";
 export { default as admin } from "./admin";

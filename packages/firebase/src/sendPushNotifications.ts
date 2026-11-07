@@ -40,6 +40,57 @@ interface SendResult {
   totalTokens: number;
 }
 
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+
+/**
+ * Proof that a platform-wide push was deliberately requested. Only Praesto's
+ * own organisation (PLATFORM_TENANT_ID) may send one, and the person who
+ * authorized it is recorded.
+ */
+export interface PlatformBroadcastAuthorization {
+  tenantId: string;
+  authorizedBy: string;
+  reason: string;
+}
+
+/**
+ * Who a push goes to: a tenant's own users by userId, or — only with an
+ * authorization — every user on the platform. There is no implicit
+ * "everyone" target: an empty userIds list sends nothing.
+ */
+export type PushAudience =
+  | { tenantId: string; userIds: string[] }
+  | { platformBroadcast: PlatformBroadcastAuthorization };
+
+export class PlatformBroadcastNotAuthorizedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PlatformBroadcastNotAuthorizedError";
+  }
+}
+
+/** Throws unless `auth` comes from the configured platform tenant and names who authorized it. Fails closed when PLATFORM_TENANT_ID is unset. */
+export function assertPlatformBroadcastAuthorized(
+  auth: PlatformBroadcastAuthorization | null | undefined,
+): void {
+  const platform = process.env.PLATFORM_TENANT_ID?.trim();
+  if (!platform || !OBJECT_ID.test(platform)) {
+    throw new PlatformBroadcastNotAuthorizedError(
+      "Platform broadcast refused: PLATFORM_TENANT_ID is not configured",
+    );
+  }
+  if (!auth || auth.tenantId !== platform) {
+    throw new PlatformBroadcastNotAuthorizedError(
+      `Platform broadcast refused: tenant ${auth?.tenantId ?? "(none)"} is not the platform tenant`,
+    );
+  }
+  if (!auth.authorizedBy?.trim() || !auth.reason?.trim()) {
+    throw new PlatformBroadcastNotAuthorizedError(
+      "Platform broadcast refused: authorizedBy and reason are required",
+    );
+  }
+}
+
 /** Pick active tokens from a user's fcmTokens JSON array. */
 function pickTokens(
   fcmTokens: StoredTokenEntry[],
@@ -63,13 +114,13 @@ function pickTokens(
 /**
  * Send FCM push notifications.
  *
- * @param target  "ALL_USERS" | single username string | array of usernames
- * @param title   Notification title
- * @param body    Notification body
- * @param options latestOnly — only send to the most-recently-used token per user
+ * @param audience a tenant's users by userId, or an authorized platform broadcast
+ * @param title    Notification title
+ * @param body     Notification body
+ * @param options  latestOnly — only send to the most-recently-used token per user
  */
 export async function sendPushNotifications(
-  target: "ALL_USERS" | string | string[],
+  audience: PushAudience,
   title: string,
   body: string,
   options: SendOptions = {},
@@ -86,16 +137,32 @@ export async function sendPushNotifications(
 
   let tokenRecords: TokenRecord[] = [];
 
+  let where: Record<string, unknown>;
+  if ("platformBroadcast" in audience) {
+    // Throws (to the caller) rather than degrading to a smaller audience: a
+    // refused broadcast is a bug the caller must see.
+    assertPlatformBroadcastAuthorized(audience.platformBroadcast);
+    logger.warn("[FCM] Platform-wide push broadcast", {
+      authorizedBy: audience.platformBroadcast.authorizedBy,
+      reason: audience.platformBroadcast.reason,
+    });
+    where = { fcmTokens: { not: null } };
+  } else {
+    // The master users collection holds every tenant's users, so the tenant
+    // filter is what keeps a push inside the organisation even if a caller
+    // passes an id from elsewhere.
+    const userIds = [...new Set(audience.userIds)].filter((id) =>
+      OBJECT_ID.test(id),
+    );
+    if (!audience.tenantId || userIds.length === 0) return noTokens;
+    where = {
+      id: { in: userIds },
+      tenantId: audience.tenantId,
+      fcmTokens: { not: null },
+    };
+  }
+
   try {
-    const where =
-      target === "ALL_USERS"
-        ? { fcmTokens: { not: null } }
-        : {
-            username: {
-              in: Array.isArray(target) ? target : [target],
-            },
-            fcmTokens: { not: null },
-          };
     const users = await prisma.user.findMany({
       where,
       select: { id: true, fcmTokens: true },

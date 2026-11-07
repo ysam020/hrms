@@ -43,3 +43,29 @@ coverage
 
 # Audit reports (artifacts/lighthouse); never part of an image
 artifacts
+
+# Not needed to compile any image (the Dockerfiles only need apps/,
+# packages/, the root workspace/turbo/tsconfig files and docker/). Every
+# pattern below is anchored at the repo root, so app-level folders with the
+# same names (e.g. apps/api-gateway/docs/swagger, served by the gateway) are
+# unaffected.
+# Graphify analysis output, runs and baselines (~100 MB)
+graphify-out
+graphify-runs
+graphify-baseline
+# Root documentation, reviews and reports
+docs
+wiki
+ARCHITECTURE_AUDIT.md
+GRAPH_REPORT_*.md
+GRAPHIFY_REMEDIATION_REPORT.md
+PRODUCTION_READINESS_REVIEW.md
+REMEDIATION_TEST_REPORT.md
+FINAL_*.md
+# Infrastructure, monitoring and load-test tooling (deployed separately)
+cloudformation
+monitoring
+load-testing
+# Local tool state
+.claude
+.playwright-mcp

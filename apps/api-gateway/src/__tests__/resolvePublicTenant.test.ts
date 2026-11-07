@@ -6,6 +6,7 @@ jest.mock("@hrms/db", () => {
     tenant: { findUnique: jest.fn() },
   };
   return {
+    leaseClient: () => () => undefined,
     prisma: _db,
     runWithTenant: jest.fn((_tenantId, _client, fn) => fn()),
     getClientForDb: jest.fn().mockReturnValue({ mockTenantClient: true }),
@@ -32,7 +33,9 @@ const mockTenantFindUnique = (prisma as any).tenant.findUnique as jest.Mock;
 const mockGetClientForDb = getClientForDb as jest.Mock;
 
 const makeReq = (slug: string | undefined) => ({ params: { slug } }) as any;
-const makeRes = () => ({ json: jest.fn() }) as any;
+// `once`: Express responses are event emitters (the tenant-client lease is
+// released on "finish"/"close").
+const makeRes = () => ({ json: jest.fn(), once: jest.fn() }) as any;
 
 describe("resolvePublicTenant", () => {
   beforeEach(() => {

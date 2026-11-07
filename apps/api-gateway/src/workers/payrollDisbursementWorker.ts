@@ -4,6 +4,7 @@ import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import type { PayrollDisbursementJobData } from "@hrms/queue";
 import { logger, requestIdStorage } from "@hrms/logger";
 import { runPayrollDisbursement } from "../services/payrollDisbursement";
+import { gatewayTenantStorage } from "../middleware/tenantContext";
 
 // Mirrors notificationWorker.ts's tenant-resolution pattern: this worker
 // runs in the same api-gateway process as the HTTP server but outside any
@@ -82,28 +83,36 @@ async function processJob(job: Job<PayrollDisbursementJobData>) {
   }
   const tenantClient = getClientForDb(tenant.dbName);
 
-  return runWithTenant(tenantId, tenantClient, async () => {
-    const summary = await runPayrollDisbursement(runId);
+  // Both contexts, as for an HTTP request (see runAsTenant in
+  // mcp/principal.ts): runWithTenant binds this process's own database
+  // queries; gatewayTenantStorage is what grpcCall forwards to the services
+  // (x-tenant-id / x-tenant-db-name). Without the second, the payslip
+  // lookups (salary-service getPayslip, via buildSalarySlipPdf) reached
+  // salary-service with no tenant and read the master database.
+  return gatewayTenantStorage.run({ tenantId, dbName: tenant.dbName }, () =>
+    runWithTenant(tenantId, tenantClient, async () => {
+      const summary = await runPayrollDisbursement(runId);
 
-    // Move to the terminal "disbursed" state from either "disbursing" (the
-    // first attempt) or "disbursement_failed" (a retry-payouts call after
-    // exhausted BullMQ attempts). If the run is already "disbursed" (a
-    // retry-payouts call made while only some individual line items had
-    // failed, not the whole job), there's nothing to transition — this
-    // pass just picked up the remaining failed items.
-    await prisma.payrollRun
-      .update({
-        where: {
-          id: runId,
-          status: { in: ["disbursing", "disbursement_failed"] },
-        },
-        data: { disbursedBy, disbursedAt: new Date(), status: "disbursed" },
-      })
-      .catch((err: any) => {
-        if (err?.code !== "P2025") throw err;
-      });
+      // Move to the terminal "disbursed" state from either "disbursing" (the
+      // first attempt) or "disbursement_failed" (a retry-payouts call after
+      // exhausted BullMQ attempts). If the run is already "disbursed" (a
+      // retry-payouts call made while only some individual line items had
+      // failed, not the whole job), there's nothing to transition — this
+      // pass just picked up the remaining failed items.
+      await prisma.payrollRun
+        .update({
+          where: {
+            id: runId,
+            status: { in: ["disbursing", "disbursement_failed"] },
+          },
+          data: { disbursedBy, disbursedAt: new Date(), status: "disbursed" },
+        })
+        .catch((err: any) => {
+          if (err?.code !== "P2025") throw err;
+        });
 
-    logger.info(`Payroll disbursement job ${job.id} completed`, summary);
-    return summary;
-  });
+      logger.info(`Payroll disbursement job ${job.id} completed`, summary);
+      return summary;
+    }),
+  );
 }

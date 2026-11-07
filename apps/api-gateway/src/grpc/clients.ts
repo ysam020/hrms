@@ -141,6 +141,28 @@ export const performanceReviewClient =
     creds,
   );
 
+/**
+ * Closes every service channel. For shutdown only, after in-flight HTTP
+ * requests — and so the gRPC calls they made — have drained.
+ */
+export function closeGrpcClients(): void {
+  for (const client of [
+    authClient,
+    userClient,
+    employeeClient,
+    attendanceClient,
+    leaveClient,
+    recruitmentClient,
+    hrmClient,
+    salaryClient,
+    analyticsClient,
+    notificationClient,
+    performanceReviewClient,
+  ]) {
+    client.close();
+  }
+}
+
 import { Metadata } from "@grpc/grpc-js";
 import { getRequestId } from "@hrms/logger";
 import { isRetryableGrpcCode, grpcRetryDelayMs } from "@hrms/grpc-client";

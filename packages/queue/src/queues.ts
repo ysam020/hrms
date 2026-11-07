@@ -27,8 +27,25 @@ function wrapAddWithRequestId(queue: Queue): void {
   }) as typeof queue.add;
 }
 
+/**
+ * In-app/push notification jobs are enqueued on NOTIFICATION_QUEUE_NAME.
+ *
+ * Workers built before the tenant-isolation fix consume only
+ * LEGACY_NOTIFICATION_QUEUE_NAME, and they deliver a job whose targets
+ * resolve to nobody to every user on the platform (a Socket.IO broadcast to
+ * all sockets plus an "ALL_USERS" push). Current producers enqueue jobs that
+ * name recipients by user id only, which such a worker cannot resolve, so
+ * those jobs must never reach it. A separate queue guarantees that whatever
+ * order images are deployed or rolled back in: an old worker never sees a
+ * new job. The current worker consumes both queues, so jobs from producers
+ * still on old images keep being delivered (with tenant-scoped resolution).
+ */
+export const NOTIFICATION_QUEUE_NAME = "notificationQueueV2";
+export const LEGACY_NOTIFICATION_QUEUE_NAME = "notificationQueue";
+
 let _emailQueue: Queue | null = null;
 let _notificationQueue: Queue | null = null;
+let _legacyNotificationQueue: Queue | null = null;
 let _schedulerQueue: Queue | null = null;
 let _resumeParsingQueue: Queue | null = null;
 let _deadLetterQueue: Queue | null = null;
@@ -48,13 +65,28 @@ export function getEmailQueue(): Queue {
 
 export function getNotificationQueue(): Queue {
   if (!_notificationQueue) {
-    _notificationQueue = new Queue("notificationQueue", {
+    _notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, {
       connection: getBullMQConnection(),
       defaultJobOptions,
     });
     wrapAddWithRequestId(_notificationQueue);
   }
   return _notificationQueue;
+}
+
+/**
+ * The pre-fix notification queue. Nothing current enqueues here; the
+ * notification worker drains it and operators inspect its failed jobs. Not
+ * for producers — see NOTIFICATION_QUEUE_NAME.
+ */
+export function getLegacyNotificationQueue(): Queue {
+  if (!_legacyNotificationQueue) {
+    _legacyNotificationQueue = new Queue(LEGACY_NOTIFICATION_QUEUE_NAME, {
+      connection: getBullMQConnection(),
+      defaultJobOptions,
+    });
+  }
+  return _legacyNotificationQueue;
 }
 
 export function getResumeParsingQueue(): Queue {
@@ -151,4 +183,22 @@ export function getPresenceQueue(): Queue {
     wrapAddWithRequestId(_presenceQueue);
   }
   return _presenceQueue;
+}
+
+/**
+ * Closes every queue this process opened (producers, the DLQ), releasing
+ * their Redis connections. For shutdown, after workers have drained.
+ */
+export async function closeQueues(): Promise<void> {
+  const open = [
+    _emailQueue,
+    _notificationQueue,
+    _legacyNotificationQueue,
+    _schedulerQueue,
+    _resumeParsingQueue,
+    _deadLetterQueue,
+    _payrollDisbursementQueue,
+    _presenceQueue,
+  ].filter((q): q is Queue => q !== null);
+  await Promise.all(open.map((q) => q.close()));
 }

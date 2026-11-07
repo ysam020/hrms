@@ -24,12 +24,21 @@ export interface NotificationJobData {
   tenantId: string;
   title: string;
   message: string;
-  /** Array of user IDs (ObjectId strings) to store as DB recipients */
+  /** User IDs (ObjectId strings) to notify — the preferred way to target. */
   recipients?: string[];
-  /** Array of usernames to target for push/WS delivery */
+  /** Usernames to notify, used only when `recipients` is empty. */
   pushTargets?: string[];
-  /** Legacy single-target backward compat */
+  /** Usernames (legacy). A user ID here is also accepted, for jobs enqueued
+   * before producers switched to `recipients`. */
   targetUser?: string | string[];
+  /**
+   * Explicit fan-out instead of named recipients. Without this, a job whose
+   * targets resolve to nobody in its tenant fails rather than reaching
+   * anyone else. "tenant" reaches every user of `tenantId`; "platform"
+   * reaches every user of every tenant and is refused unless `tenantId` is
+   * the platform tenant and the authorizer is named.
+   */
+  broadcast?: NotificationBroadcast;
   eventType?: string;
   sendPushNotification?: boolean;
   priority?: "high" | "medium" | "low";
@@ -60,6 +69,10 @@ export interface NotificationJobData {
   requestId?: string;
 }
 
+export type NotificationBroadcast =
+  | { scope: "tenant" }
+  | { scope: "platform"; authorizedBy: string; reason: string };
+
 export type SchedulerJobName =
   | "updateExpiredHrActivities"
   | "updateExpiredJobOpenings"
@@ -77,6 +90,8 @@ export interface SchedulerJobData {
   jobName: SchedulerJobName;
   // Optional extra context for non-standard jobs (e.g. ticketId for SLA check)
   ticketId?: string;
+  /** Tenant owning `ticketId` — the ticket lives in that tenant's database. */
+  tenantId?: string;
   /** Set only for the (rare) manually-triggered case; absent for the normal
    * timer-driven cron adds, which have no originating request to trace. */
   requestId?: string;
@@ -84,6 +99,8 @@ export interface SchedulerJobData {
 
 export interface ResumeParsingJobData {
   applicationId: string;
+  /** Tenant owning the application — it lives in that tenant's database. */
+  tenantId: string;
   requestId?: string;
 }
 

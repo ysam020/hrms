@@ -239,12 +239,24 @@ if (
   );
 }
 
+// Marks an Error once it has been through a log line, so code further up
+// the chain (e.g. the gateway's handleError) can avoid logging it again.
+const LOGGED = Symbol.for("hrms.logger.logged");
+
+/** Whether `err` has already been written to a log line. */
+export function wasLogged(err: unknown): boolean {
+  return !!err && typeof err === "object" && (err as any)[LOGGED] === true;
+}
+
 // Recursively convert Error instances to plain objects so JSON.stringify
-// captures message/stack (which are non-enumerable on Error).
+// captures message/stack (which are non-enumerable on Error). Only those
+// three fields are kept: an HTTP client's error also carries its request
+// config and headers (credentials), which must not reach a log line.
 // Mutates in place to preserve Symbol(level) on the TransformableInfo.
-const serializeErrors = winston.format((info) => {
+export const serializeErrors = winston.format((info) => {
   const convert = (val: unknown): unknown => {
     if (val instanceof Error) {
+      Object.defineProperty(val, LOGGED, { value: true, configurable: true });
       return { message: val.message, name: val.name, stack: val.stack };
     }
     if (val && typeof val === "object" && !Array.isArray(val)) {

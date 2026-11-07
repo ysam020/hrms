@@ -64,7 +64,7 @@ export const finalizeReview = async (
         return notify({
           tenantId: updated.tenantId!,
           event: "performanceReviewFinalized",
-          targetUser: updated.userId,
+          recipients: [updated.userId],
           inApp: {
             title: "Performance Review",
             message: decisionMessage,

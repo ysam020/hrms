@@ -10,6 +10,7 @@ import {
 import { BoundedCache, hasPrivilegedRole, HR_ROLES } from "@hrms/common";
 import { gatewayTenantStorage } from "./tenantContext";
 import { loadUserAccess } from "../services/userAccess";
+import { leaseForRequest } from "./leaseForRequest";
 
 export interface AuthUser {
   userId: string;
@@ -107,6 +108,7 @@ export const authenticate = (
           //   service (leave-service, hrm-service, etc.) can still be attributed
           // - runWithTenant (DB package) → read by prismaWithTenant for direct DB calls,
           //   and by the audit-logging Prisma middleware for who/where to attribute a change
+          leaseForRequest(res, tenantClient);
           gatewayTenantStorage.run({ tenantId: tid, dbName, actor }, () => {
             runWithTenant(tid, tenantClient, next, actor);
           });

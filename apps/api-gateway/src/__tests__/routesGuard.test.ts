@@ -157,6 +157,7 @@ beforeAll(async () => {
     },
     runWithTenant: (_t: unknown, _c: unknown, fn: () => void) => fn(),
     getClientForDb: () => ({}),
+    leaseClient: () => () => undefined,
     recordStage: () => {},
     recordExternal: () => {},
     markHandlerStart: () => {},

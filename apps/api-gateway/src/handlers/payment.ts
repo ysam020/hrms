@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import Razorpay from "razorpay";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@hrms/db";
 import { AuthRequest } from "../middleware/authenticate";
@@ -23,6 +22,7 @@ import {
 } from "../config/billingPlans";
 import { getActiveEmployeeCount } from "../utils/planLimits";
 import { recordWebhookPayment } from "../services/billingLedger";
+import { getRazorpay } from "../services/razorpayClient";
 import {
   TRIAL_DAYS,
   TRIAL_SIGNUP_PURPOSE,
@@ -123,12 +123,7 @@ export async function fetchPaymentMethod(
   }
 }
 
-export function getRazorpay() {
-  return new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID!,
-    key_secret: process.env.RAZORPAY_KEY_SECRET!,
-  });
-}
+export { getRazorpay };
 
 // ─── Plan ID — two-level cache (memory → Redis → Razorpay API) ───────────────
 

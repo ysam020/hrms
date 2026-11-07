@@ -8,6 +8,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import cluster from "node:cluster";
+import type { Worker } from "bullmq";
 import { apiRequestLogger, logger } from "@hrms/logger";
 import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
@@ -16,7 +17,13 @@ import { configureSwagger } from "./config/swaggerSetup";
 import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
 import { applyRateLimiters, authLimiter } from "./config/rateLimiters";
 import { resolveSocketUserId } from "./config/socketAuth";
-import { registerGracefulShutdown } from "./config/gracefulShutdown";
+import {
+  registerGracefulShutdown,
+  trackConnections,
+} from "./config/gracefulShutdown";
+import { closeGrpcClients } from "./grpc/clients";
+import { flushTelemetry } from "./telemetry";
+import { closeQueues, closeWorker } from "@hrms/queue";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
 import { mcpRouter } from "./mcp/router";
@@ -35,6 +42,7 @@ import {
   recordExternal,
   recordSerialize,
   warmUpDatabase,
+  disconnectDatabases,
 } from "@hrms/db";
 import { setRedisTimingHook } from "@hrms/cache";
 import { withUserAccessScope } from "./services/userAccess";
@@ -224,6 +232,10 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   );
   setupChatSocket(io, redisAdapter);
   setupPresenceSocket(io);
+  // From the start, so shutdown can tell idle connections from busy ones.
+  const connections = trackConnections(server);
+  const workers: Worker[] = [];
+  let stopBackgroundJobs = () => {};
 
   // Under cluster mode (see bootstrap.ts) every forked worker would otherwise
   // run these on its own schedule — harmless for the reconciler, but
@@ -235,9 +247,8 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     void import("./migrations/backfillPlanTier").then(({ backfillPlanTier }) =>
       backfillPlanTier(),
     );
-    startSubscriptionReconciler();
-    startPayrollDisbursementWorker();
-    startPresenceExpiryWorker();
+    stopBackgroundJobs = startSubscriptionReconciler();
+    workers.push(startPayrollDisbursementWorker(), startPresenceExpiryWorker());
   }
 
   server.listen(PORT, () => {
@@ -246,7 +257,20 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     void warmUpDatabase();
   });
 
-  registerGracefulShutdown(server, redisAdapter);
+  // On SIGTERM (passed on by the cluster primary): drain HTTP, WebSockets
+  // and jobs, then close what they used — see config/gracefulShutdown.ts.
+  registerGracefulShutdown({
+    connections,
+    io,
+    workers,
+    closeWorker,
+    stopBackgroundJobs: () => stopBackgroundJobs(),
+    closeQueues,
+    closeWebSocketRedis: () => redisAdapter.cleanup(),
+    closeGrpcClients,
+    disconnectDatabases,
+    flushTelemetry,
+  });
 }
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {

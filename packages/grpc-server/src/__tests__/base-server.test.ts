@@ -8,6 +8,7 @@ const mockServerInstance = {
     (_addr: string, _creds: any, cb: (err: Error | null) => void) => cb(null),
   ),
   tryShutdown: jest.fn((cb: (err?: Error) => void) => cb()),
+  forceShutdown: jest.fn(),
 };
 
 jest.mock("@grpc/grpc-js", () => {
@@ -208,6 +209,156 @@ describe("BaseGrpcServer", () => {
       expect(runWithTenant).not.toHaveBeenCalled();
     });
 
+    describe("calls without a tenant", () => {
+      const { logger } = jest.requireMock("@hrms/logger");
+      const tenantless = (path: string) => ({
+        ...makeCall(),
+        getPath: () => path,
+      });
+      afterEach(() => {
+        delete process.env.GRPC_REQUIRE_TENANT;
+      });
+
+      it("still runs them by default, logging each method once", async () => {
+        const server = new TestServer();
+        const handler = jest.fn((_call, cb) => cb(null, { ok: true }));
+        const wrapped = server.callWrapHandler(handler);
+        const callback = jest.fn();
+
+        await wrapped(tenantless("/svc.A/List"), callback);
+        await wrapped(tenantless("/svc.A/List"), jest.fn());
+        await wrapped(tenantless("/svc.A/Get"), jest.fn());
+
+        expect(callback).toHaveBeenCalledWith(null, { ok: true });
+        const warned = logger.warn.mock.calls.filter(
+          ([msg]: [string]) => msg === "gRPC call without tenant context",
+        );
+        expect(warned.map(([, meta]: [string, any]) => meta.method)).toEqual([
+          "/svc.A/List",
+          "/svc.A/Get",
+        ]);
+      });
+
+      it("rejects them as UNAUTHENTICATED, without running the handler, when GRPC_REQUIRE_TENANT=true", async () => {
+        process.env.GRPC_REQUIRE_TENANT = "true";
+        const server = new TestServer();
+        const handler = jest.fn((_call, cb) => cb(null, {}));
+        const wrapped = server.callWrapHandler(handler);
+        const callback = jest.fn();
+
+        await wrapped(tenantless("/svc.B/List"), callback);
+
+        expect(handler).not.toHaveBeenCalled();
+        expect(callback).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 16 }), // UNAUTHENTICATED
+          null,
+        );
+      });
+
+      const withMeta = (path: string, meta: Record<string, string>) => ({
+        ...makeCall(meta),
+        getPath: () => path,
+      });
+      const VALID = "aaaaaaaaaaaaaaaaaaaaaaaa";
+
+      it("reports a tenant without a tenant database (it would fall back to the master database)", async () => {
+        const handler = jest.fn((_call, cb) => cb(null, {}));
+        await new TestServer().callWrapHandler(handler)(
+          withMeta("/svc.C/List", { "x-tenant-id": VALID }),
+          jest.fn(),
+        );
+        expect(logger.warn).toHaveBeenCalledWith(
+          "gRPC call with a tenant but no tenant database",
+          { method: "/svc.C/List" },
+        );
+      });
+
+      it("rejects a malformed tenant id or a missing tenant database when GRPC_REQUIRE_TENANT=true", async () => {
+        process.env.GRPC_REQUIRE_TENANT = "true";
+        const handler = jest.fn((_call, cb) => cb(null, {}));
+        const wrapped = new TestServer().callWrapHandler(handler);
+        const malformed = jest.fn();
+        const noDb = jest.fn();
+
+        await wrapped(
+          withMeta("/svc.D/Get", {
+            "x-tenant-id": "not-an-id",
+            "x-tenant-db-name": "hrms-acme",
+          }),
+          malformed,
+        );
+        await wrapped(withMeta("/svc.D/Get", { "x-tenant-id": VALID }), noDb);
+
+        expect(handler).not.toHaveBeenCalled();
+        expect(malformed).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 16 }),
+          null,
+        );
+        expect(noDb).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 16 }),
+          null,
+        );
+      });
+
+      it("accepts a valid tenant with its database under GRPC_REQUIRE_TENANT=true", async () => {
+        process.env.GRPC_REQUIRE_TENANT = "true";
+        const handler = jest.fn((_call, cb) => cb(null, { ok: true }));
+        const callback = jest.fn();
+        await new TestServer().callWrapHandler(handler)(
+          withMeta("/svc.E/Get", {
+            "x-tenant-id": VALID,
+            "x-tenant-db-name": "hrms-acme",
+          }),
+          callback,
+        );
+        expect(callback).toHaveBeenCalledWith(null, { ok: true });
+      });
+
+      it("lets a method declared platform-level run without a tenant, unreported, even under GRPC_REQUIRE_TENANT=true", async () => {
+        process.env.GRPC_REQUIRE_TENANT = "true";
+        class PlatformServer extends TestServer {
+          constructor() {
+            super();
+            this.allowWithoutTenant("/auth.AuthService/Login");
+          }
+        }
+        const server = new PlatformServer();
+        const handler = jest.fn((_call, cb) => cb(null, { ok: true }));
+        const allowed = jest.fn();
+        const other = jest.fn();
+        await server.callWrapHandler(handler)(
+          tenantless("/auth.AuthService/Login"),
+          allowed,
+        );
+        await server.callWrapHandler(handler)(
+          tenantless("/auth.AuthService/ListUsers"),
+          other,
+        );
+
+        expect(allowed).toHaveBeenCalledWith(null, { ok: true });
+        expect(runWithTenant).not.toHaveBeenCalled();
+        expect(other).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 16 }),
+          null,
+        );
+      });
+
+      it("never affects calls that carry a complete tenant context", async () => {
+        process.env.GRPC_REQUIRE_TENANT = "true";
+        const server = new TestServer();
+        const handler = jest.fn((_call, cb) => cb(null, { ok: true }));
+        const callback = jest.fn();
+        await server.callWrapHandler(handler)(
+          makeCall({
+            "x-tenant-id": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "x-tenant-db-name": "hrms-acme",
+          }),
+          callback,
+        );
+        expect(callback).toHaveBeenCalledWith(null, { ok: true });
+      });
+    });
+
     it("resolves without a tenant client when x-tenant-db-name is absent", async () => {
       const server = new TestServer();
       const handler = jest.fn((_call, cb) => cb(null, {}));
@@ -319,6 +470,29 @@ describe("BaseGrpcServer", () => {
       );
       const server = new TestServer();
       await expect(server.stop()).rejects.toThrow("shutdown failed");
+    });
+  });
+
+  describe("stop", () => {
+    afterEach(() => {
+      jest.useRealTimers();
+      mockServerInstance.tryShutdown.mockImplementation(
+        (cb: (err?: Error) => void) => cb(),
+      );
+    });
+
+    it("resolves once in-flight calls finish, without forcing", async () => {
+      await expect(new TestServer().stop(5000)).resolves.toBeUndefined();
+      expect(mockServerInstance.forceShutdown).not.toHaveBeenCalled();
+    });
+
+    it("cancels calls still in flight after the timeout and rejects", async () => {
+      jest.useFakeTimers();
+      mockServerInstance.tryShutdown.mockImplementation(() => undefined);
+      const stopping = new TestServer().stop(3000);
+      jest.advanceTimersByTime(3000);
+      await expect(stopping).rejects.toThrow(/still in flight after 3000 ms/);
+      expect(mockServerInstance.forceShutdown).toHaveBeenCalled();
     });
   });
 });

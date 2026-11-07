@@ -5,13 +5,26 @@ jest.mock("@hrms/db", () => {
   const _db = {
     hrActivity: { findMany: jest.fn(), updateMany: jest.fn() },
     user: { findUnique: jest.fn() },
+    tenant: {
+      findMany: jest.fn().mockResolvedValue([{ id: "t1", dbName: "db-t1" }]),
+    },
   };
   return {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    runWithTenant: jest.fn((_id: string, _client: unknown, fn: () => unknown) =>
+      fn(),
+    ),
+    getClientForDb: jest.fn(() => ({})),
+    runForTenant: jest.fn((_id: string, fn: () => unknown) => fn()),
   };
 });
+
+jest.mock("@hrms/cache", () => ({
+  cacheManager: { invalidatePattern: jest.fn().mockResolvedValue(undefined) },
+  getRedisClient: () => require("./support/fakeRedis").fakeRedis,
+}));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -58,8 +71,14 @@ describe("updateExpiredHrActivities", () => {
       },
       select: expect.any(Object),
     });
+    // Re-checks the read's condition so a just-completed or rescheduled
+    // activity isn't overwritten.
     expect(mockUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: ["a1"] } },
+      where: {
+        id: { in: ["a1"] },
+        status: "Active",
+        scheduledAt: { lt: expect.any(Date) },
+      },
       data: expect.objectContaining({
         status: "Expired",
         lastUpdatedBy: "System",

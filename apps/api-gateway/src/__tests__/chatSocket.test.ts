@@ -7,6 +7,14 @@ jest.mock("@hrms/db", () => {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    // Sender lookup for the push title (tenant-scoped in production).
+    user: {
+      findUnique: jest.fn().mockResolvedValue({
+        first_name: "Uma",
+        last_name: "Iyer",
+        username: "uma",
+      }),
+    },
   };
   return {
     prismaWithTenant: _db,
@@ -183,9 +191,11 @@ describe("setupChatSocket", () => {
       await handlers["chat:send"]({ roomId: "r1", content: "hello" });
       await new Promise((resolve) => setImmediate(resolve));
 
+      // User ids scoped to the sender's tenant; titled with the sender's
+      // name rather than their raw user id.
       expect(sendPushNotifications).toHaveBeenCalledWith(
-        ["u2"],
-        "u1",
+        { tenantId: "t1", userIds: ["u2"] },
+        "Uma Iyer",
         "hello",
         { latestOnly: true },
       );
@@ -206,11 +216,28 @@ describe("setupChatSocket", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       expect(sendPushNotifications).toHaveBeenCalledWith(
-        ["u2"],
-        "u1",
+        { tenantId: "t1", userIds: ["u2"] },
+        "Uma Iyer",
         "📷 Sent an image",
         { latestOnly: true },
       );
+    });
+
+    it("sends no push from a socket without a tenant", async () => {
+      (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
+        participants: ["u1", "u2"],
+      });
+      (prisma.message.create as jest.Mock).mockResolvedValue({
+        id: "m1",
+        chatRoomId: "r1",
+        createdAt: "now",
+      });
+      const { handlers } = setup({ tenantId: null, dbName: null });
+
+      await handlers["chat:send"]({ roomId: "r1", content: "hello" });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(sendPushNotifications).not.toHaveBeenCalled();
     });
 
     it("holds back the push for participants on Do Not Disturb", async () => {
@@ -230,8 +257,8 @@ describe("setupChatSocket", () => {
 
       expect(withoutDoNotDisturb).toHaveBeenCalledWith("t1", ["u2", "u3"]);
       expect(sendPushNotifications).toHaveBeenCalledWith(
-        ["u3"],
-        "u1",
+        { tenantId: "t1", userIds: ["u3"] },
+        "Uma Iyer",
         "hello",
         { latestOnly: true },
       );
@@ -417,7 +444,7 @@ describe("setupChatSocket", () => {
     it("excludes the reader's own and already-read messages from the unread query", async () => {
       (prisma.message.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
-        participants: [],
+        participants: ["u1"],
       });
       const { handlers } = setup();
 
@@ -430,6 +457,145 @@ describe("setupChatSocket", () => {
           NOT: [{ senderId: "u1" }, { readBy: { has: "u1" } }],
         },
         select: { id: true },
+      });
+    });
+  });
+
+  describe("participant checks on read receipts and typing indicators", () => {
+    beforeEach(() => {
+      (prisma.chatRoom.findUnique as jest.Mock).mockResolvedValue({
+        participants: ["u2", "u3"],
+      });
+    });
+
+    it("refuses chat:read from a non-participant: nothing marked read, nobody notified", async () => {
+      (prisma.message.findMany as jest.Mock).mockResolvedValue([{ id: "m1" }]);
+      const { handlers, socket, redisAdapter } = setup();
+
+      await handlers["chat:read"]({ roomId: "r1" });
+
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+      expect(prisma.message.update).not.toHaveBeenCalled();
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith("chat:error", {
+        message: "Not a participant of this room",
+      });
+    });
+
+    it.each(["chat:typing", "chat:stop-typing"])(
+      "does not relay %s from a non-participant",
+      async (event) => {
+        const { handlers, redisAdapter } = setup();
+        await handlers[event]({ roomId: "r1" });
+        expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe("membership revocation", () => {
+    const member = { participants: ["u1", "u2"] };
+    const removed = { participants: ["u2"] };
+    const room = prisma.chatRoom.findUnique as jest.Mock;
+
+    it("refuses a participant removed while connected on their very next send, read or relay — even right after joining (no stale cache)", async () => {
+      room.mockResolvedValue(member);
+      (prisma.message.findMany as jest.Mock).mockResolvedValue([{ id: "m1" }]);
+      const { handlers, socket, redisAdapter } = setup();
+      await handlers["chat:join"]({ roomId: "r1" });
+
+      room.mockResolvedValue(removed); // removed from the room
+      await handlers["chat:send"]({ roomId: "r1", content: "still here?" });
+      await handlers["chat:read"]({ roomId: "r1" });
+      await handlers["chat:delete-message"]({ roomId: "r1", messageId: "m1" });
+      await handlers["chat:pin-message"]({
+        roomId: "r1",
+        messageId: "m1",
+        pinnedAt: "now",
+        pinnedBy: "u1",
+      });
+      await handlers["chat:unpin-message"]({ roomId: "r1", messageId: "m1" });
+
+      expect(prisma.message.create).not.toHaveBeenCalled();
+      expect(prisma.message.update).not.toHaveBeenCalled();
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+      expect(
+        socket.emit.mock.calls.filter(([e]: [string]) => e === "chat:error"),
+      ).toHaveLength(5);
+    });
+
+    it("lets typing indicators reuse a membership check for at most 5 seconds", async () => {
+      const now = jest.spyOn(Date, "now").mockReturnValue(1_000_000);
+      room.mockResolvedValue(member);
+      const { handlers, redisAdapter } = setup();
+      await handlers["chat:typing"]({ roomId: "r1" });
+      expect(redisAdapter.sendToUser).toHaveBeenCalledTimes(1);
+
+      room.mockResolvedValue(removed);
+      redisAdapter.sendToUser.mockClear();
+      now.mockReturnValue(1_000_000 + 4_999); // within the 5 s bound
+      await handlers["chat:typing"]({ roomId: "r1" });
+      expect(redisAdapter.sendToUser).toHaveBeenCalledTimes(1);
+
+      redisAdapter.sendToUser.mockClear();
+      now.mockReturnValue(1_000_000 + 5_000); // bound reached: re-checked
+      await handlers["chat:typing"]({ roomId: "r1" });
+      await handlers["chat:stop-typing"]({ roomId: "r1" });
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+      now.mockRestore();
+    });
+
+    it("a refused check is not cached as membership: typing stays refused", async () => {
+      room.mockResolvedValue(removed);
+      const { handlers, redisAdapter } = setup();
+      await handlers["chat:typing"]({ roomId: "r1" });
+      room.mockResolvedValue(removed);
+      await handlers["chat:typing"]({ roomId: "r1" });
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+      expect(room).toHaveBeenCalledTimes(2);
+    });
+
+    it("refuses a removed participant who reconnects", async () => {
+      room.mockResolvedValue(removed);
+      const { handlers, redisAdapter } = setup(); // a fresh connection
+      await handlers["chat:typing"]({ roomId: "r1" });
+      await handlers["chat:send"]({ roomId: "r1", content: "hi" });
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it("looks the room up only in the socket's own tenant database: another tenant's room id finds nothing and is refused", async () => {
+      room.mockResolvedValue(null); // not in this tenant's database
+      const { handlers, redisAdapter } = setup({
+        tenantId: "tenant-a",
+        dbName: "db-a",
+      });
+      await handlers["chat:read"]({ roomId: "room-of-tenant-b" });
+
+      expect(runWithTenant).toHaveBeenCalledWith(
+        "tenant-a",
+        { __client: true },
+        expect.any(Function),
+      );
+      expect(getClientForDb).toHaveBeenCalledWith("db-a");
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+    });
+
+    it("refuses every chat event from a socket without a tenant, without querying any database", async () => {
+      room.mockResolvedValue(member);
+      const { handlers, socket, redisAdapter } = setup({
+        tenantId: null,
+        dbName: null,
+      });
+      await handlers["chat:send"]({ roomId: "r1", content: "hi" });
+      await handlers["chat:read"]({ roomId: "r1" });
+      await handlers["chat:typing"]({ roomId: "r1" });
+
+      expect(room).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+      expect(redisAdapter.sendToUser).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith("chat:error", {
+        message: "Not a participant of this room",
       });
     });
   });

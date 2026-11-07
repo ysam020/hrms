@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 import type { TooltipRenderProps } from "react-joyride";
 import { Button, IconButton } from "@next/ui";
-import { useRunnerControls } from "./Runner";
+import { useRunnerControls } from "./controls";
 import s from "./walkthrough.module.css";
 
 /** Position data the runner passes with each step (`step.data`). */

@@ -223,18 +223,23 @@ if (ENABLED) {
 
   sdk.start();
 
-  // Flush all pending spans/metrics before the process exits.
-  const shutdown = async () => {
-    try {
-      await sdk!.shutdown();
-    } catch {
-      // Ignore shutdown errors — process is exiting anyway.
-    }
-  };
+  // Flush all pending spans/metrics before the process exits. These
+  // handlers only flush — they never exit. A service's own shutdown
+  // coordinator (processShutdown in @hrms/common, or the gateway's
+  // gracefulShutdown) exits; it can await flushTelemetry() as its last step.
+  process.on("SIGTERM", () => void flushTelemetry());
+  process.on("SIGINT", () => void flushTelemetry());
+  process.on("beforeExit", () => void flushTelemetry());
+}
 
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
-  process.on("beforeExit", shutdown);
+let flushing: Promise<void> | null = null;
+
+/** Flushes and stops the SDK, once; later calls share the first. Never rejects. */
+export function flushTelemetry(): Promise<void> {
+  flushing ??= (sdk ? sdk.shutdown() : Promise.resolve()).catch(() => {
+    // Ignore shutdown errors — process is exiting anyway.
+  });
+  return flushing;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

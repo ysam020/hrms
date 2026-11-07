@@ -37,6 +37,7 @@ describe("notify", () => {
         eventType: "leave_notification",
         sendPushNotification: true,
       }),
+      { jobId: expect.any(String) },
     );
     expect(mockEmailAdd).not.toHaveBeenCalled();
   });
@@ -99,6 +100,7 @@ describe("notify", () => {
     expect(mockNotificationAdd).toHaveBeenCalledWith(
       "leaveApproved",
       expect.objectContaining({ sendPushNotification: false }),
+      { jobId: expect.any(String) },
     );
   });
 
@@ -125,6 +127,7 @@ describe("notify", () => {
         socketPayload: { foo: "bar" },
         pushTargets: ["hr1"],
       }),
+      { jobId: expect.any(String) },
     );
   });
 
@@ -138,6 +141,7 @@ describe("notify", () => {
     expect(mockNotificationAdd).toHaveBeenCalledWith(
       "leaveApproved",
       expect.objectContaining({ eventType: "leave_notification" }),
+      { jobId: expect.any(String) },
     );
   });
 
@@ -159,6 +163,7 @@ describe("notify", () => {
       expect.objectContaining({
         metadata: expect.objectContaining({ notificationId: a.notificationId }),
       }),
+      { jobId: expect.any(String) },
     );
   });
 
@@ -178,6 +183,7 @@ describe("notify", () => {
           notificationId: result.notificationId,
         },
       }),
+      { jobId: expect.any(String) },
     );
   });
 
@@ -196,6 +202,27 @@ describe("notify", () => {
 
     expect(result.jobIds.inApp).toBe("job-in-app");
     expect(result.jobIds.email).toEqual(["job-email"]);
+  });
+
+  it("uses the notification id as the BullMQ job id (the worker's idempotency key)", async () => {
+    const result = await notify({
+      tenantId: "t1",
+      event: "leaveApproved",
+      recipients: ["u1"],
+      inApp: { title: "Leave", message: "approved", eventType: "leave" },
+    });
+    const second = await notify({
+      tenantId: "t1",
+      event: "leaveApproved",
+      recipients: ["u1"],
+      inApp: { title: "Leave", message: "approved", eventType: "leave" },
+    });
+
+    const ids = mockNotificationAdd.mock.calls.map(([, , opts]) => opts.jobId);
+    expect(ids).toEqual([result.notificationId, second.notificationId]);
+    expect(ids[0]).not.toBe(ids[1]);
+    // BullMQ rejects custom ids that are integers or contain ":".
+    expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("does not throw when a mocked queue resolves .add() to undefined (common in existing handler tests)", async () => {

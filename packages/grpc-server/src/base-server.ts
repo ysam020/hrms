@@ -2,7 +2,7 @@ import * as grpc from "@grpc/grpc-js";
 import fs from "fs";
 import path from "path";
 import { logger, grpcApiRequestLogger } from "@hrms/logger";
-import { errorHandler } from "./error-handling";
+import { errorHandler, GrpcError } from "./error-handling";
 import { validationMiddleware } from "./middleware/validation";
 import {
   runWithTenant,
@@ -42,16 +42,54 @@ const grpcTimingMiddleware = (call: any, next: () => Promise<any>) =>
 // Also reads the x-actor-* headers (who's making the call) so this service's
 // own audit-logging Prisma middleware can attribute a mutation to a person,
 // even though authentication itself happened in api-gateway's process.
-const tenantContextMiddleware = async (
-  call: any,
-  next: () => Promise<any>,
-): Promise<any> => {
-  const getHeader = (key: string): string | undefined =>
-    (call.metadata?.get(key) ?? [])[0];
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
-  const tenantId = getHeader("x-tenant-id");
-  const dbName = getHeader("x-tenant-db-name");
-  if (tenantId) {
+// Tenant context problems, each logged once per method (and per kind):
+//   - no x-tenant-id: the call runs with no tenant bound, so
+//     prismaWithTenant reaches the master database and the master `user`
+//     model applies no tenant filter;
+//   - x-tenant-id without x-tenant-db-name, or a malformed id: the tenant
+//     is bound but its client is null, so tenant-scoped queries also fall
+//     back to the master database.
+// No gateway path sends either today (every call site runs under
+// authenticate+requireTenant, resolvePublicTenant or the MCP principal —
+// ARCHITECTURE_AUDIT T3), but nothing reported it if one started to.
+// GRPC_REQUIRE_TENANT=true rejects both, once production logs confirm none
+// occur. A method that is genuinely platform-level is exempted explicitly
+// with allowWithoutTenant() and runs with no tenant, as before.
+const loggedProblems = new Set<string>();
+
+function tenantProblem(method: string, problem: string): void {
+  if (process.env.GRPC_REQUIRE_TENANT === "true") {
+    throw new GrpcError(`${method}: ${problem}`, grpc.status.UNAUTHENTICATED);
+  }
+  const key = `${method}|${problem}`;
+  if (!loggedProblems.has(key)) {
+    loggedProblems.add(key);
+    logger.warn(`gRPC call ${problem}`, { method });
+  }
+}
+
+function tenantContextMiddleware(tenantlessAllowed: ReadonlySet<string>) {
+  return async (call: any, next: () => Promise<any>): Promise<any> => {
+    const getHeader = (key: string): string | undefined =>
+      (call.metadata?.get(key) ?? [])[0];
+    const method = call.getPath ? call.getPath() : "unknown";
+
+    const tenantId = getHeader("x-tenant-id");
+    const dbName = getHeader("x-tenant-db-name");
+    if (!tenantId) {
+      if (!tenantlessAllowed.has(method)) {
+        tenantProblem(method, "without tenant context");
+      }
+      return next();
+    }
+    if (!OBJECT_ID.test(tenantId)) {
+      tenantProblem(method, "with a malformed tenant id");
+    } else if (!dbName) {
+      tenantProblem(method, "with a tenant but no tenant database");
+    }
+
     const tenantClient = dbName ? getClientForDb(dbName) : null;
     const userId = getHeader("x-actor-user-id");
     const username = getHeader("x-actor-username");
@@ -64,9 +102,8 @@ const tenantContextMiddleware = async (
         }
       : undefined;
     return runWithTenant(tenantId, tenantClient, () => next(), actor);
-  }
-  return next();
-};
+  };
+}
 
 export class BaseGrpcServer {
   private server: grpc.Server;
@@ -82,7 +119,24 @@ export class BaseGrpcServer {
     this.middlewares = [];
     this.addMiddleware(grpcApiRequestLogger);
     this.addMiddleware(grpcTimingMiddleware);
-    this.addMiddleware(tenantContextMiddleware);
+    this.addMiddleware(tenantContextMiddleware(this.tenantlessAllowed));
+    // Every service registers the gRPC health service; a health probe has
+    // no tenant and touches no data (packages/common/src/healthCheck.ts).
+    this.allowWithoutTenant("/health.HealthService/Check");
+  }
+
+  private readonly tenantlessAllowed = new Set<string>();
+
+  /**
+   * Declares methods (full paths, e.g. "/auth.AuthService/RefreshToken")
+   * that are platform-level and legitimately called without a tenant: they
+   * run with no tenant bound and are not rejected or reported for it. If a
+   * caller does send a tenant, it is validated like any other call. List a
+   * method only after tracing that it touches no tenant data and
+   * authenticates its caller itself; every other method requires a tenant.
+   */
+  protected allowWithoutTenant(...methodPaths: string[]): void {
+    for (const path of methodPaths) this.tenantlessAllowed.add(path);
   }
 
   protected addMiddleware(
@@ -229,9 +283,30 @@ export class BaseGrpcServer {
     );
   }
 
-  public stop(): Promise<void> {
+  /**
+   * Stops accepting calls and waits for in-flight ones to finish. With
+   * `timeoutMs`, calls still running then are cancelled (forceShutdown) and
+   * the promise rejects, so a shutdown can't hang on one slow call.
+   */
+  public stop(timeoutMs?: number): Promise<void> {
     return new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      if (timeoutMs !== undefined) {
+        timer = setTimeout(
+          () => {
+            this.server.forceShutdown();
+            reject(
+              new Error(
+                `gRPC calls still in flight after ${timeoutMs} ms — cancelled`,
+              ),
+            );
+          },
+          Math.max(timeoutMs, 0),
+        );
+        timer.unref?.();
+      }
       this.server.tryShutdown((error) => {
+        clearTimeout(timer);
         if (error) reject(error);
         else resolve();
       });

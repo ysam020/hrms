@@ -15,7 +15,12 @@ jest.mock("@hrms/common", () => ({
   },
 }));
 
+jest.mock("@hrms/logger", () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { logger } from "@hrms/logger";
 
 const mockApiResponse = apiResponse as jest.Mock;
 const makeRes = () => ({ json: jest.fn() }) as any;
@@ -189,5 +194,77 @@ describe("handleError — unknown errors", () => {
       RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
       expect.any(Object),
     );
+  });
+});
+
+describe("logging", () => {
+  const reqFor = (originalUrl: string) => ({
+    method: "POST",
+    originalUrl,
+    baseUrl: "/api/v1",
+    route: { path: "/hrm/activities/:id" },
+  });
+
+  it("logs an unexpected error with service, route pattern and path before returning a generic 500", () => {
+    const res = {
+      json: jest.fn(),
+      req: reqFor("/api/v1/hrm/activities/a1"),
+    } as any;
+    const err = new Error("db exploded");
+
+    handleError(res, err);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "Unhandled error returned as 500",
+      {
+        err,
+        service: "api-gateway",
+        method: "POST",
+        route: "/api/v1/hrm/activities/:id",
+        path: "/api/v1/hrm/activities/a1",
+      },
+    );
+    // The client-facing response is unchanged.
+    expect(mockApiResponse).toHaveBeenCalledWith(res, 500, {
+      message: "Internal Server Error",
+    });
+  });
+
+  it("drops the query string, which can carry tokens, from the logged path", () => {
+    const res = {
+      json: jest.fn(),
+      req: reqFor("/api/v1/hrm/activities/a1?token=secret-reset-token"),
+    } as any;
+    handleError(res, new Error("boom"));
+    const logged = (logger.error as jest.Mock).mock.calls[0][1];
+    expect(JSON.stringify(logged)).not.toContain("secret-reset-token");
+    expect(logged.path).toBe("/api/v1/hrm/activities/a1");
+  });
+
+  it("does not log an error the call site already logged (no duplicate lines)", () => {
+    const err = new Error("already reported");
+    // What @hrms/logger does to every Error it writes.
+    Object.defineProperty(err, Symbol.for("hrms.logger.logged"), {
+      value: true,
+    });
+    handleError({ json: jest.fn(), req: reqFor("/x") } as any, err);
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(mockApiResponse).toHaveBeenCalledWith(expect.anything(), 500, {
+      message: "Internal Server Error",
+    });
+  });
+
+  it("still logs a thrown non-Error value (it can't have been marked)", () => {
+    handleError({ json: jest.fn(), req: reqFor("/x") } as any, "plain string");
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not log errors it maps to a client status", () => {
+    handleError(makeRes(), makePrismaError("P2025"));
+    handleError(
+      makeRes(),
+      Object.assign(new Error("nope"), { httpStatus: 403 }),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
   });
 });

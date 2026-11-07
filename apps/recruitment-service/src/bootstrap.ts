@@ -26,18 +26,11 @@ async function startWorker() {
 if (cluster.isPrimary && WORKERS > 1) {
   // The primary serves /metrics for all workers (see @hrms/logger).
   void import("@hrms/logger");
-  // eslint-disable-next-line no-console
-  console.log(
-    `recruitment-service primary ${process.pid}: forking ${WORKERS} workers`,
+  // Forks and respawns the workers; on SIGTERM passes the signal on and
+  // waits for them to drain instead of respawning them.
+  void import("@hrms/common").then(({ runClusterPrimary }) =>
+    runClusterPrimary("recruitment-service", WORKERS, cluster),
   );
-  for (let i = 0; i < WORKERS; i++) cluster.fork();
-  cluster.on("exit", (worker, code, signal) => {
-    // eslint-disable-next-line no-console
-    console.error(
-      `recruitment-service worker ${worker.process.pid} exited (${signal || code}) — respawning`,
-    );
-    cluster.fork();
-  });
 } else {
   startWorker();
 }

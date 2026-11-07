@@ -1,3 +1,4 @@
+import { notify } from "@hrms/notifications";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { rejectResignation } from "../handlers/rejectResignation";
@@ -148,5 +149,89 @@ describe("rejectResignation", () => {
       null,
       expect.objectContaining({ status: 13 }),
     );
+  });
+});
+
+// What the notification worker expects (NotificationJobData): the job's
+// tenant, recipients as user ids — never usernames — and no legacy
+// targetUser / pushTargets or broadcast that could widen the audience.
+function expectRecipientsOnly(
+  job: any,
+  {
+    tenantId,
+    userId,
+    username,
+  }: { tenantId: string; userId: string; username?: string },
+) {
+  expect(job.tenantId).toBe(tenantId);
+  expect(job.recipients).toEqual([userId]);
+  if (username) expect(job.recipients).not.toContain(username);
+  expect(job).not.toHaveProperty("targetUser");
+  expect(job).not.toHaveProperty("pushTargets");
+  expect(job).not.toHaveProperty("broadcast");
+  expect(job.inApp).toEqual(
+    expect.objectContaining({
+      title: expect.any(String),
+      message: expect.any(String),
+      eventType: expect.any(String),
+    }),
+  );
+}
+
+const flushNotifications = async () => {
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+};
+
+describe("rejectResignation notification", () => {
+  const USER = "a00000000000000000000003";
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockInvalidate.mockResolvedValue(undefined);
+  });
+
+  it("notifies the employee by user id (not username), in the request's tenant, with no broadcast fields", async () => {
+    mockFindFirst.mockResolvedValue({ ...resignation, userId: USER });
+    mockUpdate.mockResolvedValue({
+      ...resignation,
+      userId: USER,
+      status: "Rejected",
+    });
+    await rejectResignation(
+      makeCall({ id: "res-1", lastWorkingDay: "2024-03-31" }),
+      makeCallback(),
+    );
+    await flushNotifications();
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    const job = (notify as jest.Mock).mock.calls[0][0];
+    expectRecipientsOnly(job, {
+      tenantId: "t1",
+      userId: USER,
+      username: "john",
+    });
+    expect(job.event).toBe("resignationRejected");
+  });
+
+  it("a resignation with no user id produces a job naming nobody — refused by the worker, never broadcast", async () => {
+    mockFindFirst.mockResolvedValue(resignation);
+    mockUpdate.mockResolvedValue({
+      ...resignation,
+      userId: null,
+      status: "Rejected",
+    });
+    await rejectResignation(
+      makeCall({ id: "res-1", lastWorkingDay: "2024-03-31" }),
+      makeCallback(),
+    );
+    await flushNotifications();
+
+    // The worker fails such a job permanently ("names no recipients"),
+    // so it ends in the dead-letter queue rather than reaching anyone.
+    expect(notify).toHaveBeenCalledTimes(1);
+    const job = (notify as jest.Mock).mock.calls[0][0];
+    expect(job.recipients).toEqual([]);
+    expect(job).not.toHaveProperty("targetUser");
+    expect(job).not.toHaveProperty("pushTargets");
+    expect(job).not.toHaveProperty("broadcast");
   });
 });

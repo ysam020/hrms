@@ -56,6 +56,7 @@ jest.mock("@hrms/common", () => ({
   ),
   tenantReplyTo: jest.fn((email?: string | null) => email || undefined),
   renderEmailHtml: jest.fn(({ bodyHtml }: { bodyHtml: string }) => bodyHtml),
+  formatDateOrRange: jest.fn(() => "1 Jan 2026"),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -172,6 +173,19 @@ describe("approveLeave", () => {
         data: expect.objectContaining(approved),
       }),
     );
+
+    // The applicant is addressed by user id. Passing the id as targetUser
+    // (a username field) used to resolve to nobody, which made the worker
+    // broadcast the notification to every connected user on the platform.
+    await new Promise((resolve) => setImmediate(resolve));
+    const { notify } = jest.requireMock("@hrms/notifications");
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "leaveApproved",
+        recipients: ["john-id"],
+      }),
+    );
+    expect(notify.mock.calls[0][0].targetUser).toBeUndefined();
   });
 
   it("invalidates leave cache after approval", async () => {

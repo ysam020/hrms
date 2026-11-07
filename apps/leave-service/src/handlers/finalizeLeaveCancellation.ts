@@ -137,7 +137,7 @@ export const finalizeLeaveCancellation = async (
         return notify({
           tenantId: getTenantId()!,
           event: approved ? "leaveCancelled" : "leaveCancellationRejected",
-          targetUser: updatedLeave.userId,
+          recipients: [updatedLeave.userId],
           inApp: {
             title: "Leave",
             message: notificationMessage,

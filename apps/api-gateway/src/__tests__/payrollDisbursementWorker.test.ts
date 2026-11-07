@@ -169,4 +169,19 @@ describe("payrollDisbursementWorker", () => {
       expect(mockDlqAdd).not.toHaveBeenCalled();
     });
   });
+
+  it("binds the gateway tenant context grpcCall forwards, so payslip lookups reach salary-service with this tenant and its database", async () => {
+    const { gatewayTenantStorage } = jest.requireActual(
+      "../middleware/tenantContext",
+    );
+    let seen: unknown;
+    mockRunPayrollDisbursement.mockImplementation(async () => {
+      seen = gatewayTenantStorage.getStore();
+      return { runId: "r1", payoutOk: 1, payoutFail: 0 };
+    });
+
+    await runProcessor({ tenantId: "t9" });
+
+    expect(seen).toEqual({ tenantId: "t9", dbName: "hrms-test-tenant" });
+  });
 });

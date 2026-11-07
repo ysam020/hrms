@@ -7,6 +7,17 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./src/testing/fakePrismaClient.ts",
+      "default": "./dist/testing/fakePrismaClient.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "testing": [
+        "src/testing/fakePrismaClient.ts"
+      ]
     }
   },
   "prisma": {

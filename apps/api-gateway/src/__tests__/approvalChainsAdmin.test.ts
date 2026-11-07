@@ -1,3 +1,4 @@
+import { notify } from "@hrms/notifications";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { actOnStep } from "@hrms/approval-engine";
@@ -66,8 +67,17 @@ jest.mock("@hrms/common", () => {
     },
     deriveFromComponents: actual.deriveFromComponents,
     legacyFieldsToComponents: actual.legacyFieldsToComponents,
+    // Used when building the requester's decision notification.
+    formatDateOrRange: jest.fn(() => "10–11 Jun 2024"),
+    tenantFrom: jest.fn((name: string) => `"${name} HR" <hr@praesto.in>`),
+    tenantReplyTo: jest.fn(() => undefined),
+    renderEmailHtml: jest.fn(() => "<p></p>"),
   };
 });
+
+jest.mock("@hrms/notifications", () => ({
+  notify: jest.fn().mockResolvedValue({ notificationId: "n1", jobIds: {} }),
+}));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -848,5 +858,74 @@ describe("actOnApproval (PUT /approvals/:instanceId/act)", () => {
       "finalizeReview",
       expect.objectContaining({ id: "pr1", approved: false }),
     );
+  });
+});
+
+describe("WFH decision notification", () => {
+  const USER = "a00000000000000000000006";
+  const flush = async () => {
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    db.approvalInstance.findFirst.mockResolvedValue({
+      id: "i1",
+      module: "wfh",
+      entityId: "w1",
+    });
+    (eachDate as jest.Mock).mockReturnValue([]);
+    db.user.findUnique.mockResolvedValue({ email: null });
+    db.tenant.findUnique.mockResolvedValue({ name: "Acme" });
+  });
+
+  it.each(["approved", "rejected"])(
+    "a final %s decision notifies the requester by user id, in the approver's tenant, with no broadcast fields",
+    async (finalStatus) => {
+      mockActOnStep.mockResolvedValue({
+        instanceId: "i1",
+        decision: finalStatus,
+        isFinal: true,
+        finalStatus,
+      });
+      db.wfhRequest.update.mockResolvedValue({
+        userId: USER,
+        username: "priya",
+        date: new Date("2024-06-10"),
+        toDate: new Date("2024-06-11"),
+      });
+
+      await actOnApproval(
+        makeReq({
+          params: { instanceId: "i1" },
+          body: { decision: finalStatus },
+        }),
+        makeRes(),
+      );
+      await flush();
+
+      expect(notify).toHaveBeenCalledTimes(1);
+      const job = (notify as jest.Mock).mock.calls[0][0];
+      expect(job.tenantId).toBe("t1");
+      expect(job.recipients).toEqual([USER]);
+      expect(job.recipients).not.toContain("priya");
+      expect(job).not.toHaveProperty("targetUser");
+      expect(job).not.toHaveProperty("pushTargets");
+      expect(job).not.toHaveProperty("broadcast");
+      expect(job.event).toBe("wfhDecision");
+    },
+  );
+
+  it("sends nothing while the approval is not final", async () => {
+    mockActOnStep.mockResolvedValue({
+      instanceId: "i1",
+      decision: "approved",
+      isFinal: false,
+    });
+    await actOnApproval(
+      makeReq({ params: { instanceId: "i1" }, body: { decision: "approved" } }),
+      makeRes(),
+    );
+    await flush();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

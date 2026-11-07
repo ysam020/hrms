@@ -1,8 +1,8 @@
 import { prisma } from "@hrms/db";
 import { checkTicketSla } from "../jobs/checkTicketSla";
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     ticket: {
       updateMany: jest.fn(),
       findMany: jest.fn(),
@@ -10,11 +10,27 @@ jest.mock("@hrms/db", () => ({
       update: jest.fn(),
     },
     user: { findMany: jest.fn() },
-  },
-}));
+    tenant: {
+      findMany: jest.fn().mockResolvedValue([{ id: "t1", dbName: "db-t1" }]),
+    },
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    runWithTenant: jest.fn((_id: string, _client: unknown, fn: () => unknown) =>
+      fn(),
+    ),
+    getClientForDb: jest.fn(() => ({})),
+    runForTenant: jest.fn((_id: string, fn: () => unknown) => fn()),
+  };
+});
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@hrms/cache", () => ({
+  getRedisClient: () => require("./support/fakeRedis").fakeRedis,
 }));
 
 jest.mock("@hrms/notifications", () => ({
@@ -58,8 +74,14 @@ describe("checkTicketSla", () => {
         },
         select: expect.any(Object),
       });
+      // Re-checks "still due" so a ticket resolved since the read is left alone.
       expect(mockUpdateMany).toHaveBeenCalledWith({
-        where: { id: { in: ["t1"] } },
+        where: {
+          id: { in: ["t1"] },
+          slaBreached: false,
+          slaDeadline: { lte: expect.any(Date) },
+          status: { notIn: ["resolved", "closed"] },
+        },
         data: { slaBreached: true },
       });
       expect(mockFindUnique).not.toHaveBeenCalled();
@@ -93,6 +115,7 @@ describe("checkTicketSla", () => {
       mockFindUnique.mockResolvedValue(null);
       await checkTicketSla({ ticketId: "missing" });
       expect(mockUpdate).not.toHaveBeenCalled();
+      expect(mockUpdateMany).not.toHaveBeenCalled();
     });
 
     it("skips a ticket that is already marked breached", async () => {
@@ -104,6 +127,7 @@ describe("checkTicketSla", () => {
       });
       await checkTicketSla({ ticketId: "t1" });
       expect(mockUpdate).not.toHaveBeenCalled();
+      expect(mockUpdateMany).not.toHaveBeenCalled();
     });
 
     it.each(["resolved", "closed"])(
@@ -117,6 +141,7 @@ describe("checkTicketSla", () => {
         });
         await checkTicketSla({ ticketId: "t1" });
         expect(mockUpdate).not.toHaveBeenCalled();
+        expect(mockUpdateMany).not.toHaveBeenCalled();
       },
     );
 
@@ -128,10 +153,17 @@ describe("checkTicketSla", () => {
         slaDeadline: new Date(),
       });
 
+      mockUpdateMany.mockResolvedValue({ count: 1 });
+
       await checkTicketSla({ ticketId: "t1" });
 
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: "t1" },
+      expect(mockUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: "t1",
+          slaBreached: false,
+          slaDeadline: { lte: expect.any(Date) },
+          status: { notIn: ["resolved", "closed"] },
+        },
         data: { slaBreached: true },
       });
     });

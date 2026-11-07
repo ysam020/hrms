@@ -191,6 +191,7 @@ function groupBy(rows: any[], by: string[]) {
 }
 
 jest.mock("@hrms/db", () => ({
+  leaseClient: () => () => undefined,
   prisma: {
     tenant: {
       findMany: async ({ where }: any = {}) =>

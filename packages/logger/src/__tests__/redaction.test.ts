@@ -204,3 +204,26 @@ describe("log redaction", () => {
     expect(out).toContain('"status":"Applied"');
   });
 });
+
+describe("error serialization for log lines", () => {
+  const { serializeErrors, wasLogged } = jest.requireActual("../index");
+
+  it("marks an Error as logged and keeps only name, message and stack (no request config or headers)", () => {
+    const err: any = new Error("request failed");
+    err.config = { headers: { Authorization: "Bearer secret-token" } };
+    const info: any = serializeErrors.transform({
+      level: "error",
+      message: "x",
+      err,
+    });
+
+    expect(wasLogged(err)).toBe(true);
+    expect(Object.keys(info.err).sort()).toEqual(["message", "name", "stack"]);
+    expect(JSON.stringify(info)).not.toContain("secret-token");
+  });
+
+  it("does not mark errors that were never logged", () => {
+    expect(wasLogged(new Error("quiet"))).toBe(false);
+    expect(wasLogged("not an error")).toBe(false);
+  });
+});

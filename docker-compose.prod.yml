@@ -20,6 +20,13 @@ x-backend-service: &backend-service
   volumes:
     - ./packages/certificates:/app/packages/certificates:ro
   restart: on-failure
+  # Time between SIGTERM and SIGKILL on `docker compose stop`/redeploy.
+  # Must exceed each service's own shutdown budget so it exits on its own
+  # after draining: gRPC services and queue workers 8 s, their cluster
+  # primary 9 s (SHUTDOWN_GRACE_MS, packages/common/src/shutdown.ts); the API
+  # gateway 15 s, its primary 16 s (apps/api-gateway/src/config/
+  # shutdownBudget.ts). Docker's default 10 s was below the gateway's.
+  stop_grace_period: 20s
   # Every service already exposes /health on METRICS_PORT (see
   # packages/logger/src/index.ts's metrics HTTP server) — this just wires it
   # in. Uses `node` directly (no curl/wget baked into the slim runner image)

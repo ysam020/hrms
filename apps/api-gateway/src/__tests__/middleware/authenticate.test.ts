@@ -15,6 +15,7 @@ import { gatewayTenantStorage } from "../../middleware/tenantContext";
 jest.mock("jsonwebtoken");
 
 jest.mock("@hrms/db", () => ({
+  leaseClient: () => () => undefined,
   prisma: {
     tenant: { findUnique: jest.fn() },
     user: { findUnique: jest.fn() },
@@ -44,6 +45,9 @@ function makeRes() {
   const res: any = {};
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
+  // Express responses are event emitters; the tenant-client lease is
+  // released on "finish"/"close".
+  res.once = jest.fn().mockReturnValue(res);
   return res;
 }
 

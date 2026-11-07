@@ -19,8 +19,11 @@ export {
 } from "./tenantContext";
 export type { AuditActor } from "./tenantContext";
 export { prismaWithTenant } from "./prismaWithTenant";
+export { runForTenant, TenantContextError } from "./runForTenant";
 export { warmUpDatabase } from "./warmUp";
 export { getClientForDb, closeAllTenantClients } from "./tenantClientPool";
+export { disconnectDatabases } from "./disconnect";
+export { leaseClient, activeLeases } from "./clientLeases";
 export {
   checkUserHasHistoricalRecords,
   type UserHistoricalRecordsResult,

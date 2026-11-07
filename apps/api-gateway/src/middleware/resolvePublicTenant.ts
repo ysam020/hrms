@@ -3,6 +3,7 @@ import { prisma, runWithTenant, getClientForDb } from "@hrms/db";
 import { apiResponse, RESPONSE_STATUS, BoundedCache } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { gatewayTenantStorage } from "./tenantContext";
+import { leaseForRequest } from "./leaseForRequest";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 
@@ -79,6 +80,7 @@ export async function resolvePublicTenant(
     }
 
     const tenantClient = tenant.dbName ? getClientForDb(tenant.dbName) : null;
+    leaseForRequest(res, tenantClient);
     gatewayTenantStorage.run(
       { tenantId: tenant.id, dbName: tenant.dbName },
       () => {

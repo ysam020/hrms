@@ -1,3 +1,4 @@
+import { notify } from "@hrms/notifications";
 import { status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
@@ -50,6 +51,7 @@ jest.mock("@hrms/notifications", () => ({
 }));
 
 jest.mock("@hrms/common", () => ({
+  formatDateOrRange: jest.fn(() => "1 Mar 2024"),
   tenantFrom: jest.fn(
     (name: string) => `"${name} HR" <hr@notifications.praesto.in>`,
   ),
@@ -278,5 +280,99 @@ describe("finalizeLeaveCancellation", () => {
       status: status.INTERNAL,
     });
     expect(mockInvalidate).not.toHaveBeenCalled();
+  });
+});
+
+// What the notification worker expects (NotificationJobData): the job's
+// tenant, recipients as user ids — never usernames — and no legacy
+// targetUser / pushTargets or broadcast that could widen the audience.
+function expectRecipientsOnly(
+  job: any,
+  {
+    tenantId,
+    userId,
+    username,
+  }: { tenantId: string; userId: string; username?: string },
+) {
+  expect(job.tenantId).toBe(tenantId);
+  expect(job.recipients).toEqual([userId]);
+  if (username) expect(job.recipients).not.toContain(username);
+  expect(job).not.toHaveProperty("targetUser");
+  expect(job).not.toHaveProperty("pushTargets");
+  expect(job).not.toHaveProperty("broadcast");
+  expect(job.inApp).toEqual(
+    expect.objectContaining({
+      title: expect.any(String),
+      message: expect.any(String),
+      eventType: expect.any(String),
+    }),
+  );
+}
+
+const flushNotifications = async () => {
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+};
+
+describe("finalizeLeaveCancellation notification", () => {
+  const USER = "a00000000000000000000002";
+  const requested = {
+    id: "leave-1",
+    status: "Cancellation Requested",
+    userId: USER,
+    username: "john",
+    leaveType: "PL",
+    days: 2,
+    from: new Date("2024-03-01"),
+    to: new Date("2024-03-02"),
+  };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockInvalidate.mockResolvedValue(undefined);
+    mockUpdateMany.mockResolvedValue({ count: 1 });
+    mockBalanceFindFirst.mockResolvedValue({
+      id: "bal-1",
+      updatedAt: new Date("2024-01-01"),
+      balances: { PL: 5 },
+    });
+    mockBalanceUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it.each([
+    [true, "leaveCancelled", "Cancelled"],
+    [false, "leaveCancellationRejected", "Approved"],
+  ])(
+    "approved=%s notifies the applicant by user id in the request's tenant (%s)",
+    async (approved, event, finalStatus) => {
+      mockFindUnique.mockResolvedValue(requested);
+      mockFindUniqueOrThrow.mockResolvedValue({
+        ...requested,
+        status: finalStatus,
+      });
+      await finalizeLeaveCancellation(
+        makeCall({ id: "leave-1", approved }),
+        makeCallback(),
+      );
+      await flushNotifications();
+
+      expect(notify).toHaveBeenCalledTimes(1);
+      const job = (notify as jest.Mock).mock.calls[0][0];
+      expectRecipientsOnly(job, {
+        tenantId: "t1",
+        userId: USER,
+        username: "john",
+      });
+      expect(job.event).toBe(event);
+    },
+  );
+
+  it("sends nothing when a concurrent finalize already won (no state change)", async () => {
+    mockFindUnique.mockResolvedValue(requested);
+    mockUpdateMany.mockResolvedValue({ count: 0 });
+    await finalizeLeaveCancellation(
+      makeCall({ id: "leave-1", approved: true }),
+      makeCallback(),
+    );
+    await flushNotifications();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

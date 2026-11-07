@@ -405,7 +405,7 @@ describe("assets handlers", () => {
       expect(mockNotify).toHaveBeenCalledWith(
         expect.objectContaining({
           event: "assetAssigned",
-          targetUser: "u2",
+          recipients: ["u2"],
         }),
       );
     });

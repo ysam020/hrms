@@ -32,7 +32,11 @@ export const sendNotification = async (
     // Send FCM push (non-fatal)
     try {
       const { sendPushNotifications } = await import("@hrms/firebase");
-      await sendPushNotifications([userId], title || "", message || "");
+      await sendPushNotifications(
+        { tenantId: getTenantId()!, userIds: [userId] },
+        title || "",
+        message || "",
+      );
     } catch (fcmErr) {
       logger.warn("FCM send failed (non-fatal):", { fcmErr });
     }

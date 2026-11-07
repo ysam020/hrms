@@ -1,7 +1,7 @@
 // ⚠️ Telemetry MUST be the very first import — before any other module.
 import "./telemetry";
 
-import { loadSecrets, validateEnv } from "@hrms/common";
+import { loadSecrets, processShutdown, validateEnv } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { envSchema } from "./envSchema";
 
@@ -32,7 +32,29 @@ async function bootstrap() {
   await registerScheduledJobs();
 
   // Cron/business logic jobs (serial).
-  startSchedulerWorker();
+  const worker = startSchedulerWorker();
+
+  // On SIGTERM: stop taking jobs and let a running one finish rather than
+  // be killed mid-run (which leaves its lease "running" and the job half
+  // done until the next period), then close connections and flush
+  // telemetry. The telemetry SDK's own SIGTERM handler only flushes, so
+  // without this the process waited for SIGKILL.
+  const { closeWorker, closeQueues } = await import("@hrms/queue");
+  const { disconnectDatabases } = await import("@hrms/db");
+  const { flushTelemetry } = await import("./telemetry");
+  const shutdown = processShutdown("scheduler-service");
+  shutdown.onShutdown(
+    "scheduler worker",
+    (ms) => closeWorker(worker, ms),
+    "drain",
+  );
+  shutdown.onShutdown("queues", () => closeQueues(), "cleanup");
+  shutdown.onShutdown(
+    "database clients",
+    () => disconnectDatabases(),
+    "cleanup",
+  );
+  shutdown.onShutdown("telemetry", () => flushTelemetry(), "flush");
 
   logger.info("Scheduler service started (schedulerWorker)");
 }

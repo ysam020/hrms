@@ -171,7 +171,7 @@ export async function createTicket(req: Request, res: Response) {
       const queue = getSchedulerQueue();
       await queue.add(
         "checkTicketSla",
-        { jobName: "checkTicketSla", ticketId: ticket.id },
+        { jobName: "checkTicketSla", ticketId: ticket.id, tenantId },
         {
           delay: slaHours * 60 * 60 * 1000,
           jobId: `sla:${ticket.id}`, // idempotent — won't duplicate on restart
