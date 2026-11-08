@@ -12,7 +12,12 @@ import { handleError } from "../utils/handleError";
 import { parsePagination } from "../utils/pagination";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3Client, S3_BUCKET, S3_URL_PREFIX } from "../config/s3";
+import {
+  s3Client,
+  S3_BUCKET,
+  S3_URL_PREFIX,
+  isChatFileUrl,
+} from "../config/s3";
 
 function withId<
   T extends { id: string; chatRoomId?: string; replyToId?: string | null },
@@ -305,7 +310,10 @@ export async function getMessageFileViewUrl(req: Request, res: Response) {
         message: "Forbidden",
       });
 
-    if (!msg.fileUrl.startsWith(S3_URL_PREFIX))
+    // A message can only reach chat uploads. Without this, room membership
+    // would be enough to presign any object in the shared bucket, including
+    // KYC documents that have their own ownership checks.
+    if (!isChatFileUrl(msg.fileUrl))
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "Invalid file reference",
       });

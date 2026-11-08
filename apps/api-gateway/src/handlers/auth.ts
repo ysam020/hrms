@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { faceAttestationEnforced } from "../services/faceAttestation";
 import { Request, Response } from "express";
 import { status as GrpcStatus } from "@grpc/grpc-js";
@@ -28,6 +29,16 @@ const REFRESH_COOKIE_OPTIONS = {
   sameSite: "strict" as const,
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — matches REFRESH_TOKEN_EXPIRE default
   path: "/api/v1/refresh-token",
+};
+
+const OAUTH_STATE_COOKIE = "oauth_state";
+const OAUTH_STATE_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  // Lax, because the callback is a top-level redirect from Google.
+  sameSite: "lax" as const,
+  maxAge: 10 * 60 * 1000,
+  path: "/api/auth/google/callback",
 };
 
 const usableDescriptor = (d: number[] | null) => (d?.length === 128 ? d : null);
@@ -697,6 +708,12 @@ export function googleAuthRedirect(req: Request, res: Response) {
       ? requested
       : DEFAULT_MOBILE_REDIRECT;
     state = `mobile:${encodeURIComponent(target)}`;
+  } else {
+    // Ties the callback to this browser, so an attacker can't send a victim
+    // a callback that signs them in to the attacker's account.
+    const nonce = randomBytes(32).toString("hex");
+    res.cookie(OAUTH_STATE_COOKIE, nonce, OAUTH_STATE_COOKIE_OPTIONS);
+    state = `web:${nonce}`;
   }
 
   const url =
@@ -734,6 +751,17 @@ export async function googleAuthCallback(req: Request, res: Response) {
         ? `${mobileScheme}?error=${encodeURIComponent(message)}`
         : `${clientUrl}/login?error=${encodeURIComponent(message)}`,
     );
+  }
+
+  if (!isMobile) {
+    const expected = req.cookies?.[OAUTH_STATE_COOKIE];
+    res.clearCookie(OAUTH_STATE_COOKIE, OAUTH_STATE_COOKIE_OPTIONS);
+    if (!expected || rawState !== `web:${expected}`) {
+      return jsRedirect(
+        res,
+        `${clientUrl}/login?error=${encodeURIComponent("Sign-in expired. Please try again.")}`,
+      );
+    }
   }
 
   try {

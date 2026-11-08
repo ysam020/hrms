@@ -796,13 +796,41 @@ describe("authHandlers", () => {
       );
     });
 
+    it.each([
+      ["no state and no cookie", {}, {}],
+      ["no cookie", { state: "web:nonce-1" }, {}],
+      ["no state", {}, { oauth_state: "nonce-1" }],
+      [
+        "a mismatched state",
+        { state: "web:attacker" },
+        { oauth_state: "nonce-1" },
+      ],
+    ])("refuses a web callback with %s", async (_n, query, cookies) => {
+      const res = makeRes();
+      await googleAuthCallback(
+        makeReq({ query: { code: "auth-code", ...query }, cookies }),
+        res,
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        expect.stringContaining("/login?error="),
+      );
+    });
+
     it("sets cookie and redirects to home on successful auth", async () => {
       mockGrpcCall.mockResolvedValue({
         accessToken: "acc-token",
         refreshToken: "ref-token",
       });
       const res = makeRes();
-      await googleAuthCallback(makeReq({ query: { code: "auth-code" } }), res);
+      await googleAuthCallback(
+        makeReq({
+          query: { code: "auth-code", state: "web:nonce-1" },
+          cookies: { oauth_state: "nonce-1" },
+        }),
+        res,
+      );
       expect(res.cookie).toHaveBeenCalledWith(
         "refresh_token",
         expect.any(String),

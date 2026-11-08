@@ -20,6 +20,11 @@ import {
   deleteUserFromTeam,
 } from "../handlers/permissions";
 
+const mockIsHrOrAbove = jest.fn();
+jest.mock("../utils/user", () => ({
+  isHrOrAboveCaller: (...a: unknown[]) => mockIsHrOrAbove(...a),
+}));
+
 jest.mock("@hrms/db", () => {
   const _db = {
     role: {
@@ -165,8 +170,53 @@ describe("permissionsHandlers", () => {
   });
 
   describe("getUserPermissions", () => {
+    it("refuses an ordinary employee reading a colleague", async () => {
+      mockUserFindFirst.mockResolvedValue({
+        id: "colleague",
+        permissions: ["x"],
+        role: [],
+      });
+      mockIsHrOrAbove.mockResolvedValue(false);
+      const res = makeRes();
+      await getUserPermissions(
+        makeReq({
+          params: { username: "colleague" },
+          user: { userId: "user-1", tenantRole: "employee" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.anything(),
+      );
+    });
+
+    it("lets HR read a colleague", async () => {
+      mockUserFindFirst.mockResolvedValue({
+        id: "colleague",
+        permissions: ["x"],
+        role: [],
+      });
+      mockIsHrOrAbove.mockResolvedValue(true);
+      const res = makeRes();
+      await getUserPermissions(
+        makeReq({
+          params: { username: "colleague" },
+          user: { userId: "user-1", tenantRole: "hr" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.anything(),
+      );
+    });
+
     it("returns permissions and role for existing user", async () => {
       mockUserFindFirst.mockResolvedValue({
+        id: "user-1",
         permissions: ["view_employees"],
         role: ["HR"],
       });

@@ -120,8 +120,6 @@ services:
       - SERVICE_NAME=auth-service
       - NODE_ENV=production
       - METRICS_PORT=9101
-    ports:
-      - "9101:9101"
     <<: *backend-service
 
   user-service:
@@ -131,8 +129,6 @@ services:
       - SERVICE_NAME=user-service
       - NODE_ENV=production
       - METRICS_PORT=9102
-    ports:
-      - "9102:9102"
     <<: *backend-service
 
   employee-service:
@@ -142,8 +138,6 @@ services:
       - SERVICE_NAME=employee-service
       - NODE_ENV=production
       - METRICS_PORT=9103
-    ports:
-      - "9103:9103"
     <<: *backend-service
 
   attendance-service:
@@ -153,8 +147,6 @@ services:
       - SERVICE_NAME=attendance-service
       - NODE_ENV=production
       - METRICS_PORT=9104
-    ports:
-      - "9104:9104"
     <<: *backend-service
 
   leave-service:
@@ -164,8 +156,6 @@ services:
       - SERVICE_NAME=leave-service
       - NODE_ENV=production
       - METRICS_PORT=9105
-    ports:
-      - "9105:9105"
     <<: *backend-service
 
   recruitment-service:
@@ -175,8 +165,6 @@ services:
       - SERVICE_NAME=recruitment-service
       - NODE_ENV=production
       - METRICS_PORT=9106
-    ports:
-      - "9106:9106"
     <<: *backend-service
 
   hrm-service:
@@ -186,8 +174,6 @@ services:
       - SERVICE_NAME=hrm-service
       - NODE_ENV=production
       - METRICS_PORT=9107
-    ports:
-      - "9107:9107"
     <<: *backend-service
 
   salary-service:
@@ -197,8 +183,6 @@ services:
       - SERVICE_NAME=salary-service
       - NODE_ENV=production
       - METRICS_PORT=9108
-    ports:
-      - "9108:9108"
     <<: *backend-service
 
   analytics-service:
@@ -208,8 +192,6 @@ services:
       - SERVICE_NAME=analytics-service
       - NODE_ENV=production
       - METRICS_PORT=9109
-    ports:
-      - "9109:9109"
     <<: *backend-service
 
   notification-service:
@@ -219,8 +201,6 @@ services:
       - SERVICE_NAME=notification-service
       - NODE_ENV=production
       - METRICS_PORT=9110
-    ports:
-      - "9110:9110"
     <<: *backend-service
 
   performance-review-service:
@@ -230,8 +210,6 @@ services:
       - SERVICE_NAME=performance-review-service
       - NODE_ENV=production
       - METRICS_PORT=9112
-    ports:
-      - "9112:9112"
     <<: *backend-service
 
   scheduler-service:
@@ -243,8 +221,6 @@ services:
       # Crons run only where this is "true" — see apps/scheduler-service/src/scheduler.ts
       - SCHEDULER_ENABLED=true
       - METRICS_PORT=9111
-    ports:
-      - "9111:9111"
     <<: *backend-service
 
   # Back to a per-instance container (was ElastiCache — see the CloudFormation
@@ -257,7 +233,7 @@ services:
   redis:
     container_name: hrms-prod-redis
     logging: *default-logging
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
     volumes:
       - redis-data:/data
     healthcheck:
@@ -310,7 +286,7 @@ services:
   caddy:
     container_name: hrms-prod-caddy
     logging: *default-logging
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
     ports:
       - "80:80"
       - "443:443"

@@ -1,6 +1,5 @@
 export { tokenFns } from "./tokens";
 export { responseMessage, errorMessage } from "./messages";
-export { aesEncrypt, aesDecrypt } from "./encryption";
 export { sendEmail } from "./email";
 export { PLATFORM_FROM, tenantFrom, tenantReplyTo } from "./emailFrom";
 export { renderEmailHtml } from "./emailTemplate";

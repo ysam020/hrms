@@ -1,3 +1,4 @@
+import { isHrOrAboveCaller } from "../utils/user";
 import { Request, Response } from "express";
 import {
   prismaWithTenant as prisma,
@@ -331,8 +332,18 @@ export async function getUserPermissions(req: Request, res: Response) {
   try {
     const user = await prisma.user.findFirst({
       where: { username: String(req.params.username) },
-      select: { permissions: true, role: true },
+      select: { id: true, permissions: true, role: true },
     });
+    const caller = (req as AuthRequest).user!;
+    if (
+      user &&
+      user.id !== caller.userId &&
+      !(await isHrOrAboveCaller(caller.userId, caller.tenantRole))
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Forbidden",
+      });
+    }
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { permissions: user?.permissions ?? [], role: user?.role ?? [] },
     });

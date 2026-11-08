@@ -1,3 +1,4 @@
+import { isChatFileUrl } from "./s3";
 import type { Server as SocketServer, Socket } from "socket.io";
 import {
   prismaWithTenant as prisma,
@@ -121,6 +122,7 @@ export function setupChatSocket(
           // refused on this attempt, not after a cache expires.
           const participants = await participantsIfMember(roomId);
           if (!participants) return;
+          if (fileUrl && !isChatFileUrl(fileUrl)) return;
 
           // Enforce message content size limit (10 000 chars)
           if (content && content.length > 10_000) {

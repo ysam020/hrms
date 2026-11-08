@@ -123,7 +123,7 @@ export function getClientForDb(dbName: string): PrismaClient {
   attachQueryTiming(client, "tenant");
   attachAuditLogging(client);
   pool.set(dbName, { client, lastUsed: Date.now() });
-  logger.info(`Tenant DB client created for "${dbName}"`);
+  logger.info("Tenant DB client created", { poolSize: pool.size });
   return client;
 }
 

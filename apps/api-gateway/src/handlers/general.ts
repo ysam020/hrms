@@ -1,3 +1,4 @@
+import { isHrOrAboveCaller } from "../utils/user";
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authenticate";
 import {
@@ -701,6 +702,22 @@ export async function getPresignedUrl(req: Request, res: Response) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message: "fileName, fileType, folder and username are required",
       });
+    }
+
+    // The KYC view check treats this path segment as the file's owner.
+    if (folder === "employee_kyc") {
+      const caller = (req as AuthRequest).user!;
+      const access = await loadUserAccess(caller.userId, {
+        tenantScoped: true,
+      });
+      if (
+        access?.username !== username &&
+        !(await isHrOrAboveCaller(caller.userId, caller.tenantRole))
+      ) {
+        return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+          message: "Forbidden",
+        });
+      }
     }
 
     const ext = path.extname(fileName).toLowerCase();

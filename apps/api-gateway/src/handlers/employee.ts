@@ -708,8 +708,10 @@ export async function viewAllKycs(req: Request, res: Response) {
         { designation: { $regex: escaped, $options: "i" } },
       ];
     }
-    if (req.query.status && req.query.status !== "All") {
-      match.kyc_approval = req.query.status;
+    // A string only: Express parses ?status[$ne]=x into an object, which a
+    // raw $match would treat as a query operator.
+    if (typeof req.query.status === "string" && req.query.status !== "All") {
+      if (req.query.status) match.kyc_approval = req.query.status;
     }
 
     const [rows, countRows] = await Promise.all([

@@ -245,9 +245,16 @@ app.use((error: any, _req: any, res: any, _next: any) => {
   return res.status(httpStatus).json({ success: false, message });
 });
 
-process.on("uncaughtException", (error) =>
-  logger.error("Uncaught Exception:", { error }),
-);
+// State is unknown after an uncaught exception, so drain and let the cluster
+// primary or the restart policy start a clean process.
+let exitingAfterCrash = false;
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught Exception:", { error });
+  if (exitingAfterCrash) return;
+  exitingAfterCrash = true;
+  process.exitCode = 1;
+  process.kill(process.pid, "SIGTERM");
+});
 process.on("unhandledRejection", (error) =>
   logger.error("Unhandled Rejection:", { error }),
 );

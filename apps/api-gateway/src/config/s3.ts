@@ -14,3 +14,15 @@ export const S3_URL_PREFIX = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com
 export function s3FileUrl(key: string): string {
   return `${S3_URL_PREFIX}${key}`;
 }
+
+/** True only for a URL pointing at an object under the chat upload folder. */
+export function isChatFileUrl(url: unknown): url is string {
+  if (typeof url !== "string" || !url.startsWith(S3_URL_PREFIX)) return false;
+  let key: string;
+  try {
+    key = decodeURIComponent(url.slice(S3_URL_PREFIX.length));
+  } catch {
+    return false;
+  }
+  return key.startsWith("chat/") && !key.includes("..");
+}
