@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import geoip from "geoip-lite";
 import { prisma } from "@hrms/db";
 import { sendEmail, PLATFORM_FROM } from "@hrms/common";
 import { logger } from "@hrms/logger";
@@ -9,6 +8,7 @@ import {
   type LoginMethod,
 } from "./loginRiskAnalyzer";
 import { buildLoginAlertEmail } from "./loginAlertEmail";
+import { lookupGeo } from "./geoLookup";
 
 export interface LoginEventInput {
   userId: string;
@@ -59,7 +59,7 @@ export async function recordLoginEvent(input: LoginEventInput): Promise<void> {
   const tenantId = user?.tenantId ?? null;
 
   const geoIp = resolveGeoIp(ip);
-  const geo = geoIp ? geoip.lookup(geoIp) : null;
+  const geo = geoIp ? await lookupGeo(geoIp) : null;
   const country = geo?.country ?? null;
   const city = geo?.city ?? null;
   const latitude = geo?.ll?.[0] ?? null;

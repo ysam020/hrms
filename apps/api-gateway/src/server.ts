@@ -13,7 +13,6 @@ import { apiRequestLogger, logger } from "@hrms/logger";
 import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
 import { setupPresenceSocket } from "./config/presenceSocket";
-import { configureSwagger } from "./config/swaggerSetup";
 import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
 import {
   applyRateLimiters,
@@ -195,7 +194,15 @@ app.use(express.urlencoded({ extended: true }));
 applyRateLimiters(app);
 
 app.use(auditLogMiddleware);
-configureSwagger(app as any);
+// The spec costs about 35 MB per process to parse, and production has no
+// need to publish it.
+if (
+  process.env.NODE_ENV !== "production" ||
+  process.env.ENABLE_API_DOCS === "true"
+) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("./config/swaggerSetup").configureSwagger(app);
+}
 app.get("/api/v1/csrf-token", (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });

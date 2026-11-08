@@ -32,9 +32,10 @@ import {
 } from "@opentelemetry/semantic-conventions";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
 
+// Only when something will receive the data: instrumenting every call with
+// no collector costs memory and CPU and produces nothing.
 const ENABLED =
-  process.env.OTEL_ENABLED === "true" ||
-  (process.env.NODE_ENV !== "test" && process.env.NODE_ENV !== undefined);
+  process.env.OTEL_ENABLED === "true" || Boolean(process.env.OTEL_EXPORTER_URL);
 
 const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "api-gateway";
 const SERVICE_VERSION = process.env.npm_package_version ?? "0.0.0";

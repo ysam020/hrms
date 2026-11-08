@@ -1,4 +1,7 @@
-import ExcelJS from "exceljs";
+import type ExcelJS from "exceljs";
+
+// Loaded on first use: bulk import is rare and the package is large.
+const loadExcel = async () => (await import("exceljs")).default;
 import { Readable } from "stream";
 import {
   EMPLOYEES_TAB,
@@ -61,7 +64,8 @@ function cellText(value: unknown): string {
 // typing aid) and no protected header. A stray edited header is still
 // caught the same way as before, at parse time (see parseSheet below).
 export async function buildOnboardingTemplate() {
-  const workbook = new ExcelJS.Workbook();
+  const { Workbook } = await loadExcel();
+  const workbook = new Workbook();
   const sheet = workbook.addWorksheet(EMPLOYEES_TAB.sheetName);
   sheet.columns = EMPLOYEES_TAB.columns.map((c) => ({
     header: c.header,
@@ -146,7 +150,8 @@ export async function parseWorkbook(
   // parseSheet already treats a genuinely missing sheet.
   let worksheet: ExcelJS.Worksheet | undefined;
   try {
-    const workbook = new ExcelJS.Workbook();
+    const { Workbook } = await loadExcel();
+    const workbook = new Workbook();
     worksheet = await workbook.csv.read(Readable.from(buffer));
   } catch {
     worksheet = undefined;

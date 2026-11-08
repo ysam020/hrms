@@ -33,6 +33,9 @@ async function startWorker() {
 if (cluster.isPrimary && WORKERS > 1) {
   // The primary serves /metrics for all workers (see @hrms/logger).
   void import("@hrms/logger");
+  void import("./services/geoLookup").then(({ serveGeoLookups }) =>
+    serveGeoLookups(cluster),
+  );
   // Forks and respawns the workers; on SIGTERM/SIGINT passes the signal to
   // every worker and waits for them to drain (their budget + 1 s) instead
   // of respawning them. Without this the primary — PID 1 in the container
