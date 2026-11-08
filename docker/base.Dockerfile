@@ -2,14 +2,15 @@ ARG APP_DIR=api-gateway
 ARG PROJECT=api-gateway
 ARG PORT=9002
 
-FROM node:20-alpine AS runtime-base
+# Node 24 LTS, pinned by digest so a rebuild is reproducible.
+FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS runtime-base
 # Alpine's CDN mirror occasionally drops the TLS handshake mid-build in CI —
 # retry a few times before giving up, rather than failing the whole image
 # build on one transient network blip. Exits non-zero if every attempt
 # fails, so a genuine persistent failure still fails the build loudly.
 RUN set -e; \
     for i in 1 2 3 4 5; do \
-      if apk update && apk add --no-cache libc6-compat openssl; then \
+      if apk update && apk upgrade --no-cache && apk add --no-cache libc6-compat openssl; then \
         exit 0; \
       fi; \
       echo "apk failed (attempt $i/5), retrying in 5s..."; \
@@ -77,6 +78,9 @@ FROM runtime-base AS runner
 ARG APP_DIR
 ARG PORT
 
+# Package managers are build tools. The service runs node directly.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-*
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 ENV AWS_SHARED_CREDENTIALS_FILE=/app/.aws/credentials
@@ -84,7 +88,7 @@ ENV AWS_CONFIG_FILE=/app/.aws/config
 # Interview/attendance times are stored as naive "YYYYMMDDTHHmmss" strings
 # with no timezone marker (see recruitment-service's parseInterviewTime) —
 # every comparison against the server's own clock only lines up if the
-# container's local time matches the tenant's. node:20-alpine defaults to
+# container's local time matches the tenant's. node:alpine defaults to
 # UTC otherwise, which silently shifts every such deadline by the offset.
 ENV TZ=Asia/Kolkata
 USER nodejs
