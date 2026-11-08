@@ -4,6 +4,7 @@ import { validate } from "../middleware/validate";
 import * as h from "../handlers/attendance";
 import * as breaks from "../handlers/attendanceBreaks";
 import {
+  verifyFaceSchema,
   addAttendanceSchema,
   attendanceCorrectionSchema,
   startBreakSchema,
@@ -11,6 +12,17 @@ import {
 
 export const attendanceRouter: Router = Router();
 
+attendanceRouter.post(
+  "/attendance/face/challenge",
+  authenticate,
+  h.createFaceChallenge,
+);
+attendanceRouter.post(
+  "/attendance/face/verify",
+  authenticate,
+  validate(verifyFaceSchema),
+  h.verifyFace,
+);
 attendanceRouter.post(
   "/add-attendance",
   authenticate,

@@ -1,3 +1,7 @@
+import {
+  faceAttestationEnforced,
+  issueAttestation,
+} from "../services/faceAttestation";
 import { readFaceDescriptor } from "@hrms/crypto";
 import { Request, Response } from "express";
 import { salary } from "@hrms/proto";
@@ -186,7 +190,10 @@ export async function checkFaceDescriptor(req: Request, res: Response) {
       message: "Face descriptor status fetched",
       data: {
         hasDescriptor,
-        descriptor: hasDescriptor ? descriptor : null,
+        // Compared on the server when attestation is enforced; older web
+        // builds still compare in the browser until then.
+        descriptor:
+          hasDescriptor && !faceAttestationEnforced() ? descriptor : null,
       },
     });
   } catch (error: unknown) {
@@ -198,12 +205,27 @@ export async function saveFaceDescriptor(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
     const { descriptor } = req.body;
+    const row = await prisma.user.findUnique({
+      where: { id: user!.userId },
+      select: { face_descriptor: true },
+    });
+    // Enrolment happens once. Replacing a template would let an employee
+    // swap in someone else's face and then pass verification as them.
+    if (readFaceDescriptor(row?.face_descriptor)?.length === 128) {
+      return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
+        message: "A face is already enrolled for this account.",
+        code: "FACE_ALREADY_ENROLLED",
+      });
+    }
     await prisma.user.update({
       where: { id: user!.userId },
       data: { face_descriptor: descriptor },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Face descriptor saved successfully",
+      data: {
+        attestation: await issueAttestation(user!.tenantId!, user!.userId),
+      },
     });
   } catch (error: unknown) {
     return handleError(res, error);

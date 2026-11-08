@@ -84,6 +84,12 @@ export const addAttendanceSchema = z.object({
   longitude: z.number().min(-180).max(180).optional(),
   deviceInfo: z.string().max(512).optional(),
   imageUrl: z.string().max(2048).optional(),
+  faceAttestation: z.string().max(128).optional(),
+});
+
+export const verifyFaceSchema = z.object({
+  challengeId: z.string().min(1).max(128),
+  descriptor: z.array(z.number().finite()).length(128),
 });
 
 export const attendanceCorrectionSchema = z.object({

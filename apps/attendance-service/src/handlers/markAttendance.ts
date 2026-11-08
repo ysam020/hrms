@@ -199,20 +199,32 @@ export const markAttendance = async (
         ? await resolveLeaveConflictForCheckIn(tenantId, userId, todayStart)
         : null;
 
-      const record = existingRecord
-        ? await prisma.attendanceRecord.update({
-            where: { id: existingRecord.id },
-            data: { timeIn: now, status: attendanceStatus },
-          })
-        : await prisma.attendanceRecord.create({
-            data: {
-              tenantId: getTenantId()!,
-              userId,
-              date: todayStart,
-              timeIn: now,
-              status: attendanceStatus,
-            },
+      let record;
+      try {
+        record = existingRecord
+          ? await prisma.attendanceRecord.update({
+              where: { id: existingRecord.id },
+              data: { timeIn: now, status: attendanceStatus },
+            })
+          : await prisma.attendanceRecord.create({
+              data: {
+                tenantId: getTenantId()!,
+                userId,
+                date: todayStart,
+                timeIn: now,
+                status: attendanceStatus,
+              },
+            });
+      } catch (err) {
+        // Two punches raced: the unique index let exactly one through.
+        if ((err as { code?: string }).code === "P2002") {
+          return callback(null, {
+            message: MESSAGES.ALREADY_CHECKED_IN,
+            status: status.ALREADY_EXISTS,
           });
+        }
+        throw err;
+      }
 
       await Promise.all([
         cacheManager.invalidatePattern(`t:${tenantId}:attendance:${userId}:*`),

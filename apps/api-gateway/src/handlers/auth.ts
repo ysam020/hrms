@@ -1,3 +1,4 @@
+import { faceAttestationEnforced } from "../services/faceAttestation";
 import { Request, Response } from "express";
 import { status as GrpcStatus } from "@grpc/grpc-js";
 import jwt from "jsonwebtoken";
@@ -216,7 +217,9 @@ export async function fetchFullProfile(
     esic_no: readSensitiveForDisplay(u.esic_no, "esic_no"),
     fcmTokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [],
     events: Array.isArray(u.events) ? u.events : [],
-    face_descriptor: usableDescriptor(readFaceDescriptor(u.face_descriptor)),
+    face_descriptor: faceAttestationEnforced()
+      ? null
+      : usableDescriptor(readFaceDescriptor(u.face_descriptor)),
   };
 }
 

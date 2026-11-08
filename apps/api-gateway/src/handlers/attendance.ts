@@ -1,3 +1,10 @@
+import {
+  consumeFaceAttestation,
+  faceAttestationEnforced,
+  issueFaceChallenge,
+  verifyFaceForAttendance,
+  type FaceVerifyFailure,
+} from "../services/faceAttestation";
 import { Request, Response } from "express";
 import { attendanceClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
@@ -20,9 +27,86 @@ import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
 
+const FACE_FAILURE_RESPONSE: Record<
+  FaceVerifyFailure,
+  { status: keyof typeof RESPONSE_STATUS; message: string }
+> = {
+  CHALLENGE_INVALID: {
+    status: "BAD_REQUEST",
+    message: "This verification has expired. Please try again.",
+  },
+  NOT_ENROLLED: {
+    status: "BAD_REQUEST",
+    message: "Face enrolment is required before marking attendance.",
+  },
+  INVALID_DESCRIPTOR: {
+    status: "BAD_REQUEST",
+    message: "Face data could not be read. Please try again.",
+  },
+  NO_MATCH: {
+    status: "FORBIDDEN",
+    message: "Face verification failed. Please try again.",
+  },
+  TOO_MANY_ATTEMPTS: {
+    status: "TOO_MANY_REQUEST",
+    message: "Too many failed attempts. Please try again later.",
+  },
+};
+
+export async function createFaceChallenge(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const data = await issueFaceChallenge(user!.tenantId!, user!.userId);
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Face challenge issued",
+      data,
+    });
+  } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
+export async function verifyFace(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const result = await verifyFaceForAttendance(
+      user!.tenantId!,
+      user!.userId,
+      req.body.challengeId,
+      req.body.descriptor,
+    );
+    if (!result.ok) {
+      const failure = FACE_FAILURE_RESPONSE[result.reason];
+      return apiResponse(res, RESPONSE_STATUS[failure.status], {
+        message: failure.message,
+        code: result.reason,
+      });
+    }
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
+      message: "Face verified",
+      data: { attestation: result.attestation },
+    });
+  } catch (error: unknown) {
+    return handleError(res, error);
+  }
+}
+
 export async function addAttendance(req: Request, res: Response) {
   const { user } = req as AuthRequest;
   try {
+    if (
+      faceAttestationEnforced() &&
+      !(await consumeFaceAttestation(
+        user!.tenantId!,
+        user!.userId,
+        req.body.faceAttestation,
+      ))
+    ) {
+      return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+        message: "Face verification is required to mark attendance.",
+        code: "FACE_ATTESTATION_REQUIRED",
+      });
+    }
     const response = await grpcCall(attendanceClient, "markAttendance", {
       userId: user!.userId,
       type: req.body.type,

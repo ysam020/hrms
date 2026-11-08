@@ -95,6 +95,7 @@ export function usePunch(refresh: () => void) {
           refresh,
           pos.coords.latitude,
           pos.coords.longitude,
+          process.faceAttestationRef.current,
         );
       },
       () => {
