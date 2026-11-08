@@ -8,42 +8,40 @@
       "outputs": ["dist/**", "build/**"],
       "env": ["VITE_SERVER_URL", "VITE_API_STRING"]
     },
-
     "dev": {
       "cache": false,
       "persistent": true
     },
-
     "start:prod": {
       "dependsOn": ["build"],
       "cache": false
     },
-
     "proto:gen": {
       "cache": false
     },
-
     "db:generate": {
       "cache": false
     },
-
     "db:push": {
       "cache": false
     },
-
     "db:migrate": {
       "cache": false
     },
-
     "db:studio": {
       "cache": false,
       "persistent": true
     },
-
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["src/**/*.ts", "src/__tests__/**/*.ts", "jest.config.*"],
       "outputs": ["coverage/**"]
     }
-  }
+  },
+  "globalPassThroughEnv": [
+    "DEPLOY_ENV",
+    "LOCAL_SECRETS_FILE",
+    "LOKI_URL",
+    "CLOUDWATCH_LOGS_DISABLED"
+  ]
 }

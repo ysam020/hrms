@@ -11,7 +11,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "node scripts/generate-certs.mjs && cross-env LOKI_URL=http://localhost:3100 turbo run dev --concurrency=25",
+    "dev": "node scripts/generate-certs.mjs && cross-env LOKI_URL=http://localhost:3100 DEPLOY_ENV=development LOCAL_SECRETS_FILE=../../local-secrets.json CLOUDWATCH_LOGS_DISABLED=true turbo run dev --concurrency=25",
     "build": "turbo run build",
     "test": "jest && pnpm --filter web test:run",
     "test:coverage": "jest --coverage --forceExit && pnpm --filter web test:coverage",

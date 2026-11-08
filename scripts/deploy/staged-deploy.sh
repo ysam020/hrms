@@ -26,9 +26,16 @@
 # so a compose file copied only to the host would be overwritten.
 #
 # DRY_RUN=1 prints every command instead of running it.
+#
+# Environments (defaults = production, unchanged):
+#   IMAGE_TAG_PARAM   SSM parameter holding the image tag (default /hrms/prod/image-tag)
+#   COMPOSE_OVERLAY   extra compose file layered on top, e.g. docker-compose.staging.yml;
+#                     downloaded by `prepare`, uploaded by `upload`, passed as a second -f.
 set -euo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+COMPOSE_OVERLAY="${COMPOSE_OVERLAY:-}"
+IMAGE_TAG_PARAM="${IMAGE_TAG_PARAM:-/hrms/prod/image-tag}"
 HRMS_DIR="${HRMS_DIR:-/opt/hrms}"
 HEALTH_TIMEOUT_S="${HEALTH_TIMEOUT_S:-120}"
 GRPC_SERVICES=(
@@ -57,19 +64,23 @@ load_env() {
   : "${ECR_REGISTRY:?set ECR_REGISTRY (<account>.dkr.ecr.<region>.amazonaws.com)}"
   : "${ECR_REPOSITORY_PREFIX:?set ECR_REPOSITORY_PREFIX}"
   if [ -z "${TAG_NAME:-}" ] && [ "${DRY_RUN:-}" = "1" ]; then
-    echo "+ aws ssm get-parameter --name /hrms/prod/image-tag"
+    echo "+ aws ssm get-parameter --name $IMAGE_TAG_PARAM"
     TAG_NAME="<from-ssm>"
   elif [ -z "${TAG_NAME:-}" ]; then
-    TAG_NAME=$(aws ssm get-parameter --name /hrms/prod/image-tag \
+    TAG_NAME=$(aws ssm get-parameter --name "$IMAGE_TAG_PARAM" \
       --region "$AWS_REGION" --query 'Parameter.Value' --output text)
   fi
-  [ -n "$TAG_NAME" ] || die "no image tag (TAG_NAME or /hrms/prod/image-tag)"
+  [ -n "$TAG_NAME" ] || die "no image tag (TAG_NAME or $IMAGE_TAG_PARAM)"
   export AWS_REGION ECR_REGISTRY ECR_REPOSITORY_PREFIX TAG_NAME
   echo "staged-deploy: image tag $TAG_NAME"
 }
 
 compose() {
-  run docker compose -f "$HRMS_DIR/$COMPOSE_FILE" "$@"
+  if [ -n "$COMPOSE_OVERLAY" ]; then
+    run docker compose -f "$HRMS_DIR/$COMPOSE_FILE" -f "$HRMS_DIR/$COMPOSE_OVERLAY" "$@"
+  else
+    run docker compose -f "$HRMS_DIR/$COMPOSE_FILE" "$@"
+  fi
 }
 
 container_of() {
@@ -111,11 +122,17 @@ case "$cmd" in
     repo=$(cd "$here/../.." && pwd)
     run aws s3 cp "$repo/docker-compose.prod.yml" "s3://$DEPLOY_ARTIFACTS_BUCKET/docker-compose.prod.yml"
     run aws s3 cp "$here/staged-deploy.sh" "s3://$DEPLOY_ARTIFACTS_BUCKET/staged-deploy.sh"
+    if [ -n "$COMPOSE_OVERLAY" ]; then
+      run aws s3 cp "$repo/$COMPOSE_OVERLAY" "s3://$DEPLOY_ARTIFACTS_BUCKET/$COMPOSE_OVERLAY"
+    fi
     ;;
   prepare)
     load_env
     : "${DEPLOY_ARTIFACTS_BUCKET:?set DEPLOY_ARTIFACTS_BUCKET}"
     run aws s3 cp "s3://$DEPLOY_ARTIFACTS_BUCKET/docker-compose.prod.yml" "$HRMS_DIR/$COMPOSE_FILE" --region "$AWS_REGION"
+    if [ -n "$COMPOSE_OVERLAY" ]; then
+      run aws s3 cp "s3://$DEPLOY_ARTIFACTS_BUCKET/$COMPOSE_OVERLAY" "$HRMS_DIR/$COMPOSE_OVERLAY" --region "$AWS_REGION"
+    fi
     # Certificates are created by deploy.sh on first boot; refuse to guess here.
     [ "${DRY_RUN:-}" = "1" ] || [ -f "$HRMS_DIR/packages/certificates/cert.pem" ] \
       || die "missing $HRMS_DIR/packages/certificates/cert.pem — run deploy.sh's certificate setup first"

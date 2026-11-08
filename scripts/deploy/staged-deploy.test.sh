@@ -57,6 +57,15 @@ grep -q "up -d --no-deps attendance-service" "$log" && fail "must stop at the fi
 : > "$log"; bash "$script" gateway >/dev/null
 grep -q "up -d --no-deps api-gateway" "$log" || fail "gateway stage"
 
+# Staging: environment-specific tag parameter and overlay (defaults above stay production).
+: > "$log"; IMAGE_TAG_PARAM=/hrms/staging/image-tag COMPOSE_OVERLAY=docker-compose.staging.yml bash "$script" prepare >/dev/null
+grep -q "aws ssm get-parameter --name /hrms/staging/image-tag" "$log" || fail "staging tag parameter"
+grep -q "/hrms/prod/image-tag" "$log" && fail "staging must not read the production tag parameter"
+grep -q "aws s3 cp s3://bucket/docker-compose.staging.yml $work/opt/docker-compose.staging.yml" "$log" || fail "overlay downloaded"
+grep -q "docker compose -f $work/opt/docker-compose.prod.yml -f $work/opt/docker-compose.staging.yml pull --quiet" "$log" || fail "overlay layered on pull"
+: > "$log"; COMPOSE_OVERLAY=docker-compose.staging.yml bash "$script" gateway >/dev/null
+grep -q "docker compose -f $work/opt/docker-compose.prod.yml -f $work/opt/docker-compose.staging.yml up -d --no-deps api-gateway" "$log" || fail "overlay layered on stages"
+
 : > "$log"; bash "$script" reconcile >/dev/null
 grep -q "up -d --remove-orphans" "$log" || fail "reconcile = deploy.sh's full up"
 

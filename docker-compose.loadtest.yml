@@ -43,6 +43,7 @@ x-service: &service
 
 x-env: &env
   LOCAL_SECRETS_FILE: /app/local-secrets.json
+  DEPLOY_ENV: development
   REDIS_URL: redis://redis:6379
   REDIS_HOST: redis
   REDIS_PORT: "6379"

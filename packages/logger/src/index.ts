@@ -34,7 +34,16 @@ export {
 } from "./redaction";
 export type { FieldClass } from "./redaction";
 
-const env = process.env.NODE_ENV === "production" ? "production" : "dev";
+// The deployment's own environment name (production / staging) labels logs
+// and metrics; staging runs NODE_ENV=production, so NODE_ENV alone would
+// label it "production". Local development keeps the historical "dev".
+const deployEnv = process.env.DEPLOY_ENV;
+const env =
+  deployEnv && deployEnv !== "development" && deployEnv !== "test"
+    ? deployEnv
+    : process.env.NODE_ENV === "production"
+      ? "production"
+      : "dev";
 const serviceName =
   process.env.SERVICE_NAME || process.env.npm_package_name || "api-gateway";
 

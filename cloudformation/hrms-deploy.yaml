@@ -64,6 +64,20 @@ Parameters:
       Set to "false" if a GitHub Actions OIDC provider (token.actions.githubusercontent.com)
       already exists in this AWS account — an account can only have one, and stack
       creation will fail if you try to create a duplicate.
+  StackEnvironment:
+    Type: String
+    AllowedValues: [production, staging]
+    Default: production
+    Description: >
+      Which environment this stack runs. "production" keeps every name and the
+      instance UserData exactly as before (no resource change on update).
+      "staging" names the image-tag parameter, uploads bucket and instance
+      after the environment and deploys with docker-compose.staging.yml on
+      top of docker-compose.prod.yml. Run staging in its own AWS account.
+  GrafanaSubdomain:
+    Type: String
+    Default: grafana
+    Description: Subdomain Grafana is served on (staging only; production's is in the compose file)
   ExistingGithubOidcProviderArn:
     Type: String
     Default: ""
@@ -71,6 +85,7 @@ Parameters:
 
 Conditions:
   ShouldCreateOidcProvider: !Equals [!Ref CreateGithubOidcProvider, "true"]
+  IsProduction: !Equals [!Ref StackEnvironment, production]
 
 Resources:
   # ─────────────────────────── GitHub OIDC ───────────────────────────
@@ -118,7 +133,10 @@ Resources:
   PraestoBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "praesto-${AWS::AccountId}"
+      BucketName: !If
+        - IsProduction
+        - !Sub "praesto-${AWS::AccountId}"
+        - !Sub "praesto-${StackEnvironment}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -693,7 +711,10 @@ Resources:
   ImageTagParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /hrms/prod/image-tag
+      Name: !If
+        - IsProduction
+        - /hrms/prod/image-tag
+        - !Sub "/hrms/${StackEnvironment}/image-tag"
       Type: String
       Value: latest
 
@@ -969,127 +990,224 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: hrms-prod
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            set -euo pipefail
+                Value:
+                  !If [IsProduction, hrms-prod, !Sub "hrms-${StackEnvironment}"]
+        UserData: !If
+          - IsProduction
+          - Fn::Base64: !Sub |
+              #!/bin/bash
+              set -euo pipefail
 
-            # No ALB anymore — this instance needs its own stable public
-            # address for api.praesto.in to keep pointing at (see
-            # ElasticIp's comment). --allow-reassociation because the EIP is
-            # still attached to whatever instance this one is replacing.
-            TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-            INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
-            aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id ${ElasticIp.AllocationId} --region ${AWS::Region} --allow-reassociation
+              # No ALB anymore — this instance needs its own stable public
+              # address for api.praesto.in to keep pointing at (see
+              # ElasticIp's comment). --allow-reassociation because the EIP is
+              # still attached to whatever instance this one is replacing.
+              TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+              INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+              aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id ${ElasticIp.AllocationId} --region ${AWS::Region} --allow-reassociation
 
-            dnf install -y docker
-            systemctl enable --now docker
+              dnf install -y docker
+              systemctl enable --now docker
 
-            mkdir -p /usr/local/lib/docker/cli-plugins
-            curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
-              -o /usr/local/lib/docker/cli-plugins/docker-compose
-            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+              mkdir -p /usr/local/lib/docker/cli-plugins
+              curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+                -o /usr/local/lib/docker/cli-plugins/docker-compose
+              chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-            mkdir -p /opt/hrms
+              mkdir -p /opt/hrms
 
-            # Public-facing TLS termination (was the ALB's job) is Caddy, whose
-            # Caddyfile now ships inside docker-compose.prod.yml (the
-            # `caddyfile` config) so it's synced on every deploy. It gets real
-            # Let's Encrypt certs (HTTP-01, needs port 80 open, see
-            # InstanceSecurityGroup) for api.praesto.in and grafana.praesto.in.
+              # Public-facing TLS termination (was the ALB's job) is Caddy, whose
+              # Caddyfile now ships inside docker-compose.prod.yml (the
+              # `caddyfile` config) so it's synced on every deploy. It gets real
+              # Let's Encrypt certs (HTTP-01, needs port 80 open, see
+              # InstanceSecurityGroup) for api.praesto.in and grafana.praesto.in.
 
-            cat > /opt/hrms/deploy.sh <<'DEPLOY_EOF'
-            #!/bin/bash
-            set -euo pipefail
+              cat > /opt/hrms/deploy.sh <<'DEPLOY_EOF'
+              #!/bin/bash
+              set -euo pipefail
 
-            AWS_REGION="${AWS::Region}"
-            ECR_REGISTRY="${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
-            ECR_REPOSITORY_PREFIX="${EcrRepositoryPrefix}"
+              AWS_REGION="${AWS::Region}"
+              ECR_REGISTRY="${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+              ECR_REPOSITORY_PREFIX="${EcrRepositoryPrefix}"
 
-            TAG_NAME=$(aws ssm get-parameter --name /hrms/prod/image-tag --region "$AWS_REGION" --query 'Parameter.Value' --output text)
-            export ECR_REGISTRY ECR_REPOSITORY_PREFIX TAG_NAME
+              TAG_NAME=$(aws ssm get-parameter --name /hrms/prod/image-tag --region "$AWS_REGION" --query 'Parameter.Value' --output text)
+              export ECR_REGISTRY ECR_REPOSITORY_PREFIX TAG_NAME
 
-            aws s3 cp "s3://${DeployArtifactsBucket}/docker-compose.prod.yml" /opt/hrms/docker-compose.prod.yml --region "$AWS_REGION"
+              aws s3 cp "s3://${DeployArtifactsBucket}/docker-compose.prod.yml" /opt/hrms/docker-compose.prod.yml --region "$AWS_REGION"
 
-            mkdir -p /opt/hrms/packages/certificates
-            if [ ! -f /opt/hrms/packages/certificates/cert.pem ]; then
-              openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
-                -keyout /opt/hrms/packages/certificates/key.pem \
-                -out /opt/hrms/packages/certificates/cert.pem \
-                -subj "/CN=localhost" \
-                -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
-              # mTLS: gRPC clients (api-gateway) must present a distinct
-              # identity from the servers' own cert.pem/key.pem - grpc-js
-              # resets the connection if client and server present identical
-              # certs (see the comment in apps/api-gateway/src/grpc/clients.ts).
-              # Mirrors scripts/generate-certs.mjs's self-signed fallback:
-              # two independent self-signed leaf certs, neither a real CA,
-              # bundled together into rootCA.pem as mutually-trusted roots.
-              openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
-                -keyout /opt/hrms/packages/certificates/client-key.pem \
-                -out /opt/hrms/packages/certificates/client-cert.pem \
-                -subj "/CN=grpc-internal-client"
-              cat /opt/hrms/packages/certificates/cert.pem /opt/hrms/packages/certificates/client-cert.pem \
-                > /opt/hrms/packages/certificates/rootCA.pem
-              chmod 644 /opt/hrms/packages/certificates/*.pem
-            fi
-            aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+              mkdir -p /opt/hrms/packages/certificates
+              if [ ! -f /opt/hrms/packages/certificates/cert.pem ]; then
+                openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+                  -keyout /opt/hrms/packages/certificates/key.pem \
+                  -out /opt/hrms/packages/certificates/cert.pem \
+                  -subj "/CN=localhost" \
+                  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+                # mTLS: gRPC clients (api-gateway) must present a distinct
+                # identity from the servers' own cert.pem/key.pem - grpc-js
+                # resets the connection if client and server present identical
+                # certs (see the comment in apps/api-gateway/src/grpc/clients.ts).
+                # Mirrors scripts/generate-certs.mjs's self-signed fallback:
+                # two independent self-signed leaf certs, neither a real CA,
+                # bundled together into rootCA.pem as mutually-trusted roots.
+                openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+                  -keyout /opt/hrms/packages/certificates/client-key.pem \
+                  -out /opt/hrms/packages/certificates/client-cert.pem \
+                  -subj "/CN=grpc-internal-client"
+                cat /opt/hrms/packages/certificates/cert.pem /opt/hrms/packages/certificates/client-cert.pem \
+                  > /opt/hrms/packages/certificates/rootCA.pem
+                chmod 644 /opt/hrms/packages/certificates/*.pem
+              fi
+              aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-            cd /opt/hrms
-            docker compose -f docker-compose.prod.yml pull --quiet
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+              cd /opt/hrms
+              docker compose -f docker-compose.prod.yml pull --quiet
+              docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            docker image prune -af
-            DEPLOY_EOF
-            chmod +x /opt/hrms/deploy.sh
+              docker image prune -af
+              DEPLOY_EOF
+              chmod +x /opt/hrms/deploy.sh
 
-            cat > /etc/systemd/system/hrms.service <<'UNIT_EOF'
-            [Unit]
-            Description=HRMS docker compose stack
-            After=docker.service network-online.target
-            Requires=docker.service
+              cat > /etc/systemd/system/hrms.service <<'UNIT_EOF'
+              [Unit]
+              Description=HRMS docker compose stack
+              After=docker.service network-online.target
+              Requires=docker.service
 
-            [Service]
-            Type=oneshot
-            RemainAfterExit=yes
-            ExecStart=/opt/hrms/deploy.sh
+              [Service]
+              Type=oneshot
+              RemainAfterExit=yes
+              ExecStart=/opt/hrms/deploy.sh
 
-            [Install]
-            WantedBy=multi-user.target
-            UNIT_EOF
+              [Install]
+              WantedBy=multi-user.target
+              UNIT_EOF
 
-            systemctl daemon-reload
-            systemctl enable --now hrms.service
+              systemctl daemon-reload
+              systemctl enable --now hrms.service
+          - Fn::Base64: !Sub |
+              #!/bin/bash
+              set -euo pipefail
+
+              # No ALB anymore — this instance needs its own stable public
+              # address for its API hostname to keep pointing at (see
+              # ElasticIp's comment). --allow-reassociation because the EIP is
+              # still attached to whatever instance this one is replacing.
+              TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+              INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+              aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id ${ElasticIp.AllocationId} --region ${AWS::Region} --allow-reassociation
+
+              dnf install -y docker
+              systemctl enable --now docker
+
+              mkdir -p /usr/local/lib/docker/cli-plugins
+              curl -fsSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64" \
+                -o /usr/local/lib/docker/cli-plugins/docker-compose
+              chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+              mkdir -p /opt/hrms
+
+              # Public-facing TLS termination (was the ALB's job) is Caddy, whose
+              # Caddyfile now ships inside docker-compose.prod.yml (the
+              # `caddyfile` config) so it's synced on every deploy. It gets real
+              # Let's Encrypt certs (HTTP-01, needs port 80 open, see
+              # InstanceSecurityGroup) for the staging API and Grafana hostnames.
+
+              cat > /opt/hrms/deploy.sh <<'DEPLOY_EOF'
+              #!/bin/bash
+              set -euo pipefail
+
+              AWS_REGION="${AWS::Region}"
+              ECR_REGISTRY="${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+              ECR_REPOSITORY_PREFIX="${EcrRepositoryPrefix}"
+
+              TAG_NAME=$(aws ssm get-parameter --name ${ImageTagParameter} --region "$AWS_REGION" --query 'Parameter.Value' --output text)
+              # Environment-specific hostnames for the staging overlay (compose refuses
+              # to render without them: no production default can be inherited).
+              API_HOSTNAME="${ApiSubdomain}.${DomainName}"
+              GRAFANA_HOSTNAME="${GrafanaSubdomain}.${DomainName}"
+              GRAFANA_AUTH_SECRET_ID="${SecretsManagerSecretName}-grafana-basic-auth"
+              export ECR_REGISTRY ECR_REPOSITORY_PREFIX TAG_NAME API_HOSTNAME GRAFANA_HOSTNAME GRAFANA_AUTH_SECRET_ID
+
+              aws s3 cp "s3://${DeployArtifactsBucket}/docker-compose.prod.yml" /opt/hrms/docker-compose.prod.yml --region "$AWS_REGION"
+              aws s3 cp "s3://${DeployArtifactsBucket}/docker-compose.${StackEnvironment}.yml" /opt/hrms/docker-compose.${StackEnvironment}.yml --region "$AWS_REGION"
+
+              mkdir -p /opt/hrms/packages/certificates
+              if [ ! -f /opt/hrms/packages/certificates/cert.pem ]; then
+                openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+                  -keyout /opt/hrms/packages/certificates/key.pem \
+                  -out /opt/hrms/packages/certificates/cert.pem \
+                  -subj "/CN=localhost" \
+                  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+                # mTLS: gRPC clients (api-gateway) must present a distinct
+                # identity from the servers' own cert.pem/key.pem - grpc-js
+                # resets the connection if client and server present identical
+                # certs (see the comment in apps/api-gateway/src/grpc/clients.ts).
+                # Mirrors scripts/generate-certs.mjs's self-signed fallback:
+                # two independent self-signed leaf certs, neither a real CA,
+                # bundled together into rootCA.pem as mutually-trusted roots.
+                openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+                  -keyout /opt/hrms/packages/certificates/client-key.pem \
+                  -out /opt/hrms/packages/certificates/client-cert.pem \
+                  -subj "/CN=grpc-internal-client"
+                cat /opt/hrms/packages/certificates/cert.pem /opt/hrms/packages/certificates/client-cert.pem \
+                  > /opt/hrms/packages/certificates/rootCA.pem
+                chmod 644 /opt/hrms/packages/certificates/*.pem
+              fi
+              aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+              cd /opt/hrms
+              docker compose -f docker-compose.prod.yml -f docker-compose.${StackEnvironment}.yml pull --quiet
+              docker compose -f docker-compose.prod.yml -f docker-compose.${StackEnvironment}.yml up -d --remove-orphans
+
+              docker image prune -af
+              DEPLOY_EOF
+              chmod +x /opt/hrms/deploy.sh
+
+              cat > /etc/systemd/system/hrms.service <<'UNIT_EOF'
+              [Unit]
+              Description=HRMS docker compose stack
+              After=docker.service network-online.target
+              Requires=docker.service
+
+              [Service]
+              Type=oneshot
+              RemainAfterExit=yes
+              ExecStart=/opt/hrms/deploy.sh
+
+              [Install]
+              WantedBy=multi-user.target
+              UNIT_EOF
+
+              systemctl daemon-reload
+              systemctl enable --now hrms.service
 
   Asg:
-  Type: AWS::AutoScaling::AutoScalingGroup
+    Type: AWS::AutoScaling::AutoScalingGroup
 
-  UpdatePolicy:
-    AutoScalingRollingUpdate:
-      MinInstancesInService: 0
-      MaxBatchSize: 1
-      PauseTime: PT3M
-      WaitOnResourceSignals: false
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+        MaxBatchSize: 1
+        PauseTime: PT3M
+        WaitOnResourceSignals: false
 
-  Properties:
-    LaunchTemplate:
-      LaunchTemplateSpecification:
+    Properties:
+      LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
 
-    MinSize: !Ref MinSize
-    MaxSize: !Ref MaxSize
-    DesiredCapacity: !Ref DesiredCapacity
-    VPCZoneIdentifier: !Ref PublicSubnetIds
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+      VPCZoneIdentifier: !Ref PublicSubnetIds
 
-    HealthCheckType: EC2
-    HealthCheckGracePeriod: 180
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 180
 
-    Tags:
-      - Key: Name
-        Value: hrms-prod
-        PropagateAtLaunch: true
+      Tags:
+        - Key: Name
+          Value: !If [IsProduction, hrms-prod, !Sub "hrms-${StackEnvironment}"]
+          PropagateAtLaunch: true
   # ─────────────────────────── DNS ───────────────────────────
   # Plain A record to the EIP (not an ALB alias anymore) — this only ever
   # needs to be set once, since ElasticIp's address doesn't change across

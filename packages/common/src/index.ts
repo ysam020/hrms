@@ -21,7 +21,12 @@ export {
   camelToSnake,
 } from "./object";
 export { RESPONSE_STATUS, grpcToHttpStatus, apiResponse } from "./response";
-export { loadSecrets } from "./loadSecrets";
+export {
+  loadSecrets,
+  REQUIRED_SECRET_KEYS,
+  DEPLOY_ENVIRONMENTS,
+  SecretsConfigError,
+} from "./loadSecrets";
 export { validateEnv } from "./validateEnv";
 export {
   deriveFromComponents,

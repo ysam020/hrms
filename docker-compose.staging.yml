@@ -1,0 +1,117 @@
+# Staging overlay. Use ONLY as:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.staging.yml <cmd>
+#
+# Compose merges `environment` by variable name and replaces `configs`
+# entries by key, so everything environment-specific in the production file
+# is overridden here. Values with no safe default are REQUIRED compose
+# variables (${VAR:?...}): rendering fails if one is missing, so a
+# staging stack can never inherit a production hostname or secret name.
+#   API_HOSTNAME            staging API hostname (Caddy)
+#   GRAFANA_HOSTNAME        staging Grafana hostname (Caddy, Grafana root URL)
+#   GRAFANA_AUTH_SECRET_ID  Secrets Manager id of the Grafana basic-auth hash
+# The CloudFormation UserData (StackEnvironment=staging) exports all three.
+#
+# The staging secret (hrms/config/staging) must contain SECRET_ENV=staging,
+# S3_BUCKET=<staging bucket> and every REQUIRED_SECRET_KEYS entry, or the
+# services refuse to start (packages/common/src/loadSecrets.ts).
+# ATTENDANCE_RECONCILE_ENABLED is deliberately absent: reconciliation stays
+# off until explicitly approved.
+x-staging-env: &staging-env
+  DEPLOY_ENV: staging
+  AWS_SECRET_NAME: hrms/config/staging
+  SCHEDULER_ENABLED: "false"
+
+services:
+  api-gateway:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: api-gateway
+  auth-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: auth-service
+  user-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: user-service
+  employee-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: employee-service
+  attendance-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: attendance-service
+  leave-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: leave-service
+  recruitment-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: recruitment-service
+  hrm-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: hrm-service
+  salary-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: salary-service
+  analytics-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: analytics-service
+  notification-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: notification-service
+  performance-review-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: performance-review-service
+  scheduler-service:
+    environment:
+      <<: *staging-env
+      SERVICE_NAME: scheduler-service
+
+  # Same credential flow as production; the secret id comes from the stack.
+  grafana-auth:
+    command:
+      - |
+        hash=$$(aws secretsmanager get-secret-value --region ap-south-1 --secret-id "${GRAFANA_AUTH_SECRET_ID:?set GRAFANA_AUTH_SECRET_ID}" --query SecretString --output text 2>/dev/null) || hash=""
+        case "$$hash" in
+          "" | *[!A-Za-z0-9+/=]*)
+            echo "grafana-auth: secret unavailable or malformed; Grafana stays locked" >&2
+            hash="JDJhJDE0JFdBZ3ZPVlQ0TS95V0dNRHRrMHBmcy56b2czZ0JZblJBSHAwN3VYWlJSWG1UVS4vZ2F6Z0Np" ;;
+        esac
+        printf 'admin %s\n' "$$hash" > /run/grafana-auth/credentials
+
+  grafana:
+    environment:
+      GF_SERVER_ROOT_URL: https://${GRAFANA_HOSTNAME:?set GRAFANA_HOSTNAME}
+
+  # Pinned (production uses the floating redis:7-alpine tag).
+  redis:
+    image: redis:7.4-alpine
+
+configs:
+  caddyfile:
+    content: |
+      ${API_HOSTNAME:?set API_HOSTNAME to the staging API hostname} {
+      	reverse_proxy https://api-gateway:9002 {
+      		transport http {
+      			tls_insecure_skip_verify
+      		}
+      	}
+      }
+
+      ${GRAFANA_HOSTNAME:?set GRAFANA_HOSTNAME to the staging Grafana hostname} {
+      	basic_auth {
+      		import /run/grafana-auth/credentials
+      	}
+      	reverse_proxy grafana:3000 {
+      		header_up X-WEBAUTH-USER {http.auth.user.id}
+      		header_up -Authorization
+      	}
+      }

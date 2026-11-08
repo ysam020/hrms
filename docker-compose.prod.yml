@@ -91,6 +91,10 @@ services:
       - PERFORMANCE_REVIEW_SERVICE_HOST=performance-review-service
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
       - SERVICE_NAME=api-gateway
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9003
     ports:
@@ -118,6 +122,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/auth-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=auth-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9101
     ports:
@@ -129,6 +137,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/user-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=user-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9102
     ports:
@@ -140,6 +152,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/employee-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=employee-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9103
     ports:
@@ -151,6 +167,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/attendance-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=attendance-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9104
     ports:
@@ -162,6 +182,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/leave-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=leave-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9105
     ports:
@@ -173,6 +197,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/recruitment-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=recruitment-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9106
     ports:
@@ -184,6 +212,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/hrm-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=hrm-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9107
     ports:
@@ -195,6 +227,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/salary-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=salary-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9108
     ports:
@@ -206,6 +242,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/analytics-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=analytics-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9109
     ports:
@@ -217,6 +257,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/notification-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=notification-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9110
     ports:
@@ -228,6 +272,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/performance-review-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=performance-review-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       - METRICS_PORT=9112
     ports:
@@ -239,6 +287,10 @@ services:
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY_PREFIX:-dev}/scheduler-service:${TAG_NAME:-latest}
     environment:
       - SERVICE_NAME=scheduler-service
+      # Explicit environment + secret (loadSecrets has no default; the
+      # secret's own SECRET_ENV must equal DEPLOY_ENV or the service exits).
+      - DEPLOY_ENV=production
+      - AWS_SECRET_NAME=hrms/config-production
       - NODE_ENV=production
       # Crons run only where this is "true" — see apps/scheduler-service/src/scheduler.ts
       - SCHEDULER_ENABLED=true
