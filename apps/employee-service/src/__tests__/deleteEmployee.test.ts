@@ -20,11 +20,13 @@ jest.mock("@hrms/db", () => {
   };
 });
 
+const mockPublishRevocation = jest.fn().mockResolvedValue(true);
 jest.mock("@hrms/cache", () => ({
   cacheManager: {
     invalidatePattern: jest.fn(),
     delete: jest.fn(),
   },
+  publishAccountRevocation: (...a: unknown[]) => mockPublishRevocation(...a),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -104,6 +106,11 @@ describe("deleteEmployee", () => {
       // Termination also unregisters devices.
       data: { employeeStatus: "Terminated", fcmTokens: [] },
     });
+    // Every gateway closes the person's sockets now.
+    expect(mockPublishRevocation).toHaveBeenCalledWith({
+      userId: "emp-1",
+      reason: "employee-deactivated",
+    });
     expect(mockDelete).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.EMPLOYEE_DEACTIVATED,
@@ -126,6 +133,10 @@ describe("deleteEmployee", () => {
     );
 
     expect(mockDelete).toHaveBeenCalledWith({ where: { id: "emp-1" } });
+    expect(mockPublishRevocation).toHaveBeenCalledWith({
+      userId: "emp-1",
+      reason: "employee-deleted",
+    });
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, {
       message: MESSAGES.EMPLOYEE_PERMANENTLY_DELETED,

@@ -1,7 +1,10 @@
 import type { Server as HttpServer } from "http";
 import type { Server as HttpsServer } from "https";
 import { Server, type Socket } from "socket.io";
-import { RedisWebSocketAdapter } from "./RedisWebSocketAdapter";
+import {
+  RedisWebSocketAdapter,
+  type AdapterOptions,
+} from "./RedisWebSocketAdapter";
 
 type AuthenticatedSocket = Socket & {
   userId: string;
@@ -38,6 +41,7 @@ export function configureSocketIO(
   server: HttpServer | HttpsServer,
   allowedOrigins: string | string[],
   verifyToken?: TokenVerifier,
+  adapterOptions: AdapterOptions = {},
 ): { io: Server; redisAdapter: RedisWebSocketAdapter } {
   const io = new Server(server, {
     cors: {
@@ -130,7 +134,7 @@ export function configureSocketIO(
     socket.on("disconnect", () => clearTimeout(timer));
   });
 
-  const redisAdapter = new RedisWebSocketAdapter(io);
+  const redisAdapter = new RedisWebSocketAdapter(io, adapterOptions);
 
   return { io, redisAdapter };
 }

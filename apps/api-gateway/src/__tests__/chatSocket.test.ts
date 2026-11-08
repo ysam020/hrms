@@ -173,6 +173,7 @@ describe("setupChatSocket", () => {
         "u2",
         "chat:message",
         expect.objectContaining({ _id: "m1", content: "hello" }),
+        { tenantId: "t1" },
       );
     });
 
@@ -267,6 +268,7 @@ describe("setupChatSocket", () => {
         "u2",
         "chat:message",
         expect.anything(),
+        { tenantId: "t1" },
       );
     });
 
@@ -380,10 +382,12 @@ describe("setupChatSocket", () => {
           roomId: "r1",
           userId: "u1",
         },
+        { tenantId: "t1" },
       );
       expect(redisAdapter.sendToUser).not.toHaveBeenCalledWith(
         "u1",
         "chat:typing",
+        expect.anything(),
         expect.anything(),
       );
     });
@@ -423,10 +427,15 @@ describe("setupChatSocket", () => {
         where: { id: "m2" },
         data: { readBy: { push: "u1" } },
       });
-      expect(redisAdapter.sendToUser).toHaveBeenCalledWith("u2", "chat:read", {
-        roomId: "r1",
-        reader: "u1",
-      });
+      expect(redisAdapter.sendToUser).toHaveBeenCalledWith(
+        "u2",
+        "chat:read",
+        {
+          roomId: "r1",
+          reader: "u1",
+        },
+        { tenantId: "t1" },
+      );
     });
 
     it("skips the update step entirely when there is nothing unread", async () => {
@@ -664,6 +673,7 @@ describe("setupChatSocket", () => {
           messageId: "m1",
           roomId: "r1",
         },
+        { tenantId: "t1" },
       );
     });
 
@@ -689,6 +699,7 @@ describe("setupChatSocket", () => {
           pinnedAt: "2026-01-01",
           pinnedBy: "u1",
         },
+        { tenantId: "t1" },
       );
     });
 
@@ -707,6 +718,7 @@ describe("setupChatSocket", () => {
           messageId: "m1",
           roomId: "r1",
         },
+        { tenantId: "t1" },
       );
     });
   });

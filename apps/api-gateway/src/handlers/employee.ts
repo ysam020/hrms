@@ -14,7 +14,11 @@ import {
   hasPrivilegedRole,
   HR_ROLES,
 } from "@hrms/common";
-import { cacheManager, revokeRefreshToken } from "@hrms/cache";
+import {
+  cacheManager,
+  revokeRefreshToken,
+  publishAccountRevocation,
+} from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
 import { safeDecrypt } from "@hrms/crypto";
@@ -112,6 +116,12 @@ export async function editEmployeeDetails(req: Request, res: Response) {
     // refresh token at once and drops this process's cached decision.
     if (isBlockedEmployeeStatus(employeeStatus)) {
       invalidateAccountAccess(targetUser.id);
+      // Every other gateway worker drops its cached decision and
+      // closes this person's sockets now (not after the cache TTL).
+      void publishAccountRevocation({
+        userId: targetUser.id,
+        reason: `employee-status:${employeeStatus}`,
+      });
       await revokeRefreshToken(targetUser.id).catch((err: unknown) =>
         logger.error("edit-employee-details: session revocation failed", {
           err,

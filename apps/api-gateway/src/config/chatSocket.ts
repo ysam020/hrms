@@ -200,7 +200,7 @@ export function setupChatSocket(
 
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message", msgObj),
+              redisAdapter.sendToUser(p, "chat:message", msgObj, { tenantId }),
             ),
           );
 
@@ -270,7 +270,12 @@ export function setupChatSocket(
           participants
             .filter((p) => p !== userId)
             .map((p) =>
-              redisAdapter.sendToUser(p, "chat:typing", { roomId, userId }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:typing",
+                { roomId, userId },
+                { tenantId },
+              ),
             ),
         );
       } catch {
@@ -289,10 +294,15 @@ export function setupChatSocket(
           participants
             .filter((p) => p !== userId)
             .map((p) =>
-              redisAdapter.sendToUser(p, "chat:stop-typing", {
-                roomId,
-                userId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:stop-typing",
+                {
+                  roomId,
+                  userId,
+                },
+                { tenantId },
+              ),
             ),
         );
       } catch {
@@ -334,10 +344,15 @@ export function setupChatSocket(
           participants
             .filter((p) => p !== userId)
             .map((p) =>
-              redisAdapter.sendToUser(p, "chat:read", {
-                roomId,
-                reader: userId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:read",
+                {
+                  roomId,
+                  reader: userId,
+                },
+                { tenantId },
+              ),
             ),
         );
       } catch (err) {
@@ -356,10 +371,15 @@ export function setupChatSocket(
           if (!participants) return;
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message-deleted", {
-                messageId,
-                roomId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:message-deleted",
+                {
+                  messageId,
+                  roomId,
+                },
+                { tenantId },
+              ),
             ),
           );
         } catch (err) {
@@ -391,12 +411,17 @@ export function setupChatSocket(
           if (!participants) return;
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message-pinned", {
-                messageId,
-                roomId,
-                pinnedAt,
-                pinnedBy,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:message-pinned",
+                {
+                  messageId,
+                  roomId,
+                  pinnedAt,
+                  pinnedBy,
+                },
+                { tenantId },
+              ),
             ),
           );
         } catch (err) {
@@ -416,10 +441,15 @@ export function setupChatSocket(
           if (!participants) return;
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message-unpinned", {
-                messageId,
-                roomId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:message-unpinned",
+                {
+                  messageId,
+                  roomId,
+                },
+                { tenantId },
+              ),
             ),
           );
         } catch (err) {

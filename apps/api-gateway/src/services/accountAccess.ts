@@ -84,13 +84,21 @@ function onFailure(err: unknown): void {
   }
 }
 
+/**
+ * `maxAgeMs` (≤ TTL) demands a decision at most that old — used
+ * for sensitive socket events and for targeted deliveries, so a change made
+ * outside the application (direct DB edit, no revocation message) is
+ * honoured within that bound instead of the full TTL. `0` = always fresh.
+ */
 export function resolveAccountAccess(
   userId: string,
   tenantId: string | null | undefined,
+  options: { maxAgeMs?: number } = {},
 ): Promise<AccountAccess> {
   const key = keyFor(userId, tenantId);
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.loadedAt < TTL_MS) {
+  const maxAge = Math.min(TTL_MS, options.maxAgeMs ?? TTL_MS);
+  if (hit && Date.now() - hit.loadedAt < maxAge) {
     count("hit");
     return hit.result;
   }
@@ -134,6 +142,24 @@ export function invalidateAccountAccess(userId: string): void {
   for (const key of [...cache.keys()]) {
     if (key.startsWith(`${userId}:`)) cache.delete(key);
   }
+}
+
+/** Drops every cached decision for this tenant (all users) in this process. */
+export function invalidateTenantAccess(tenantId: string): void {
+  const suffix = `:${tenantId}`;
+  for (const key of [...cache.keys()]) {
+    if (key.endsWith(suffix)) cache.delete(key);
+  }
+}
+
+/**
+ * Drops every cached decision (the breaker is kept). Used when the
+ * revocation subscriber reconnects: messages sent meanwhile were missed.
+ */
+export function flushAccountAccessDecisions(): number {
+  const n = cache.size;
+  cache.clear();
+  return n;
 }
 
 /** Diagnostics for /health (no ids). */

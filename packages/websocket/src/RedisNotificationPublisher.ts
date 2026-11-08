@@ -1,5 +1,6 @@
 import { logger, websocketPublishFailuresTotal } from "@hrms/logger";
 import { getWebSocketRedis } from "./connection";
+import { publishToNodes } from "./SocketRegistry";
 
 const SERVICE_LABEL = process.env.SERVICE_NAME || "notification-service";
 
@@ -13,34 +14,32 @@ const SERVICE_LABEL = process.env.SERVICE_NAME || "notification-service";
  */
 export class RedisNotificationPublisher {
   /**
-   * Send an event to a specific user. Looks up which API gateway worker
-   * holds the user's socket via Redis, then routes via pub/sub.
+   * Send an event to every socket of `userId` in `tenantId`, on every API
+   * gateway process that holds one (SocketRegistry). Resolves true only if
+   * at least one gateway process received it. Each receiving gateway
+   * re-authorises the person just before emitting.
    */
   async sendToUser(
     userId: string,
     eventName: string,
     payload: unknown,
+    options: { tenantId: string | null },
   ): Promise<boolean> {
     try {
-      const redisClient = getWebSocketRedis("client");
-      const publisher = getWebSocketRedis("publisher");
-
-      const socketEntry = await redisClient.hget("user:sockets", userId);
-
-      if (!socketEntry) {
-        logger.warn(
-          `[RedisNotificationPublisher] ${userId} not found in user:sockets — user may be offline`,
-        );
-        return false;
-      }
-
-      const [pid] = socketEntry.split(":");
-
-      await publisher.publish(
-        `socket:worker-${pid}`,
-        JSON.stringify({ userId, eventName, payload }),
+      const reached = await publishToNodes(
+        getWebSocketRedis("client"),
+        getWebSocketRedis("publisher"),
+        options.tenantId ?? null,
+        userId,
+        eventName,
+        payload,
       );
-      return true;
+      if (reached === 0) {
+        logger.debug?.(
+          `[RedisNotificationPublisher] ${userId} has no live socket — offline`,
+        );
+      }
+      return reached > 0;
     } catch (err) {
       websocketPublishFailuresTotal.inc({
         method: "sendToUser",

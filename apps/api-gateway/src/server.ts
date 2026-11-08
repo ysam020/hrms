@@ -20,7 +20,12 @@ import {
   authLimiter,
   rateLimitStoreHealth,
 } from "./config/rateLimiters";
-import { enforceSocketAccess, resolveSocketUserId } from "./config/socketAuth";
+import {
+  enforceSocketAccess,
+  resolveSocketUserId,
+  authorizeSocketDelivery,
+  startAccountRevocationListener,
+} from "./config/socketAuth";
 import {
   registerGracefulShutdown,
   trackConnections,
@@ -251,6 +256,13 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     server as any,
     allowedOrigins,
     resolveSocketUserId,
+    // Every targeted delivery re-checks the recipient just before emit.
+    { authorizeDelivery: authorizeSocketDelivery },
+  );
+  // Cluster-wide revocations close sockets on every worker at once.
+  const stopRevocationListener = startAccountRevocationListener(
+    redisAdapter,
+    io,
   );
   // Before the feature handlers: their event listeners then sit behind the
   // per-event account check registered here.
@@ -291,7 +303,10 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     closeWorker,
     stopBackgroundJobs: () => stopBackgroundJobs(),
     closeQueues,
-    closeWebSocketRedis: () => redisAdapter.cleanup(),
+    closeWebSocketRedis: async () => {
+      await stopRevocationListener();
+      await redisAdapter.cleanup();
+    },
     closeGrpcClients,
     disconnectDatabases,
     flushTelemetry,

@@ -452,7 +452,7 @@ async function processJob(job: Job<NotificationJobData>) {
     });
 
     // Deliver via WebSocket to connected clients through the API gateway.
-    // sendToUser()/the socket registry are keyed by userId, not username —
+    // sendToUser()/the socket registry are keyed by (tenantId, userId), not username —
     // resolvedRecipients above already is that userId list (either passed
     // directly as `recipients`, or resolved from pushTargets/targetUser),
     // so reuse it here instead of re-deriving anything from usernames.
@@ -462,7 +462,9 @@ async function processJob(job: Job<NotificationJobData>) {
       const live = await realtimeEligible(resolvedRecipients);
       await Promise.all(
         live.map((userId) =>
-          wsPublisher.sendToUser(userId, "notification", notification),
+          wsPublisher.sendToUser(userId, "notification", notification, {
+            tenantId,
+          }),
         ),
       );
       if (socketEvent) {
@@ -472,6 +474,7 @@ async function processJob(job: Job<NotificationJobData>) {
               userId,
               socketEvent,
               socketPayload ?? notification,
+              { tenantId },
             ),
           ),
         );
@@ -603,7 +606,9 @@ async function processSilentJob(
     const live = await realtimeEligible(resolvedRecipients);
     await Promise.all(
       live.map((userId) =>
-        wsPublisher.sendToUser(userId, "notification", pingPayload),
+        wsPublisher.sendToUser(userId, "notification", pingPayload, {
+          tenantId: job.data.tenantId ?? null,
+        }),
       ),
     );
     if (socketEvent) {
@@ -613,6 +618,7 @@ async function processSilentJob(
             userId,
             socketEvent,
             socketPayload ?? pingPayload,
+            { tenantId: job.data.tenantId ?? null },
           ),
         ),
       );

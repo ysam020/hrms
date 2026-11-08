@@ -5,7 +5,7 @@ import {
   checkUserHasHistoricalRecords,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { cacheManager } from "@hrms/cache";
+import { cacheManager, publishAccountRevocation } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
 export const deleteEmployee = async (
@@ -72,6 +72,10 @@ export const deleteEmployee = async (
       }
 
       await prisma.user.delete({ where: { id } });
+      await publishAccountRevocation({
+        userId: id,
+        reason: "employee-deleted",
+      });
       await invalidate();
       return callback(null, {
         message: MESSAGES.EMPLOYEE_PERMANENTLY_DELETED,
@@ -83,6 +87,11 @@ export const deleteEmployee = async (
       where: { id },
       // Termination also unregisters the person's devices.
       data: { employeeStatus: "Terminated", fcmTokens: [] },
+    });
+    // Gateways close this person's sockets and drop cached access.
+    await publishAccountRevocation({
+      userId: id,
+      reason: "employee-deactivated",
     });
 
     await invalidate();

@@ -168,19 +168,23 @@ describe("notificationWorker", () => {
       ALICE,
       "notification",
       expect.anything(),
+      { tenantId: TENANT },
     );
     expect(mockSendToUser).toHaveBeenCalledWith(
       BOB,
       "notification",
       expect.anything(),
+      { tenantId: TENANT },
     );
     expect(mockSendToUser).not.toHaveBeenCalledWith(
       "alice",
       expect.anything(),
       expect.anything(),
+      expect.anything(),
     );
     expect(mockSendToUser).not.toHaveBeenCalledWith(
       "bob",
+      expect.anything(),
       expect.anything(),
       expect.anything(),
     );
@@ -202,11 +206,13 @@ describe("notificationWorker", () => {
       ALICE,
       "notification",
       expect.anything(),
+      { tenantId: TENANT },
     );
     expect(mockSendToUser).toHaveBeenCalledWith(
       BOB,
       "notification",
       expect.anything(),
+      { tenantId: TENANT },
     );
   });
 
@@ -221,12 +227,18 @@ describe("notificationWorker", () => {
       socketPayload: { username: "alice" },
     });
 
-    expect(mockSendToUser).toHaveBeenCalledWith(ALICE, "kyc-edit-requested", {
-      username: "alice",
-    });
+    expect(mockSendToUser).toHaveBeenCalledWith(
+      ALICE,
+      "kyc-edit-requested",
+      {
+        username: "alice",
+      },
+      { tenantId: TENANT },
+    );
     expect(mockSendToUser).not.toHaveBeenCalledWith(
       "alice",
       "kyc-edit-requested",
+      expect.anything(),
       expect.anything(),
     );
   });
@@ -524,6 +536,7 @@ describe("notificationWorker", () => {
         BOB,
         "notification",
         expect.anything(),
+        { tenantId: TENANT },
       );
       expect(result.unresolvedTargets).toEqual([]);
     });
@@ -534,6 +547,7 @@ describe("notificationWorker", () => {
         BOB,
         "notification",
         expect.anything(),
+        { tenantId: TENANT },
       );
     });
 
@@ -549,6 +563,7 @@ describe("notificationWorker", () => {
         ALICE,
         "notification",
         expect.anything(),
+        { tenantId: TENANT },
       );
       expect(mockSendNotification).not.toHaveBeenCalled();
     });
@@ -601,6 +616,7 @@ describe("notificationWorker", () => {
         ALICE,
         "notification",
         expect.anything(),
+        { tenantId: TENANT },
       );
       expect(mockSendPushNotifications).toHaveBeenCalledWith(
         { tenantId: TENANT, userIds: [ALICE] },
@@ -631,6 +647,7 @@ describe("notificationWorker", () => {
         ALICE,
         "notification",
         expect.objectContaining({ silent: true }),
+        { tenantId: TENANT },
       );
       expect(mockSendNotification).not.toHaveBeenCalled();
       expect(mockSendPushNotifications).toHaveBeenCalledWith(
@@ -671,11 +688,13 @@ describe("notificationWorker", () => {
         ALICE,
         "notification",
         expect.anything(),
+        { tenantId: TENANT },
       );
       expect(mockSendToUser).toHaveBeenCalledWith(
         BOB,
         "notification",
         expect.anything(),
+        { tenantId: TENANT },
       );
       expect(mockSendNotification).not.toHaveBeenCalled();
       expect(mockSendPushNotifications).toHaveBeenCalledWith(
@@ -910,9 +929,11 @@ describe("notificationWorker — recipient eligibility at delivery time", () => 
       ALICE,
       "notification",
       expect.anything(),
+      { tenantId: TENANT },
     );
     expect(mockSendToUser).not.toHaveBeenCalledWith(
       BOB,
+      expect.anything(),
       expect.anything(),
       expect.anything(),
     );
@@ -930,6 +951,7 @@ describe("notificationWorker — recipient eligibility at delivery time", () => 
       BOB,
       "notification",
       expect.anything(),
+      { tenantId: TENANT },
     );
     mockSendToUser.mockClear();
     (prisma as any).notification.findFirst.mockResolvedValue(null); // first attempt "failed" before persisting

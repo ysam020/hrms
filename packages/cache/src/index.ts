@@ -17,3 +17,9 @@ export {
   type RefreshTokenMeta,
   type TokenValidation,
 } from "./refreshTokenStore";
+export {
+  ACCOUNT_REVOCATION_CHANNEL,
+  publishAccountRevocation,
+  subscribeAccountRevocations,
+  type AccountRevocation,
+} from "./accountRevocation";

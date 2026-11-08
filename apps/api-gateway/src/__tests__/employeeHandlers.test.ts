@@ -83,6 +83,8 @@ jest.mock("@hrms/cache", () => ({
   },
   // Terminating someone revokes their refresh token.
   revokeRefreshToken: jest.fn().mockResolvedValue(undefined),
+  // Cluster-wide revocation (other gateways close sockets now).
+  publishAccountRevocation: jest.fn().mockResolvedValue(true),
 }));
 jest.mock("../services/accountAccess", () => ({
   invalidateAccountAccess: jest.fn(),
@@ -139,7 +141,8 @@ describe("employeeHandlers", () => {
   });
 
   describe("editEmployeeDetails — leaving employment ends sessions", () => {
-    const { revokeRefreshToken } = jest.requireMock("@hrms/cache");
+    const { revokeRefreshToken, publishAccountRevocation } =
+      jest.requireMock("@hrms/cache");
     const { invalidateAccountAccess } = jest.requireMock(
       "../services/accountAccess",
     );
@@ -158,6 +161,10 @@ describe("employeeHandlers", () => {
         );
         expect(revokeRefreshToken).toHaveBeenCalledWith("u9");
         expect(invalidateAccountAccess).toHaveBeenCalledWith("u9");
+        expect(publishAccountRevocation).toHaveBeenCalledWith({
+          userId: "u9",
+          reason: `employee-status:${employeeStatus}`,
+        });
         // Devices unregistered in the SAME write as the status.
         expect(prisma.user.update).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -178,6 +185,7 @@ describe("employeeHandlers", () => {
         makeRes(),
       );
       expect(revokeRefreshToken).not.toHaveBeenCalled();
+      expect(publishAccountRevocation).not.toHaveBeenCalled();
       expect(
         (prisma.user.update as jest.Mock).mock.calls.at(-1)[0].data.fcmTokens,
       ).toBeUndefined();

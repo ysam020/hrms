@@ -5,6 +5,7 @@ import {
   runWithTenant,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { publishAccountRevocation } from "@hrms/cache";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
@@ -27,6 +28,11 @@ async function processTenantResignations(
       where: { id: resignation.userId },
       // The last working day also unregisters the person's devices.
       data: { employeeStatus: "Resigned", fcmTokens: [] },
+    });
+    // Gateways close this person's sockets and drop cached access.
+    await publishAccountRevocation({
+      userId: resignation.userId,
+      reason: "resignation-effective",
     });
   }
 

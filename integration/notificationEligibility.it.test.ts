@@ -21,7 +21,7 @@ import { startNotificationWorker } from "../apps/notification-service/src/worker
 const TENANT = "6d0000000000000000000001";
 const ALICE = "6e0000000000000000000001";
 const BOB = "6e0000000000000000000002";
-const FAKE_PID = "424242"; // the "gateway worker" whose channel we listen on
+const FAKE_NODE = "it-host:424242:feedface"; // the "gateway node" whose channel we listen on
 const oid = (id: string) => ({ $oid: id });
 
 let workers: Worker[] = [];
@@ -66,14 +66,14 @@ async function seed() {
     insert: "users",
     documents: [user(ALICE, "alice"), user(BOB, "bob")],
   });
-  // Both have an open socket on our fake gateway worker.
-  await redis.hset(
-    "user:sockets",
-    ALICE,
-    `${FAKE_PID}:sock-a`,
-    BOB,
-    `${FAKE_PID}:sock-b`,
-  );
+  // Both have an open socket on our fake gateway node (registry:
+  // per-(tenant,user) node set + a live node + its delivery channel).
+  await redis
+    .pipeline()
+    .sadd(`ws:v2:u:${TENANT}:${ALICE}`, FAKE_NODE)
+    .sadd(`ws:v2:u:${TENANT}:${BOB}`, FAKE_NODE)
+    .set(`ws:v2:alive:${FAKE_NODE}`, "1", "PX", 60_000)
+    .exec();
 }
 
 /** What termination writes (handlers/employee.ts editEmployeeDetails). */
@@ -109,7 +109,7 @@ async function waitForJob(id: string, timeoutMs = 15000) {
 beforeAll(async () => {
   redis = new Redis(process.env.REDIS_URL!);
   sub = new Redis(process.env.REDIS_URL!);
-  await sub.subscribe(`socket:worker-${FAKE_PID}`);
+  await sub.subscribe(`ws:v2:node:${FAKE_NODE}`);
   sub.on("message", (_ch, raw) => {
     const m = JSON.parse(raw);
     delivered.push({ userId: m.userId, eventName: m.eventName });

@@ -277,7 +277,9 @@ describe("Real Socket.IO clients", () => {
     s.connect();
     await once(s, "connect");
     await new Promise((r) => setTimeout(r, 300));
-    await fetch(`http://127.0.0.1:${A}/push/${CAROL}`, { method: "POST" });
+    await fetch(`http://127.0.0.1:${A}/push/${CAROL}?tenant=${TENANT}`, {
+      method: "POST",
+    });
     await new Promise((r) => setTimeout(r, 800));
     expect(received).toBe(1);
     s.disconnect();

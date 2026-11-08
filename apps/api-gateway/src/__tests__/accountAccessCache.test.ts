@@ -25,6 +25,8 @@ jest.mock("@hrms/logger", () => ({
 import {
   resolveAccountAccess,
   invalidateAccountAccess,
+  invalidateTenantAccess,
+  flushAccountAccessDecisions,
   clearAccountAccessCache,
 } from "../services/accountAccess";
 
@@ -44,6 +46,52 @@ beforeEach(() => {
   Date.now = () => now;
 });
 afterAll(() => (Date.now = realNow));
+
+describe("Bounded-age decisions and wider invalidation", () => {
+  it("maxAgeMs re-checks a decision older than the bound (but within the TTL)", async () => {
+    await resolveAccountAccess("u", "t");
+    now += 4_000;
+    await resolveAccountAccess("u", "t", { maxAgeMs: 5_000 });
+    expect(mockCheck).toHaveBeenCalledTimes(1); // 4 s old: still fresh enough
+    now += 2_000;
+    await resolveAccountAccess("u", "t", { maxAgeMs: 5_000 });
+    expect(mockCheck).toHaveBeenCalledTimes(2); // 6 s old: re-checked
+  });
+
+  it("maxAgeMs: 0 always re-checks; the new decision then serves ordinary callers", async () => {
+    await resolveAccountAccess("u", "t");
+    await resolveAccountAccess("u", "t", { maxAgeMs: 0 });
+    expect(mockCheck).toHaveBeenCalledTimes(2);
+    await resolveAccountAccess("u", "t");
+    expect(mockCheck).toHaveBeenCalledTimes(2);
+  });
+
+  it("maxAgeMs can never extend a decision past the TTL", async () => {
+    await resolveAccountAccess("u", "t");
+    now += 31_000;
+    await resolveAccountAccess("u", "t", { maxAgeMs: 600_000 });
+    expect(mockCheck).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidateTenantAccess drops every user of that tenant only", async () => {
+    await resolveAccountAccess("u1", "t1");
+    await resolveAccountAccess("u2", "t1");
+    await resolveAccountAccess("u1", "t2");
+    invalidateTenantAccess("t1");
+    await resolveAccountAccess("u1", "t1");
+    await resolveAccountAccess("u2", "t1");
+    await resolveAccountAccess("u1", "t2");
+    expect(mockCheck).toHaveBeenCalledTimes(5);
+  });
+
+  it("flushAccountAccessDecisions drops everything and reports how many", async () => {
+    await resolveAccountAccess("u1", "t1");
+    await resolveAccountAccess("u2", "t1");
+    expect(flushAccountAccessDecisions()).toBe(2);
+    await resolveAccountAccess("u1", "t1");
+    expect(mockCheck).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe("resolveAccountAccess cache", () => {
   it("serves repeats within the TTL from one lookup, shared by concurrent callers", async () => {
