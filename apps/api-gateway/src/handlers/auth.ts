@@ -8,7 +8,12 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
-import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
+import {
+  aesEncrypt,
+  aesDecrypt,
+  readSensitiveForDisplay,
+  readFaceDescriptor,
+} from "@hrms/crypto";
 import { recordLoginEvent } from "../services/loginEventService";
 import { getActiveSettings } from "./tenantSettings";
 import { hasSupportAccess } from "../services/supportStore";
@@ -23,6 +28,8 @@ const REFRESH_COOKIE_OPTIONS = {
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — matches REFRESH_TOKEN_EXPIRE default
   path: "/api/v1/refresh-token",
 };
+
+const usableDescriptor = (d: number[] | null) => (d?.length === 128 ? d : null);
 
 const jsRedirect = (res: Response, url: string) => {
   // Use a standard HTTP redirect — inline <script> is blocked by CSP script-src 'self'
@@ -140,40 +147,76 @@ export async function fetchFullProfile(
     fullName,
     dob: u.dob || "",
     blood_group: u.blood_group || "",
-    mobile: safeDecrypt(u.mobile),
+    mobile: readSensitiveForDisplay(u.mobile, "mobile"),
     official_email: u.official_email || "",
     personalEmail: u.personalEmail || "",
     designation: u.designation || "",
     department: u.department || "",
     joining_date: u.joining_date || "",
     employee_photo: u.employee_photo || "",
-    communication_address_line_1: safeDecrypt(u.communication_address_line_1),
-    communication_address_line_2: safeDecrypt(u.communication_address_line_2),
-    communication_address_city: safeDecrypt(u.communication_address_city),
-    communication_address_state: safeDecrypt(u.communication_address_state),
-    communication_address_pincode: safeDecrypt(u.communication_address_pincode),
-    permanent_address_line_1: safeDecrypt(u.permanent_address_line_1),
-    permanent_address_line_2: safeDecrypt(u.permanent_address_line_2),
-    permanent_address_city: safeDecrypt(u.permanent_address_city),
-    permanent_address_state: safeDecrypt(u.permanent_address_state),
-    permanent_address_pincode: safeDecrypt(u.permanent_address_pincode),
-    bank_account_no: safeDecrypt(u.bank_account_no),
+    communication_address_line_1: readSensitiveForDisplay(
+      u.communication_address_line_1,
+      "communication_address_line_1",
+    ),
+    communication_address_line_2: readSensitiveForDisplay(
+      u.communication_address_line_2,
+      "communication_address_line_2",
+    ),
+    communication_address_city: readSensitiveForDisplay(
+      u.communication_address_city,
+      "communication_address_city",
+    ),
+    communication_address_state: readSensitiveForDisplay(
+      u.communication_address_state,
+      "communication_address_state",
+    ),
+    communication_address_pincode: readSensitiveForDisplay(
+      u.communication_address_pincode,
+      "communication_address_pincode",
+    ),
+    permanent_address_line_1: readSensitiveForDisplay(
+      u.permanent_address_line_1,
+      "permanent_address_line_1",
+    ),
+    permanent_address_line_2: readSensitiveForDisplay(
+      u.permanent_address_line_2,
+      "permanent_address_line_2",
+    ),
+    permanent_address_city: readSensitiveForDisplay(
+      u.permanent_address_city,
+      "permanent_address_city",
+    ),
+    permanent_address_state: readSensitiveForDisplay(
+      u.permanent_address_state,
+      "permanent_address_state",
+    ),
+    permanent_address_pincode: readSensitiveForDisplay(
+      u.permanent_address_pincode,
+      "permanent_address_pincode",
+    ),
+    bank_account_no: readSensitiveForDisplay(
+      u.bank_account_no,
+      "bank_account_no",
+    ),
     bank_name: u.bank_name || "",
     ifsc_code: u.ifsc_code || "",
-    aadhar_no: safeDecrypt(u.aadhar_no),
-    aadhar_photo_front: safeDecrypt(u.aadhar_photo_front),
-    aadhar_photo_back: safeDecrypt(u.aadhar_photo_back),
-    pan_no: safeDecrypt(u.pan_no),
-    pan_photo: safeDecrypt(u.pan_photo),
-    pf_no: safeDecrypt(u.pf_no),
-    uan_no: safeDecrypt(u.uan_no),
-    esic_no: safeDecrypt(u.esic_no),
+    aadhar_no: readSensitiveForDisplay(u.aadhar_no, "aadhar_no"),
+    aadhar_photo_front: readSensitiveForDisplay(
+      u.aadhar_photo_front,
+      "aadhar_photo_front",
+    ),
+    aadhar_photo_back: readSensitiveForDisplay(
+      u.aadhar_photo_back,
+      "aadhar_photo_back",
+    ),
+    pan_no: readSensitiveForDisplay(u.pan_no, "pan_no"),
+    pan_photo: readSensitiveForDisplay(u.pan_photo, "pan_photo"),
+    pf_no: readSensitiveForDisplay(u.pf_no, "pf_no"),
+    uan_no: readSensitiveForDisplay(u.uan_no, "uan_no"),
+    esic_no: readSensitiveForDisplay(u.esic_no, "esic_no"),
     fcmTokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [],
     events: Array.isArray(u.events) ? u.events : [],
-    face_descriptor:
-      Array.isArray(u.face_descriptor) && u.face_descriptor.length === 128
-        ? u.face_descriptor
-        : null,
+    face_descriptor: usableDescriptor(readFaceDescriptor(u.face_descriptor)),
   };
 }
 

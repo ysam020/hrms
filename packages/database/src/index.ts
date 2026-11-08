@@ -29,6 +29,11 @@ export {
   type UserHistoricalRecordsResult,
 } from "./userDeletionGuard";
 export { canonicalizeEmail, getEmailDomain } from "./email";
+export {
+  sensitiveWritesAllowed,
+  sealUserWriteArgs,
+  SensitiveWriteBlockedError,
+} from "./fieldEncryption";
 export { redactAuditValue, isSensitiveAuditField } from "./auditMiddleware";
 export { generateUniqueUsername } from "./username";
 export {

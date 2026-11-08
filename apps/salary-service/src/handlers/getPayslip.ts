@@ -1,3 +1,4 @@
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -203,9 +204,12 @@ export const getPayslip = async (
           department: employee.department ?? "",
           designation: employee.designation ?? "",
           joiningDate: employee.joining_date?.toISOString() ?? "",
-          uanNo: employee.uan_no ?? "",
-          bankAccountNo: employee.bank_account_no ?? "",
-          panNo: employee.pan_no ?? "",
+          uanNo: readSensitiveForDisplay(employee.uan_no, "uan_no"),
+          bankAccountNo: readSensitiveForDisplay(
+            employee.bank_account_no,
+            "bank_account_no",
+          ),
+          panNo: readSensitiveForDisplay(employee.pan_no, "pan_no"),
           dob: employee.dob?.toISOString() ?? "",
         },
         salaryStructure: toWireSalaryStructure(salaryStructure),

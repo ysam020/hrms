@@ -725,7 +725,7 @@ describe("CacheManager", () => {
     it.each([
       ["t:abc:dashboard:v1:workforce", "dashboard"],
       ["tenantSettings:leave:abc", "tenantSettings"],
-      ["t:abc:user:v6:42", "user"],
+      ["t:abc:user:v7:42", "user"],
       ["t:abc:*", "other"],
       ["6553f0a1b2c3d4e5f6a7b8c9:x", "other"],
     ])("%s → %s", (key, family) => {

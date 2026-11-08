@@ -65,7 +65,8 @@ jest.mock("@hrms/crypto", () => ({
     if (v === "bad-token") throw new Error("Decrypt failed");
     return v;
   }),
-  safeDecrypt: jest.fn((v: any) => v || ""),
+  readSensitiveForDisplay: jest.fn((v: any) => v || ""),
+  readFaceDescriptor: jest.fn((v: any) => (Array.isArray(v) ? v : null)),
 }));
 
 jest.mock("@hrms/cache", () => ({

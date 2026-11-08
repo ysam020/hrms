@@ -1,3 +1,4 @@
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -38,12 +39,15 @@ export const updateUser = async (
     const tenantId = getTenantId() ?? "global";
     await Promise.all([
       cacheManager.invalidatePattern(`t:${tenantId}:users:*`),
-      cacheManager.delete(`t:${tenantId}:user:v6:${userId}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${userId}`),
     ]);
     return callback(null, {
       message: MESSAGES.USER_UPDATED,
       status: status.OK,
-      data: { ...user },
+      data: {
+        ...user,
+        mobile: readSensitiveForDisplay(user.mobile, "mobile"),
+      },
     });
   } catch (err) {
     logger.error("UpdateUser error:", { err });

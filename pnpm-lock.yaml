@@ -380,6 +380,9 @@ importers:
 
   apps/auth-service:
     dependencies:
+      "@hrms/crypto":
+        specifier: workspace:*
+        version: link:../../packages/crypto
       "@hrms/cache":
         specifier: workspace:*
         version: link:../../packages/cache
@@ -435,6 +438,9 @@ importers:
 
   apps/employee-service:
     dependencies:
+      "@hrms/crypto":
+        specifier: workspace:*
+        version: link:../../packages/crypto
       "@hrms/cache":
         specifier: workspace:*
         version: link:../../packages/cache
@@ -690,6 +696,9 @@ importers:
 
   apps/salary-service:
     dependencies:
+      "@hrms/crypto":
+        specifier: workspace:*
+        version: link:../../packages/crypto
       "@hrms/common":
         specifier: workspace:*
         version: link:../../packages/common
@@ -994,6 +1003,9 @@ importers:
 
   packages/database:
     dependencies:
+      "@hrms/crypto":
+        specifier: workspace:*
+        version: link:../crypto
       "@prisma/client":
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)

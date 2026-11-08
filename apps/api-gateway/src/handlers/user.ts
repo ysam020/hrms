@@ -1,3 +1,4 @@
+import { readFaceDescriptor } from "@hrms/crypto";
 import { Request, Response } from "express";
 import { salary } from "@hrms/proto";
 import { userClient, salaryClient, grpcCall } from "../grpc/clients";
@@ -179,9 +180,8 @@ export async function checkFaceDescriptor(req: Request, res: Response) {
       where: { id: user!.userId },
       select: { face_descriptor: true },
     });
-    const descriptor = (row?.face_descriptor as number[] | null) ?? [];
-    const hasDescriptor =
-      Array.isArray(descriptor) && descriptor.length === 128;
+    const descriptor = readFaceDescriptor(row?.face_descriptor);
+    const hasDescriptor = descriptor?.length === 128;
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Face descriptor status fetched",
       data: {

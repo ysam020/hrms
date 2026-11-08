@@ -1,3 +1,4 @@
+import { readSensitiveStrict } from "@hrms/crypto";
 /**
  * Payroll disbursement — extracted out of payroll.ts's updatePayrollRunStatus
  * handler so it can run as a resumable BullMQ job (see
@@ -294,7 +295,21 @@ export async function runPayrollDisbursement(
 
     for (const li of retryableItems) {
       const emp = empMap.get(li.userId);
-      if (!emp || !emp.bank_account_no || !emp.ifsc_code) {
+      let bankAccountNo = "";
+      let bankReason = "Missing bank details";
+      try {
+        bankAccountNo = readSensitiveStrict(
+          emp?.bank_account_no,
+          "bank_account_no",
+        );
+      } catch (err) {
+        bankReason = "Bank details could not be read";
+        logger.error("Payout: bank details could not be opened", {
+          code: (err as { code?: string }).code,
+          lineItemId: li.id,
+        });
+      }
+      if (!emp || !bankAccountNo || !emp.ifsc_code) {
         // Should never reach here after the pre-flight check, but be safe.
         const { status: nextStatus, attempts } = nextFailureStatus(
           li.payoutAttempts ?? 0,
@@ -303,10 +318,7 @@ export async function runPayrollDisbursement(
           where: { id: li.id },
           data: {
             payoutStatus: nextStatus,
-            payoutFailureReason: failureReasonFor(
-              "Missing bank details",
-              nextStatus,
-            ),
+            payoutFailureReason: failureReasonFor(bankReason, nextStatus),
             payoutInitiatedAt: new Date(),
             payoutAttempts: attempts,
           },
@@ -346,7 +358,7 @@ export async function runPayrollDisbursement(
           rzpXAuth,
           contactId,
           holderName,
-          emp.bank_account_no!,
+          bankAccountNo,
           emp.ifsc_code!,
         );
         const payout = await createRzpPayout(rzpXAuth, {

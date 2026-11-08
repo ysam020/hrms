@@ -1,3 +1,4 @@
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -73,7 +74,7 @@ export const listUsers = async (
         role: (u.role ?? []).join(","),
         firstName: u.first_name ?? "",
         lastName: u.last_name ?? "",
-        mobile: u.mobile ?? "",
+        mobile: readSensitiveForDisplay(u.mobile, "mobile"),
         department: u.department ?? "",
         designation: u.designation ?? "",
         employeeStatus: u.employeeStatus ?? "",

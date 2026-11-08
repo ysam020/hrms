@@ -48,7 +48,7 @@ jest.mock("@hrms/db", () => {
 });
 
 jest.mock("@hrms/crypto", () => ({
-  safeDecrypt: jest.fn((v: any) => v),
+  readSensitiveForDisplay: jest.fn((v: any) => v),
 }));
 
 jest.mock("@hrms/common", () => ({

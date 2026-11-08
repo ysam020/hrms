@@ -110,8 +110,8 @@ describe("submitKyc", () => {
     // /get-user-data/:username (KYC edit-prefill + HR detail page) reads
     // through user-service's GetUser RPC cache — a separate key namespace
     // that must also be cleared, or that page keeps showing stale KYC data.
-    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:v6:u1");
-    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:v6:john");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:v7:u1");
+    expect(mockCacheDelete).toHaveBeenCalledWith("t:t1:user:v7:john");
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 0 }),

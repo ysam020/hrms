@@ -21,7 +21,7 @@ import {
 } from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
-import { safeDecrypt } from "@hrms/crypto";
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { isPrivileged } from "./approvalChains";
 import { isHrOrAboveCaller } from "../utils/user";
 import { getSeatStatus } from "../utils/planLimits";
@@ -162,6 +162,16 @@ const RESTRICTED_EMPLOYEE_DETAIL_FIELDS = [
   "dateOfAbscond",
 ] as const;
 
+// The cached copy keeps these sealed; they are opened per response.
+function openEmployeeDetails(data: Record<string, any>): Record<string, any> {
+  return {
+    ...data,
+    pf_no: readSensitiveForDisplay(data.pf_no, "pf_no"),
+    uan_no: readSensitiveForDisplay(data.uan_no, "uan_no"),
+    esic_no: readSensitiveForDisplay(data.esic_no, "esic_no"),
+  };
+}
+
 async function scopeEmployeeDetails(
   authReq: AuthRequest,
   targetUserId: string,
@@ -189,7 +199,11 @@ export async function getEmployeeDetails(req: Request, res: Response) {
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         message: "Employee details fetched",
-        data: await scopeEmployeeDetails(authReq, cached.id, cached),
+        data: await scopeEmployeeDetails(
+          authReq,
+          cached.id,
+          openEmployeeDetails(cached),
+        ),
       });
     }
 
@@ -242,9 +256,6 @@ export async function getEmployeeDetails(req: Request, res: Response) {
     const data = {
       ...user,
       tenantRole: membership?.role ?? null,
-      pf_no: safeDecrypt(user.pf_no),
-      uan_no: safeDecrypt(user.uan_no),
-      esic_no: safeDecrypt(user.esic_no),
       salary: salaryRow?.grossEarnings ?? 0,
       salaryStructure: {
         basicPay: salaryRow?.basicPay ?? 0,
@@ -261,7 +272,11 @@ export async function getEmployeeDetails(req: Request, res: Response) {
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Employee details fetched",
-      data: await scopeEmployeeDetails(authReq, user.id, data),
+      data: await scopeEmployeeDetails(
+        authReq,
+        user.id,
+        openEmployeeDetails(data),
+      ),
     });
   } catch (error: unknown) {
     logger.error("GET /get-employee-details/:username error:", { error });
