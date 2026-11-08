@@ -73,6 +73,7 @@ const MASTER_MODELS = new Set([
   "supportActivity",
   "supportCounter",
   "billingPayment",
+  "webhookInboxEvent",
 ]);
 
 // Federated proxy:

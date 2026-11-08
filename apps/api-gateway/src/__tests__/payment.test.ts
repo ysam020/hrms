@@ -53,6 +53,19 @@ jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
+const mockInbox = {
+  claimWebhookEvent: jest.fn(),
+  completeWebhookEvent: jest.fn(),
+  failWebhookEvent: jest.fn(),
+};
+jest.mock("../services/webhookInbox", () => ({
+  claimWebhookEvent: (...a: unknown[]) => mockInbox.claimWebhookEvent(...a),
+  completeWebhookEvent: (...a: unknown[]) =>
+    mockInbox.completeWebhookEvent(...a),
+  failWebhookEvent: (...a: unknown[]) => mockInbox.failWebhookEvent(...a),
+  webhookBodyDigest: () => "body:digest",
+}));
+
 jest.mock("../services/tenantTokenStore");
 
 const mockRzpPaymentsFetch = jest.fn();
@@ -1103,7 +1116,10 @@ describe("payment handlers", () => {
 
     beforeEach(() => {
       process.env.RAZORPAY_WEBHOOK_SECRET = "webhook_secret";
-      mockTokenStore.tryReserveWebhookEvent.mockResolvedValue(true);
+      mockInbox.claimWebhookEvent.mockResolvedValue({
+        outcome: "claimed",
+        id: "inbox-1",
+      });
     });
 
     it("returns 500 when the webhook secret is not configured", async () => {
@@ -1132,35 +1148,87 @@ describe("payment handlers", () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
-    it("returns 500 for a body that isn't valid JSON (caught by the outer handler)", async () => {
-      const rawBody = Buffer.from("not json", "utf8");
+    const charged = (extra: object = {}) =>
+      makeWebhookReq({
+        event: "subscription.charged",
+        payload: {
+          subscription: { entity: { id: "sub_1", ...extra } },
+          payment: { entity: { id: "pay_1" } },
+        },
+      });
+
+    it("skips an event already processed", async () => {
+      mockInbox.claimWebhookEvent.mockResolvedValue({ outcome: "duplicate" });
+      const res = makeRes();
+      await handleWebhook(charged(), res);
+      expect(res.json).toHaveBeenCalledWith({ ok: true });
+      expect(mockTenantFindFirst).not.toHaveBeenCalled();
+    });
+
+    it("asks for a retry while another delivery is working", async () => {
+      mockInbox.claimWebhookEvent.mockResolvedValue({ outcome: "in_progress" });
+      const res = makeRes();
+      await handleWebhook(charged(), res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(mockTenantFindFirst).not.toHaveBeenCalled();
+    });
+
+    it("records a failure and returns 500 so the provider retries", async () => {
+      mockTenantFindFirst.mockRejectedValue(new Error("database down"));
+      const res = makeRes();
+      await handleWebhook(charged(), res);
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(mockInbox.failWebhookEvent).toHaveBeenCalledWith(
+        "inbox-1",
+        expect.any(Error),
+      );
+      expect(mockInbox.completeWebhookEvent).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid body before claiming anything", async () => {
+      const raw = Buffer.from("{not json");
       const signature = createHmac("sha256", "webhook_secret")
-        .update(rawBody)
+        .update(raw)
         .digest("hex");
       const req: any = {
         headers: { "x-razorpay-signature": signature },
-        body: rawBody,
+        body: raw,
       };
       const res = makeRes();
-
       await handleWebhook(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(mockInbox.claimWebhookEvent).not.toHaveBeenCalled();
     });
 
-    it("skips already-processed events (idempotency)", async () => {
-      mockTokenStore.tryReserveWebhookEvent.mockResolvedValue(false);
-      const req = makeWebhookReq({
-        event: "subscription.charged",
-        payload: { subscription: { entity: { id: "sub_1" } } },
+    it("does not extend a plan for a charge already applied", async () => {
+      mockTenantFindFirst.mockResolvedValue({
+        id: "t1",
+        planTier: "starter",
+        lastChargePaymentId: "pay_1",
+        planExpiresAt: new Date("2030-01-01"),
       });
-      req.headers["x-razorpay-event-id"] = "evt_1";
       const res = makeRes();
+      await handleWebhook(charged(), res);
+      expect(mockTenantUpdate).not.toHaveBeenCalled();
+      expect(mockInbox.completeWebhookEvent).toHaveBeenCalledWith("inbox-1");
+    });
 
-      await handleWebhook(req, res);
-
-      expect(res.json).toHaveBeenCalledWith({ ok: true });
-      expect(mockTenantFindFirst).not.toHaveBeenCalled();
+    it("uses Razorpay's period end, so a healed cycle isn't extended again", async () => {
+      const healed = new Date("2030-02-01T00:00:00Z");
+      mockTenantFindFirst.mockResolvedValue({
+        id: "t1",
+        planTier: "starter",
+        billing: "monthly",
+        planExpiresAt: healed,
+      });
+      const res = makeRes();
+      await handleWebhook(
+        charged({ current_end: Math.floor(healed.getTime() / 1000) }),
+        res,
+      );
+      const data = mockTenantUpdate.mock.calls[0][0].data;
+      expect(data.planExpiresAt.getTime()).toBe(healed.getTime());
+      expect(data.lastChargePaymentId).toBe("pay_1");
     });
 
     it("acks without processing when the payload has no subscription id", async () => {

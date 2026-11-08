@@ -44,6 +44,7 @@ model Tenant {
   // Prisma still maps the resulting duplicate-key error to P2002 on
   // tenant.create() even though the index isn't declared here.
   razorpaySubscriptionId String?
+  lastChargePaymentId    String?
   // Set transiently during a payment-method swap (see confirmPaymentMethodChange
   // in payment.ts) to the subscription being retired; cleared once its
   // cancellation is confirmed. subscriptionReconciler.ts retries the cancel
@@ -2202,4 +2203,26 @@ model BillingPayment {
   @@index([paidAt])
   @@index([status, paidAt])
   @@map("billing_payments")
+}
+
+// Durable record of inbound payment webhooks: lets a failed delivery be
+// retried, and a processed one be recognised as a duplicate. Master DB,
+// because a webhook arrives before any tenant is known.
+model WebhookInboxEvent {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  provider      String
+  eventId       String
+  eventType     String?
+  status        String    // processing | processed | failed | dead
+  attempts      Int       @default(1)
+  leaseUntil    DateTime
+  // Sealed; kept only until the event has been processed.
+  payload       String?
+  lastErrorName String?
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime?
+
+  @@unique([provider, eventId])
+  @@index([status, receivedAt])
+  @@map("webhook_inbox_events")
 }

@@ -16,6 +16,15 @@ import { checkTrialEligibility } from "../services/trial";
 // Trial paths through the payment handlers. Mocks mirror payment.test.ts;
 // Razorpay is fully mocked, so nothing here can reach a real account.
 
+jest.mock("../services/webhookInbox", () => ({
+  claimWebhookEvent: jest.fn().mockResolvedValue({
+    outcome: "claimed",
+    id: "inbox-1",
+  }),
+  completeWebhookEvent: jest.fn(),
+  failWebhookEvent: jest.fn(),
+  webhookBodyDigest: () => "body:digest",
+}));
 jest.mock("@hrms/db", () => ({
   prisma: {
     tenant: {
@@ -514,7 +523,9 @@ describe("payment handlers — free trial", () => {
     });
 
     it("ignores a redelivered event", async () => {
-      mockTokenStore.tryReserveWebhookEvent.mockResolvedValue(false);
+      jest
+        .requireMock("../services/webhookInbox")
+        .claimWebhookEvent.mockResolvedValueOnce({ outcome: "duplicate" });
       await handleWebhook(webhook("subscription.charged"), makeRes());
       expect(db.tenant.findFirst).not.toHaveBeenCalled();
       expect(db.tenant.update).not.toHaveBeenCalled();

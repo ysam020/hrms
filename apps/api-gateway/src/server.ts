@@ -288,6 +288,12 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     workers.push(startPayrollDisbursementWorker(), startPresenceExpiryWorker());
   }
 
+  for (const name of ["RAZORPAY_WEBHOOK_SECRET", "RAZORPAY_X_WEBHOOK_SECRET"]) {
+    if (!process.env[name]) {
+      logger.error(`${name} is not set: these webhooks will be rejected`);
+    }
+  }
+
   server.listen(PORT, () => {
     const protocol = server instanceof http.Server ? "http" : "https";
     logger.info(`API Gateway running on ${protocol} port ${PORT}`);
