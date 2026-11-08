@@ -211,7 +211,9 @@ export async function saveFaceDescriptor(req: Request, res: Response) {
     });
     // Enrolment happens once. Replacing a template would let an employee
     // swap in someone else's face and then pass verification as them.
-    if (readFaceDescriptor(row?.face_descriptor)?.length === 128) {
+    // Judged on the stored value: one that can't be opened still counts.
+    const stored = row?.face_descriptor;
+    if (Array.isArray(stored) ? stored.length > 0 : Boolean(stored)) {
       return apiResponse(res, RESPONSE_STATUS.CONFLICT, {
         message: "A face is already enrolled for this account.",
         code: "FACE_ALREADY_ENROLLED",

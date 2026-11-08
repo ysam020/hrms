@@ -5,6 +5,19 @@ import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
+// The cached copy keeps mobile numbers sealed; they are opened per response.
+function openMobiles<T extends { data: Array<{ mobile: string }> }>(
+  response: T,
+): T {
+  return {
+    ...response,
+    data: response.data.map((u) => ({
+      ...u,
+      mobile: readSensitiveForDisplay(u.mobile, "mobile"),
+    })),
+  };
+}
+
 export const listUsers = async (
   call: ServerUnaryCall<any, any>,
   callback: sendUnaryData<any>,
@@ -27,7 +40,7 @@ export const listUsers = async (
     // already-cached broken response isn't replayed post-fix.
     const cacheKey = `t:${tenantId}:users:v2:${search}:${role}:${department}:p${page}:l${limit}`;
     const cached = await cacheManager.get(cacheKey);
-    if (cached) return callback(null, cached);
+    if (cached) return callback(null, openMobiles(cached as any));
 
     const where: any = {};
     if (search)
@@ -74,7 +87,7 @@ export const listUsers = async (
         role: (u.role ?? []).join(","),
         firstName: u.first_name ?? "",
         lastName: u.last_name ?? "",
-        mobile: readSensitiveForDisplay(u.mobile, "mobile"),
+        mobile: u.mobile ?? "",
         department: u.department ?? "",
         designation: u.designation ?? "",
         employeeStatus: u.employeeStatus ?? "",
@@ -89,7 +102,7 @@ export const listUsers = async (
     await cacheManager.set(cacheKey, response, "user");
     // Also register under a pattern so the whole tenant's user cache can be
     // invalidated with cacheManager.invalidatePattern(`t:${tenantId}:users:*`)
-    return callback(null, response);
+    return callback(null, openMobiles(response));
   } catch (err) {
     logger.error("ListUsers error:", { err });
     return callback(null, {

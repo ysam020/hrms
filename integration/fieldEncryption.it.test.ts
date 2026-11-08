@@ -16,7 +16,7 @@ import {
 
 process.env.CRYPTO_ENCRYPTION_KEY = "c".repeat(64);
 
-import { prisma } from "@hrms/db";
+import { prisma, prismaWithTenant, runWithTenant } from "@hrms/db";
 import {
   runPiiMigration,
   assertMigrationAllowed,
@@ -157,6 +157,34 @@ describe("write middleware", () => {
     const id = await insertRaw({ pan_no: "x" });
     await prisma.user.update({ where: { id }, data: { pan_no: null } });
     expect((await raw(id)).pan_no).toBeNull();
+  });
+});
+
+describe("every client that can write User", () => {
+  const TENANT = "65f000000000000000000abc";
+
+  it("seals writes through the tenant-scoped proxy submitKyc uses", async () => {
+    const id = await insertRaw({ tenantId: { $oid: TENANT } });
+    await runWithTenant(TENANT, null, () =>
+      (prismaWithTenant as any).user.update({
+        where: { id },
+        data: { aadhar_no: AADHAAR, bank_account_no: BANK },
+      }),
+    );
+    const doc = await raw(id);
+    expect(isFieldCiphertext(doc.aadhar_no)).toBe(true);
+    expect(isFieldCiphertext(doc.bank_account_no)).toBe(true);
+  });
+
+  it("seals updateMany through the tenant-scoped proxy", async () => {
+    const id = await insertRaw({ tenantId: { $oid: TENANT } });
+    await runWithTenant(TENANT, null, () =>
+      (prismaWithTenant as any).user.updateMany({
+        where: { id },
+        data: { pan_no: PAN },
+      }),
+    );
+    expect(isFieldCiphertext((await raw(id)).pan_no)).toBe(true);
   });
 });
 
