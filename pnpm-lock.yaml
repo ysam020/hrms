@@ -22,7 +22,6 @@ overrides:
   fast-xml-builder@<=1.1.6: ">=1.1.7 <2.0.0"
   "@babel/plugin-transform-modules-systemjs@>=7.12.0 <=7.29.3": ">=7.29.4 <8.0.0"
   "@babel/core@<=7.29.0": ">=7.29.6 <8.0.0"
-  "@grpc/grpc-js@<1.14.4": ">=1.14.4 <2.0.0"
   linkify-it@<=5.0.0: ">=5.0.1 <6.0.0"
   nodemailer@<9.0.3: ">=9.0.3 <10.0.0"
   vite@>=8.0.0 <=8.0.4: ">=8.0.5 <9.0.0"
@@ -62,14 +61,14 @@ overrides:
   follow-redirects@<1.16.2: ">=1.16.2 <2.0.0"
   body-parser@<1.20.9: ">=1.20.9 <2.0.0"
   dompurify@>=3.4.4 <3.4.17: ">=3.4.17 <4.0.0"
-  "@grpc/grpc-js@<1.14.5": ">=1.14.5 <2.0.0"
+  "@grpc/grpc-js@<1.14.4": ">=1.14.4 <1.14.5"
 
 importers:
   .:
     dependencies:
       "@grpc/grpc-js":
-        specifier: ">=1.14.5 <2.0.0"
-        version: 1.14.7
+        specifier: ^1.14.4
+        version: 1.14.4
       "@grpc/proto-loader":
         specifier: ^0.7.13
         version: 0.7.15
@@ -193,8 +192,8 @@ importers:
         specifier: ^3.1019.0
         version: 3.1024.0
       "@grpc/grpc-js":
-        specifier: ">=1.14.5 <2.0.0"
-        version: 1.14.7
+        specifier: ^1.14.4
+        version: 1.14.4
       "@hrms/approval-engine":
         specifier: workspace:*
         version: link:../../packages/approval-engine
@@ -973,8 +972,8 @@ importers:
         specifier: ^3.1019.0
         version: 3.1024.0
       "@grpc/grpc-js":
-        specifier: ">=1.14.5 <2.0.0"
-        version: 1.14.7
+        specifier: ">=1.14.4 <1.14.5"
+        version: 1.14.4
       "@hrms/logger":
         specifier: workspace:*
         version: link:../logger
@@ -1066,8 +1065,8 @@ importers:
   packages/grpc-client:
     dependencies:
       "@grpc/grpc-js":
-        specifier: ">=1.14.5 <2.0.0"
-        version: 1.14.7
+        specifier: ">=1.14.4 <1.14.5"
+        version: 1.14.4
       "@hrms/logger":
         specifier: workspace:*
         version: link:../logger
@@ -1085,8 +1084,8 @@ importers:
   packages/grpc-server:
     dependencies:
       "@grpc/grpc-js":
-        specifier: ">=1.14.5 <2.0.0"
-        version: 1.14.7
+        specifier: ">=1.14.4 <1.14.5"
+        version: 1.14.4
       "@hrms/db":
         specifier: workspace:*
         version: link:../database
@@ -1107,8 +1106,8 @@ importers:
         specifier: ^3.1028.0
         version: 3.1028.0
       "@grpc/grpc-js":
-        specifier: ">=1.14.5 <2.0.0"
-        version: 1.14.7
+        specifier: ">=1.14.4 <1.14.5"
+        version: 1.14.4
       prom-client:
         specifier: ^15.1.3
         version: 15.1.3
@@ -1145,8 +1144,8 @@ importers:
         specifier: ^2.11.0
         version: 2.11.0
       "@grpc/grpc-js":
-        specifier: ">=1.14.5 <2.0.0"
-        version: 1.14.7
+        specifier: ">=1.14.4 <1.14.5"
+        version: 1.14.4
     devDependencies:
       "@hrms/typescript-config":
         specifier: workspace:*
@@ -5238,7 +5237,7 @@ packages:
       "@firebase/logger": 0.4.4
       "@firebase/util": 1.12.1
       "@firebase/webchannel-wrapper": 1.0.3
-      "@grpc/grpc-js": 1.14.7
+      "@grpc/grpc-js": 1.14.4
       "@grpc/proto-loader": 0.7.15
       tslib: 2.8.1
     dev: false
@@ -5701,10 +5700,10 @@ packages:
     dev: false
     optional: true
 
-  /@grpc/grpc-js@1.14.7:
+  /@grpc/grpc-js@1.14.4:
     resolution:
       {
-        integrity: sha512-W4W/fcBMGRVtG6dW2c7cw2mnpS3hvbBd+oQXjh2iYFTZDk1JJmcNqkM5KSaPubQpamlUUurrlb7G1s9NJeERmQ==,
+        integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==,
       }
     engines: { node: ">=12.10.0" }
     dependencies:
@@ -6783,7 +6782,7 @@ packages:
     peerDependencies:
       "@opentelemetry/api": ^1.3.0
     dependencies:
-      "@grpc/grpc-js": 1.14.7
+      "@grpc/grpc-js": 1.14.4
       "@opentelemetry/api": 1.9.1
       "@opentelemetry/core": 2.9.0(@opentelemetry/api@1.9.1)
       "@opentelemetry/otlp-exporter-base": 0.217.0(@opentelemetry/api@1.9.1)
@@ -6837,7 +6836,7 @@ packages:
     peerDependencies:
       "@opentelemetry/api": ^1.3.0
     dependencies:
-      "@grpc/grpc-js": 1.14.7
+      "@grpc/grpc-js": 1.14.4
       "@opentelemetry/api": 1.9.1
       "@opentelemetry/core": 2.9.0(@opentelemetry/api@1.9.1)
       "@opentelemetry/exporter-metrics-otlp-http": 0.217.0(@opentelemetry/api@1.9.1)
@@ -6908,7 +6907,7 @@ packages:
     peerDependencies:
       "@opentelemetry/api": ^1.3.0
     dependencies:
-      "@grpc/grpc-js": 1.14.7
+      "@grpc/grpc-js": 1.14.4
       "@opentelemetry/api": 1.9.1
       "@opentelemetry/core": 2.9.0(@opentelemetry/api@1.9.1)
       "@opentelemetry/otlp-exporter-base": 0.217.0(@opentelemetry/api@1.9.1)
@@ -7668,7 +7667,7 @@ packages:
     peerDependencies:
       "@opentelemetry/api": ^1.3.0
     dependencies:
-      "@grpc/grpc-js": 1.14.7
+      "@grpc/grpc-js": 1.14.4
       "@opentelemetry/api": 1.9.1
       "@opentelemetry/core": 2.9.0(@opentelemetry/api@1.9.1)
       "@opentelemetry/otlp-exporter-base": 0.217.0(@opentelemetry/api@1.9.1)
@@ -14368,7 +14367,7 @@ packages:
     engines: { node: ">=14" }
     requiresBuild: true
     dependencies:
-      "@grpc/grpc-js": 1.14.7
+      "@grpc/grpc-js": 1.14.4
       "@grpc/proto-loader": 0.7.15
       "@types/long": 4.0.2
       abort-controller: 3.0.0
