@@ -1031,6 +1031,9 @@ importers:
 
   packages/firebase:
     dependencies:
+      "@hrms/common":
+        specifier: workspace:*
+        version: link:../common
       "@hrms/db":
         specifier: workspace:*
         version: link:../database

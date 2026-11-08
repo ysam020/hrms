@@ -1,3 +1,4 @@
+import { assertLivePaymentAllowed } from "@hrms/common";
 import { readSensitiveStrict } from "@hrms/crypto";
 /**
  * Payroll disbursement — extracted out of payroll.ts's updatePayrollRunStatus
@@ -64,6 +65,7 @@ async function getOrCreateRzpContact(
   userId: string,
   name: string,
 ): Promise<string> {
+  assertLivePaymentAllowed();
   const listRes = await fetch(
     `${RZP_X_BASE}/contacts?reference_id=${encodeURIComponent(userId)}&count=1`,
     { headers: { Authorization: auth } },

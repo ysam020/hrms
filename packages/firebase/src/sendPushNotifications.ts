@@ -1,3 +1,4 @@
+import { outboundSideEffectsAllowed } from "@hrms/common";
 import { prisma, BLOCKED_STATUSES } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { getMessaging } from "./admin";
@@ -134,6 +135,11 @@ export async function sendPushNotifications(
     failedCount: 0,
     totalTokens: 0,
   };
+
+  if (!outboundSideEffectsAllowed()) {
+    logger.info("Push notification suppressed in a non-production process");
+    return noTokens;
+  }
 
   let tokenRecords: TokenRecord[] = [];
 

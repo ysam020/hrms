@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { logger } from "@hrms/logger";
+import { outboundSideEffectsAllowed } from "./runtimeSafety";
 
 let resend: Resend | null = null;
 
@@ -28,6 +29,10 @@ export const sendEmail = async (options: {
    * invite card (When/Guests/Yes-No-Maybe) instead of a plain attachment. */
   attachments?: { filename: string; content: string; contentType?: string }[];
 }): Promise<void> => {
+  if (!outboundSideEffectsAllowed()) {
+    logger.info("Email suppressed in a non-production process");
+    return;
+  }
   try {
     const { error } = await getResendClient().emails.send({
       from: options.from,

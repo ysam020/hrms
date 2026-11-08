@@ -56,6 +56,7 @@ import {
 import { setRedisTimingHook } from "@hrms/cache";
 import { withUserAccessScope } from "./services/userAccess";
 import { accountAccessHealth } from "./services/accountAccess";
+import { outboundSideEffectsAllowed } from "@hrms/common";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -279,7 +280,12 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
   // startPayrollDisbursementWorker actually disburses payroll, so running it
   // once per CPU core risks duplicate disbursements. Restrict both to a
   // single designated worker (or the sole process outside cluster mode).
-  if (!cluster.isWorker || cluster.worker?.id === 1) {
+  // A developer's gateway shares production's database, so it must not run
+  // the jobs that write to shared records or call payment APIs.
+  if (
+    (!cluster.isWorker || cluster.worker?.id === 1) &&
+    outboundSideEffectsAllowed()
+  ) {
     void ensureMasterIndexes();
     void import("./migrations/backfillPlanTier").then(({ backfillPlanTier }) =>
       backfillPlanTier(),

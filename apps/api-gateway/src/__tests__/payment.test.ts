@@ -29,6 +29,7 @@ jest.mock("@hrms/db", () => ({
 }));
 
 jest.mock("@hrms/common", () => ({
+  assertLivePaymentAllowed: jest.fn(),
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
   ),
