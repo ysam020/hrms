@@ -1,7 +1,11 @@
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
+
+const open = (value: string | null, field: string) =>
+  value ? readSensitiveForDisplay(value, field) : value;
 
 export const getKycStatus = async (
   call: ServerUnaryCall<any, any>,
@@ -43,7 +47,15 @@ export const getKycStatus = async (
     return callback(null, {
       message: MESSAGES.KYC_STATUS_FETCHED,
       status: status.OK,
-      data: user,
+      data: {
+        ...user,
+        aadhar_no: open(user.aadhar_no, "aadhar_no"),
+        pan_no: open(user.pan_no, "pan_no"),
+        bank_account_no: open(user.bank_account_no, "bank_account_no"),
+        pf_no: open(user.pf_no, "pf_no"),
+        uan_no: open(user.uan_no, "uan_no"),
+        esic_no: open(user.esic_no, "esic_no"),
+      },
     });
   } catch (err) {
     logger.error("GetKycStatus error:", { err });

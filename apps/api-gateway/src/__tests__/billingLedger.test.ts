@@ -16,7 +16,9 @@ const mockRzp = {
   payments: { fetch: jest.fn() },
   invoices: { fetch: jest.fn(), all: jest.fn() },
 };
-jest.mock("../handlers/payment", () => ({ getRazorpay: () => mockRzp }));
+jest.mock("../services/razorpayClient", () => ({
+  getRazorpay: () => mockRzp,
+}));
 
 import {
   billingFromPeriod,

@@ -412,7 +412,11 @@ describe("chatHandlers", () => {
     });
 
     it("pushes userId to deletedFor list", async () => {
-      mockChatRoomFindUnique.mockResolvedValue({ id: "r1", deletedFor: [] });
+      mockChatRoomFindUnique.mockResolvedValue({
+        id: "r1",
+        participants: ["user-1", "user-2"],
+        deletedFor: [],
+      });
       mockChatRoomUpdate.mockResolvedValue({});
       const res = makeRes();
       await deleteConversation(makeReq({ params: { roomId: "r1" } }), res);
@@ -432,6 +436,7 @@ describe("chatHandlers", () => {
     it("does not update deletedFor when already in list", async () => {
       mockChatRoomFindUnique.mockResolvedValue({
         id: "r1",
+        participants: ["user-1", "user-2"],
         deletedFor: ["user-1"],
       });
       const res = makeRes();
@@ -440,6 +445,22 @@ describe("chatHandlers", () => {
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
+
+    it("refuses a non-participant and leaves the room untouched", async () => {
+      mockChatRoomFindUnique.mockResolvedValue({
+        id: "r1",
+        participants: ["user-2", "user-3"],
+        deletedFor: [],
+      });
+      const res = makeRes();
+      await deleteConversation(makeReq({ params: { roomId: "r1" } }), res);
+      expect(mockChatRoomUpdate).not.toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
         expect.any(Object),
       );
     });

@@ -1,4 +1,4 @@
-import { useState, useCallback, useContext } from "react";
+import { useState, useCallback, useContext, useRef } from "react";
 import { AlertContext } from "@web/app/providers/AlertContext";
 import { UserContext } from "@web/app/providers/UserContext";
 import { getGeolocation } from "@web/core/auth";
@@ -13,11 +13,12 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
 
   const { setAlert } = useContext(AlertContext);
   const { setUser } = useContext(UserContext);
+  // Kept across the location-consent prompt, which finishes the punch later.
+  const faceAttestationRef = useRef<string | undefined>(undefined);
 
   const {
     updateFaceRecognitionState,
     performLivenessDetection,
-    performFaceVerification,
     performFaceEnrollment,
     setupCamera,
     cleanupCamera,
@@ -44,8 +45,7 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
           API_ENDPOINTS.CHECK_FACE_DESCRIPTOR,
         );
         const hasDescriptor = descriptorStatus?.data?.hasDescriptor === true;
-        const storedDescriptorData: number[] | null =
-          descriptorStatus?.data?.descriptor ?? null;
+        faceAttestationRef.current = undefined;
 
         updateFaceRecognitionState({ step: "camera_setup" });
 
@@ -71,16 +71,16 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
           const descriptor = await performFaceEnrollment(video);
 
           updateFaceRecognitionState({ step: "enrollment_saving" });
-          await apiClient.post(API_ENDPOINTS.SAVE_FACE_DESCRIPTOR, {
-            descriptor,
-          });
+          const { data: saved } = await apiClient.post(
+            API_ENDPOINTS.SAVE_FACE_DESCRIPTOR,
+            { descriptor },
+          );
+          faceAttestationRef.current = saved?.data?.attestation;
 
           // Persist in user context so subsequent punch-outs use verification
           setUser((prev: any) => ({ ...prev, face_descriptor: descriptor }));
         } else {
           // ── Verification mode ───────────────────────────────────────────────
-          const storedDescriptor = new Float32Array(storedDescriptorData!);
-
           updateFaceRecognitionState({ step: "liveness_instruction" });
           await new Promise((resolve) => setTimeout(resolve, 2000));
 
@@ -88,9 +88,20 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
           await performLivenessDetection(video);
 
           updateFaceRecognitionState({ step: "face_analysis" });
-          await performFaceVerification(video, storedDescriptor);
+          const liveDescriptor = await performFaceEnrollment(video);
 
           updateFaceRecognitionState({ step: "face_matching" });
+          const { data: challenge } = await apiClient.post(
+            API_ENDPOINTS.FACE_CHALLENGE,
+          );
+          const { data: verified } = await apiClient.post(
+            API_ENDPOINTS.FACE_VERIFY,
+            {
+              challengeId: challenge?.data?.challengeId,
+              descriptor: liveDescriptor,
+            },
+          );
+          faceAttestationRef.current = verified?.data?.attestation;
         }
 
         setDialogOpen(false);
@@ -107,13 +118,17 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
           refreshAttendances,
           geoLocation.latitude,
           geoLocation.longitude,
+          faceAttestationRef.current,
         );
       } catch (err) {
         console.error("Face recognition error:", err);
         setDialogOpen(false);
         setAlert({
           open: true,
-          message: err.message || "Error verifying identity. Please try again.",
+          message:
+            err.response?.data?.message ||
+            err.message ||
+            "Error verifying identity. Please try again.",
           severity: "error",
         });
       } finally {
@@ -128,7 +143,6 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
       updateFaceRecognitionState,
       setupCamera,
       performLivenessDetection,
-      performFaceVerification,
       performFaceEnrollment,
       cleanupCamera,
       refreshAttendances,
@@ -136,6 +150,7 @@ export const useAttendanceProcess = (faceRecognition, refreshAttendances) => {
   );
 
   return {
+    faceAttestationRef,
     dialogOpen,
     setDialogOpen,
     field,

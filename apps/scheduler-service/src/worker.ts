@@ -29,7 +29,7 @@ const jobHandlers: Record<SchedulerJobName, (data?: any) => Promise<void>> = {
 };
 
 async function processSchedulerJob(job: Job<SchedulerJobData>) {
-  const { jobName, ticketId } = job.data;
+  const { jobName, ticketId, tenantId } = job.data;
   const handler = jobHandlers[jobName];
 
   if (!handler) {
@@ -56,8 +56,8 @@ async function processSchedulerJob(job: Job<SchedulerJobData>) {
   logger.info(`Running scheduled job: ${jobName}`);
   const start = Date.now();
   try {
-    // Pass extra job data (e.g. ticketId for checkTicketSla).
-    await handler({ ticketId });
+    // Pass extra job data (e.g. ticketId + tenantId for checkTicketSla).
+    await handler({ ticketId, tenantId });
   } catch (err) {
     if (leaseId)
       await releaseJobLease(

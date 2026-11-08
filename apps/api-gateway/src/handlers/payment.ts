@@ -1,5 +1,10 @@
+import {
+  claimWebhookEvent,
+  completeWebhookEvent,
+  failWebhookEvent,
+  webhookBodyDigest,
+} from "../services/webhookInbox";
 import { Request, Response } from "express";
-import Razorpay from "razorpay";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@hrms/db";
 import { AuthRequest } from "../middleware/authenticate";
@@ -23,6 +28,7 @@ import {
 } from "../config/billingPlans";
 import { getActiveEmployeeCount } from "../utils/planLimits";
 import { recordWebhookPayment } from "../services/billingLedger";
+import { getRazorpay } from "../services/razorpayClient";
 import {
   TRIAL_DAYS,
   TRIAL_SIGNUP_PURPOSE,
@@ -123,12 +129,7 @@ export async function fetchPaymentMethod(
   }
 }
 
-export function getRazorpay() {
-  return new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID!,
-    key_secret: process.env.RAZORPAY_KEY_SECRET!,
-  });
-}
+export { getRazorpay };
 
 // ─── Plan ID — two-level cache (memory → Redis → Razorpay API) ───────────────
 
@@ -1124,6 +1125,7 @@ export async function confirmPaymentMethodChange(
 //   • Razorpay's server-to-server requests aren't rejected by CSRF
 
 export async function handleWebhook(req: Request, res: Response) {
+  let inboxId: string | null = null;
   try {
     // ── Guard: secret must be configured ───────────────────────────────────
     if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
@@ -1160,31 +1162,40 @@ export async function handleWebhook(req: Request, res: Response) {
       return res.status(400).json({ ok: false });
     }
 
-    // ── Idempotency — skip already-processed events ─────────────────────────
-    // Razorpay retries on non-2xx. We ack early (200) then do nothing.
-    // tryReserveWebhookEvent is an atomic SET NX: only one concurrent
-    // delivery of the same event ID can ever win this check, closing the
-    // race a separate GET-then-SETEX would leave open. Operations below are
-    // all naturally idempotent, so a crash after reserving but before
-    // finishing is safe: the key's TTL eventually expires and a later retry
-    // (if Razorpay sends one) re-processes with the same outcome.
-    if (eventId) {
-      const { tryReserveWebhookEvent } =
-        await import("../services/tenantTokenStore");
-      if (!(await tryReserveWebhookEvent(eventId))) {
-        logger.info(`Razorpay webhook: duplicate event ${eventId} — skipped`);
-        return res.json({ ok: true });
-      }
-    }
-
     // ── Parse body ──────────────────────────────────────────────────────────
-    const { event, payload } = JSON.parse(rawBody) as {
+    let parsed: {
       event: string;
       payload: {
-        subscription?: { entity?: { id?: string } };
+        subscription?: {
+          entity?: { id?: string; current_end?: number | null };
+        };
         payment?: { entity?: any };
       };
     };
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch {
+      return res.status(400).json({ ok: false });
+    }
+    const { event, payload } = parsed;
+
+    // ── Idempotency ─────────────────────────────────────────────────────────
+    // Durable, so a delivery that fails can be retried and one that
+    // succeeded can't be applied twice.
+    const claim = await claimWebhookEvent({
+      provider: "razorpay",
+      eventId: eventId || webhookBodyDigest(rawBody),
+      eventType: event,
+      rawBody,
+    });
+    if (claim.outcome === "duplicate") {
+      logger.info("Razorpay webhook: duplicate event skipped");
+      return res.json({ ok: true });
+    }
+    if (claim.outcome === "in_progress") {
+      return res.status(503).json({ ok: false });
+    }
+    inboxId = claim.id;
 
     // Platform billing ledger (read model only, never affects access).
     // Before the subscription check: refund and payment.failed events carry
@@ -1192,7 +1203,10 @@ export async function handleWebhook(req: Request, res: Response) {
     void recordWebhookPayment(event, payload);
 
     const subscriptionId = payload?.subscription?.entity?.id;
-    if (!subscriptionId) return res.json({ ok: true });
+    if (!subscriptionId) {
+      await completeWebhookEvent(inboxId);
+      return res.json({ ok: true });
+    }
 
     const now = new Date();
 
@@ -1203,6 +1217,12 @@ export async function handleWebhook(req: Request, res: Response) {
         const tenant = await prisma.tenant.findFirst({
           where: { razorpaySubscriptionId: subscriptionId },
         });
+        const paymentId = payload.payment?.entity?.id as string | undefined;
+        // The same charge can reach this point under a new event id.
+        if (tenant && paymentId && tenant.lastChargePaymentId === paymentId) {
+          logger.info("Razorpay webhook: charge already applied");
+          break;
+        }
         if (tenant) {
           const base =
             tenant.planExpiresAt && tenant.planExpiresAt > now
@@ -1274,9 +1294,21 @@ export async function handleWebhook(req: Request, res: Response) {
             }
           }
 
-          const next = new Date(base);
-          if (billing === "annual") next.setFullYear(next.getFullYear() + 1);
-          else next.setMonth(next.getMonth() + 1);
+          // Razorpay's own period end when it sends one. Setting it can't
+          // over-extend if the reconciler has already healed this cycle.
+          const periodEnd = payload.subscription?.entity?.current_end;
+          let next = new Date(base);
+          if (periodEnd) {
+            const end = new Date(periodEnd * 1000);
+            next =
+              tenant.planExpiresAt && tenant.planExpiresAt > end
+                ? tenant.planExpiresAt
+                : end;
+          } else if (billing === "annual") {
+            next.setFullYear(next.getFullYear() + 1);
+          } else {
+            next.setMonth(next.getMonth() + 1);
+          }
 
           // A trial's first charge is its activation. Keyed off
           // planActivatedAt rather than the status, which may already have
@@ -1293,6 +1325,7 @@ export async function handleWebhook(req: Request, res: Response) {
               subscriptionStatus: "active",
               ...(firstCharge && { planActivatedAt: now }),
               planExpiresAt: next,
+              ...(paymentId && { lastChargePaymentId: paymentId }),
               planTier: effectiveTier,
               billing,
               lastBilledQuantity: employeeCount,
@@ -1435,9 +1468,11 @@ export async function handleWebhook(req: Request, res: Response) {
     logger.info(
       `Razorpay webhook processed: ${event} for subscription ${subscriptionId}`,
     );
+    await completeWebhookEvent(inboxId);
     return res.json({ ok: true });
   } catch (error: unknown) {
     logger.error("handleWebhook error:", { error });
+    if (inboxId) await failWebhookEvent(inboxId, error);
     return res.status(500).json({ ok: false });
   }
 }

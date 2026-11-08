@@ -17,6 +17,12 @@ jest.mock("@hrms/db", () => {
   };
 });
 
+// The resignation taking effect is announced cluster-wide.
+const mockPublishRevocation = jest.fn().mockResolvedValue(true);
+jest.mock("@hrms/cache", () => ({
+  publishAccountRevocation: (...a: unknown[]) => mockPublishRevocation(...a),
+}));
+
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
@@ -60,6 +66,7 @@ describe("updateEmployeeStatus", () => {
     mockFindMany.mockResolvedValue([]);
     await updateEmployeeStatus();
     expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockPublishRevocation).not.toHaveBeenCalled();
   });
 
   it("scopes the resignation lookup to each tenant and queries lastWorkingDay is yesterday", async () => {
@@ -88,11 +95,21 @@ describe("updateEmployeeStatus", () => {
     expect(mockUpdate).toHaveBeenCalledTimes(2);
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "john-id" },
-      data: { employeeStatus: "Resigned" },
+      // The last working day also unregisters devices.
+      data: { employeeStatus: "Resigned", fcmTokens: [] },
     });
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "jane-id" },
-      data: { employeeStatus: "Resigned" },
+      // The last working day also unregisters devices.
+      data: { employeeStatus: "Resigned", fcmTokens: [] },
+    });
+    expect(mockPublishRevocation).toHaveBeenCalledWith({
+      userId: "john-id",
+      reason: "resignation-effective",
+    });
+    expect(mockPublishRevocation).toHaveBeenCalledWith({
+      userId: "jane-id",
+      reason: "resignation-effective",
     });
   });
 

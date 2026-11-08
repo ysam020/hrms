@@ -1,3 +1,4 @@
+import { isChatFileUrl } from "./s3";
 import type { Server as SocketServer, Socket } from "socket.io";
 import {
   prismaWithTenant as prisma,
@@ -15,6 +16,14 @@ type AuthenticatedSocket = Socket & {
   dbName: string | null;
 };
 
+// Membership is re-read from the room on every event that writes data or
+// reaches other people (send, read receipts, delete/pin relays), so a
+// removed participant is refused on their very next attempt. Only typing
+// indicators — sent on keystrokes, changing nothing — may reuse a check
+// this recent, which bounds what a removed participant can still do to
+// showing "typing…" for at most this long.
+const TYPING_MEMBERSHIP_MAX_AGE_MS = 5 * 1000;
+
 export function setupChatSocket(
   io: SocketServer,
   redisAdapter: RedisWebSocketAdapter,
@@ -24,8 +33,12 @@ export function setupChatSocket(
     const tenantId = (socket as AuthenticatedSocket).tenantId;
     const dbName = (socket as AuthenticatedSocket).dbName ?? null;
 
-    // Per-connection cache of roomId → participants[] to avoid repeated DB hits
-    const roomParticipantsCache = new Map<string, string[]>();
+    // Per-connection record of this user's last confirmed membership per
+    // room — only consulted by typing indicators (see above).
+    const confirmedMembership = new Map<
+      string,
+      { participants: string[]; checkedAt: number }
+    >();
 
     // Tenant-scoped queries (unlike REST requests) get no automatic
     // AsyncLocalStorage context, so every DB call here must be run through
@@ -34,9 +47,12 @@ export function setupChatSocket(
     const withTenant = <T>(fn: () => Promise<T>): Promise<T> =>
       tenantId ? runWithTenant(tenantId, tenantClient, fn) : fn();
 
-    const getParticipants = async (roomId: string): Promise<string[]> => {
-      if (roomParticipantsCache.has(roomId))
-        return roomParticipantsCache.get(roomId)!;
+    // The room's participants, read now from this tenant's database, if
+    // this socket's user is one of them; otherwise null. A socket without a
+    // tenant has no database to check against (the lookup would reach the
+    // master database), so it is refused.
+    const readMembership = async (roomId: string): Promise<string[] | null> => {
+      if (!tenantId) return null;
       const room = await withTenant(() =>
         prisma.chatRoom.findUnique({
           where: { id: roomId },
@@ -44,14 +60,36 @@ export function setupChatSocket(
         }),
       );
       const participants = room?.participants ?? [];
-      roomParticipantsCache.set(roomId, participants);
+      if (!participants.includes(userId)) {
+        confirmedMembership.delete(roomId);
+        return null;
+      }
+      confirmedMembership.set(roomId, { participants, checkedAt: Date.now() });
       return participants;
     };
 
-    // Client joins a room — pre-fetch participants into cache
+    // Participants of roomId if this socket's user is one of them, else
+    // null (and the client is told why). Re-checked against the database
+    // unless `maxAgeMs` allows a check that recent.
+    const participantsIfMember = async (
+      roomId: string,
+      { maxAgeMs = 0 }: { maxAgeMs?: number } = {},
+    ): Promise<string[] | null> => {
+      const confirmed = confirmedMembership.get(roomId);
+      const participants =
+        confirmed && Date.now() - confirmed.checkedAt < maxAgeMs
+          ? confirmed.participants
+          : await readMembership(roomId);
+      if (participants) return participants;
+      socket.emit("chat:error", { message: "Not a participant of this room" });
+      return null;
+    };
+
+    // Client opens a room — confirm membership up front so the first typing
+    // indicators don't each need a lookup.
     socket.on("chat:join", async ({ roomId }: { roomId: string }) => {
       try {
-        await getParticipants(roomId);
+        await readMembership(roomId);
       } catch (err) {
         logger.error(`chat:join error for ${userId}:`, { err });
       }
@@ -80,14 +118,11 @@ export function setupChatSocket(
         fileSize?: number;
       }) => {
         try {
-          // Verify sender is a participant of this room
-          const participants = await getParticipants(roomId);
-          if (!participants.includes(userId)) {
-            socket.emit("chat:error", {
-              message: "Not a participant of this room",
-            });
-            return;
-          }
+          // Re-checked against the room now: a removed participant is
+          // refused on this attempt, not after a cache expires.
+          const participants = await participantsIfMember(roomId);
+          if (!participants) return;
+          if (fileUrl && !isChatFileUrl(fileUrl)) return;
 
           // Enforce message content size limit (10 000 chars)
           if (content && content.length > 10_000) {
@@ -167,7 +202,7 @@ export function setupChatSocket(
 
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message", msgObj),
+              redisAdapter.sendToUser(p, "chat:message", msgObj, { tenantId }),
             ),
           );
 
@@ -184,17 +219,37 @@ export function setupChatSocket(
                     : (content ?? "");
             // Chat is a non-essential notification: Do Not Disturb holds
             // back the push (the message itself still arrives in-app).
+            // Participants are user IDs, scoped to this tenant by
+            // sendPushNotifications; a socket without a tenant sends none.
             (tenantId
               ? withoutDoNotDisturb(tenantId, others)
-              : Promise.resolve(others)
+              : Promise.resolve([] as string[])
             )
-              .then((recipients) =>
-                recipients.length > 0
-                  ? sendPushNotifications(recipients, userId, pushBody, {
-                      latestOnly: true,
-                    })
-                  : undefined,
-              )
+              .then(async (recipients) => {
+                if (!tenantId || recipients.length === 0) return;
+                const sender = await withTenant(() =>
+                  prisma.user.findUnique({
+                    where: { id: userId },
+                    select: {
+                      first_name: true,
+                      last_name: true,
+                      username: true,
+                    },
+                  }),
+                );
+                const senderName =
+                  [sender?.first_name, sender?.last_name]
+                    .filter(Boolean)
+                    .join(" ") ||
+                  sender?.username ||
+                  "New message";
+                await sendPushNotifications(
+                  { tenantId, userIds: recipients },
+                  senderName,
+                  pushBody,
+                  { latestOnly: true },
+                );
+              })
               .catch((err) =>
                 logger.error("[chat:send] FCM push error:", { err }),
               );
@@ -209,12 +264,20 @@ export function setupChatSocket(
     // Typing started — forward to other participants only
     socket.on("chat:typing", async ({ roomId }: { roomId: string }) => {
       try {
-        const participants = await getParticipants(roomId);
+        const participants = await participantsIfMember(roomId, {
+          maxAgeMs: TYPING_MEMBERSHIP_MAX_AGE_MS,
+        });
+        if (!participants) return;
         await Promise.all(
           participants
             .filter((p) => p !== userId)
             .map((p) =>
-              redisAdapter.sendToUser(p, "chat:typing", { roomId, userId }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:typing",
+                { roomId, userId },
+                { tenantId },
+              ),
             ),
         );
       } catch {
@@ -225,15 +288,23 @@ export function setupChatSocket(
     // Typing stopped — forward to other participants only
     socket.on("chat:stop-typing", async ({ roomId }: { roomId: string }) => {
       try {
-        const participants = await getParticipants(roomId);
+        const participants = await participantsIfMember(roomId, {
+          maxAgeMs: TYPING_MEMBERSHIP_MAX_AGE_MS,
+        });
+        if (!participants) return;
         await Promise.all(
           participants
             .filter((p) => p !== userId)
             .map((p) =>
-              redisAdapter.sendToUser(p, "chat:stop-typing", {
-                roomId,
-                userId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:stop-typing",
+                {
+                  roomId,
+                  userId,
+                },
+                { tenantId },
+              ),
             ),
         );
       } catch {
@@ -244,6 +315,9 @@ export function setupChatSocket(
     // Mark room messages as read and notify other participants
     socket.on("chat:read", async ({ roomId }: { roomId: string }) => {
       try {
+        // Only a participant may mark a room's messages as read.
+        const participants = await participantsIfMember(roomId);
+        if (!participants) return;
         const unread = await withTenant(() =>
           prisma.message.findMany({
             where: {
@@ -268,15 +342,19 @@ export function setupChatSocket(
           );
         }
 
-        const participants = await getParticipants(roomId);
         await Promise.all(
           participants
             .filter((p) => p !== userId)
             .map((p) =>
-              redisAdapter.sendToUser(p, "chat:read", {
-                roomId,
-                reader: userId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:read",
+                {
+                  roomId,
+                  reader: userId,
+                },
+                { tenantId },
+              ),
             ),
         );
       } catch (err) {
@@ -289,19 +367,21 @@ export function setupChatSocket(
       "chat:delete-message",
       async ({ messageId, roomId }: { messageId: string; roomId: string }) => {
         try {
-          const participants = await getParticipants(roomId);
-          if (!participants.includes(userId)) {
-            socket.emit("chat:error", {
-              message: "Not a participant of this room",
-            });
-            return;
-          }
+          // Re-checked against the room now: a removed participant is
+          // refused on this attempt, not after a cache expires.
+          const participants = await participantsIfMember(roomId);
+          if (!participants) return;
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message-deleted", {
-                messageId,
-                roomId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:message-deleted",
+                {
+                  messageId,
+                  roomId,
+                },
+                { tenantId },
+              ),
             ),
           );
         } catch (err) {
@@ -327,21 +407,23 @@ export function setupChatSocket(
         pinnedBy: string;
       }) => {
         try {
-          const participants = await getParticipants(roomId);
-          if (!participants.includes(userId)) {
-            socket.emit("chat:error", {
-              message: "Not a participant of this room",
-            });
-            return;
-          }
+          // Re-checked against the room now: a removed participant is
+          // refused on this attempt, not after a cache expires.
+          const participants = await participantsIfMember(roomId);
+          if (!participants) return;
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message-pinned", {
-                messageId,
-                roomId,
-                pinnedAt,
-                pinnedBy,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:message-pinned",
+                {
+                  messageId,
+                  roomId,
+                  pinnedAt,
+                  pinnedBy,
+                },
+                { tenantId },
+              ),
             ),
           );
         } catch (err) {
@@ -355,19 +437,21 @@ export function setupChatSocket(
       "chat:unpin-message",
       async ({ messageId, roomId }: { messageId: string; roomId: string }) => {
         try {
-          const participants = await getParticipants(roomId);
-          if (!participants.includes(userId)) {
-            socket.emit("chat:error", {
-              message: "Not a participant of this room",
-            });
-            return;
-          }
+          // Re-checked against the room now: a removed participant is
+          // refused on this attempt, not after a cache expires.
+          const participants = await participantsIfMember(roomId);
+          if (!participants) return;
           await Promise.all(
             participants.map((p) =>
-              redisAdapter.sendToUser(p, "chat:message-unpinned", {
-                messageId,
-                roomId,
-              }),
+              redisAdapter.sendToUser(
+                p,
+                "chat:message-unpinned",
+                {
+                  messageId,
+                  roomId,
+                },
+                { tenantId },
+              ),
             ),
           );
         } catch (err) {
@@ -377,7 +461,7 @@ export function setupChatSocket(
     );
 
     socket.on("disconnect", () => {
-      roomParticipantsCache.clear();
+      confirmedMembership.clear();
     });
   });
 }

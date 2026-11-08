@@ -1,98 +1,109 @@
-import { getWebSocketRedis } from "../connection";
+import { FakeRedis, FakeRedisServer, connectionsFor } from "./fakes";
+
+const srv = new FakeRedisServer();
+let conns = connectionsFor(srv);
+jest.mock("../connection", () => ({
+  getWebSocketRedis: (type: "client" | "publisher" | "subscriber") =>
+    conns[type],
+}));
+const mockInc = jest.fn();
+jest.mock("@hrms/logger", () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+  websocketPublishFailuresTotal: { inc: (...a: unknown[]) => mockInc(...a) },
+}));
+
 import {
   RedisNotificationPublisher,
   getNotificationPublisher,
 } from "../RedisNotificationPublisher";
+import { addMembership, heartbeat, nodeChannel } from "../SocketRegistry";
 
-jest.mock("../connection", () => ({
-  getWebSocketRedis: jest.fn(),
-}));
-
-jest.mock("@hrms/logger", () => ({
-  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
-  websocketPublishFailuresTotal: { inc: jest.fn() },
-}));
-
-const mockClient = { hget: jest.fn() };
-const mockPublisher = { publish: jest.fn().mockResolvedValue(1) };
-const mockGetRedis = getWebSocketRedis as jest.Mock;
-
-describe("RedisNotificationPublisher", () => {
-  let publisher: RedisNotificationPublisher;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockPublisher.publish.mockResolvedValue(1);
-    mockGetRedis.mockImplementation((type: string) =>
-      type === "client" ? mockClient : mockPublisher,
-    );
-    publisher = new RedisNotificationPublisher();
-  });
-
-  describe("sendToUser", () => {
-    it("returns false and does not publish when the user has no active socket", async () => {
-      mockClient.hget.mockResolvedValue(null);
-      const result = await publisher.sendToUser("u1", "notify", { x: 1 });
-      expect(result).toBe(false);
-      expect(mockPublisher.publish).not.toHaveBeenCalled();
-    });
-
-    it("routes the event to the worker holding the user's socket", async () => {
-      mockClient.hget.mockResolvedValue("1234:socket-abc");
-      const result = await publisher.sendToUser("u1", "notify", { x: 1 });
-      expect(result).toBe(true);
-      expect(mockPublisher.publish).toHaveBeenCalledWith(
-        "socket:worker-1234",
-        JSON.stringify({
-          userId: "u1",
-          eventName: "notify",
-          payload: { x: 1 },
-        }),
-      );
-    });
-
-    it("returns false without throwing when Redis errors", async () => {
-      mockClient.hget.mockRejectedValue(new Error("redis down"));
-      const result = await publisher.sendToUser("u1", "notify", {});
-      expect(result).toBe(false);
-    });
-  });
-
-  describe("broadcast", () => {
-    it("publishes to the global broadcast channel", async () => {
-      await publisher.broadcast("announcement", { msg: "hi" });
-      expect(mockPublisher.publish).toHaveBeenCalledWith(
-        "socket:broadcast",
-        JSON.stringify({ eventName: "announcement", payload: { msg: "hi" } }),
-      );
-    });
-
-    it("swallows publish errors without throwing", async () => {
-      mockPublisher.publish.mockRejectedValue(new Error("redis down"));
-      await expect(publisher.broadcast("x", {})).resolves.toBeUndefined();
-    });
-  });
-
-  describe("sendNotification", () => {
-    it("publishes to the notification channel", async () => {
-      await publisher.sendNotification({ title: "Hi" });
-      expect(mockPublisher.publish).toHaveBeenCalledWith(
-        "socket:notification",
-        JSON.stringify({ notification: { title: "Hi" } }),
-      );
-    });
-
-    it("swallows publish errors without throwing", async () => {
-      mockPublisher.publish.mockRejectedValue(new Error("redis down"));
-      await expect(publisher.sendNotification({})).resolves.toBeUndefined();
-    });
-  });
+beforeEach(() => {
+  srv.sets.clear();
+  srv.strings.clear();
+  srv.subs.clear();
+  srv.down = false;
+  conns = connectionsFor(srv);
+  mockInc.mockReset();
 });
 
-describe("getNotificationPublisher", () => {
-  it("memoizes a single instance across calls", () => {
-    const a = getNotificationPublisher();
-    const b = getNotificationPublisher();
-    expect(a).toBe(b);
+async function gatewayNode(nodeId: string) {
+  const sub = new FakeRedis(srv);
+  await sub.subscribe(nodeChannel(nodeId));
+  await heartbeat(conns.client as any, nodeId);
+  const got: any[] = [];
+  sub.on("message", (_c: string, m: string) => got.push(JSON.parse(m)));
+  return got;
+}
+
+describe("RedisNotificationPublisher", () => {
+  it("publishes once to every gateway node holding the person's sockets in that tenant", async () => {
+    const n1 = await gatewayNode("n1");
+    const n2 = await gatewayNode("n2");
+    await addMembership(conns.client as any, "n1", "t1", "u1");
+    await addMembership(conns.client as any, "n2", "t1", "u1");
+    const ok = await new RedisNotificationPublisher().sendToUser(
+      "u1",
+      "notification",
+      { id: 1 },
+      { tenantId: "t1" },
+    );
+    await new Promise((r) => setImmediate(r));
+    expect(ok).toBe(true);
+    for (const got of [n1, n2])
+      expect(got).toEqual([
+        {
+          v: 2,
+          tenantId: "t1",
+          userId: "u1",
+          eventName: "notification",
+          payload: { id: 1 },
+        },
+      ]);
+  });
+
+  it("returns false (offline) when no node holds a socket for that person in that tenant", async () => {
+    await gatewayNode("n1");
+    await addMembership(conns.client as any, "n1", "t2", "u1"); // other tenant only
+    expect(
+      await new RedisNotificationPublisher().sendToUser(
+        "u1",
+        "notification",
+        {},
+        { tenantId: "t1" },
+      ),
+    ).toBe(false);
+  });
+
+  it("returns false and counts the failure when Redis is unavailable", async () => {
+    srv.down = true;
+    expect(
+      await new RedisNotificationPublisher().sendToUser(
+        "u1",
+        "notification",
+        {},
+        { tenantId: "t1" },
+      ),
+    ).toBe(false);
+    expect(mockInc).toHaveBeenCalledWith({
+      method: "sendToUser",
+      service: expect.any(String),
+    });
+  });
+
+  it("broadcast and sendNotification publish on the shared channels", async () => {
+    const sub = new FakeRedis(srv);
+    await sub.subscribe("socket:broadcast", "socket:notification");
+    const got: string[] = [];
+    sub.on("message", (c: string) => got.push(c));
+    await getNotificationPublisher().broadcast("e", {});
+    await getNotificationPublisher().sendNotification({});
+    await new Promise((r) => setImmediate(r));
+    expect(got.sort()).toEqual(["socket:broadcast", "socket:notification"]);
   });
 });

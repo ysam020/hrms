@@ -71,7 +71,7 @@ export const rejectLeave = async (
         return notify({
           tenantId: getTenantId()!,
           event: "leaveRejected",
-          targetUser: updatedLeave.userId,
+          recipients: [updatedLeave.userId],
           inApp: {
             title: "Leave",
             message: MESSAGES.LEAVE_REJECTED,

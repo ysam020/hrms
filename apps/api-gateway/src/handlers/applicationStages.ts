@@ -163,6 +163,11 @@ export async function listApplicationStageEvents(
 ) {
   const tenantId = requireTenantId(req, res);
   if (!tenantId) return;
+  if (!(await isPrivileged(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "Only owners, admins, and HR can view hiring stage history.",
+    });
+  }
   try {
     const { id: applicationId } = req.params as { id: string };
     const events = await (prisma as any).applicationStageEvent.findMany({
@@ -243,6 +248,11 @@ export async function bulkAdvanceStage(req: AuthRequest, res: Response) {
 export async function listOffers(req: AuthRequest, res: Response) {
   const tenantId = requireTenantId(req, res);
   if (!tenantId) return;
+  if (!(await isPrivileged(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "Only owners, admins, and HR can view offers.",
+    });
+  }
   try {
     const { id: applicationId } = req.params as { id: string };
     const offers = await (prisma as any).offer.findMany({
@@ -319,6 +329,11 @@ export async function createOffer(req: AuthRequest, res: Response) {
 export async function updateOfferStatus(req: AuthRequest, res: Response) {
   const tenantId = requireTenantId(req, res);
   if (!tenantId) return;
+  if (!(await isPrivileged(req))) {
+    return apiResponse(res, RESPONSE_STATUS.FORBIDDEN, {
+      message: "Only owners, admins, and HR can change an offer.",
+    });
+  }
   try {
     const { id } = req.params as { id: string };
     const { status: newStatus } = req.body as { status: string };

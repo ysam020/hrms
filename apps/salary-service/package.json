@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@hrms/common": "workspace:*",
+    "@hrms/crypto": "workspace:*",
     "@hrms/db": "workspace:*",
     "@hrms/grpc-server": "workspace:*",
     "@hrms/logger": "workspace:*",

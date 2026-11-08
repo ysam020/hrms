@@ -23,7 +23,7 @@ jest.mock("@hrms/cache", () => ({
 }));
 
 jest.mock("@hrms/crypto", () => ({
-  safeDecrypt: jest.fn((v: string | null | undefined) => v ?? ""),
+  readSensitiveForDisplay: jest.fn((v: string | null | undefined) => v ?? ""),
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -254,7 +254,7 @@ describe("getUser", () => {
     await getUser(makeCall({ userId: "john" }), makeCallback());
 
     expect(mockCacheSet).toHaveBeenCalledWith(
-      "t:t1:user:v6:john",
+      "t:t1:user:v7:john",
       expect.objectContaining({ status: status.OK }),
       "user",
     );

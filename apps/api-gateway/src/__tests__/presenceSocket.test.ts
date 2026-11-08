@@ -34,6 +34,24 @@ jest.mock("@hrms/queue", () => ({
     remove: jest.fn(),
   }),
 }));
+// Presence updates are re-authorised per watcher before emit; the decision
+// logic is covered in socketAuth.test.ts — here we assert the relay uses it.
+jest.mock("../config/socketAuth", () => ({
+  emitToRoomAuthorized: async (
+    _io: unknown,
+    room: string,
+    event: string,
+    payload: unknown,
+  ) => {
+    authorisedEmits.push({ room, event, payload });
+    return 1;
+  },
+}));
+const authorisedEmits: Array<{
+  room: string;
+  event: string;
+  payload: unknown;
+}> = [];
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
@@ -254,7 +272,8 @@ describe("watching", () => {
     expect(ack).toHaveBeenLastCalledWith({ ok: false, error: "rate_limited" });
   });
 
-  it("relays events to the matching room on this worker only", () => {
+  it("relays events to the matching room on this worker only, through the per-watcher authorised emit", () => {
+    authorisedEmits.length = 0;
     listeners[0](
       "socket:presence",
       JSON.stringify({ room: `px:${T}:${U1}`, payload: { a: 1 } }),
@@ -264,8 +283,10 @@ describe("watching", () => {
       JSON.stringify({ room: "everyone", payload: {} }),
     );
     listeners[0]("socket:broadcast", JSON.stringify({ room: `px:${T}:${U1}` }));
-    expect(emitted).toEqual([
+    expect(authorisedEmits).toEqual([
       { room: `px:${T}:${U1}`, event: "presence:update", payload: { a: 1 } },
     ]);
+    // Never an unauthorised room-wide emit.
+    expect(emitted.filter((e) => e.event === "presence:update")).toEqual([]);
   });
 });

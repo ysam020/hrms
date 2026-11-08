@@ -6,6 +6,19 @@ import {
 } from "@hrms/db";
 import { handleRazorpayXWebhook } from "../handlers/razorpayxWebhook";
 
+const mockInbox = {
+  claimWebhookEvent: jest.fn(),
+  completeWebhookEvent: jest.fn(),
+  failWebhookEvent: jest.fn(),
+};
+jest.mock("../services/webhookInbox", () => ({
+  claimWebhookEvent: (...a: unknown[]) => mockInbox.claimWebhookEvent(...a),
+  completeWebhookEvent: (...a: unknown[]) =>
+    mockInbox.completeWebhookEvent(...a),
+  failWebhookEvent: (...a: unknown[]) => mockInbox.failWebhookEvent(...a),
+  webhookBodyDigest: () => "body:digest",
+}));
+
 jest.mock("@hrms/db", () => {
   const _db: any = {
     payoutTenantIndex: { findUnique: jest.fn() },
@@ -52,6 +65,42 @@ describe("handleRazorpayXWebhook", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.RAZORPAY_X_WEBHOOK_SECRET = SECRET;
+    mockInbox.claimWebhookEvent.mockResolvedValue({
+      outcome: "claimed",
+      id: "inbox-1",
+    });
+  });
+
+  it("returns 500 and records the failure instead of acknowledging", async () => {
+    mockIndexFindUnique.mockRejectedValue(new Error("database down"));
+    const req = makeReq({
+      event: "payout.processed",
+      payload: { payout: { entity: { id: "pout_1" } } },
+    });
+    const res = makeRes();
+
+    await handleRazorpayXWebhook(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).not.toHaveBeenCalledWith({ ok: true });
+    expect(mockInbox.failWebhookEvent).toHaveBeenCalledWith(
+      "inbox-1",
+      expect.any(Error),
+    );
+  });
+
+  it("skips a delivery already processed", async () => {
+    mockInbox.claimWebhookEvent.mockResolvedValue({ outcome: "duplicate" });
+    const req = makeReq({
+      event: "payout.processed",
+      payload: { payout: { entity: { id: "pout_1" } } },
+    });
+    const res = makeRes();
+
+    await handleRazorpayXWebhook(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true });
+    expect(mockIndexFindUnique).not.toHaveBeenCalled();
   });
 
   it("returns 500 when the webhook secret is not configured", async () => {

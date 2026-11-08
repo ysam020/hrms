@@ -1,7 +1,7 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { safeDecrypt } from "@hrms/crypto";
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
 
@@ -14,6 +14,39 @@ import { MESSAGES } from "../constants/messages";
 function toIsoOrEmpty(value: Date | string | null | undefined): string {
   if (!value) return "";
   return value instanceof Date ? value.toISOString() : value;
+}
+
+const SEALED_USER_FIELDS: ReadonlyArray<[string, string]> = [
+  ["mobile", "mobile"],
+  ["communicationAddressLine1", "communication_address_line_1"],
+  ["communicationAddressLine2", "communication_address_line_2"],
+  ["communicationAddressCity", "communication_address_city"],
+  ["communicationAddressState", "communication_address_state"],
+  ["communicationAddressPincode", "communication_address_pincode"],
+  ["permanentAddressLine1", "permanent_address_line_1"],
+  ["permanentAddressLine2", "permanent_address_line_2"],
+  ["permanentAddressCity", "permanent_address_city"],
+  ["permanentAddressState", "permanent_address_state"],
+  ["permanentAddressPincode", "permanent_address_pincode"],
+  ["bankAccountNo", "bank_account_no"],
+  ["aadharNo", "aadhar_no"],
+  ["aadharPhotoFront", "aadhar_photo_front"],
+  ["aadharPhotoBack", "aadhar_photo_back"],
+  ["panNo", "pan_no"],
+  ["panPhoto", "pan_photo"],
+  ["pfNo", "pf_no"],
+  ["uanNo", "uan_no"],
+  ["esicNo", "esic_no"],
+];
+
+function openUserResponse<T extends { data: Record<string, any> }>(
+  response: T,
+): T {
+  const data = { ...response.data };
+  for (const [key, field] of SEALED_USER_FIELDS) {
+    if (key in data) data[key] = readSensitiveForDisplay(data[key], field);
+  }
+  return { ...response, data };
 }
 
 export const getUser = async (
@@ -86,11 +119,13 @@ export const getUser = async (
     // v4: added kycRevisionNotesJson.
     // v5: added kycEditRequestReason.
     // v6: added kycEditWindow.
+    // v7: sensitive fields are cached sealed and opened per response. The
+    // bump also retires older entries that held them in the clear.
     // Bump this suffix whenever the response shape or field formatting
     // changes, so a stale cached entry is never replayed.
-    const cacheKey = `t:${tenantId}:user:v6:${userId}`;
-    const cached = await cacheManager.get(cacheKey);
-    if (cached) return callback(null, cached);
+    const cacheKey = `t:${tenantId}:user:v7:${userId}`;
+    const cached = await cacheManager.get<any>(cacheKey);
+    if (cached) return callback(null, openUserResponse(cached));
 
     const isObjectId = /^[a-f\d]{24}$/i.test(userId);
     const user = await prismaWithTenant.user.findFirst({
@@ -117,7 +152,7 @@ export const getUser = async (
         firstName: user.first_name ?? "",
         lastName: user.last_name ?? "",
         middleName: user.middle_name ?? "",
-        mobile: safeDecrypt(user.mobile),
+        mobile: user.mobile ?? "",
         department: user.department ?? "",
         designation: user.designation ?? "",
         employeeStatus: user.employeeStatus ?? "",
@@ -126,40 +161,32 @@ export const getUser = async (
         bloodGroup: user.blood_group ?? "",
         officialEmail: user.official_email ?? "",
         joiningDate: toIsoOrEmpty(user.joining_date),
-        communicationAddressLine1: safeDecrypt(
-          user.communication_address_line_1,
-        ),
-        communicationAddressLine2: safeDecrypt(
-          user.communication_address_line_2,
-        ),
-        communicationAddressCity: safeDecrypt(user.communication_address_city),
-        communicationAddressState: safeDecrypt(
-          user.communication_address_state,
-        ),
-        communicationAddressPincode: safeDecrypt(
-          user.communication_address_pincode,
-        ),
-        permanentAddressLine1: safeDecrypt(user.permanent_address_line_1),
-        permanentAddressLine2: safeDecrypt(user.permanent_address_line_2),
-        permanentAddressCity: safeDecrypt(user.permanent_address_city),
-        permanentAddressState: safeDecrypt(user.permanent_address_state),
-        permanentAddressPincode: safeDecrypt(user.permanent_address_pincode),
-        bankAccountNo: safeDecrypt(user.bank_account_no),
+        communicationAddressLine1: user.communication_address_line_1 ?? "",
+        communicationAddressLine2: user.communication_address_line_2 ?? "",
+        communicationAddressCity: user.communication_address_city ?? "",
+        communicationAddressState: user.communication_address_state ?? "",
+        communicationAddressPincode: user.communication_address_pincode ?? "",
+        permanentAddressLine1: user.permanent_address_line_1 ?? "",
+        permanentAddressLine2: user.permanent_address_line_2 ?? "",
+        permanentAddressCity: user.permanent_address_city ?? "",
+        permanentAddressState: user.permanent_address_state ?? "",
+        permanentAddressPincode: user.permanent_address_pincode ?? "",
+        bankAccountNo: user.bank_account_no ?? "",
         bankName: user.bank_name ?? "",
         ifscCode: user.ifsc_code ?? "",
-        aadharNo: safeDecrypt(user.aadhar_no),
-        aadharPhotoFront: safeDecrypt(user.aadhar_photo_front),
-        panNo: safeDecrypt(user.pan_no),
-        panPhoto: safeDecrypt(user.pan_photo),
-        pfNo: safeDecrypt(user.pf_no),
-        uanNo: safeDecrypt(user.uan_no),
-        esicNo: safeDecrypt(user.esic_no),
+        aadharNo: user.aadhar_no ?? "",
+        aadharPhotoFront: user.aadhar_photo_front ?? "",
+        panNo: user.pan_no ?? "",
+        panPhoto: user.pan_photo ?? "",
+        pfNo: user.pf_no ?? "",
+        uanNo: user.uan_no ?? "",
+        esicNo: user.esic_no ?? "",
         isSuperUser: user.isSuperUser ?? false,
         dateOfTermination: toIsoOrEmpty(user.dateOfTermination),
         reasonForTermination: user.reasonForTermination ?? "",
         dateOfAbscond: toIsoOrEmpty(user.dateOfAbscond),
         qualification: user.qualification ?? "",
-        aadharPhotoBack: safeDecrypt(user.aadhar_photo_back),
+        aadharPhotoBack: user.aadhar_photo_back ?? "",
         educationCertificates: user.education_certificates ?? [],
         experienceCertificate: user.experience_certificate ?? "",
         electricityBill: user.electricity_bill ?? "",
@@ -173,7 +200,7 @@ export const getUser = async (
       },
     };
     await cacheManager.set(cacheKey, response, "user");
-    return callback(null, response);
+    return callback(null, openUserResponse(response));
   } catch (err) {
     logger.error("GetUser error:", { err });
     return callback(null, {

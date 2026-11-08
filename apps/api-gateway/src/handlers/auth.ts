@@ -1,18 +1,27 @@
+import { randomBytes } from "node:crypto";
+import { faceAttestationEnforced } from "../services/faceAttestation";
 import { Request, Response } from "express";
+import { status as GrpcStatus } from "@grpc/grpc-js";
 import jwt from "jsonwebtoken";
 import { authClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma, markHandlerStart } from "@hrms/db";
+import { prisma, markHandlerStart, isAccountAccessUnavailable } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
 import { handleError } from "../utils/handleError";
-import { aesEncrypt, aesDecrypt, safeDecrypt } from "@hrms/crypto";
+import {
+  aesEncrypt,
+  aesDecrypt,
+  readSensitiveForDisplay,
+  readFaceDescriptor,
+} from "@hrms/crypto";
 import { recordLoginEvent } from "../services/loginEventService";
 import { getActiveSettings } from "./tenantSettings";
 import { hasSupportAccess } from "../services/supportStore";
 import { isPlatformTenant } from "../config/platform";
 import { platformAdminGrants } from "../services/platformAccess";
+import { resolveAccountAccess } from "../services/accountAccess";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -21,6 +30,18 @@ const REFRESH_COOKIE_OPTIONS = {
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — matches REFRESH_TOKEN_EXPIRE default
   path: "/api/v1/refresh-token",
 };
+
+const OAUTH_STATE_COOKIE = "oauth_state";
+const OAUTH_STATE_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  // Lax, because the callback is a top-level redirect from Google.
+  sameSite: "lax" as const,
+  maxAge: 10 * 60 * 1000,
+  path: "/api/auth/google/callback",
+};
+
+const usableDescriptor = (d: number[] | null) => (d?.length === 128 ? d : null);
 
 const jsRedirect = (res: Response, url: string) => {
   // Use a standard HTTP redirect — inline <script> is blocked by CSP script-src 'self'
@@ -50,7 +71,16 @@ function isoDates(value: unknown): any {
   return value;
 }
 
-export async function fetchFullProfile(userId: string) {
+/**
+ * `tenantId` is the organisation the caller is acting in (the token's).
+ * isSuperUser / permissions / role on the master record were granted by the
+ * user's home organisation and are reported only for it — they
+ * are UI hints here, but must agree with what the guards enforce.
+ */
+export async function fetchFullProfile(
+  userId: string,
+  tenantId: string | null,
+) {
   const rows = (await prisma.user.aggregateRaw({
     pipeline: [
       { $match: { $expr: { $eq: ["$_id", { $toObjectId: userId }] } } },
@@ -63,6 +93,7 @@ export async function fetchFullProfile(userId: string) {
           role: 1,
           isSuperUser: 1,
           permissions: 1,
+          homeTenantId: { $toString: "$tenantId" },
           employeeStatus: 1,
           first_name: 1,
           last_name: 1,
@@ -108,6 +139,7 @@ export async function fetchFullProfile(userId: string) {
   if (!rows || rows.length === 0) return null;
 
   const u = isoDates(rows[0]);
+  const inHomeTenant = !!tenantId && u.homeTenantId === tenantId;
   const firstName = u.first_name || "";
   const lastName = u.last_name || "";
   const fullName =
@@ -118,49 +150,87 @@ export async function fetchFullProfile(userId: string) {
     id: u.id,
     email: u.email || "",
     username: u.username || "",
-    role: u.role || [],
-    isSuperUser: u.isSuperUser || false,
-    permissions: u.permissions || [],
+    role: inHomeTenant ? u.role || [] : [],
+    isSuperUser: inHomeTenant ? u.isSuperUser || false : false,
+    permissions: inHomeTenant ? u.permissions || [] : [],
     employeeStatus: u.employeeStatus || "Active",
     firstName,
     lastName,
     fullName,
     dob: u.dob || "",
     blood_group: u.blood_group || "",
-    mobile: safeDecrypt(u.mobile),
+    mobile: readSensitiveForDisplay(u.mobile, "mobile"),
     official_email: u.official_email || "",
     personalEmail: u.personalEmail || "",
     designation: u.designation || "",
     department: u.department || "",
     joining_date: u.joining_date || "",
     employee_photo: u.employee_photo || "",
-    communication_address_line_1: safeDecrypt(u.communication_address_line_1),
-    communication_address_line_2: safeDecrypt(u.communication_address_line_2),
-    communication_address_city: safeDecrypt(u.communication_address_city),
-    communication_address_state: safeDecrypt(u.communication_address_state),
-    communication_address_pincode: safeDecrypt(u.communication_address_pincode),
-    permanent_address_line_1: safeDecrypt(u.permanent_address_line_1),
-    permanent_address_line_2: safeDecrypt(u.permanent_address_line_2),
-    permanent_address_city: safeDecrypt(u.permanent_address_city),
-    permanent_address_state: safeDecrypt(u.permanent_address_state),
-    permanent_address_pincode: safeDecrypt(u.permanent_address_pincode),
-    bank_account_no: safeDecrypt(u.bank_account_no),
+    communication_address_line_1: readSensitiveForDisplay(
+      u.communication_address_line_1,
+      "communication_address_line_1",
+    ),
+    communication_address_line_2: readSensitiveForDisplay(
+      u.communication_address_line_2,
+      "communication_address_line_2",
+    ),
+    communication_address_city: readSensitiveForDisplay(
+      u.communication_address_city,
+      "communication_address_city",
+    ),
+    communication_address_state: readSensitiveForDisplay(
+      u.communication_address_state,
+      "communication_address_state",
+    ),
+    communication_address_pincode: readSensitiveForDisplay(
+      u.communication_address_pincode,
+      "communication_address_pincode",
+    ),
+    permanent_address_line_1: readSensitiveForDisplay(
+      u.permanent_address_line_1,
+      "permanent_address_line_1",
+    ),
+    permanent_address_line_2: readSensitiveForDisplay(
+      u.permanent_address_line_2,
+      "permanent_address_line_2",
+    ),
+    permanent_address_city: readSensitiveForDisplay(
+      u.permanent_address_city,
+      "permanent_address_city",
+    ),
+    permanent_address_state: readSensitiveForDisplay(
+      u.permanent_address_state,
+      "permanent_address_state",
+    ),
+    permanent_address_pincode: readSensitiveForDisplay(
+      u.permanent_address_pincode,
+      "permanent_address_pincode",
+    ),
+    bank_account_no: readSensitiveForDisplay(
+      u.bank_account_no,
+      "bank_account_no",
+    ),
     bank_name: u.bank_name || "",
     ifsc_code: u.ifsc_code || "",
-    aadhar_no: safeDecrypt(u.aadhar_no),
-    aadhar_photo_front: safeDecrypt(u.aadhar_photo_front),
-    aadhar_photo_back: safeDecrypt(u.aadhar_photo_back),
-    pan_no: safeDecrypt(u.pan_no),
-    pan_photo: safeDecrypt(u.pan_photo),
-    pf_no: safeDecrypt(u.pf_no),
-    uan_no: safeDecrypt(u.uan_no),
-    esic_no: safeDecrypt(u.esic_no),
+    aadhar_no: readSensitiveForDisplay(u.aadhar_no, "aadhar_no"),
+    aadhar_photo_front: readSensitiveForDisplay(
+      u.aadhar_photo_front,
+      "aadhar_photo_front",
+    ),
+    aadhar_photo_back: readSensitiveForDisplay(
+      u.aadhar_photo_back,
+      "aadhar_photo_back",
+    ),
+    pan_no: readSensitiveForDisplay(u.pan_no, "pan_no"),
+    pan_photo: readSensitiveForDisplay(u.pan_photo, "pan_photo"),
+    pf_no: readSensitiveForDisplay(u.pf_no, "pf_no"),
+    uan_no: readSensitiveForDisplay(u.uan_no, "uan_no"),
+    esic_no: readSensitiveForDisplay(u.esic_no, "esic_no"),
     fcmTokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [],
     events: Array.isArray(u.events) ? u.events : [],
-    face_descriptor:
-      Array.isArray(u.face_descriptor) && u.face_descriptor.length === 128
-        ? u.face_descriptor
-        : null,
+    face_descriptor: faceAttestationEnforced()
+      ? null
+      : usableDescriptor(readFaceDescriptor(u.face_descriptor)),
   };
 }
 
@@ -186,7 +256,7 @@ export async function getProfile(req: Request, res: Response) {
     const tenantId = user?.tenantId ?? null;
     const [profile, tenant, activeSettings, isSupportAgent, platformAdmin] =
       await Promise.all([
-        fetchFullProfile(user!.userId),
+        fetchFullProfile(user!.userId, tenantId),
         tenantId ? tenantNameAndSlug(tenantId) : Promise.resolve(null),
         tenantId ? getActiveSettings(tenantId) : Promise.resolve(null),
         // UI hint only (shows the Praesto support console link); every
@@ -266,6 +336,17 @@ export async function refreshToken(req: Request, res: Response) {
       // treats a 401 here as "session is really gone," and collapsing every
       // failure reason into that code is what turned momentary backend
       // blips into full logouts.
+      // Auth-service could not verify the session (Redis/Mongo down or
+      // slow) and left it untouched — 503 + Retry-After, so the client keeps
+      // its token and retries. Only 401 means the session is gone.
+      if (response.status === GrpcStatus.UNAVAILABLE) {
+        res.setHeader("Retry-After", "5");
+        return res.status(503).json({
+          success: false,
+          code: "SESSION_CHECK_UNAVAILABLE",
+          message: response.message,
+        });
+      }
       return apiResponse(res, grpcToHttpStatus(response.status), {
         message: response.message,
       });
@@ -564,7 +645,35 @@ export async function webAuthnLogin(req: Request, res: Response) {
     // rejection, so it must not collapse into the same 401 as an invalid
     // token above (a DB hiccup right after a legitimate WebAuthn login
     // shouldn't look like "authentication failed" to the client).
-    const profile = await fetchFullProfile(payload.userId);
+    // Any still-valid access token is accepted as a tempToken,
+    // so this must apply the same account check as `authenticate` — a
+    // terminated or removed person's old token gets nothing here.
+    let access;
+    try {
+      access = await resolveAccountAccess(
+        payload.userId,
+        payload.tenantId ?? null,
+      );
+    } catch (err) {
+      if (isAccountAccessUnavailable(err)) {
+        res.setHeader("Retry-After", "5");
+        return res.status(503).json({
+          success: false,
+          code: "AUTH_CHECK_UNAVAILABLE",
+          message: "Temporarily unable to verify your session. Please retry.",
+        });
+      }
+      throw err;
+    }
+    if (!access.ok) {
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: "Authentication failed",
+      });
+    }
+    const profile = await fetchFullProfile(
+      payload.userId,
+      payload.tenantId ?? null,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { accessToken: tempToken, user: profile },
     });
@@ -599,6 +708,12 @@ export function googleAuthRedirect(req: Request, res: Response) {
       ? requested
       : DEFAULT_MOBILE_REDIRECT;
     state = `mobile:${encodeURIComponent(target)}`;
+  } else {
+    // Ties the callback to this browser, so an attacker can't send a victim
+    // a callback that signs them in to the attacker's account.
+    const nonce = randomBytes(32).toString("hex");
+    res.cookie(OAUTH_STATE_COOKIE, nonce, OAUTH_STATE_COOKIE_OPTIONS);
+    state = `web:${nonce}`;
   }
 
   const url =
@@ -636,6 +751,17 @@ export async function googleAuthCallback(req: Request, res: Response) {
         ? `${mobileScheme}?error=${encodeURIComponent(message)}`
         : `${clientUrl}/login?error=${encodeURIComponent(message)}`,
     );
+  }
+
+  if (!isMobile) {
+    const expected = req.cookies?.[OAUTH_STATE_COOKIE];
+    res.clearCookie(OAUTH_STATE_COOKIE, OAUTH_STATE_COOKIE_OPTIONS);
+    if (!expected || rawState !== `web:${expected}`) {
+      return jsRedirect(
+        res,
+        `${clientUrl}/login?error=${encodeURIComponent("Sign-in expired. Please try again.")}`,
+      );
+    }
   }
 
   try {

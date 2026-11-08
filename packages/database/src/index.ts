@@ -19,13 +19,21 @@ export {
 } from "./tenantContext";
 export type { AuditActor } from "./tenantContext";
 export { prismaWithTenant } from "./prismaWithTenant";
+export { runForTenant, TenantContextError } from "./runForTenant";
 export { warmUpDatabase } from "./warmUp";
 export { getClientForDb, closeAllTenantClients } from "./tenantClientPool";
+export { disconnectDatabases } from "./disconnect";
+export { leaseClient, activeLeases } from "./clientLeases";
 export {
   checkUserHasHistoricalRecords,
   type UserHistoricalRecordsResult,
 } from "./userDeletionGuard";
 export { canonicalizeEmail, getEmailDomain } from "./email";
+export {
+  sensitiveWritesAllowed,
+  sealUserWriteArgs,
+  SensitiveWriteBlockedError,
+} from "./fieldEncryption";
 export { redactAuditValue, isSensitiveAuditField } from "./auditMiddleware";
 export { generateUniqueUsername } from "./username";
 export {
@@ -49,3 +57,13 @@ export {
 } from "./publicEmailDomains";
 export { ensureMasterIndexes } from "./ensureIndexes";
 export { recordAuditEntry } from "./auditMiddleware";
+export {
+  checkAccountAccess,
+  isBlockedEmployeeStatus,
+  BLOCKED_STATUSES,
+  AccountAccessUnavailableError,
+  isAccountAccessUnavailable,
+  ACCOUNT_CHECK_TIMEOUT_MS,
+  type AccountAccess,
+  type AccountAccessDenial,
+} from "./accountAccess";

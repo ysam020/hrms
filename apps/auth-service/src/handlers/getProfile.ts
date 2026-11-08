@@ -1,3 +1,4 @@
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -53,7 +54,7 @@ export const getProfile = async (
         role: user.role,
         firstName: user.first_name || "",
         lastName: user.last_name || "",
-        mobile: user.mobile || "",
+        mobile: readSensitiveForDisplay(user.mobile, "mobile"),
         department: user.department || "",
         designation: user.designation || "",
         employeePhoto: user.employee_photo || "",

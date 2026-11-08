@@ -1,6 +1,7 @@
 import http from "http";
 import cluster from "node:cluster";
 import { randomUUID } from "crypto";
+import { performance } from "node:perf_hooks";
 import winston from "winston";
 import WinstonCloudWatch from "winston-cloudwatch";
 import { status as grpcStatus } from "@grpc/grpc-js";
@@ -152,6 +153,36 @@ export const cacheRedisDuration = new Histogram({
   buckets: [0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250],
 });
 
+// Account-access checks (api-gateway authenticate / sockets).
+// `result`: hit (cached decision), miss_allowed, miss_denied,
+// unavailable_timeout, unavailable_error, breaker_open. No ids, ever.
+export const accountAccessChecksTotal = new Counter({
+  name: "account_access_checks_total",
+  help: "Account/membership checks by outcome",
+  labelNames: ["result", "service"],
+});
+
+export const accountAccessCheckDuration = new Histogram({
+  name: "account_access_check_duration_ms",
+  help: "Duration of uncached account/membership checks, in milliseconds",
+  labelNames: ["service"],
+  buckets: [1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000],
+});
+
+// Rate-limit store mode: 0 = Redis (global), 1 = in-process
+// memory fallback (per-process counters).
+export const rateLimitStoreDegraded = new Gauge({
+  name: "rate_limit_store_degraded",
+  help: "1 while rate limiting has fallen back to per-process memory",
+  labelNames: ["service"],
+});
+
+export const rateLimitStoreFailoversTotal = new Counter({
+  name: "rate_limit_store_failovers_total",
+  help: "Times rate limiting fell back from Redis to per-process memory",
+  labelNames: ["service"],
+});
+
 // ── Transports ───────────────────────────────────────────────────────────────
 const logGroupName =
   process.env.AWS_CLOUDWATCH_LOG_GROUP || `/hrms/${serviceName}/${env}`;
@@ -238,12 +269,24 @@ if (
   );
 }
 
+// Marks an Error once it has been through a log line, so code further up
+// the chain (e.g. the gateway's handleError) can avoid logging it again.
+const LOGGED = Symbol.for("hrms.logger.logged");
+
+/** Whether `err` has already been written to a log line. */
+export function wasLogged(err: unknown): boolean {
+  return !!err && typeof err === "object" && (err as any)[LOGGED] === true;
+}
+
 // Recursively convert Error instances to plain objects so JSON.stringify
-// captures message/stack (which are non-enumerable on Error).
+// captures message/stack (which are non-enumerable on Error). Only those
+// three fields are kept: an HTTP client's error also carries its request
+// config and headers (credentials), which must not reach a log line.
 // Mutates in place to preserve Symbol(level) on the TransformableInfo.
-const serializeErrors = winston.format((info) => {
+export const serializeErrors = winston.format((info) => {
   const convert = (val: unknown): unknown => {
     if (val instanceof Error) {
+      Object.defineProperty(val, LOGGED, { value: true, configurable: true });
       return { message: val.message, name: val.name, stack: val.stack };
     }
     if (val && typeof val === "object" && !Array.isArray(val)) {

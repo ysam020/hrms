@@ -3,6 +3,7 @@ import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { getResumeParsingQueue } from "@hrms/queue";
+import type { ResumeParsingJobData } from "@hrms/queue";
 import { notify } from "@hrms/notifications";
 import { MESSAGES } from "../constants/messages";
 
@@ -134,8 +135,12 @@ export const applyForJob = async (
     await cacheManager.invalidatePattern(`t:${tenantId}:applications:*`);
 
     // Enqueue resume scoring (fire-and-forget — worker updates DB asynchronously)
+    const resumeJob: ResumeParsingJobData = {
+      applicationId: application.id,
+      tenantId,
+    };
     getResumeParsingQueue()
-      .add("scoreResume", { applicationId: application.id })
+      .add("scoreResume", resumeJob)
       .catch((err) =>
         logger.warn("[applyForJob] Resume parsing enqueue failed:", { err }),
       );

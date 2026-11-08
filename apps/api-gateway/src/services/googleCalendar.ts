@@ -1,4 +1,7 @@
-import { google } from "googleapis";
+// Loaded on first use: the package costs about 60 MB of heap per process and
+// only calendar scheduling needs it.
+const loadGoogle = async () => (await import("googleapis")).google;
+type Google = Awaited<ReturnType<typeof loadGoogle>>;
 import { aesDecrypt } from "@hrms/crypto";
 
 // "Connect Google Calendar" consent flow — deliberately separate from the
@@ -78,7 +81,7 @@ async function getFreshAccessToken(
 }
 
 async function insertMeetEvent(
-  auth: InstanceType<typeof google.auth.OAuth2>,
+  auth: InstanceType<Google["auth"]["OAuth2"]>,
   options: {
     summary: string;
     description?: string;
@@ -87,6 +90,7 @@ async function insertMeetEvent(
     attendeeEmails: string[];
   },
 ): Promise<{ meetLink: string; eventId: string }> {
+  const google = await loadGoogle();
   const calendar = google.calendar({ version: "v3", auth });
   const requestId = `interview-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const res = await calendar.events.insert({
@@ -134,6 +138,7 @@ export async function createInterviewMeetEvent(options: {
   attendeeEmails: string[];
 }): Promise<{ meetLink: string; eventId: string }> {
   const accessToken = await getFreshAccessToken(options.encryptedRefreshToken);
+  const google = await loadGoogle();
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({ access_token: accessToken });
   return insertMeetEvent(oauth2Client, options);

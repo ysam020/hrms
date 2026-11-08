@@ -90,7 +90,9 @@ export const approveResignation = async (
         return notify({
           tenantId: getTenantId()!,
           event: "resignationApproved",
-          targetUser: updatedResignation.userId ?? undefined,
+          recipients: updatedResignation.userId
+            ? [updatedResignation.userId]
+            : [],
           inApp: {
             title: "Resignation",
             message: MESSAGES.RESIGNATION_APPROVED,

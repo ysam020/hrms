@@ -207,3 +207,31 @@ describe("checkPermission", () => {
     });
   });
 });
+
+// Without x-tenant-id metadata no tenant is bound, and
+// prismaWithTenant would return a master record from ANY organisation.
+describe("checkPermission without a tenant bound", () => {
+  const { getTenantId } = jest.requireMock("@hrms/db") as {
+    getTenantId: jest.Mock;
+  };
+  afterEach(() => getTenantId.mockReturnValue("t1"));
+
+  it("refuses even a superuser record — another organisation's flag must not count", async () => {
+    getTenantId.mockReturnValue(undefined);
+    mockFindUnique.mockResolvedValue({
+      role: [],
+      permissions: ["leave:*"],
+      isSuperUser: true,
+    });
+    const cb = makeCallback();
+    await checkPermission(
+      makeCall({ userId: "user-1", resource: "leave", action: "read" }),
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(null, {
+      message: MESSAGES.USER_NOT_FOUND,
+      status: status.NOT_FOUND,
+    });
+    expect(cb.mock.calls[0][1].allowed).toBeUndefined();
+  });
+});

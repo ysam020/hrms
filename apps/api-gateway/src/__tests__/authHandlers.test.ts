@@ -31,6 +31,8 @@ jest.mock("@hrms/db", () => {
       update: jest.fn(),
       findUnique: jest.fn(),
     },
+    // Read by getProfile only when the token carries a tenant.
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   return {
     markHandlerStart: jest.fn(),
@@ -63,7 +65,8 @@ jest.mock("@hrms/crypto", () => ({
     if (v === "bad-token") throw new Error("Decrypt failed");
     return v;
   }),
-  safeDecrypt: jest.fn((v: any) => v || ""),
+  readSensitiveForDisplay: jest.fn((v: any) => v || ""),
+  readFaceDescriptor: jest.fn((v: any) => (Array.isArray(v) ? v : null)),
 }));
 
 jest.mock("@hrms/cache", () => ({
@@ -86,6 +89,20 @@ jest.mock("jsonwebtoken", () => ({
   },
 }));
 
+// Read by getProfile only when the token carries a tenant.
+jest.mock("./../handlers/tenantSettings", () => ({
+  getActiveSettings: jest.fn().mockResolvedValue(null),
+}));
+// webAuthnLogin applies authenticate's account check.
+const mockResolveAccess = jest.fn(async () => ({
+  ok: true,
+  tenantRole: null,
+  dbName: null,
+  employeeStatus: "Active",
+}));
+jest.mock("../services/accountAccess", () => ({
+  resolveAccountAccess: (...a: unknown[]) => (mockResolveAccess as any)(...a),
+}));
 jest.mock("../services/loginEventService", () => ({
   recordLoginEvent: jest.fn().mockResolvedValue(undefined),
 }));
@@ -196,6 +213,44 @@ describe("authHandlers", () => {
       expect(user.dob).toBe("1993-10-10T00:00:00.000Z");
       expect(user.joining_date).toBe("2020-01-01T00:00:00.000Z");
       expect(user.fcmTokens[0].lastUsed).toBe("2026-11-01T09:00:00.000Z");
+    });
+
+    // The profile's isSuperUser/permissions/role are UI hints
+    // that must agree with what the guards enforce — reported only in the
+    // user's home organisation.
+    it("reports superuser/permissions only in the user's home organisation", async () => {
+      const privileged = {
+        ...profileRow,
+        isSuperUser: true,
+        permissions: ["*:*:*"],
+        role: ["admin"],
+        homeTenantId: "home-t",
+      };
+      mockAggregateRaw.mockResolvedValue([privileged]);
+      const home = makeRes();
+      await getProfile(
+        makeReq({ user: { userId: "user-1", tenantId: "home-t" } }),
+        home,
+      );
+      const inHome = mockApiResponse.mock.calls.at(-1)[2].data.user;
+      expect(inHome).toMatchObject({
+        isSuperUser: true,
+        permissions: ["*:*:*"],
+      });
+
+      mockAggregateRaw.mockResolvedValue([privileged]);
+      await getProfile(
+        makeReq({ user: { userId: "user-1", tenantId: "other-t" } }),
+        makeRes(),
+      );
+      const elsewhere = mockApiResponse.mock.calls.at(-1)[2].data.user;
+      expect(elsewhere).toMatchObject({
+        isSuperUser: false,
+        permissions: [],
+        role: [],
+      });
+      // The internal home-tenant field is never sent to the client.
+      expect(elsewhere.homeTenantId).toBeUndefined();
     });
 
     it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
@@ -659,6 +714,26 @@ describe("authHandlers", () => {
       );
     });
 
+    it("gives a terminated/removed person's still-valid token nothing", async () => {
+      mockJwtVerify.mockReturnValue({ userId: "user-1", tenantId: "t1" });
+      mockResolveAccess.mockResolvedValueOnce({
+        ok: false,
+        reason: "blocked_status",
+      } as any);
+      mockAggregateRaw.mockResolvedValue([profileRow]);
+      const res = makeRes();
+      await webAuthnLogin(
+        makeReq({ body: { tempToken: "old-access-token" } }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.UN_AUTHORIZED,
+        expect.any(Object),
+      );
+      expect(mockAggregateRaw).not.toHaveBeenCalled(); // no profile read
+    });
+
     it("returns accessToken and profile on valid token", async () => {
       mockJwtVerify.mockReturnValue({ userId: "user-1" });
       mockAggregateRaw.mockResolvedValue([profileRow]);
@@ -721,13 +796,41 @@ describe("authHandlers", () => {
       );
     });
 
+    it.each([
+      ["no state and no cookie", {}, {}],
+      ["no cookie", { state: "web:nonce-1" }, {}],
+      ["no state", {}, { oauth_state: "nonce-1" }],
+      [
+        "a mismatched state",
+        { state: "web:attacker" },
+        { oauth_state: "nonce-1" },
+      ],
+    ])("refuses a web callback with %s", async (_n, query, cookies) => {
+      const res = makeRes();
+      await googleAuthCallback(
+        makeReq({ query: { code: "auth-code", ...query }, cookies }),
+        res,
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalled();
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        expect.stringContaining("/login?error="),
+      );
+    });
+
     it("sets cookie and redirects to home on successful auth", async () => {
       mockGrpcCall.mockResolvedValue({
         accessToken: "acc-token",
         refreshToken: "ref-token",
       });
       const res = makeRes();
-      await googleAuthCallback(makeReq({ query: { code: "auth-code" } }), res);
+      await googleAuthCallback(
+        makeReq({
+          query: { code: "auth-code", state: "web:nonce-1" },
+          cookies: { oauth_state: "nonce-1" },
+        }),
+        res,
+      );
       expect(res.cookie).toHaveBeenCalledWith(
         "refresh_token",
         expect.any(String),

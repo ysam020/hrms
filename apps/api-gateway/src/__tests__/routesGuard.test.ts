@@ -156,7 +156,17 @@ beforeAll(async () => {
       user: { findUnique: jest.fn().mockResolvedValue({ username: "probe" }) },
     },
     runWithTenant: (_t: unknown, _c: unknown, fn: () => void) => fn(),
+    // authenticate's per-request account check: allowed,
+    // with the role token() issues. Kept off mockTenantFindUnique so the
+    // "one tenant lookup per request" counts below are unaffected.
+    checkAccountAccess: async (_u: string, tenantId: string | null) => ({
+      ok: true,
+      tenantRole: tenantId ? "owner" : null,
+      dbName: null,
+      employeeStatus: "Active",
+    }),
     getClientForDb: () => ({}),
+    leaseClient: () => () => undefined,
     recordStage: () => {},
     recordExternal: () => {},
     markHandlerStart: () => {},

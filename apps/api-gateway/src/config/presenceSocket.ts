@@ -5,6 +5,7 @@ import {
   getClientForDb,
 } from "@hrms/db";
 import { logger } from "@hrms/logger";
+import { emitToRoomAuthorized } from "./socketAuth";
 import { getWebSocketRedis } from "@hrms/websocket";
 import {
   broadcast,
@@ -58,8 +59,11 @@ export function setupPresenceSocket(io: SocketServer): void {
     if (channel !== PRESENCE_CHANNEL) return;
     try {
       const { room, payload } = JSON.parse(message);
+      // Each watcher is re-authorised before the update reaches them.
       if (typeof room === "string" && room.startsWith("px:"))
-        io.to(room).emit("presence:update", payload);
+        void emitToRoomAuthorized(io, room, "presence:update", payload).catch(
+          (err) => logger.error("presence: authorised emit failed", { err }),
+        );
     } catch (err) {
       logger.error("presence: bad event", { err });
     }

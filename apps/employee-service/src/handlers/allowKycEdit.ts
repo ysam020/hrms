@@ -74,8 +74,8 @@ export const allowKycEdit = async (
       cacheManager.delete(
         `t:${tenantId}:employee-details:${updatedUser!.username}`,
       ),
-      cacheManager.delete(`t:${tenantId}:user:v6:${employeeId}`),
-      cacheManager.delete(`t:${tenantId}:user:v6:${updatedUser!.username}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${employeeId}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${updatedUser!.username}`),
     ]);
 
     // Notify employee (fire-and-forget)

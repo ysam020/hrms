@@ -7,7 +7,20 @@ jest.mock("express-rate-limit", () => {
     middleware.__options = options;
     return middleware;
   });
-  return { __esModule: true, default: rateLimit };
+  return {
+    __esModule: true,
+    default: rateLimit,
+    // FailoverStore keeps an in-process fallback.
+    MemoryStore: class {
+      init() {}
+      increment() {
+        return { totalHits: 1, resetTime: undefined };
+      }
+      decrement() {}
+      resetKey() {}
+      shutdown() {}
+    },
+  };
 });
 
 // Without these mocks, constructing config/rateLimiters.ts's module-level
@@ -39,7 +52,7 @@ describe("middleware/rateLimiter — Redis-backed store", () => {
   // module's own prefix (rl:mw-*) rather than asserting a raw count.
   const mwOptions = () =>
     capturedOptions.filter((o) =>
-      /^rl:mw-/.test(o.store?.__options?.prefix ?? ""),
+      /^rl:mw-/.test((o.store?.primary ?? o.store)?.__options?.prefix ?? ""),
     );
 
   it("gives defaultLimiter a RedisStore instance, not the in-process default", () => {
@@ -47,14 +60,14 @@ describe("middleware/rateLimiter — Redis-backed store", () => {
     expect(options.length).toBe(1);
     for (const o of options) {
       expect(o.store).toBeDefined();
-      expect(o.store.__options).toBeDefined();
+      expect(o.store.primary.__options).toBeDefined();
     }
   });
 
   it("uses a distinct key prefix from every other rate limiter in the app so counters can't collide", () => {
     const prefixes = capturedStoreOptions.map((o) => o.prefix);
     expect(new Set(prefixes).size).toBe(prefixes.length); // all distinct across every limiter constructed
-    const mwPrefixes = mwOptions().map((o) => o.store.__options.prefix);
+    const mwPrefixes = mwOptions().map((o) => o.store.primary.__options.prefix);
     expect(mwPrefixes).toEqual(expect.arrayContaining(["rl:mw-default:"]));
   });
 

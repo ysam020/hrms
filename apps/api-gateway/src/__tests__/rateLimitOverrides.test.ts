@@ -1,5 +1,15 @@
 jest.mock("express-rate-limit", () => ({
   __esModule: true,
+  // FailoverStore keeps an in-process fallback.
+  MemoryStore: class {
+    init() {}
+    increment() {
+      return { totalHits: 1, resetTime: undefined };
+    }
+    decrement() {}
+    resetKey() {}
+    shutdown() {}
+  },
   default: jest.fn(() => jest.fn()),
   ipKeyGenerator: jest.fn(),
 }));

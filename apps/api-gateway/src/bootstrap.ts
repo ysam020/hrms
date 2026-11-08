@@ -33,16 +33,22 @@ async function startWorker() {
 if (cluster.isPrimary && WORKERS > 1) {
   // The primary serves /metrics for all workers (see @hrms/logger).
   void import("@hrms/logger");
-  // eslint-disable-next-line no-console
-  console.log(`api-gateway primary ${process.pid}: forking ${WORKERS} workers`);
-  for (let i = 0; i < WORKERS; i++) cluster.fork();
-  cluster.on("exit", (worker, code, signal) => {
-    // eslint-disable-next-line no-console
-    console.error(
-      `api-gateway worker ${worker.process.pid} exited (${signal || code}) — respawning`,
-    );
-    cluster.fork();
-  });
+  void import("./services/geoLookup").then(({ serveGeoLookups }) =>
+    serveGeoLookups(cluster),
+  );
+  // Forks and respawns the workers; on SIGTERM/SIGINT passes the signal to
+  // every worker and waits for them to drain (their budget + 1 s) instead
+  // of respawning them. Without this the primary — PID 1 in the container
+  // — ignored SIGTERM, the workers' shutdown never ran, and Docker killed
+  // the gateway at its stop timeout.
+  void Promise.all([
+    import("@hrms/common"),
+    import("./config/shutdownBudget"),
+  ]).then(([{ runClusterPrimary }, { gatewayShutdownGraceMs }]) =>
+    runClusterPrimary("api-gateway", WORKERS, cluster, {
+      workerGraceMs: gatewayShutdownGraceMs(),
+    }),
+  );
 } else {
   startWorker();
 }

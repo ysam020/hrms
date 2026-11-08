@@ -158,6 +158,20 @@ describe("grpcCall", () => {
     expect(meta.get("x-tenant-id")).toEqual([]);
   });
 
+  it("sends no tenant for a signed-in user whose organisation isn't set up yet (authenticate's null-tenant context)", async () => {
+    // authenticate stores { tenantId: null, dbName: null } for a token with
+    // no tenant; auth-service's tenant-optional methods rely on this
+    // arriving as "no tenant" rather than an empty or partial one.
+    mockGetStore.mockReturnValue({ tenantId: null, dbName: null });
+    const client = makeFakeGrpcClient((_req, meta, _options, cb) =>
+      cb(null, {}),
+    );
+    await grpcCall(client, "someMethod", {});
+    const meta = client.someMethod.mock.calls[0][1];
+    expect(meta.get("x-tenant-id")).toEqual([]);
+    expect(meta.get("x-tenant-db-name")).toEqual([]);
+  });
+
   it("forwards actor identity fields (for downstream audit-log attribution) when present", async () => {
     mockGetStore.mockReturnValue({
       tenantId: "t1",
@@ -298,6 +312,10 @@ describe("grpcCall retries", () => {
 
   it("uses a fresh deadline for each retry attempt rather than the original one", async () => {
     jest.useFakeTimers();
+    // The retry delay has full jitter (Math.random() × base): a draw that
+    // rounds to 0 ms starts the retry at the same fake-clock instant, making
+    // the deadlines equal and this test fail intermittently. Pin the draw.
+    const random = jest.spyOn(Math, "random").mockReturnValue(0.5);
     try {
       const spy = jest
         .fn()
@@ -319,6 +337,7 @@ describe("grpcCall retries", () => {
       // inherited from the first attempt — it should be later, not equal.
       expect(secondDeadline).toBeGreaterThan(firstDeadline);
     } finally {
+      random.mockRestore();
       jest.useRealTimers();
     }
   });

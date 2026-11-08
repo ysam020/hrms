@@ -2,7 +2,7 @@ import { Worker, Job } from "bullmq";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import type { ResumeParsingJobData } from "@hrms/queue";
-import { prisma } from "@hrms/db";
+import { prismaWithTenant, runForTenant } from "@hrms/db";
 import { logger, requestIdStorage } from "@hrms/logger";
 import pdfParse from "pdf-parse";
 import { s3Client, S3_BUCKET, S3_URL_PREFIX } from "../config/s3";
@@ -79,10 +79,38 @@ Respond with ONLY valid JSON in this exact format (no other text):
   return { score, notes };
 }
 
-async function processJob(job: Job<ResumeParsingJobData>) {
-  const { applicationId } = job.data;
+// BullMQ fails a job without retrying when the thrown error is named
+// "UnrecoverableError" — used when no retry could ever succeed.
+function permanentFailure(message: string): Error {
+  const err = new Error(message);
+  err.name = "UnrecoverableError";
+  return err;
+}
 
-  const application = await prisma.jobApplication.findUnique({
+// Applications live in the applicant's tenant database. Jobs used to carry
+// only the application id and were scored against the master database,
+// where no application exists, so every one was silently skipped.
+async function processJob(job: Job<ResumeParsingJobData>) {
+  const { applicationId, tenantId } = job.data;
+  if (!tenantId) {
+    throw permanentFailure(
+      `[resumeParser] Job ${job.id} for application ${applicationId} has no tenantId — refusing to score outside a tenant`,
+    );
+  }
+  try {
+    await runForTenant(tenantId, () => scoreApplication(applicationId));
+  } catch (err) {
+    if ((err as Error)?.name === "TenantContextError") {
+      throw permanentFailure(
+        `[resumeParser] Job ${job.id}: ${(err as Error).message}`,
+      );
+    }
+    throw err;
+  }
+}
+
+async function scoreApplication(applicationId: string) {
+  const application = await prismaWithTenant.jobApplication.findUnique({
     where: { id: applicationId },
     select: {
       id: true,
@@ -136,7 +164,7 @@ async function processJob(job: Job<ResumeParsingJobData>) {
 
   const newStatus = score < SCORE_THRESHOLD ? "Rejected" : "Applied";
 
-  await prisma.jobApplication.update({
+  await prismaWithTenant.jobApplication.update({
     where: { id: applicationId },
     data: { resumeScore: score, aiNotes: notes, status: newStatus },
   });
@@ -163,7 +191,13 @@ export function startResumeParserWorker(): Worker {
 
   worker.on("failed", (job, err) => {
     logger.error(`[resumeParser] Job ${job?.id} failed:`, { err });
-    if (job) {
+    // Only a final failure is dead-lettered: a permanent one (no retry), or
+    // the last attempt. An attempt BullMQ will retry isn't a failure yet —
+    // forwarding it left DLQ entries for jobs that then succeeded.
+    const final =
+      err?.name === "UnrecoverableError" ||
+      (job && job.attemptsMade >= (job.opts?.attempts ?? 1));
+    if (job && final) {
       getDeadLetterQueue()
         .add("failed-resume-parse", {
           originalQueue: "resumeParsingQueue",

@@ -7,6 +7,17 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./src/testing/fakePrismaClient.ts",
+      "default": "./dist/testing/fakePrismaClient.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "testing": [
+        "src/testing/fakePrismaClient.ts"
+      ]
     }
   },
   "prisma": {
@@ -20,6 +31,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@hrms/crypto": "workspace:*",
     "@prisma/client": "^5.22.0",
     "prisma": "^5.22.0"
   },

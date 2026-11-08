@@ -67,8 +67,8 @@ export const requestKycRevision = async (
       ),
       // See submitKyc.ts — /get-user-data/:username reads through
       // user-service's GetUser RPC cache, keyed separately from the above.
-      cacheManager.delete(`t:${tenantId}:user:v6:${employeeId}`),
-      cacheManager.delete(`t:${tenantId}:user:v6:${updatedUser.username}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${employeeId}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${updatedUser.username}`),
     ]);
 
     // Notify employee (fire-and-forget)

@@ -13,7 +13,6 @@ name: hrms-dev
 
 x-backend-service: &backend-service
   volumes:
-    - ${USERPROFILE:-${HOME}}/.aws:/app/.aws:ro
     - ./packages/certificates:/app/packages/certificates:ro
     - ./local-secrets.json:/app/local-secrets.json:ro
   restart: on-failure
@@ -21,6 +20,11 @@ x-backend-service: &backend-service
 services:
   api-gateway:
     container_name: hrms-dev-api-gateway
+    volumes:
+      # S3 presigned URLs need AWS credentials; nothing else does.
+      - ${USERPROFILE:-${HOME}}/.aws:/app/.aws:ro
+      - ./packages/certificates:/app/packages/certificates:ro
+      - ./local-secrets.json:/app/local-secrets.json:ro
     image: ysam090/hrms-api-gateway:latest
     build:
       context: .
@@ -83,6 +87,7 @@ services:
       - AWS_SECRET_NAME=hrms/config/docker
       - REQUEST_TIMING_LOG=true # per-request timing lines (no tokens/values); docs/performance/targeted-api-latency-investigation.md
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=auth-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9101
@@ -110,6 +115,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=user-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9102
@@ -137,6 +143,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=employee-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9103
@@ -164,6 +171,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=attendance-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9104
@@ -192,6 +200,7 @@ services:
       - AWS_SECRET_NAME=hrms/config/docker
       - REQUEST_TIMING_LOG=true # per-request timing lines (no tokens/values); docs/performance/targeted-api-latency-investigation.md
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=leave-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9105
@@ -208,6 +217,11 @@ services:
 
   recruitment-service:
     container_name: hrms-dev-recruitment-service
+    volumes:
+      # S3 presigned URLs need AWS credentials; nothing else does.
+      - ${USERPROFILE:-${HOME}}/.aws:/app/.aws:ro
+      - ./packages/certificates:/app/packages/certificates:ro
+      - ./local-secrets.json:/app/local-secrets.json:ro
     image: ysam090/hrms-recruitment-service:latest
     build:
       context: .
@@ -247,6 +261,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=hrm-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9107
@@ -274,6 +289,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=salary-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9108
@@ -301,6 +317,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=analytics-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9109
@@ -329,6 +346,7 @@ services:
       - AWS_SECRET_NAME=hrms/config/docker
       - REQUEST_TIMING_LOG=true # per-request timing lines (no tokens/values); docs/performance/targeted-api-latency-investigation.md
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=notification-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9110
@@ -356,6 +374,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=performance-review-service
       - WEB_CONCURRENCY=2
       - METRICS_PORT=9112
@@ -382,6 +401,7 @@ services:
     environment:
       - AWS_SECRET_NAME=hrms/config/docker
       - LOCAL_SECRETS_FILE=/app/local-secrets.json
+      - CLOUDWATCH_LOGS_DISABLED=true
       - SERVICE_NAME=scheduler-service
       # Never run crons locally: dev shares production's database (see scheduler.ts)
       - SCHEDULER_ENABLED=false

@@ -469,7 +469,7 @@ export async function assignAsset(req: Request, res: Response) {
           return notify({
             tenantId,
             event: "assetAssigned",
-            targetUser: userId,
+            recipients: [userId],
             inApp: {
               title: "Asset assigned",
               message: `${assetCode} has been assigned to you`,

@@ -1,3 +1,4 @@
+import { notify } from "@hrms/notifications";
 import { prisma } from "@hrms/db";
 import { cacheManager } from "@hrms/cache";
 import { rejectLeave } from "../handlers/rejectLeave";
@@ -24,6 +25,7 @@ jest.mock("@hrms/notifications", () => ({
 }));
 
 jest.mock("@hrms/common", () => ({
+  formatDateOrRange: jest.fn(() => "1 Mar 2024"),
   tenantFrom: jest.fn(
     (name: string) => `"${name} HR" <hr@notifications.praesto.in>`,
   ),
@@ -112,5 +114,75 @@ describe("rejectLeave", () => {
       null,
       expect.objectContaining({ status: 13 }),
     );
+  });
+});
+
+// What the notification worker expects (NotificationJobData): the job's
+// tenant, recipients as user ids — never usernames — and no legacy
+// targetUser / pushTargets or broadcast that could widen the audience.
+function expectRecipientsOnly(
+  job: any,
+  {
+    tenantId,
+    userId,
+    username,
+  }: { tenantId: string; userId: string; username?: string },
+) {
+  expect(job.tenantId).toBe(tenantId);
+  expect(job.recipients).toEqual([userId]);
+  if (username) expect(job.recipients).not.toContain(username);
+  expect(job).not.toHaveProperty("targetUser");
+  expect(job).not.toHaveProperty("pushTargets");
+  expect(job).not.toHaveProperty("broadcast");
+  expect(job.inApp).toEqual(
+    expect.objectContaining({
+      title: expect.any(String),
+      message: expect.any(String),
+      eventType: expect.any(String),
+    }),
+  );
+}
+
+const flushNotifications = async () => {
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+};
+
+describe("rejectLeave notification", () => {
+  const USER = "a00000000000000000000001";
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockInvalidate.mockResolvedValue(undefined);
+    (notify as jest.Mock).mockResolvedValue({
+      notificationId: "n1",
+      jobIds: {},
+    });
+  });
+
+  it("notifies the applicant by user id (not username), in the request's tenant, with no broadcast fields", async () => {
+    mockFindUnique.mockResolvedValue({ ...pendingLeave, userId: USER });
+    mockUpdate.mockResolvedValue({
+      ...pendingLeave,
+      userId: USER,
+      status: "Rejected",
+      from: new Date("2024-03-01"),
+      to: new Date("2024-03-01"),
+    });
+    await rejectLeave(makeCall({ id: "leave-1" }), makeCallback());
+    await flushNotifications();
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    expectRecipientsOnly((notify as jest.Mock).mock.calls[0][0], {
+      tenantId: "t1",
+      userId: USER,
+      username: "john",
+    });
+    expect((notify as jest.Mock).mock.calls[0][0].event).toBe("leaveRejected");
+  });
+
+  it("sends nothing when the leave isn't rejected (not pending)", async () => {
+    mockFindUnique.mockResolvedValue({ ...pendingLeave, status: "Approved" });
+    await rejectLeave(makeCall({ id: "leave-1" }), makeCallback());
+    await flushNotifications();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

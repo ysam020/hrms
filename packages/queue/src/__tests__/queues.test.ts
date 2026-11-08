@@ -3,6 +3,7 @@ import { getBullMQConnection } from "../connection";
 import {
   getEmailQueue,
   getNotificationQueue,
+  getLegacyNotificationQueue,
   getResumeParsingQueue,
   getSchedulerQueue,
   getDeadLetterQueue,
@@ -41,7 +42,15 @@ describe("queue singletons", () => {
 
   it.each([
     ["getEmailQueue", getEmailQueue, "emailQueue"],
-    ["getNotificationQueue", getNotificationQueue, "notificationQueue"],
+    // Producers use a new queue name: workers built before the tenant-
+    // isolation fix consume only "notificationQueue" and would broadcast
+    // a recipients-only job to every user (see queues.ts).
+    ["getNotificationQueue", getNotificationQueue, "notificationQueueV2"],
+    [
+      "getLegacyNotificationQueue",
+      getLegacyNotificationQueue,
+      "notificationQueue",
+    ],
     ["getResumeParsingQueue", getResumeParsingQueue, "resumeParsingQueue"],
     ["getSchedulerQueue", getSchedulerQueue, "schedulerQueue"],
     ["getDeadLetterQueue", getDeadLetterQueue, "deadLetterQueue"],
@@ -53,6 +62,12 @@ describe("queue singletons", () => {
   ])("%s creates a Queue named %s", (_label, getter, expectedName) => {
     const q = getter() as any;
     expect(q.name).toBe(expectedName);
+  });
+
+  it("never lets producers enqueue notifications on the legacy queue", () => {
+    expect((getNotificationQueue() as any).name).not.toBe(
+      (getLegacyNotificationQueue() as any).name,
+    );
   });
 
   it("memoizes each queue — repeated calls return the same instance without re-constructing", () => {

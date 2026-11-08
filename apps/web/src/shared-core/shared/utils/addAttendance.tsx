@@ -17,12 +17,14 @@ export const addAttendance = async (
   getAttendances,
   latitude,
   longitude,
+  faceAttestation,
 ) => {
   try {
     await apiClient.post(API_ENDPOINTS.ADD_ATTENDANCE, {
       type: FIELD_TO_TYPE[field] ?? field,
       latitude,
       longitude,
+      faceAttestation,
     });
 
     setAlert({

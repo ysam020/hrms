@@ -1,0 +1,41 @@
+# Initial production alerts, using only metrics Prometheus already collects.
+# Each rule has a `for` window so a brief blip doesn't page anyone.
+groups:
+  - name: praesto-availability
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.job }} has been unreachable for 2 minutes"
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+          and sum(rate(http_requests_total[5m])) > 0.1
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 5% of API requests are failing"
+      - alert: ProcessRestarted
+        expr: changes(process_start_time_seconds[15m]) > 2
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.job }} restarted more than twice in 15 minutes"
+  - name: praesto-capacity
+    rules:
+      - alert: GatewayMemoryHigh
+        expr: |
+          sum(process_resident_memory_bytes{job=~".*gateway.*"})
+            > 0.85 * 768 * 1024 * 1024
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Gateway memory is above 85% of its limit"
+      - alert: EventLoopLagHigh
+        expr: nodejs_eventloop_lag_p99_seconds > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.job }} event loop p99 lag is above 500 ms"

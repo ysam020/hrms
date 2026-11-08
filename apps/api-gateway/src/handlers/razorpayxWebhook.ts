@@ -1,3 +1,9 @@
+import {
+  claimWebhookEvent,
+  completeWebhookEvent,
+  failWebhookEvent,
+  webhookBodyDigest,
+} from "../services/webhookInbox";
 /**
  * RazorpayX Payout Webhook handler.
  *
@@ -82,12 +88,41 @@ export async function handleRazorpayXWebhook(req: Request, res: Response) {
     return res.status(400).json({ ok: false, message: "Invalid JSON" });
   }
 
-  // Acknowledge immediately — Razorpay retries on non-2xx.
-  res.json({ ok: true });
+  // Acknowledged only after the work is done, so a failure is retried.
+  if (!payoutEntity?.id) return res.json({ ok: true });
 
+  let inboxId: string | null = null;
+  try {
+    const claim = await claimWebhookEvent({
+      provider: "razorpayx",
+      eventId:
+        (req.headers["x-razorpay-event-id"] as string | undefined) ||
+        webhookBodyDigest(rawBody),
+      eventType: event,
+      rawBody,
+    });
+    if (claim.outcome === "duplicate") return res.json({ ok: true });
+    if (claim.outcome === "in_progress") {
+      return res.status(503).json({ ok: false });
+    }
+    inboxId = claim.id;
+    await applyPayoutEvent(event, payoutEntity);
+    await completeWebhookEvent(inboxId);
+    return res.json({ ok: true });
+  } catch (error: unknown) {
+    logger.error("RazorpayX webhook: processing failed", {
+      name: (error as Error)?.name,
+    });
+    if (inboxId) await failWebhookEvent(inboxId, error);
+    return res.status(500).json({ ok: false });
+  }
+}
+
+async function applyPayoutEvent(
+  event: string,
+  payoutEntity: any,
+): Promise<void> {
   // ── 3. Handle payout lifecycle events ────────────────────────────────────
-  if (!payoutEntity?.id) return; // not a payout event we care about
-
   const payoutId: string = payoutEntity.id;
 
   // This request carries no auth/session, so there's no tenant context bound

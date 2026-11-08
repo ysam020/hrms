@@ -1,3 +1,4 @@
+export * from "./fieldEncryption";
 import crypto from "crypto";
 
 const getKey = (): Buffer => {

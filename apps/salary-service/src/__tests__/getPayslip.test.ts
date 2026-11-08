@@ -121,10 +121,10 @@ describe("getPayslip", () => {
 
   it("includes attendance summary when month and year provided", async () => {
     mockAttendanceFindMany.mockResolvedValue([
-      { status: "Present" },
-      { status: "Present" },
-      { status: "Absent" },
-      { status: "Late" },
+      { date: new Date(Date.UTC(2024, 2, 1)), status: "Present" },
+      { date: new Date(Date.UTC(2024, 2, 2)), status: "Present" },
+      { date: new Date(Date.UTC(2024, 2, 3)), status: "Absent" },
+      { date: new Date(Date.UTC(2024, 2, 4)), status: "Late" },
     ]);
     const cb = makeCallback();
     await getPayslip(makeCall({ userId: "u1", month: "3", year: "2024" }), cb);

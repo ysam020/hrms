@@ -77,7 +77,9 @@ export const rejectResignation = async (
         return notify({
           tenantId: getTenantId()!,
           event: "resignationRejected",
-          targetUser: updatedResignation.userId ?? undefined,
+          recipients: updatedResignation.userId
+            ? [updatedResignation.userId]
+            : [],
           inApp: {
             title: "Resignation",
             message: MESSAGES.RESIGNATION_REJECTED,

@@ -22,21 +22,30 @@ export async function notify(options: NotifyOptions): Promise<NotifyResult> {
   const jobIds: NotifyResult["jobIds"] = {};
 
   if (options.inApp) {
-    const job = await getNotificationQueue().add(options.event, {
-      tenantId: options.tenantId,
-      title: options.inApp.title,
-      message: options.inApp.message,
-      recipients: options.recipients,
-      pushTargets: options.pushTargets,
-      targetUser: options.targetUser,
-      eventType: options.inApp.eventType,
-      sendPushNotification: options.push?.enabled ?? true,
-      priority: options.inApp.priority,
-      silent: options.inApp.silent,
-      socketEvent: options.inApp.socketEvent,
-      socketPayload: options.inApp.socketPayload,
-      metadata: { ...options.metadata, notificationId },
-    });
+    const job = await getNotificationQueue().add(
+      options.event,
+      {
+        tenantId: options.tenantId,
+        title: options.inApp.title,
+        message: options.inApp.message,
+        recipients: options.recipients,
+        pushTargets: options.pushTargets,
+        targetUser: options.targetUser,
+        broadcast: options.broadcast,
+        eventType: options.inApp.eventType,
+        sendPushNotification: options.push?.enabled ?? true,
+        priority: options.inApp.priority,
+        silent: options.inApp.silent,
+        socketEvent: options.inApp.socketEvent,
+        socketPayload: options.inApp.socketPayload,
+        metadata: { ...options.metadata, notificationId },
+      },
+      // The job id is also the worker's idempotency key (Notification.jobId).
+      // A UUID stays unique even if Redis loses recent writes and its job
+      // counter rolls back, which would otherwise reissue ids already stored
+      // and make new notifications look like duplicates.
+      { jobId: notificationId },
+    );
     // Optional chaining — BullMQ's real Queue.add() always resolves a Job,
     // but plenty of existing handler tests mock queues with `.add: jest.fn()
     // .mockResolvedValue(undefined)` (they only assert the call args, not

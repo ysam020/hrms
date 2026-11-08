@@ -16,7 +16,7 @@
  */
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
-import { getRazorpay } from "../handlers/payment";
+import { getRazorpay } from "./razorpayClient";
 import {
   PLAN_PRICING,
   type Billing,

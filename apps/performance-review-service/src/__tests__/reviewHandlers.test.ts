@@ -1,3 +1,4 @@
+import { notify } from "@hrms/notifications";
 import { status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { instantiateApproval } from "@hrms/approval-engine";
@@ -423,5 +424,55 @@ describe("listReviews", () => {
       data: [],
       total: 0,
     });
+  });
+});
+
+describe("finalizeReview notification", () => {
+  const USER = "a00000000000000000000004";
+  const TENANT = "aaaaaaaaaaaaaaaaaaaaaaaa";
+  beforeEach(() => jest.clearAllMocks());
+
+  it.each([
+    [true, "Your performance review has been finalized and approved."],
+    [false, "Your performance review has been finalized and rejected."],
+  ])(
+    "approved=%s notifies the reviewed employee by user id, in the review's own tenant, with no broadcast fields",
+    async (approved, message) => {
+      db.performanceReview.findUnique.mockResolvedValue({ id: "r1" });
+      db.performanceReview.update.mockResolvedValue({
+        id: "r1",
+        userId: USER,
+        username: "john",
+        tenantId: TENANT,
+        createdAt: new Date(),
+      });
+      await finalizeReview(makeCall({ id: "r1", approved }), makeCallback());
+      for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+
+      expect(notify).toHaveBeenCalledTimes(1);
+      const job = (notify as jest.Mock).mock.calls[0][0];
+      // Reviews are created with the request's tenant (createCycle), so the
+      // review's tenantId is the tenant this call runs in.
+      expect(job.tenantId).toBe(TENANT);
+      expect(job.recipients).toEqual([USER]);
+      expect(job.recipients).not.toContain("john");
+      expect(job).not.toHaveProperty("targetUser");
+      expect(job).not.toHaveProperty("pushTargets");
+      expect(job).not.toHaveProperty("broadcast");
+      expect(job.event).toBe("performanceReviewFinalized");
+      expect(job.inApp).toEqual(
+        expect.objectContaining({ message, eventType: expect.any(String) }),
+      );
+    },
+  );
+
+  it("sends nothing for a review that doesn't exist", async () => {
+    db.performanceReview.findUnique.mockResolvedValue(null);
+    await finalizeReview(
+      makeCall({ id: "r1", approved: true }),
+      makeCallback(),
+    );
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    expect(notify).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,10 @@
 import type { Server as HttpServer } from "http";
 import type { Server as HttpsServer } from "https";
 import { Server, type Socket } from "socket.io";
-import { RedisWebSocketAdapter } from "./RedisWebSocketAdapter";
+import {
+  RedisWebSocketAdapter,
+  type AdapterOptions,
+} from "./RedisWebSocketAdapter";
 
 type AuthenticatedSocket = Socket & {
   userId: string;
@@ -27,10 +30,18 @@ export type SocketAuthPayload = {
  */
 type TokenVerifier = (token: string) => Promise<SocketAuthPayload | null>;
 
+function authError(
+  message: string,
+  data: { code: string; retryable: boolean },
+): Error {
+  return Object.assign(new Error(message), { data });
+}
+
 export function configureSocketIO(
   server: HttpServer | HttpsServer,
   allowedOrigins: string | string[],
   verifyToken?: TokenVerifier,
+  adapterOptions: AdapterOptions = {},
 ): { io: Server; redisAdapter: RedisWebSocketAdapter } {
   const io = new Server(server, {
     cors: {
@@ -58,7 +69,14 @@ export function configureSocketIO(
         }
         const payload = await verifyToken(token);
         if (!payload) {
-          return next(new Error("Authentication failed: invalid token"));
+          // A definitive refusal (bad/expired token, or the person may not
+          // connect): the client must not retry with this token.
+          return next(
+            authError("Authentication failed: invalid token", {
+              code: "AUTH_REJECTED",
+              retryable: false,
+            }),
+          );
         }
         (socket as AuthenticatedSocket).userId = payload.userId;
         (socket as AuthenticatedSocket).tenantId = payload.tenantId;
@@ -74,8 +92,24 @@ export function configureSocketIO(
         (socket as AuthenticatedSocket).dbName = null;
       }
       next();
-    } catch {
-      next(new Error("Authentication failed"));
+    } catch (err) {
+      // The verifier could not complete the check (database down /
+      // slow / breaker open). Not a refusal — the client keeps its session
+      // and reconnects with backoff. Socket.IO sends `data` to the client's
+      // connect_error handler.
+      const unavailable =
+        (err as { name?: string })?.name === "AccountAccessUnavailableError";
+      next(
+        unavailable
+          ? authError("Authentication temporarily unavailable", {
+              code: "AUTH_CHECK_UNAVAILABLE",
+              retryable: true,
+            })
+          : authError("Authentication failed", {
+              code: "AUTH_FAILED",
+              retryable: true,
+            }),
+      );
     }
   });
 
@@ -100,7 +134,7 @@ export function configureSocketIO(
     socket.on("disconnect", () => clearTimeout(timer));
   });
 
-  const redisAdapter = new RedisWebSocketAdapter(io);
+  const redisAdapter = new RedisWebSocketAdapter(io, adapterOptions);
 
   return { io, redisAdapter };
 }

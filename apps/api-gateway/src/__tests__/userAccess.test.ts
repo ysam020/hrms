@@ -324,6 +324,10 @@ describe("deactivated users stay denied on the platform guards", () => {
   beforeAll(() => (process.env.PLATFORM_TENANT_ID = PLATFORM));
   afterAll(() => (process.env.PLATFORM_TENANT_ID = saved));
   const user = { userId: "u1", tenantId: PLATFORM, tenantRole: "employee" };
+  // authenticate binds the token's tenant for the request (this also
+  // checks privileges against the bound tenant).
+  beforeEach(() => (mockTenant = PLATFORM));
+  afterEach(() => (mockTenant = "tenant-A"));
 
   it.each([
     [
@@ -355,4 +359,74 @@ describe("deactivated users stay denied on the platform guards", () => {
     // both platform checks shared one lookup
     expect(mockMaster).toHaveBeenCalledTimes(1);
   });
+});
+
+// isSuperUser / permissions / role on the master record were
+// granted by the user's home organisation and count only there.
+describe("loadUserAccess: privileges are scoped to the home organisation", () => {
+  const privileged = (tenantId: string | null) =>
+    row({
+      isSuperUser: true,
+      permissions: ["*:*:*"],
+      role: ["admin"],
+      tenantId,
+    });
+
+  it("unscoped: drops privileges when the record's home differs from the bound tenant", async () => {
+    mockTenant = "tenant-A";
+    mockMaster.mockResolvedValue(privileged("tenant-B"));
+    const a = await loadUserAccess("u1", { tenantScoped: false });
+    expect(a).toMatchObject({ isSuperUser: false, permissions: [], role: [] });
+    // Identity fields survive (support/platform guards read them).
+    expect(a).toMatchObject({ tenantId: "tenant-B", employeeStatus: "Active" });
+  });
+
+  it("unscoped: keeps privileges in the home organisation", async () => {
+    mockTenant = "tenant-A";
+    mockMaster.mockResolvedValue(privileged("tenant-A"));
+    const a = await loadUserAccess("u1", { tenantScoped: false });
+    expect(a).toMatchObject({ isSuperUser: true, permissions: ["*:*:*"] });
+  });
+
+  it("scoped with NO tenant bound: drops privileges (prismaWithTenant applies no filter then)", async () => {
+    mockTenant = null;
+    mockScoped.mockResolvedValue(privileged("tenant-B"));
+    expect(await isSuperUser("u1")).toBe(false);
+    const a = await loadUserAccess("u1", { tenantScoped: true });
+    expect(a).toMatchObject({ isSuperUser: false, permissions: [], role: [] });
+  });
+
+  it("does not reuse a lookup across tenants within one request (memo keys include the tenant)", async () => {
+    mockMaster.mockImplementation(async () => privileged("tenant-A"));
+    await withUserAccessScope(async () => {
+      mockTenant = "tenant-A";
+      const inHome = await loadUserAccess("u1", { tenantScoped: false });
+      mockTenant = "tenant-B";
+      const elsewhere = await loadUserAccess("u1", { tenantScoped: false });
+      expect(inHome?.isSuperUser).toBe(true);
+      expect(elsewhere?.isSuperUser).toBe(false);
+    });
+    expect(mockMaster).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["requireSuperUser", requireSuperUser],
+    ["requirePrivileged", requirePrivileged],
+    ["requireHrPrivileged", requireHrPrivileged],
+    ["requireSubscriptionManager", requireSubscriptionManager],
+  ] as const)(
+    "%s compares against the TOKEN's tenant even when no tenant is bound",
+    async (_n, guard) => {
+      mockTenant = null; // e.g. a code path that forgot runWithTenant
+      mockMaster.mockResolvedValue(privileged("tenant-B"));
+      const req: any = {
+        user: { userId: "u1", tenantId: "tenant-A", tenantRole: "employee" },
+      };
+      const res: any = { status: jest.fn(() => res), json: jest.fn(() => res) };
+      const next = jest.fn();
+      await guard(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+    },
+  );
 });

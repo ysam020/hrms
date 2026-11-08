@@ -1,3 +1,9 @@
+import {
+  computeMonthlyPaidDays,
+  ledgerUsedPLFor,
+  LEAVE_STATUSES_IN_EFFECT,
+} from "@hrms/common";
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
@@ -120,68 +126,92 @@ export const getPayslip = async (
       const endDate = monthStart.endOf("month").toDate();
       const totalMonthDays = monthStart.daysInMonth();
 
-      const [records, leaveBalance] = await Promise.all([
-        prisma.attendanceRecord.findMany({
-          where: { userId, date: { gte: startDate, lte: endDate } },
-          select: { status: true },
-        }),
-        prisma.leaveBalance?.findFirst
-          ? prisma.leaveBalance.findFirst({
-              where: { userId },
-              select: { balances: true },
-            })
-          : Promise.resolve(null),
-      ]);
+      const [records, leaveBalance, leaves, settings, holidayRows, exitRow] =
+        await Promise.all([
+          prisma.attendanceRecord.findMany({
+            where: { userId, date: { gte: startDate, lte: endDate } },
+            select: { status: true, date: true },
+          }),
+          prisma.leaveBalance?.findFirst
+            ? prisma.leaveBalance.findFirst({
+                where: { userId },
+                select: { balances: true },
+              })
+            : Promise.resolve(null),
+          prisma.leaveApplication?.findMany
+            ? prisma.leaveApplication.findMany({
+                where: {
+                  userId,
+                  status: { in: [...LEAVE_STATUSES_IN_EFFECT] },
+                  from: { lte: endDate },
+                  to: { gte: startDate },
+                },
+              })
+            : Promise.resolve([]),
+          (prisma as any).tenantSettings?.findFirst
+            ? (prisma as any).tenantSettings.findFirst({
+                where: { effectiveFrom: { lte: new Date() } },
+                orderBy: { effectiveFrom: "desc" },
+                select: { workWeekPattern: true, leavePolicies: true },
+              })
+            : Promise.resolve(null),
+          (prisma as any).holiday?.findMany
+            ? (prisma as any).holiday.findMany({ where: { year: yearNum } })
+            : Promise.resolve([]),
+          (prisma as any).resignation?.findFirst
+            ? (prisma as any).resignation.findFirst({
+                where: {
+                  userId,
+                  lastWorkingDay: { gte: startDate, lte: endDate },
+                },
+                select: { lastWorkingDay: true },
+              })
+            : Promise.resolve(null),
+        ]);
 
-      // Count each attendance status separately so the PDF can display a full breakdown.
-      let present = 0,
-        late = 0,
-        halfDay = 0,
-        holiday = 0,
-        weekOff = 0,
-        wfh = 0,
-        absentDays = 0;
-      for (const r of records) {
-        const s = (r.status ?? "").toLowerCase();
-        if (s === "present") present++;
-        else if (s === "late") late++;
-        else if (s === "half day") halfDay++;
-        else if (s === "holiday") holiday++;
-        // Weekly offs (e.g. Sat/Sun) are non-working but still paid days.
-        else if (s === "week off") weekOff++;
-        else if (s === "wfh") wfh++;
-        else if (s === "absent") absentDays++;
-      }
-
-      // Paid leaves from LeaveBalance for this specific month.
-      let paidLeaves = 0;
-      if (leaveBalance?.balances && Array.isArray(leaveBalance.balances)) {
-        const mb = (leaveBalance.balances as any[]).find(
-          (b: any) =>
-            String(b.year) === String(yearNum) &&
-            String(b.month) === String(monthNum),
-        );
-        paidLeaves = mb?.usedPL ?? 0;
-      }
-
-      // Weighted paid days — same formula used by initiatePayrollRun.
-      const paidDays = Math.min(
-        present + late + halfDay * 0.5 + holiday + weekOff + wfh + paidLeaves,
-        totalMonthDays,
-      );
+      const inMonth = (d: Date) =>
+        d.getUTCFullYear() === yearNum && d.getUTCMonth() + 1 === monthNum;
+      const joined = employee.joining_date
+        ? new Date(employee.joining_date)
+        : null;
+      const left = exitRow?.lastWorkingDay
+        ? new Date(exitRow.lastWorkingDay)
+        : null;
+      const days = computeMonthlyPaidDays({
+        year: yearNum,
+        month: monthNum,
+        workingDays: settings?.workWeekPattern?.workingDays ?? [1, 2, 3, 4, 5],
+        holidayDateKeys: new Set<string>(
+          ((holidayRows ?? []) as any[]).flatMap((r) =>
+            (Array.isArray(r.holidays) ? r.holidays : []).map(
+              (h: any) => h.date as string,
+            ),
+          ),
+        ),
+        attendance: records,
+        leaves: (leaves ?? []) as any[],
+        ledgerUsedPL: ledgerUsedPLFor(
+          leaveBalance?.balances,
+          yearNum,
+          monthNum,
+        ),
+        policies: settings?.leavePolicies ?? [],
+        startDay: joined && inMonth(joined) ? joined.getUTCDate() : 1,
+        endDay: left && inMonth(left) ? left.getUTCDate() : totalMonthDays,
+      });
 
       attendanceSummary = {
         month: monthNum,
         year: yearNum,
         totalMonthDays,
-        presentDays: present + late, // physical presence (backward-compat field)
-        halfDays: halfDay,
-        holidayDays: holiday,
-        weekOffDays: weekOff,
-        wfhDays: wfh,
-        paidLeaves,
-        paidDays,
-        absentDays,
+        presentDays: days.present + days.late, // physical presence (backward-compat field)
+        halfDays: days.halfDay,
+        holidayDays: days.holiday,
+        weekOffDays: days.weekOff,
+        wfhDays: days.wfh,
+        paidLeaves: days.paidLeaves,
+        paidDays: days.paidDays,
+        absentDays: days.absent,
       };
     }
 
@@ -203,9 +233,12 @@ export const getPayslip = async (
           department: employee.department ?? "",
           designation: employee.designation ?? "",
           joiningDate: employee.joining_date?.toISOString() ?? "",
-          uanNo: employee.uan_no ?? "",
-          bankAccountNo: employee.bank_account_no ?? "",
-          panNo: employee.pan_no ?? "",
+          uanNo: readSensitiveForDisplay(employee.uan_no, "uan_no"),
+          bankAccountNo: readSensitiveForDisplay(
+            employee.bank_account_no,
+            "bank_account_no",
+          ),
+          panNo: readSensitiveForDisplay(employee.pan_no, "pan_no"),
           dob: employee.dob?.toISOString() ?? "",
         },
         salaryStructure: toWireSalaryStructure(salaryStructure),

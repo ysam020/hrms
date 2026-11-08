@@ -1,6 +1,5 @@
 import {
   Component,
-  createContext,
   useCallback,
   useContext,
   useEffect,
@@ -21,6 +20,7 @@ import { MODULES, canReach, matchesRoute } from "./registry";
 import { isVisible, waitForTarget } from "./waitForTarget";
 import { useWalkthrough } from "./WalkthroughProvider";
 import { Tooltip, type StepMeta } from "./Tooltip";
+import { ControlsCtx, type RunnerControls } from "./controls";
 import {
   APP_TOUR,
   type PrepareContext,
@@ -38,19 +38,7 @@ import s from "./walkthrough.module.css";
 // index. A target that doesn't appear in time is skipped, never waited on
 // forever, and the person can pause at any moment, including while waiting.
 
-export interface RunnerControls {
-  next: () => void;
-  back: () => void;
-  skipStep: () => void;
-  skipModule: () => void;
-  pause: () => void;
-  dismiss: () => void;
-}
-
-const ControlsCtx = createContext<RunnerControls | null>(null);
-
 type TourState = NonNullable<ReturnType<typeof useWalkthrough>>["state"];
-export const useRunnerControls = () => useContext(ControlsCtx)!;
 
 /**
  * Where the tooltip attaches. A target taller than half the screen (a long

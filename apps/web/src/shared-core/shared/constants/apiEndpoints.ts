@@ -244,6 +244,8 @@ const USER = {
   // Face
   CHECK_FACE_DESCRIPTOR: "/check-face-descriptor",
   SAVE_FACE_DESCRIPTOR: "/save-face-descriptor",
+  FACE_CHALLENGE: "/attendance/face/challenge",
+  FACE_VERIFY: "/attendance/face/verify",
   // WebAuthn
   WEBAUTHN_CREDENTIALS: "/webauthn-credentials",
   WEBAUTHN_LOGIN_OPTIONS: "/webauthn-login-options",

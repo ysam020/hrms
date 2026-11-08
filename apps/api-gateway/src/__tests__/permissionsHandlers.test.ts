@@ -1,3 +1,5 @@
+import { notify } from "@hrms/notifications";
+import { getTenantId } from "@hrms/db";
 import { prisma } from "@hrms/db";
 import {
   getRoles,
@@ -17,6 +19,11 @@ import {
   addTeamMembers,
   deleteUserFromTeam,
 } from "../handlers/permissions";
+
+const mockIsHrOrAbove = jest.fn();
+jest.mock("../utils/user", () => ({
+  isHrOrAboveCaller: (...a: unknown[]) => mockIsHrOrAbove(...a),
+}));
 
 jest.mock("@hrms/db", () => {
   const _db = {
@@ -163,8 +170,53 @@ describe("permissionsHandlers", () => {
   });
 
   describe("getUserPermissions", () => {
+    it("refuses an ordinary employee reading a colleague", async () => {
+      mockUserFindFirst.mockResolvedValue({
+        id: "colleague",
+        permissions: ["x"],
+        role: [],
+      });
+      mockIsHrOrAbove.mockResolvedValue(false);
+      const res = makeRes();
+      await getUserPermissions(
+        makeReq({
+          params: { username: "colleague" },
+          user: { userId: "user-1", tenantRole: "employee" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.FORBIDDEN,
+        expect.anything(),
+      );
+    });
+
+    it("lets HR read a colleague", async () => {
+      mockUserFindFirst.mockResolvedValue({
+        id: "colleague",
+        permissions: ["x"],
+        role: [],
+      });
+      mockIsHrOrAbove.mockResolvedValue(true);
+      const res = makeRes();
+      await getUserPermissions(
+        makeReq({
+          params: { username: "colleague" },
+          user: { userId: "user-1", tenantRole: "hr" },
+        }),
+        res,
+      );
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.anything(),
+      );
+    });
+
     it("returns permissions and role for existing user", async () => {
       mockUserFindFirst.mockResolvedValue({
+        id: "user-1",
         permissions: ["view_employees"],
         role: ["HR"],
       });
@@ -1162,5 +1214,85 @@ describe("getOrgChart name resolution", () => {
     await getOrgChart({} as any, res);
     expect(p.user.findMany).toHaveBeenCalledTimes(2);
     expect(p.user.findMany.mock.calls[1][0].where.id.in).toEqual(["gone"]);
+  });
+});
+
+describe("saveUserPermissions notification", () => {
+  const USER = "a00000000000000000000005";
+  const grantee = {
+    id: USER,
+    username: "john",
+    role: [],
+    permissions: [],
+    first_name: "John",
+    last_name: "Doe",
+    employee_photo: null,
+  };
+  const flush = async () => {
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getTenantId as jest.Mock).mockReturnValue("t1");
+    mockUserUpdate.mockResolvedValue({});
+  });
+
+  it("notifies the grantee by user id — the request names them by username — in the request's tenant, with no broadcast fields", async () => {
+    mockUserFindFirst.mockResolvedValue(grantee);
+    await saveUserPermissions(
+      makeReq({
+        body: {
+          selectedUser: "john",
+          permissions: ["EmployeeManagement:view"],
+          selectedRole: null,
+        },
+      }),
+      makeRes(),
+    );
+    await flush();
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    const job = (notify as jest.Mock).mock.calls[0][0];
+    expect(job.tenantId).toBe("t1");
+    expect(job.recipients).toEqual([USER]);
+    expect(job.recipients).not.toContain("john");
+    expect(job).not.toHaveProperty("targetUser");
+    expect(job).not.toHaveProperty("pushTargets");
+    expect(job).not.toHaveProperty("broadcast");
+    expect(job.event).toBe("permissionsGranted");
+  });
+
+  it("sends nothing without a tenant (no tenant to scope the recipient to)", async () => {
+    (getTenantId as jest.Mock).mockReturnValue(undefined);
+    mockUserFindFirst.mockResolvedValue(grantee);
+    await saveUserPermissions(
+      makeReq({
+        body: {
+          selectedUser: "john",
+          permissions: ["EmployeeManagement:view"],
+        },
+      }),
+      makeRes(),
+    );
+    await flush();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when no permission was added", async () => {
+    mockUserFindFirst.mockResolvedValue({
+      ...grantee,
+      permissions: ["EmployeeManagement:view"],
+    });
+    await saveUserPermissions(
+      makeReq({
+        body: {
+          selectedUser: "john",
+          permissions: ["EmployeeManagement:view"],
+        },
+      }),
+      makeRes(),
+    );
+    await flush();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

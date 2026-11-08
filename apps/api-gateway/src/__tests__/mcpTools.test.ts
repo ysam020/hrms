@@ -41,7 +41,12 @@ const mockDb = {
   policy: { findMany: jest.fn(), findFirst: jest.fn() },
   hrActivity: { findMany: jest.fn() },
 };
-jest.mock("@hrms/db", () => ({ prismaWithTenant: mockDb }));
+// getTenantId: the tenant the MCP principal is bound to (runWithTenant in
+// mcp/principal.ts). Privileges need a bound tenant.
+jest.mock("@hrms/db", () => ({
+  prismaWithTenant: mockDb,
+  getTenantId: () => "507f1f77bcf86cd799439022",
+}));
 
 import { TOOLS, ToolError } from "../mcp/tools";
 import type { McpPrincipal } from "../mcp/principal";
@@ -178,7 +183,8 @@ describe("'my' tools only ever read the token's own user", () => {
     });
     mockDb.tenant.findUnique.mockResolvedValue({ name: "Acme" });
     const out = await tool("get_my_profile").run({}, principal);
-    expect(mockFetchFullProfile).toHaveBeenCalledWith(ME);
+    // The token's own user, in the token's own tenant (privileges are tenant-scoped).
+    expect(mockFetchFullProfile).toHaveBeenCalledWith(ME, principal.tenantId);
     const json = JSON.stringify(out);
     expect(json).not.toMatch(
       /1234 5678|ABCDE1234F|000111|aadhar|pan_no|bank|face|fcm/i,

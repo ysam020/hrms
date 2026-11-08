@@ -12,6 +12,7 @@ jest.mock("@hrms/db", () => {
     },
     payrollLineItem: { createMany: jest.fn(), findMany: jest.fn() },
     attendanceRecord: { findMany: jest.fn() },
+    leaveApplication: { findMany: jest.fn().mockResolvedValue([]) },
     leaveBalance: { findMany: jest.fn() },
     professionalTaxSlab: { findMany: jest.fn() },
     incomeTaxSlab: { findMany: jest.fn() },
@@ -35,6 +36,11 @@ jest.mock("@hrms/db", () => {
 });
 
 jest.mock("@hrms/common", () => ({
+  computeMonthlyPaidDays:
+    jest.requireActual("@hrms/common").computeMonthlyPaidDays,
+  ledgerUsedPLFor: jest.requireActual("@hrms/common").ledgerUsedPLFor,
+  LEAVE_STATUSES_IN_EFFECT:
+    jest.requireActual("@hrms/common").LEAVE_STATUSES_IN_EFFECT,
   apiResponse: jest.fn((res: any, status: number, data: any) =>
     res.json({ status, ...data }),
   ),

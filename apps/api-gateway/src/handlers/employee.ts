@@ -2,7 +2,11 @@ import { Request, Response } from "express";
 import { salary } from "@hrms/proto";
 import { employeeClient, salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  getTenantId,
+  isBlockedEmployeeStatus,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
   apiResponse,
@@ -10,14 +14,19 @@ import {
   hasPrivilegedRole,
   HR_ROLES,
 } from "@hrms/common";
-import { cacheManager } from "@hrms/cache";
+import {
+  cacheManager,
+  revokeRefreshToken,
+  publishAccountRevocation,
+} from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
-import { safeDecrypt } from "@hrms/crypto";
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { isPrivileged } from "./approvalChains";
 import { isHrOrAboveCaller } from "../utils/user";
 import { getSeatStatus } from "../utils/planLimits";
 import { invalidateUserAccess, loadUserAccess } from "../services/userAccess";
+import { invalidateAccountAccess } from "../services/accountAccess";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
   const authReq = req as AuthRequest;
@@ -80,6 +89,10 @@ export async function editEmployeeDetails(req: Request, res: Response) {
 
     if (employeeStatus !== undefined)
       updateData.employeeStatus = employeeStatus;
+    // Leaving employment also unregisters every device, in the same
+    // write as the status change (push is additionally refused at send time
+    // for blocked statuses, so this is not the only safeguard).
+    if (isBlockedEmployeeStatus(employeeStatus)) updateData.fcmTokens = [];
     if (pf_no !== undefined) updateData.pf_no = pf_no;
     if (uan_no !== undefined) updateData.uan_no = uan_no;
     if (esic_no !== undefined) updateData.esic_no = esic_no;
@@ -97,6 +110,24 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       data: updateData,
     });
     invalidateUserAccess(targetUser.id);
+    // Leaving employment ends every session now. Every request
+    // and renewal re-checks status anyway (authenticate / refreshToken, so
+    // this is not the only line of defence); revoking here removes the
+    // refresh token at once and drops this process's cached decision.
+    if (isBlockedEmployeeStatus(employeeStatus)) {
+      invalidateAccountAccess(targetUser.id);
+      // Every other gateway worker drops its cached decision and
+      // closes this person's sockets now (not after the cache TTL).
+      void publishAccountRevocation({
+        userId: targetUser.id,
+        reason: `employee-status:${employeeStatus}`,
+      });
+      await revokeRefreshToken(targetUser.id).catch((err: unknown) =>
+        logger.error("edit-employee-details: session revocation failed", {
+          err,
+        }),
+      );
+    }
 
     const cacheTenantId = tenantId ?? "global";
     await Promise.all([
@@ -131,6 +162,16 @@ const RESTRICTED_EMPLOYEE_DETAIL_FIELDS = [
   "dateOfAbscond",
 ] as const;
 
+// The cached copy keeps these sealed; they are opened per response.
+function openEmployeeDetails(data: Record<string, any>): Record<string, any> {
+  return {
+    ...data,
+    pf_no: readSensitiveForDisplay(data.pf_no, "pf_no"),
+    uan_no: readSensitiveForDisplay(data.uan_no, "uan_no"),
+    esic_no: readSensitiveForDisplay(data.esic_no, "esic_no"),
+  };
+}
+
 async function scopeEmployeeDetails(
   authReq: AuthRequest,
   targetUserId: string,
@@ -158,7 +199,11 @@ export async function getEmployeeDetails(req: Request, res: Response) {
     if (cached) {
       return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
         message: "Employee details fetched",
-        data: await scopeEmployeeDetails(authReq, cached.id, cached),
+        data: await scopeEmployeeDetails(
+          authReq,
+          cached.id,
+          openEmployeeDetails(cached),
+        ),
       });
     }
 
@@ -211,9 +256,6 @@ export async function getEmployeeDetails(req: Request, res: Response) {
     const data = {
       ...user,
       tenantRole: membership?.role ?? null,
-      pf_no: safeDecrypt(user.pf_no),
-      uan_no: safeDecrypt(user.uan_no),
-      esic_no: safeDecrypt(user.esic_no),
       salary: salaryRow?.grossEarnings ?? 0,
       salaryStructure: {
         basicPay: salaryRow?.basicPay ?? 0,
@@ -230,7 +272,11 @@ export async function getEmployeeDetails(req: Request, res: Response) {
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "Employee details fetched",
-      data: await scopeEmployeeDetails(authReq, user.id, data),
+      data: await scopeEmployeeDetails(
+        authReq,
+        user.id,
+        openEmployeeDetails(data),
+      ),
     });
   } catch (error: unknown) {
     logger.error("GET /get-employee-details/:username error:", { error });
@@ -662,8 +708,10 @@ export async function viewAllKycs(req: Request, res: Response) {
         { designation: { $regex: escaped, $options: "i" } },
       ];
     }
-    if (req.query.status && req.query.status !== "All") {
-      match.kyc_approval = req.query.status;
+    // A string only: Express parses ?status[$ne]=x into an object, which a
+    // raw $match would treat as a query operator.
+    if (typeof req.query.status === "string" && req.query.status !== "All") {
+      if (req.query.status) match.kyc_approval = req.query.status;
     }
 
     const [rows, countRows] = await Promise.all([

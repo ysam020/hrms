@@ -81,43 +81,25 @@ export function calcStatutoryDeductions(
   };
 }
 
+export { classifyImpliedNonWorkingDays } from "@hrms/common";
+
 /**
- * Holiday/weekly-off pay does not depend on reconcileAttendance.ts having
- * already backfilled an explicit "Holiday"/"Week Off" AttendanceRecord for
- * every past non-working date — that only happens once the nightly job has
- * caught up (or not at all in an environment where the scheduler isn't
- * running). Any calendar date in the month with no AttendanceRecord at all
- * is still an implicit, paid day off if it's either (a) in the tenant's
- * configured Holiday calendar, or (b) not a working day per the tenant's
- * workWeekPattern — so both are counted directly here from the calendar
- * instead of requiring a pre-seeded record. Holiday takes precedence over
- * weekly-off when a configured holiday happens to fall on a working day,
- * matching reconcileAttendance.ts's own classification order.
+ * The inclusive days of a month an employee was employed, so a mid-month
+ * joiner or leaver isn't credited days outside their employment.
  */
-export function classifyImpliedNonWorkingDays(
+export function employmentWindow(
+  joiningDate: Date | string | null | undefined,
+  exitDate: Date | string | null | undefined,
   year: number,
-  month: number, // 1-indexed
+  month: number,
   totalMonthDays: number,
-  workingDays: number[],
-  holidayDateKeys: Set<string>,
-  recordedDateKeys: Set<string>,
-  // Inclusive 1-indexed day range to actually credit — defaults to the
-  // whole month. A mid-month joiner/leaver passes their active window here
-  // so a weekend/holiday before they joined (or after they left) isn't
-  // counted as a paid day just because no AttendanceRecord exists for it —
-  // there's no record for those dates because they weren't employed yet,
-  // not because reconcileAttendance.ts hasn't backfilled it.
-  startDay = 1,
-  endDay = totalMonthDays,
-): { impliedHolidays: number; impliedWeekOffs: number } {
-  let impliedHolidays = 0;
-  let impliedWeekOffs = 0;
-  for (let day = startDay; day <= endDay; day++) {
-    const d = new Date(Date.UTC(year, month - 1, day));
-    const key = d.toISOString().slice(0, 10);
-    if (recordedDateKeys.has(key)) continue; // already has a real AttendanceRecord
-    if (holidayDateKeys.has(key)) impliedHolidays++;
-    else if (!workingDays.includes(d.getUTCDay())) impliedWeekOffs++;
-  }
-  return { impliedHolidays, impliedWeekOffs };
+): { startDay: number; endDay: number } {
+  const inMonth = (d: Date) =>
+    d.getFullYear() === year && d.getMonth() + 1 === month;
+  const join = joiningDate ? new Date(joiningDate) : null;
+  const exit = exitDate ? new Date(exitDate) : null;
+  return {
+    startDay: join && inMonth(join) ? join.getDate() : 1,
+    endDay: exit && inMonth(exit) ? exit.getDate() : totalMonthDays,
+  };
 }

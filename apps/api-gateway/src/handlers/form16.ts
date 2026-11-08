@@ -1,3 +1,4 @@
+import { readSensitiveForDisplay } from "@hrms/crypto";
 import { Request, Response } from "express";
 import { jsPDF } from "jspdf";
 import { AuthRequest } from "../middleware/authenticate";
@@ -73,10 +74,8 @@ export async function generateForm16(req: Request, res: Response) {
       [employee.first_name, employee.last_name].filter(Boolean).join(" ") ||
       employee.username;
 
-    const pdfPassword = derivePdfPassword(
-      employee.pan_no,
-      employee.dob?.toISOString(),
-    );
+    const panNo = readSensitiveForDisplay(employee.pan_no, "pan_no");
+    const pdfPassword = derivePdfPassword(panNo, employee.dob?.toISOString());
     if (!pdfPassword) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message:
@@ -326,7 +325,7 @@ export async function generateForm16(req: Request, res: Response) {
       doc.text(value || "-", x, curY + 5.5);
     };
     infoField(0, "Employee Name", employeeName);
-    infoField(1, "PAN", employee.pan_no || "-");
+    infoField(1, "PAN", panNo || "-");
     infoField(2, "Designation", employee.designation || "-");
     infoField(3, "Tax Regime", regime === "new" ? "New Regime" : "Old Regime");
     curY += 11;

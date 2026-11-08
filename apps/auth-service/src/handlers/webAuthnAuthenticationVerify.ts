@@ -1,6 +1,6 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
-import { prisma } from "@hrms/db";
+import { prisma, checkAccountAccess, isBlockedEmployeeStatus } from "@hrms/db";
 import { signAccessToken, signRefreshToken } from "../services/jwt";
 import { storeRefreshToken, getRedisClient } from "../services/redis";
 import { logger } from "@hrms/logger";
@@ -103,6 +103,19 @@ export const webAuthnAuthenticationVerify = async (
       });
     }
 
+    // A valid passkey is not a licence to sign in — the same
+    // employment-status rule as Google sign-in applies. Checked only after
+    // the assertion verified, so the response reveals nothing about an
+    // account's status to someone without its passkey.
+    if (isBlockedEmployeeStatus(user.employeeStatus)) {
+      await redis.del(`webauthn:auth:challenge:${user.email}`);
+      return callback(null, {
+        message: MESSAGES.ACCESS_DENIED,
+        status: status.PERMISSION_DENIED,
+        accessToken: "",
+      });
+    }
+
     // Update counter and lastUsed
     const updatedCreds = (user.webAuthnCredentials as any[]).map((c: any) =>
       c.credentialID === raw.id
@@ -161,6 +174,21 @@ export const webAuthnAuthenticationVerify = async (
           select: { dbName: true },
         })
       : null;
+
+    // The organisation must still be active and the
+    // membership current — the same authoritative check every request and
+    // every session renewal now runs.
+    if (membership) {
+      const access = await checkAccountAccess(user.id, membership.tenantId);
+      if (!access.ok) {
+        await redis.del(`webauthn:auth:challenge:${user.email}`);
+        return callback(null, {
+          message: MESSAGES.ACCESS_DENIED,
+          status: status.PERMISSION_DENIED,
+          accessToken: "",
+        });
+      }
+    }
     const accessToken = signAccessToken({
       userId: user.id,
       tenantId: membership?.tenantId ?? null,

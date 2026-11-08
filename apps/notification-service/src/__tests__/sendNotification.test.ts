@@ -114,6 +114,22 @@ describe("sendNotification", () => {
     );
   });
 
+  it("pushes to the recipient by user id, scoped to the caller's tenant", async () => {
+    mockCreate.mockResolvedValue({ id: "notif-1", recipients: [] });
+    const { sendPushNotifications } = jest.requireMock("@hrms/firebase");
+
+    await sendNotification(
+      makeCall({ userId: "user-1", title: "Hi", message: "There" }),
+      makeCallback(),
+    );
+
+    expect(sendPushNotifications).toHaveBeenCalledWith(
+      { tenantId: "t1", userIds: ["user-1"] },
+      "Hi",
+      "There",
+    );
+  });
+
   it("still returns OK even when FCM push notification fails", async () => {
     mockCreate.mockResolvedValue({ id: "notif-1", recipients: [] });
 

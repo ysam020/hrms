@@ -161,7 +161,7 @@ export const approveLeave = async (
         return notify({
           tenantId: getTenantId()!,
           event: "leaveApproved",
-          targetUser: updatedLeave.userId,
+          recipients: [updatedLeave.userId],
           inApp: {
             title: "Leave",
             message: MESSAGES.LEAVE_APPROVED,

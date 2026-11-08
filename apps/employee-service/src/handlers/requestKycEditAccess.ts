@@ -62,8 +62,8 @@ export const requestKycEditAccess = async (
       cacheManager.delete(
         `t:${tenantId}:employee-details:${updatedUser.username}`,
       ),
-      cacheManager.delete(`t:${tenantId}:user:v6:${userId}`),
-      cacheManager.delete(`t:${tenantId}:user:v6:${updatedUser.username}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${userId}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${updatedUser.username}`),
     ]);
 
     // Notify everyone who can actually act on this — i.e. whoever

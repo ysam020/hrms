@@ -48,16 +48,18 @@ async function acquireLock(): Promise<boolean> {
   return result === "OK";
 }
 
-export function startSubscriptionReconciler(): void {
+/** Schedules the reconciler; returns a function that stops future runs (for shutdown). */
+export function startSubscriptionReconciler(): () => void {
   // Kick off the first run after a short delay so the server finishes booting.
   const firstRunDelay = 30_000; // 30 s
+  let interval: ReturnType<typeof setInterval> | undefined;
   // unref() on both timers: this is a best-effort background job, not a
   // reason to keep the process alive on its own (the HTTP/gRPC listeners
   // already do that) — and without it, a test that calls this function
   // leaks a real handle past the test run's own lifetime.
   const firstRunTimer = setTimeout(() => {
     void reconcile();
-    const interval = setInterval(() => void reconcile(), RECONCILE_INTERVAL_MS);
+    interval = setInterval(() => void reconcile(), RECONCILE_INTERVAL_MS);
     interval.unref();
   }, firstRunDelay);
   firstRunTimer.unref();
@@ -65,6 +67,10 @@ export function startSubscriptionReconciler(): void {
   logger.info(
     `Subscription reconciler scheduled: first run in ${firstRunDelay / 1000}s, then every ${RECONCILE_INTERVAL_MS / 3600_000}h`,
   );
+  return () => {
+    clearTimeout(firstRunTimer);
+    if (interval) clearInterval(interval);
+  };
 }
 
 async function reconcile(): Promise<void> {

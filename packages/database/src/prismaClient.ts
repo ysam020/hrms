@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { attachMasterAuditLogging } from "./auditMiddleware";
 import { attachQueryTiming } from "./queryTiming";
+import { attachFieldEncryption } from "./fieldEncryption";
 
 declare global {
   var prisma: PrismaClient | undefined;
@@ -16,6 +17,7 @@ function createClient(): PrismaClient {
   });
   attachQueryTiming(client, "master");
   attachMasterAuditLogging(client);
+  attachFieldEncryption(client);
   return client;
 }
 

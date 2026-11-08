@@ -4,13 +4,25 @@ import { updateExpiredJobOpenings } from "../jobs/updateExpiredJobOpenings";
 jest.mock("@hrms/db", () => {
   const _db = {
     jobOpening: { updateMany: jest.fn() },
+    tenant: {
+      findMany: jest.fn().mockResolvedValue([{ id: "t1", dbName: "db-t1" }]),
+    },
   };
   return {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    runWithTenant: jest.fn((_id: string, _client: unknown, fn: () => unknown) =>
+      fn(),
+    ),
+    getClientForDb: jest.fn(() => ({})),
+    runForTenant: jest.fn((_id: string, fn: () => unknown) => fn()),
   };
 });
+
+jest.mock("@hrms/cache", () => ({
+  cacheManager: { invalidatePattern: jest.fn().mockResolvedValue(undefined) },
+}));
 
 jest.mock("@hrms/logger", () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -36,7 +48,7 @@ describe("updateExpiredJobOpenings", () => {
     expect(mockUpdateMany).toHaveBeenCalledWith({
       where: {
         status: "Active",
-        applicationDeadline: { lt: expect.any(Date) },
+        applicationDeadline: { lte: expect.any(Date) },
       },
       data: expect.objectContaining({
         status: "Expired",
@@ -46,16 +58,16 @@ describe("updateExpiredJobOpenings", () => {
     });
   });
 
-  it("uses current Date for the deadline lt filter", async () => {
+  it("expires only deadlines a full day in the past (the deadline day stays open)", async () => {
     mockUpdateMany.mockResolvedValue({ count: 0 });
     await updateExpiredJobOpenings();
 
     const deadlineFilter =
-      mockUpdateMany.mock.calls[0][0].where.applicationDeadline.lt;
-    // Should be a Date close to the mocked current time
+      mockUpdateMany.mock.calls[0][0].where.applicationDeadline.lte;
     expect(deadlineFilter).toBeInstanceOf(Date);
-    expect(deadlineFilter.getFullYear()).toBe(2024);
-    expect(deadlineFilter.getMonth()).toBe(2); // March
+    expect(deadlineFilter.getTime()).toBe(
+      new Date(2024, 2, 15, 12, 0, 0).getTime() - 24 * 60 * 60 * 1000,
+    );
   });
 
   it("sets status to 'Expired' and lastUpdateBy to 'System'", async () => {

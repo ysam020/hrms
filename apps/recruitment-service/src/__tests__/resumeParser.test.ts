@@ -10,11 +10,16 @@ jest.mock("@hrms/logger", () => ({
   requestIdStorage: { run: jest.fn((_id: string, fn: () => any) => fn()) },
 }));
 
-jest.mock("@hrms/db", () => ({
-  prisma: {
+jest.mock("@hrms/db", () => {
+  const _db = {
     jobApplication: { findUnique: jest.fn(), update: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: _db,
+    prismaWithTenant: _db,
+    runForTenant: jest.fn((_tenantId: string, fn: () => unknown) => fn()),
+  };
+});
 
 jest.mock("pdf-parse", () =>
   jest.fn().mockResolvedValue({ text: "  Experienced software engineer.  " }),
@@ -87,7 +92,9 @@ describe("startResumeParserWorker", () => {
     (prisma.jobApplication.findUnique as jest.Mock).mockResolvedValue(null);
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(logger.warn).toHaveBeenCalledWith(
       "[resumeParser] Application app1 not found",
@@ -101,7 +108,9 @@ describe("startResumeParserWorker", () => {
     );
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(logger.warn).toHaveBeenCalledWith(
       "[resumeParser] No resume for application app1",
@@ -115,7 +124,9 @@ describe("startResumeParserWorker", () => {
     );
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(logger.warn).toHaveBeenCalledWith(
       "[resumeParser] No job opening linked to application app1",
@@ -130,7 +141,9 @@ describe("startResumeParserWorker", () => {
     (pdfParse as unknown as jest.Mock).mockResolvedValueOnce({ text: "   " });
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(logger.warn).toHaveBeenCalledWith(
       "[resumeParser] Empty PDF text for application app1",
@@ -145,7 +158,9 @@ describe("startResumeParserWorker", () => {
     mockOllamaResponse(JSON.stringify({ score: 7, notes: "Meets bar" }));
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(prisma.jobApplication.update).toHaveBeenCalledWith({
       where: { id: "app1" },
@@ -162,7 +177,9 @@ describe("startResumeParserWorker", () => {
     );
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(prisma.jobApplication.update).toHaveBeenCalledWith({
       where: { id: "app1" },
@@ -181,7 +198,9 @@ describe("startResumeParserWorker", () => {
     mockOllamaResponse(JSON.stringify({ score: 15, notes: "great" }));
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(prisma.jobApplication.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -197,7 +216,9 @@ describe("startResumeParserWorker", () => {
     mockOllamaResponse(JSON.stringify({ score: "not-a-number", notes: "n/a" }));
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(prisma.jobApplication.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -213,7 +234,9 @@ describe("startResumeParserWorker", () => {
     mockOllamaResponse('```json\n{"score": 9, "notes": "Excellent"}\n```');
     startResumeParserWorker();
 
-    await capturedWorker!.processor({ data: { applicationId: "app1" } });
+    await capturedWorker!.processor({
+      data: { applicationId: "app1", tenantId: "t1" },
+    });
 
     expect(prisma.jobApplication.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -230,13 +253,21 @@ describe("startResumeParserWorker", () => {
     startResumeParserWorker();
 
     await expect(
-      capturedWorker!.processor({ data: { applicationId: "app1" } }),
+      capturedWorker!.processor({
+        data: { applicationId: "app1", tenantId: "t1" },
+      }),
     ).rejects.toThrow("Ollama HTTP 500");
   });
 
   it("forwards a failed job to the dead-letter queue", async () => {
     startResumeParserWorker();
-    const job = { id: "j1", data: { applicationId: "app1" } };
+    // Last of its attempts.
+    const job = {
+      id: "j1",
+      data: { applicationId: "app1", tenantId: "t1" },
+      attemptsMade: 2,
+      opts: { attempts: 2 },
+    };
 
     capturedWorker!.handlers.failed(job, new Error("scoring crashed"));
     await new Promise((resolve) => setImmediate(resolve));
@@ -254,7 +285,12 @@ describe("startResumeParserWorker", () => {
   it("logs (but does not throw) when the dead-letter enqueue itself fails", async () => {
     mockDlqAdd.mockRejectedValueOnce(new Error("redis down"));
     startResumeParserWorker();
-    const job = { id: "j2", data: { applicationId: "app1" } };
+    const job = {
+      id: "j2",
+      data: { applicationId: "app1", tenantId: "t1" },
+      attemptsMade: 2,
+      opts: { attempts: 2 },
+    };
 
     capturedWorker!.handlers.failed(job, new Error("scoring crashed"));
     await new Promise((resolve) => setImmediate(resolve));
@@ -265,6 +301,37 @@ describe("startResumeParserWorker", () => {
       {
         dlqErr: expect.any(Error),
       },
+    );
+  });
+
+  it("does not dead-letter an attempt BullMQ will still retry", async () => {
+    startResumeParserWorker();
+    const job = {
+      id: "j3",
+      data: { applicationId: "app1", tenantId: "t1" },
+      attemptsMade: 1,
+      opts: { attempts: 2 },
+    };
+    capturedWorker!.handlers.failed(job, new Error("Ollama HTTP 500"));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mockDlqAdd).not.toHaveBeenCalled();
+  });
+
+  it("dead-letters a permanent failure on its first attempt", async () => {
+    startResumeParserWorker();
+    const job = {
+      id: "j4",
+      data: { applicationId: "app1" },
+      attemptsMade: 1,
+      opts: { attempts: 2 },
+    };
+    const err = new Error("no tenantId");
+    err.name = "UnrecoverableError";
+    capturedWorker!.handlers.failed(job, err);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mockDlqAdd).toHaveBeenCalledWith(
+      "failed-resume-parse",
+      expect.objectContaining({ jobId: "j4" }),
     );
   });
 
@@ -288,7 +355,7 @@ describe("startResumeParserWorker", () => {
       startResumeParserWorker();
 
       await capturedWorker!.processor({
-        data: { applicationId: "app1", requestId: "req-3" },
+        data: { applicationId: "app1", tenantId: "t1", requestId: "req-3" },
       });
 
       expect(requestIdStorage.run).toHaveBeenCalledWith(
@@ -301,7 +368,9 @@ describe("startResumeParserWorker", () => {
       (prisma.jobApplication.findUnique as jest.Mock).mockResolvedValue(null);
       startResumeParserWorker();
 
-      await capturedWorker!.processor({ data: { applicationId: "app1" } });
+      await capturedWorker!.processor({
+        data: { applicationId: "app1", tenantId: "t1" },
+      });
 
       expect(requestIdStorage.run).not.toHaveBeenCalled();
     });

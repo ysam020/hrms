@@ -32,15 +32,29 @@ import {
 } from "@opentelemetry/semantic-conventions";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
 
+// Only when something will receive the data: instrumenting every call with
+// no collector costs memory and CPU and produces nothing.
 const ENABLED =
-  process.env.OTEL_ENABLED === "true" ||
-  (process.env.NODE_ENV !== "test" && process.env.NODE_ENV !== undefined);
+  process.env.OTEL_ENABLED === "true" || Boolean(process.env.OTEL_EXPORTER_URL);
 
 const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "api-gateway";
 const SERVICE_VERSION = process.env.npm_package_version ?? "0.0.0";
 const OTLP_ENDPOINT =
   process.env.OTEL_EXPORTER_URL ?? "http://localhost:4318/v1/traces";
 const METRICS_PORT = parseInt(process.env.OTEL_METRICS_PORT ?? "9464", 10);
+
+let startedSdk: { shutdown(): Promise<void> } | null = null;
+let flushing: Promise<void> | null = null;
+
+/** Flushes and stops the SDK, once; later calls share the first. Never rejects. */
+export function flushTelemetry(): Promise<void> {
+  flushing ??= (startedSdk ? startedSdk.shutdown() : Promise.resolve()).catch(
+    () => {
+      /* exiting anyway */
+    },
+  );
+  return flushing;
+}
 
 if (ENABLED) {
   const detectedResources = detectResources({
@@ -137,16 +151,13 @@ if (ENABLED) {
   });
 
   sdk.start();
+  startedSdk = sdk;
 
-  const shutdown = async () => {
-    try {
-      await sdk.shutdown();
-    } catch {
-      /* exiting anyway */
-    }
-  };
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
+  // These handlers only flush — they never exit. The gateway's shutdown
+  // coordinator (config/gracefulShutdown.ts) exits, after awaiting
+  // flushTelemetry() as its last step.
+  process.on("SIGTERM", () => void flushTelemetry());
+  process.on("SIGINT", () => void flushTelemetry());
 
   // eslint-disable-next-line no-console
   console.log(

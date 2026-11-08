@@ -151,8 +151,8 @@ export const submitKyc = async (
       // as userId, which for that route is always the username. Without
       // this, a submit/edit here would leave that page showing stale data
       // until the cache's own TTL expires.
-      cacheManager.delete(`t:${tenantId}:user:v6:${user.id}`),
-      cacheManager.delete(`t:${tenantId}:user:v6:${user.username}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${user.id}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${user.username}`),
     ]);
 
     // Notify everyone who can approve this KYC (fire-and-forget) — only

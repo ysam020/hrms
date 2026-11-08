@@ -55,7 +55,7 @@ export const deleteUser = async (
     const tenantId = getTenantId() ?? "global";
     await Promise.all([
       cacheManager.invalidatePattern(`t:${tenantId}:users:*`),
-      cacheManager.delete(`t:${tenantId}:user:v6:${userId}`),
+      cacheManager.delete(`t:${tenantId}:user:v7:${userId}`),
     ]);
     return callback(null, {
       message: MESSAGES.USER_DELETED,

@@ -8,15 +8,30 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import cluster from "node:cluster";
+import type { Worker } from "bullmq";
 import { apiRequestLogger, logger } from "@hrms/logger";
 import { configureSocketIO } from "@hrms/websocket";
 import { setupChatSocket } from "./config/chatSocket";
 import { setupPresenceSocket } from "./config/presenceSocket";
-import { configureSwagger } from "./config/swaggerSetup";
 import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
-import { applyRateLimiters, authLimiter } from "./config/rateLimiters";
-import { resolveSocketUserId } from "./config/socketAuth";
-import { registerGracefulShutdown } from "./config/gracefulShutdown";
+import {
+  applyRateLimiters,
+  authLimiter,
+  rateLimitStoreHealth,
+} from "./config/rateLimiters";
+import {
+  enforceSocketAccess,
+  resolveSocketUserId,
+  authorizeSocketDelivery,
+  startAccountRevocationListener,
+} from "./config/socketAuth";
+import {
+  registerGracefulShutdown,
+  trackConnections,
+} from "./config/gracefulShutdown";
+import { closeGrpcClients } from "./grpc/clients";
+import { flushTelemetry } from "./telemetry";
+import { closeQueues, closeWorker } from "@hrms/queue";
 import { rootRouter } from "./routes";
 import { auditLogMiddleware } from "./middleware/auditLog";
 import { mcpRouter } from "./mcp/router";
@@ -35,9 +50,12 @@ import {
   recordExternal,
   recordSerialize,
   warmUpDatabase,
+  disconnectDatabases,
 } from "@hrms/db";
 import { setRedisTimingHook } from "@hrms/cache";
 import { withUserAccessScope } from "./services/userAccess";
+import { accountAccessHealth } from "./services/accountAccess";
+import { outboundSideEffectsAllowed } from "@hrms/common";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -176,7 +194,15 @@ app.use(express.urlencoded({ extended: true }));
 applyRateLimiters(app);
 
 app.use(auditLogMiddleware);
-configureSwagger(app as any);
+// The spec costs about 35 MB per process to parse, and production has no
+// need to publish it.
+if (
+  process.env.NODE_ENV !== "production" ||
+  process.env.ENABLE_API_DOCS === "true"
+) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("./config/swaggerSetup").configureSwagger(app);
+}
 app.get("/api/v1/csrf-token", (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
@@ -192,7 +218,24 @@ app.get(
 );
 app.use("/api/v1", rootRouter);
 
-app.get("/health", (_req, res) => res.json({ status: "healthy" }));
+// Still 200 when rate limiting has fallen back to per-process memory (the
+// API keeps serving); the field makes the degradation visible
+// to monitoring.
+app.get("/health", (_req, res) => {
+  const store = rateLimitStoreHealth();
+  const access = accountAccessHealth();
+  res.json({
+    status:
+      store.mode === "redis" && !access.breakerOpen ? "healthy" : "degraded",
+    rateLimitStore: store.mode,
+    // Account checks failing fast because the database is unhealthy.
+    accountAccessBreakerOpen: access.breakerOpen,
+    accountAccessCachedDecisions: access.cachedDecisions,
+    ...(store.degradedSince && {
+      rateLimitDegradedSince: new Date(store.degradedSince).toISOString(),
+    }),
+  });
+});
 
 app.use((error: any, _req: any, res: any, _next: any) => {
   logger.error("Unhandled error:", { error });
@@ -202,9 +245,16 @@ app.use((error: any, _req: any, res: any, _next: any) => {
   return res.status(httpStatus).json({ success: false, message });
 });
 
-process.on("uncaughtException", (error) =>
-  logger.error("Uncaught Exception:", { error }),
-);
+// State is unknown after an uncaught exception, so drain and let the cluster
+// primary or the restart policy start a clean process.
+let exitingAfterCrash = false;
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught Exception:", { error });
+  if (exitingAfterCrash) return;
+  exitingAfterCrash = true;
+  process.exitCode = 1;
+  process.kill(process.pid, "SIGTERM");
+});
 process.on("unhandledRejection", (error) =>
   logger.error("Unhandled Rejection:", { error }),
 );
@@ -221,23 +271,47 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     server as any,
     allowedOrigins,
     resolveSocketUserId,
+    // Every targeted delivery re-checks the recipient just before emit.
+    { authorizeDelivery: authorizeSocketDelivery },
   );
+  // Cluster-wide revocations close sockets on every worker at once.
+  const stopRevocationListener = startAccountRevocationListener(
+    redisAdapter,
+    io,
+  );
+  // Before the feature handlers: their event listeners then sit behind the
+  // per-event account check registered here.
+  enforceSocketAccess(io);
   setupChatSocket(io, redisAdapter);
   setupPresenceSocket(io);
+  // From the start, so shutdown can tell idle connections from busy ones.
+  const connections = trackConnections(server);
+  const workers: Worker[] = [];
+  let stopBackgroundJobs = () => {};
 
   // Under cluster mode (see bootstrap.ts) every forked worker would otherwise
   // run these on its own schedule — harmless for the reconciler, but
   // startPayrollDisbursementWorker actually disburses payroll, so running it
   // once per CPU core risks duplicate disbursements. Restrict both to a
   // single designated worker (or the sole process outside cluster mode).
-  if (!cluster.isWorker || cluster.worker?.id === 1) {
+  // A developer's gateway shares production's database, so it must not run
+  // the jobs that write to shared records or call payment APIs.
+  if (
+    (!cluster.isWorker || cluster.worker?.id === 1) &&
+    outboundSideEffectsAllowed()
+  ) {
     void ensureMasterIndexes();
     void import("./migrations/backfillPlanTier").then(({ backfillPlanTier }) =>
       backfillPlanTier(),
     );
-    startSubscriptionReconciler();
-    startPayrollDisbursementWorker();
-    startPresenceExpiryWorker();
+    stopBackgroundJobs = startSubscriptionReconciler();
+    workers.push(startPayrollDisbursementWorker(), startPresenceExpiryWorker());
+  }
+
+  for (const name of ["RAZORPAY_WEBHOOK_SECRET", "RAZORPAY_X_WEBHOOK_SECRET"]) {
+    if (!process.env[name]) {
+      logger.error(`${name} is not set: these webhooks will be rejected`);
+    }
   }
 
   server.listen(PORT, () => {
@@ -246,7 +320,23 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     void warmUpDatabase();
   });
 
-  registerGracefulShutdown(server, redisAdapter);
+  // On SIGTERM (passed on by the cluster primary): drain HTTP, WebSockets
+  // and jobs, then close what they used — see config/gracefulShutdown.ts.
+  registerGracefulShutdown({
+    connections,
+    io,
+    workers,
+    closeWorker,
+    stopBackgroundJobs: () => stopBackgroundJobs(),
+    closeQueues,
+    closeWebSocketRedis: async () => {
+      await stopRevocationListener();
+      await redisAdapter.cleanup();
+    },
+    closeGrpcClients,
+    disconnectDatabases,
+    flushTelemetry,
+  });
 }
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {

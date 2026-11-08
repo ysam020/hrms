@@ -11,8 +11,14 @@ jest.mock("@hrms/db", () => {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    // The real status rule, and the shared account check
+    // (allowed by default; denial has its own tests below).
+    isBlockedEmployeeStatus: (s: string) =>
+      ["Terminated", "Absconded", "Resigned"].includes(s),
+    checkAccountAccess: (...a: unknown[]) => mockCheckAccountAccess(...a),
   };
 });
+const mockCheckAccountAccess = jest.fn();
 
 jest.mock("@simplewebauthn/server", () => ({
   verifyAuthenticationResponse: jest.fn(),
@@ -87,6 +93,12 @@ describe("webAuthnAuthenticationVerify", () => {
     mockUpdate.mockResolvedValue(user);
     mockMembershipFindFirst.mockResolvedValue({ tenantId: "t1", role: "HR" });
     mockTenantFindUnique.mockResolvedValue({ dbName: "db-t1" });
+    mockCheckAccountAccess.mockResolvedValue({
+      ok: true,
+      tenantRole: "HR",
+      dbName: "db-t1",
+      employeeStatus: "Active",
+    });
   });
 
   it("returns NOT_FOUND when user does not exist", async () => {
@@ -215,6 +227,95 @@ describe("webAuthnAuthenticationVerify", () => {
     expect(cb).toHaveBeenCalledWith(
       null,
       expect.objectContaining({ status: 13 }),
+    );
+  });
+});
+
+describe("webAuthnAuthenticationVerify — passkeys follow the same access rules", () => {
+  const { storeRefreshToken } = jest.requireMock("../services/redis");
+  const { signAccessToken } = jest.requireMock("../services/jwt");
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getRedisClient as jest.Mock).mockReturnValue({
+      get: mockRedisGet,
+      del: jest.fn(),
+    });
+    mockRedisGet.mockResolvedValue("test-challenge");
+    mockVerify.mockResolvedValue({
+      verified: true,
+      authenticationInfo: { newCounter: 1 },
+    });
+    mockUpdate.mockResolvedValue(user);
+    mockMembershipFindFirst.mockResolvedValue({ tenantId: "t1", role: "HR" });
+    mockTenantFindUnique.mockResolvedValue({ dbName: "db-t1" });
+    mockCheckAccountAccess.mockResolvedValue({
+      ok: true,
+      tenantRole: "HR",
+      dbName: "db-t1",
+      employeeStatus: "Active",
+    });
+  });
+
+  it.each(["Terminated", "Absconded", "Resigned"])(
+    "refuses a %s employee who presents a VALID passkey — no tokens issued",
+    async (employeeStatus) => {
+      mockFindUnique.mockResolvedValue({ ...user, employeeStatus });
+      const cb = makeCallback();
+      await webAuthnAuthenticationVerify(
+        makeCall({ userId: "u1", credential }),
+        cb,
+      );
+      expect(cb).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ status: 7, accessToken: "" }), // PERMISSION_DENIED
+      );
+      expect(signAccessToken).not.toHaveBeenCalled();
+      expect(storeRefreshToken).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses when the organisation was deactivated", async () => {
+    mockFindUnique.mockResolvedValue({ ...user, employeeStatus: "Active" });
+    mockCheckAccountAccess.mockResolvedValue({
+      ok: false,
+      reason: "tenant_inactive",
+    });
+    const cb = makeCallback();
+    await webAuthnAuthenticationVerify(
+      makeCall({ userId: "u1", credential }),
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 7, accessToken: "" }),
+    );
+    expect(storeRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it("still signs in an active employee", async () => {
+    mockFindUnique.mockResolvedValue({ ...user, employeeStatus: "Active" });
+    const cb = makeCallback();
+    await webAuthnAuthenticationVerify(
+      makeCall({ userId: "u1", credential }),
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 0, accessToken: "access-token" }),
+    );
+  });
+
+  it("does not reveal a blocked status to someone whose assertion fails", async () => {
+    mockFindUnique.mockResolvedValue({ ...user, employeeStatus: "Terminated" });
+    mockVerify.mockResolvedValue({ verified: false });
+    const cb = makeCallback();
+    await webAuthnAuthenticationVerify(
+      makeCall({ userId: "u1", credential }),
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ status: 16 }), // UNAUTHENTICATED, same as any bad assertion
     );
   });
 });

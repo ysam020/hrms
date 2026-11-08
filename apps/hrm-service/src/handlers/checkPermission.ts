@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -19,10 +19,19 @@ export const checkPermission = async (
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, permissions: true, isSuperUser: true },
+      select: {
+        role: true,
+        permissions: true,
+        isSuperUser: true,
+      },
     });
 
-    if (!user) {
+    // isSuperUser/permissions on the master record belong to the
+    // user's home organisation. prismaWithTenant injects the bound tenant
+    // into the lookup, so a record is only found inside that organisation —
+    // but with NO tenant bound it applies no filter, and a record from any
+    // organisation would match. Refuse in that case.
+    if (!user || !getTenantId()) {
       return callback(null, {
         message: MESSAGES.USER_NOT_FOUND,
         status: status.NOT_FOUND,

@@ -28,6 +28,7 @@ jest.mock("@hrms/notifications", () => ({
 }));
 
 jest.mock("@hrms/common", () => ({
+  assertLivePaymentAllowed: jest.fn(),
   tenantFrom: jest.fn(
     (name: string) => `"${name} HR" <hr@notifications.praesto.in>`,
   ),

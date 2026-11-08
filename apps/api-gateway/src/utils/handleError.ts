@@ -1,6 +1,13 @@
 import { Response } from "express";
 import { Prisma } from "@prisma/client";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
+import { logger } from "@hrms/logger";
+
+// Set by @hrms/logger on every Error it writes (see wasLogged there); read
+// through the global symbol registry so this check needs no import.
+const LOGGED = Symbol.for("hrms.logger.logged");
+const wasLogged = (err: unknown) =>
+  !!err && typeof err === "object" && (err as any)[LOGGED] === true;
 
 /**
  * For call sites wrapping business-logic helpers (e.g. actOnApprovalForEntity)
@@ -60,6 +67,23 @@ export function handleError(res: Response, err: unknown): Response {
     });
   }
 
+  // An unexpected error: the client gets a generic message, so the details
+  // must be logged — unless the call site already did (most log first, and
+  // the logger marks each error it writes). Logged with the route pattern
+  // and the path without its query string (which can carry tokens); the
+  // logger adds the request id and redacts sensitive values.
+  if (!wasLogged(err)) {
+    const req = res.req;
+    logger.error("Unhandled error returned as 500", {
+      err,
+      service: "api-gateway",
+      method: req?.method,
+      route: req?.route?.path
+        ? `${req.baseUrl ?? ""}${req.route.path}`
+        : undefined,
+      path: req?.originalUrl?.split("?")[0],
+    });
+  }
   return apiResponse(res, RESPONSE_STATUS.INTERNAL_SERVER_ERROR, {
     message: "Internal Server Error",
   });

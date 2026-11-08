@@ -33,6 +33,28 @@ export async function ensureMasterIndexes(): Promise<void> {
     });
   }
 
+  // Webhook idempotency depends on this index existing.
+  try {
+    await prisma.$runCommandRaw({
+      createIndexes: "webhook_inbox_events",
+      indexes: [
+        {
+          key: { provider: 1, eventId: 1 },
+          name: "webhook_inbox_events_provider_eventId_key",
+          unique: true,
+        },
+        {
+          key: { status: 1, receivedAt: 1 },
+          name: "webhook_inbox_events_status_receivedAt_idx",
+        },
+      ],
+    });
+  } catch (error: unknown) {
+    logger.error("ensureMasterIndexes: failed to create webhook inbox index", {
+      error,
+    });
+  }
+
   // TrialClaim.key's unique index is what makes trial eligibility race-safe
   // (services/trial.ts in the gateway), so it can't depend on someone having
   // run `prisma db push` against the master DB.

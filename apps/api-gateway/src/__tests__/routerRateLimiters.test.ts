@@ -7,7 +7,20 @@ jest.mock("express-rate-limit", () => {
     middleware.__options = options;
     return middleware;
   });
-  return { __esModule: true, default: rateLimit };
+  return {
+    __esModule: true,
+    default: rateLimit,
+    // FailoverStore keeps an in-process fallback.
+    MemoryStore: class {
+      init() {}
+      increment() {
+        return { totalHits: 1, resetTime: undefined };
+      }
+      decrement() {}
+      resetKey() {}
+      shutdown() {}
+    },
+  };
 });
 
 const capturedStoreOptions: any[] = [];
@@ -49,9 +62,11 @@ jest.mock("@hrms/logger", () => ({
 describe("router-level Redis-backed limiters", () => {
   const findLimiterPrefix = (prefixPattern: RegExp) => {
     const match = capturedOptions.find((o) =>
-      prefixPattern.test(o.store?.__options?.prefix ?? ""),
+      prefixPattern.test(
+        (o.store?.primary ?? o.store)?.__options?.prefix ?? "",
+      ),
     );
-    return match?.store?.__options?.prefix;
+    return (match?.store?.primary ?? match?.store)?.__options?.prefix;
   };
 
   it("routes/analytics.ts's limiter is Redis-backed under rl:analytics:", () => {
@@ -66,7 +81,7 @@ describe("router-level Redis-backed limiters", () => {
       require("../mcp/router");
     });
     const prefixes = capturedOptions
-      .map((o) => o.store?.__options?.prefix)
+      .map((o) => (o.store?.primary ?? o.store)?.__options?.prefix)
       .filter((p) => /^rl:(mcp|oauth):/.test(p ?? ""));
     expect(prefixes.sort()).toEqual([
       "rl:mcp:grant:",

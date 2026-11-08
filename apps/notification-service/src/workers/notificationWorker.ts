@@ -5,13 +5,23 @@ import {
   prismaWithTenant,
   runWithTenant,
   getClientForDb,
+  BLOCKED_STATUSES,
 } from "@hrms/db";
-import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
+import {
+  getBullMQConnection,
+  getDeadLetterQueue,
+  NOTIFICATION_QUEUE_NAME,
+  LEGACY_NOTIFICATION_QUEUE_NAME,
+} from "@hrms/queue";
 import { logger, requestIdStorage } from "@hrms/logger";
 import { getNotificationPublisher } from "@hrms/websocket";
-import { sendPushNotifications } from "@hrms/firebase";
+import {
+  sendPushNotifications,
+  assertPlatformBroadcastAuthorized,
+  type PushAudience,
+} from "@hrms/firebase";
 import { getRedisClient } from "@hrms/cache";
-import type { NotificationJobData } from "@hrms/queue";
+import type { NotificationBroadcast, NotificationJobData } from "@hrms/queue";
 import type { Job } from "bullmq";
 
 // Guards the check-then-create idempotency block below against a real race:
@@ -87,9 +97,173 @@ async function withNotificationJobLock<T>(
   }
 }
 
-export function startNotificationWorker(): Worker {
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+
+// BullMQ fails a job without retrying when the thrown error is named
+// "UnrecoverableError" — used for jobs no retry could ever deliver.
+function permanentFailure(message: string): Error {
+  const err = new Error(message);
+  err.name = "UnrecoverableError";
+  return err;
+}
+
+const unique = <T>(values: T[]): T[] => [...new Set(values)];
+
+interface ResolvedTargets {
+  /** User IDs inside the job's tenant that will receive the notification. */
+  userIds: string[];
+  /** Targets that matched nobody in the tenant — reported, never dropped silently. */
+  unresolved: string[];
+}
+
+// Turns a job's targets into user IDs belonging to the job's tenant. Runs
+// inside runWithTenant, so every lookup carries the tenant filter
+// (prismaWithTenant.user): an id or username from another organisation
+// resolves to nobody rather than to that person.
+async function resolveTargets(
+  data: Pick<
+    NotificationJobData,
+    "recipients" | "pushTargets" | "targetUser" | "broadcast"
+  >,
+): Promise<ResolvedTargets> {
+  if (data.broadcast?.scope === "tenant") {
+    const users = await prismaWithTenant.user.findMany({
+      select: { id: true },
+    });
+    return { userIds: users.map((u) => u.id), unresolved: [] };
+  }
+
+  const recipients = unique(data.recipients ?? []);
+  if (recipients.length > 0) {
+    const valid = recipients.filter((id) => OBJECT_ID.test(id));
+    const users = valid.length
+      ? await prismaWithTenant.user.findMany({
+          where: { id: { in: valid } },
+          select: { id: true },
+        })
+      : [];
+    const found = new Set(users.map((u) => u.id));
+    return {
+      userIds: recipients.filter((id) => found.has(id)),
+      unresolved: recipients.filter((id) => !found.has(id)),
+    };
+  }
+
+  const pushTargets = data.pushTargets ?? [];
+  const targetUser = data.targetUser;
+  const names = unique(
+    pushTargets.length > 0
+      ? pushTargets
+      : targetUser
+        ? Array.isArray(targetUser)
+          ? targetUser
+          : [targetUser]
+        : [],
+  );
+  if (names.length === 0) return { userIds: [], unresolved: [] };
+  // Producers used to pass user IDs as targetUser; jobs enqueued before they
+  // switched to `recipients` still carry them, so an ObjectId-shaped target
+  // also matches by id (within the tenant, like any other lookup).
+  const legacyIds = names.filter((n) => OBJECT_ID.test(n));
+  const users = await prismaWithTenant.user.findMany({
+    where: legacyIds.length
+      ? { OR: [{ username: { in: names } }, { id: { in: legacyIds } }] }
+      : { username: { in: names } },
+    select: { id: true, username: true },
+  });
+  const matched = new Set(users.flatMap((u) => [u.id, u.username]));
+  return {
+    userIds: unique(users.map((u) => u.id)),
+    unresolved: names.filter((n) => !matched.has(n)),
+  };
+}
+
+// Who may receive REALTIME delivery (sockets) right now. Resolution
+// above decides who a notification is FOR (and gets the in-app record, kept
+// as history); delivery to devices goes only to people whose employment
+// hasn't ended. Evaluated on every attempt — a retry, or a job that sat in
+// the queue while the person was terminated, re-checks. Push has the same
+// rule inside sendPushNotifications (send time). Runs in the job's tenant.
+async function realtimeEligible(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const rows = await prismaWithTenant.user.findMany({
+    where: {
+      id: { in: userIds },
+      employeeStatus: { notIn: [...BLOCKED_STATUSES] },
+    },
+    select: { id: true },
+  });
+  const ok = new Set(rows.map((r) => r.id));
+  const kept = userIds.filter((id) => ok.has(id));
+  if (kept.length < userIds.length) {
+    logger.info(
+      "notification: realtime delivery skipped for ineligible recipients",
+      {
+        skipped: userIds.length - kept.length,
+      },
+    );
+  }
+  return kept;
+}
+
+// A targeted job must reach at least one person in its tenant. Before, a job
+// whose targets resolved to nobody fell back to every socket and every push
+// token on the platform; now it fails (to the dead-letter queue) instead.
+function assertDeliverable(
+  job: Job<NotificationJobData>,
+  targets: ResolvedTargets,
+  broadcast: NotificationBroadcast | undefined,
+): void {
+  if (broadcast?.scope === "platform") return;
+  if (targets.userIds.length === 0) {
+    throw permanentFailure(
+      `Notification job ${job.id}: no recipient in tenant ${job.data.tenantId}` +
+        (targets.unresolved.length
+          ? ` (unresolved: ${targets.unresolved.join(", ")})`
+          : " (job named no recipients and requested no broadcast)"),
+    );
+  }
+  if (targets.unresolved.length > 0) {
+    logger.warn(
+      `Notification job ${job.id}: ${targets.unresolved.length} target(s) not found in tenant ${job.data.tenantId}`,
+      { unresolved: targets.unresolved },
+    );
+  }
+}
+
+function pushAudienceFor(
+  tenantId: string,
+  targets: ResolvedTargets,
+  broadcast: NotificationBroadcast | undefined,
+): PushAudience {
+  return broadcast?.scope === "platform"
+    ? {
+        platformBroadcast: {
+          tenantId,
+          authorizedBy: broadcast.authorizedBy,
+          reason: broadcast.reason,
+        },
+      }
+    : { tenantId, userIds: targets.userIds };
+}
+
+/**
+ * Consumes both notification queues: the current one, and the pre-fix
+ * queue that producers on images built before the tenant-isolation fix
+ * still write to (see NOTIFICATION_QUEUE_NAME in @hrms/queue for why they
+ * are separate). Both run the same tenant-scoped processing. Returns both
+ * workers (legacy first), so the caller can close them on shutdown.
+ */
+export function startNotificationWorker(): Worker[] {
+  return [
+    startQueueWorker(LEGACY_NOTIFICATION_QUEUE_NAME),
+    startQueueWorker(NOTIFICATION_QUEUE_NAME),
+  ];
+}
+
+function startQueueWorker(queueName: string): Worker {
   const worker = new Worker<NotificationJobData>(
-    "notificationQueue",
+    queueName,
     (job) =>
       // Continue the correlation ID the producer attached (see
       // getNotificationQueue in @hrms/queue) so this worker's own log lines
@@ -110,10 +284,14 @@ export function startNotificationWorker(): Worker {
 
   worker.on("failed", (job, err) => {
     logger.error(`Notification job ${job?.id} failed:`, { err });
-    if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    // A permanent failure skips the remaining attempts, so it is final now.
+    const final =
+      err?.name === "UnrecoverableError" ||
+      (job && job.attemptsMade >= (job.opts.attempts ?? 1));
+    if (job && final) {
       getDeadLetterQueue()
         .add("failed-notification", {
-          originalQueue: "notificationQueue",
+          originalQueue: queueName,
           originalJobId: job.id,
           originalJobData: job.data,
           failureReason: err.message,
@@ -144,6 +322,7 @@ async function processJob(job: Job<NotificationJobData>) {
     recipients = [],
     pushTargets = [],
     targetUser,
+    broadcast,
     eventType = "general",
     sendPushNotification = true,
     priority = "medium",
@@ -160,6 +339,20 @@ async function processJob(job: Job<NotificationJobData>) {
     throw new Error(
       `Notification job ${job.id} is missing tenantId — refusing to process.`,
     );
+  }
+
+  if (broadcast?.scope === "platform") {
+    try {
+      assertPlatformBroadcastAuthorized({
+        tenantId,
+        authorizedBy: broadcast.authorizedBy,
+        reason: broadcast.reason,
+      });
+    } catch (err) {
+      throw permanentFailure(
+        `Notification job ${job.id}: ${(err as Error).message}`,
+      );
+    }
   }
 
   const tenant = await prisma.tenant.findUnique({
@@ -182,6 +375,7 @@ async function processJob(job: Job<NotificationJobData>) {
         recipients,
         pushTargets,
         targetUser,
+        broadcast,
         title,
         message,
         eventType,
@@ -222,25 +416,16 @@ async function processJob(job: Job<NotificationJobData>) {
       };
     }
 
-    // Resolve DB recipients: prefer explicit user IDs, else resolve from usernames
-    let resolvedRecipients = [...recipients];
-    if (resolvedRecipients.length === 0) {
-      const targetUsernames =
-        pushTargets.length > 0
-          ? pushTargets
-          : targetUser
-            ? Array.isArray(targetUser)
-              ? targetUser
-              : [targetUser]
-            : [];
-      if (targetUsernames.length > 0) {
-        const users = await prismaWithTenant.user.findMany({
-          where: { username: { in: targetUsernames } },
-          select: { id: true },
-        });
-        resolvedRecipients = users.map((u) => u.id);
-      }
-    }
+    // Resolve every target to a user of this tenant before writing
+    // anything, so an undeliverable job fails without a stray row.
+    const targets = await resolveTargets({
+      recipients,
+      pushTargets,
+      targetUser,
+      broadcast,
+    });
+    assertDeliverable(job, targets, broadcast);
+    const resolvedRecipients = targets.userIds;
 
     // Persist notification to the tenant's own database
     const notification = await (prismaWithTenant.notification.create as any)({
@@ -267,45 +452,48 @@ async function processJob(job: Job<NotificationJobData>) {
     });
 
     // Deliver via WebSocket to connected clients through the API gateway.
-    // sendToUser()/the socket registry are keyed by userId, not username —
+    // sendToUser()/the socket registry are keyed by (tenantId, userId), not username —
     // resolvedRecipients above already is that userId list (either passed
     // directly as `recipients`, or resolved from pushTargets/targetUser),
     // so reuse it here instead of re-deriving anything from usernames.
     const wsPublisher = getNotificationPublisher();
 
-    if (resolvedRecipients.length > 0) {
+    if (broadcast?.scope !== "platform") {
+      const live = await realtimeEligible(resolvedRecipients);
       await Promise.all(
-        resolvedRecipients.map((userId) =>
-          wsPublisher.sendToUser(userId, "notification", notification),
+        live.map((userId) =>
+          wsPublisher.sendToUser(userId, "notification", notification, {
+            tenantId,
+          }),
         ),
       );
       if (socketEvent) {
         await Promise.all(
-          resolvedRecipients.map((userId) =>
+          live.map((userId) =>
             wsPublisher.sendToUser(
               userId,
               socketEvent,
               socketPayload ?? notification,
+              { tenantId },
             ),
           ),
         );
       }
     } else {
+      // Authorized platform-wide broadcast (checked at the top of processJob).
       await wsPublisher.sendNotification(notification);
     }
 
     // FCM push notifications
     let fcmResult = { sentCount: 0, failedCount: 0, success: false };
     if (sendPushNotification) {
-      let targets: string[] = pushTargets;
-      if (!targets.length && targetUser) {
-        targets = Array.isArray(targetUser) ? targetUser : [targetUser];
-      }
-
-      const result =
-        targets.length > 0
-          ? await sendPushNotifications(targets, title, message)
-          : await sendPushNotifications("ALL_USERS", title, message);
+      // The same resolved, tenant-scoped people as the in-app delivery —
+      // never "everyone" unless the job is an authorized platform broadcast.
+      const result = await sendPushNotifications(
+        pushAudienceFor(tenantId, targets, broadcast),
+        title,
+        message,
+      );
 
       fcmResult = {
         sentCount: result.sentCount,
@@ -316,14 +504,16 @@ async function processJob(job: Job<NotificationJobData>) {
 
     logger.info(`Notification job ${job.id} processed`, {
       notificationId: notification.id,
-      dbRecipients: recipients.length,
+      dbRecipients: resolvedRecipients.length,
+      unresolvedTargets: targets.unresolved.length,
       fcmSent: fcmResult.sentCount,
     });
 
     return {
       success: true,
       notificationId: notification.id,
-      dbRecipients: recipients.length,
+      dbRecipients: resolvedRecipients.length,
+      unresolvedTargets: targets.unresolved,
       pushNotificationResult: fcmResult,
     };
   };
@@ -349,12 +539,16 @@ async function processSilentJob(
       | "sendPushNotification"
     >
   > &
-    Pick<NotificationJobData, "targetUser" | "socketEvent" | "socketPayload">,
+    Pick<
+      NotificationJobData,
+      "targetUser" | "broadcast" | "socketEvent" | "socketPayload"
+    >,
 ) {
   const {
     recipients,
     pushTargets,
     targetUser,
+    broadcast,
     title,
     message,
     eventType,
@@ -377,27 +571,25 @@ async function processSilentJob(
     };
   }
 
-  let resolvedRecipients = [...recipients];
-  if (resolvedRecipients.length === 0) {
-    const targetUsernames =
-      pushTargets.length > 0
-        ? pushTargets
-        : targetUser
-          ? Array.isArray(targetUser)
-            ? targetUser
-            : [targetUser]
-          : [];
-    if (targetUsernames.length > 0) {
-      const users = await prismaWithTenant.user.findMany({
-        where: { username: { in: targetUsernames } },
-        select: { id: true },
-      });
-      resolvedRecipients = users.map((u) => u.id);
-    }
-  }
+  const targets = await resolveTargets({
+    recipients,
+    pushTargets,
+    targetUser,
+    broadcast,
+  });
+  assertDeliverable(job, targets, broadcast);
+  const resolvedRecipients = targets.userIds;
 
-  if (resolvedRecipients.length > 0) {
-    const wsPublisher = getNotificationPublisher();
+  const wsPublisher = getNotificationPublisher();
+  if (broadcast?.scope === "platform") {
+    await wsPublisher.sendNotification({
+      silent: true,
+      eventType,
+      title,
+      message,
+      timeStamp: new Date(),
+    });
+  } else {
     // Unpersisted payload on the same "notification" channel the bell
     // (useNotifications.tsx) and the Pending Approvals badge
     // (ApprovalsBadgeContext.tsx) both listen on. The badge refetches on
@@ -411,18 +603,22 @@ async function processSilentJob(
       message,
       timeStamp: new Date(),
     };
+    const live = await realtimeEligible(resolvedRecipients);
     await Promise.all(
-      resolvedRecipients.map((userId) =>
-        wsPublisher.sendToUser(userId, "notification", pingPayload),
+      live.map((userId) =>
+        wsPublisher.sendToUser(userId, "notification", pingPayload, {
+          tenantId: job.data.tenantId ?? null,
+        }),
       ),
     );
     if (socketEvent) {
       await Promise.all(
-        resolvedRecipients.map((userId) =>
+        live.map((userId) =>
           wsPublisher.sendToUser(
             userId,
             socketEvent,
             socketPayload ?? pingPayload,
+            { tenantId: job.data.tenantId ?? null },
           ),
         ),
       );
@@ -431,14 +627,11 @@ async function processSilentJob(
 
   let fcmResult = { sentCount: 0, failedCount: 0, success: false };
   if (sendPushNotification) {
-    let targets: string[] = pushTargets;
-    if (!targets.length && targetUser) {
-      targets = Array.isArray(targetUser) ? targetUser : [targetUser];
-    }
-    const result =
-      targets.length > 0
-        ? await sendPushNotifications(targets, title, message)
-        : await sendPushNotifications("ALL_USERS", title, message);
+    const result = await sendPushNotifications(
+      pushAudienceFor(job.data.tenantId, targets, broadcast),
+      title,
+      message,
+    );
     fcmResult = {
       sentCount: result.sentCount,
       failedCount: result.failedCount,
@@ -457,12 +650,14 @@ async function processSilentJob(
 
   logger.info(`Silent notification job ${job.id} processed`, {
     dbRecipients: 0,
+    unresolvedTargets: targets.unresolved.length,
     fcmSent: fcmResult.sentCount,
   });
 
   return {
     success: true,
     dbRecipients: 0,
+    unresolvedTargets: targets.unresolved,
     pushNotificationResult: fcmResult,
   };
 }
