@@ -17,6 +17,8 @@ jest.mock("@hrms/db", () => {
   const _db = {
     user: { findUnique: jest.fn(), update: jest.fn() },
     attendanceRecord: { findMany: jest.fn().mockResolvedValue([]) },
+    leaveApplication: { findMany: jest.fn().mockResolvedValue([]) },
+    resignation: { findFirst: jest.fn().mockResolvedValue(null) },
     leaveBalance: { findFirst: jest.fn().mockResolvedValue(null) },
     payrollRun: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -45,6 +47,11 @@ jest.mock("@hrms/db", () => {
 });
 
 jest.mock("@hrms/common", () => ({
+  computeMonthlyPaidDays:
+    jest.requireActual("@hrms/common").computeMonthlyPaidDays,
+  ledgerUsedPLFor: jest.requireActual("@hrms/common").ledgerUsedPLFor,
+  LEAVE_STATUSES_IN_EFFECT:
+    jest.requireActual("@hrms/common").LEAVE_STATUSES_IN_EFFECT,
   hasPrivilegedRole: (
     role: string | null | undefined,
     allowed: readonly string[] = ["owner", "admin"],

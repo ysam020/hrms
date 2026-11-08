@@ -12,6 +12,10 @@ import {
   renderEmailHtml,
   hasPrivilegedRole,
   HR_ROLES,
+  computeMonthlyPaidDays,
+  ledgerUsedPLFor,
+  LEAVE_STATUSES_IN_EFFECT,
+  type LeaveTypePolicy,
 } from "@hrms/common";
 import { notify } from "@hrms/notifications";
 import { cacheManager } from "@hrms/cache";
@@ -19,7 +23,7 @@ import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
 import { isSuperUser } from "../utils/user";
 import { getActiveSettings } from "./tenantSettings";
-import { classifyImpliedNonWorkingDays } from "../utils/payrollCalc";
+import { employmentWindow } from "../utils/payrollCalc";
 import {
   calcMonthlyTds,
   getFinancialYear,
@@ -457,29 +461,61 @@ export async function buildSalarySlipPdf(
   // correctness in the latter.
   const totalMonthDays = new Date(year, month, 0).getDate(); // e.g. 30 for April
 
-  const [attRecords, lbRecord, tenantSettings, holidayRecords] =
-    await Promise.all([
-      prisma.attendanceRecord.findMany({
-        where: {
-          tenantId,
-          userId: requestedUserId,
-          date: {
-            gte: new Date(year, month - 1, 1),
-            lte: new Date(year, month, 0, 23, 59, 59, 999),
-          },
+  const monthFirst = new Date(year, month - 1, 1);
+  const monthLast = new Date(year, month, 0, 23, 59, 59, 999);
+  const [
+    attRecords,
+    lbRecord,
+    tenantSettings,
+    holidayRecords,
+    leaveApplications,
+    exitRecord,
+  ] = await Promise.all([
+    prisma.attendanceRecord.findMany({
+      where: {
+        tenantId,
+        userId: requestedUserId,
+        date: {
+          gte: new Date(year, month - 1, 1),
+          lte: new Date(year, month, 0, 23, 59, 59, 999),
         },
-        select: { status: true, date: true },
-      }),
-      prisma.leaveBalance.findFirst({
-        where: { tenantId, userId: requestedUserId },
-        select: { balances: true },
-      }),
-      // Fresh: feeds salary figures.
-      tenantId
-        ? getActiveSettings(tenantId, { fresh: true })
-        : Promise.resolve(null),
-      (prisma as any).holiday.findMany({ where: { year } }),
-    ]);
+      },
+      select: { status: true, date: true },
+    }),
+    prisma.leaveBalance.findFirst({
+      where: { tenantId, userId: requestedUserId },
+      select: { balances: true },
+    }),
+    // Fresh: feeds salary figures.
+    tenantId
+      ? getActiveSettings(tenantId, { fresh: true })
+      : Promise.resolve(null),
+    (prisma as any).holiday.findMany({ where: { year } }),
+    prisma.leaveApplication.findMany({
+      where: {
+        userId: requestedUserId,
+        status: { in: [...LEAVE_STATUSES_IN_EFFECT] },
+        from: { lte: monthLast },
+        to: { gte: monthFirst },
+      },
+      select: {
+        from: true,
+        to: true,
+        leaveType: true,
+        status: true,
+        unit: true,
+        session: true,
+        shortLeaveHours: true,
+      },
+    }),
+    (prisma as any).resignation.findFirst({
+      where: {
+        userId: requestedUserId,
+        lastWorkingDay: { gte: monthFirst, lte: monthLast },
+      },
+      select: { lastWorkingDay: true },
+    }),
+  ]);
   const workingDays: number[] = (tenantSettings as any)?.workWeekPattern
     ?.workingDays ?? [1, 2, 3, 4, 5];
   const holidayDateKeys = new Set<string>(
@@ -488,60 +524,25 @@ export async function buildSalarySlipPdf(
     ),
   );
 
-  // Count per-status attendance (case-insensitive to handle any capitalization).
-  let attPresent = 0,
-    attLate = 0,
-    attHalfDay = 0,
-    attHoliday = 0,
-    attWeekOff = 0,
-    attWfh = 0;
-  const recordedDates = new Set<string>();
-  for (const r of attRecords) {
-    recordedDates.add(new Date(r.date).toISOString().slice(0, 10));
-    const s = (r.status ?? "").toLowerCase();
-    if (s === "present") attPresent++;
-    else if (s === "late") attLate++;
-    else if (s === "half day") attHalfDay++;
-    else if (s === "holiday") attHoliday++;
-    // Weekly offs (e.g. Sat/Sun) are non-working but still paid days.
-    else if (s === "week off") attWeekOff++;
-    else if (s === "wfh") attWfh++;
-  }
-  // Calendar-derived holidays/weekly offs — covers dates
-  // reconcileAttendance.ts hasn't (yet) backfilled with an explicit
-  // "Holiday"/"Week Off" record.
-  const { impliedHolidays, impliedWeekOffs } = classifyImpliedNonWorkingDays(
+  // Same calculation as the payroll run (@hrms/common).
+  const { paidDays } = computeMonthlyPaidDays({
     year,
     month,
-    totalMonthDays,
     workingDays,
     holidayDateKeys,
-    recordedDates,
-  );
-  attHoliday += impliedHolidays;
-  attWeekOff += impliedWeekOffs;
-
-  // Paid leaves from LeaveBalance.balances for this specific month.
-  let paidLeaves = 0;
-  if (lbRecord?.balances && Array.isArray(lbRecord.balances)) {
-    const mb = (lbRecord.balances as any[]).find(
-      (b: any) =>
-        String(b.year) === String(year) && String(b.month) === String(month),
-    );
-    paidLeaves = mb?.usedPL ?? 0;
-  }
-
-  // Weighted paid days — same formula as initiatePayrollRun.
-  const paidDays = Math.min(
-    attPresent +
-      attLate +
-      attHalfDay * 0.5 +
-      attHoliday +
-      attWeekOff +
-      attWfh +
-      paidLeaves,
-    totalMonthDays,
-  );
+    attendance: attRecords,
+    leaves: leaveApplications,
+    ledgerUsedPL: ledgerUsedPLFor(lbRecord?.balances, year, month),
+    policies: ((tenantSettings as any)?.leavePolicies ??
+      []) as LeaveTypePolicy[],
+    ...employmentWindow(
+      employee?.joiningDate,
+      exitRecord?.lastWorkingDay,
+      year,
+      month,
+      totalMonthDays,
+    ),
+  });
 
   // If a real payroll run has already disbursed this exact month, its
   // PayrollLineItem holds the final, already-prorated amount that was
@@ -624,7 +625,18 @@ export async function buildSalarySlipPdf(
       calcPf = disbursedLineItem.pf ?? 0;
       calcEsi = disbursedLineItem.esi ?? 0;
       calcPt = disbursedLineItem.pt ?? 0;
-      calcIncentive = 0;
+      // Older line items keep the part of gross not allocated to Basic, HRA
+      // or Conveyance outside any component, so show it here or the rows
+      // don't add up to what was paid.
+      calcIncentive =
+        disbursedLineItem.incentive ||
+        Math.max(
+          0,
+          disbursedLineItem.grossSalary -
+            calcBasicPay -
+            calcHra -
+            calcConveyance,
+        );
       calcOtherDed = disbursedLineItem.otherDeductions ?? 0;
     } else {
       // No disbursed run yet for this month — prorate the already-stored,

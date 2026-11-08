@@ -281,39 +281,13 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-// Today's payroll-run paid days per scenario (measured 2026-11-07).
-const EXPECTED_RUN_PAID_DAYS: Record<string, number> = {
-  S01: 30,
-  S02: 28,
-  S03: 29,
-  S04: 27,
-  S05: 28,
-  S06: 28,
-  S07: 29.5,
-  S08: 25,
-  S09: 28,
-  S10: 27,
-  S11: 27,
-  S12: 28,
-  S13: 15,
-  S14: 15,
-  S15: 30,
-  S16: 30,
-  B01: 30,
-  B02: 28,
-  B13: 15,
-  B14: 15,
-};
+// Approved leave beyond the balance stays paid: balances can only be judged
+// when the leave is applied for and approved (applyLeave rejects it or
+// converts it to LWP), so payroll doesn't second-guess an approval.
+const PAID_DAYS_OVERRIDE: Record<string, number> = { S08: 30 };
+const expectedPaidDays = (s: Scenario) =>
+  PAID_DAYS_OVERRIDE[s.key] ?? s.paidIfLeavePaid;
 const PAY02_KEYS = new Set(["S13", "S14", "B13", "B14"]);
-// Legacy-path line items drop the (prorated) incentive from the
-// components, so the disbursed payslip's gross is short by that amount.
-const PAY03_DISBURSED_GROSS: Record<string, number> = {
-  S02: 22493,
-  S08: 20083,
-  S13: 12050,
-  S14: 12050,
-};
-
 const idFor = (i: number) =>
   `7c00000000000000000000${String(i + 1).padStart(2, "0")}`;
 let server: http.Server;
@@ -634,20 +608,11 @@ describe("payroll characterization — September 2026, synthetic employees", () 
             : null,
       };
       results.push(row);
-      // CHARACTERIZATION of today's behaviour (no policy asserted):
-      //  - approved paid leave is not paid → runPaidDays as recorded.
-      //  - for mid-month joiners/leavers the payslip credits the whole
-      //    month's weekends (19 paid / 11 LOP) while the run pays 15 days.
-      // When either is fixed this test FAILS on purpose: update the
-      // expectation together with the approved rule.
-      expect(row.runPaidDays).toBe(EXPECTED_RUN_PAID_DAYS[key]);
-      if (PAY02_KEYS.has(key)) {
-        expect(row.pdfPaidDays).toBe(19); // known defect (payslip window)
-        expect(row.pdfLopDays).toBe(11);
-      } else {
-        expect(row.pdfPaidDays).toBeCloseTo(row.runPaidDays!, 1);
-        expect(row.pdfLopDays).toBeCloseTo(DAYS - row.runPaidDays!, 1);
-      }
+      // The run and the payslip must both match the rule, and each other.
+      expect(row.runPaidDays).toBe(expectedPaidDays(s));
+      expect(row.pdfPaidDays).toBeCloseTo(row.runPaidDays!, 1);
+      expect(row.pdfLopDays).toBeCloseTo(DAYS - row.runPaidDays!, 1);
+      expect(row.salaryServiceSummaryPaidDays).toBeCloseTo(row.runPaidDays!, 1);
     },
   );
 });
@@ -694,13 +659,8 @@ describe("payslip AFTER the run is disbursed (stored line items)", () => {
         pdfLopDays: Number(after("LOP Days")),
       };
       results.push(row);
-      if (key in PAY03_DISBURSED_GROSS) {
-        expect(row.pdfGross).toBe(PAY03_DISBURSED_GROSS[key]); // known defect (legacy incentive)
-        expect(row.pdfGross).toBeLessThan(row.lineItemGross);
-      } else {
-        expect(row.pdfGross).toBeCloseTo(row.lineItemGross, 0);
-      }
-      if (PAY02_KEYS.has(key)) expect(row.pdfPaidDays).toBe(19); // known defect (payslip window)
+      expect(row.pdfGross).toBeCloseTo(row.lineItemGross, 0);
+      if (PAY02_KEYS.has(key)) expect(row.pdfPaidDays).toBe(15);
     },
   );
 });

@@ -22,6 +22,11 @@ import {
   apiResponse,
   RESPONSE_STATUS,
   deriveFromComponents,
+  computeMonthlyPaidDays,
+  ledgerUsedPLFor,
+  LEAVE_STATUSES_IN_EFFECT,
+  type LeaveTypePolicy,
+  type PaidDaysBreakdown,
 } from "@hrms/common";
 import { handleError } from "../utils/handleError";
 import { AuthRequest } from "../middleware/authenticate";
@@ -30,7 +35,7 @@ import { getActiveSettings } from "./tenantSettings";
 import {
   calcStatutoryDeductions,
   groupSlabsByState,
-  classifyImpliedNonWorkingDays,
+  employmentWindow,
 } from "../utils/payrollCalc";
 import {
   calcMonthlyTds,
@@ -267,25 +272,48 @@ export async function initiatePayrollRun(req: Request, res: Response) {
     });
 
     // ── Attendance data for the payroll month ─────────────────────────────────
-    const [attendanceRecords, leaveBalances, tenantSettings, holidayRecords] =
-      await Promise.all([
-        prisma.attendanceRecord.findMany({
-          where: {
-            userId: { in: empIds },
-            date: { gte: monthStart, lte: monthEnd },
-          },
-          select: { userId: true, status: true, date: true },
-        }),
-        prisma.leaveBalance.findMany({
-          where: { userId: { in: empIds } },
-          select: { userId: true, balances: true },
-        }),
-        // Fresh: feeds payroll figures.
-        tenantId
-          ? getActiveSettings(tenantId, { fresh: true })
-          : Promise.resolve(null),
-        (prisma as any).holiday.findMany({ where: { year } }),
-      ]);
+    const [
+      attendanceRecords,
+      leaveBalances,
+      tenantSettings,
+      holidayRecords,
+      leaveApplications,
+    ] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: {
+          userId: { in: empIds },
+          date: { gte: monthStart, lte: monthEnd },
+        },
+        select: { userId: true, status: true, date: true },
+      }),
+      prisma.leaveBalance.findMany({
+        where: { userId: { in: empIds } },
+        select: { userId: true, balances: true },
+      }),
+      // Fresh: feeds payroll figures.
+      tenantId
+        ? getActiveSettings(tenantId, { fresh: true })
+        : Promise.resolve(null),
+      (prisma as any).holiday.findMany({ where: { year } }),
+      prisma.leaveApplication.findMany({
+        where: {
+          userId: { in: empIds },
+          status: { in: [...LEAVE_STATUSES_IN_EFFECT] },
+          from: { lte: monthEnd },
+          to: { gte: monthStart },
+        },
+        select: {
+          userId: true,
+          from: true,
+          to: true,
+          leaveType: true,
+          status: true,
+          unit: true,
+          session: true,
+          shortLeaveHours: true,
+        },
+      }),
+    ]);
     const workingDays: number[] = (tenantSettings as any)?.workWeekPattern
       ?.workingDays ?? [1, 2, 3, 4, 5];
     const holidayDateKeys = new Set<string>(
@@ -294,110 +322,46 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       ),
     );
 
-    // Every date (any status) that already has an AttendanceRecord, per
-    // employee — used to avoid double-counting a weekly off that
-    // reconcileAttendance.ts has already backfilled explicitly.
-    const recordedDatesByUser = new Map<string, Set<string>>();
+    // One calculation, shared with the payslip (@hrms/common computeMonthlyPaidDays).
+    const paidDaysByUser = new Map<string, PaidDaysBreakdown>();
+    const attendanceByUser = new Map<string, any[]>();
     for (const r of attendanceRecords as any[]) {
-      const key = new Date(r.date).toISOString().slice(0, 10);
-      const set = recordedDatesByUser.get(r.userId) ?? new Set<string>();
-      set.add(key);
-      recordedDatesByUser.set(r.userId, set);
+      const list = attendanceByUser.get(r.userId) ?? [];
+      list.push(r);
+      attendanceByUser.set(r.userId, list);
     }
-
-    // Aggregate per-employee attendance counts.
-    type AttAgg = {
-      present: number;
-      late: number;
-      halfDay: number;
-      holiday: number;
-      weekOff: number;
-      wfh: number;
-    };
-    const attByUser = new Map<string, AttAgg>();
+    const leavesByUser = new Map<string, any[]>();
+    for (const l of leaveApplications as any[]) {
+      const list = leavesByUser.get(l.userId) ?? [];
+      list.push(l);
+      leavesByUser.set(l.userId, list);
+    }
+    const balanceByUser = new Map<string, unknown>(
+      (leaveBalances as any[]).map((lb) => [lb.userId, lb.balances]),
+    );
+    const leavePolicies = ((tenantSettings as any)?.leavePolicies ??
+      []) as LeaveTypePolicy[];
     for (const emp of employees) {
-      attByUser.set(emp.id, {
-        present: 0,
-        late: 0,
-        halfDay: 0,
-        holiday: 0,
-        weekOff: 0,
-        wfh: 0,
-      });
-    }
-    for (const r of attendanceRecords as any[]) {
-      const agg = attByUser.get(r.userId);
-      if (!agg) continue;
-      if (r.status === "Present") agg.present++;
-      else if (r.status === "Late") agg.late++;
-      else if (r.status === "Half Day") agg.halfDay++;
-      else if (r.status === "Holiday") agg.holiday++;
-      // Weekly offs (e.g. Sat/Sun) are non-working but still paid days —
-      // reconcileAttendance.ts backfills them with this status per the
-      // tenant's configured work-week pattern. Without counting them here,
-      // every salaried employee's pay is systematically prorated down by
-      // however many weekly-off days fall in the month.
-      else if (r.status === "Week Off") agg.weekOff++;
-      else if (r.status === "WFH") agg.wfh++;
-    }
-
-    // Calendar-derived holidays/weekly offs — covers dates
-    // reconcileAttendance.ts hasn't (yet) backfilled with an explicit
-    // "Holiday"/"Week Off" record.
-    for (const emp of employees) {
-      const agg = attByUser.get(emp.id)!;
-      const recorded = recordedDatesByUser.get(emp.id) ?? new Set<string>();
-
-      // Bound implied-day crediting to the employee's actual employment
-      // window within this month — otherwise a mid-month joiner/leaver gets
-      // credited paid weekends/holidays for dates before they joined or
-      // after they left, purely because no AttendanceRecord exists for a
-      // date they were never employed on.
-      let startDay = 1;
-      const joinDate = (emp as any).joining_date
-        ? new Date((emp as any).joining_date)
-        : null;
-      if (
-        joinDate &&
-        joinDate.getFullYear() === year &&
-        joinDate.getMonth() + 1 === month
-      ) {
-        startDay = joinDate.getDate();
-      }
-      let endDay = totalMonthDays;
-      const exitDate = lastWorkingDayByUser.get(emp.id);
-      if (
-        exitDate &&
-        exitDate.getFullYear() === year &&
-        exitDate.getMonth() + 1 === month
-      ) {
-        endDay = exitDate.getDate();
-      }
-
-      const { impliedHolidays, impliedWeekOffs } =
-        classifyImpliedNonWorkingDays(
+      paidDaysByUser.set(
+        emp.id,
+        computeMonthlyPaidDays({
           year,
           month,
-          totalMonthDays,
           workingDays,
           holidayDateKeys,
-          recorded,
-          startDay,
-          endDay,
-        );
-      agg.holiday += impliedHolidays;
-      agg.weekOff += impliedWeekOffs;
-    }
-
-    // Extract paid-leave count per employee for this month from LeaveBalance.balances JSON.
-    const paidLeaveByUser = new Map<string, number>();
-    for (const lb of leaveBalances as any[]) {
-      if (!lb.balances || !Array.isArray(lb.balances)) continue;
-      const mb = lb.balances.find(
-        (b: any) =>
-          String(b.year) === String(year) && String(b.month) === String(month),
+          attendance: attendanceByUser.get(emp.id) ?? [],
+          leaves: leavesByUser.get(emp.id) ?? [],
+          ledgerUsedPL: ledgerUsedPLFor(balanceByUser.get(emp.id), year, month),
+          policies: leavePolicies,
+          ...employmentWindow(
+            (emp as any).joining_date,
+            lastWorkingDayByUser.get(emp.id),
+            year,
+            month,
+            totalMonthDays,
+          ),
+        }),
       );
-      paidLeaveByUser.set(lb.userId, mb?.usedPL ?? 0);
     }
 
     // Professional Tax — state-wise slabs when the tenant has configured them
@@ -563,27 +527,7 @@ export async function initiatePayrollRun(req: Request, res: Response) {
           return null;
         }
 
-        // Paid days = present + late + halfDays×0.5 + holidays + weekly offs
-        // + WFH days + paid leaves.
-        const att = attByUser.get(emp.id) ?? {
-          present: 0,
-          late: 0,
-          halfDay: 0,
-          holiday: 0,
-          weekOff: 0,
-          wfh: 0,
-        };
-        const paidLeaves = paidLeaveByUser.get(emp.id) ?? 0;
-        const paidDays = Math.min(
-          att.present +
-            att.late +
-            att.halfDay * 0.5 +
-            att.holiday +
-            att.weekOff +
-            att.wfh +
-            paidLeaves,
-          totalMonthDays, // cap at total days to avoid overrun
-        );
+        const paidDays = paidDaysByUser.get(emp.id)!.paidDays;
 
         const prorationRatio =
           totalMonthDays > 0 ? paidDays / totalMonthDays : 1;
