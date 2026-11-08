@@ -51,7 +51,13 @@ async function main() {
 }
 
 main().catch((err) => {
-  // The error name only: a driver message can quote a whole document.
-  console.error("migrate-encrypt-pii failed:", (err as Error).name);
+  // Our own refusals are safe to show. For anything else, the error name
+  // only: a driver message can quote a whole document.
+  const message = (err as Error).message ?? "";
+  console.error(
+    message.startsWith("migrate-encrypt-pii refused")
+      ? message
+      : `migrate-encrypt-pii failed: ${(err as Error).name}`,
+  );
   process.exit(1);
 });
