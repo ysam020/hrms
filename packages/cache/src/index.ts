@@ -10,6 +10,8 @@ export {
 export {
   storeRefreshToken,
   rotateRefreshToken,
+  peekRefreshToken,
+  type RefreshTokenPeek,
   revokeRefreshToken,
   markOrgSetupComplete,
   type RefreshTokenMeta,

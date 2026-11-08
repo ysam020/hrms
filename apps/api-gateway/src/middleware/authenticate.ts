@@ -6,11 +6,13 @@ import {
   getClientForDb,
   AuditActor,
   recordStage,
+  isAccountAccessUnavailable,
 } from "@hrms/db";
 import { BoundedCache, hasPrivilegedRole, HR_ROLES } from "@hrms/common";
 import { gatewayTenantStorage } from "./tenantContext";
-import { loadUserAccess } from "../services/userAccess";
+import { loadUserAccess, scopeToTenant } from "../services/userAccess";
 import { leaseForRequest } from "./leaseForRequest";
+import { resolveAccountAccess } from "../services/accountAccess";
 
 export interface AuthUser {
   userId: string;
@@ -62,6 +64,33 @@ async function resolveUsername(userId: string): Promise<string | null> {
   return username;
 }
 
+// 401 + a stable code: the web client's 401 handling tries one refresh, which
+// is refused for the same reason (auth-service refreshToken), and then signs
+// the person out. No detail about why — that is for the person's employer.
+function denySession(res: Response) {
+  res.status(401).json({
+    message: "Your session is no longer valid. Please sign in again.",
+    code: "SESSION_REVOKED",
+  });
+}
+
+// The account check could not be COMPLETED (database timeout or
+// error, or the breaker is open). Not a denial — the client must keep its
+// session and retry — and not access. 503 + Retry-After; any other failure
+// stays a 500.
+function checkFailed(res: Response, err: unknown) {
+  if (res.headersSent) return;
+  if (isAccountAccessUnavailable(err)) {
+    res.setHeader("Retry-After", "5");
+    res.status(503).json({
+      message: "Temporarily unable to verify your session. Please retry.",
+      code: "AUTH_CHECK_UNAVAILABLE",
+    });
+    return;
+  }
+  res.status(500).json({ message: "Internal Server Error" });
+}
+
 export const authenticate = (
   req: AuthRequest,
   res: Response,
@@ -87,14 +116,24 @@ export const authenticate = (
     const tid = payload.tenantId ?? null;
     const dbNameFromToken: string | null = payload.dbName ?? null;
 
+    // The token is a 24 h snapshot. Whether this
+    // person may still act here — employment status, membership, tenant
+    // active — and in what role is re-read from the database (behind a 30 s
+    // per-process cache, services/accountAccess.ts) on every request, so a
+    // termination, removal or demotion takes effect within that window
+    // instead of whenever the token (and every refresh after it) expires.
     if (tid) {
-      // Resolve dbName (from JWT if present, else fall back to a DB lookup for old tokens)
-      // and username (for audit-log attribution) in parallel.
       Promise.all([
-        resolveDbName(tid, dbNameFromToken),
+        resolveAccountAccess(payload.userId, tid),
         resolveUsername(payload.userId),
       ])
-        .then(([dbName, username]) => {
+        .then(async ([access, username]) => {
+          if (!access.ok) return denySession(res);
+          // Authoritative values replace the token's snapshot.
+          req.user!.tenantRole = access.tenantRole;
+          const dbName =
+            access.dbName ?? (await resolveDbName(tid, dbNameFromToken));
+          req.user!.dbName = dbName;
           const tenantClient = dbName ? getClientForDb(dbName) : null;
           const actor: AuditActor = {
             userId: payload.userId ?? null,
@@ -113,11 +152,17 @@ export const authenticate = (
             runWithTenant(tid, tenantClient, next, actor);
           });
         })
-        .catch(() => {
-          res.status(500).json({ message: "Internal Server Error" });
-        });
+        .catch((err) => checkFailed(res, err));
     } else {
-      gatewayTenantStorage.run({ tenantId: null, dbName: null }, () => next());
+      // No organisation yet (org setup): only the person-level checks apply.
+      resolveAccountAccess(payload.userId, null)
+        .then((access) => {
+          if (!access.ok) return denySession(res);
+          gatewayTenantStorage.run({ tenantId: null, dbName: null }, () =>
+            next(),
+          );
+        })
+        .catch((err) => checkFailed(res, err));
     }
   } catch {
     return res.status(401).json({ message: "Invalid or expired token" });
@@ -164,7 +209,11 @@ export const requireSuperUser = async (
     return;
   }
   try {
-    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
+    // Privileges count only in the user's own organisation.
+    const user = scopeToTenant(
+      await loadUserAccess(req.user.userId, { tenantScoped: false }),
+      req.user.tenantId,
+    );
     if (!user?.isSuperUser) {
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -194,7 +243,11 @@ export const requirePrivileged = async (
     return;
   }
   try {
-    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
+    // Privileges count only in the user's own organisation.
+    const user = scopeToTenant(
+      await loadUserAccess(req.user.userId, { tenantScoped: false }),
+      req.user.tenantId,
+    );
     if (!user?.isSuperUser) {
       res.status(403).json({ message: "Forbidden" });
       return;
@@ -226,7 +279,11 @@ export const requireSubscriptionManager = async (
     return;
   }
   try {
-    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
+    // Privileges count only in the user's own organisation.
+    const user = scopeToTenant(
+      await loadUserAccess(req.user.userId, { tenantScoped: false }),
+      req.user.tenantId,
+    );
     const permitted =
       user?.isSuperUser ||
       (user?.permissions ?? []).some((p) => p.startsWith("Subscription:"));
@@ -259,7 +316,11 @@ export const requireHrPrivileged = async (
     return;
   }
   try {
-    const user = await loadUserAccess(req.user.userId, { tenantScoped: false });
+    // Privileges count only in the user's own organisation.
+    const user = scopeToTenant(
+      await loadUserAccess(req.user.userId, { tenantScoped: false }),
+      req.user.tenantId,
+    );
     if (!user?.isSuperUser) {
       res.status(403).json({ message: "Forbidden" });
       return;

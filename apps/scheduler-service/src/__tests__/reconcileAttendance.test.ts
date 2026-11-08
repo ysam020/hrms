@@ -1,3 +1,5 @@
+// These suites test the job's logic when it IS enabled (behind its off-by-default gate).
+process.env.ATTENDANCE_RECONCILE_ENABLED = "true";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { prisma, getClientForDb, runWithTenant } from "@hrms/db";
@@ -19,7 +21,11 @@ jest.mock("@hrms/db", () => {
       findFirst: jest.fn(),
       upsert: jest.fn(),
       create: jest.fn(),
+      // The ledger is written with an updatedAt CAS.
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    // The per-employee writes run in one transaction.
+    $transaction: (fn: (tx: unknown) => unknown) => fn(_db),
     holiday: { findMany: jest.fn() },
     tenantSettings: { findFirst: jest.fn() },
   };

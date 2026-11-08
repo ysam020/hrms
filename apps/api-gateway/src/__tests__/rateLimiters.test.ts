@@ -13,6 +13,16 @@ jest.mock("express-rate-limit", () => {
   });
   return {
     __esModule: true,
+    // FailoverStore keeps an in-process fallback.
+    MemoryStore: class {
+      init() {}
+      increment() {
+        return { totalHits: 1, resetTime: undefined };
+      }
+      decrement() {}
+      resetKey() {}
+      shutdown() {}
+    },
     default: rateLimit,
     ipKeyGenerator: jest.fn((req: any) => `normalized:${req.ip}`),
   };
@@ -129,7 +139,7 @@ describe("Redis-backed store", () => {
     expect(new Set(prefixes).size).toBe(prefixes.length); // all distinct
     for (const options of capturedOptions) {
       expect(options.store).toBeDefined();
-      expect(options.store.__options.prefix).toEqual(
+      expect(options.store.primary.__options.prefix).toEqual(
         expect.stringMatching(/^rl:/),
       );
     }

@@ -88,11 +88,13 @@ describe("updateEmployeeStatus", () => {
     expect(mockUpdate).toHaveBeenCalledTimes(2);
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "john-id" },
-      data: { employeeStatus: "Resigned" },
+      // The last working day also unregisters devices.
+      data: { employeeStatus: "Resigned", fcmTokens: [] },
     });
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "jane-id" },
-      data: { employeeStatus: "Resigned" },
+      // The last working day also unregisters devices.
+      data: { employeeStatus: "Resigned", fcmTokens: [] },
     });
   });
 

@@ -108,7 +108,7 @@ const getMyProfile: ToolDef = {
   scope: "profile:read",
   input: z.object({}).strict(),
   async run(_args, principal) {
-    const p = await fetchFullProfile(self(principal));
+    const p = await fetchFullProfile(self(principal), principal!.tenantId);
     if (!p) throw new ToolError("not_found", "Your profile wasn't found.");
     const tenant = await prisma.tenant.findUnique({
       where: { id: principal!.tenantId },

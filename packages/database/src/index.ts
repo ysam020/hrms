@@ -52,3 +52,13 @@ export {
 } from "./publicEmailDomains";
 export { ensureMasterIndexes } from "./ensureIndexes";
 export { recordAuditEntry } from "./auditMiddleware";
+export {
+  checkAccountAccess,
+  isBlockedEmployeeStatus,
+  BLOCKED_STATUSES,
+  AccountAccessUnavailableError,
+  isAccountAccessUnavailable,
+  ACCOUNT_CHECK_TIMEOUT_MS,
+  type AccountAccess,
+  type AccountAccessDenial,
+} from "./accountAccess";

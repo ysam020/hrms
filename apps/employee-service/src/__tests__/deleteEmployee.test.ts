@@ -101,7 +101,8 @@ describe("deleteEmployee", () => {
 
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: "emp-1" },
-      data: { employeeStatus: "Terminated" },
+      // Termination also unregisters devices.
+      data: { employeeStatus: "Terminated", fcmTokens: [] },
     });
     expect(mockDelete).not.toHaveBeenCalled();
     expect(cb).toHaveBeenCalledWith(null, {

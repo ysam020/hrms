@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
+import { status as GrpcStatus } from "@grpc/grpc-js";
 import jwt from "jsonwebtoken";
 import { authClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prisma, markHandlerStart } from "@hrms/db";
+import { prisma, markHandlerStart, isAccountAccessUnavailable } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { apiResponse, RESPONSE_STATUS, grpcToHttpStatus } from "@hrms/common";
@@ -13,6 +14,7 @@ import { getActiveSettings } from "./tenantSettings";
 import { hasSupportAccess } from "../services/supportStore";
 import { isPlatformTenant } from "../config/platform";
 import { platformAdminGrants } from "../services/platformAccess";
+import { resolveAccountAccess } from "../services/accountAccess";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -50,7 +52,16 @@ function isoDates(value: unknown): any {
   return value;
 }
 
-export async function fetchFullProfile(userId: string) {
+/**
+ * `tenantId` is the organisation the caller is acting in (the token's).
+ * isSuperUser / permissions / role on the master record were granted by the
+ * user's home organisation and are reported only for it — they
+ * are UI hints here, but must agree with what the guards enforce.
+ */
+export async function fetchFullProfile(
+  userId: string,
+  tenantId: string | null,
+) {
   const rows = (await prisma.user.aggregateRaw({
     pipeline: [
       { $match: { $expr: { $eq: ["$_id", { $toObjectId: userId }] } } },
@@ -63,6 +74,7 @@ export async function fetchFullProfile(userId: string) {
           role: 1,
           isSuperUser: 1,
           permissions: 1,
+          homeTenantId: { $toString: "$tenantId" },
           employeeStatus: 1,
           first_name: 1,
           last_name: 1,
@@ -108,6 +120,7 @@ export async function fetchFullProfile(userId: string) {
   if (!rows || rows.length === 0) return null;
 
   const u = isoDates(rows[0]);
+  const inHomeTenant = !!tenantId && u.homeTenantId === tenantId;
   const firstName = u.first_name || "";
   const lastName = u.last_name || "";
   const fullName =
@@ -118,9 +131,9 @@ export async function fetchFullProfile(userId: string) {
     id: u.id,
     email: u.email || "",
     username: u.username || "",
-    role: u.role || [],
-    isSuperUser: u.isSuperUser || false,
-    permissions: u.permissions || [],
+    role: inHomeTenant ? u.role || [] : [],
+    isSuperUser: inHomeTenant ? u.isSuperUser || false : false,
+    permissions: inHomeTenant ? u.permissions || [] : [],
     employeeStatus: u.employeeStatus || "Active",
     firstName,
     lastName,
@@ -186,7 +199,7 @@ export async function getProfile(req: Request, res: Response) {
     const tenantId = user?.tenantId ?? null;
     const [profile, tenant, activeSettings, isSupportAgent, platformAdmin] =
       await Promise.all([
-        fetchFullProfile(user!.userId),
+        fetchFullProfile(user!.userId, tenantId),
         tenantId ? tenantNameAndSlug(tenantId) : Promise.resolve(null),
         tenantId ? getActiveSettings(tenantId) : Promise.resolve(null),
         // UI hint only (shows the Praesto support console link); every
@@ -266,6 +279,17 @@ export async function refreshToken(req: Request, res: Response) {
       // treats a 401 here as "session is really gone," and collapsing every
       // failure reason into that code is what turned momentary backend
       // blips into full logouts.
+      // Auth-service could not verify the session (Redis/Mongo down or
+      // slow) and left it untouched — 503 + Retry-After, so the client keeps
+      // its token and retries. Only 401 means the session is gone.
+      if (response.status === GrpcStatus.UNAVAILABLE) {
+        res.setHeader("Retry-After", "5");
+        return res.status(503).json({
+          success: false,
+          code: "SESSION_CHECK_UNAVAILABLE",
+          message: response.message,
+        });
+      }
       return apiResponse(res, grpcToHttpStatus(response.status), {
         message: response.message,
       });
@@ -564,7 +588,35 @@ export async function webAuthnLogin(req: Request, res: Response) {
     // rejection, so it must not collapse into the same 401 as an invalid
     // token above (a DB hiccup right after a legitimate WebAuthn login
     // shouldn't look like "authentication failed" to the client).
-    const profile = await fetchFullProfile(payload.userId);
+    // Any still-valid access token is accepted as a tempToken,
+    // so this must apply the same account check as `authenticate` — a
+    // terminated or removed person's old token gets nothing here.
+    let access;
+    try {
+      access = await resolveAccountAccess(
+        payload.userId,
+        payload.tenantId ?? null,
+      );
+    } catch (err) {
+      if (isAccountAccessUnavailable(err)) {
+        res.setHeader("Retry-After", "5");
+        return res.status(503).json({
+          success: false,
+          code: "AUTH_CHECK_UNAVAILABLE",
+          message: "Temporarily unable to verify your session. Please retry.",
+        });
+      }
+      throw err;
+    }
+    if (!access.ok) {
+      return apiResponse(res, RESPONSE_STATUS.UN_AUTHORIZED, {
+        message: "Authentication failed",
+      });
+    }
+    const profile = await fetchFullProfile(
+      payload.userId,
+      payload.tenantId ?? null,
+    );
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       data: { accessToken: tempToken, user: profile },
     });

@@ -43,7 +43,11 @@ import {
   trialKeysFor,
   TRIAL_INELIGIBLE_MESSAGE,
 } from "../services/trial";
-import { invalidateUserAccess, loadUserAccess } from "../services/userAccess";
+import {
+  invalidateUserAccess,
+  loadUserAccess,
+  scopeToTenant,
+} from "../services/userAccess";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -960,7 +964,11 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
       message: "No active tenant.",
     });
   }
-  const actor = await loadUserAccess(userId, { tenantScoped: false });
+  // Privileges count only in the user's own organisation.
+  const actor = scopeToTenant(
+    await loadUserAccess(userId, { tenantScoped: false }),
+    tenantId,
+  );
   const canEdit =
     actor?.isSuperUser ||
     (actor?.permissions ?? []).includes("Organisation:edit_company_info");
@@ -1303,9 +1311,13 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
 // Organisation:approve_join_requests permission (req.user from the JWT
 // doesn't carry either, hence the lookup).
 async function canApproveJoinRequests(req: AuthRequest): Promise<boolean> {
-  const { userId, tenantRole } = req.user!;
+  const { userId, tenantRole, tenantId } = req.user!;
   if (hasPrivilegedRole(tenantRole ?? "")) return true;
-  const user = await loadUserAccess(userId, { tenantScoped: false });
+  // Privileges count only in the user's own organisation.
+  const user = scopeToTenant(
+    await loadUserAccess(userId, { tenantScoped: false }),
+    tenantId,
+  );
   if (user?.isSuperUser) return true;
   const permissions = (user?.permissions as string[]) ?? [];
   return permissions.includes("Organisation:approve_join_requests");

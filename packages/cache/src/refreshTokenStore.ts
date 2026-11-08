@@ -21,6 +21,7 @@ const hashToken = (token: string): string =>
 
 const REFRESH_TTL = 30 * 24 * 60 * 60; // 30 days — matches REFRESH_TOKEN_EXPIRE default
 const PREV_TOKEN_GRACE_SECONDS = 60;
+const MIRROR_WAIT_MS = Number(process.env.REFRESH_MIRROR_WAIT_MS) || 1_000;
 
 export interface RefreshTokenMeta {
   tokenHash: string;
@@ -195,11 +196,26 @@ export const rotateRefreshToken = async (
     // afterwards (3 commands to Atlas instead of 2), and nothing here uses it.
     // Still awaited, so the mirror is written before the new token is handed
     // out, as before.
+    //
+    // Bounded. The rotation above is already committed in Redis, so
+    // the new token MUST reach the client; a stalled Mongo here (the driver
+    // waits up to its 30 s server-selection timeout) would otherwise outlive
+    // the gateway's 8 s gRPC deadline and strand the session. Wait at most
+    // MIRROR_WAIT_MS, then let the mirror write finish in the background.
+    // Redis stays the source of truth; the mirror is the fallback copy.
+    const mirror = prisma.user
+      .updateMany({ where: { id: userId }, data: { refreshToken: newHash } })
+      .then(() => true)
+      .catch(() => false);
     await timed(
       "mongoMs",
-      prisma.user
-        .updateMany({ where: { id: userId }, data: { refreshToken: newHash } })
-        .catch(() => {}),
+      Promise.race([
+        mirror,
+        new Promise<boolean>((resolve) => {
+          const t = setTimeout(() => resolve(false), MIRROR_WAIT_MS);
+          t.unref?.();
+        }),
+      ]),
     );
   }
 
@@ -211,6 +227,68 @@ export const rotateRefreshToken = async (
     dbName: meta.dbName,
     orgSetupComplete: meta.orgSetupComplete,
   };
+};
+
+/**
+ * Read-only look at a presented refresh token — nothing is rotated,
+ * written or revoked. Lets the refresh handler learn which organisation the
+ * session belongs to and confirm the token is still the current (or
+ * just-rotated grace) one BEFORE the irreversible rotation, so the account
+ * check can run first and a failed check leaves the session untouched.
+ *
+ *   current  — the presented token is the live one
+ *   grace    — it was rotated out < PREV_TOKEN_GRACE_SECONDS ago (a
+ *              concurrent refresh won); rotation will re-serve the winner's
+ *   invalid  — neither (revoked, superseded, logged out)
+ *
+ * When Redis has no record (eviction, flush, restart) the Mongo mirror of
+ * the hash decides, as rotateRefreshToken does. Redis or Mongo errors are
+ * thrown: the caller must answer "unavailable", never "invalid".
+ */
+export type RefreshTokenPeek =
+  | { state: "current" | "grace"; tenantId: string | null }
+  | { state: "invalid" };
+
+export const peekRefreshToken = async (
+  userId: string,
+  presentedToken: string,
+): Promise<RefreshTokenPeek> => {
+  const presentedHash = hashToken(presentedToken);
+  const [raw, graceRaw] = await getRedisClient().mget(
+    `refresh:${userId}`,
+    `refresh-prev:${userId}`,
+  );
+  let meta: RefreshTokenMeta | null = null;
+  if (raw) {
+    try {
+      meta = JSON.parse(raw) as RefreshTokenMeta;
+    } catch {
+      meta = null;
+    }
+  }
+  if (meta) {
+    if (meta.tokenHash === presentedHash)
+      return { state: "current", tenantId: meta.tenantId ?? null };
+    if (graceRaw) {
+      try {
+        const grace = JSON.parse(graceRaw) as PrevTokenGrace;
+        if (grace.prevTokenHash === presentedHash)
+          return { state: "grace", tenantId: meta.tenantId ?? null };
+      } catch {
+        /* unparseable grace slot: treat as absent */
+      }
+    }
+    return { state: "invalid" };
+  }
+  // No usable Redis record: the Mongo mirror decides (same rule as the
+  // rotation's fallback).
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { refreshToken: true, tenantId: true },
+  });
+  if (user?.refreshToken && user.refreshToken === presentedHash)
+    return { state: "current", tenantId: user.tenantId ?? null };
+  return { state: "invalid" };
 };
 
 export const storeRefreshToken = async (

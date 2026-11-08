@@ -12,7 +12,9 @@ jest.mock("@hrms/db", () => {
     taxDeclaration: { findFirst: jest.fn() },
     tenant: { findUnique: jest.fn() },
   };
-  return { prismaWithTenant: _db };
+  // The tenant authenticate binds for the request fixtures below
+  // (privileges are only honoured with a tenant bound).
+  return { prismaWithTenant: _db, getTenantId: () => "t1" };
 });
 
 jest.mock("@hrms/common", () => ({

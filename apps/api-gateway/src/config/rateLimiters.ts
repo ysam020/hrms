@@ -1,5 +1,8 @@
 import rateLimit, {
   ipKeyGenerator,
+  MemoryStore,
+  type IncrementResponse,
+  type Options,
   type RateLimitRequestHandler,
   type Store,
 } from "express-rate-limit";
@@ -8,6 +11,11 @@ import { Application } from "express";
 import jwt from "jsonwebtoken";
 import { getRedisClient } from "@hrms/cache";
 import { recordExternal } from "@hrms/db";
+import {
+  logger,
+  rateLimitStoreDegraded,
+  rateLimitStoreFailoversTotal,
+} from "@hrms/logger";
 import { timed } from "../middleware/timed";
 
 // Every limiter shares one Redis-backed store (prefixed per limiter so
@@ -17,7 +25,20 @@ import { timed } from "../middleware/timed";
 // independently, so the real effective limit is max × N, and every deploy
 // silently resets every counter to zero. Redis makes the limit actually
 // shared and durable across the fleet.
+//
+// But Redis must not be a hard dependency of every request.
+// express-rate-limit forwards a store error to next(err), so with Redis down
+// EVERY /api request returned 500. redisStore() therefore returns a
+// FailoverStore: Redis first; on an error or a slow answer, the SAME limit
+// (same window, same max, same key) is enforced by an in-process
+// MemoryStore until Redis is healthy again. Nothing is ever unlimited —
+// auth, refresh, public and draft-recovery limits keep holding — the limit
+// just becomes per gateway process (max × processes) for the outage.
 export function redisStore(prefix: string): Store {
+  return new FailoverStore(prefix, rawRedisStore(prefix));
+}
+
+function rawRedisStore(prefix: string): Store {
   return new RedisStore({
     prefix,
     sendCommand: async (...args: string[]) => {
@@ -42,6 +63,173 @@ export function redisStore(prefix: string): Store {
 // once at startup. Ignored when NODE_ENV=production so a stray variable can
 // never loosen production limits; anything that isn't a positive integer
 // falls back to the coded default. Every override in effect is logged.
+// ─── Failover ────────────────────────────────────────────────────
+
+const METRIC_SERVICE = process.env.SERVICE_NAME || "api-gateway";
+const REDIS_TIMEOUT_MS = Number(process.env.RATE_LIMIT_REDIS_TIMEOUT_MS) || 200;
+// After a failure, skip Redis for this long (one shared breaker — every
+// limiter talks to the same Redis), then let the next call probe it.
+const BREAKER_OPEN_MS = Number(process.env.RATE_LIMIT_BREAKER_MS) || 5_000;
+
+interface StoreHealth {
+  mode: "redis" | "memory";
+  degradedSince: number | null;
+  openUntil: number;
+  failures: number;
+  lastError: string | null;
+}
+const health: StoreHealth = {
+  mode: "redis",
+  degradedSince: null,
+  openUntil: 0,
+  failures: 0,
+  lastError: null,
+};
+
+/** For /health and tests: whether limits are currently Redis-backed. */
+export function rateLimitStoreHealth(): Readonly<StoreHealth> {
+  return { ...health };
+}
+/** Test hook. */
+export function resetRateLimitStoreHealth(): void {
+  Object.assign(health, {
+    mode: "redis",
+    degradedSince: null,
+    openUntil: 0,
+    failures: 0,
+    lastError: null,
+  });
+}
+
+function recordFailure(err: unknown, prefix: string): void {
+  const now = Date.now();
+  health.failures++;
+  health.openUntil = now + BREAKER_OPEN_MS;
+  health.lastError = err instanceof Error ? err.message : String(err);
+  if (health.mode === "redis") {
+    health.mode = "memory";
+    health.degradedSince = now;
+    rateLimitStoreFailoversTotal?.inc?.({ service: METRIC_SERVICE });
+    rateLimitStoreDegraded?.set?.({ service: METRIC_SERVICE }, 1);
+    // Once per outage, not once per request.
+    logger.warn(
+      "rate limiting degraded to per-process memory: Redis unavailable",
+      { limiter: prefix, error: health.lastError },
+    );
+  }
+}
+
+function recordSuccess(): void {
+  if (health.mode === "memory") {
+    logger.info("rate limiting restored to Redis", {
+      degradedForMs: Date.now() - (health.degradedSince ?? Date.now()),
+      failures: health.failures,
+    });
+  }
+  if (health.mode === "memory")
+    rateLimitStoreDegraded?.set?.({ service: METRIC_SERVICE }, 0);
+  health.mode = "redis";
+  health.degradedSince = null;
+  health.failures = 0;
+  health.lastError = null;
+}
+
+function withTimeout<T>(work: Promise<T> | T, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`rate-limit store timeout after ${ms} ms`)),
+      ms,
+    );
+    timer.unref?.();
+    Promise.resolve(work).then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+export class FailoverStore implements Store {
+  readonly prefix: string;
+  // Counters are shared across processes while Redis is up.
+  readonly localKeys = false;
+  private readonly fallback = new MemoryStore();
+
+  constructor(
+    prefix: string,
+    /** The Redis store; public so wiring tests can check it is primary. */
+    readonly primary: Store,
+    private readonly timeoutMs = REDIS_TIMEOUT_MS,
+  ) {
+    this.prefix = prefix;
+  }
+
+  init(options: Options): void {
+    // The fallback gets the limiter's own window, so it enforces the same
+    // limit. Primary init failures (e.g. script load with Redis down) are
+    // the primary's own concern; increment() fails over regardless.
+    this.fallback.init(options);
+    try {
+      const r = this.primary.init?.(options);
+      if (r && typeof (r as Promise<void>).catch === "function")
+        (r as Promise<void>).catch((err) => recordFailure(err, this.prefix));
+    } catch (err) {
+      recordFailure(err, this.prefix);
+    }
+  }
+
+  private redisAvailable(): boolean {
+    return Date.now() >= health.openUntil;
+  }
+
+  async increment(key: string): Promise<IncrementResponse> {
+    if (this.redisAvailable()) {
+      try {
+        const result = await withTimeout(
+          this.primary.increment(key),
+          this.timeoutMs,
+        );
+        recordSuccess();
+        return result;
+      } catch (err) {
+        recordFailure(err, this.prefix);
+      }
+    }
+    return this.fallback.increment(key);
+  }
+
+  async decrement(key: string): Promise<void> {
+    // Best effort on both: the hit may have been counted by either store.
+    this.fallback.decrement(key);
+    if (!this.redisAvailable()) return;
+    try {
+      await withTimeout(this.primary.decrement(key), this.timeoutMs);
+    } catch (err) {
+      recordFailure(err, this.prefix);
+    }
+  }
+
+  async resetKey(key: string): Promise<void> {
+    this.fallback.resetKey(key);
+    if (!this.redisAvailable()) return;
+    try {
+      await withTimeout(this.primary.resetKey(key), this.timeoutMs);
+    } catch (err) {
+      recordFailure(err, this.prefix);
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    this.fallback.shutdown();
+    await this.primary.shutdown?.();
+  }
+}
+
 export function limitMax(name: string, fallback: number): number {
   const raw = process.env[`RATE_LIMIT_MAX_${name}`];
   if (raw === undefined || process.env.NODE_ENV === "production") {

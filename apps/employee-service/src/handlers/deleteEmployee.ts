@@ -81,7 +81,8 @@ export const deleteEmployee = async (
 
     await prisma.user.update({
       where: { id },
-      data: { employeeStatus: "Terminated" },
+      // Termination also unregisters the person's devices.
+      data: { employeeStatus: "Terminated", fcmTokens: [] },
     });
 
     await invalidate();

@@ -5,6 +5,7 @@ import {
   prismaWithTenant,
   runWithTenant,
   getClientForDb,
+  BLOCKED_STATUSES,
 } from "@hrms/db";
 import {
   getBullMQConnection,
@@ -175,6 +176,34 @@ async function resolveTargets(
     userIds: unique(users.map((u) => u.id)),
     unresolved: names.filter((n) => !matched.has(n)),
   };
+}
+
+// Who may receive REALTIME delivery (sockets) right now. Resolution
+// above decides who a notification is FOR (and gets the in-app record, kept
+// as history); delivery to devices goes only to people whose employment
+// hasn't ended. Evaluated on every attempt — a retry, or a job that sat in
+// the queue while the person was terminated, re-checks. Push has the same
+// rule inside sendPushNotifications (send time). Runs in the job's tenant.
+async function realtimeEligible(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const rows = await prismaWithTenant.user.findMany({
+    where: {
+      id: { in: userIds },
+      employeeStatus: { notIn: [...BLOCKED_STATUSES] },
+    },
+    select: { id: true },
+  });
+  const ok = new Set(rows.map((r) => r.id));
+  const kept = userIds.filter((id) => ok.has(id));
+  if (kept.length < userIds.length) {
+    logger.info(
+      "notification: realtime delivery skipped for ineligible recipients",
+      {
+        skipped: userIds.length - kept.length,
+      },
+    );
+  }
+  return kept;
 }
 
 // A targeted job must reach at least one person in its tenant. Before, a job
@@ -430,14 +459,15 @@ async function processJob(job: Job<NotificationJobData>) {
     const wsPublisher = getNotificationPublisher();
 
     if (broadcast?.scope !== "platform") {
+      const live = await realtimeEligible(resolvedRecipients);
       await Promise.all(
-        resolvedRecipients.map((userId) =>
+        live.map((userId) =>
           wsPublisher.sendToUser(userId, "notification", notification),
         ),
       );
       if (socketEvent) {
         await Promise.all(
-          resolvedRecipients.map((userId) =>
+          live.map((userId) =>
             wsPublisher.sendToUser(
               userId,
               socketEvent,
@@ -570,14 +600,15 @@ async function processSilentJob(
       message,
       timeStamp: new Date(),
     };
+    const live = await realtimeEligible(resolvedRecipients);
     await Promise.all(
-      resolvedRecipients.map((userId) =>
+      live.map((userId) =>
         wsPublisher.sendToUser(userId, "notification", pingPayload),
       ),
     );
     if (socketEvent) {
       await Promise.all(
-        resolvedRecipients.map((userId) =>
+        live.map((userId) =>
           wsPublisher.sendToUser(
             userId,
             socketEvent,

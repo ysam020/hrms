@@ -15,8 +15,12 @@ import { setupChatSocket } from "./config/chatSocket";
 import { setupPresenceSocket } from "./config/presenceSocket";
 import { configureSwagger } from "./config/swaggerSetup";
 import { generateCsrfToken, doubleCsrfProtection } from "./config/csrf";
-import { applyRateLimiters, authLimiter } from "./config/rateLimiters";
-import { resolveSocketUserId } from "./config/socketAuth";
+import {
+  applyRateLimiters,
+  authLimiter,
+  rateLimitStoreHealth,
+} from "./config/rateLimiters";
+import { enforceSocketAccess, resolveSocketUserId } from "./config/socketAuth";
 import {
   registerGracefulShutdown,
   trackConnections,
@@ -46,6 +50,7 @@ import {
 } from "@hrms/db";
 import { setRedisTimingHook } from "@hrms/cache";
 import { withUserAccessScope } from "./services/userAccess";
+import { accountAccessHealth } from "./services/accountAccess";
 
 const app = http2Express(express);
 const PORT = Number(process.env.API_GATEWAY_PORT) || 9002;
@@ -200,7 +205,24 @@ app.get(
 );
 app.use("/api/v1", rootRouter);
 
-app.get("/health", (_req, res) => res.json({ status: "healthy" }));
+// Still 200 when rate limiting has fallen back to per-process memory (the
+// API keeps serving); the field makes the degradation visible
+// to monitoring.
+app.get("/health", (_req, res) => {
+  const store = rateLimitStoreHealth();
+  const access = accountAccessHealth();
+  res.json({
+    status:
+      store.mode === "redis" && !access.breakerOpen ? "healthy" : "degraded",
+    rateLimitStore: store.mode,
+    // Account checks failing fast because the database is unhealthy.
+    accountAccessBreakerOpen: access.breakerOpen,
+    accountAccessCachedDecisions: access.cachedDecisions,
+    ...(store.degradedSince && {
+      rateLimitDegradedSince: new Date(store.degradedSince).toISOString(),
+    }),
+  });
+});
 
 app.use((error: any, _req: any, res: any, _next: any) => {
   logger.error("Unhandled error:", { error });
@@ -230,6 +252,9 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     allowedOrigins,
     resolveSocketUserId,
   );
+  // Before the feature handlers: their event listeners then sit behind the
+  // per-event account check registered here.
+  enforceSocketAccess(io);
   setupChatSocket(io, redisAdapter);
   setupPresenceSocket(io);
   // From the start, so shutdown can tell idle connections from busy ones.

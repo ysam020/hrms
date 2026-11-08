@@ -2,7 +2,11 @@ import { Request, Response } from "express";
 import { salary } from "@hrms/proto";
 import { employeeClient, salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
-import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import {
+  prismaWithTenant as prisma,
+  getTenantId,
+  isBlockedEmployeeStatus,
+} from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
   apiResponse,
@@ -10,7 +14,7 @@ import {
   hasPrivilegedRole,
   HR_ROLES,
 } from "@hrms/common";
-import { cacheManager } from "@hrms/cache";
+import { cacheManager, revokeRefreshToken } from "@hrms/cache";
 import { parsePagination } from "../utils/pagination";
 import { handleError } from "../utils/handleError";
 import { safeDecrypt } from "@hrms/crypto";
@@ -18,6 +22,7 @@ import { isPrivileged } from "./approvalChains";
 import { isHrOrAboveCaller } from "../utils/user";
 import { getSeatStatus } from "../utils/planLimits";
 import { invalidateUserAccess, loadUserAccess } from "../services/userAccess";
+import { invalidateAccountAccess } from "../services/accountAccess";
 
 export async function editEmployeeDetails(req: Request, res: Response) {
   const authReq = req as AuthRequest;
@@ -80,6 +85,10 @@ export async function editEmployeeDetails(req: Request, res: Response) {
 
     if (employeeStatus !== undefined)
       updateData.employeeStatus = employeeStatus;
+    // Leaving employment also unregisters every device, in the same
+    // write as the status change (push is additionally refused at send time
+    // for blocked statuses, so this is not the only safeguard).
+    if (isBlockedEmployeeStatus(employeeStatus)) updateData.fcmTokens = [];
     if (pf_no !== undefined) updateData.pf_no = pf_no;
     if (uan_no !== undefined) updateData.uan_no = uan_no;
     if (esic_no !== undefined) updateData.esic_no = esic_no;
@@ -97,6 +106,18 @@ export async function editEmployeeDetails(req: Request, res: Response) {
       data: updateData,
     });
     invalidateUserAccess(targetUser.id);
+    // Leaving employment ends every session now. Every request
+    // and renewal re-checks status anyway (authenticate / refreshToken, so
+    // this is not the only line of defence); revoking here removes the
+    // refresh token at once and drops this process's cached decision.
+    if (isBlockedEmployeeStatus(employeeStatus)) {
+      invalidateAccountAccess(targetUser.id);
+      await revokeRefreshToken(targetUser.id).catch((err: unknown) =>
+        logger.error("edit-employee-details: session revocation failed", {
+          err,
+        }),
+      );
+    }
 
     const cacheTenantId = tenantId ?? "global";
     await Promise.all([

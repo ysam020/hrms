@@ -42,6 +42,8 @@ jest.mock("@hrms/db", () => {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    isBlockedEmployeeStatus: (st: string) =>
+      ["Terminated", "Absconded", "Resigned"].includes(st),
   };
 });
 
@@ -79,6 +81,11 @@ jest.mock("@hrms/cache", () => ({
     delete: jest.fn(),
     invalidatePattern: jest.fn(),
   },
+  // Terminating someone revokes their refresh token.
+  revokeRefreshToken: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock("../services/accountAccess", () => ({
+  invalidateAccountAccess: jest.fn(),
 }));
 
 jest.mock("../handlers/approvalChains", () => ({
@@ -129,6 +136,72 @@ describe("employeeHandlers", () => {
     // priority over this fallback.
     mockUserCount.mockResolvedValue(5);
     mockTenantFindUnique.mockResolvedValue({ planTier: "starter" });
+  });
+
+  describe("editEmployeeDetails — leaving employment ends sessions", () => {
+    const { revokeRefreshToken } = jest.requireMock("@hrms/cache");
+    const { invalidateAccountAccess } = jest.requireMock(
+      "../services/accountAccess",
+    );
+
+    it.each(["Terminated", "Absconded", "Resigned"])(
+      "revokes the refresh token and the cached access decision on %s",
+      async (employeeStatus) => {
+        mockUserFindUnique.mockResolvedValue({
+          id: "u9",
+          employeeStatus: "Active",
+        });
+        (prisma.user.update as jest.Mock).mockResolvedValue({});
+        await editEmployeeDetails(
+          makeReq({ body: { username: "leaver", employeeStatus } }),
+          makeRes(),
+        );
+        expect(revokeRefreshToken).toHaveBeenCalledWith("u9");
+        expect(invalidateAccountAccess).toHaveBeenCalledWith("u9");
+        // Devices unregistered in the SAME write as the status.
+        expect(prisma.user.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ employeeStatus, fcmTokens: [] }),
+          }),
+        );
+      },
+    );
+
+    it("does not touch sessions for a non-blocking edit", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: "u9",
+        employeeStatus: "Active",
+      });
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      await editEmployeeDetails(
+        makeReq({ body: { username: "x", pf_no: "PF1" } }),
+        makeRes(),
+      );
+      expect(revokeRefreshToken).not.toHaveBeenCalled();
+      expect(
+        (prisma.user.update as jest.Mock).mock.calls.at(-1)[0].data.fcmTokens,
+      ).toBeUndefined();
+    });
+
+    it("still saves the termination when revocation fails (logged; every request re-checks status anyway)", async () => {
+      mockUserFindUnique.mockResolvedValue({
+        id: "u9",
+        employeeStatus: "Active",
+      });
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      revokeRefreshToken.mockRejectedValueOnce(new Error("redis down"));
+      const res = makeRes();
+      await editEmployeeDetails(
+        makeReq({ body: { username: "leaver", employeeStatus: "Terminated" } }),
+        res,
+      );
+      expect(prisma.user.update).toHaveBeenCalled();
+      expect(mockApiResponse).toHaveBeenCalledWith(
+        res,
+        RESPONSE_STATUS.SUCCESS,
+        expect.any(Object),
+      );
+    });
   });
 
   describe("editEmployeeDetails", () => {

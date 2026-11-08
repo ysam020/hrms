@@ -13,8 +13,15 @@ const AUDIENCE = { tenantId: TENANT_A, userIds: [USER_1] };
 
 jest.mock("@hrms/db", () => ({
   prisma: {
-    user: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    user: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      // The token sync is now a conditional write.
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
   },
+  BLOCKED_STATUSES: ["Terminated", "Absconded", "Resigned"],
 }));
 
 jest.mock("@hrms/logger", () => ({
@@ -74,6 +81,8 @@ describe("sendPushNotifications", () => {
           id: { in: [USER_1, USER_2] },
           tenantId: TENANT_A,
           fcmTokens: { not: null },
+          // Never push to people whose employment ended.
+          employeeStatus: { notIn: ["Terminated", "Absconded", "Resigned"] },
         },
       }),
     );
@@ -163,7 +172,12 @@ describe("sendPushNotifications", () => {
       db.user.findMany.mockResolvedValue([]);
       await sendPushNotifications({ platformBroadcast: auth }, "T", "B");
       expect(db.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { fcmTokens: { not: null } } }),
+        expect.objectContaining({
+          where: {
+            fcmTokens: { not: null },
+            employeeStatus: { notIn: ["Terminated", "Absconded", "Resigned"] },
+          },
+        }),
       );
       expect(logger.warn).toHaveBeenCalledWith(
         "[FCM] Platform-wide push broadcast",
@@ -186,7 +200,7 @@ describe("sendPushNotifications", () => {
     db.user.findUnique.mockResolvedValue({
       fcmTokens: [tokenEntry({ token: "active-tok" })],
     });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
     const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
     expect(mockSend).toHaveBeenCalledTimes(1);
     expect(mockSend).toHaveBeenCalledWith(
@@ -211,7 +225,7 @@ describe("sendPushNotifications", () => {
         tokenEntry({ token: "new-tok", lastUsed: "2024-06-01T00:00:00Z" }),
       ],
     });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
     await sendPushNotifications(AUDIENCE, "Title", "Body", {
       latestOnly: true,
     });
@@ -233,7 +247,7 @@ describe("sendPushNotifications", () => {
     ]);
     mockSend.mockResolvedValue({});
     db.user.findUnique.mockResolvedValue({ fcmTokens: [] });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
     const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
     expect(mockSend).toHaveBeenCalledTimes(2);
     expect(result.totalTokens).toBe(2);
@@ -245,7 +259,7 @@ describe("sendPushNotifications", () => {
     ]);
     mockSend.mockResolvedValue({});
     db.user.findUnique.mockResolvedValue({ fcmTokens: [tokenEntry()] });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
 
@@ -257,8 +271,12 @@ describe("sendPushNotifications", () => {
         totalTokens: 1,
       }),
     );
-    expect(db.user.update).toHaveBeenCalledWith({
-      where: { id: "u1" },
+    // Conditional on the person still being employed.
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "u1",
+        employeeStatus: { notIn: ["Terminated", "Absconded", "Resigned"] },
+      },
       data: {
         fcmTokens: [expect.objectContaining({ lastUsed: expect.any(String) })],
       },
@@ -293,12 +311,16 @@ describe("sendPushNotifications", () => {
         tokenEntry({ token: "bad-tok", deviceFingerprint: "fp-bad" }),
       ],
     });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
 
     await sendPushNotifications(AUDIENCE, "Title", "Body");
 
-    expect(db.user.update).toHaveBeenCalledWith({
-      where: { id: "u1" },
+    // Conditional on the person still being employed.
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "u1",
+        employeeStatus: { notIn: ["Terminated", "Absconded", "Resigned"] },
+      },
       data: { fcmTokens: [] },
     });
   });
@@ -318,7 +340,7 @@ describe("sendPushNotifications", () => {
 
     // findUnique is only called on the success path (to update lastUsed) or
     // during cleanup — neither should fire for a non-cleanup-eligible error.
-    expect(db.user.update).not.toHaveBeenCalled();
+    expect(db.user.updateMany).not.toHaveBeenCalled();
   });
 
   it("sends to a legacy string-format token entry, and upgrades it to object form with a lastUsed timestamp on success", async () => {
@@ -327,7 +349,7 @@ describe("sendPushNotifications", () => {
     ]);
     mockSend.mockResolvedValue({});
     db.user.findUnique.mockResolvedValue({ fcmTokens: ["legacy-tok"] });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
 
@@ -335,8 +357,12 @@ describe("sendPushNotifications", () => {
       expect.objectContaining({ token: "legacy-tok" }),
     );
     expect(result.sentCount).toBe(1);
-    expect(db.user.update).toHaveBeenCalledWith({
-      where: { id: "u1" },
+    // Conditional on the person still being employed.
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "u1",
+        employeeStatus: { notIn: ["Terminated", "Absconded", "Resigned"] },
+      },
       data: {
         fcmTokens: [{ token: "legacy-tok", lastUsed: expect.any(String) }],
       },
@@ -351,12 +377,16 @@ describe("sendPushNotifications", () => {
     err.code = "messaging/invalid-registration-token";
     mockSend.mockRejectedValue(err);
     db.user.findUnique.mockResolvedValue({ fcmTokens: ["bad-legacy-tok"] });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
 
     await sendPushNotifications(AUDIENCE, "Title", "Body");
 
-    expect(db.user.update).toHaveBeenCalledWith({
-      where: { id: "u1" },
+    // Conditional on the person still being employed.
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "u1",
+        employeeStatus: { notIn: ["Terminated", "Absconded", "Resigned"] },
+      },
       data: { fcmTokens: [] },
     });
   });
@@ -378,7 +408,7 @@ describe("sendPushNotifications", () => {
         tokenEntry({ token: "device-b", deviceFingerprint: "fp-b" }),
       ],
     });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await sendPushNotifications(AUDIENCE, "Title", "Body");
 
@@ -387,8 +417,8 @@ describe("sendPushNotifications", () => {
     // devices, not one per device — avoids the two concurrent sends racing
     // to read-modify-write the same array and clobbering each other.
     expect(db.user.findUnique).toHaveBeenCalledTimes(1);
-    expect(db.user.update).toHaveBeenCalledTimes(1);
-    const written = db.user.update.mock.calls[0][0].data.fcmTokens;
+    expect(db.user.updateMany).toHaveBeenCalledTimes(1);
+    const written = db.user.updateMany.mock.calls[0][0].data.fcmTokens;
     expect(written).toHaveLength(2);
     expect(written.every((t: any) => typeof t.lastUsed === "string")).toBe(
       true,
@@ -401,7 +431,7 @@ describe("sendPushNotifications", () => {
     ]);
     mockSend.mockResolvedValue({});
     db.user.findUnique.mockResolvedValue({ fcmTokens: [tokenEntry()] });
-    db.user.update.mockResolvedValue({});
+    db.user.updateMany.mockResolvedValue({ count: 1 });
 
     await sendPushNotifications(AUDIENCE, "Hello", "World");
 
@@ -410,5 +440,34 @@ describe("sendPushNotifications", () => {
         notification: { title: "Hello", body: "World" },
       }),
     );
+  });
+});
+
+// The token sync must not resurrect a terminated person's tokens.
+describe("sendPushNotifications — termination during delivery", () => {
+  it("the post-send token sync is conditional on the person still being employed", async () => {
+    db.user.findMany.mockResolvedValue([
+      {
+        id: USER_1,
+        fcmTokens: [{ token: "tok-1", lastUsed: new Date().toISOString() }],
+      },
+    ]);
+    mockSend.mockResolvedValue("ok");
+    // Read happened before the termination; by the time we write, the
+    // person is Terminated — the conditional write matches nothing.
+    db.user.findUnique.mockResolvedValue({
+      fcmTokens: [{ token: "tok-1", lastUsed: new Date().toISOString() }],
+    });
+    db.user.updateMany.mockResolvedValue({ count: 0 });
+    await sendPushNotifications(
+      { tenantId: TENANT_A, userIds: [USER_1] },
+      "T",
+      "B",
+    );
+    const where = db.user.updateMany.mock.calls.at(-1)[0].where;
+    expect(where.employeeStatus).toEqual({
+      notIn: ["Terminated", "Absconded", "Resigned"],
+    });
+    expect(db.user.update).not.toHaveBeenCalled(); // never the unconditional write
   });
 });

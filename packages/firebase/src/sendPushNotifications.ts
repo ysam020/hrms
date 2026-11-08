@@ -1,4 +1,4 @@
-import { prisma } from "@hrms/db";
+import { prisma, BLOCKED_STATUSES } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { getMessaging } from "./admin";
 
@@ -146,7 +146,11 @@ export async function sendPushNotifications(
       authorizedBy: audience.platformBroadcast.authorizedBy,
       reason: audience.platformBroadcast.reason,
     });
-    where = { fcmTokens: { not: null } };
+    where = {
+      fcmTokens: { not: null },
+      // Never push to people whose employment ended.
+      employeeStatus: { notIn: [...BLOCKED_STATUSES] },
+    };
   } else {
     // The master users collection holds every tenant's users, so the tenant
     // filter is what keeps a push inside the organisation even if a caller
@@ -159,6 +163,9 @@ export async function sendPushNotifications(
       id: { in: userIds },
       tenantId: audience.tenantId,
       fcmTokens: { not: null },
+      // Checked at SEND time (every attempt, retries included), so a
+      // termination recorded while a notification was queued still applies.
+      employeeStatus: { notIn: [...BLOCKED_STATUSES] },
     };
   }
 
@@ -261,8 +268,14 @@ export async function sendPushNotifications(
                 : { ...entry, lastUsed: nowIso };
             });
 
-          await prisma.user.update({
-            where: { id: userId },
+          // Conditional. This is a read-modify-write of fcmTokens;
+          // if the person was terminated meanwhile (which clears their
+          // tokens), an unconditional write would put the tokens back.
+          await prisma.user.updateMany({
+            where: {
+              id: userId,
+              employeeStatus: { notIn: [...BLOCKED_STATUSES] },
+            },
             data: { fcmTokens: updated as any },
           });
         } catch (err) {

@@ -74,7 +74,12 @@ const mockDb: Record<string, ReturnType<typeof model>> = {
   jobApplication: model(),
   savedReport: model(),
 };
-jest.mock("@hrms/db", () => ({ prismaWithTenant: mockDb }));
+// getTenantId: the tenant the MCP principal is bound to (runWithTenant in
+// mcp/principal.ts). Privileges need a bound tenant.
+jest.mock("@hrms/db", () => ({
+  prismaWithTenant: mockDb,
+  getTenantId: () => "507f1f77bcf86cd799439022",
+}));
 
 import { TOOLS, ToolError } from "../mcp/tools";
 import type { McpPrincipal } from "../mcp/principal";

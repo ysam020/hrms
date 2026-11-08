@@ -118,6 +118,13 @@ function seed() {
     u(U.bEmployee, BETA),
   ];
   db.tenantMembership = [
+    // Everyone token() issues a Praesto token for is a member of Praesto in
+    // that role (a token for an organisation always comes from a membership;
+    // the account check now verifies it on every request).
+    { tenantId: PLATFORM, userId: U.pFinance, role: "employee" },
+    { tenantId: PLATFORM, userId: U.pOverviewOnly, role: "employee" },
+    { tenantId: PLATFORM, userId: U.pAdmin, role: "admin" },
+    { tenantId: PLATFORM, userId: U.pLeaver, role: "employee" },
     { tenantId: PLATFORM, userId: U.pOwner, role: "owner" },
     { tenantId: ACME, userId: U.aOwner, role: "owner" },
     { tenantId: ACME, userId: U.aEmployee, role: "employee" },
@@ -256,6 +263,37 @@ jest.mock("@hrms/db", () => ({
       aggregateRaw: async () => [],
     },
   },
+  // The real rule of @hrms/db checkAccountAccess, over this file's fixtures
+  // (user status, membership in the token's tenant, tenant active).
+  checkAccountAccess: async (userId: string, tenantId: string | null) => {
+    const user = db.user.find((u) => u.id === userId);
+    if (!user) return { ok: false, reason: "user_not_found" };
+    if (["Terminated", "Absconded", "Resigned"].includes(user.employeeStatus))
+      return { ok: false, reason: "blocked_status" };
+    if (!tenantId)
+      return {
+        ok: true,
+        tenantRole: null,
+        dbName: null,
+        employeeStatus: user.employeeStatus,
+      };
+    const m = db.tenantMembership.find(
+      (x) => x.tenantId === tenantId && x.userId === userId,
+    );
+    if (!m) return { ok: false, reason: "no_membership" };
+    const t = db.tenant.find((x) => x.id === tenantId);
+    if (!t || t.isActive === false)
+      return { ok: false, reason: "tenant_inactive" };
+    // dbName null → authenticate keeps the token's database name.
+    return {
+      ok: true,
+      tenantRole: m.role,
+      dbName: null,
+      employeeStatus: user.employeeStatus,
+    };
+  },
+  isBlockedEmployeeStatus: (s: string) =>
+    ["Terminated", "Absconded", "Resigned"].includes(s),
   runWithTenant: (_t: string, _c: unknown, next: () => void) => next(),
   getClientForDb: () => {
     const count = async () => 0;
@@ -394,7 +432,10 @@ describe("authorization", () => {
   it("rejects a token whose tenant doesn't match the user's own record", async () => {
     // A customer user presenting the platform tenant id in their token.
     const t = token(U.aOwner, { tenantId: PLATFORM, tenantRole: "owner" });
-    expect((await call("/platform/admin/overview", t)).status).toBe(403);
+    // No Praesto membership behind the token: refused at authentication
+    // now (401 SESSION_REVOKED) — before, by the platform
+    // guard (403). Denied either way.
+    expect((await call("/platform/admin/overview", t)).status).toBe(401);
   });
 
   it("gives an ordinary customer employee nothing", async () => {
@@ -410,9 +451,11 @@ describe("authorization", () => {
   });
 
   it("shuts out a former employee who still holds the permissions", async () => {
+    // Terminated: refused at authentication (401 SESSION_REVOKED);
+    // before, only by the platform guard (403).
     expect(
       (await call("/platform/admin/overview", token(U.pLeaver))).status,
-    ).toBe(403);
+    ).toBe(401);
   });
 
   it("limits a partially granted admin to their actions", async () => {

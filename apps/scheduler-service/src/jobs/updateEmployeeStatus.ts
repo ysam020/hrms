@@ -25,7 +25,8 @@ async function processTenantResignations(
 
     await (prismaWithTenant as any).user.update({
       where: { id: resignation.userId },
-      data: { employeeStatus: "Resigned" },
+      // The last working day also unregisters the person's devices.
+      data: { employeeStatus: "Resigned", fcmTokens: [] },
     });
   }
 

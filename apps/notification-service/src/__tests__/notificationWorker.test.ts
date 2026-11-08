@@ -36,6 +36,7 @@ jest.mock("@hrms/db", () => {
     prisma: _db,
     prismaWithTenant: _db,
     getClientForDb: jest.fn(() => ({})),
+    BLOCKED_STATUSES: ["Terminated", "Absconded", "Resigned"],
     runWithTenant: jest.fn((_tenantId, _client, fn) => fn()),
   };
 });
@@ -863,5 +864,96 @@ describe("notificationWorker", () => {
         err: expect.any(Error),
       });
     });
+  });
+});
+
+// A notification may still be FOR a terminated person (it is
+// recorded), but nothing is delivered to their devices — checked when the
+// job runs, so termination while it sat in the queue (or between retries)
+// applies.
+describe("notificationWorker — recipient eligibility at delivery time", () => {
+  let bobStatus = "Active";
+  // The tenant directory, now honouring the employeeStatus filter the way
+  // the database does.
+  const directoryWithStatus = ({ where }: { where?: any } = {}) =>
+    tenantDirectory({ where }).then((rows) =>
+      rows.filter((u) => {
+        const notIn: string[] | undefined = where?.employeeStatus?.notIn;
+        const status = u.id === BOB ? bobStatus : "Active";
+        return !notIn || !notIn.includes(status);
+      }),
+    );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    bobStatus = "Active";
+    mockUserFindMany.mockImplementation(directoryWithStatus);
+    (prisma as any).notification.findFirst.mockResolvedValue(null);
+    (prisma as any).notification.create.mockImplementation(
+      async ({ data }: any) => ({
+        id: "n1",
+        ...data,
+        recipients: [],
+      }),
+    );
+  });
+
+  it("does not push a realtime notification to a terminated recipient, still delivers to an active one", async () => {
+    bobStatus = "Terminated";
+    await runProcessor({
+      tenantId: TENANT,
+      title: "Chat",
+      message: "preview text",
+      recipients: [ALICE, BOB],
+    });
+    expect(mockSendToUser).toHaveBeenCalledWith(
+      ALICE,
+      "notification",
+      expect.anything(),
+    );
+    expect(mockSendToUser).not.toHaveBeenCalledWith(
+      BOB,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("termination while the job was queued: the next attempt (retry) re-checks", async () => {
+    await runProcessor({
+      tenantId: TENANT,
+      title: "t",
+      message: "m",
+      recipients: [BOB],
+      socketEvent: "chat:message",
+    });
+    expect(mockSendToUser).toHaveBeenCalledWith(
+      BOB,
+      "notification",
+      expect.anything(),
+    );
+    mockSendToUser.mockClear();
+    (prisma as any).notification.findFirst.mockResolvedValue(null); // first attempt "failed" before persisting
+    bobStatus = "Resigned";
+    await runProcessor({
+      tenantId: TENANT,
+      title: "t",
+      message: "m",
+      recipients: [BOB],
+      socketEvent: "chat:message",
+    });
+    expect(mockSendToUser).not.toHaveBeenCalled();
+  });
+
+  it("a job whose only recipient was terminated completes (recorded, not dead-lettered, nothing delivered)", async () => {
+    bobStatus = "Absconded";
+    await expect(
+      runProcessor({
+        tenantId: TENANT,
+        title: "F&F",
+        message: "settled",
+        recipients: [BOB],
+      }),
+    ).resolves.toMatchObject({ success: true });
+    expect(mockSendToUser).not.toHaveBeenCalled();
   });
 });

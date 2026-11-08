@@ -22,4 +22,6 @@ export const MESSAGES = {
   LOGIN_SUCCESSFUL: "Login successful",
   ACCESS_DENIED: "Account access denied",
   INTERNAL_SERVER_ERROR: "Internal server error",
+  SERVICE_UNAVAILABLE:
+    "Temporarily unable to verify your session. Please retry.",
 };
