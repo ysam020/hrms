@@ -543,6 +543,15 @@ export const HINDI_SPOKEN = {
   success: "सक्सेस",
   tom: "टॉम",
   worth: "वर्थ",
+  // The full tour (film/script.mjs).
+  operations: "ऑपरेशंस",
+  companies: "कंपनीज़",
+  halcyon: "हैल्सियन",
+  labs: "लैब्स",
+  screens: "स्क्रीन्स",
+  offers: "ऑफ़र्स",
+  workplace: "वर्कप्लेस",
+  "tamper-proof": "टैम्पर-प्रूफ़",
 };
 
 /** English pronunciation fixes (the narrator reads English as written). */

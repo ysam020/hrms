@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { trackEvent } from "@next/app/analytics";
 import {
+  FILM,
   MODULES as DEMO_MODULES,
   clock,
 } from "@next/features/product-demo/catalogue";
@@ -116,25 +117,41 @@ export function DemoTeaser() {
           {videos} demos in all, including {others.slice(0, -1).join(", ")} and{" "}
           {others.at(-1)}.
         </p>
-        <Link
-          to="/product-demo"
-          className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
-          onClick={() =>
-            trackEvent("cta_click", {
-              cta_id: "explore_platform",
-              cta_location: "demos",
-            })
-          }
-        >
-          <Roll>Watch the Demos</Roll>
-          <span
-            className={s.chip}
-            aria-hidden="true"
-            style={{ background: "var(--l-night)" }}
+        <div className={d.actions}>
+          {FILM && (
+            <Link
+              to={`/product-demo?v=${FILM.id}#explore`}
+              className={`${s.cta} ${s.ctaGhost}`}
+              onClick={() =>
+                trackEvent("cta_click", {
+                  cta_id: "watch_tour",
+                  cta_location: "demos",
+                })
+              }
+            >
+              <Roll>{`Watch the Complete Tour · ${Math.round(FILM.duration / 60)} min`}</Roll>
+            </Link>
+          )}
+          <Link
+            to="/product-demo"
+            className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+            onClick={() =>
+              trackEvent("cta_click", {
+                cta_id: "explore_platform",
+                cta_location: "demos",
+              })
+            }
           >
-            <Arrow />
-          </span>
-        </Link>
+            <Roll>Watch the Demos</Roll>
+            <span
+              className={s.chip}
+              aria-hidden="true"
+              style={{ background: "var(--l-night)" }}
+            >
+              <Arrow />
+            </span>
+          </Link>
+        </div>
       </Reveal>
     </section>
   );

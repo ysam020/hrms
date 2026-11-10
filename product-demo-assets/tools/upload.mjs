@@ -46,7 +46,12 @@ const aws = (args) => {
 };
 
 let n = 0;
-for (const m of manifest.modules) {
+// The demos, then the complete tour (film.mjs, in film/<id>/).
+const groups = [
+  ...manifest.modules,
+  ...(manifest.film ? [{ id: "film", videos: [manifest.film] }] : []),
+];
+for (const m of groups) {
   for (const v of m.videos) {
     const key = path.dirname(v.hls); // <module>/<id>/<rev>
     const localDir = path.join(ROOT, m.id, v.id);

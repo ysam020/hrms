@@ -14,7 +14,9 @@ import { Arrow, Footer, NavBar, Roll } from "../landing/SiteChrome";
 import landing from "../landing/landing.module.css";
 import {
   CDN_CONFIGURED,
+  FILM,
   MODULES,
+  TOUR,
   cdn,
   chapterAt,
   clock,
@@ -51,7 +53,9 @@ export default function ProductDemo() {
   const player = useRef<PlayerHandle>(null);
   const theatreRef = useRef<HTMLDivElement>(null);
 
-  const mod = MODULES.find((m) => m.id === moduleId) ?? MODULES[0];
+  const mod =
+    (moduleId === TOUR?.id ? TOUR : MODULES.find((m) => m.id === moduleId)) ??
+    MODULES[0];
   const video = mod.videos.find((v) => v.id === videoId) ?? mod.videos[0];
   const active = chapterAt(video.chapters, time);
 
@@ -111,8 +115,12 @@ export default function ProductDemo() {
 
   // Every demo in catalogue order: through each module, then the next one.
   // Previous / Next and Up Next move along this list.
+  // The complete tour comes first.
   const order = useMemo(
-    () => MODULES.flatMap((m) => m.videos.map((v) => ({ m, v }))),
+    () => [
+      ...(TOUR && FILM ? [{ m: TOUR, v: FILM }] : []),
+      ...MODULES.flatMap((m) => m.videos.map((v) => ({ m, v }))),
+    ],
     [],
   );
   const at = order.findIndex((x) => x.v.id === video.id);
@@ -216,6 +224,12 @@ export default function ProductDemo() {
                 <li>
                   <Icon name="play" size={14} /> {totalVideos} short demos
                 </li>
+                {FILM && (
+                  <li>
+                    <Icon name="play" size={14} /> A complete tour in{" "}
+                    {Math.round(FILM.duration / 60)} minutes
+                  </li>
+                )}
                 <li>
                   <Icon name="chat" size={14} /> Narrated in English and हिन्दी
                 </li>
@@ -237,8 +251,12 @@ export default function ProductDemo() {
               <button
                 type="button"
                 className={s.heroPlay}
-                onClick={() => watch(MODULES[0], MODULES[0].videos[0])}
-                aria-label={`Play: ${MODULES[0].videos[0].title}`}
+                onClick={() =>
+                  TOUR && FILM
+                    ? watch(TOUR, FILM)
+                    : watch(MODULES[0], MODULES[0].videos[0])
+                }
+                aria-label={`Play: ${(FILM ?? MODULES[0].videos[0]).title}`}
               >
                 <span>
                   <PlayGlyph size={30} />
@@ -266,6 +284,40 @@ export default function ProductDemo() {
                 are fictional.
               </p>
             </div>
+
+            {TOUR && FILM && (
+              <button
+                type="button"
+                id="pd-tab-tour"
+                className={s.tour}
+                aria-pressed={mod.id === TOUR.id}
+                aria-controls="pd-panel"
+                onClick={() => TOUR && FILM && watch(TOUR, FILM)}
+              >
+                {CDN_CONFIGURED && (
+                  <img
+                    src={cdn(FILM.thumbnail)}
+                    alt=""
+                    width={1280}
+                    height={720}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                )}
+                <span className={s.tourText}>
+                  <span className={s.tourKicker}>New to Praesto?</span>
+                  <strong>Watch the complete tour</strong>
+                  <span>
+                    Every part of Praesto in one film:{" "}
+                    {Math.round(FILM.duration / 60)} minutes, narrated in
+                    English or हिन्दी. Good for sharing with your team.
+                  </span>
+                </span>
+                <span className={s.tourPlay} aria-hidden="true">
+                  <PlayGlyph size={26} />
+                </span>
+              </button>
+            )}
 
             <ul className={s.modules} role="tablist" aria-label="Modules">
               {MODULES.map((m) => (

@@ -35,6 +35,20 @@ export type DemoModule = {
 
 export const MODULES = manifest.modules as DemoModule[];
 
+/** The complete tour (product-demo-assets/tools/film.mjs): every part of
+ *  Praesto in one film. Not one of the modules; the page features it. */
+export const FILM = (manifest as unknown as { film?: DemoVideo }).film ?? null;
+export const TOUR: DemoModule | null = FILM
+  ? {
+      id: "tour",
+      title: "The Complete Tour",
+      description:
+        "Every part of Praesto in one film, from setting up your organisation to AI and support, recorded in the real product.",
+      icon: "play",
+      videos: [FILM],
+    }
+  : null;
+
 const base = (import.meta.env.VITE_PRODUCT_DEMO_CDN_URL ?? "").replace(
   /\/+$/,
   "",
@@ -44,6 +58,7 @@ export const CDN_CONFIGURED = base.length > 0;
 export const cdn = (path: string) => `${base}/${path.replace(/^\/+/, "")}`;
 
 export function findVideo(id: string | null | undefined) {
+  if (TOUR && FILM && id === FILM.id) return { module: TOUR, video: FILM };
   for (const m of MODULES) {
     const v = m.videos.find((x) => x.id === id);
     if (v) return { module: m, video: v };

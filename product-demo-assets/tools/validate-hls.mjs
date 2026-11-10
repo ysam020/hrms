@@ -58,7 +58,12 @@ function parseVtt(file) {
   return cues;
 }
 
-for (const mod of manifest.modules) {
+// The demos, then the complete tour (film.mjs).
+const groups = [
+  ...manifest.modules,
+  ...(manifest.film ? [{ id: "film", videos: [manifest.film] }] : []),
+];
+for (const mod of groups) {
   for (const v of mod.videos) {
     const dir = path.dirname(local(v.hls));
     const errs = [];

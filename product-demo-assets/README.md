@@ -119,3 +119,37 @@ Edit `tools/flows.mjs` (and `tools/modules.mjs` for a new module). Then run
 steps 2–5 for that id, commit `manifest.json`, `validation.json` and the
 regenerated `manifest.ts`, and deploy the web app. Old revisions stay in S3
 until you delete them.
+
+## The complete tour (`tools/film.mjs`)
+
+One film of the whole product ("Praesto: The Complete Tour", about 17 min)
+for YouTube and for anyone who wants the full demo in one sitting. The page
+features it above the modules (`?v=praesto-tour`).
+
+- `tools/film/script.mjs`: the scenes in order. Title and info cards with
+  their narration lines (English and Hindi), and, for each module, a section
+  card followed by cuts from the recordings. Cuts go from one chapter up to
+  another, so no sentence is clipped, and they bring their own narration and
+  subtitles.
+- `tools/film/cards.mjs`: the cards as HTML at 1920×1080 (the opening mark,
+  "spread across too many places → one workspace", the agenda, a card per
+  part, the outro and the end lockup), the window frame the recordings play
+  in, and the YouTube thumbnail. Motion is CSS animation; film.mjs pauses
+  every animation and steps it frame by frame, so the capture is exactly
+  30 fps.
+- `tools/film/icons.json`: the module icons, scraped from the web app by
+  `tools/film/scrape-icons.mjs`.
+
+```sh
+node tools/film.mjs --preview   # stills of every card in film/preview/
+node tools/film.mjs             # render; scenes are cached in film/.work/
+node tools/build-hls.mjs --manifest-only && node tools/validate-hls.mjs && node tools/upload.mjs
+```
+
+Output: `film/praesto-tour/` (HLS, like the demos: 1080p–360p, English and
+Hindi narration, subtitles, chapters) and `film/youtube/`:
+`praesto-tour-en.mp4`, `praesto-tour-hi.mp4`, `praesto-tour-<lang>.vtt`,
+`thumbnail.jpg` and `description.txt` (title, links and YouTube chapters).
+
+The film has no music. To add some, use a track you hold a licence for,
+mixed under the narration.
