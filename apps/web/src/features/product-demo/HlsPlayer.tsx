@@ -316,7 +316,17 @@ export function HlsPlayer({
     if (!el) return;
     const ac = new AbortController();
     const opt = { signal: ac.signal };
+    // Play state comes from the element itself on every media event, not
+    // from play/pause alone: browsers that block or interrupt autoplay
+    // (Brave, Safari) can leave a single event missing or out of order, and
+    // then the big Play button would sit over a moving video.
+    let lastT = el.currentTime;
+    const syncPlaying = () => setPlaying(!el.paused && !el.ended);
     const sync = () => {
+      syncPlaying();
+      // Time moving forward means the stall is over.
+      if (!el.paused && el.currentTime > lastT) setBuffering(false);
+      lastT = el.currentTime;
       setTime(el.currentTime);
       onTimeRef.current?.(el.currentTime);
       const b = el.buffered;
@@ -329,8 +339,15 @@ export function HlsPlayer({
     el.addEventListener("timeupdate", sync, opt);
     el.addEventListener("seeked", sync, opt);
     el.addEventListener("progress", sync, opt);
-    el.addEventListener("play", () => setPlaying(true), opt);
-    el.addEventListener("pause", () => setPlaying(false), opt);
+    for (const t of [
+      "play",
+      "playing",
+      "pause",
+      "ended",
+      "emptied",
+      "loadeddata",
+    ] as const)
+      el.addEventListener(t, syncPlaying, opt);
     el.addEventListener("waiting", () => setBuffering(true), opt);
     el.addEventListener("seeking", () => setBuffering(true), opt);
     for (const t of ["playing", "canplay", "seeked", "pause"] as const)
@@ -551,6 +568,7 @@ export function HlsPlayer({
       data-idle={chromeHidden || undefined}
       onPointerMove={wake}
       onKeyDown={onKey}
+      tabIndex={-1}
       role="region"
       aria-label={`Video: ${video.title}`}
     >
@@ -562,7 +580,11 @@ export function HlsPlayer({
           playsInline
           preload="none"
           crossOrigin="anonymous"
-          onClick={togglePlay}
+          onClick={() => {
+            // Keyboard shortcuts work once the player has focus.
+            wrapRef.current?.focus({ preventScroll: true });
+            togglePlay();
+          }}
           aria-label={video.title}
         >
           <track
