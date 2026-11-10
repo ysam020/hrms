@@ -33,6 +33,9 @@ export async function demoContext(browser, extra = []) {
     deviceScaleFactor: SCALE,
     serviceWorkers: "block",
     ignoreHTTPSErrors: true, // the local dev server's self-signed certificate
+    // As for a visitor who has allowed notifications (headless otherwise
+    // reports them as blocked).
+    permissions: ["notifications"],
     colorScheme: "light",
     locale: "en-IN",
     timezoneId: zone,
@@ -68,6 +71,12 @@ export async function demoContext(browser, extra = []) {
   await context.addInitScript(() => {
     try {
       localStorage.setItem("px-appearance", "light");
+    } catch {}
+    // Headless Chromium reports notifications as denied even when allowed.
+    try {
+      Object.defineProperty(Notification, "permission", {
+        get: () => "granted",
+      });
     } catch {}
   });
   context.posted = posted;

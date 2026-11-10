@@ -15,8 +15,17 @@
 // respelled so both languages say PRAY-stoh. An English word missing from
 // the glossary stops the run.
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { ENGLISH_SPOKEN, HINDI_SPOKEN } from "./glossary.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
@@ -26,7 +35,12 @@ const LANG_CODE = { en: "en-IN", hi: "hi-IN" };
 
 /** Every r.say("english", "hindi") in flows.mjs, in order. */
 export function flowCues() {
-  const src = readFileSync(new URL("./flows.mjs", import.meta.url), "utf8");
+  const dir = new URL("./flows/", import.meta.url);
+  const src = readdirSync(dir)
+    .filter((f) => f.endsWith(".mjs"))
+    .sort()
+    .map((f) => readFileSync(new URL(f, dir), "utf8"))
+    .join("\n");
   const str = String.raw`"((?:[^"\\]|\\.)*)"`;
   const re = new RegExp(String.raw`r\.say\(\s*${str}\s*,\s*${str}`, "g");
   return [...src.matchAll(re)].map((m) => ({
@@ -44,7 +58,7 @@ export function spokenEnglish(text) {
 
 export function spokenHindi(text) {
   const missing = new Set();
-  const out = text.replace(/[A-Za-z][A-Za-z'\-]*/g, (w) => {
+  const out = text.replace(/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'\-]*/g, (w) => {
     const hit = HINDI_SPOKEN[w.toLowerCase()];
     if (!hit) missing.add(w);
     return hit ?? w;
@@ -73,7 +87,9 @@ const duration = (file) =>
     ),
   );
 
-function synth(lang, spoken) {
+const run = promisify(execFile);
+
+async function synth(lang, spoken) {
   const key = createHash("sha1")
     .update(`${VOICE.id}|${VOICE.engine}|${lang}|${spoken}`)
     .digest("hex")
@@ -81,29 +97,40 @@ function synth(lang, spoken) {
   const file = `${OUT}${lang}/${key}.mp3`;
   if (!existsSync(file)) {
     mkdirSync(`${OUT}${lang}`, { recursive: true });
-    execFileSync(
-      "aws",
-      [
-        "polly",
-        "synthesize-speech",
-        "--region",
-        VOICE.region,
-        "--engine",
-        VOICE.engine,
-        "--voice-id",
-        VOICE.id,
-        "--language-code",
-        LANG_CODE[lang],
-        "--output-format",
-        "mp3",
-        "--sample-rate",
-        "24000",
-        "--text",
-        spoken,
-        file,
-      ],
-      { stdio: ["ignore", "ignore", "inherit"] },
-    );
+    const tmp = `${file}.part`;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await run("aws", [
+          "polly",
+          "synthesize-speech",
+          "--region",
+          VOICE.region,
+          "--engine",
+          VOICE.engine,
+          "--voice-id",
+          VOICE.id,
+          "--language-code",
+          LANG_CODE[lang],
+          "--output-format",
+          "mp3",
+          "--sample-rate",
+          "24000",
+          "--text",
+          spoken,
+          tmp,
+        ]);
+        duration(tmp); // throws if the clip isn't valid audio
+        renameSync(tmp, file);
+        break;
+      } catch (e) {
+        rmSync(tmp, { force: true });
+        if (attempt >= 6)
+          throw new Error(
+            `Polly failed for "${spoken.slice(0, 40)}…": ${String(e.stderr || e.message).slice(0, 200)}`,
+          );
+        await new Promise((ok) => setTimeout(ok, 1500 * attempt));
+      }
+    }
   }
   return {
     file: file.slice(ROOT.length),
@@ -112,15 +139,50 @@ function synth(lang, spoken) {
   };
 }
 
+/** Run `jobs` (async functions) with at most `n` at a time. */
+async function pool(jobs, n) {
+  const out = new Array(jobs.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      while (next < jobs.length) {
+        const i = next++;
+        out[i] = await jobs[i]();
+      }
+    }),
+  );
+  return out;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const check = process.argv.includes("--check");
   const cues = flowCues();
   const index = {};
-  for (const c of cues) {
-    const enSpoken = spokenEnglish(c.en);
-    const hiSpoken = spokenHindi(c.hi);
-    if (check) continue;
-    index[c.en] = { en: synth("en", enSpoken), hi: synth("hi", hiSpoken) };
+  if (check) {
+    const missing = new Set();
+    for (const c of cues)
+      try {
+        spokenHindi(c.hi);
+      } catch (e) {
+        e.message
+          .split(": ")[1]
+          .split(", ")
+          .forEach((w) => missing.add(w));
+      }
+    if (missing.size) {
+      console.log(
+        `missing from glossary.mjs (${missing.size}):\n${[...missing].sort().join(" ")}`,
+      );
+      process.exit(1);
+    }
+  }
+  if (!check) {
+    const jobs = cues.flatMap((c) => [
+      async () => ["en", c.en, await synth("en", spokenEnglish(c.en))],
+      async () => ["hi", c.en, await synth("hi", spokenHindi(c.hi))],
+    ]);
+    for (const [lang, en, clip] of await pool(jobs, 3))
+      (index[en] ??= {})[lang] = clip;
   }
   if (check) {
     console.log(

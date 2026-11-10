@@ -25,7 +25,16 @@ fixtures, `probe.mjs <path…>` lists API calls the fixtures don't answer, and
 `cdn-local.mjs` serves the same keys locally (with CloudFront's headers) for
 testing before the CDN exists.
 
-### Recording (`tools/record.mjs`, `tools/flows.mjs`)
+### Recording (`tools/record.mjs`, `tools/flows/*.mjs`)
+
+41 videos in 12 modules (`tools/modules.mjs`). The flows live in
+`tools/flows/` (`start`, `people`, `work`, `admin`), with shared helpers in
+`common.mjs`. Each one explains what the feature is for, how to use it and
+what it solves. Helpers: `r.navigate(path)` moves between screens without a
+page load, and `r.optional(label, fn)` runs a nice-to-have step and records
+it in `skippedSteps` if its element isn't there. Onboarding videos use the
+`ONBOARDING()` fixtures in `extras.mjs`: a signed-in user with no
+organisation, switched mid-video to "trial started, contact details pending".
 
 - **Real app, fictional data.** Chromium runs the actual web build. Every
   `/api` request is answered _in the browser_ by the marketing library's

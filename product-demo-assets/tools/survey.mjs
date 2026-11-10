@@ -5,8 +5,8 @@ mkdirSync(OUT, { recursive: true });
 const paths = process.argv.slice(2);
 const browser = await chromium.launch();
 for (const p of paths) {
-  const { EXTRA } = await import("./extras.mjs");
-  const ctx = await demoContext(browser, EXTRA);
+  const { EXTRA, CATALOGUE_EXTRA } = await import("./extras.mjs");
+  const ctx = await demoContext(browser, [...EXTRA, ...CATALOGUE_EXTRA]);
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(e.message));

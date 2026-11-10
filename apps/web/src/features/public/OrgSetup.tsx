@@ -183,8 +183,11 @@ export default function OrgSetup() {
   // False once setup is left (e.g. signed out): a response that lands
   // afterwards mustn't put a session back into this tab.
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set again on (re)mount: React's development StrictMode mounts twice,
+    // and without this the first cleanup left every later response ignored.
+    alive.current = true;
+    return () => {
       alive.current = false;
       try {
         checkout.current?.close?.();
@@ -192,9 +195,8 @@ export default function OrgSetup() {
         // Already closed.
       }
       checkout.current = null;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const fail = (err: unknown, fallback: string) =>
     setAlert({

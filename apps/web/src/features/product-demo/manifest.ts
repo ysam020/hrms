@@ -3,24 +3,201 @@
 export default {
   modules: [
     {
+      id: "getting-started",
+      title: "Getting Started",
+      description:
+        "Set up your organisation, bring people in, and make Praesto yours: your profile, status, theme and passwordless sign-in.",
+      icon: "sparkle",
+      videos: [
+        {
+          id: "org-setup",
+          title: "Setting Up Your Organisation",
+          description:
+            "Create your company’s workspace in a few minutes: name it, choose your working days, start a 14-day free trial and add the contact details employees will see.",
+          duration: 77.8,
+          recorded: "2026-11-10",
+          thumbnail: "getting-started/org-setup/6f6b8a71ab/thumbnail.jpg",
+          hls: "getting-started/org-setup/6f6b8a71ab/master.m3u8",
+          subtitles: {
+            en: "getting-started/org-setup/6f6b8a71ab/subtitles/en.vtt",
+            hi: "getting-started/org-setup/6f6b8a71ab/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Getting Started",
+              startTime: 0,
+            },
+            {
+              title: "Your Organisation",
+              startTime: 12.9,
+            },
+            {
+              title: "Free Trial",
+              startTime: 33.2,
+            },
+            {
+              title: "Contact Details",
+              startTime: 53,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "join-organisation",
+          title: "Joining Your Company’s Workspace",
+          description:
+            "When your company already uses Praesto: sign in with your work account, ask to join, and get in as soon as an admin approves.",
+          duration: 41.2,
+          recorded: "2026-11-10",
+          thumbnail:
+            "getting-started/join-organisation/fb28fd3efa/thumbnail.jpg",
+          hls: "getting-started/join-organisation/fb28fd3efa/master.m3u8",
+          subtitles: {
+            en: "getting-started/join-organisation/fb28fd3efa/subtitles/en.vtt",
+            hi: "getting-started/join-organisation/fb28fd3efa/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Sign In",
+              startTime: 0,
+            },
+            {
+              title: "Your Company",
+              startTime: 7.9,
+            },
+            {
+              title: "Request to Join",
+              startTime: 20,
+            },
+            {
+              title: "Waiting for Approval",
+              startTime: 27.1,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "join-requests",
+          title: "Approving People Who Ask to Join",
+          description:
+            "Admins see everyone who has asked to join the organisation, check who they are, and approve or decline each request.",
+          duration: 41.8,
+          recorded: "2026-11-10",
+          thumbnail: "getting-started/join-requests/819d039c8f/thumbnail.jpg",
+          hls: "getting-started/join-requests/819d039c8f/master.m3u8",
+          subtitles: {
+            en: "getting-started/join-requests/819d039c8f/subtitles/en.vtt",
+            hi: "getting-started/join-requests/819d039c8f/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Join Requests",
+              startTime: 0,
+            },
+            {
+              title: "Review",
+              startTime: 15,
+            },
+            {
+              title: "Approve",
+              startTime: 29.5,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "profile-and-theme",
+          title: "Your Profile, Status and Theme",
+          description:
+            "Your own record in one place, a status so colleagues know if you’re free, the devices that get notifications, and light or dark mode.",
+          duration: 52.6,
+          recorded: "2026-11-10",
+          thumbnail:
+            "getting-started/profile-and-theme/6cd9912cd5/thumbnail.jpg",
+          hls: "getting-started/profile-and-theme/6cd9912cd5/master.m3u8",
+          subtitles: {
+            en: "getting-started/profile-and-theme/6cd9912cd5/subtitles/en.vtt",
+            hi: "getting-started/profile-and-theme/6cd9912cd5/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "My Profile",
+              startTime: 0,
+            },
+            {
+              title: "Your Status",
+              startTime: 14.5,
+            },
+            {
+              title: "Notifications",
+              startTime: 27.2,
+            },
+            {
+              title: "Light and Dark",
+              startTime: 34.7,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "passkeys",
+          title: "Passwordless Sign-In with Passkeys",
+          description:
+            "Sign in with Touch ID, Face ID, Windows Hello or a security key instead of a password, and manage the devices you’ve added.",
+          duration: 42.5,
+          recorded: "2026-11-10",
+          thumbnail: "getting-started/passkeys/f0eb12c28c/thumbnail.jpg",
+          hls: "getting-started/passkeys/f0eb12c28c/master.m3u8",
+          subtitles: {
+            en: "getting-started/passkeys/f0eb12c28c/subtitles/en.vtt",
+            hi: "getting-started/passkeys/f0eb12c28c/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "No Passwords",
+              startTime: 0,
+            },
+            {
+              title: "What a Passkey Is",
+              startTime: 7.9,
+            },
+            {
+              title: "Add a Passkey",
+              startTime: 23.6,
+            },
+            {
+              title: "Your Devices",
+              startTime: 30,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+      ],
+    },
+    {
       id: "overview",
       title: "Platform Overview",
       description:
-        "Start here: the Today screen everyone opens each morning, and how your organisation is laid out in Praesto.",
+        "The screens everyone uses every day: Today, the company calendar, team chat and the organisation chart.",
       icon: "today",
       videos: [
         {
           id: "today-at-a-glance",
           title: "Your Day at a Glance",
           description:
-            "The Today screen: hours worked, the month’s attendance and the requests waiting on you, in one place.",
-          duration: 29.1,
+            "The Today screen: your hours, the month’s attendance, every request waiting on you and what’s happening across the organisation, arranged the way you like.",
+          duration: 62.5,
           recorded: "2026-11-10",
-          thumbnail: "overview/today-at-a-glance/8b1039dfc1/thumbnail.jpg",
-          hls: "overview/today-at-a-glance/8b1039dfc1/master.m3u8",
+          thumbnail: "overview/today-at-a-glance/30a7160ab7/thumbnail.jpg",
+          hls: "overview/today-at-a-glance/30a7160ab7/master.m3u8",
           subtitles: {
-            en: "overview/today-at-a-glance/8b1039dfc1/subtitles/en.vtt",
-            hi: "overview/today-at-a-glance/8b1039dfc1/subtitles/hi.vtt",
+            en: "overview/today-at-a-glance/30a7160ab7/subtitles/en.vtt",
+            hi: "overview/today-at-a-glance/30a7160ab7/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -29,15 +206,79 @@ export default {
             },
             {
               title: "Your Day",
-              startTime: 4.2,
+              startTime: 15.9,
             },
             {
               title: "Needs Your Decision",
-              startTime: 13.8,
+              startTime: 29.8,
             },
             {
-              title: "Approvals",
-              startTime: 23.3,
+              title: "Make It Yours",
+              startTime: 44.1,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "calendar",
+          title: "One Calendar for the Whole Company",
+          description:
+            "Company events and holidays on one shared calendar, today’s schedule beside it, and new events in a couple of clicks.",
+          duration: 33.4,
+          recorded: "2026-11-10",
+          thumbnail: "overview/calendar/15ff1b8f7a/thumbnail.jpg",
+          hls: "overview/calendar/15ff1b8f7a/master.m3u8",
+          subtitles: {
+            en: "overview/calendar/15ff1b8f7a/subtitles/en.vtt",
+            hi: "overview/calendar/15ff1b8f7a/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "The Calendar",
+              startTime: 0,
+            },
+            {
+              title: "Today and Upcoming",
+              startTime: 12.3,
+            },
+            {
+              title: "New Event",
+              startTime: 21.9,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "chat",
+          title: "Team Chat",
+          description:
+            "Direct conversations with colleagues inside Praesto, with files, pinned messages and real-time delivery, so work talk stays at work.",
+          duration: 37,
+          recorded: "2026-11-10",
+          thumbnail: "overview/chat/344755c7c9/thumbnail.jpg",
+          hls: "overview/chat/344755c7c9/master.m3u8",
+          subtitles: {
+            en: "overview/chat/344755c7c9/subtitles/en.vtt",
+            hi: "overview/chat/344755c7c9/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Conversations",
+              startTime: 0,
+            },
+            {
+              title: "Open a Chat",
+              startTime: 11.2,
+            },
+            {
+              title: "Pinned Messages",
+              startTime: 16.6,
+            },
+            {
+              title: "Reply",
+              startTime: 23.1,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -47,14 +288,14 @@ export default {
           id: "organization-structure",
           title: "Your Organisation, Mapped",
           description:
-            "Browse teams, team leads and the people in each, and find anyone in the organisation.",
-          duration: 21.5,
+            "Headcount at a glance, every team with its lead and members, the people not yet on a team, and search across all of it.",
+          duration: 37.4,
           recorded: "2026-11-10",
-          thumbnail: "overview/organization-structure/14c3ba29c2/thumbnail.jpg",
-          hls: "overview/organization-structure/14c3ba29c2/master.m3u8",
+          thumbnail: "overview/organization-structure/fc6dd64bfd/thumbnail.jpg",
+          hls: "overview/organization-structure/fc6dd64bfd/master.m3u8",
           subtitles: {
-            en: "overview/organization-structure/14c3ba29c2/subtitles/en.vtt",
-            hi: "overview/organization-structure/14c3ba29c2/subtitles/hi.vtt",
+            en: "overview/organization-structure/fc6dd64bfd/subtitles/en.vtt",
+            hi: "overview/organization-structure/fc6dd64bfd/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -63,15 +304,19 @@ export default {
             },
             {
               title: "Headcount",
-              startTime: 4.3,
+              startTime: 7.3,
             },
             {
               title: "Teams",
-              startTime: 10.6,
+              startTime: 14.6,
+            },
+            {
+              title: "Not on a Team",
+              startTime: 25.5,
             },
             {
               title: "Find a Person",
-              startTime: 15.3,
+              startTime: 30.8,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -81,24 +326,24 @@ export default {
     },
     {
       id: "employee-management",
-      title: "Employee Management",
+      title: "Employees",
       description:
-        "One directory for everyone, with profiles that hold work, contact and statutory details, and a simple way to bring new people in.",
+        "One directory for everyone, with employment status, KYC, company assets and a clear process when someone leaves.",
       icon: "people",
       videos: [
         {
           id: "employee-directory",
           title: "Employee Directory and Profiles",
           description:
-            "Search the directory, then open an employee’s profile: work details, contact, statutory IDs and assigned assets.",
-          duration: 25.5,
+            "Every employee in one searchable directory, and a full profile for each: work details, contact, statutory numbers and the assets they hold.",
+          duration: 54.9,
           recorded: "2026-11-10",
           thumbnail:
-            "employee-management/employee-directory/4192a5889c/thumbnail.jpg",
-          hls: "employee-management/employee-directory/4192a5889c/master.m3u8",
+            "employee-management/employee-directory/a5a6492512/thumbnail.jpg",
+          hls: "employee-management/employee-directory/a5a6492512/master.m3u8",
           subtitles: {
-            en: "employee-management/employee-directory/4192a5889c/subtitles/en.vtt",
-            hi: "employee-management/employee-directory/4192a5889c/subtitles/hi.vtt",
+            en: "employee-management/employee-directory/a5a6492512/subtitles/en.vtt",
+            hi: "employee-management/employee-directory/a5a6492512/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -107,42 +352,141 @@ export default {
             },
             {
               title: "Search",
-              startTime: 10.6,
+              startTime: 20,
             },
             {
               title: "Employee Profile",
-              startTime: 14.4,
+              startTime: 25,
+            },
+            {
+              title: "Statutory and Assets",
+              startTime: 39.8,
             },
           ],
           qualities: [1080, 720, 480, 360],
           audio: ["en", "hi"],
         },
         {
-          id: "join-requests",
-          title: "Adding People to Your Organisation",
+          id: "employee-status",
+          title: "Employment Status",
           description:
-            "New employees sign in and ask to join; an admin approves or declines each request.",
-          duration: 21,
+            "Keep each person’s status accurate: active, terminated or absconded, with the reason and date recorded, and PF, UAN and ESIC numbers alongside.",
+          duration: 53.2,
           recorded: "2026-11-10",
           thumbnail:
-            "employee-management/join-requests/608e6c63e0/thumbnail.jpg",
-          hls: "employee-management/join-requests/608e6c63e0/master.m3u8",
+            "employee-management/employee-status/2a2709c9e7/thumbnail.jpg",
+          hls: "employee-management/employee-status/2a2709c9e7/master.m3u8",
           subtitles: {
-            en: "employee-management/join-requests/608e6c63e0/subtitles/en.vtt",
-            hi: "employee-management/join-requests/608e6c63e0/subtitles/hi.vtt",
+            en: "employee-management/employee-status/2a2709c9e7/subtitles/en.vtt",
+            hi: "employee-management/employee-status/2a2709c9e7/subtitles/hi.vtt",
           },
           chapters: [
             {
-              title: "Introduction",
+              title: "Status at a Glance",
               startTime: 0,
             },
             {
-              title: "Review Requests",
-              startTime: 5.7,
+              title: "Edit Employment",
+              startTime: 14.4,
             },
             {
-              title: "Approve",
-              startTime: 9.5,
+              title: "Changing Status",
+              startTime: 28.1,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "kyc",
+          title: "Employee KYC",
+          description:
+            "Employees complete their own KYC in five guided steps; HR sees every status at a glance and reviews, approves or asks for changes.",
+          duration: 58.2,
+          recorded: "2026-11-10",
+          thumbnail: "employee-management/kyc/24c6237b79/thumbnail.jpg",
+          hls: "employee-management/kyc/24c6237b79/master.m3u8",
+          subtitles: {
+            en: "employee-management/kyc/24c6237b79/subtitles/en.vtt",
+            hi: "employee-management/kyc/24c6237b79/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Why KYC",
+              startTime: 0,
+            },
+            {
+              title: "Every Status",
+              startTime: 9.7,
+            },
+            {
+              title: "Complete My KYC",
+              startTime: 27.9,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "assets",
+          title: "Company Assets",
+          description:
+            "Track laptops, phones and monitors: who has what, what’s free or in repair, returns, and issues reported by employees.",
+          duration: 47.2,
+          recorded: "2026-11-10",
+          thumbnail: "employee-management/assets/1e43b2d7f4/thumbnail.jpg",
+          hls: "employee-management/assets/1e43b2d7f4/master.m3u8",
+          subtitles: {
+            en: "employee-management/assets/1e43b2d7f4/subtitles/en.vtt",
+            hi: "employee-management/assets/1e43b2d7f4/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Inventory",
+              startTime: 0,
+            },
+            {
+              title: "One Asset",
+              startTime: 19.6,
+            },
+            {
+              title: "Add an Asset",
+              startTime: 25.8,
+            },
+            {
+              title: "Issues",
+              startTime: 33.8,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "resignations",
+          title: "Resignations and Exit",
+          description:
+            "Employees resign inside Praesto, managers and HR approve, and your exit policy sets notice periods, checklists and exit interviews.",
+          duration: 46.7,
+          recorded: "2026-11-10",
+          thumbnail:
+            "employee-management/resignations/1861468063/thumbnail.jpg",
+          hls: "employee-management/resignations/1861468063/master.m3u8",
+          subtitles: {
+            en: "employee-management/resignations/1861468063/subtitles/en.vtt",
+            hi: "employee-management/resignations/1861468063/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Resignations",
+              startTime: 0,
+            },
+            {
+              title: "Submitting",
+              startTime: 12.4,
+            },
+            {
+              title: "Exit Policy",
+              startTime: 24.5,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -154,21 +498,21 @@ export default {
       id: "attendance",
       title: "Attendance",
       description:
-        "Every workday accounted for: punches and hours, corrections tracked against your policy, and Geofencing around the office.",
+        "Every workday accounted for: punches and hours, corrections, Geofencing around the office, work from home and holidays.",
       icon: "clock",
       videos: [
         {
           id: "my-attendance",
           title: "Attendance at a Glance",
           description:
-            "An employee’s month: present days, leave, corrections left, and a daily record of punches and hours.",
-          duration: 32.6,
+            "An employee’s whole month: present days, leave, corrections left, a colour-coded calendar and a daily record of punches and hours.",
+          duration: 42.8,
           recorded: "2026-11-10",
-          thumbnail: "attendance/my-attendance/6d0b830f5f/thumbnail.jpg",
-          hls: "attendance/my-attendance/6d0b830f5f/master.m3u8",
+          thumbnail: "attendance/my-attendance/24550387a2/thumbnail.jpg",
+          hls: "attendance/my-attendance/24550387a2/master.m3u8",
           subtitles: {
-            en: "attendance/my-attendance/6d0b830f5f/subtitles/en.vtt",
-            hi: "attendance/my-attendance/6d0b830f5f/subtitles/hi.vtt",
+            en: "attendance/my-attendance/24550387a2/subtitles/en.vtt",
+            hi: "attendance/my-attendance/24550387a2/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -177,53 +521,19 @@ export default {
             },
             {
               title: "Monthly Summary",
-              startTime: 5.1,
+              startTime: 6.1,
             },
             {
               title: "Calendar",
-              startTime: 15.3,
+              startTime: 18.9,
             },
             {
               title: "Daily Record",
-              startTime: 20.9,
+              startTime: 31,
             },
             {
               title: "Previous Months",
-              startTime: 26.3,
-            },
-          ],
-          qualities: [1080, 720, 480, 360],
-          audio: ["en", "hi"],
-        },
-        {
-          id: "geofencing",
-          title: "Attendance Rules and Geofencing",
-          description:
-            "Set the working day, grace period and correction window, then turn on Geofencing and place the office on a map.",
-          duration: 32.6,
-          recorded: "2026-11-10",
-          thumbnail: "attendance/geofencing/e20b2f6408/thumbnail.jpg",
-          hls: "attendance/geofencing/e20b2f6408/master.m3u8",
-          subtitles: {
-            en: "attendance/geofencing/e20b2f6408/subtitles/en.vtt",
-            hi: "attendance/geofencing/e20b2f6408/subtitles/hi.vtt",
-          },
-          chapters: [
-            {
-              title: "Working Day",
-              startTime: 0,
-            },
-            {
-              title: "Geofencing",
-              startTime: 9.7,
-            },
-            {
-              title: "Office Location",
-              startTime: 15.5,
-            },
-            {
-              title: "Radius",
-              startTime: 23.9,
+              startTime: 37.6,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -233,15 +543,15 @@ export default {
           id: "attendance-correction",
           title: "Correcting Attendance",
           description:
-            "HR fixes a missed or wrong punch for an employee; the correction counts toward their monthly allowance.",
-          duration: 25.8,
+            "HR fixes a missed or wrong punch for an employee, with the change previewed and counted against the monthly correction allowance.",
+          duration: 42.6,
           recorded: "2026-11-10",
           thumbnail:
-            "attendance/attendance-correction/32c3082837/thumbnail.jpg",
-          hls: "attendance/attendance-correction/32c3082837/master.m3u8",
+            "attendance/attendance-correction/81491f7efd/thumbnail.jpg",
+          hls: "attendance/attendance-correction/81491f7efd/master.m3u8",
           subtitles: {
-            en: "attendance/attendance-correction/32c3082837/subtitles/en.vtt",
-            hi: "attendance/attendance-correction/32c3082837/subtitles/hi.vtt",
+            en: "attendance/attendance-correction/81491f7efd/subtitles/en.vtt",
+            hi: "attendance/attendance-correction/81491f7efd/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -250,15 +560,117 @@ export default {
             },
             {
               title: "Choose the Employee",
-              startTime: 4.3,
+              startTime: 7.9,
             },
             {
-              title: "Rules",
-              startTime: 9.6,
+              title: "The Rules",
+              startTime: 12.6,
             },
             {
               title: "Corrected Times",
-              startTime: 14.3,
+              startTime: 24.5,
+            },
+            {
+              title: "Preview and Save",
+              startTime: 29.8,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "geofencing",
+          title: "Attendance Rules and Geofencing",
+          description:
+            "Set the working day, grace period and correction window, then turn on Geofencing and place the office on a map so punches only count nearby.",
+          duration: 51.7,
+          recorded: "2026-11-10",
+          thumbnail: "attendance/geofencing/40a6c048ec/thumbnail.jpg",
+          hls: "attendance/geofencing/40a6c048ec/master.m3u8",
+          subtitles: {
+            en: "attendance/geofencing/40a6c048ec/subtitles/en.vtt",
+            hi: "attendance/geofencing/40a6c048ec/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Working Day",
+              startTime: 0,
+            },
+            {
+              title: "Geofencing",
+              startTime: 19.4,
+            },
+            {
+              title: "Office Location",
+              startTime: 24.5,
+            },
+            {
+              title: "Radius",
+              startTime: 32.8,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "wfh",
+          title: "Work From Home",
+          description:
+            "Employees request work-from-home days, managers approve in one click, and approved days count correctly in attendance.",
+          duration: 38.9,
+          recorded: "2026-11-10",
+          thumbnail: "attendance/wfh/eeb86741d0/thumbnail.jpg",
+          hls: "attendance/wfh/eeb86741d0/master.m3u8",
+          subtitles: {
+            en: "attendance/wfh/eeb86741d0/subtitles/en.vtt",
+            hi: "attendance/wfh/eeb86741d0/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Requests",
+              startTime: 0,
+            },
+            {
+              title: "Approve",
+              startTime: 13.2,
+            },
+            {
+              title: "Request a Day",
+              startTime: 24.1,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "holidays",
+          title: "Holidays",
+          description:
+            "The year’s holidays by month, how many are left and when the next one is, shown on everyone’s calendar and counted in attendance.",
+          duration: 32.8,
+          recorded: "2026-11-10",
+          thumbnail: "attendance/holidays/d86b5c02bc/thumbnail.jpg",
+          hls: "attendance/holidays/d86b5c02bc/master.m3u8",
+          subtitles: {
+            en: "attendance/holidays/d86b5c02bc/subtitles/en.vtt",
+            hi: "attendance/holidays/d86b5c02bc/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "The Year",
+              startTime: 0,
+            },
+            {
+              title: "At a Glance",
+              startTime: 6.3,
+            },
+            {
+              title: "Everywhere at Once",
+              startTime: 12.7,
+            },
+            {
+              title: "Other Years",
+              startTime: 26.5,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -268,7 +680,7 @@ export default {
     },
     {
       id: "leave-management",
-      title: "Leave Management",
+      title: "Leave",
       description:
         "Apply in seconds, approve in one click, and set the leave policy your organisation runs on.",
       icon: "leave",
@@ -277,14 +689,14 @@ export default {
           id: "apply-leave",
           title: "Applying for Leave",
           description:
-            "Choose the dates and leave type, check the balance, and send the request to your approver.",
-          duration: 29.2,
+            "Choose full days, a half day or a few hours, pick the dates and type, and send it to your approver with the balance and duration shown first.",
+          duration: 47.5,
           recorded: "2026-11-10",
-          thumbnail: "leave-management/apply-leave/46a6c0f8ad/thumbnail.jpg",
-          hls: "leave-management/apply-leave/46a6c0f8ad/master.m3u8",
+          thumbnail: "leave-management/apply-leave/f28353d9a6/thumbnail.jpg",
+          hls: "leave-management/apply-leave/f28353d9a6/master.m3u8",
           subtitles: {
-            en: "leave-management/apply-leave/46a6c0f8ad/subtitles/en.vtt",
-            hi: "leave-management/apply-leave/46a6c0f8ad/subtitles/hi.vtt",
+            en: "leave-management/apply-leave/f28353d9a6/subtitles/en.vtt",
+            hi: "leave-management/apply-leave/f28353d9a6/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -292,20 +704,24 @@ export default {
               startTime: 0,
             },
             {
-              title: "Choose Dates",
-              startTime: 3.6,
+              title: "How Long",
+              startTime: 7.1,
+            },
+            {
+              title: "Dates",
+              startTime: 13.2,
             },
             {
               title: "Details",
-              startTime: 13,
+              startTime: 20.1,
             },
             {
               title: "Review",
-              startTime: 18.4,
+              startTime: 33.2,
             },
             {
               title: "Submit",
-              startTime: 23.3,
+              startTime: 39.8,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -315,14 +731,14 @@ export default {
           id: "approve-leave",
           title: "Manager Approval",
           description:
-            "Review pending leave applications, filter by status, and approve with one click.",
-          duration: 20.5,
+            "Managers see their team’s leave requests, filter by status, check dates and reasons, and approve or reject, one at a time or in bulk.",
+          duration: 39,
           recorded: "2026-11-10",
-          thumbnail: "leave-management/approve-leave/70a62acb44/thumbnail.jpg",
-          hls: "leave-management/approve-leave/70a62acb44/master.m3u8",
+          thumbnail: "leave-management/approve-leave/726aa8050d/thumbnail.jpg",
+          hls: "leave-management/approve-leave/726aa8050d/master.m3u8",
           subtitles: {
-            en: "leave-management/approve-leave/70a62acb44/subtitles/en.vtt",
-            hi: "leave-management/approve-leave/70a62acb44/subtitles/hi.vtt",
+            en: "leave-management/approve-leave/726aa8050d/subtitles/en.vtt",
+            hi: "leave-management/approve-leave/726aa8050d/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -331,15 +747,19 @@ export default {
             },
             {
               title: "Filter",
-              startTime: 3.8,
+              startTime: 7.6,
             },
             {
               title: "Review a Request",
-              startTime: 8.3,
+              startTime: 19.3,
             },
             {
               title: "Approve",
-              startTime: 12.6,
+              startTime: 24.6,
+            },
+            {
+              title: "Several at Once",
+              startTime: 31.3,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -349,14 +769,14 @@ export default {
           id: "leave-policy",
           title: "Leave Policy",
           description:
-            "Set yearly paid, sick and casual leave, require a medical certificate, and add custom leave types.",
-          duration: 20.6,
+            "Set yearly paid, sick and casual leave, require a medical certificate for sick leave, and add your own leave types with accrual, carry forward and encashment.",
+          duration: 44.1,
           recorded: "2026-11-10",
-          thumbnail: "leave-management/leave-policy/75976d3ada/thumbnail.jpg",
-          hls: "leave-management/leave-policy/75976d3ada/master.m3u8",
+          thumbnail: "leave-management/leave-policy/d49ba1eacb/thumbnail.jpg",
+          hls: "leave-management/leave-policy/d49ba1eacb/master.m3u8",
           subtitles: {
-            en: "leave-management/leave-policy/75976d3ada/subtitles/en.vtt",
-            hi: "leave-management/leave-policy/75976d3ada/subtitles/hi.vtt",
+            en: "leave-management/leave-policy/d49ba1eacb/subtitles/en.vtt",
+            hi: "leave-management/leave-policy/d49ba1eacb/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -365,11 +785,15 @@ export default {
             },
             {
               title: "Statutory Entitlement",
-              startTime: 4.5,
+              startTime: 6.7,
             },
             {
-              title: "Leave Types",
-              startTime: 13.8,
+              title: "Medical Certificates",
+              startTime: 18.7,
+            },
+            {
+              title: "Your Own Leave Types",
+              startTime: 23.9,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -381,21 +805,21 @@ export default {
       id: "payroll",
       title: "Payroll",
       description:
-        "Take each month from draft to approved to disbursed, and give employees their payslips and TDS worksheets.",
+        "Take each month from draft to approved to disbursed, set up salary structures, and give employees their payslips.",
       icon: "banknote",
       videos: [
         {
           id: "payroll-runs",
           title: "Payroll Runs",
           description:
-            "Each month’s payroll moves from draft to review, approval and disbursal, with totals at every step.",
-          duration: 26,
+            "Each month’s payroll moves from draft through review and approval to disbursal, with employees, gross and net totals at every step.",
+          duration: 50.7,
           recorded: "2026-11-10",
-          thumbnail: "payroll/payroll-runs/401f5de85e/thumbnail.jpg",
-          hls: "payroll/payroll-runs/401f5de85e/master.m3u8",
+          thumbnail: "payroll/payroll-runs/16b50307ad/thumbnail.jpg",
+          hls: "payroll/payroll-runs/16b50307ad/master.m3u8",
           subtitles: {
-            en: "payroll/payroll-runs/401f5de85e/subtitles/en.vtt",
-            hi: "payroll/payroll-runs/401f5de85e/subtitles/hi.vtt",
+            en: "payroll/payroll-runs/16b50307ad/subtitles/en.vtt",
+            hi: "payroll/payroll-runs/16b50307ad/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -404,15 +828,19 @@ export default {
             },
             {
               title: "Latest Run",
-              startTime: 4.7,
+              startTime: 13.8,
             },
             {
               title: "Approval Steps",
-              startTime: 9.4,
+              startTime: 19.8,
             },
             {
               title: "Run History",
-              startTime: 13.8,
+              startTime: 31.9,
+            },
+            {
+              title: "New Run",
+              startTime: 46.3,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -422,14 +850,14 @@ export default {
           id: "payslips",
           title: "Payslips",
           description:
-            "Employees see their latest payslip, the breakdown of deductions, and download any month’s payslip or TDS worksheet.",
-          duration: 21.2,
+            "Employees see their latest payslip and its deductions, and download any month’s payslip or TDS worksheet as a PDF.",
+          duration: 38.9,
           recorded: "2026-11-10",
-          thumbnail: "payroll/payslips/6ec03af171/thumbnail.jpg",
-          hls: "payroll/payslips/6ec03af171/master.m3u8",
+          thumbnail: "payroll/payslips/14a3d2d8c6/thumbnail.jpg",
+          hls: "payroll/payslips/14a3d2d8c6/master.m3u8",
           subtitles: {
-            en: "payroll/payslips/6ec03af171/subtitles/en.vtt",
-            hi: "payroll/payslips/6ec03af171/subtitles/hi.vtt",
+            en: "payroll/payslips/14a3d2d8c6/subtitles/en.vtt",
+            hi: "payroll/payslips/14a3d2d8c6/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -438,11 +866,45 @@ export default {
             },
             {
               title: "Latest Payslip",
-              startTime: 5.9,
+              startTime: 6.3,
             },
             {
               title: "History",
-              startTime: 14.7,
+              startTime: 25.3,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "payroll-setup",
+          title: "Salary Structures and Payroll Setup",
+          description:
+            "Define salary components, professional tax, pay cycles and income tax once; see every employee’s salary in Salary Management.",
+          duration: 46.8,
+          recorded: "2026-11-10",
+          thumbnail: "payroll/payroll-setup/bb424b6dd6/thumbnail.jpg",
+          hls: "payroll/payroll-setup/bb424b6dd6/master.m3u8",
+          subtitles: {
+            en: "payroll/payroll-setup/bb424b6dd6/subtitles/en.vtt",
+            hi: "payroll/payroll-setup/bb424b6dd6/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Payroll Setup",
+              startTime: 0,
+            },
+            {
+              title: "Salary Components",
+              startTime: 8.3,
+            },
+            {
+              title: "Tax and Pay Cycles",
+              startTime: 23.2,
+            },
+            {
+              title: "Salary Management",
+              startTime: 32.1,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -454,21 +916,21 @@ export default {
       id: "recruitment",
       title: "Recruitment",
       description:
-        "Open roles, their applicants and each candidate’s application, in one hiring workspace.",
+        "Open roles and their candidates, interview pipelines, and a careers page where people apply.",
       icon: "briefcase",
       videos: [
         {
           id: "hiring-pipeline",
           title: "Job Openings and Candidates",
           description:
-            "Track open roles, open one to see its hiring details and applicants, and review a candidate.",
-          duration: 33.2,
+            "Track open roles with budgets and deadlines, open one to see its hiring details and applicants, filter by stage and review a candidate.",
+          duration: 49.9,
           recorded: "2026-11-10",
-          thumbnail: "recruitment/hiring-pipeline/ea2b3482f7/thumbnail.jpg",
-          hls: "recruitment/hiring-pipeline/ea2b3482f7/master.m3u8",
+          thumbnail: "recruitment/hiring-pipeline/712251db5c/thumbnail.jpg",
+          hls: "recruitment/hiring-pipeline/712251db5c/master.m3u8",
           subtitles: {
-            en: "recruitment/hiring-pipeline/ea2b3482f7/subtitles/en.vtt",
-            hi: "recruitment/hiring-pipeline/ea2b3482f7/subtitles/hi.vtt",
+            en: "recruitment/hiring-pipeline/712251db5c/subtitles/en.vtt",
+            hi: "recruitment/hiring-pipeline/712251db5c/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -476,16 +938,47 @@ export default {
               startTime: 0,
             },
             {
-              title: "Open a Role",
-              startTime: 9.2,
+              title: "One Role",
+              startTime: 14,
             },
             {
-              title: "Applicants",
-              startTime: 18.9,
+              title: "Description",
+              startTime: 26.9,
             },
             {
-              title: "Candidate",
-              startTime: 27.2,
+              title: "Candidates",
+              startTime: 34.9,
+            },
+            {
+              title: "A Candidate",
+              startTime: 42,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "recruitment-pipeline",
+          title: "Hiring Pipelines and Careers Page",
+          description:
+            "Define your interview rounds once as pipelines, and publish openings on a public careers page where candidates apply.",
+          duration: 41.4,
+          recorded: "2026-11-10",
+          thumbnail:
+            "recruitment/recruitment-pipeline/212a790f44/thumbnail.jpg",
+          hls: "recruitment/recruitment-pipeline/212a790f44/master.m3u8",
+          subtitles: {
+            en: "recruitment/recruitment-pipeline/212a790f44/subtitles/en.vtt",
+            hi: "recruitment/recruitment-pipeline/212a790f44/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Pipelines",
+              startTime: 0,
+            },
+            {
+              title: "Careers Page",
+              startTime: 21.5,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -504,14 +997,14 @@ export default {
           id: "performance-reviews",
           title: "Performance Reviews",
           description:
-            "Review cycles with a self-assessment first, then the manager’s review, with status at each step.",
-          duration: 24.2,
+            "Review cycles with a self-assessment first and the manager’s review after, statuses that show what’s due, and HR setting up cycles.",
+          duration: 47.8,
           recorded: "2026-11-10",
-          thumbnail: "performance/performance-reviews/e23fd00acd/thumbnail.jpg",
-          hls: "performance/performance-reviews/e23fd00acd/master.m3u8",
+          thumbnail: "performance/performance-reviews/09525858c7/thumbnail.jpg",
+          hls: "performance/performance-reviews/09525858c7/master.m3u8",
           subtitles: {
-            en: "performance/performance-reviews/e23fd00acd/subtitles/en.vtt",
-            hi: "performance/performance-reviews/e23fd00acd/subtitles/hi.vtt",
+            en: "performance/performance-reviews/09525858c7/subtitles/en.vtt",
+            hi: "performance/performance-reviews/09525858c7/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -519,16 +1012,149 @@ export default {
               startTime: 0,
             },
             {
+              title: "Review Cycles",
+              startTime: 7.9,
+            },
+            {
               title: "My Reviews",
-              startTime: 4.4,
+              startTime: 15.1,
             },
             {
               title: "Reviews I Give",
-              startTime: 13.7,
+              startTime: 27.5,
             },
             {
-              title: "Review Cycles",
-              startTime: 17.9,
+              title: "Managing Cycles",
+              startTime: 34,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+      ],
+    },
+    {
+      id: "workplace",
+      title: "Workplace",
+      description:
+        "Keep everyone informed and supported: announcements, company policies, the helpdesk and notifications.",
+      icon: "megaphone",
+      videos: [
+        {
+          id: "announcements",
+          title: "Announcements",
+          description:
+            "HR posts company news once and everyone sees it, current items first and past ones kept for reference.",
+          duration: 33.6,
+          recorded: "2026-11-10",
+          thumbnail: "workplace/announcements/d9760f3da9/thumbnail.jpg",
+          hls: "workplace/announcements/d9760f3da9/master.m3u8",
+          subtitles: {
+            en: "workplace/announcements/d9760f3da9/subtitles/en.vtt",
+            hi: "workplace/announcements/d9760f3da9/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Company News",
+              startTime: 0,
+            },
+            {
+              title: "Past Announcements",
+              startTime: 19,
+            },
+            {
+              title: "Reaching Everyone",
+              startTime: 25.1,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "policies",
+          title: "Company Policies",
+          description:
+            "Every company policy in one library: read it on screen, see when it was last updated, and download it as a PDF.",
+          duration: 28.2,
+          recorded: "2026-11-10",
+          thumbnail: "workplace/policies/cf8346b23d/thumbnail.jpg",
+          hls: "workplace/policies/cf8346b23d/master.m3u8",
+          subtitles: {
+            en: "workplace/policies/cf8346b23d/subtitles/en.vtt",
+            hi: "workplace/policies/cf8346b23d/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "The Policy Library",
+              startTime: 0,
+            },
+            {
+              title: "Reading a Policy",
+              startTime: 11.5,
+            },
+            {
+              title: "Download",
+              startTime: 17.2,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "helpdesk",
+          title: "Helpdesk",
+          description:
+            "Employees raise tickets for IT, HR or payroll questions; the team tracks priority, response targets and replies, with internal notes for HR only.",
+          duration: 37.8,
+          recorded: "2026-11-10",
+          thumbnail: "workplace/helpdesk/a17e5311cf/thumbnail.jpg",
+          hls: "workplace/helpdesk/a17e5311cf/master.m3u8",
+          subtitles: {
+            en: "workplace/helpdesk/a17e5311cf/subtitles/en.vtt",
+            hi: "workplace/helpdesk/a17e5311cf/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Tickets",
+              startTime: 0,
+            },
+            {
+              title: "A Conversation",
+              startTime: 14.3,
+            },
+            {
+              title: "New Ticket",
+              startTime: 28.6,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "notifications",
+          title: "Notifications",
+          description:
+            "The bell shows what changed for you: decisions on your requests, new announcements and things waiting on you, in the app and as push notifications.",
+          duration: 38.7,
+          recorded: "2026-11-10",
+          thumbnail: "workplace/notifications/0a7bb66d01/thumbnail.jpg",
+          hls: "workplace/notifications/0a7bb66d01/master.m3u8",
+          subtitles: {
+            en: "workplace/notifications/0a7bb66d01/subtitles/en.vtt",
+            hi: "workplace/notifications/0a7bb66d01/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "The Bell",
+              startTime: 0,
+            },
+            {
+              title: "Your Notifications",
+              startTime: 11.3,
+            },
+            {
+              title: "Push Notifications",
+              startTime: 24.3,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -540,21 +1166,21 @@ export default {
       id: "reports",
       title: "Reports & Analytics",
       description:
-        "Build your own reports from people data, and see the workforce at a glance.",
+        "Build your own reports from people data, and see the workforce, attendance and hiring at a glance.",
       icon: "chart",
       videos: [
         {
           id: "report-builder",
           title: "Report Builder",
           description:
-            "Pick a data source and columns, run the report, then save it or download it as CSV.",
-          duration: 26.6,
+            "Pick a data source and columns, add filters and sorting, run it, then save the report to run again or download it as CSV.",
+          duration: 40.1,
           recorded: "2026-11-10",
-          thumbnail: "reports/report-builder/31d6c967d3/thumbnail.jpg",
-          hls: "reports/report-builder/31d6c967d3/master.m3u8",
+          thumbnail: "reports/report-builder/6e477dafbf/thumbnail.jpg",
+          hls: "reports/report-builder/6e477dafbf/master.m3u8",
           subtitles: {
-            en: "reports/report-builder/31d6c967d3/subtitles/en.vtt",
-            hi: "reports/report-builder/31d6c967d3/subtitles/hi.vtt",
+            en: "reports/report-builder/6e477dafbf/subtitles/en.vtt",
+            hi: "reports/report-builder/6e477dafbf/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -562,20 +1188,54 @@ export default {
               startTime: 0,
             },
             {
+              title: "Choose the Data",
+              startTime: 6.7,
+            },
+            {
               title: "Choose Columns",
-              startTime: 5,
+              startTime: 12.3,
             },
             {
               title: "Filters and Sorting",
-              startTime: 11.2,
+              startTime: 17.6,
             },
             {
               title: "Run",
-              startTime: 15.8,
+              startTime: 23.6,
             },
             {
               title: "Save or Export",
-              startTime: 19.9,
+              startTime: 26.7,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "analytics",
+          title: "Analytics",
+          description:
+            "Ready-made dashboards for the workforce, leave and attendance, and recruitment: headcount growth, joiners, attendance trends, leave patterns and the hiring funnel.",
+          duration: 46.1,
+          recorded: "2026-11-10",
+          thumbnail: "reports/analytics/db6d47ce8b/thumbnail.jpg",
+          hls: "reports/analytics/db6d47ce8b/master.m3u8",
+          subtitles: {
+            en: "reports/analytics/db6d47ce8b/subtitles/en.vtt",
+            hi: "reports/analytics/db6d47ce8b/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Workforce",
+              startTime: 0,
+            },
+            {
+              title: "Leave and Attendance",
+              startTime: 21,
+            },
+            {
+              title: "Recruitment",
+              startTime: 33.7,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -583,16 +1243,16 @@ export default {
         },
         {
           id: "employee-insights",
-          title: "Workforce Insights",
+          title: "Employee Insights",
           description:
-            "Headcount, workforce status and people by department, at a glance for HR and leadership.",
-          duration: 26.1,
+            "Headcount, workforce status, people by department, and active rate, PF and work-from-home coverage by department, for HR and leadership.",
+          duration: 35.8,
           recorded: "2026-11-10",
-          thumbnail: "reports/employee-insights/f63ba9ec09/thumbnail.jpg",
-          hls: "reports/employee-insights/f63ba9ec09/master.m3u8",
+          thumbnail: "reports/employee-insights/3e2bff26c0/thumbnail.jpg",
+          hls: "reports/employee-insights/3e2bff26c0/master.m3u8",
           subtitles: {
-            en: "reports/employee-insights/f63ba9ec09/subtitles/en.vtt",
-            hi: "reports/employee-insights/f63ba9ec09/subtitles/hi.vtt",
+            en: "reports/employee-insights/3e2bff26c0/subtitles/en.vtt",
+            hi: "reports/employee-insights/3e2bff26c0/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -601,19 +1261,19 @@ export default {
             },
             {
               title: "Headcount",
-              startTime: 4.8,
+              startTime: 5.8,
             },
             {
               title: "Workforce Status",
-              startTime: 9.8,
+              startTime: 10.9,
             },
             {
               title: "By Department",
-              startTime: 14.1,
+              startTime: 15.9,
             },
             {
               title: "Coverage",
-              startTime: 18.4,
+              startTime: 21.5,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -623,23 +1283,23 @@ export default {
     },
     {
       id: "security",
-      title: "Security",
+      title: "Security & Admin",
       description:
-        "Role-Based Access Control with Own, Team and Everyone scopes, passwordless sign-in with passkeys, and a full audit log.",
+        "Role-Based Access Control, a tamper-proof audit log, organisation settings and your subscription.",
       icon: "shield",
       videos: [
         {
           id: "roles-permissions",
-          title: "Role-Based Access Control",
+          title: "Roles, Permissions and Teams",
           description:
-            "Roles bundle permissions, and each permission has a scope: the person’s own records, their team’s, or everyone’s.",
-          duration: 30.5,
+            "Role-Based Access Control with Own, Team and Everyone scopes; per-person permissions; and teams whose leads approve their own team’s requests.",
+          duration: 49.3,
           recorded: "2026-11-10",
-          thumbnail: "security/roles-permissions/73cdb0ae97/thumbnail.jpg",
-          hls: "security/roles-permissions/73cdb0ae97/master.m3u8",
+          thumbnail: "security/roles-permissions/eb3baa4a6a/thumbnail.jpg",
+          hls: "security/roles-permissions/eb3baa4a6a/master.m3u8",
           subtitles: {
-            en: "security/roles-permissions/73cdb0ae97/subtitles/en.vtt",
-            hi: "security/roles-permissions/73cdb0ae97/subtitles/hi.vtt",
+            en: "security/roles-permissions/eb3baa4a6a/subtitles/en.vtt",
+            hi: "security/roles-permissions/eb3baa4a6a/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -647,46 +1307,110 @@ export default {
               startTime: 0,
             },
             {
-              title: "Open a Role",
-              startTime: 7.6,
-            },
-            {
               title: "Own, Team, Everyone",
-              startTime: 11.6,
+              startTime: 14.9,
             },
             {
-              title: "Leave Approvals",
-              startTime: 21.3,
+              title: "User Permissions",
+              startTime: 34.2,
+            },
+            {
+              title: "Teams",
+              startTime: 40.7,
             },
           ],
           qualities: [1080, 720, 480, 360],
           audio: ["en", "hi"],
         },
         {
-          id: "passkeys-and-audit",
-          title: "Passkeys and the Audit Log",
+          id: "audit-logs",
+          title: "Audit Log",
           description:
-            "Passwordless sign-in with WebAuthn passkeys, and an audit log of who changed what, and when.",
-          duration: 27.4,
+            "Who changed what, and when: every change to settings and records, filterable by time, area and person, with before and after values and sensitive fields redacted.",
+          duration: 39.2,
           recorded: "2026-11-10",
-          thumbnail: "security/passkeys-and-audit/a86043d5ba/thumbnail.jpg",
-          hls: "security/passkeys-and-audit/a86043d5ba/master.m3u8",
+          thumbnail: "security/audit-logs/dae9065d8a/thumbnail.jpg",
+          hls: "security/audit-logs/dae9065d8a/master.m3u8",
           subtitles: {
-            en: "security/passkeys-and-audit/a86043d5ba/subtitles/en.vtt",
-            hi: "security/passkeys-and-audit/a86043d5ba/subtitles/hi.vtt",
+            en: "security/audit-logs/dae9065d8a/subtitles/en.vtt",
+            hi: "security/audit-logs/dae9065d8a/subtitles/hi.vtt",
           },
           chapters: [
             {
-              title: "Passkeys",
+              title: "Introduction",
               startTime: 0,
             },
             {
-              title: "Audit Log",
-              startTime: 15.9,
+              title: "Filters",
+              startTime: 11.9,
             },
             {
-              title: "Change Details",
-              startTime: 21.4,
+              title: "Before and After",
+              startTime: 18.2,
+            },
+            {
+              title: "Sensitive Data",
+              startTime: 24.2,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "settings",
+          title: "Organisation Settings",
+          description:
+            "Company details and statutory IDs, the work week, HR policy defaults like probation and notice, and more, each applied across the organisation.",
+          duration: 46.7,
+          recorded: "2026-11-10",
+          thumbnail: "security/settings/afcd176e4a/thumbnail.jpg",
+          hls: "security/settings/afcd176e4a/master.m3u8",
+          subtitles: {
+            en: "security/settings/afcd176e4a/subtitles/en.vtt",
+            hi: "security/settings/afcd176e4a/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Company Info",
+              startTime: 0,
+            },
+            {
+              title: "Work Week",
+              startTime: 20.5,
+            },
+            {
+              title: "HR Policy",
+              startTime: 27.8,
+            },
+            {
+              title: "Saving Changes",
+              startTime: 37.2,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "subscription",
+          title: "Subscription and Billing",
+          description:
+            "Your plan, renewal date and payment method; switch between Starter, Growth and Enterprise, or monthly and annual billing.",
+          duration: 31.2,
+          recorded: "2026-11-10",
+          thumbnail: "security/subscription/ebbe108ef8/thumbnail.jpg",
+          hls: "security/subscription/ebbe108ef8/master.m3u8",
+          subtitles: {
+            en: "security/subscription/ebbe108ef8/subtitles/en.vtt",
+            hi: "security/subscription/ebbe108ef8/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Your Plan",
+              startTime: 0,
+            },
+            {
+              title: "Change Plan",
+              startTime: 10.3,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -695,33 +1419,71 @@ export default {
       ],
     },
     {
-      id: "notifications",
-      title: "Notifications",
+      id: "ai-support",
+      title: "AI & Support",
       description:
-        "Know when something changes for you: decisions on your requests and updates from HR.",
-      icon: "bell",
+        "Use your own AI assistant with Praesto, within your permissions, and reach the Praesto team when you need help.",
+      icon: "assistant",
       videos: [
         {
-          id: "notifications",
-          title: "In-App Notifications",
+          id: "ai-assistants",
+          title: "AI Assistants",
           description:
-            "The bell shows what changed for you, such as decisions on your requests and new announcements.",
-          duration: 14.2,
+            "Connect the AI assistant you already use to Praesto through its MCP server, and ask about leave, approvals and your calendar, within your own permissions.",
+          duration: 38.1,
           recorded: "2026-11-10",
-          thumbnail: "notifications/notifications/fd6c315f57/thumbnail.jpg",
-          hls: "notifications/notifications/fd6c315f57/master.m3u8",
+          thumbnail: "ai-support/ai-assistants/dc8b6381c1/thumbnail.jpg",
+          hls: "ai-support/ai-assistants/dc8b6381c1/master.m3u8",
           subtitles: {
-            en: "notifications/notifications/fd6c315f57/subtitles/en.vtt",
-            hi: "notifications/notifications/fd6c315f57/subtitles/hi.vtt",
+            en: "ai-support/ai-assistants/dc8b6381c1/subtitles/en.vtt",
+            hi: "ai-support/ai-assistants/dc8b6381c1/subtitles/hi.vtt",
           },
           chapters: [
             {
-              title: "The Bell",
+              title: "Your Own Assistant",
               startTime: 0,
             },
             {
-              title: "Your Notifications",
-              startTime: 3.9,
+              title: "The MCP Server",
+              startTime: 5.9,
+            },
+            {
+              title: "Setting Up",
+              startTime: 14.3,
+            },
+            {
+              title: "Your Data, Your Rules",
+              startTime: 21,
+            },
+            {
+              title: "Connected Assistants",
+              startTime: 29.8,
+            },
+          ],
+          qualities: [1080, 720, 480, 360],
+          audio: ["en", "hi"],
+        },
+        {
+          id: "support",
+          title: "Praesto Support",
+          description:
+            "Raise bugs, billing questions and ideas with the Praesto team, track every ticket’s status, and reply when they need something from you.",
+          duration: 44.4,
+          recorded: "2026-11-10",
+          thumbnail: "ai-support/support/bee90389f1/thumbnail.jpg",
+          hls: "ai-support/support/bee90389f1/master.m3u8",
+          subtitles: {
+            en: "ai-support/support/bee90389f1/subtitles/en.vtt",
+            hi: "ai-support/support/bee90389f1/subtitles/hi.vtt",
+          },
+          chapters: [
+            {
+              title: "Support Tickets",
+              startTime: 0,
+            },
+            {
+              title: "Raising a Ticket",
+              startTime: 21.9,
             },
           ],
           qualities: [1080, 720, 480, 360],
