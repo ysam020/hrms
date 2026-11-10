@@ -97,6 +97,22 @@ export const WORK_FLOWS = {
         "हर request में कौन माँग रहा है, तारीख़ें, कारण और status दिखता है।",
       );
       await r.glide(860, 250, 1000);
+      await r.chapter("Several at Once");
+      await r.say(
+        "Tick several requests to approve or reject them together, useful before a long weekend.",
+        "कई requests पर tick करके उन्हें एक साथ approve या reject करें, लंबे weekend से पहले काम आता है।",
+      );
+      await r.optional("select", async () => {
+        const boxes = main(p).locator('td input[type="checkbox"]');
+        await r.click(boxes.nth(0));
+        await r.wait(400);
+        await r.click(boxes.nth(1));
+        await r.wait(1800);
+        await r.click(boxes.nth(1));
+        await r.wait(300);
+        await r.click(boxes.nth(0));
+        await r.wait(500);
+      });
       await r.chapter("Approve");
       await r.say(
         "Approve it, and the employee is notified, their balance is updated and the leave appears on the calendar.",
@@ -110,15 +126,6 @@ export const WORK_FLOWS = {
           .getByRole("button", { name: /Approve/ });
         if (await c.count()) await r.click(c);
       });
-      await r.chapter("Several at Once");
-      await r.say(
-        "Tick several requests to approve or reject them together, useful before a long weekend.",
-        "कई requests पर tick करके उन्हें एक साथ approve या reject करें, लंबे weekend से पहले काम आता है।",
-      );
-      await r.optional("select", () =>
-        r.point(p.getByRole("checkbox", { name: "Select all" })),
-      );
-      await r.wait(1200);
     },
   },
 

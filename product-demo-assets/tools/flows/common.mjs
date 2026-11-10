@@ -43,11 +43,9 @@ export async function pickDate(r, button, d) {
   await r.wait(600);
   for (let i = 0; i < 2 && !(await dayCell(p, d).count()); i++) {
     await r.click(
-      p
-        .getByRole("dialog")
-        .getByRole("button", {
-          name: d < new Date() ? "Previous month" : "Next month",
-        }),
+      p.getByRole("dialog").getByRole("button", {
+        name: d < new Date() ? "Previous month" : "Next month",
+      }),
     );
     await r.wait(400);
   }

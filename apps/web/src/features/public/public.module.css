@@ -433,7 +433,10 @@
 .stepHead h2:focus {
   outline: none;
 }
-.steps {
+/* The job application's progress bar. (Named apart from the setup wizard's
+   labelled .steps above: sharing the name merged both rule sets, and the
+   wizard's labels were drawn as 4px bars with a line through them.) */
+.progressSteps {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
@@ -442,13 +445,13 @@
   padding: 0;
   list-style: none;
 }
-.steps li {
+.progressSteps li {
   height: 4px;
   border-radius: var(--px-radius-pill);
   background: var(--px-neutral-soft);
 }
-.steps li[data-state="done"],
-.steps li[data-state="current"] {
+.progressSteps li[data-state="done"],
+.progressSteps li[data-state="current"] {
   background: var(--px-accent);
 }
 .stepActions {

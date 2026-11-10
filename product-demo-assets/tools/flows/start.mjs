@@ -1,6 +1,13 @@
 // Getting Started and Platform Overview demos.
 import { ONBOARDING } from "../extras.mjs";
-import { cancelDialog, choose, main, nav } from "./common.mjs";
+import {
+  cancelDialog,
+  choose,
+  main,
+  nav,
+  pickDate,
+  weekday,
+} from "./common.mjs";
 
 const createPhase = {};
 
@@ -430,6 +437,12 @@ export const START_FLOWS = {
         "Quarterly planning",
         60,
       );
+      // A date ahead: Praesto won't add an event in the past.
+      await pickDate(
+        r,
+        p.getByRole("dialog").getByRole("button", { name: "Date" }),
+        weekday(4),
+      );
       await r.say(
         "Add notes for context, and it appears on everyone’s calendar.",
         "Context के लिए notes जोड़ें, और यह सबके calendar पर दिख जाता है।",
@@ -440,7 +453,12 @@ export const START_FLOWS = {
         45,
       );
       await r.click(p.getByRole("button", { name: "Add Event" }));
-      await r.wait(1500);
+      await r.wait(800);
+      await r.say(
+        "Add it, and the event is on the calendar straight away, for everyone to see.",
+        "Add करें, और event तुरंत calendar पर आ जाता है, सबके देखने के लिए।",
+      );
+      await r.wait(2500);
     },
   },
 

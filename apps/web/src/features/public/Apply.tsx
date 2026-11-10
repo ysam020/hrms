@@ -911,7 +911,7 @@ function StepIndicator({
       <p className="px-meta" aria-hidden>
         Step {current + 1} of {steps.length}
       </p>
-      <ol className={s.steps}>
+      <ol className={s.progressSteps}>
         {steps.map((t, i) => (
           <li
             key={t}
