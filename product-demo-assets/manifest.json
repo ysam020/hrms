@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-10T18:21:46.932Z",
+  "generatedAt": "2026-11-10T19:20:38.745Z",
   "modules": [
     {
       "id": "getting-started",
@@ -1580,13 +1580,13 @@
     "id": "praesto-tour",
     "title": "Praesto: The Complete Tour",
     "description": "Every part of Praesto in one film: setting up, the screens everyone uses, employees, attendance, leave, payroll, recruitment, performance, the workplace, reports, security and AI.",
-    "duration": 1018.5,
+    "duration": 1085.2,
     "recorded": "2026-11-10",
-    "thumbnail": "film/praesto-tour/dd2dbdce1b/thumbnail.jpg",
-    "hls": "film/praesto-tour/dd2dbdce1b/master.m3u8",
+    "thumbnail": "film/praesto-tour/c8af9a67ef/thumbnail.jpg",
+    "hls": "film/praesto-tour/c8af9a67ef/master.m3u8",
     "subtitles": {
-      "en": "film/praesto-tour/dd2dbdce1b/subtitles/en.vtt",
-      "hi": "film/praesto-tour/dd2dbdce1b/subtitles/hi.vtt"
+      "en": "film/praesto-tour/c8af9a67ef/subtitles/en.vtt",
+      "hi": "film/praesto-tour/c8af9a67ef/subtitles/hi.vtt"
     },
     "chapters": [
       {
@@ -1599,51 +1599,51 @@
       },
       {
         "title": "Platform Overview",
-        "startTime": 136.9
+        "startTime": 142.7
       },
       {
         "title": "Employees",
-        "startTime": 218.7
+        "startTime": 230.3
       },
       {
         "title": "Attendance",
-        "startTime": 297.1
+        "startTime": 314.5
       },
       {
         "title": "Leave",
-        "startTime": 395.1
+        "startTime": 421.2
       },
       {
         "title": "Payroll",
-        "startTime": 475.6
+        "startTime": 507.5
       },
       {
         "title": "Recruitment",
-        "startTime": 566.1
+        "startTime": 603.8
       },
       {
         "title": "Performance",
-        "startTime": 667.6
+        "startTime": 716.9
       },
       {
         "title": "Workplace",
-        "startTime": 717.5
+        "startTime": 766.8
       },
       {
         "title": "Reports & Analytics",
-        "startTime": 788.7
+        "startTime": 843.8
       },
       {
         "title": "Security & Admin",
-        "startTime": 855.2
+        "startTime": 913.2
       },
       {
         "title": "AI & Support",
-        "startTime": 927.3
+        "startTime": 991.1
       },
       {
         "title": "Try Praesto",
-        "startTime": 1000.4
+        "startTime": 1067.1
       }
     ],
     "qualities": [1080, 720, 480, 360],

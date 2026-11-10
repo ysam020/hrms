@@ -38,6 +38,7 @@ import * as cards from "./film/cards.mjs";
 import { MODULES } from "./modules.mjs";
 import { pool, spokenEnglish, spokenHindi, synth } from "./narrate.mjs";
 import { build, FILM_DIR } from "./build-hls.mjs";
+import { soundEffects } from "./film/sfx.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const WORK = `${ROOT}film/.work/`;
@@ -51,6 +52,9 @@ mkdirSync(WORK, { recursive: true });
 const frames = (s) => Math.round(s * FPS);
 const snap = (s) => frames(s) / FPS;
 const manifest = JSON.parse(readFileSync(`${ROOT}manifest.json`, "utf8"));
+const videoDescription = (id) =>
+  manifest.modules.flatMap((m) => m.videos).find((v) => v.id === id)
+    .description;
 const videoTitle = (id) =>
   manifest.modules.flatMap((m) => m.videos).find((v) => v.id === id).title;
 const moduleOf = (id) => MODULES.find((m) => m.id === id);
@@ -161,6 +165,16 @@ function cardHtml(p) {
         index: p.index,
         of: p.of,
         highlights: p.highlights.map(videoTitle),
+      });
+    case "topic":
+      return cards.topic({
+        module: moduleOf(p.module),
+        part: p.part,
+        parts: p.parts,
+        step: p.step,
+        title: videoTitle(p.video),
+        description: videoDescription(p.video),
+        topics: p.topics.map(videoTitle),
       });
     case "outro":
       return cards.outro({ marks: p.marks });
@@ -299,16 +313,20 @@ await browser.close();
 
 // ── 4. Join ───────────────────────────────────────────────────────────────
 mkdirSync(FILM_DIR, { recursive: true });
-const sameSection = (a, b) =>
-  a.kind === "clip" && b.kind === "clip" && a.module === b.module;
+// A clip slides away to the next topic's screen, which dissolves into the
+// clip; everything else crossfades, and the end fades through black.
+const transition = (a, b) =>
+  b.card === "topic"
+    ? "smoothleft"
+    : a.card === "topic"
+      ? "fade"
+      : b.card === "end"
+        ? "fadeblack"
+        : "fade";
 const graph = [];
 let last = "[0:v]";
 for (let k = 1; k < plan.length; k++) {
-  const kind = sameSection(plan[k - 1], plan[k])
-    ? "smoothleft"
-    : plan[k].card === "end"
-      ? "fadeblack"
-      : "fade";
+  const kind = transition(plan[k - 1], plan[k]);
   const out = k === plan.length - 1 ? "[film]" : `[x${k}]`;
   graph.push(`${last}[${k}:v]xfade=transition=${kind}:duration=${T}:offset=${plan[k].start.toFixed(4)}${out}`);
   last = out;
@@ -341,6 +359,40 @@ const chapters = plan
     startTime: Math.round(p.start * 10) / 10,
   }))
   .filter((c) => c.title);
+// Sound: a cue at each change of scene, under the narration (film/sfx.mjs).
+const sfx = await soundEffects(`${WORK}sfx/`);
+const at_ = (p, dt) => Math.round((p.start + dt) * 1000) / 1000;
+const effects = plan.flatMap((p) => {
+  switch (p.card) {
+    case "open":
+      return [
+        { ...sfx.rise, start: at_(p, 0.15) },
+        { ...sfx.chime, start: at_(p, 1.05) },
+      ];
+    case "pitch":
+    case "agenda":
+      return [{ ...sfx.whoosh, start: at_(p, 0.0), gain: 0.6 }];
+    case "section":
+      return [
+        { ...sfx.whoosh, start: at_(p, 0.0) },
+        { ...sfx.chime, start: at_(p, 0.45) },
+      ];
+    case "topic":
+      return [
+        { ...sfx.swipe, start: at_(p, 0.0) },
+        { ...sfx.tick, start: at_(p, 0.3) },
+      ];
+    case "outro":
+      return [
+        { ...sfx.whoosh, start: at_(p, 0.0) },
+        { ...sfx.chime, start: at_(p, 0.35) },
+      ];
+    case "end":
+      return [{ ...sfx.chime, start: at_(p, 0.4), gain: 0.8 }];
+  }
+  return [];
+});
+
 const film = {
   id: FILM.id,
   module: "film",
@@ -351,6 +403,7 @@ const film = {
   chapters,
   cues,
   recordedAt: new Date().toISOString(),
+  sfx: effects,
   scenes: plan.map((p) => ({ kind: p.kind, card: p.card, video: p.video, start: p.start, length: p.length })),
 };
 writeFileSync(`${FILM_DIR}timeline.json`, JSON.stringify(film, null, 1) + "\n");

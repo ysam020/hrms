@@ -3,6 +3,7 @@
 //
 // Scenes play in order, joined by short transitions:
 //   card  an animated title or info screen (cards.mjs), with narration
+//   card  …or, between two topics of a part, a short "next topic" screen
 //   clip  part of a recorded demo, from one chapter up to another (or its
 //         end); its own narration and subtitles come with it
 //
@@ -211,13 +212,27 @@ export const SCENES = [
       lines: [s.line],
       highlights: s.clips.map(([id]) => id),
     },
-    ...s.clips.map(([video, from, to]) => ({
-      kind: "clip",
-      module: s.module,
-      video,
-      from,
-      to: to ?? null,
-    })),
+    // Between one topic and the next, a short screen names what's coming
+    // and where it sits in the part, so the move is never a surprise.
+    ...s.clips.flatMap(([video, from, to], k) => [
+      ...(k > 0
+        ? [
+            {
+              kind: "card",
+              card: "topic",
+              module: s.module,
+              part: i + 1,
+              parts: SECTIONS.length,
+              video,
+              step: k + 1,
+              topics: s.clips.map(([id]) => id),
+              lines: [],
+              hold: 3.6,
+            },
+          ]
+        : []),
+      { kind: "clip", module: s.module, video, from, to: to ?? null },
+    ]),
   ]),
   {
     kind: "card",
