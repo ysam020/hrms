@@ -138,22 +138,119 @@
   padding: var(--px-space-3) var(--px-space-4);
   border-bottom: 1px solid var(--px-separator);
 }
+.pinsButton {
+  position: relative;
+  display: inline-flex;
+}
+.pinCount {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-accent);
+  color: var(--px-text-on-accent);
+  font: 600 10px/16px var(--px-font);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: none;
+}
 .pinBar {
-  width: 100%;
-  border: 0;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--px-space-2);
-  padding: var(--px-space-2) var(--px-space-4);
   border-bottom: 1px solid var(--px-separator);
   background: var(--px-accent-soft);
   color: var(--px-text-1);
   font: var(--px-type-callout);
-  text-align: left;
   overflow: hidden;
 }
-.pinBar > :global(.px-truncate) {
+.pinBarShow {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  padding: var(--px-space-2) var(--px-space-2) var(--px-space-2)
+    var(--px-space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pinBarShow > :global(.px-truncate) {
+  flex: 1;
+}
+.pinLink {
+  flex-shrink: 0;
+  padding: var(--px-space-2) var(--px-space-4);
+  border: 0;
+  background: transparent;
+  color: var(--px-accent);
+  font: var(--px-type-callout);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pinLink:hover {
+  text-decoration: underline;
+}
+
+/* ── Pinned messages panel ── */
+.pinList {
+  display: grid;
+  margin-top: var(--px-space-2);
+  list-style: none;
+  padding: 0;
+}
+.pinRow {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--px-separator);
+}
+.pinRow:last-child {
+  border-bottom: 0;
+}
+.pinShow {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: var(--px-space-3) var(--px-space-1);
+  border: 0;
+  background: transparent;
+  color: var(--px-text-1);
+  text-align: left;
+  cursor: pointer;
+}
+.pinShow:hover .pinPreview {
+  color: var(--px-accent);
+}
+.pinTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--px-space-2);
+  min-width: 0;
+}
+.pinTop > :last-child {
+  flex-shrink: 0;
+}
+.pinPreview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font: var(--px-type-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pinRow .pinLink {
+  padding: var(--px-space-3) var(--px-space-1) var(--px-space-3)
+    var(--px-space-3);
 }
 .messages {
   flex: 1;

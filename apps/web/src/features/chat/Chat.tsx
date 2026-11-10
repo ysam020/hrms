@@ -29,11 +29,13 @@ import {
   Avatar,
   Button,
   ConfirmDialog,
+  EmptyState,
   Icon,
   IconButton,
   Menu,
   Page,
   SearchField,
+  Sheet,
   Skeleton,
   Spinner,
   type MenuEntry,
@@ -49,6 +51,9 @@ import s from "./chat.module.css";
 
 type Msg = any;
 type Room = any;
+
+// The gateway's per-conversation limit (MAX_PINNED_MESSAGES).
+const MAX_PINS = 5;
 
 const previewOf = (m: Msg | undefined) =>
   !m
@@ -250,6 +255,85 @@ function Bubble({
   );
 }
 
+/** Every pin in the conversation, newest pin first. */
+function PinnedPanel({
+  open,
+  onClose,
+  pins,
+  compact,
+  nameOf,
+  onShow,
+  onUnpin,
+}: {
+  open: boolean;
+  onClose: () => void;
+  pins: Msg[];
+  compact: boolean;
+  nameOf: (id: string) => string;
+  onShow: (id: string) => void;
+  onUnpin: (id: string) => void;
+}) {
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Pinned messages"
+      edge={compact ? "bottom" : "right"}
+      width={420}
+    >
+      {pins.length === 0 ? (
+        <EmptyState icon="pin" title="Nothing pinned yet">
+          Open the menu on any message and choose Pin to keep it here.
+        </EmptyState>
+      ) : (
+        <>
+          <p className="px-meta">
+            {pins.length} of {MAX_PINS} pinned
+          </p>
+          <ul className={s.pinList}>
+            {pins.map((m) => {
+              const sender = nameOf(m.senderId) || "Someone";
+              return (
+                <li key={m._id} className={s.pinRow}>
+                  <button
+                    type="button"
+                    className={s.pinShow}
+                    onClick={() => onShow(m._id)}
+                  >
+                    <span className={s.pinTop}>
+                      <span className="px-headline px-truncate">{sender}</span>
+                      <span className="px-meta">
+                        {formatDateSeparator(m.createdAt)},{" "}
+                        {formatTime(m.createdAt)}
+                      </span>
+                    </span>
+                    <span className={s.pinPreview}>
+                      {previewOf(m) || "Message"}
+                    </span>
+                    {m.pinnedBy && nameOf(m.pinnedBy) && (
+                      <span className="px-meta">
+                        Pinned by {nameOf(m.pinnedBy)}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className={s.pinLink}
+                    onClick={() => onUnpin(m._id)}
+                    aria-label={`Unpin message from ${sender}`}
+                  >
+                    Unpin
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
 export default function Chat() {
   const { user } = useContext(UserContext);
   const { setAlert } = useContext(AlertContext);
@@ -296,6 +380,7 @@ export default function Chat() {
   const [deleteRoom, setDeleteRoom] = useState(false);
   const [roomMenu, setRoomMenu] = useState(false);
   const [pinIndex, setPinIndex] = useState(0);
+  const [pinsOpen, setPinsOpen] = useState(false);
   const roomMenuRef = useRef<HTMLButtonElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -522,9 +607,20 @@ export default function Chat() {
         if (flash(id)) return;
         cursor = older[0]?.createdAt;
       }
+      setAlert({
+        open: true,
+        message: "Couldn’t find that message in this conversation.",
+        severity: "info",
+      });
     },
-    [activeRoomId, thread, fetchMessages],
+    [activeRoomId, thread, fetchMessages, setAlert],
   );
+
+  const openPins = () => {
+    setPinsOpen(true);
+    // Catches pins changed while this client's socket was away.
+    if (activeRoomId) fetchPinnedMessages(activeRoomId);
+  };
 
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -695,6 +791,22 @@ export default function Chat() {
                   : otherPerson?.designation || " "}
               </span>
             </span>
+            <span className={s.pinsButton}>
+              <IconButton
+                icon="pin"
+                label={
+                  pins.length
+                    ? `Pinned messages (${pins.length})`
+                    : "Pinned messages"
+                }
+                onClick={openPins}
+              />
+              {pins.length > 0 && (
+                <span className={s.pinCount} aria-hidden>
+                  {pins.length}
+                </span>
+              )}
+            </span>
             <IconButton
               ref={roomMenuRef}
               icon="more"
@@ -718,32 +830,44 @@ export default function Chat() {
           </header>
           <AnimatePresence initial={false}>
             {pin && (
-              <motion.button
-                type="button"
+              <motion.div
                 key="pins"
                 className={s.pinBar}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: duration.fast, ease: ease.standard }}
-                onClick={() => {
-                  jump(pin._id);
-                  setPinIndex((i) => (i + 1) % pins.length);
-                }}
-                aria-label={`Pinned message ${Math.min(pinIndex, pins.length - 1) + 1} of ${pins.length}. Show it.`}
               >
-                <Icon name="pin" size={14} />
-                <span className="px-truncate">
-                  {pin.isDeleted
-                    ? "Message deleted"
-                    : pin.content || pin.fileName || "File"}
-                </span>
-                {pins.length > 1 && (
-                  <span className="px-meta px-num">
-                    {Math.min(pinIndex, pins.length - 1) + 1}/{pins.length}
+                <button
+                  type="button"
+                  className={s.pinBarShow}
+                  onClick={() => {
+                    jump(pin._id);
+                    setPinIndex((i) => (i + 1) % pins.length);
+                  }}
+                  aria-label={`Pinned message ${Math.min(pinIndex, pins.length - 1) + 1} of ${pins.length}. Show it.`}
+                >
+                  <Icon name="pin" size={14} />
+                  <span className="px-truncate">
+                    {pin.isDeleted
+                      ? "Message deleted"
+                      : pin.content || pin.fileName || "File"}
                   </span>
-                )}
-              </motion.button>
+                  {pins.length > 1 && (
+                    <span className="px-meta px-num">
+                      {Math.min(pinIndex, pins.length - 1) + 1}/{pins.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={s.pinLink}
+                  onClick={openPins}
+                  aria-label="View all pinned messages"
+                >
+                  View all
+                </button>
+              </motion.div>
             )}
           </AnimatePresence>
           <div
@@ -902,6 +1026,18 @@ export default function Chat() {
         {showList && list}
         {showThread && threadPane}
       </div>
+      <PinnedPanel
+        open={pinsOpen && Boolean(room)}
+        onClose={() => setPinsOpen(false)}
+        pins={pins}
+        compact={compact}
+        nameOf={nameOf}
+        onShow={(id) => {
+          setPinsOpen(false);
+          jump(id);
+        }}
+        onUnpin={(id) => act(() => chat.unpinMessage(id, activeRoomId))}
+      />
       <ConfirmDialog
         open={deleteMsg !== null}
         onClose={() => setDeleteMsg(null)}
