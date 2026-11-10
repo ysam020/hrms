@@ -1,0 +1,46 @@
+/* The section pages' heading (Pages.tsx): the midnight surface of the
+   landing hero and /product-demo, with the landing page's tokens. */
+.wrap {
+  max-width: var(--l-max);
+  margin: 0 auto;
+  padding: 0 var(--l-gutter);
+}
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(120px, 15vw, 168px) 0 clamp(56px, 8vw, 96px);
+  background:
+    radial-gradient(
+      60% 80% at 85% 10%,
+      rgb(38 110 198 / 0.28),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 60% at 0% 100%,
+      rgb(106 160 226 / 0.14),
+      transparent 70%
+    ),
+    var(--l-night);
+  color: #fff;
+}
+.eyebrow {
+  margin: 0 0 14px;
+  color: #9cc1ee;
+  font: 600 14px/1.2 var(--px-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.title {
+  max-width: 16em;
+  margin: 0;
+  font: 600 clamp(38px, 5.6vw, 64px) / 1.05 var(--px-font-display);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.lead {
+  max-width: 40em;
+  margin: 22px 0 0;
+  color: rgb(255 255 255 / 0.78);
+  font: 400 clamp(17px, 1.6vw, 20px) / 1.5 var(--px-font);
+  text-wrap: pretty;
+}

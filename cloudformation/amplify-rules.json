@@ -25,6 +25,31 @@
     "status": "200"
   },
   {
+    "source": "/features",
+    "target": "/features.html",
+    "status": "200"
+  },
+  {
+    "source": "/platform",
+    "target": "/platform.html",
+    "status": "200"
+  },
+  {
+    "source": "/modules",
+    "target": "/modules.html",
+    "status": "200"
+  },
+  {
+    "source": "/security",
+    "target": "/security.html",
+    "status": "200"
+  },
+  {
+    "source": "/pricing",
+    "target": "/pricing.html",
+    "status": "200"
+  },
+  {
     "source": "/watch/<id>",
     "target": "/watch/<id>.html",
     "status": "200"

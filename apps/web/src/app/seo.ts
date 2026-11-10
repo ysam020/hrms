@@ -47,6 +47,37 @@ export const PUBLIC_PAGES: Record<string, PageMeta> = {
       "Explore Praesto HRMS through interactive product demonstrations covering attendance, payroll, employee management, leave management, recruitment, and more.",
     prerender: true,
   },
+  // The landing page's sections on their own pages (features/landing/Pages.tsx).
+  "/features": {
+    title: "HRMS Features: Attendance, Leave & Payroll · Praesto",
+    description:
+      "See how Praesto handles the everyday work of HR: requests and approvals, attendance with face punch-in, leave, payroll and an AI assistant, on any device.",
+    prerender: true,
+  },
+  "/platform": {
+    title: "HR Platform Set Up to Your Rules · Praesto",
+    description:
+      "Attendance rules and geofencing, organisation settings, roles and permissions, HR policies, reports and notifications, configured once in Praesto.",
+    prerender: true,
+  },
+  "/modules": {
+    title: "HRMS Modules for the Employee Lifecycle · Praesto",
+    description:
+      "Every Praesto module, from recruitment and onboarding to attendance, leave, payroll, performance and exit, sharing one set of people, permissions and approvals.",
+    prerender: true,
+  },
+  "/security": {
+    title: "Security & Data Privacy · Praesto",
+    description:
+      "How Praesto protects HR data: a database for every organisation, passwordless sign-in, server-side permissions, a complete audit trail and AI on your terms.",
+    prerender: true,
+  },
+  "/pricing": {
+    title: "HRMS Pricing & Plans · Praesto",
+    description:
+      "Praesto's plans by team size, each with every module included. Start with a 14-day free trial.",
+    prerender: true,
+  },
   // Lead forms: not prerendered (served by the SPA fallback, so no hosting
   // rewrite is needed), but titled, described and measured like the others.
   "/book-demo": {

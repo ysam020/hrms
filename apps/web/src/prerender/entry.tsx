@@ -13,6 +13,13 @@ import RefundPolicyPage from "@web/pages/legal/RefundPolicyPage";
 import { MotionProvider } from "@next/motion";
 import Landing from "@next/features/landing/Landing";
 import ProductDemo from "@next/features/product-demo/ProductDemo";
+import {
+  FeaturesPage,
+  ModulesPage,
+  PlatformPage,
+  PricingPage,
+  SecurityPage,
+} from "@next/features/landing/Pages";
 import Watch from "@next/features/product-demo/Watch";
 import { OG_IMAGE, PUBLIC_PAGES, SITE_NAME, SITE_URL } from "@next/app/seo";
 import {
@@ -36,6 +43,11 @@ const PAGES: Record<string, ComponentType> = {
   "/terms-of-use": TermsOfUsePage,
   "/refund-policy": RefundPolicyPage,
   "/product-demo": ProductDemo,
+  "/features": FeaturesPage,
+  "/platform": PlatformPage,
+  "/modules": ModulesPage,
+  "/security": SecurityPage,
+  "/pricing": PricingPage,
 };
 
 const anonymous = { user: null, setUser: () => {}, handleLogout: () => {} };
@@ -127,7 +139,7 @@ export function structuredData(path: string): object[] {
             name: `${PLAN_TIER_LABELS[tier]} (monthly)`,
             price: (PLAN_PRICING[tier].monthly / 100).toFixed(2),
             priceCurrency: "INR",
-            url: `${SITE_URL}/#pricing`,
+            url: `${SITE_URL}/pricing`,
           })),
         },
       ],

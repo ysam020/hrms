@@ -47,6 +47,11 @@ const ROUTE_MODULE = {
   "/refund-policy": "src/features/public/Public.tsx",
   "/product-demo": "src/features/product-demo/ProductDemo.tsx",
   "/watch/*": "src/features/product-demo/Watch.tsx",
+  "/features": "src/features/landing/Pages.tsx",
+  "/platform": "src/features/landing/Pages.tsx",
+  "/modules": "src/features/landing/Pages.tsx",
+  "/security": "src/features/landing/Pages.tsx",
+  "/pricing": "src/features/landing/Pages.tsx",
 };
 
 const esc = (s) =>

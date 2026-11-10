@@ -164,7 +164,7 @@ function LeadForm({ initialKind }: { initialKind: Kind }) {
         </Link>
         <nav className={s.legalNav} aria-label="Site">
           <Link to="/">Home</Link>
-          <a href="/#pricing">Pricing</a>
+          <a href="/pricing">Pricing</a>
           <Link to="/login">Sign In</Link>
         </nav>
       </header>

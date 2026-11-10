@@ -1,7 +1,9 @@
 # SEO and the public pages
 
 praesto.in is one Vite + React SPA (apps/web). The public pages — `/`,
-`/privacy-policy`, `/terms-of-use`, `/refund-policy`, `/product-demo` — are
+`/privacy-policy`, `/terms-of-use`, `/refund-policy`, `/product-demo`, and the
+landing page's sections on their own pages (`/features`, `/platform`,
+`/modules`, `/security`, `/pricing`) — are
 **prerendered at build time** so crawlers, link previews and first paint get real HTML. The
 signed-in app is unchanged.
 
@@ -67,6 +69,31 @@ app isn't managed by a stack, so they are applied by hand. Order matters
     "status": "200"
   },
   {
+    "source": "/features",
+    "target": "/features.html",
+    "status": "200"
+  },
+  {
+    "source": "/platform",
+    "target": "/platform.html",
+    "status": "200"
+  },
+  {
+    "source": "/modules",
+    "target": "/modules.html",
+    "status": "200"
+  },
+  {
+    "source": "/security",
+    "target": "/security.html",
+    "status": "200"
+  },
+  {
+    "source": "/pricing",
+    "target": "/pricing.html",
+    "status": "200"
+  },
+  {
     "source": "/watch/<id>",
     "target": "/watch/<id>.html",
     "status": "200"
@@ -96,7 +123,7 @@ except `/` answer `301` to a trailing-slash URL and then `404`.
 After applying, check:
 
 ```sh
-for p in / /privacy-policy /terms-of-use /refund-policy /product-demo /watch/praesto-tour /sitemap.xml /robots.txt /dashboard; do
+for p in / /features /platform /modules /security /pricing /privacy-policy /terms-of-use /refund-policy /product-demo /watch/praesto-tour /sitemap.xml /robots.txt /dashboard; do
   curl -s -o /dev/null -w "%{http_code} $p\n" "https://praesto.in$p"; done   # all 200
 curl -sI https://www.praesto.in/terms-of-use | grep -i -E "^HTTP|^location"   # 301 → https://praesto.in/terms-of-use
 curl -s https://praesto.in/terms-of-use | grep -o "<h1[^>]*>[^<]*"            # the page's own H1

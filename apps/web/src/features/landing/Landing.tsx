@@ -345,245 +345,288 @@ export default function Landing() {
 
         <div id="features" className={s.anchor} />
 
-        <section
-          className={s.stackSection}
-          data-nav="features"
-          aria-labelledby="features-title"
-        >
-          <Reveal className={s.galleryHead}>
-            <h2 id="features-title" className={s.h2}>
-              Built for the way people work.
-            </h2>
-            <p className={s.lead}>
-              The everyday work of HR, from the first request of the morning to
-              the last payroll run of the month.
-            </p>
-          </Reveal>
-          <Stack />
-        </section>
-
-        <section
-          id="how-it-works"
-          className={s.section}
-          data-nav="features"
-          aria-labelledby="flow-title"
-        >
-          <Reveal className={s.galleryHead}>
-            <h2 id="flow-title" className={s.h2}>
-              One request, start to finish.
-            </h2>
-            <p className={s.lead}>
-              Follow a day of leave through Praesto, from the employee who asks
-              to the record that keeps it.
-            </p>
-            <p className={s.note}>
-              An illustration using the app’s own labels. The people and dates
-              are fictional.
-            </p>
-          </Reveal>
-          <LeaveFlow />
-        </section>
+        <FeaturesIntro />
 
         <div id="platform" className={s.anchor} />
         <Platform />
 
-        <section
-          className={s.anywhere}
-          data-nav="features"
-          aria-labelledby="anywhere-title"
-        >
-          <Reveal className={s.galleryHead}>
-            <h2 id="anywhere-title" className={s.h2}>
-              Wherever the work happens.
-            </h2>
-            <p className={s.lead}>
-              Approve a request between meetings, check your hours on the way
-              home, pick up a conversation from anywhere. Praesto is there on a
-              phone, a tablet or a laptop, with nothing to install.
-            </p>
-          </Reveal>
-          <Phones />
-        </section>
+        <FeaturesMore />
 
-        <section
-          id="abilities"
-          className={`${s.section} ${s.abilities}`}
-          data-nav="features"
-          aria-labelledby="abilities-title"
-        >
-          <Reveal className={s.galleryHead}>
-            <h2 id="abilities-title" className={s.h2}>
-              Ready for the real workday.
-            </h2>
-            <p className={s.lead}>
-              Punch in with your face, keep working when the signal drops, and
-              ask your own AI assistant instead of digging through menus.
-            </p>
-          </Reveal>
-          <Abilities />
-        </section>
-
-        <section
-          id="more"
-          className={`${s.section} ${s.gallery}`}
-          aria-labelledby="more-title"
-        >
-          <Reveal className={s.galleryHead}>
-            <h2 id="more-title" className={s.h2}>
-              And everything around it.
-            </h2>
-            <p className={s.lead}>
-              The tools your organisation reaches for every day, in the same
-              workspace as everything else.
-            </p>
-          </Reveal>
-          <Reveal kind="media" delay={0.06}>
-            <TiltShowcase scenes={MORE_SCENES} label="More of Praesto" />
-          </Reveal>
-        </section>
-
-        <section
-          id="modules"
-          className={`${s.section} ${s.tintSection}`}
-          data-nav="modules"
-          aria-labelledby="modules-title"
-        >
-          <Reveal className={s.sectionHead}>
-            <h2 id="modules-title" className={s.h2}>
-              Twenty-five modules. One workspace.
-            </h2>
-            <p className={s.lead}>
-              A complete HRMS: from someone’s first application to their last
-              working day, every part of the employee lifecycle shares the same
-              people, the same permissions and the same approvals.
-            </p>
-          </Reveal>
-          {/* The index fills in column by column, like a contents page. */}
-          <Reveal
-            className={s.modules}
-            kind="group"
-            delay={0.06}
-            stagger={stagger.columns}
-          >
-            {MODULES.map((g) => (
-              <RevealItem key={g.group} className={s.moduleGroup}>
-                <h3 className={s.moduleHead}>{g.group}</h3>
-                <ul className={s.moduleList}>
-                  {g.items.map((m) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-              </RevealItem>
-            ))}
-          </Reveal>
-        </section>
+        <ModulesSection />
 
         <DemoTeaser />
 
-        <LitSection
-          id="security"
-          className={`${s.section} ${s.dark} ${s.lit}`}
-          data-nav-dark
-          aria-labelledby="security-title"
-          spotlight
-        >
-          <Reveal className={s.sectionHead}>
-            <h2 id="security-title" className={s.h2}>
-              Private by design.
-            </h2>
-            <p className={s.lead}>
-              HR data is the most personal data a company holds. Praesto is
-              built so it stays with the people who should see it.
-            </p>
-          </Reveal>
-          <Reveal className={s.securityShot} kind="media" delay={0.04}>
-            <Shot
-              src={`${SHOT}/audit-log.webp`}
-              alt="Praesto’s audit log with a settings change open, listing each field’s value before and after."
-              crop={{ x: 268, y: 0, w: 1172, h: 700 }}
-            />
-          </Reveal>
-          <Reveal className={s.security} kind="group" stagger={stagger.items}>
-            {SECURITY.map((f) => (
-              <RevealItem key={f.title} className={s.securityItem}>
-                <Icon name={f.icon} size={20} className={s.securityIcon} />
-                <h3 className={s.h3}>{f.title}</h3>
-                <p>{f.body}</p>
-              </RevealItem>
-            ))}
-          </Reveal>
-        </LitSection>
+        <SecuritySection />
 
         <Pricing user={user} />
 
-        <LitSection
-          className={s.closing}
-          data-nav-dark
-          aria-labelledby="closing-title"
-        >
-          <div className={s.aurora} aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </div>
-          <div className={s.closingInner}>
-            <ClosingTitle />
-            <Reveal className={s.closingInner} delay={0.36}>
-              <p className={s.lead}>
-                {signedIn
-                  ? "Your workspace is ready when you are."
-                  : "Sign in with Google and set up your organisation in three short steps."}
-              </p>
-              <div className={s.actions}>
-                {signedIn ? (
-                  <Link
-                    to="/dashboard"
-                    className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
-                  >
-                    <Roll>Open Dashboard</Roll>
-                    <span className={s.chip} aria-hidden="true">
-                      <Arrow />
-                    </span>
-                  </Link>
-                ) : (
-                  <>
-                    <Link
-                      to="/login"
-                      className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
-                      onClick={() =>
-                        trackEvent("sign_up_click", {
-                          cta_id: "start_trial",
-                          cta_location: "closing",
-                        })
-                      }
-                    >
-                      <Roll>Start Free Trial</Roll>
-                      <span className={s.chip} aria-hidden="true">
-                        <Arrow />
-                      </span>
-                    </Link>
-                    <Link
-                      to="/book-demo"
-                      className={`${s.cta} ${s.ctaGhost}`}
-                      onClick={() =>
-                        trackEvent("cta_click", {
-                          cta_id: "book_demo",
-                          cta_location: "closing",
-                        })
-                      }
-                    >
-                      <Roll>Book a Demo</Roll>
-                    </Link>
-                  </>
-                )}
-              </div>
-            </Reveal>
-          </div>
-        </LitSection>
+        <Closing signedIn={signedIn} />
       </main>
 
       <Footer signedIn={signedIn} />
     </div>
+  );
+}
+
+// ── Sections, shared by the landing page and the section pages ───────────
+// (Pages.tsx: /features, /platform, /modules, /security, /pricing).
+
+/** "Built for the way people work" and "One request, start to finish". */
+export function FeaturesIntro() {
+  return (
+    <>
+      <section
+        className={s.stackSection}
+        data-nav="features"
+        aria-labelledby="features-title"
+      >
+        <Reveal className={s.galleryHead}>
+          <h2 id="features-title" className={s.h2}>
+            Built for the way people work.
+          </h2>
+          <p className={s.lead}>
+            The everyday work of HR, from the first request of the morning to
+            the last payroll run of the month.
+          </p>
+        </Reveal>
+        <Stack />
+      </section>
+
+      <section
+        id="how-it-works"
+        className={s.section}
+        data-nav="features"
+        aria-labelledby="flow-title"
+      >
+        <Reveal className={s.galleryHead}>
+          <h2 id="flow-title" className={s.h2}>
+            One request, start to finish.
+          </h2>
+          <p className={s.lead}>
+            Follow a day of leave through Praesto, from the employee who asks to
+            the record that keeps it.
+          </p>
+          <p className={s.note}>
+            An illustration using the app’s own labels. The people and dates are
+            fictional.
+          </p>
+        </Reveal>
+        <LeaveFlow />
+      </section>
+    </>
+  );
+}
+
+/** "Wherever the work happens", "Ready for the real workday" and "And
+ *  everything around it". */
+export function FeaturesMore() {
+  return (
+    <>
+      <section
+        className={s.anywhere}
+        data-nav="features"
+        aria-labelledby="anywhere-title"
+      >
+        <Reveal className={s.galleryHead}>
+          <h2 id="anywhere-title" className={s.h2}>
+            Wherever the work happens.
+          </h2>
+          <p className={s.lead}>
+            Approve a request between meetings, check your hours on the way
+            home, pick up a conversation from anywhere. Praesto is there on a
+            phone, a tablet or a laptop, with nothing to install.
+          </p>
+        </Reveal>
+        <Phones />
+      </section>
+
+      <section
+        id="abilities"
+        className={`${s.section} ${s.abilities}`}
+        data-nav="features"
+        aria-labelledby="abilities-title"
+      >
+        <Reveal className={s.galleryHead}>
+          <h2 id="abilities-title" className={s.h2}>
+            Ready for the real workday.
+          </h2>
+          <p className={s.lead}>
+            Punch in with your face, keep working when the signal drops, and ask
+            your own AI assistant instead of digging through menus.
+          </p>
+        </Reveal>
+        <Abilities />
+      </section>
+
+      <section
+        id="more"
+        className={`${s.section} ${s.gallery}`}
+        aria-labelledby="more-title"
+      >
+        <Reveal className={s.galleryHead}>
+          <h2 id="more-title" className={s.h2}>
+            And everything around it.
+          </h2>
+          <p className={s.lead}>
+            The tools your organisation reaches for every day, in the same
+            workspace as everything else.
+          </p>
+        </Reveal>
+        <Reveal kind="media" delay={0.06}>
+          <TiltShowcase scenes={MORE_SCENES} label="More of Praesto" />
+        </Reveal>
+      </section>
+    </>
+  );
+}
+
+/** The module index. */
+export function ModulesSection() {
+  return (
+    <section
+      id="modules"
+      className={`${s.section} ${s.tintSection}`}
+      data-nav="modules"
+      aria-labelledby="modules-title"
+    >
+      <Reveal className={s.sectionHead}>
+        <h2 id="modules-title" className={s.h2}>
+          Twenty-five modules. One workspace.
+        </h2>
+        <p className={s.lead}>
+          A complete HRMS: from someone’s first application to their last
+          working day, every part of the employee lifecycle shares the same
+          people, the same permissions and the same approvals.
+        </p>
+      </Reveal>
+      {/* The index fills in column by column, like a contents page. */}
+      <Reveal
+        className={s.modules}
+        kind="group"
+        delay={0.06}
+        stagger={stagger.columns}
+      >
+        {MODULES.map((g) => (
+          <RevealItem key={g.group} className={s.moduleGroup}>
+            <h3 className={s.moduleHead}>{g.group}</h3>
+            <ul className={s.moduleList}>
+              {g.items.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </RevealItem>
+        ))}
+      </Reveal>
+    </section>
+  );
+}
+
+/** "Private by design". */
+export function SecuritySection() {
+  return (
+    <LitSection
+      id="security"
+      className={`${s.section} ${s.dark} ${s.lit}`}
+      data-nav-dark
+      aria-labelledby="security-title"
+      spotlight
+    >
+      <Reveal className={s.sectionHead}>
+        <h2 id="security-title" className={s.h2}>
+          Private by design.
+        </h2>
+        <p className={s.lead}>
+          HR data is the most personal data a company holds. Praesto is built so
+          it stays with the people who should see it.
+        </p>
+      </Reveal>
+      <Reveal className={s.securityShot} kind="media" delay={0.04}>
+        <Shot
+          src={`${SHOT}/audit-log.webp`}
+          alt="Praesto’s audit log with a settings change open, listing each field’s value before and after."
+          crop={{ x: 268, y: 0, w: 1172, h: 700 }}
+        />
+      </Reveal>
+      <Reveal className={s.security} kind="group" stagger={stagger.items}>
+        {SECURITY.map((f) => (
+          <RevealItem key={f.title} className={s.securityItem}>
+            <Icon name={f.icon} size={20} className={s.securityIcon} />
+            <h3 className={s.h3}>{f.title}</h3>
+            <p>{f.body}</p>
+          </RevealItem>
+        ))}
+      </Reveal>
+    </LitSection>
+  );
+}
+
+/** The closing call to action. */
+export function Closing({ signedIn }: { signedIn: boolean }) {
+  return (
+    <LitSection
+      className={s.closing}
+      data-nav-dark
+      aria-labelledby="closing-title"
+    >
+      <div className={s.aurora} aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </div>
+      <div className={s.closingInner}>
+        <ClosingTitle />
+        <Reveal className={s.closingInner} delay={0.36}>
+          <p className={s.lead}>
+            {signedIn
+              ? "Your workspace is ready when you are."
+              : "Sign in with Google and set up your organisation in three short steps."}
+          </p>
+          <div className={s.actions}>
+            {signedIn ? (
+              <Link
+                to="/dashboard"
+                className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+              >
+                <Roll>Open Dashboard</Roll>
+                <span className={s.chip} aria-hidden="true">
+                  <Arrow />
+                </span>
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+                  onClick={() =>
+                    trackEvent("sign_up_click", {
+                      cta_id: "start_trial",
+                      cta_location: "closing",
+                    })
+                  }
+                >
+                  <Roll>Start Free Trial</Roll>
+                  <span className={s.chip} aria-hidden="true">
+                    <Arrow />
+                  </span>
+                </Link>
+                <Link
+                  to="/book-demo"
+                  className={`${s.cta} ${s.ctaGhost}`}
+                  onClick={() =>
+                    trackEvent("cta_click", {
+                      cta_id: "book_demo",
+                      cta_location: "closing",
+                    })
+                  }
+                >
+                  <Roll>Book a Demo</Roll>
+                </Link>
+              </>
+            )}
+          </div>
+        </Reveal>
+      </div>
+    </LitSection>
   );
 }
 
@@ -1076,7 +1119,7 @@ const ANNUAL_SAVING = Math.round(
   (1 - PLAN_PRICING.starter.annual / (PLAN_PRICING.starter.monthly * 12)) * 100,
 );
 
-function Pricing({ user }: { user: any }) {
+export function Pricing({ user }: { user: any }) {
   const [billing, setBilling] = useState<Billing>("monthly");
   // Signed in: plans are managed on the Subscription page, by those allowed.
   const manage = user ? hasSubscriptionAccess(user) : false;

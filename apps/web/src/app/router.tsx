@@ -189,6 +189,7 @@ const F = {
   leadForm: () => import("@next/features/public/LeadForm"),
   productDemo: () => import("@next/features/product-demo/ProductDemo"),
   watch: () => import("@next/features/product-demo/Watch"),
+  sectionPages: () => import("@next/features/landing/Pages"),
   aiAssistants: () => import("@next/features/assistant/AiAssistants"),
   connectAuthorize: () => import("@next/features/assistant/ConnectAuthorize"),
   orgSetup: () => import("@next/features/public/OrgSetup"),
@@ -522,6 +523,12 @@ export const router = createBrowserRouter(
         { path: "/product-demo", ...page(F.productDemo) },
         // One video on its own page: what Share copies.
         { path: "/watch/:id", ...page(F.watch) },
+        // The landing page's sections on their own pages.
+        { path: "/features", ...page(F.sectionPages, "FeaturesPage") },
+        { path: "/platform", ...page(F.sectionPages, "PlatformPage") },
+        { path: "/modules", ...page(F.sectionPages, "ModulesPage") },
+        { path: "/security", ...page(F.sectionPages, "SecurityPage") },
+        { path: "/pricing", ...page(F.sectionPages, "PricingPage") },
         // Public landing page, open to everyone (signed in or not).
         {
           path: "/",
