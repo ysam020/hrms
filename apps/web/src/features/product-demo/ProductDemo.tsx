@@ -32,6 +32,7 @@ import {
   type PlayerHandle,
 } from "./HlsPlayer";
 import { Thumb } from "./Thumb";
+import { useChapterRow } from "./useChapterRow";
 import s from "./productDemo.module.css";
 
 /**
@@ -60,6 +61,7 @@ export default function ProductDemo() {
     MODULES[0];
   const video = mod.videos.find((v) => v.id === videoId) ?? mod.videos[0];
   const active = chapterAt(video.chapters, time);
+  const chapterRow = useChapterRow(active);
 
   // Keep ?v= in step, so a demo can be shared (the canonical URL stays
   // /product-demo).
@@ -402,7 +404,7 @@ export default function ProductDemo() {
                     <h4 className={s.panelHead}>
                       Chapters <span>{video.chapters.length}</span>
                     </h4>
-                    <ol className={s.chapters}>
+                    <ol ref={chapterRow} className={s.chapters}>
                       {video.chapters.map((c, i) => (
                         <li key={c.startTime}>
                           <button

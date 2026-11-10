@@ -314,9 +314,13 @@
 
 .side {
   display: grid;
+  /* minmax(0, …): a long chapter row scrolls inside the panel instead of
+     widening the column past the screen. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 .panel {
+  min-width: 0;
   border-radius: 16px;
   background: var(--l-tint);
   padding: 16px;
@@ -335,6 +339,7 @@
   font-size: 13px;
 }
 .chapters {
+  position: relative;
   display: grid;
   gap: 2px;
   margin: 0;
@@ -380,12 +385,37 @@
   color: #fff;
 }
 @media (max-width: 1080px) {
+  /* One row that scrolls sideways, snapping to each chapter; the current
+     one is kept in view (useChapterRow). */
   .chapters {
     grid-auto-flow: column;
-    grid-auto-columns: minmax(200px, max-content);
+    grid-auto-columns: max-content;
+    gap: 8px;
+    margin: 0 -16px;
+    padding: 2px 16px 6px;
     overflow-x: auto;
-    scrollbar-width: thin;
-    padding-bottom: 4px;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 16px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chapters::-webkit-scrollbar {
+    display: none;
+  }
+  .chapters > li {
+    scroll-snap-align: start;
+  }
+  .chapter {
+    width: auto;
+    max-width: 260px;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--l-line);
+    white-space: nowrap;
+  }
+  .chapter > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

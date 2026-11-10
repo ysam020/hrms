@@ -83,14 +83,22 @@ function pickNativeAudio(el: HTMLVideoElement, lang: Voice) {
 type QualityLevel = { index: number; height: number; bitrate: number };
 type Status = "idle" | "loading" | "ready" | "error";
 
-/** Safari (desktop or iOS) plays HLS itself; other browsers use hls.js. */
-function prefersNativeHls(video: HTMLVideoElement) {
-  if (!video.canPlayType("application/vnd.apple.mpegurl")) return false;
-  const ua = navigator.userAgent;
+/**
+ * hls.js wherever the browser has Media Source Extensions, including iPhone
+ * (iOS 17.1+ has ManagedMediaSource, which hls.js uses). The browser's own
+ * HLS player is the fallback for the rest (older iPhones). iOS's own player
+ * proved fragile here: it adds an X-Playback-Session-Id header to every
+ * request (a CORS preflight for our <video crossorigin>), and it gives no
+ * quality menu.
+ */
+function hasMediaSource() {
   return (
-    /Safari/.test(ua) && !/Chrome|Chromium|Android|Edg|OPR|Firefox/.test(ua)
+    typeof window !== "undefined" &&
+    ("MediaSource" in window || "ManagedMediaSource" in window)
   );
 }
+const canPlayNativeHls = (video: HTMLVideoElement) =>
+  Boolean(video.canPlayType("application/vnd.apple.mpegurl"));
 
 const MAX_NETWORK_RETRIES = 3;
 
@@ -232,23 +240,30 @@ export function HlsPlayer({
       });
     });
     on("error", () => {
-      // hls.js reports its own errors; this covers native playback.
+      // hls.js reports its own errors; this covers native playback. The
+      // code (MediaError: 2 network, 3 decode, 4 not supported) helps when
+      // someone reports it.
       if (!hlsRef.current)
         fail(
-          "This video couldn’t be played. Check your connection and try again.",
+          `This video couldn’t be played. Check your connection and try again. (Error ${el.error?.code ?? "?"})`,
         );
     });
 
-    if (prefersNativeHls(el)) {
+    const playNative = () => {
       setNative(true);
       el.src = src;
       el.load();
+    };
+
+    if (!hasMediaSource() && canPlayNativeHls(el)) {
+      playNative();
     } else {
       setNative(false);
       import("hls.js")
         .then(({ default: HlsCtor }) => {
           if (disposed) return;
           if (!HlsCtor.isSupported()) {
+            if (canPlayNativeHls(el)) return playNative();
             fail(
               "This browser can’t play these videos. Try a recent version of Chrome, Edge, Firefox or Safari.",
             );
@@ -315,9 +330,11 @@ export function HlsPlayer({
               hls.recoverMediaError();
             } else {
               fail(
-                data.type === HlsCtor.ErrorTypes.NETWORK_ERROR
-                  ? "The video couldn’t be loaded. Check your connection and try again."
-                  : "This video couldn’t be played. Try again.",
+                `${
+                  data.type === HlsCtor.ErrorTypes.NETWORK_ERROR
+                    ? "The video couldn’t be loaded. Check your connection and try again."
+                    : "This video couldn’t be played. Try again."
+                } (${data.details})`,
               );
             }
           });
