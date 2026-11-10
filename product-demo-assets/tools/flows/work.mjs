@@ -1,4 +1,5 @@
 // Leave, Payroll, Recruitment and Performance demos.
+import { recruitmentFixtures } from "../extras.mjs";
 import { cancelDialog, main, nav, pickDate, weekday } from "./common.mjs";
 
 export const WORK_FLOWS = {
@@ -372,6 +373,7 @@ export const WORK_FLOWS = {
     description:
       "Track open roles with budgets and deadlines, open one to see its hiring details and applicants, filter by stage and review a candidate.",
     path: "/job-openings/view-job-openings",
+    extra: recruitmentFixtures(),
     async run(r) {
       const p = r.page;
       await r.chapter("Job Openings");

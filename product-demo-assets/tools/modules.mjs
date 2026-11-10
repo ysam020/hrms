@@ -75,8 +75,8 @@ export const MODULES = [
     title: "Recruitment",
     icon: "briefcase",
     description:
-      "Open roles and their candidates, interview pipelines, and a careers page where people apply.",
-    order: ["hiring-pipeline", "recruitment-pipeline"],
+      "Hiring from start to finish: new openings, interviews and interviewers, offers and rejections, insights, pipelines and the careers page.",
+    order: ["hiring-pipeline", "new-job-opening", "interview-scheduling", "hire-or-reject", "recruitment-insights", "recruitment-pipeline"],
   },
   {
     id: "performance",

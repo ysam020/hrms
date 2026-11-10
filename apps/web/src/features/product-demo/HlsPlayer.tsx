@@ -608,16 +608,78 @@ export function HlsPlayer({
     seekTo(0);
   };
 
-  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("input,[role=menu]")) return;
-    // Shift+N / Shift+P: next and previous demo.
+  // Picture in picture: the browser's floating window (Safari's own
+  // presentation mode where the standard API is missing).
+  const [pip, setPip] = useState(false);
+  const pipSupported =
+    typeof document !== "undefined" &&
+    (Boolean((document as any).pictureInPictureEnabled) ||
+      typeof (videoRef.current as any)?.webkitSetPresentationMode ===
+        "function");
+  const togglePip = async () => {
+    const el = videoRef.current as any;
+    if (!el) return;
+    if (!started) start();
+    try {
+      if (document.pictureInPictureElement)
+        await document.exitPictureInPicture();
+      else if (
+        el.requestPictureInPicture &&
+        (document as any).pictureInPictureEnabled
+      ) {
+        if (el.readyState < 1)
+          await new Promise((ok) =>
+            el.addEventListener("loadedmetadata", ok, { once: true }),
+          );
+        await el.requestPictureInPicture();
+      } else if (typeof el.webkitSetPresentationMode === "function")
+        el.webkitSetPresentationMode(
+          el.webkitPresentationMode === "picture-in-picture"
+            ? "inline"
+            : "picture-in-picture",
+        );
+    } catch {
+      /* refused (no user gesture, or not supported) */
+    }
+  };
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const ac = new AbortController();
+    el.addEventListener("enterpictureinpicture", () => setPip(true), {
+      signal: ac.signal,
+    });
+    el.addEventListener("leavepictureinpicture", () => setPip(false), {
+      signal: ac.signal,
+    });
+    return () => ac.abort();
+  }, []);
+
+  // Keyboard shortcuts work anywhere on the page, as on YouTube, except
+  // while typing in a field. Space still activates a focused button outside
+  // the player, and arrows still move within radios, tabs and sliders.
+  const keys = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target as HTMLElement;
+    if (
+      t.closest(
+        "input,textarea,select,[contenteditable=true],[role=menu],[role=dialog]:not([aria-label^='Up next']):not([aria-label='End of demo'])",
+      )
+    )
+      return;
     if (e.shiftKey && (e.key === "N" || e.key === "P")) {
       e.preventDefault();
       if (e.key === "N" && next) onNext?.();
       if (e.key === "P" && prev) onPrev?.();
       return;
     }
+    const inPlayer = Boolean(wrapRef.current?.contains(t));
+    const onControl = t.closest(
+      "button,a,[role=tab],[role=radio],[role=switch],[role=slider],[role=option]",
+    );
     const k = e.key.toLowerCase();
+    if ((k === " " || k === "enter") && onControl) return;
+    if (k.startsWith("arrow") && onControl && !inPlayer) return;
     const map: Record<string, () => void> = {
       " ": togglePlay,
       k: togglePlay,
@@ -627,17 +689,23 @@ export function HlsPlayer({
       l: () => seekTo(time + 10),
       m: toggleMute,
       f: toggleFullscreen,
+      i: () => void togglePip(),
       c: () => setLang((x) => (x === "off" ? "en" : "off")),
     };
-    if (
-      map[k] &&
-      !(k === " " && (e.target as HTMLElement).tagName === "BUTTON")
-    ) {
-      e.preventDefault();
-      map[k]();
-      wake();
-    }
+    if (!map[k]) return;
+    // Arrow keys seek only once the video has started.
+    if (k.startsWith("arrow") && !started) return;
+    e.preventDefault();
+    map[k]();
+    wake();
   };
+  const keysRef = useRef(keys);
+  keysRef.current = keys;
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => keysRef.current(e);
+    document.addEventListener("keydown", on);
+    return () => document.removeEventListener("keydown", on);
+  }, []);
 
   // Close a menu on Escape or a click elsewhere.
   useEffect(() => {
@@ -672,7 +740,6 @@ export function HlsPlayer({
       data-fullscreen={fullscreen || undefined}
       data-idle={chromeHidden || undefined}
       onPointerMove={wake}
-      onKeyDown={onKey}
       tabIndex={-1}
       role="region"
       aria-label={`Video: ${video.title}`}
@@ -934,6 +1001,20 @@ export function HlsPlayer({
                   }))),
             ]}
           />
+          {pipSupported && (
+            <button
+              type="button"
+              className={`${s.ctrl} ${s.pip}`}
+              onClick={() => void togglePip()}
+              aria-pressed={pip}
+              aria-label={
+                pip ? "Exit picture in picture (i)" : "Picture in picture (i)"
+              }
+              title="Picture in picture (i)"
+            >
+              <PipGlyph />
+            </button>
+          )}
           <button
             type="button"
             className={s.ctrl}
@@ -1048,6 +1129,32 @@ function UpNext({
         </button>
       </div>
     </div>
+  );
+}
+
+function PipGlyph() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden
+      focusable="false"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <rect
+        x="12"
+        y="11.5"
+        width="7"
+        height="5.5"
+        rx="1"
+        fill="currentColor"
+        stroke="none"
+      />
+    </svg>
   );
 }
 

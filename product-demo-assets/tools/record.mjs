@@ -199,6 +199,20 @@ async function record(browser, id, flow) {
       const l = locator.first();
       await l.waitFor({ state: "visible", timeout: 5000 });
       await l.scrollIntoViewIfNeeded();
+      // "In view" can still mean under a sticky header or footer: if the
+      // point we'd click belongs to something else, centre the element.
+      const covered = await l.evaluate((e) => {
+        const r = e.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          r.x + Math.min(r.width / 2, 60),
+          r.y + r.height / 2,
+        );
+        return !hit || !(e === hit || e.contains(hit) || hit.contains(e));
+      });
+      if (covered) {
+        await l.evaluate((e) => e.scrollIntoView({ block: "center", behavior: "smooth" }));
+        await page.waitForTimeout(500);
+      }
       const b = await l.boundingBox();
       await rec.glide(b.x + Math.min(b.width / 2, 60), b.y + b.height / 2, ms);
       return l;
@@ -248,6 +262,10 @@ async function record(browser, id, flow) {
     await page.waitForTimeout(flow.tail ?? 1200);
   } catch (e) {
     failure = e;
+    // Where it stopped: the selector it was waiting for, and the screen.
+    const waiting = String(e.message).split("\n").find((l) => /waiting for/.test(l));
+    if (waiting) e.message = `${e.message.split("\n")[0]} — ${waiting.trim()}`;
+    await page.screenshot({ path: `${ROOT}survey/fail-${id}.png` }).catch(() => {});
   }
   recording = false;
   await capture;

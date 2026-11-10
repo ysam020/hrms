@@ -12,10 +12,12 @@ import { START_FLOWS } from "./flows/start.mjs";
 import { PEOPLE_FLOWS } from "./flows/people.mjs";
 import { WORK_FLOWS } from "./flows/work.mjs";
 import { ADMIN_FLOWS } from "./flows/admin.mjs";
+import { HIRING_FLOWS } from "./flows/hiring.mjs";
 
 export const FLOWS = {
   ...START_FLOWS,
   ...PEOPLE_FLOWS,
   ...WORK_FLOWS,
+  ...HIRING_FLOWS,
   ...ADMIN_FLOWS,
 };
