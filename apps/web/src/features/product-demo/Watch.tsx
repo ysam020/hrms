@@ -13,6 +13,7 @@ import {
 } from "./catalogue";
 import { HlsPlayer, type Neighbour, type PlayerHandle } from "./HlsPlayer";
 import { Thumb } from "./Thumb";
+import { useChapterRow } from "./useChapterRow";
 import s from "./productDemo.module.css";
 import w from "./watch.module.css";
 
@@ -32,10 +33,11 @@ export default function Watch() {
   const at = ORDER.findIndex((x) => x.video.id === id);
   const player = useRef<PlayerHandle>(null);
   const [time, setTime] = useState(0);
+  const active = at < 0 ? 0 : chapterAt(ORDER[at].video.chapters, time);
+  const chapterRow = useChapterRow(active);
 
   if (at < 0) return <Navigate to="/product-demo" replace />;
   const { module: mod, video } = ORDER[at];
-  const active = chapterAt(video.chapters, time);
 
   const neighbour = (i: number): Neighbour | null => {
     const x = ORDER[i];
@@ -123,7 +125,7 @@ export default function Watch() {
                 <h2 className={s.panelHead}>
                   Chapters <span>{video.chapters.length}</span>
                 </h2>
-                <ol className={s.chapters}>
+                <ol ref={chapterRow} className={s.chapters}>
                   {video.chapters.map((c, i) => (
                     <li key={c.startTime}>
                       <button
