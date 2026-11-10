@@ -70,10 +70,13 @@ export function normalizePath(path: string): string {
   return path.length > 1 ? path.replace(/\/+$/, "") || "/" : path;
 }
 
-/** Public pages, plus organisations' careers pages, may be indexed. */
+/** Public pages, organisations' careers pages and the product videos'
+ *  pages (/watch/<id>) may be indexed. */
 export function isIndexable(path: string): boolean {
   const p = normalizePath(path);
-  return p in PUBLIC_PAGES || p.startsWith("/careers/");
+  return (
+    p in PUBLIC_PAGES || p.startsWith("/careers/") || p.startsWith("/watch/")
+  );
 }
 
 /**

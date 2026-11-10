@@ -66,6 +66,16 @@ export function findVideo(id: string | null | undefined) {
   return null;
 }
 
+/** Every video in play order: the complete tour, then each module's demos.
+ *  Previous / Next and Up Next move along this list. */
+export const ORDER: { module: DemoModule; video: DemoVideo }[] = [
+  ...(TOUR && FILM ? [{ module: TOUR, video: FILM }] : []),
+  ...MODULES.flatMap((m) => m.videos.map((v) => ({ module: m, video: v }))),
+];
+
+/** A video's own page: what Share copies, and what link previews show. */
+export const watchPath = (id: string) => `/watch/${encodeURIComponent(id)}`;
+
 /** 75 → "1:15". */
 export function clock(seconds: number) {
   const s = Math.max(0, Math.floor(seconds));

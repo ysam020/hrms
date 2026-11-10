@@ -188,6 +188,7 @@ const F = {
   publicPages: () => import("@next/features/public/Public"),
   leadForm: () => import("@next/features/public/LeadForm"),
   productDemo: () => import("@next/features/product-demo/ProductDemo"),
+  watch: () => import("@next/features/product-demo/Watch"),
   aiAssistants: () => import("@next/features/assistant/AiAssistants"),
   connectAuthorize: () => import("@next/features/assistant/ConnectAuthorize"),
   orgSetup: () => import("@next/features/public/OrgSetup"),
@@ -519,6 +520,8 @@ export const router = createBrowserRouter(
         { path: "/contact", ...page(F.leadForm, "ContactPage") },
         // Product demo videos: public, no sign-in, no subscription check.
         { path: "/product-demo", ...page(F.productDemo) },
+        // One video on its own page: what Share copies.
+        { path: "/watch/:id", ...page(F.watch) },
         // Public landing page, open to everyone (signed in or not).
         {
           path: "/",

@@ -25,6 +25,11 @@
     "status": "200"
   },
   {
+    "source": "/watch/<id>",
+    "target": "/watch/<id>.html",
+    "status": "200"
+  },
+  {
     "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|xml|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>",
     "target": "/index.html",
     "status": "200"

@@ -13,11 +13,14 @@ import RefundPolicyPage from "@web/pages/legal/RefundPolicyPage";
 import { MotionProvider } from "@next/motion";
 import Landing from "@next/features/landing/Landing";
 import ProductDemo from "@next/features/product-demo/ProductDemo";
+import Watch from "@next/features/product-demo/Watch";
 import { OG_IMAGE, PUBLIC_PAGES, SITE_NAME, SITE_URL } from "@next/app/seo";
 import {
   CDN_CONFIGURED,
   MODULES as DEMO_MODULES,
+  ORDER as DEMO_ORDER,
   cdn,
+  watchPath,
 } from "@next/features/product-demo/catalogue";
 
 // Build-time render of the public pages for scripts/prerender.mjs: the same
@@ -37,8 +40,29 @@ const PAGES: Record<string, ComponentType> = {
 
 const anonymous = { user: null, setUser: () => {}, handleLogout: () => {} };
 
+/**
+ * /watch/<id>: a page per product video, with that video's own title,
+ * description and thumbnail for search results and link previews.
+ */
+export function watchPages() {
+  return DEMO_ORDER.map(({ video }) => ({
+    path: watchPath(video.id),
+    title: `${video.title} · Praesto`,
+    description: video.description,
+    // The video's thumbnail when the build knows the CDN (1280×720).
+    image: CDN_CONFIGURED
+      ? {
+          url: cdn(video.thumbnail),
+          width: 1280,
+          height: 720,
+          alt: video.title,
+        }
+      : null,
+  }));
+}
+
 export function render(path: string): string {
-  const Page = PAGES[path];
+  const Page = path.startsWith("/watch/") ? Watch : PAGES[path];
   if (!Page) throw new Error(`No prerendered page for ${path}`);
   return renderToString(
     <StaticRouter location={path}>
@@ -60,6 +84,7 @@ const TIERS: PlanTier[] = ["starter", "growth", "enterprise"];
  */
 export function structuredData(path: string): object[] {
   if (path === "/product-demo") return productDemoData();
+  if (path.startsWith("/watch/")) return watchData(path);
   if (path !== "/") return [];
   const org = `${SITE_URL}/#organization`;
   return [
@@ -125,7 +150,7 @@ function productDemoData(): object[] {
       itemListElement: DEMO_MODULES.flatMap((m) => m.videos).map((v, i) => ({
         "@type": "ListItem",
         position: i + 1,
-        url: `${SITE_URL}/product-demo?v=${v.id}`,
+        url: `${SITE_URL}${watchPath(v.id)}`,
         item: {
           "@type": "VideoObject",
           name: v.title,
@@ -134,7 +159,7 @@ function productDemoData(): object[] {
           uploadDate: v.recorded,
           duration: iso(v.duration),
           contentUrl: cdn(v.hls),
-          embedUrl: `${SITE_URL}/product-demo?v=${v.id}`,
+          embedUrl: `${SITE_URL}${watchPath(v.id)}`,
           inLanguage: "en",
           publisher: {
             "@type": "Organization",
@@ -143,6 +168,40 @@ function productDemoData(): object[] {
           },
         },
       })),
+    },
+  ];
+}
+
+/** /watch/<id>: the video as a VideoObject. */
+function watchData(path: string): object[] {
+  const x = DEMO_ORDER.find((x) => watchPath(x.video.id) === path);
+  if (!x || !CDN_CONFIGURED) return [];
+  const v = x.video;
+  const iso = (s: number) => `PT${Math.floor(s / 60)}M${Math.round(s % 60)}S`;
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoObject",
+      name: v.title,
+      description: v.description,
+      thumbnailUrl: cdn(v.thumbnail),
+      uploadDate: v.recorded,
+      duration: iso(v.duration),
+      contentUrl: cdn(v.hls),
+      embedUrl: `${SITE_URL}${path}`,
+      inLanguage: "en",
+      hasPart: v.chapters.map((c, i) => ({
+        "@type": "Clip",
+        name: c.title,
+        startOffset: Math.round(c.startTime),
+        endOffset: Math.round(v.chapters[i + 1]?.startTime ?? v.duration),
+        url: `${SITE_URL}${path}`,
+      })),
+      publisher: {
+        "@type": "Organization",
+        name: SITE_NAME,
+        url: `${SITE_URL}/`,
+      },
     },
   ];
 }
