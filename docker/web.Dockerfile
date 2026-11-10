@@ -33,9 +33,13 @@ RUN --mount=type=cache,id=pnpm,target=/root/.pnpm-store \
     pnpm install --frozen-lockfile --ignore-scripts
 
 # Same-origin API (nginx proxies /api and /socket.io to api-gateway). No
-# secrets are needed: the build reads no other VITE_* value.
+# secrets are needed.
 ARG VITE_API_STRING=/api/v1
 ENV VITE_API_STRING=$VITE_API_STRING
+# Where /product-demo's videos are served from (docs/product-demo.md). Read
+# at build time; without it the demo pages show "videos aren't available".
+ARG VITE_PRODUCT_DEMO_CDN_URL=
+ENV VITE_PRODUCT_DEMO_CDN_URL=$VITE_PRODUCT_DEMO_CDN_URL
 
 RUN pnpm --filter web build
 
