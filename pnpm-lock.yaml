@@ -843,6 +843,9 @@ importers:
       framer-motion:
         specifier: ^12.40.0
         version: 12.40.0(react-dom@19.3.0)(react@19.3.0)
+      hls.js:
+        specifier: 1.7.3
+        version: 1.7.3
       idb:
         specifier: ^7.1.1
         version: 7.1.1
@@ -14570,6 +14573,13 @@ packages:
         integrity: sha512-jOiHyAZsmnr8LqoPGmCjYAaiuWwjAPLgY8ZX2XrmHawt99/u1y6RgrZMTeoPfpUbV96HOalYgz1qzkRbw54Pmg==,
       }
     engines: { node: ">=18.0.0" }
+    dev: false
+
+  /hls.js@1.7.3:
+    resolution:
+      {
+        integrity: sha512-MsPlx6yVW4Qv4C7mEVou4/gk/5cN2dVxOTnrNjPSmyH2f0Ln+/UkG10Ax1PE6OvrmTVPKgQYozTtBaPOuCzq7A==,
+      }
     dev: false
 
   /hono@4.13.14:

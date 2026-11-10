@@ -1,0 +1,211 @@
+[
+  {
+    "video": "overview/today-at-a-glance",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 32.6,
+    "segments": 9,
+    "sizeMB": 7.9,
+    "cues": 6,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "overview/organization-structure",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 24.5,
+    "segments": 7,
+    "sizeMB": 3.1,
+    "cues": 4,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "employee-management/employee-directory",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 27.8,
+    "segments": 7,
+    "sizeMB": 6.3,
+    "cues": 5,
+    "chapters": 3,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "employee-management/join-requests",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 24.5,
+    "segments": 7,
+    "sizeMB": 4.5,
+    "cues": 4,
+    "chapters": 3,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "attendance/my-attendance",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 35.8,
+    "segments": 9,
+    "sizeMB": 9.3,
+    "cues": 6,
+    "chapters": 5,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "attendance/geofencing",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 37.6,
+    "segments": 10,
+    "sizeMB": 9.4,
+    "cues": 6,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "attendance/attendance-correction",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 31.1,
+    "segments": 8,
+    "sizeMB": 5.8,
+    "cues": 5,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "leave-management/apply-leave",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 33.6,
+    "segments": 9,
+    "sizeMB": 6.5,
+    "cues": 5,
+    "chapters": 5,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "leave-management/approve-leave",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 24.6,
+    "segments": 7,
+    "sizeMB": 4.4,
+    "cues": 4,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "leave-management/leave-policy",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 22.9,
+    "segments": 6,
+    "sizeMB": 2.8,
+    "cues": 4,
+    "chapters": 3,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "payroll/payroll-runs",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 30.2,
+    "segments": 8,
+    "sizeMB": 4.4,
+    "cues": 5,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "payroll/payslips",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 23.3,
+    "segments": 6,
+    "sizeMB": 3.3,
+    "cues": 4,
+    "chapters": 3,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "recruitment/hiring-pipeline",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 35.5,
+    "segments": 9,
+    "sizeMB": 7.7,
+    "cues": 7,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "performance/performance-reviews",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 28.4,
+    "segments": 8,
+    "sizeMB": 3.3,
+    "cues": 5,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "reports/report-builder",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 30.4,
+    "segments": 8,
+    "sizeMB": 3.9,
+    "cues": 5,
+    "chapters": 5,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "reports/employee-insights",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 28.3,
+    "segments": 8,
+    "sizeMB": 5.9,
+    "cues": 5,
+    "chapters": 5,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "security/roles-permissions",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 34.2,
+    "segments": 9,
+    "sizeMB": 4.3,
+    "cues": 7,
+    "chapters": 4,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "security/passkeys-and-audit",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 30.3,
+    "segments": 8,
+    "sizeMB": 5.8,
+    "cues": 5,
+    "chapters": 3,
+    "ok": true,
+    "errors": []
+  },
+  {
+    "video": "notifications/notifications",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 18.2,
+    "segments": 5,
+    "sizeMB": 3.1,
+    "cues": 3,
+    "chapters": 2,
+    "ok": true,
+    "errors": []
+  }
+]

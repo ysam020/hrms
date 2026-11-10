@@ -99,3 +99,12 @@ artifacts/lighthouse/*.log
 # graphify output (regenerated); keep only the report
 graphify-out/*
 !graphify-out/GRAPH_REPORT.md
+
+# ── Product demo recordings (product-demo-assets/README.md) ─────────────────
+# Recordings, HLS output and review frames are generated and live in S3.
+# Only the tooling, the catalogue and the validation report are committed.
+product-demo-assets/*
+!product-demo-assets/tools/
+!product-demo-assets/README.md
+!product-demo-assets/manifest.json
+!product-demo-assets/validation.json

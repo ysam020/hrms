@@ -38,6 +38,7 @@ const ROUTE_MODULE = {
   "/privacy-policy": "src/features/public/Public.tsx",
   "/terms-of-use": "src/features/public/Public.tsx",
   "/refund-policy": "src/features/public/Public.tsx",
+  "/product-demo": "src/features/product-demo/ProductDemo.tsx",
 };
 
 const esc = (s) =>

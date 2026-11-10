@@ -187,6 +187,7 @@ const F = {
   paLeads: () => import("@next/features/platform-admin/Leads"),
   publicPages: () => import("@next/features/public/Public"),
   leadForm: () => import("@next/features/public/LeadForm"),
+  productDemo: () => import("@next/features/product-demo/ProductDemo"),
   aiAssistants: () => import("@next/features/assistant/AiAssistants"),
   connectAuthorize: () => import("@next/features/assistant/ConnectAuthorize"),
   orgSetup: () => import("@next/features/public/OrgSetup"),
@@ -516,6 +517,8 @@ export const router = createBrowserRouter(
         { path: "/refund-policy", ...page(F.publicPages, "RefundPolicyPage") },
         { path: "/book-demo", ...page(F.leadForm, "BookDemoPage") },
         { path: "/contact", ...page(F.leadForm, "ContactPage") },
+        // Product demo videos: public, no sign-in, no subscription check.
+        { path: "/product-demo", ...page(F.productDemo) },
         // Public landing page, open to everyone (signed in or not).
         {
           path: "/",
