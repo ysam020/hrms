@@ -257,9 +257,16 @@ for (const mod of groups) {
             Number(m[1]),
           ),
         ];
+        // The full tour's sound effects can run into a line's first words,
+        // so there's no silence before it to find: a cue just after an
+        // effect counts as placed.
+        const effects = (tl.sfx ?? []).map((e) => e.start);
         for (const c of tl.cues) {
           const near = Math.min(...onsets.map((o) => Math.abs(o - c.start)));
-          if (near > 0.5)
+          const afterEffect = effects.some(
+            (e) => e <= c.start && c.start - e < 2.5,
+          );
+          if (near > 0.5 && !afterEffect)
             fail(
               `${lang}: no speech starts near the cue at ${c.start.toFixed(2)} s`,
             );

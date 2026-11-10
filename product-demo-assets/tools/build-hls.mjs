@@ -109,13 +109,24 @@ function mixTrack(dir, t, lang) {
   const clips = t.cues.filter((c) => c.voice?.[lang]);
   if (clips.length !== t.cues.length)
     throw new Error(`${t.id}: cues without ${lang} narration; re-record`);
+  // Sound effects (the full tour's, film/sfx.mjs): absolute files, placed
+  // and scaled like the narration, the same in every language.
+  const sfx = t.sfx ?? [];
   const args = ["-y", "-loglevel", "error"];
   for (const c of clips) args.push("-i", `${ROOT}${c.voice[lang].file}`);
-  const parts = clips.map(
-    (c, i) =>
-      `[${i}:a]aresample=48000,aformat=channel_layouts=mono,adelay=${Math.round(c.start * 1000)}:all=1[a${i}]`,
-  );
-  const mix = `${clips.map((_, i) => `[a${i}]`).join("")}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,apad,atrim=0:${t.duration.toFixed(3)},loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=mono[out]`;
+  for (const e of sfx) args.push("-i", e.file);
+  const parts = [
+    ...clips.map(
+      (c, i) =>
+        `[${i}:a]aresample=48000,aformat=channel_layouts=mono,adelay=${Math.round(c.start * 1000)}:all=1[a${i}]`,
+    ),
+    ...sfx.map(
+      (e, j) =>
+        `[${clips.length + j}:a]aresample=48000,aformat=channel_layouts=mono,volume=${e.gain},adelay=${Math.round(e.start * 1000)}:all=1[a${clips.length + j}]`,
+    ),
+  ];
+  const n = clips.length + sfx.length;
+  const mix = `${Array.from({ length: n }, (_, i) => `[a${i}]`).join("")}amix=inputs=${n}:normalize=0:dropout_transition=0,apad,atrim=0:${t.duration.toFixed(3)},loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=mono[out]`;
   args.push(
     "-filter_complex",
     [...parts, mix].join(";"),

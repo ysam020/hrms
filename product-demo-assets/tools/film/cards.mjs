@@ -217,6 +217,53 @@ export function section({ module, index, of, highlights }) {
   );
 }
 
+// ── Topic: the next topic within a part, and where it sits ────────────────
+// Short (about 3 s): the part and step, the topic's name and what it's for,
+// and the part's topics with this one lit, so the move between two demos
+// reads as the next step, not a cut.
+export function topic({ module, part, parts, step, title, description, topics }) {
+  const rows = topics
+    .map((t, i) => {
+      const state = i + 1 < step ? "done" : i + 1 === step ? "now" : "todo";
+      return `<li class="${state}" style="--d:${(0.15 + i * 0.07).toFixed(2)}s">
+        <span class="dot">${state === "done" ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0b1e2e" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : ""}</span>${esc(t)}</li>`;
+    })
+    .join("");
+  return page(
+    `.left{position:absolute;left:160px;top:300px;width:1000px}
+     .chip{display:inline-flex;align-items:center;gap:12px;padding:10px 18px 10px 12px;border-radius:999px;
+       background:rgb(255 255 255 / .07);border:1px solid rgb(255 255 255 / .1);font-size:22px;font-weight:600;color:#c9d6e3}
+     .chip .tile{width:38px;height:38px;border-radius:11px}
+     .kick{margin-top:38px;font-size:24px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#7fb2ee}
+     h2{margin-top:14px;font-size:112px;font-weight:700;letter-spacing:-.045em;line-height:1.02}
+     .desc{margin-top:26px;max-width:900px;font-size:32px;line-height:1.4;
+       display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+     ol{position:absolute;left:1260px;top:330px;width:500px;list-style:none;display:grid;gap:0}
+     ol li{position:relative;display:flex;align-items:center;gap:20px;min-height:84px;font-size:27px;font-weight:550;
+       letter-spacing:-.01em;line-height:1.2;color:#6f8193;animation:rise .7s cubic-bezier(.2,.75,.1,1) both;animation-delay:var(--d)}
+     ol li:not(:last-child)::after{content:"";position:absolute;left:15px;top:58px;bottom:-26px;width:2px;background:rgb(255 255 255 / .12)}
+     ol li.done{color:#9fb0c1}
+     ol li.done::after{background:rgb(127 178 238 / .55)}
+     ol li.now{color:#fff;font-weight:650}
+     .dot{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:2px solid rgb(255 255 255 / .22)}
+     .done .dot{background:#7fb2ee;border-color:#7fb2ee}
+     .now .dot{border-color:#4a8fe0;background:radial-gradient(circle,#4a8fe0 0 7px,transparent 8px);
+       box-shadow:0 0 0 0 rgb(74 143 224 / .6);animation:ping 1.6s ease-out .5s infinite}
+     @keyframes ping{to{box-shadow:0 0 0 14px rgb(74 143 224 / 0)}}
+     .sweep{position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgb(127 178 238 / .08) 50%,transparent 70%);
+       animation:sweep 1.4s cubic-bezier(.4,0,.2,1) both .1s}
+     @keyframes sweep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}`,
+    `<div class="sweep"></div>
+     <div class="left">
+       <span class="chip fade" style="--d:.05s"><span class="tile">${icon(module.id, 20)}</span>${esc(module.title)} · Part ${String(part).padStart(2, "0")} of ${parts}</span>
+       <p class="kick fade" style="--d:.2s">Next · ${step} of ${topics.length}</p>
+       <h2>${line(title, 0.22)}</h2>
+       <p class="desc muted rise" style="--d:.5s">${esc(description)}</p>
+     </div>
+     <ol>${rows}</ol>`,
+  );
+}
+
 // ── The frame a recorded clip plays in (a still; the video is laid over) ───
 export const FRAME = { x: 160, y: 108, w: 1600, h: 900, bar: 40 };
 export function frame({ module, title, index, of }) {

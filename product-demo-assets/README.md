@@ -122,7 +122,7 @@ until you delete them.
 
 ## The complete tour (`tools/film.mjs`)
 
-One film of the whole product ("Praesto: The Complete Tour", about 17 min)
+One film of the whole product ("Praesto: The Complete Tour", about 18 min)
 for YouTube and for anyone who wants the full demo in one sitting. The page
 features it above the modules (`?v=praesto-tour`).
 
@@ -137,6 +137,15 @@ features it above the modules (`?v=praesto-tour`).
   in, and the YouTube thumbnail. Motion is CSS animation; film.mjs pauses
   every animation and steps it frame by frame, so the capture is exactly
   30 fps.
+- Between two topics of a part, a short "next topic" screen names what's
+  coming, says what it's for, and lists the part's topics with this one lit
+  (done, current, still to come). A clip slides away to it, and it dissolves
+  into the next clip.
+- `tools/film/sfx.mjs`: the sound effects, synthesised with FFmpeg (nothing
+  to license). A whoosh and a two-note chime open each part, the pitch and
+  the outro, and a swipe and a soft tick mark each next topic. The opening
+  mark rises in with a swell. They sit under the narration in both language
+  tracks (`sfx` in the film's timeline; build-hls.mjs mixes them in).
 - `tools/film/icons.json`: the module icons, scraped from the web app by
   `tools/film/scrape-icons.mjs`.
 
@@ -151,5 +160,5 @@ Hindi narration, subtitles, chapters) and `film/youtube/`:
 `praesto-tour-en.mp4`, `praesto-tour-hi.mp4`, `praesto-tour-<lang>.vtt`,
 `thumbnail.jpg` and `description.txt` (title, links and YouTube chapters).
 
-The film has no music. To add some, use a track you hold a licence for,
-mixed under the narration.
+The film has sound effects but no music. To add music, use a track you
+hold a licence for, mixed under the narration.
