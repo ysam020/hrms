@@ -13,7 +13,13 @@ import type Hls from "hls.js";
 import type { ErrorData, Level } from "hls.js";
 import { Spinner } from "@next/ui";
 import { createRoot, type Root } from "react-dom/client";
-import { cdn, clock, watchPath, type DemoVideo } from "./catalogue";
+import {
+  cdn,
+  clock,
+  thumbnailSrc,
+  watchPath,
+  type DemoVideo,
+} from "./catalogue";
 import { documentPip, PipControls, prepareWindow } from "./PipWindow";
 import s from "./productDemo.module.css";
 
@@ -744,7 +750,7 @@ export function HlsPlayer({
       ms.metadata = new MediaMetadata({
         title: video.title,
         artist: "Praesto product demo",
-        artwork: [{ src: cdn(video.thumbnail), sizes: "640x360" }],
+        artwork: [{ src: thumbnailSrc(video.thumbnail), sizes: "1280x720" }],
       });
       ms.setActionHandler(
         "nexttrack",
@@ -886,7 +892,7 @@ export function HlsPlayer({
         <video
           ref={videoRef}
           className={s.video}
-          poster={cdn(video.thumbnail)}
+          poster={thumbnailSrc(video.thumbnail)}
           playsInline
           preload="none"
           crossOrigin="anonymous"
@@ -1247,7 +1253,13 @@ function UpNext({
         tabIndex={-1}
       >
         <span className={s.upNextThumb}>
-          <img src={cdn(next.thumbnail)} alt="" width={1280} height={720} />
+          <img
+            src={thumbnailSrc(next.thumbnail)}
+            crossOrigin="anonymous"
+            alt=""
+            width={1280}
+            height={720}
+          />
           <span className={s.upNextRing} aria-hidden>
             <svg viewBox="0 0 64 64" width="64" height="64">
               <circle cx="32" cy="32" r={r} fill="rgb(10 18 25 / 0.55)" />
