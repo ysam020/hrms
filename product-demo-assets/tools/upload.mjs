@@ -17,8 +17,13 @@ import path from "node:path";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const DRY = process.argv.includes("--dry-run");
-const acct = execFileSync("aws", ["sts", "get-caller-identity", "--query", "Account", "--output", "text"], { encoding: "utf8" }).trim();
-const BUCKET = process.env.PRODUCT_DEMO_BUCKET || `praesto-product-demo-${acct}`;
+const acct = execFileSync(
+  "aws",
+  ["sts", "get-caller-identity", "--query", "Account", "--output", "text"],
+  { encoding: "utf8" },
+).trim();
+const BUCKET =
+  process.env.PRODUCT_DEMO_BUCKET || `praesto-product-demo-${acct}`;
 const PREFIX = "product-demo";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -36,7 +41,8 @@ const TYPES = [
 const manifest = JSON.parse(readFileSync(`${ROOT}manifest.json`, "utf8"));
 const aws = (args) => {
   console.log(`aws ${args.join(" ").replace(acct, "<acct>")}`);
-  if (!DRY) execFileSync("aws", args, { stdio: ["ignore", "ignore", "inherit"] });
+  if (!DRY)
+    execFileSync("aws", args, { stdio: ["ignore", "ignore", "inherit"] });
 };
 
 let n = 0;
@@ -46,16 +52,42 @@ for (const m of manifest.modules) {
     const localDir = path.join(ROOT, m.id, v.id);
     for (const [glob, type, cache] of TYPES) {
       aws([
-        "s3", "cp", localDir, `s3://${BUCKET}/${PREFIX}/${key}`, "--recursive", "--only-show-errors",
-        "--exclude", "*", "--include", glob, "--exclude", "source.mp4", "--exclude", "timeline.json",
-        "--content-type", type, "--cache-control", cache, "--metadata-directive", "REPLACE",
+        "s3",
+        "cp",
+        localDir,
+        `s3://${BUCKET}/${PREFIX}/${key}`,
+        "--recursive",
+        "--only-show-errors",
+        "--exclude",
+        "*",
+        "--include",
+        glob,
+        "--exclude",
+        "source.mp4",
+        "--exclude",
+        "timeline.json",
+        "--content-type",
+        type,
+        "--cache-control",
+        cache,
+        "--metadata-directive",
+        "REPLACE",
       ]);
     }
     n++;
   }
 }
 aws([
-  "s3", "cp", `${ROOT}manifest.json`, `s3://${BUCKET}/${PREFIX}/manifests/catalogue.json`, "--only-show-errors",
-  "--content-type", "application/json", "--cache-control", SHORT,
+  "s3",
+  "cp",
+  `${ROOT}manifest.json`,
+  `s3://${BUCKET}/${PREFIX}/manifests/catalogue.json`,
+  "--only-show-errors",
+  "--content-type",
+  "application/json",
+  "--cache-control",
+  SHORT,
 ]);
-console.log(`${DRY ? "[dry run] " : ""}uploaded ${n} videos to s3://praesto-product-demo-<acct>/${PREFIX}/`);
+console.log(
+  `${DRY ? "[dry run] " : ""}uploaded ${n} videos to s3://praesto-product-demo-<acct>/${PREFIX}/`,
+);

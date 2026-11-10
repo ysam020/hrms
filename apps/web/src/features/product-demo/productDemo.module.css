@@ -718,6 +718,11 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.ctrlVoice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .ctrlText sup {
   margin-left: 2px;
   color: #9cc1ee;
@@ -742,6 +747,17 @@
 }
 @media (max-width: 560px) {
   .volumeSlider {
+    display: none;
+  }
+  /* Phones: hardware buttons set the volume, and the total duration is
+     shown under the player, so the bar keeps 40px targets without
+     overflowing. */
+  .volume,
+  .timeTotal {
+    display: none;
+  }
+  /* Phones: the narration button shows its language only. */
+  .ctrlVoice svg {
     display: none;
   }
   .ctrl {

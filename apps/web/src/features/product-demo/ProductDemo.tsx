@@ -140,8 +140,8 @@ export default function ProductDemo() {
               </h1>
               <p className={s.heroLead}>
                 See attendance, leave, payroll, hiring and approvals working in
-                the real product. Pick a module and watch a short demo, with
-                English or Hindi subtitles.
+                the real product. Pick a module and watch a short demo, narrated
+                in English or Hindi, with subtitles in either.
               </p>
               <div className={s.heroActions}>
                 <a
@@ -183,7 +183,7 @@ export default function ProductDemo() {
                   <Icon name="play" size={14} /> {totalVideos} short demos
                 </li>
                 <li>
-                  <Icon name="chat" size={14} /> English and हिन्दी subtitles
+                  <Icon name="chat" size={14} /> Narrated in English and हिन्दी
                 </li>
                 <li>
                   <Icon name="checkCircle" size={14} /> No sign-up needed

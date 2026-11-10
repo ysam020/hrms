@@ -1,7 +1,7 @@
 # /product-demo
 
 A public page (no sign-in, no subscription, no permission check) where
-visitors pick an HRMS module and watch short recordings of the real product.
+visitors pick an HRMS module and watch short recordings of the real product, narrated in English or Hindi.
 The videos are HLS adaptive streams, with English and Hindi subtitles and
 chapters, served straight from a public S3 bucket (CloudFront is blocked for
 now, see below).
@@ -95,6 +95,11 @@ Once AWS Support verifies the account for CloudFront:
 - Errors: a playlist that still fails after hls.js's own retries shows
   "couldn’t be loaded" with Try Again. Segment network errors resume up to
   3 times, and media errors go through `recoverMediaError()`.
+- Narration: English and Hindi voice tracks (HLS alternate audio). The
+  Narration menu switches between them with `hls.audioTrack`, or the video
+  element's `audioTracks` on Safari. The choice carries over between videos
+  and is independent of subtitles. The default is English, or Hindi when
+  the browser's language is Hindi.
 - Subtitles: `<track>` elements in hidden mode, drawn by the player (same
   look everywhere, Devanagari fonts for Hindi, larger in fullscreen). Tracks
   are only fetched after play.

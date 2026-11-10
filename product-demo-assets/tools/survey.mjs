@@ -13,7 +13,11 @@ for (const p of paths) {
   await page.goto(BASE + p);
   await settle(page, 1200);
   const name = p.replace(/\W+/g, "_").replace(/^_|_$/g, "") || "root";
-  await page.screenshot({ path: `${OUT}${name}.jpg`, type: "jpeg", quality: 70 });
+  await page.screenshot({
+    path: `${OUT}${name}.jpg`,
+    type: "jpeg",
+    quality: 70,
+  });
   console.log(p, "->", name, errs.length ? "ERR " + errs[0].slice(0, 120) : "");
   await ctx.close();
 }

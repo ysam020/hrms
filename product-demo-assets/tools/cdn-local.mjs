@@ -41,16 +41,26 @@ createServer((req, res) => {
   if (rel === "manifests/catalogue.json") rel = "manifest.json";
   rel = rel.replace(/^([^/]+\/[^/]+)\/[0-9a-f]{10}\//, "$1/");
   const file = path.join(ROOT, rel);
-  const blocked = !file.startsWith(ROOT) || /source\.mp4$|timeline\.json$/.test(file);
+  const blocked =
+    !file.startsWith(ROOT) || /source\.mp4$|timeline\.json$/.test(file);
   if (blocked || !existsSync(file) || !statSync(file).isFile()) {
     log.push({ path: url.pathname, status: 404 });
     res.writeHead(blocked ? 403 : 404).end();
     return;
   }
-  const [type, cache] = TYPES[path.extname(file)] ?? ["application/octet-stream", "no-store"];
+  const [type, cache] = TYPES[path.extname(file)] ?? [
+    "application/octet-stream",
+    "no-store",
+  ];
   const size = statSync(file).size;
   log.push({ path: url.pathname, status: 200, bytes: size });
-  res.writeHead(200, { "Content-Type": type, "Cache-Control": cache, "Content-Length": size });
+  res.writeHead(200, {
+    "Content-Type": type,
+    "Cache-Control": cache,
+    "Content-Length": size,
+  });
   if (req.method === "HEAD") return res.end();
   createReadStream(file).pipe(res);
-}).listen(PORT, () => console.log(`local CDN on http://localhost:${PORT}/product-demo`));
+}).listen(PORT, () =>
+  console.log(`local CDN on http://localhost:${PORT}/product-demo`),
+);

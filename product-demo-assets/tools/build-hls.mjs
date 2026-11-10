@@ -14,7 +14,14 @@
 // segment boundaries line up and the player can switch quality at any
 // segment. Segments are fragmented MP4 (CMAF), 4 s. The demos have no audio
 // track (they are silent screen recordings; the subtitles carry the words).
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { MODULES } from "./modules.mjs";
@@ -25,14 +32,48 @@ const FPS = 30;
 
 /** Ladder for screen content: crisp text needs bits mostly at 1080p/720p. */
 export const LADDER = [
-  { name: "1080p", w: 1920, h: 1080, bitrate: 3200, max: 4500, profile: "high", level: "4.0" },
-  { name: "720p", w: 1280, h: 720, bitrate: 1800, max: 2600, profile: "high", level: "3.1" },
-  { name: "480p", w: 854, h: 480, bitrate: 900, max: 1300, profile: "main", level: "3.0" },
-  { name: "360p", w: 640, h: 360, bitrate: 550, max: 800, profile: "main", level: "3.0" },
+  {
+    name: "1080p",
+    w: 1920,
+    h: 1080,
+    bitrate: 3200,
+    max: 4500,
+    profile: "high",
+    level: "4.0",
+  },
+  {
+    name: "720p",
+    w: 1280,
+    h: 720,
+    bitrate: 1800,
+    max: 2600,
+    profile: "high",
+    level: "3.1",
+  },
+  {
+    name: "480p",
+    w: 854,
+    h: 480,
+    bitrate: 900,
+    max: 1300,
+    profile: "main",
+    level: "3.0",
+  },
+  {
+    name: "360p",
+    w: 640,
+    h: 360,
+    bitrate: 550,
+    max: 800,
+    profile: "main",
+    level: "3.0",
+  },
 ];
 
 const probe = (file, args) =>
-  execFileSync("ffprobe", ["-v", "error", ...args, file], { encoding: "utf8" }).trim();
+  execFileSync("ffprobe", ["-v", "error", ...args, file], {
+    encoding: "utf8",
+  }).trim();
 
 function vttTime(s) {
   const ms = Math.round(s * 1000);
@@ -44,53 +85,147 @@ function vttTime(s) {
 
 function writeVtt(file, cues, lang) {
   const body = cues
-    .map((c, i) => `${i + 1}\n${vttTime(c.start)} --> ${vttTime(c.end)} line:85%\n${c[lang]}`)
+    .map(
+      (c, i) =>
+        `${i + 1}\n${vttTime(c.start)} --> ${vttTime(c.end)} line:85%\n${c[lang]}`,
+    )
     .join("\n\n");
   writeFileSync(file, `WEBVTT\n\n${body}\n`);
 }
 
+/** Spoken languages, in menu order; the first is the default track. */
+export const AUDIO = [
+  { lang: "en", name: "English" },
+  { lang: "hi", name: "Hindi" },
+];
+
+/**
+ * One narration track: every cue's clip placed at the cue's start, padded to
+ * the video's length, loudness-normalised for speech (-16 LUFS, -1.5 dBTP),
+ * AAC-LC mono 96 kb/s at 48 kHz.
+ */
+function mixTrack(dir, t, lang) {
+  const out = `${dir}audio-${lang}.m4a`;
+  const clips = t.cues.filter((c) => c.voice?.[lang]);
+  if (clips.length !== t.cues.length)
+    throw new Error(`${t.id}: cues without ${lang} narration; re-record`);
+  const args = ["-y", "-loglevel", "error"];
+  for (const c of clips) args.push("-i", `${ROOT}${c.voice[lang].file}`);
+  const parts = clips.map(
+    (c, i) =>
+      `[${i}:a]aresample=48000,aformat=channel_layouts=mono,adelay=${Math.round(c.start * 1000)}:all=1[a${i}]`,
+  );
+  const mix = `${clips.map((_, i) => `[a${i}]`).join("")}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,apad,atrim=0:${t.duration.toFixed(3)},loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,aformat=channel_layouts=mono[out]`;
+  args.push(
+    "-filter_complex",
+    [...parts, mix].join(";"),
+    "-map",
+    "[out]",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "96k",
+    "-ar",
+    "48000",
+    "-ac",
+    "1",
+    out,
+  );
+  execFileSync("ffmpeg", args, { stdio: "inherit" });
+  return out;
+}
+
 function build(dir, t) {
   const src = `${dir}source.mp4`;
-  const [sw, sh] = probe(src, ["-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0"]).split(",").map(Number);
+  const [sw, sh] = probe(src, [
+    "-select_streams",
+    "v:0",
+    "-show_entries",
+    "stream=width,height",
+    "-of",
+    "csv=p=0",
+  ])
+    .split(",")
+    .map(Number);
   // Never upscale: only rungs at or below the source size.
   const ladder = LADDER.filter((r) => r.w <= sw && r.h <= sh);
 
-  for (const r of LADDER) rmSync(`${dir}${r.name}`, { recursive: true, force: true });
+  for (const r of LADDER)
+    rmSync(`${dir}${r.name}`, { recursive: true, force: true });
+  for (const a of AUDIO)
+    rmSync(`${dir}audio_${a.lang}`, { recursive: true, force: true });
   rmSync(`${dir}master.m3u8`, { force: true });
+  const tracks = AUDIO.map((a) => mixTrack(dir, t, a.lang));
 
   const split = `[0:v]split=${ladder.length}${ladder.map((_, i) => `[s${i}]`).join("")}`;
-  const scales = ladder.map((r, i) => `[s${i}]scale=${r.w}:${r.h}:flags=lanczos,format=yuv420p[v${i}]`);
-  const args = ["-y", "-loglevel", "error", "-i", src, "-filter_complex", [split, ...scales].join(";")];
+  const scales = ladder.map(
+    (r, i) => `[s${i}]scale=${r.w}:${r.h}:flags=lanczos,format=yuv420p[v${i}]`,
+  );
+  const args = ["-y", "-loglevel", "error", "-i", src];
+  for (const f of tracks) args.push("-i", f);
+  args.push("-filter_complex", [split, ...scales].join(";"));
   ladder.forEach((r, i) => {
     args.push(
-      "-map", `[v${i}]`,
-      `-c:v:${i}`, "libx264",
-      `-profile:v:${i}`, r.profile,
-      `-level:v:${i}`, r.level,
-      `-b:v:${i}`, `${r.bitrate}k`,
-      `-maxrate:v:${i}`, `${r.max}k`,
-      `-bufsize:v:${i}`, `${r.max * 2}k`,
+      "-map",
+      `[v${i}]`,
+      `-c:v:${i}`,
+      "libx264",
+      `-profile:v:${i}`,
+      r.profile,
+      `-level:v:${i}`,
+      r.level,
+      `-b:v:${i}`,
+      `${r.bitrate}k`,
+      `-maxrate:v:${i}`,
+      `${r.max}k`,
+      `-bufsize:v:${i}`,
+      `${r.max * 2}k`,
     );
   });
+  // Narration tracks, already AAC: copied into their own renditions.
+  AUDIO.forEach((_, i) => args.push("-map", `${i + 1}:a`));
+  args.push("-c:a", "copy");
   args.push(
-    "-preset", "slow",
-    "-tune", "animation",
-    "-r", String(FPS),
-    "-g", String(FPS * SEGMENT),
-    "-keyint_min", String(FPS * SEGMENT),
-    "-sc_threshold", "0",
-    "-force_key_frames", `expr:gte(t,n_forced*${SEGMENT})`,
-    "-flags", "+cgop",
-    "-an",
-    "-f", "hls",
-    "-hls_time", String(SEGMENT),
-    "-hls_playlist_type", "vod",
-    "-hls_flags", "independent_segments",
-    "-hls_segment_type", "fmp4",
-    "-hls_fmp4_init_filename", "init.mp4",
-    "-hls_segment_filename", `${dir}%v/segment_%03d.m4s`,
-    "-master_pl_name", "master.m3u8",
-    "-var_stream_map", ladder.map((r, i) => `v:${i},name:${r.name}`).join(" "),
+    "-preset",
+    "slow",
+    "-tune",
+    "animation",
+    "-r",
+    String(FPS),
+    "-g",
+    String(FPS * SEGMENT),
+    "-keyint_min",
+    String(FPS * SEGMENT),
+    "-sc_threshold",
+    "0",
+    "-force_key_frames",
+    `expr:gte(t,n_forced*${SEGMENT})`,
+    "-flags",
+    "+cgop",
+    "-f",
+    "hls",
+    "-hls_time",
+    String(SEGMENT),
+    "-hls_playlist_type",
+    "vod",
+    "-hls_flags",
+    "independent_segments",
+    "-hls_segment_type",
+    "fmp4",
+    "-hls_fmp4_init_filename",
+    "init.mp4",
+    "-hls_segment_filename",
+    `${dir}%v/segment_%03d.m4s`,
+    "-master_pl_name",
+    "master.m3u8",
+    "-var_stream_map",
+    [
+      ...ladder.map((r, i) => `v:${i},agroup:narration,name:${r.name}`),
+      ...AUDIO.map(
+        (a, i) =>
+          `a:${i},agroup:narration,language:${a.lang},name:audio_${a.lang}${i === 0 ? ",default:yes" : ""}`,
+      ),
+    ].join(" "),
     `${dir}%v/playlist.m3u8`,
   );
   execFileSync("ffmpeg", args, { stdio: "inherit" });
@@ -100,10 +235,23 @@ function build(dir, t) {
     /(#EXT-X-STREAM-INF:[^\n]*RESOLUTION=\d+x\d+)(?![^\n]*FRAME-RATE)/g,
     `$1,FRAME-RATE=${FPS.toFixed(3)}`,
   );
+  // Audio renditions: readable names for the player's Audio menu (ffmpeg
+  // writes "audio_N"), and AUTOSELECT, which the spec requires with DEFAULT.
+  master = master.replace(/^#EXT-X-MEDIA:TYPE=AUDIO[^\n]*$/gm, (line) => {
+    const lang = line.match(/LANGUAGE="([a-z]+)"/)?.[1];
+    const name = AUDIO.find((a) => a.lang === lang)?.name ?? lang;
+    let out = line.replace(/NAME="[^"]*"/, `NAME="${name}"`);
+    if (!/AUTOSELECT=/.test(out))
+      out = out.replace(/(DEFAULT=(?:YES|NO))/, "$1,AUTOSELECT=YES");
+    return out;
+  });
   // Every segment starts on a keyframe (forced above): say so in the master
   // too, so players may switch renditions at any segment.
   if (!master.includes("#EXT-X-INDEPENDENT-SEGMENTS"))
-    master = master.replace("#EXT-X-VERSION:7\n", "#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n");
+    master = master.replace(
+      "#EXT-X-VERSION:7\n",
+      "#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n",
+    );
   writeFileSync(`${dir}master.m3u8`, master);
 
   mkdirSync(`${dir}subtitles`, { recursive: true });
@@ -112,7 +260,22 @@ function build(dir, t) {
 
   // Thumbnail: a moment into the second chapter, where the feature is on screen.
   const at = Math.min((t.chapters[1]?.startTime ?? 2) + 1.5, t.duration - 0.5);
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(at), "-i", src, "-frames:v", "1", "-vf", "scale=1280:720:flags=lanczos", "-q:v", "3", `${dir}thumbnail.jpg`]);
+  execFileSync("ffmpeg", [
+    "-y",
+    "-loglevel",
+    "error",
+    "-ss",
+    String(at),
+    "-i",
+    src,
+    "-frames:v",
+    "1",
+    "-vf",
+    "scale=1280:720:flags=lanczos",
+    "-q:v",
+    "3",
+    `${dir}thumbnail.jpg`,
+  ]);
   return ladder;
 }
 
@@ -123,7 +286,8 @@ for (const m of MODULES) {
   if (!existsSync(mdir)) continue;
   for (const id of readdirSync(mdir)) {
     const dir = `${mdir}${id}/`;
-    if (!existsSync(`${dir}timeline.json`) || !existsSync(`${dir}source.mp4`)) continue;
+    if (!existsSync(`${dir}timeline.json`) || !existsSync(`${dir}source.mp4`))
+      continue;
     const t = JSON.parse(readFileSync(`${dir}timeline.json`, "utf8"));
     if (!only.length || only.includes(id)) {
       const ladder = build(dir, t);
@@ -145,14 +309,26 @@ const manifest = {
     icon: m.icon,
     videos: videos
       .filter((v) => v.module === m.id)
-      .sort((a, b) => (m.order ?? []).indexOf(a.id) - (m.order ?? []).indexOf(b.id))
+      .sort(
+        (a, b) => (m.order ?? []).indexOf(a.id) - (m.order ?? []).indexOf(b.id),
+      )
       .map(({ id, t, dir }) => {
         // A content revision in every path: segment names repeat between
         // builds, so this is what makes a year of immutable caching safe.
-        const rev = createHash("sha256").update(readFileSync(`${dir}source.mp4`)).digest("hex").slice(0, 10);
+        const rev = createHash("sha256")
+          .update(readFileSync(`${dir}source.mp4`))
+          .digest("hex")
+          .slice(0, 10);
         const base = `${m.id}/${id}/${rev}`;
         const master = readFileSync(`${dir}master.m3u8`, "utf8");
-        const qualities = [...master.matchAll(/RESOLUTION=\d+x(\d+)/g)].map((x) => Number(x[1]));
+        const qualities = [...master.matchAll(/RESOLUTION=\d+x(\d+)/g)].map(
+          (x) => Number(x[1]),
+        );
+        const audio = [
+          ...master.matchAll(
+            /#EXT-X-MEDIA:TYPE=AUDIO[^\n]*LANGUAGE="([a-z]+)"/g,
+          ),
+        ].map((x) => x[1]);
         return {
           id,
           title: t.title,
@@ -161,9 +337,13 @@ const manifest = {
           recorded: t.recordedAt.slice(0, 10),
           thumbnail: `${base}/thumbnail.jpg`,
           hls: `${base}/master.m3u8`,
-          subtitles: { en: `${base}/subtitles/en.vtt`, hi: `${base}/subtitles/hi.vtt` },
+          subtitles: {
+            en: `${base}/subtitles/en.vtt`,
+            hi: `${base}/subtitles/hi.vtt`,
+          },
           chapters: t.chapters,
           qualities,
+          audio,
         };
       }),
   })).filter((m) => m.videos.length),
@@ -171,9 +351,14 @@ const manifest = {
 writeFileSync(`${ROOT}manifest.json`, JSON.stringify(manifest, null, 2) + "\n");
 // The web app bundles the same catalogue (no request before the page shows).
 writeFileSync(
-  new URL("../../apps/web/src/features/product-demo/manifest.ts", import.meta.url),
+  new URL(
+    "../../apps/web/src/features/product-demo/manifest.ts",
+    import.meta.url,
+  ),
   `// Generated by product-demo-assets/tools/build-hls.mjs. Don't edit by hand:\n` +
     `// re-record or re-build, and this file is rewritten.\n` +
     `export default ${JSON.stringify({ modules: manifest.modules }, null, 2)};\n`,
 );
-console.log(`manifest.json: ${manifest.modules.length} modules, ${videos.length} videos`);
+console.log(
+  `manifest.json: ${manifest.modules.length} modules, ${videos.length} videos`,
+);

@@ -46,6 +46,32 @@ const LANGS: { id: Lang; label: string }[] = [
   { id: "hi", label: "हिन्दी (Hindi)" },
 ];
 
+/** Spoken languages (HLS alternate audio renditions). */
+type Voice = "en" | "hi";
+const VOICES: { id: Voice; label: string; short: string }[] = [
+  { id: "en", label: "English", short: "EN" },
+  { id: "hi", label: "हिन्दी (Hindi)", short: "हिं" },
+];
+/** Hindi narration for visitors whose browser prefers Hindi. */
+const defaultVoice = (): Voice =>
+  typeof navigator !== "undefined" && /^hi\b/i.test(navigator.language)
+    ? "hi"
+    : "en";
+
+/** Enable the native (Safari) audio track in `lang`, if there is one. */
+function pickNativeAudio(el: HTMLVideoElement, lang: Voice) {
+  const tracks = (el as any).audioTracks as
+    | { length: number; [i: number]: { language: string; enabled: boolean } }
+    | undefined;
+  if (!tracks?.length) return;
+  let found = false;
+  for (let i = 0; i < tracks.length; i++)
+    if (tracks[i].language === lang) found = true;
+  if (!found) return;
+  for (let i = 0; i < tracks.length; i++)
+    tracks[i].enabled = tracks[i].language === lang;
+}
+
 type QualityLevel = { index: number; height: number; bitrate: number };
 type Status = "idle" | "loading" | "ready" | "error";
 
@@ -94,6 +120,9 @@ export function HlsPlayer({
   const [muted, setMuted] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [lang, setLang] = useState<Lang>("en");
+  const [voice, setVoice] = useState<Voice>(defaultVoice);
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
   const [cue, setCue] = useState<string | null>(null);
   const [levels, setLevels] = useState<QualityLevel[]>([]);
   const [native, setNative] = useState(false);
@@ -101,7 +130,9 @@ export function HlsPlayer({
   const [quality, setQuality] = useState(-1);
   const [playingLevel, setPlayingLevel] = useState<number | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [menu, setMenu] = useState<null | "speed" | "quality" | "cc">(null);
+  const [menu, setMenu] = useState<null | "speed" | "quality" | "cc" | "audio">(
+    null,
+  );
   const [idle, setIdle] = useState(false);
   const [loadKey, setLoadKey] = useState(0);
   const [started, setStarted] = useState(false);
@@ -144,6 +175,7 @@ export function HlsPlayer({
 
     on("loadedmetadata", () => {
       el.playbackRate = speedRef.current;
+      if (!hlsRef.current) pickNativeAudio(el, voiceRef.current);
       if (Number.isFinite(el.duration)) setDuration(el.duration);
       if (pendingSeek.current !== null) {
         el.currentTime = pendingSeek.current;
@@ -204,6 +236,13 @@ export function HlsPlayer({
               hls.currentLevel = same ? same.index : -1;
               if (!same) setQuality(-1);
             }
+          });
+          // Narration language: keep the visitor's choice across videos.
+          hls.on(HlsCtor.Events.AUDIO_TRACKS_UPDATED, (_e, data) => {
+            const i = data.audioTracks.findIndex(
+              (t) => t.lang === voiceRef.current,
+            );
+            if (i >= 0 && hls.audioTrack !== i) hls.audioTrack = i;
           });
           hls.on(HlsCtor.Events.LEVEL_SWITCHED, (_e, data) => {
             setPlayingLevel(hls.levels[data.level]?.height ?? null);
@@ -410,6 +449,17 @@ export function HlsPlayer({
     }
     setMenu(null);
   };
+  const changeVoice = (v: Voice) => {
+    setVoice(v);
+    const hls = hlsRef.current;
+    if (hls) {
+      const i = hls.audioTracks.findIndex((t) => t.lang === v);
+      if (i >= 0) hls.audioTrack = i;
+    } else if (videoRef.current) {
+      pickNativeAudio(videoRef.current, v);
+    }
+    setMenu(null);
+  };
   const changeLang = (l: Lang) => {
     setLang(l);
     setMenu(null);
@@ -611,11 +661,35 @@ export function HlsPlayer({
           </div>
           <span className={s.time}>
             <span className="px-num">{clock(time)}</span>
-            <span aria-hidden> / </span>
-            <span className="px-num">{clock(total)}</span>
+            <span className={s.timeTotal}>
+              <span aria-hidden> / </span>
+              <span className="px-num">{clock(total)}</span>
+            </span>
           </span>
           <span className={s.spacer} />
 
+          <MenuButton
+            id="audio"
+            open={menu === "audio"}
+            onToggle={() => setMenu(menu === "audio" ? null : "audio")}
+            label={`Narration: ${VOICES.find((v) => v.id === voice)!.label}`}
+            title="Narration language"
+            button={
+              <span className={s.ctrlVoice}>
+                <VoiceGlyph />
+                <span className={s.ctrlText}>
+                  {VOICES.find((v) => v.id === voice)!.short}
+                </span>
+              </span>
+            }
+            heading="Narration"
+            items={VOICES.map((v) => ({
+              key: v.id,
+              label: v.label,
+              checked: voice === v.id,
+              onSelect: () => changeVoice(v.id),
+            }))}
+          />
           <MenuButton
             id="cc"
             open={menu === "cc"}
@@ -975,6 +1049,25 @@ function VolumeGlyph({ level }: { level: number }) {
         </>
       )}
     </>,
+  );
+}
+function VoiceGlyph() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      focusable="false"
+    >
+      <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
+      <path d="M19 11a7 7 0 0 1-14 0M12 18v3" />
+    </svg>
   );
 }
 function CcGlyph({ on }: { on: boolean }) {
