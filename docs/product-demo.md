@@ -18,7 +18,7 @@ now, see below).
 | Piece                                                                                                                        | State                                                                                                                                                                                                                                                 |
 | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 41 recordings in 12 modules (about 30 minutes), HLS (1080/720/480/360p), English and Hindi narration and subtitles, chapters | Done, validated (`product-demo-assets/validation.json`)                                                                                                                                                                                               |
-| S3 bucket `praesto-product-demo-<account>` (ap-south-1)                                                                      | 821 objects under `product-demo/`. **Public read** on `product-demo/*` only (bucket policy). Listing is denied, public ACLs stay blocked, CORS allows GET/HEAD from any origin. Holds nothing else.                                                   |
+| S3 bucket `praesto-product-demo-<account>` (ap-south-1)                                                                      | 821 objects under `product-demo/`. **Public read** on `product-demo/*` only (bucket policy). Listing is denied, public ACLs stay blocked, CORS allows GET/HEAD from any origin, with any request header (see below). Holds nothing else.              |
 | Delivery                                                                                                                     | Direct from S3 over HTTPS: `https://praesto-product-demo-<account>.s3.ap-south-1.amazonaws.com/product-demo`. Tested end to end.                                                                                                                      |
 | CloudFront                                                                                                                   | Not used. Creating a distribution is refused until AWS Support verifies the account. OAC `praesto-product-demo-oac` exists for later.                                                                                                                 |
 | Web page, route, SEO, sitemap, prerender                                                                                     | Done on branch `feature/product-demo` (not merged or deployed)                                                                                                                                                                                        |
@@ -131,3 +131,39 @@ It's in the manifest as `film`, served like the demos from
 The YouTube upload files (MP4 in English and Hindi, subtitles, thumbnail,
 and a description with chapters) are in `product-demo-assets/film/youtube/`,
 and aren't uploaded anywhere automatically.
+
+## Bucket CORS (iPhone playback)
+
+The demo bucket's CORS rule, as applied with
+`aws s3api put-bucket-cors` (2026-11-11; the earlier rule is in
+`~/.praesto-backups/2026-11-11-demo-bucket-cors-before.json`):
+
+```json
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "HEAD"],
+      "AllowedOrigins": ["*"],
+      "ExposeHeaders": ["Content-Length", "Content-Range", "ETag"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
+```
+
+`AllowedHeaders` must not be narrowed to `Range`. On iPhone, Safari and
+every other iOS browser play HLS with the system player, which adds an
+`X-Playback-Session-Id` header to each playlist and segment request. The
+player's `<video crossorigin>` (needed for the subtitle tracks) makes those
+CORS requests, so the header triggers a preflight; with only `Range`
+allowed, S3 answered it 403 and no video played on iPhone ("This video
+couldn’t be played"). Desktop browsers don't send the header. To check:
+
+```sh
+curl -si -X OPTIONS -H "Origin: https://praesto.in" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: range,x-playback-session-id" \
+  https://praesto-product-demo-<account>.s3.ap-south-1.amazonaws.com/product-demo/manifests/catalogue.json
+# want: 200 and Access-Control-Allow-Headers: range, x-playback-session-id
+```
