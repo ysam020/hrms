@@ -45,6 +45,7 @@ import {
 } from "@next/ui";
 import { apiClient, errorMessage } from "@next/lib/api";
 import { BrandLockup } from "@next/features/auth/BrandMark";
+import { trackEvent } from "@next/app/analytics";
 import s from "./public.module.css";
 
 // Organisation setup (Classic's features/auth/OrgSetupPage + org-setup/*).
@@ -256,6 +257,7 @@ export default function OrgSetup() {
             },
           );
           localStorage.removeItem(PENDING_FORM_KEY);
+          if (created.data?.success) trackEvent("sign_up_complete");
           if (!alive.current) return;
           if (created.data?.success) {
             setAccessToken(created.data.data.accessToken);
@@ -389,6 +391,12 @@ export default function OrgSetup() {
             .then((res) => {
               if (res.data?.success) {
                 localStorage.removeItem(PENDING_FORM_KEY);
+                // The organisation exists now: the sign-up conversion.
+                trackEvent("sign_up_complete", {
+                  plan_type: trial ? "trial" : "paid",
+                  plan_tier: planTierForCompanySize(f.companySize),
+                  billing_period: f.billing,
+                });
                 if (!alive.current) return;
                 setAccessToken(res.data.data.accessToken);
                 setStep(2);
