@@ -111,7 +111,8 @@ export type CtaLocation =
   | "pricing"
   | "closing"
   | "footer"
-  | "lead_form";
+  | "lead_form"
+  | "demos";
 
 /** Every parameter any event may carry. Keep it free of personal data. */
 export type EventParams = {

@@ -125,7 +125,7 @@ export default function ProductDemo() {
       <NavBar
         tone={overDark ? "dark" : "light"}
         user={user}
-        current={null}
+        current="demos"
         home={false}
       />
 

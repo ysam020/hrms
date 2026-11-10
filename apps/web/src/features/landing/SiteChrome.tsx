@@ -61,8 +61,15 @@ const NAV_LINKS = [
   { href: "#features", label: "Features", key: "features" },
   { href: "#platform", label: "Platform", key: "platform" },
   { href: "#modules", label: "Modules", key: "modules" },
+  { href: "#demos", label: "Demos", key: "demos" },
   { href: "#pricing", label: "Pricing", key: "pricing" },
 ];
+
+/** A nav link's target: the section here, or the right page elsewhere. */
+function linkFor(hash: string, home: boolean) {
+  if (home) return hash;
+  return hash === "#demos" ? "/product-demo" : `/${hash}`;
+}
 
 export function NavBar({
   tone,
@@ -127,7 +134,7 @@ export function NavBar({
           {NAV_LINKS.map((l) => (
             <a
               key={l.href}
-              href={home ? l.href : `/${l.href}`}
+              href={linkFor(l.href, home)}
               aria-current={current === l.key ? "location" : undefined}
             >
               {l.label}
@@ -198,7 +205,7 @@ export function NavBar({
               {NAV_LINKS.map((l) => (
                 <motion.a
                   key={l.href}
-                  href={home ? l.href : `/${l.href}`}
+                  href={linkFor(l.href, home)}
                   variants={menuItem}
                   onClick={() => setOpen(false)}
                 >
