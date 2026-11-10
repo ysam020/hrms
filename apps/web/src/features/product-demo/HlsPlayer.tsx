@@ -12,7 +12,9 @@ import {
 import type Hls from "hls.js";
 import type { ErrorData, Level } from "hls.js";
 import { Spinner } from "@next/ui";
+import { createRoot, type Root } from "react-dom/client";
 import { cdn, clock, type DemoVideo } from "./catalogue";
+import { documentPip, PipControls, prepareWindow } from "./PipWindow";
 import s from "./productDemo.module.css";
 
 // The /product-demo video player: HLS adaptive streaming with custom
@@ -608,22 +610,34 @@ export function HlsPlayer({
     seekTo(0);
   };
 
-  // Picture in picture: the browser's floating window (Safari's own
-  // presentation mode where the standard API is missing).
+  // Picture in picture. Where the browser has Document Picture-in-Picture
+  // (Chrome, Edge, Brave), the video moves into a window with Praesto's own
+  // controls, and shortcuts keep working there (I brings it back). Elsewhere
+  // it's the browser's floating video (Safari's presentation mode where the
+  // standard API is missing).
   const [pip, setPip] = useState(false);
+  const [pipWin, setPipWin] = useState<Window | null>(null);
+  const pipRoot = useRef<Root | null>(null);
   const pipSupported =
     typeof document !== "undefined" &&
-    (Boolean((document as any).pictureInPictureEnabled) ||
+    (Boolean(documentPip()) ||
+      Boolean((document as any).pictureInPictureEnabled) ||
       typeof (videoRef.current as any)?.webkitSetPresentationMode ===
         "function");
   const togglePip = async () => {
     const el = videoRef.current as any;
     if (!el) return;
+    if (pipWin) return pipWin.close();
     if (!started) start();
     try {
       if (document.pictureInPictureElement)
-        await document.exitPictureInPicture();
-      else if (
+        return await document.exitPictureInPicture();
+      const api = documentPip();
+      if (api && wrapRef.current) {
+        const w = await api.requestWindow({ width: 512, height: 288 });
+        prepareWindow(w, wrapRef.current, video.title);
+        setPipWin(w);
+      } else if (
         el.requestPictureInPicture &&
         (document as any).pictureInPictureEnabled
       ) {
@@ -654,6 +668,98 @@ export function HlsPlayer({
     });
     return () => ac.abort();
   }, []);
+  // Move the video into the window, and back when it closes (its own close
+  // button, the I key, or leaving the page).
+  useEffect(() => {
+    const w = pipWin;
+    const el = videoRef.current;
+    const stage = el?.parentElement;
+    if (!w || !el || !stage) return;
+    const resume = () => {
+      if (wasPlaying) void el.play().catch(() => {});
+    };
+    let wasPlaying = !el.paused;
+    const frame = w.document.createElement("div");
+    frame.className = s.pipFrame;
+    frame.append(el);
+    const ui = w.document.createElement("div");
+    w.document.body.append(frame, ui);
+    resume();
+    const root = createRoot(ui);
+    pipRoot.current = root;
+    setPip(true);
+    const onKey = (e: KeyboardEvent) => keysRef.current(e);
+    const onHide = () => setPipWin(null);
+    w.document.addEventListener("keydown", onKey);
+    w.addEventListener("pagehide", onHide);
+    return () => {
+      w.document.removeEventListener("keydown", onKey);
+      w.removeEventListener("pagehide", onHide);
+      pipRoot.current = null;
+      // Unmounting inside React's commit is not allowed; do it right after.
+      queueMicrotask(() => root.unmount());
+      wasPlaying = !el.paused;
+      stage.prepend(el);
+      resume();
+      setPip(false);
+      if (!w.closed) w.close();
+    };
+  }, [pipWin]);
+  // Close the window if the player goes away.
+  const pipWinRef = useRef(pipWin);
+  pipWinRef.current = pipWin;
+  useEffect(() => () => pipWinRef.current?.close(), []);
+  // The window's controls follow the player's state.
+  useEffect(() => {
+    if (pipWin) pipWin.document.title = video.title;
+    pipRoot.current?.render(
+      <PipControls
+        title={video.title}
+        playing={playing}
+        ended={ended}
+        buffering={buffering}
+        time={time}
+        total={duration || video.duration}
+        cue={cue}
+        lang={lang}
+        muted={muted}
+        subtitlesOn={lang !== "off"}
+        prevTitle={prev?.title}
+        nextTitle={next?.title}
+        onTogglePlay={togglePlay}
+        onSeek={seekTo}
+        onPrev={() => onPrev?.()}
+        onNext={() => onNext?.()}
+        onToggleMute={toggleMute}
+        onToggleSubtitles={() => setLang((x) => (x === "off" ? "en" : "off"))}
+        onBack={() => pipWin?.close()}
+      />,
+    );
+  });
+  // In the browser's own window, offer previous and next there too.
+  useEffect(() => {
+    const ms = typeof navigator !== "undefined" ? navigator.mediaSession : null;
+    if (!ms) return;
+    try {
+      ms.metadata = new MediaMetadata({
+        title: video.title,
+        artist: "Praesto product demo",
+        artwork: [{ src: cdn(video.thumbnail), sizes: "640x360" }],
+      });
+      ms.setActionHandler(
+        "nexttrack",
+        next ? () => onNextRef.current?.() : null,
+      );
+      ms.setActionHandler(
+        "previoustrack",
+        prev ? () => onPrevRef.current?.() : null,
+      );
+    } catch {
+      /* an action this browser doesn't know */
+    }
+  }, [video.title, video.thumbnail, next, prev]);
+  const onPrevRef = useRef(onPrev);
+  onPrevRef.current = onPrev;
 
   // Keyboard shortcuts work anywhere on the page, as on YouTube, except
   // while typing in a field. Space still activates a focused button outside
@@ -661,6 +767,7 @@ export function HlsPlayer({
   const keys = (e: KeyboardEvent) => {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target as HTMLElement;
+    if (!t.closest) return;
     if (
       t.closest(
         "input,textarea,select,[contenteditable=true],[role=menu],[role=dialog]:not([aria-label^='Up next']):not([aria-label='End of demo'])",
@@ -688,7 +795,7 @@ export function HlsPlayer({
       j: () => seekTo(time - 10),
       l: () => seekTo(time + 10),
       m: toggleMute,
-      f: toggleFullscreen,
+      f: () => !pipWin && toggleFullscreen(),
       i: () => void togglePip(),
       c: () => setLang((x) => (x === "off" ? "en" : "off")),
     };
@@ -813,6 +920,19 @@ export function HlsPlayer({
             <Spinner
               label={status === "loading" ? "Loading video" : "Buffering"}
             />
+          </div>
+        )}
+        {pip && (
+          <div className={s.pipPlaceholder}>
+            <PipGlyph />
+            <p>Playing in picture in picture</p>
+            <button
+              type="button"
+              className={s.retry}
+              onClick={() => void togglePip()}
+            >
+              Bring It Back
+            </button>
           </div>
         )}
         {status === "error" && (
