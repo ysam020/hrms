@@ -149,13 +149,19 @@
 /* Module selector: a grid of cards; a single scrolling row on phones. */
 .modules {
   display: grid;
+  /* Every card the same height, whatever its name wraps to. */
+  grid-auto-rows: 1fr;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin: 32px 0 0;
   padding: 0;
   list-style: none;
 }
+.modules > li {
+  display: flex;
+}
 .module {
+  height: 100%;
   display: grid;
   grid-template-columns: auto 1fr;
   grid-template-rows: auto auto;
@@ -1108,5 +1114,12 @@
   .ctrl {
     min-width: 36px;
     padding: 0 4px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Phones: picture in picture is in the browser's own controls. */
+  .pip {
+    display: none;
   }
 }

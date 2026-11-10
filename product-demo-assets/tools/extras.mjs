@@ -17,7 +17,7 @@ const profile = {
       isSuperUser: false,
       permissions: [
         "Permissions:manage_role_permissions",
-        "JobOpenings:view_applications",
+        ...["view_job_openings", "create_job_opening", "view_applications", "edit_job_opening", "schedule_interview", "take_interview", "provide_feedback", "reassign_interviewer", "update_candidate_status", "hire_candidate", "reject_candidate"].map((a) => `JobOpenings:${a}`),
       ],
       wfhEnabled: true,
       designation: "Founder",
@@ -698,3 +698,118 @@ export const ONBOARDING = (variant, phase = {}) => [
 
 /** Everything the catalogue's flows use by default. */
 export const ALL_EXTRA = [...CATALOGUE_EXTRA];
+
+// ── Recruitment, end to end (2026-11-10). All fictional. ───────────────────
+
+/** "YYYYMMDDTHHmmss", the format interviews are stored in. */
+const stampAt = (d) => {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+};
+const at = (days, hour) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(hour, 0, 0, 0);
+  return d;
+};
+const round = (n, start, interviewer, done) => ({
+  roundNumber: n,
+  interviewer,
+  interviewStartTime: stampAt(start),
+  interviewEndTime: stampAt(new Date(start.getTime() + 36e5)),
+  interviewConducted: done,
+  cleared: done,
+  feedback: done ? (n === 1 ? "Strong portfolio and clear thinking about trade-offs." : "Great collaboration in the design exercise.") : undefined,
+});
+
+/**
+ * Candidates for the Senior Product Designer opening, each at a different
+ * point, and handlers that change them the way the server does. A fresh copy
+ * per flow, so one video's changes don't leak into another.
+ */
+export function recruitmentFixtures() {
+  const ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const people = [
+    { id: "ap1", name: "Riya Sen", email: "riya.sen@example.com", phone: "98450 22110", status: "Round 1 Cleared", appliedAt: ago(12), createdAt: ago(12),
+      interviews: [round(1, at(-5, 11), "priya.nair", true), round(2, at(3, 15), "aarav.mehta", false)] },
+    { id: "ap4", name: "Kavya Menon", email: "kavya.menon@example.com", phone: "98450 22114", status: "Round 2 Cleared", appliedAt: ago(21), createdAt: ago(21),
+      interviews: [round(1, at(-14, 10), "priya.nair", true), round(2, at(-7, 16), "aarav.mehta", true)] },
+    { id: "ap2", name: "Tom Wu", email: "tom.wu@example.com", phone: "98450 22112", status: "Applied", appliedAt: ago(4), createdAt: ago(4), interviews: [] },
+    { id: "ap3", name: "Lena Ortiz", email: "lena.ortiz@example.com", phone: "98450 22113", status: "Applied", appliedAt: ago(2), createdAt: ago(2), interviews: [] },
+  ];
+  const find = (b) => people.find((p) => p.id === (b._id ?? b.id));
+  const read = (req) => {
+    try {
+      return JSON.parse(req.postData() || "{}");
+    } catch {
+      return {};
+    }
+  };
+  const ok = (message) => ({ success: true, message });
+  return [
+    [/\/view-applications\//, (url) => {
+      const stage = url.searchParams.get("status");
+      const list = !stage ? people : people.filter((p) => (stage === "Interviewing" ? /Interviewing|Round/.test(p.status) : p.status === stage));
+      return { success: true, data: list };
+    }],
+    [/\/get-interviewer-list/, { success: true, data: [
+      { id: "u3", username: "priya.nair", name: "Priya Nair" }, { id: "u2", username: "aarav.mehta", name: "Aarav Mehta" },
+      { id: "u9", username: "vikram.rao", name: "Vikram Rao" }, { id: "u8", username: "sara.thomas", name: "Sara Thomas" },
+    ] }],
+    [/\/schedule-interview$/, (url, req) => {
+      const b = read(req);
+      const p = find(b);
+      if (p) {
+        p.interviews.push({ roundNumber: b.roundNumber, interviewer: b.interviewer, interviewStartTime: b.interviewStartTime, interviewEndTime: b.interviewEndTime, interviewConducted: false });
+        p.status = "Interviewing";
+      }
+      return ok(`Round ${b.roundNumber} scheduled. The candidate and interviewer have been invited.`);
+    }],
+    [/\/reschedule-interview$/, (url, req) => {
+      const b = read(req);
+      const iv = find(b)?.interviews.find((i) => i.roundNumber === b.roundNumber);
+      if (iv) Object.assign(iv, { interviewStartTime: b.interviewStartTime, interviewEndTime: b.interviewEndTime });
+      return ok(`Round ${b.roundNumber} rescheduled. Everyone has the new time.`);
+    }],
+    [/\/reassign-interviewer$/, (url, req) => {
+      const b = read(req);
+      const iv = find(b)?.interviews.find((i) => i.roundNumber === b.interviewRound);
+      if (iv) iv.interviewer = b.interviewer;
+      return ok(`Round ${b.interviewRound} reassigned.`);
+    }],
+    [/\/update-candidate-status$/, (url, req) => {
+      const b = read(req);
+      const p = find(b);
+      const iv = p?.interviews.find((i) => i.roundNumber === b.interviewRound);
+      if (p) p.status = b.status;
+      if (iv && /Completed/.test(b.status)) Object.assign(iv, { interviewConducted: true, feedback: b.feedback });
+      if (iv && /Cleared/.test(b.status)) Object.assign(iv, { interviewConducted: true, cleared: true });
+      return ok("Candidate updated.");
+    }],
+    [/\/reject-application$/, (url, req) => {
+      const p = find(read(req));
+      if (p) p.status = "Rejected";
+      return ok("Candidate rejected. They've been told by email.");
+    }],
+    [/\/hire-candidate$/, (url, req) => {
+      const p = find(read(req));
+      if (p) p.status = "Hired";
+      return ok("Hired. Their employee account is ready for their joining date.");
+    }],
+    [/\/job-openings-insights/, { success: true, data: {
+      lastUpdated: new Date().toISOString(),
+      overview: { activeJobOpenings: 3, totalJobOpenings: 6, totalApplications: 64, averageApplicationsPerJob: 10.7, hiringSuccessRate: 6.3 },
+      deadlines: { overdueJobs: 1, deadlinesThisWeek: 2 },
+      actionableInsights: [
+        { title: "Backend Engineer is past its deadline.", message: "Extend the date or close the opening.", priority: "high" },
+        { title: "Senior Product Designer has a candidate ready to hire.", message: "Kavya Menon cleared both rounds.", type: "success" },
+      ],
+      topPerformingJobs: [{ jobTitle: "Senior Product Designer", hiringRate: 8.7 }, { jobTitle: "Account Executive", hiringRate: 8.3 }, { jobTitle: "Backend Engineer", hiringRate: 3.4 }],
+      statusDistribution: [{ status: "Active", count: 3 }, { status: "Hired", count: 2 }, { status: "Expired", count: 1 }],
+      hiringManagers: { topPerformers: [{ name: "Priya Nair", totalJobs: 3, activeJobs: 2, totalHired: 3 }, { name: "Kabir Singh", totalJobs: 2, activeJobs: 1, totalHired: 1 }] },
+      experienceRequirements: { mostCommonRange: "3–5 years", breakdown: { "0–2 years": 1, "3–5 years": 3, "5+ years": 2 } },
+      budgetAnalysis: { averageBudget: 2200000, budgetRanges: { "Under ₹10L": 1, "₹10–20L": 2, "₹20–30L": 2, "Over ₹30L": 1 } },
+    } }],
+    [/\/create-job-opening|\/add-job-opening|\/job-openings$/, { success: true, message: "Opening published. It’s live on your careers page.", data: { _id: "j9", id: "j9" } }, "POST"],
+  ];
+}

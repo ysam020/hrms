@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-10T16:42:44.219Z",
+  "generatedAt": "2026-11-10T17:30:02.903Z",
   "modules": [
     {
       "id": "getting-started",
@@ -878,7 +878,7 @@
     {
       "id": "recruitment",
       "title": "Recruitment",
-      "description": "Open roles and their candidates, interview pipelines, and a careers page where people apply.",
+      "description": "Hiring from start to finish: new openings, interviews and interviewers, offers and rejections, insights, pipelines and the careers page.",
       "icon": "briefcase",
       "videos": [
         {
@@ -887,11 +887,11 @@
           "description": "Track open roles with budgets and deadlines, open one to see its hiring details and applicants, filter by stage and review a candidate.",
           "duration": 49.9,
           "recorded": "2026-11-10",
-          "thumbnail": "recruitment/hiring-pipeline/712251db5c/thumbnail.jpg",
-          "hls": "recruitment/hiring-pipeline/712251db5c/master.m3u8",
+          "thumbnail": "recruitment/hiring-pipeline/ad2bacc016/thumbnail.jpg",
+          "hls": "recruitment/hiring-pipeline/ad2bacc016/master.m3u8",
           "subtitles": {
-            "en": "recruitment/hiring-pipeline/712251db5c/subtitles/en.vtt",
-            "hi": "recruitment/hiring-pipeline/712251db5c/subtitles/hi.vtt"
+            "en": "recruitment/hiring-pipeline/ad2bacc016/subtitles/en.vtt",
+            "hi": "recruitment/hiring-pipeline/ad2bacc016/subtitles/hi.vtt"
           },
           "chapters": [
             {
@@ -913,6 +913,150 @@
             {
               "title": "A Candidate",
               "startTime": 42
+            }
+          ],
+          "qualities": [1080, 720, 480, 360],
+          "audio": ["en", "hi"]
+        },
+        {
+          "id": "new-job-opening",
+          "title": "Creating a Job Opening",
+          "description": "A guided form for a new role: basics, workplace, requirements, description, pay and hiring team, the application form, then a review before it goes live.",
+          "duration": 75.8,
+          "recorded": "2026-11-10",
+          "thumbnail": "recruitment/new-job-opening/a94df8efda/thumbnail.jpg",
+          "hls": "recruitment/new-job-opening/a94df8efda/master.m3u8",
+          "subtitles": {
+            "en": "recruitment/new-job-opening/a94df8efda/subtitles/en.vtt",
+            "hi": "recruitment/new-job-opening/a94df8efda/subtitles/hi.vtt"
+          },
+          "chapters": [
+            {
+              "title": "Basics",
+              "startTime": 0
+            },
+            {
+              "title": "Workplace",
+              "startTime": 14.4
+            },
+            {
+              "title": "Requirements",
+              "startTime": 21.5
+            },
+            {
+              "title": "Description",
+              "startTime": 28.6
+            },
+            {
+              "title": "Pay and Hiring Team",
+              "startTime": 34.1
+            },
+            {
+              "title": "Application Form",
+              "startTime": 50.9
+            },
+            {
+              "title": "Review and Publish",
+              "startTime": 64.3
+            }
+          ],
+          "qualities": [1080, 720, 480, 360],
+          "audio": ["en", "hi"]
+        },
+        {
+          "id": "interview-scheduling",
+          "title": "Scheduling Interviews",
+          "description": "Schedule each interview round with an interviewer and a time, then reschedule or hand it to a different interviewer when plans change.",
+          "duration": 57.7,
+          "recorded": "2026-11-10",
+          "thumbnail": "recruitment/interview-scheduling/57c1d9f3e2/thumbnail.jpg",
+          "hls": "recruitment/interview-scheduling/57c1d9f3e2/master.m3u8",
+          "subtitles": {
+            "en": "recruitment/interview-scheduling/57c1d9f3e2/subtitles/en.vtt",
+            "hi": "recruitment/interview-scheduling/57c1d9f3e2/subtitles/hi.vtt"
+          },
+          "chapters": [
+            {
+              "title": "Candidates",
+              "startTime": 0
+            },
+            {
+              "title": "Schedule a Round",
+              "startTime": 5.7
+            },
+            {
+              "title": "Reschedule",
+              "startTime": 25.1
+            },
+            {
+              "title": "Reassign the Interviewer",
+              "startTime": 42.4
+            }
+          ],
+          "qualities": [1080, 720, 480, 360],
+          "audio": ["en", "hi"]
+        },
+        {
+          "id": "hire-or-reject",
+          "title": "Hiring and Rejecting Candidates",
+          "description": "Review a candidate’s interview feedback, hire them with a salary and joining date, or reject with a reason; everyone is told, and the candidate list stays current.",
+          "duration": 44,
+          "recorded": "2026-11-10",
+          "thumbnail": "recruitment/hire-or-reject/19a23644df/thumbnail.jpg",
+          "hls": "recruitment/hire-or-reject/19a23644df/master.m3u8",
+          "subtitles": {
+            "en": "recruitment/hire-or-reject/19a23644df/subtitles/en.vtt",
+            "hi": "recruitment/hire-or-reject/19a23644df/subtitles/hi.vtt"
+          },
+          "chapters": [
+            {
+              "title": "The Decision",
+              "startTime": 0
+            },
+            {
+              "title": "Hire",
+              "startTime": 11
+            },
+            {
+              "title": "Reject",
+              "startTime": 23.6
+            },
+            {
+              "title": "Hired and Rejected",
+              "startTime": 36.9
+            }
+          ],
+          "qualities": [1080, 720, 480, 360],
+          "audio": ["en", "hi"]
+        },
+        {
+          "id": "recruitment-insights",
+          "title": "Recruitment Insights",
+          "description": "How hiring is going at a glance: active openings, applications, hiring rate, deadlines, what needs attention, and how each role and hiring manager is doing.",
+          "duration": 35.2,
+          "recorded": "2026-11-10",
+          "thumbnail": "recruitment/recruitment-insights/aa55f7e7b5/thumbnail.jpg",
+          "hls": "recruitment/recruitment-insights/aa55f7e7b5/master.m3u8",
+          "subtitles": {
+            "en": "recruitment/recruitment-insights/aa55f7e7b5/subtitles/en.vtt",
+            "hi": "recruitment/recruitment-insights/aa55f7e7b5/subtitles/hi.vtt"
+          },
+          "chapters": [
+            {
+              "title": "At a Glance",
+              "startTime": 0
+            },
+            {
+              "title": "Worth Your Attention",
+              "startTime": 13.9
+            },
+            {
+              "title": "Roles and Managers",
+              "startTime": 21.3
+            },
+            {
+              "title": "Experience and Budget",
+              "startTime": 28.4
             }
           ],
           "qualities": [1080, 720, 480, 360],
