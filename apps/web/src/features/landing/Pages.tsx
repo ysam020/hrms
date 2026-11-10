@@ -2,24 +2,24 @@ import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { UserContext } from "@web/app/providers/UserContext";
 import { DemoTeaser } from "./DemoTeaser";
+import { Closing } from "./parts";
 import {
-  Closing,
   FeaturesIntro,
   FeaturesMore,
   ModulesSection,
   Pricing,
   SecuritySection,
-} from "./Landing";
+} from "./Sections";
 import { Platform } from "./Platform";
 import { Footer, NavBar } from "./SiteChrome";
 import s from "./landing.module.css";
 import p from "./pages.module.css";
 
-// The landing page's sections, each on its own route: /features, /platform,
-// /modules, /security and /pricing. The same components as on the landing
-// page (which still tells the whole story), under a short page heading and
-// above the closing call to action. Prerendered like the landing page
-// (src/app/seo.ts PUBLIC_PAGES, src/prerender/entry.tsx).
+// The site's sections, each on its own route: /features, /platform,
+// /modules, /security and /pricing (Sections.tsx, Platform.tsx; the landing
+// page leads to them), under a short page heading and above the closing call
+// to action. Prerendered like the landing page (src/app/seo.ts PUBLIC_PAGES,
+// src/prerender/entry.tsx).
 
 /** Which nav link a section page lights. */
 export type PageKey =
