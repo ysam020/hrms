@@ -22,7 +22,7 @@ import {
 } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { chromium, demoContext, settle, BASE, VIEWPORT } from "./harness.mjs";
-import { EXTRA } from "./extras.mjs";
+import { EXTRA, CATALOGUE_EXTRA } from "./extras.mjs";
 import { FLOWS } from "./flows.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
@@ -108,7 +108,11 @@ async function record(browser, id, flow) {
   mkdirSync(tmp, { recursive: true });
   mkdirSync(dir, { recursive: true });
 
-  const context = await demoContext(browser, [...(flow.extra || []), ...EXTRA]);
+  const context = await demoContext(browser, [
+    ...(flow.extra || []),
+    ...EXTRA,
+    ...CATALOGUE_EXTRA,
+  ]);
   await context.addInitScript(cursorOverlay);
   const page = await context.newPage();
   const errors = [];
@@ -123,6 +127,7 @@ async function record(browser, id, flow) {
   const frames = [];
   const chapters = [];
   const cues = [];
+  const skipped = [];
   /** Wait until the last narrated line (both languages) has been spoken. */
   const pace = async () => {
     const last = cues.at(-1);
@@ -138,13 +143,22 @@ async function record(browser, id, flow) {
   const capture = (async () => {
     while (recording) {
       const t = now();
-      const jpg = await page.screenshot({
-        type: "jpeg",
-        quality: 90,
-        animations: "allow",
-        caret: "initial",
-        scale: "device",
-      });
+      // During a page load a screenshot can stall; skip the frame (the
+      // timeline holds the previous one) and try again.
+      let jpg;
+      try {
+        jpg = await page.screenshot({
+          type: "jpeg",
+          quality: 90,
+          animations: "allow",
+          caret: "initial",
+          scale: "device",
+          timeout: 3000,
+        });
+      } catch {
+        await new Promise((ok) => setTimeout(ok, 100));
+        continue;
+      }
       const file = `${String(frames.length).padStart(5, "0")}.jpg`;
       writeFileSync(tmp + file, jpg);
       frames.push({ t, file });
@@ -200,6 +214,22 @@ async function record(browser, id, flow) {
     async type(locator, text, delay = 55) {
       const l = await rec.click(locator);
       await l.pressSequentially(text, { delay });
+    },
+    /** Move to another screen in the app without a page load. */
+    async navigate(to) {
+      await page.evaluate((p) => {
+        history.pushState({}, "", p);
+        dispatchEvent(new PopStateEvent("popstate"));
+      }, to);
+      await page.waitForTimeout(1300);
+    },
+    /** A nice-to-have step: if its element isn't there, note it and go on. */
+    async optional(label, fn) {
+      try {
+        await fn();
+      } catch (e) {
+        skipped.push(`${label}: ${e.message.split("\n")[0]}`);
+      }
     },
     /** Smooth wheel scroll by `dy` CSS px. */
     async scroll(dy, ms = 900) {
@@ -294,6 +324,7 @@ async function record(browser, id, flow) {
         // Writes the flow made; all were answered by fixtures in the browser.
         fixtureWrites: posted.filter((p) => !/refresh-token|csrf/.test(p)),
         pageErrors: errors,
+        skippedSteps: skipped,
         recordedAt: new Date().toISOString(),
       },
       null,
@@ -301,6 +332,7 @@ async function record(browser, id, flow) {
     ),
   );
   rmSync(tmp, { recursive: true, force: true });
+  if (skipped.length) console.log(`  ${id} skipped: ${skipped.join(" | ")}`);
   console.log(
     `✓ ${id}: ${duration.toFixed(1)} s, ${(frames.length / end).toFixed(1)} fps captured, ${chapters.length} chapters, ${cues.length} cues${errors.length ? `, ${errors.length} page errors` : ""}`,
   );

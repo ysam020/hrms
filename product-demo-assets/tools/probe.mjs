@@ -6,12 +6,12 @@ import {
   BASE,
   MARKETING_TOOLS,
 } from "./harness.mjs";
-import { EXTRA } from "./extras.mjs";
+import { EXTRA, CATALOGUE_EXTRA } from "./extras.mjs";
 const { buildFixtures } = await import(MARKETING_TOOLS + "/fixtures.mjs");
 const { fixtures } = buildFixtures(new Date(), 330);
 const browser = await chromium.launch();
 for (const p of process.argv.slice(2)) {
-  const ctx = await demoContext(browser, EXTRA);
+  const ctx = await demoContext(browser, [...EXTRA, ...CATALOGUE_EXTRA]);
   const page = await ctx.newPage();
   const miss = new Set();
   page.on("request", (r) => {

@@ -226,9 +226,10 @@ export default function ProductDemo() {
                 Choose what you’d like to see.
               </h2>
               <p className={s.lead}>
-                Each demo is a minute or less and covers one task, recorded in
-                Praesto itself. The organisation, people and figures in them are
-                fictional.
+                Each demo walks through one part of Praesto in a minute or two:
+                what it’s for, how to use it, and what it solves. They’re
+                recorded in Praesto itself; the organisation, people and figures
+                are fictional.
               </p>
             </div>
 

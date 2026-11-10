@@ -149,7 +149,7 @@
 /* Module selector: a grid of cards; a single scrolling row on phones. */
 .modules {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin: 32px 0 0;
   padding: 0;
@@ -211,7 +211,12 @@
   color: var(--l-ink-3);
   font: 500 13px/1.3 var(--px-font);
 }
-@media (max-width: 1024px) {
+@media (max-width: 1180px) {
+  .modules {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 860px) {
   .modules {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

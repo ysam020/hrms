@@ -5,32 +5,58 @@
 // the module's featured video).
 export const MODULES = [
   {
+    id: "getting-started",
+    title: "Getting Started",
+    icon: "sparkle",
+    description:
+      "Set up your organisation, bring people in, and make Praesto yours: your profile, status, theme and passwordless sign-in.",
+    order: [
+      "org-setup",
+      "join-organisation",
+      "join-requests",
+      "profile-and-theme",
+      "passkeys",
+    ],
+  },
+  {
     id: "overview",
     title: "Platform Overview",
     icon: "today",
     description:
-      "Start here: the Today screen everyone opens each morning, and how your organisation is laid out in Praesto.",
-    order: ["today-at-a-glance", "organization-structure"],
+      "The screens everyone uses every day: Today, the company calendar, team chat and the organisation chart.",
+    order: ["today-at-a-glance", "calendar", "chat", "organization-structure"],
   },
   {
     id: "employee-management",
-    title: "Employee Management",
+    title: "Employees",
     icon: "people",
     description:
-      "One directory for everyone, with profiles that hold work, contact and statutory details, and a simple way to bring new people in.",
-    order: ["employee-directory", "join-requests"],
+      "One directory for everyone, with employment status, KYC, company assets and a clear process when someone leaves.",
+    order: [
+      "employee-directory",
+      "employee-status",
+      "kyc",
+      "assets",
+      "resignations",
+    ],
   },
   {
     id: "attendance",
     title: "Attendance",
     icon: "clock",
     description:
-      "Every workday accounted for: punches and hours, corrections tracked against your policy, and Geofencing around the office.",
-    order: ["my-attendance", "geofencing", "attendance-correction"],
+      "Every workday accounted for: punches and hours, corrections, Geofencing around the office, work from home and holidays.",
+    order: [
+      "my-attendance",
+      "attendance-correction",
+      "geofencing",
+      "wfh",
+      "holidays",
+    ],
   },
   {
     id: "leave-management",
-    title: "Leave Management",
+    title: "Leave",
     icon: "leave",
     description:
       "Apply in seconds, approve in one click, and set the leave policy your organisation runs on.",
@@ -41,16 +67,16 @@ export const MODULES = [
     title: "Payroll",
     icon: "banknote",
     description:
-      "Take each month from draft to approved to disbursed, and give employees their payslips and TDS worksheets.",
-    order: ["payroll-runs", "payslips"],
+      "Take each month from draft to approved to disbursed, set up salary structures, and give employees their payslips.",
+    order: ["payroll-runs", "payslips", "payroll-setup"],
   },
   {
     id: "recruitment",
     title: "Recruitment",
     icon: "briefcase",
     description:
-      "Open roles, their applicants and each candidate’s application, in one hiring workspace.",
-    order: ["hiring-pipeline"],
+      "Open roles and their candidates, interview pipelines, and a careers page where people apply.",
+    order: ["hiring-pipeline", "recruitment-pipeline"],
   },
   {
     id: "performance",
@@ -61,27 +87,35 @@ export const MODULES = [
     order: ["performance-reviews"],
   },
   {
+    id: "workplace",
+    title: "Workplace",
+    icon: "megaphone",
+    description:
+      "Keep everyone informed and supported: announcements, company policies, the helpdesk and notifications.",
+    order: ["announcements", "policies", "helpdesk", "notifications"],
+  },
+  {
     id: "reports",
     title: "Reports & Analytics",
     icon: "chart",
     description:
-      "Build your own reports from people data, and see the workforce at a glance.",
-    order: ["report-builder", "employee-insights"],
+      "Build your own reports from people data, and see the workforce, attendance and hiring at a glance.",
+    order: ["report-builder", "analytics", "employee-insights"],
   },
   {
     id: "security",
-    title: "Security",
+    title: "Security & Admin",
     icon: "shield",
     description:
-      "Role-Based Access Control with Own, Team and Everyone scopes, passwordless sign-in with passkeys, and a full audit log.",
-    order: ["roles-permissions", "passkeys-and-audit"],
+      "Role-Based Access Control, a tamper-proof audit log, organisation settings and your subscription.",
+    order: ["roles-permissions", "audit-logs", "settings", "subscription"],
   },
   {
-    id: "notifications",
-    title: "Notifications",
-    icon: "bell",
+    id: "ai-support",
+    title: "AI & Support",
+    icon: "assistant",
     description:
-      "Know when something changes for you: decisions on your requests and updates from HR.",
-    order: ["notifications"],
+      "Use your own AI assistant with Praesto, within your permissions, and reach the Praesto team when you need help.",
+    order: ["ai-assistants", "support"],
   },
 ];
